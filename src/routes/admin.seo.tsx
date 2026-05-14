@@ -29,8 +29,15 @@ function SeoPage() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["seo-pages"], queryFn: () => fn() });
 
+  type SeoInput = {
+    id?: string;
+    slug: string;
+    title: string;
+    description?: string | null;
+    og_image_url?: string | null;
+  };
   const m = useMutation({
-    mutationFn: (v: Parameters<typeof upsert>[0]["data"]) => upsert({ data: v }),
+    mutationFn: (v: SeoInput) => upsert({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["seo-pages"] });
       toast.success("SEO saved");
