@@ -16,9 +16,13 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminWhatsappRouteImport } from './routes/admin.whatsapp'
+import { Route as AdminTrainingRouteImport } from './routes/admin.training'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminSeoRouteImport } from './routes/admin.seo'
 import { Route as AdminRoomsRouteImport } from './routes/admin.rooms'
+import { Route as AdminPricingRouteImport } from './routes/admin.pricing'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminAiRouteImport } from './routes/admin.ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 
@@ -57,9 +61,19 @@ const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   path: '/whatsapp',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminTrainingRoute = AdminTrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSeoRoute = AdminSeoRouteImport.update({
+  id: '/seo',
+  path: '/seo',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoomsRoute = AdminRoomsRouteImport.update({
@@ -67,9 +81,19 @@ const AdminRoomsRoute = AdminRoomsRouteImport.update({
   path: '/rooms',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPricingRoute = AdminPricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminBookingsRoute = AdminBookingsRouteImport.update({
   id: '/bookings',
   path: '/bookings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAiRoute = AdminAiRouteImport.update({
@@ -90,9 +114,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/rooms': typeof RoomsRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
@@ -103,9 +131,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/rooms': typeof RoomsRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
@@ -118,9 +150,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/rooms': typeof RoomsRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
@@ -134,9 +170,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/rooms'
     | '/admin/ai'
+    | '/admin/analytics'
     | '/admin/bookings'
+    | '/admin/pricing'
     | '/admin/rooms'
+    | '/admin/seo'
     | '/admin/settings'
+    | '/admin/training'
     | '/admin/whatsapp'
     | '/admin/'
     | '/book/confirmation/$id'
@@ -147,9 +187,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/rooms'
     | '/admin/ai'
+    | '/admin/analytics'
     | '/admin/bookings'
+    | '/admin/pricing'
     | '/admin/rooms'
+    | '/admin/seo'
     | '/admin/settings'
+    | '/admin/training'
     | '/admin/whatsapp'
     | '/admin'
     | '/book/confirmation/$id'
@@ -161,9 +205,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/rooms'
     | '/admin/ai'
+    | '/admin/analytics'
     | '/admin/bookings'
+    | '/admin/pricing'
     | '/admin/rooms'
+    | '/admin/seo'
     | '/admin/settings'
+    | '/admin/training'
     | '/admin/whatsapp'
     | '/admin/'
     | '/book/confirmation/$id'
@@ -228,11 +276,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWhatsappRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/training': {
+      id: '/admin/training'
+      path: '/training'
+      fullPath: '/admin/training'
+      preLoaderRoute: typeof AdminTrainingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/seo': {
+      id: '/admin/seo'
+      path: '/seo'
+      fullPath: '/admin/seo'
+      preLoaderRoute: typeof AdminSeoRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/rooms': {
@@ -242,11 +304,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRoomsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/pricing': {
+      id: '/admin/pricing'
+      path: '/pricing'
+      fullPath: '/admin/pricing'
+      preLoaderRoute: typeof AdminPricingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/bookings': {
       id: '/admin/bookings'
       path: '/bookings'
       fullPath: '/admin/bookings'
       preLoaderRoute: typeof AdminBookingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/ai': {
@@ -268,18 +344,26 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAiRoute: typeof AdminAiRoute
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
+  AdminPricingRoute: typeof AdminPricingRoute
   AdminRoomsRoute: typeof AdminRoomsRoute
+  AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminTrainingRoute: typeof AdminTrainingRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAiRoute: AdminAiRoute,
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
+  AdminPricingRoute: AdminPricingRoute,
   AdminRoomsRoute: AdminRoomsRoute,
+  AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminTrainingRoute: AdminTrainingRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
@@ -306,3 +390,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
