@@ -9,38 +9,204 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RoomsRouteImport } from './routes/rooms'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as BookRouteImport } from './routes/book'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminWhatsappRouteImport } from './routes/admin.whatsapp'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminRoomsRouteImport } from './routes/admin.rooms'
+import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
+import { Route as AdminAiRouteImport } from './routes/admin.ai'
+import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 
+const RoomsRoute = RoomsRouteImport.update({
+  id: '/rooms',
+  path: '/rooms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookRoute = BookRouteImport.update({
+  id: '/book',
+  path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoomsRoute = AdminRoomsRouteImport.update({
+  id: '/rooms',
+  path: '/rooms',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBookingsRoute = AdminBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAiRoute = AdminAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AdminRoute,
+} as any)
+const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
+  id: '/confirmation/$id',
+  path: '/confirmation/$id',
+  getParentRoute: () => BookRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/book': typeof BookRouteWithChildren
+  '/login': typeof LoginRoute
+  '/rooms': typeof RoomsRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/': typeof AdminIndexRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/book': typeof BookRouteWithChildren
+  '/login': typeof LoginRoute
+  '/rooms': typeof RoomsRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin': typeof AdminIndexRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/book': typeof BookRouteWithChildren
+  '/login': typeof LoginRoute
+  '/rooms': typeof RoomsRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/': typeof AdminIndexRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/book'
+    | '/login'
+    | '/rooms'
+    | '/admin/ai'
+    | '/admin/bookings'
+    | '/admin/rooms'
+    | '/admin/settings'
+    | '/admin/whatsapp'
+    | '/admin/'
+    | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/book'
+    | '/login'
+    | '/rooms'
+    | '/admin/ai'
+    | '/admin/bookings'
+    | '/admin/rooms'
+    | '/admin/settings'
+    | '/admin/whatsapp'
+    | '/admin'
+    | '/book/confirmation/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/book'
+    | '/login'
+    | '/rooms'
+    | '/admin/ai'
+    | '/admin/bookings'
+    | '/admin/rooms'
+    | '/admin/settings'
+    | '/admin/whatsapp'
+    | '/admin/'
+    | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  BookRoute: typeof BookRouteWithChildren
+  LoginRoute: typeof LoginRoute
+  RoomsRoute: typeof RoomsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/rooms': {
+      id: '/rooms'
+      path: '/rooms'
+      fullPath: '/rooms'
+      preLoaderRoute: typeof RoomsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book': {
+      id: '/book'
+      path: '/book'
+      fullPath: '/book'
+      preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +214,94 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/whatsapp': {
+      id: '/admin/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/admin/whatsapp'
+      preLoaderRoute: typeof AdminWhatsappRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/rooms': {
+      id: '/admin/rooms'
+      path: '/rooms'
+      fullPath: '/admin/rooms'
+      preLoaderRoute: typeof AdminRoomsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/bookings': {
+      id: '/admin/bookings'
+      path: '/bookings'
+      fullPath: '/admin/bookings'
+      preLoaderRoute: typeof AdminBookingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ai': {
+      id: '/admin/ai'
+      path: '/ai'
+      fullPath: '/admin/ai'
+      preLoaderRoute: typeof AdminAiRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/book/confirmation/$id': {
+      id: '/book/confirmation/$id'
+      path: '/confirmation/$id'
+      fullPath: '/book/confirmation/$id'
+      preLoaderRoute: typeof BookConfirmationIdRouteImport
+      parentRoute: typeof BookRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminAiRoute: typeof AdminAiRoute
+  AdminBookingsRoute: typeof AdminBookingsRoute
+  AdminRoomsRoute: typeof AdminRoomsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminWhatsappRoute: typeof AdminWhatsappRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAiRoute: AdminAiRoute,
+  AdminBookingsRoute: AdminBookingsRoute,
+  AdminRoomsRoute: AdminRoomsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminWhatsappRoute: AdminWhatsappRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface BookRouteChildren {
+  BookConfirmationIdRoute: typeof BookConfirmationIdRoute
+}
+
+const BookRouteChildren: BookRouteChildren = {
+  BookConfirmationIdRoute: BookConfirmationIdRoute,
+}
+
+const BookRouteWithChildren = BookRoute._addFileChildren(BookRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
+  BookRoute: BookRouteWithChildren,
+  LoginRoute: LoginRoute,
+  RoomsRoute: RoomsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
