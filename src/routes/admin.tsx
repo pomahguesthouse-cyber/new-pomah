@@ -34,10 +34,6 @@ import {
 } from "@/components/ui/sidebar";
 
 export const Route = createFileRoute("/admin")({
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/login" });
-  },
   component: AdminLayout,
 });
 
