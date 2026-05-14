@@ -46,7 +46,7 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         .limit(5),
     ]);
 
-    const today = today; // noop
+    void 0;
     const { data: stays } = await supabase
       .from("bookings")
       .select("id")
