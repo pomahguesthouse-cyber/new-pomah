@@ -386,9 +386,11 @@ function WhatsAppPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    pinMut.mutate({ id: current, pinned: !thread.thread.pinned })
-                  }
+                  onClick={() => {
+                    const t = thread.thread;
+                    if (!t) return;
+                    pinMut.mutate({ id: current, pinned: !t.pinned });
+                  }}
                   title={thread.thread.pinned ? "Unpin" : "Pin"}
                 >
                   {thread.thread.pinned ? (
@@ -400,9 +402,11 @@ function WhatsAppPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() =>
-                    statusMut.mutate(thread.thread.status === "open" ? "closed" : "open")
-                  }
+                  onClick={() => {
+                    const t = thread.thread;
+                    if (!t) return;
+                    statusMut.mutate(t.status === "open" ? "closed" : "open");
+                  }}
                 >
                   <CheckCheck className="mr-1.5 h-4 w-4" />
                   {thread.thread.status === "open" ? "Close" : "Reopen"}
