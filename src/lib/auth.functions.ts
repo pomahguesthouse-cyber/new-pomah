@@ -15,8 +15,11 @@ export const getMyAccess = createServerFn({ method: "GET" })
       .eq("id", context.userId)
       .maybeSingle();
     const roleList = (roles ?? []).map((r) => r.role);
+    const email =
+      (context.claims as { email?: string } | null)?.email ?? null;
     return {
       userId: context.userId,
+      email,
       profile: profile ?? null,
       roles: roleList,
       isStaff: roleList.includes("admin") || roleList.includes("staff"),
