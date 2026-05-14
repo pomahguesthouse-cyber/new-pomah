@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   createFileRoute,
   Outlet,
-  redirect,
   useNavigate,
   Link,
   useRouterState,
