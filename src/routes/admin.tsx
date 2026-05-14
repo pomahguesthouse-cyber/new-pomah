@@ -88,11 +88,34 @@ function NoAccess({
   const navigate = useNavigate();
   const claim = useServerFn(claimFirstAdmin);
   const [granting, setGranting] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const canClaimAdmin = bootstrap?.canClaimAdmin ?? false;
   const knownAdmins = bootstrap?.adminNames ?? [];
+
+  const switchAccount = async () => {
+    setSwitching(true);
+    try {
+      // Sign out the current Supabase session, then immediately re-trigger
+      // Google OAuth with prompt=select_account so the user can pick a
+      // different Google account without leaving this screen.
+      await supabase.auth.signOut();
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin + "/admin",
+        extraParams: { prompt: "select_account" },
+      });
+      if (result.error) {
+        toast.error(result.error.message);
+        setSwitching(false);
+      }
+    } catch (e) {
+      toast.error((e as Error).message);
+      setSwitching(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
-      <div className="max-w-md rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+      <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 text-center shadow-sm">
         <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
           No access
         </p>
@@ -102,36 +125,66 @@ function NoAccess({
         <p className="mt-3 text-sm text-muted-foreground">
           {email ? (
             <>
-              Signed in as <span className="font-medium text-foreground">{email}</span>. Ask an
-              admin to grant access to this account.
+              Signed in as <span className="font-medium text-foreground">{email}</span>.
             </>
           ) : (
-            <>Ask an admin to grant access to this account.</>
+            <>This Google account doesn't have staff access yet.</>
           )}
         </p>
         {knownAdmins.length > 0 && (
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             Current admin: {knownAdmins.join(", ")}
           </p>
         )}
+
+        <div className="mt-6 rounded-md border border-border/60 bg-muted/30 p-4 text-left">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            Quick fix
+          </p>
+          <ol className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+            <li>
+              <span className="font-medium text-foreground">1.</span> Click{" "}
+              <span className="font-medium text-foreground">Switch Google account</span> below.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">2.</span> Pick the admin Google account
+              from the chooser.
+            </li>
+            <li>
+              <span className="font-medium text-foreground">3.</span> You'll land back here with
+              full access.
+            </li>
+          </ol>
+        </div>
+
         <button
-          disabled={granting || !canClaimAdmin}
-          onClick={async () => {
-            if (!canClaimAdmin) return;
-            setGranting(true);
-            try {
-              await claim();
-              window.location.reload();
-            } catch (e) {
-              toast.error((e as Error).message);
-            } finally {
-              setGranting(false);
-            }
-          }}
-          className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={switching}
+          onClick={switchAccount}
+          className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {granting ? "…" : canClaimAdmin ? "Claim admin" : "Admin already exists"}
+          {switching ? "Opening Google…" : "Switch Google account"}
         </button>
+
+        {canClaimAdmin && (
+          <button
+            disabled={granting}
+            onClick={async () => {
+              setGranting(true);
+              try {
+                await claim();
+                window.location.reload();
+              } catch (e) {
+                toast.error((e as Error).message);
+              } finally {
+                setGranting(false);
+              }
+            }}
+            className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {granting ? "…" : "Claim admin (first user only)"}
+          </button>
+        )}
+
         <button
           onClick={async () => {
             await supabase.auth.signOut();
