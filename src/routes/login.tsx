@@ -61,6 +61,7 @@ function LoginPage() {
   const onGoogle = async () => {
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/admin",
+      extraParams: { prompt: "select_account" },
     });
     if (result.error) toast.error(result.error.message);
   };
