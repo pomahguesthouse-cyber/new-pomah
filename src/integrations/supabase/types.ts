@@ -521,36 +521,48 @@ export type Database = {
       }
       whatsapp_threads: {
         Row: {
+          assigned_to: string | null
           created_at: string
           display_name: string | null
           guest_id: string | null
           id: string
+          intent: string | null
           last_message_at: string
           last_message_preview: string | null
           phone: string
+          pinned: boolean
           status: Database["public"]["Enums"]["thread_status"]
+          tags: string[] | null
           unread_count: number
         }
         Insert: {
+          assigned_to?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
           id?: string
+          intent?: string | null
           last_message_at?: string
           last_message_preview?: string | null
           phone: string
+          pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
+          tags?: string[] | null
           unread_count?: number
         }
         Update: {
+          assigned_to?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
           id?: string
+          intent?: string | null
           last_message_at?: string
           last_message_preview?: string | null
           phone?: string
+          pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
+          tags?: string[] | null
           unread_count?: number
         }
         Relationships: [
