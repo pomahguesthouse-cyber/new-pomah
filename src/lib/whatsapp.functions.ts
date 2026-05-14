@@ -38,7 +38,7 @@ export const sendMessage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("whatsapp_messages").insert({
       thread_id: data.threadId,
-      direction: "outbound",
+      direction: "out",
       body: data.body,
     });
     if (error) throw error;
@@ -68,7 +68,7 @@ export const draftAiReply = createServerFn({ method: "POST" })
     if (!apiKey) return { draft: "AI gateway is not configured." };
 
     const transcript = (messages ?? [])
-      .map((m) => `${m.direction === "inbound" ? "Guest" : "Host"}: ${m.body}`)
+      .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

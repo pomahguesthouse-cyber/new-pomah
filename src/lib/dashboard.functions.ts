@@ -46,7 +46,7 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         .limit(5),
     ]);
 
-    const occupied = rooms?.filter((r) => r.status === "occupied").length ?? 0;
+    const occupied = rooms?.filter((r) => r.status === "dirty").length ?? 0;
     const totalRooms = rooms?.length ?? 0;
 
     const { data: revenueRows } = await supabase

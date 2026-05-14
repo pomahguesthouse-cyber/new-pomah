@@ -52,7 +52,7 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        status: z.enum(["clean", "dirty", "occupied", "out_of_service"]),
+        status: z.enum(["clean", "dirty", "maintenance", "out_of_order"]),
       })
       .parse(d),
   )
