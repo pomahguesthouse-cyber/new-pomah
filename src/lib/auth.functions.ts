@@ -26,6 +26,50 @@ export const getMyAccess = createServerFn({ method: "GET" })
     };
   });
 
+export const getAccessBootstrapStatus = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { count, error: countError } = await supabaseAdmin
+      .from("user_roles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin");
+
+    if (countError) throw countError;
+
+    const adminCount = count ?? 0;
+    let adminNames: string[] = [];
+
+    if (adminCount > 0) {
+      const { data: adminRows, error: adminRowsError } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+
+      if (adminRowsError) throw adminRowsError;
+
+      const adminIds = [...new Set((adminRows ?? []).map((row) => row.user_id))];
+
+      if (adminIds.length > 0) {
+        const { data: profiles, error: profilesError } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name")
+          .in("id", adminIds);
+
+        if (profilesError) throw profilesError;
+
+        adminNames = (profiles ?? [])
+          .map((profile) => profile.full_name)
+          .filter((name): name is string => Boolean(name));
+      }
+    }
+
+    return {
+      adminCount,
+      hasAdmin: adminCount > 0,
+      canClaimAdmin: adminCount === 0,
+      adminNames,
+    };
+  });
+
 export const claimFirstAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
