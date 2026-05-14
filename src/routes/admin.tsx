@@ -16,6 +16,10 @@ import {
   Sparkles,
   Settings,
   LogOut,
+  DollarSign,
+  BarChart3,
+  Search,
+  GraduationCap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getMyAccess } from "@/lib/auth.functions";
@@ -40,8 +44,12 @@ const items = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/bookings", label: "Bookings", icon: CalendarDays, exact: false },
   { to: "/admin/rooms", label: "Rooms", icon: BedDouble, exact: false },
+  { to: "/admin/pricing", label: "Pricing", icon: DollarSign, exact: false },
   { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle, exact: false },
   { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles, exact: false },
+  { to: "/admin/training", label: "Training", icon: GraduationCap, exact: false },
+  { to: "/admin/analytics", label: "Analytics", icon: BarChart3, exact: false },
+  { to: "/admin/seo", label: "SEO", icon: Search, exact: false },
   { to: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ] as const;
 
