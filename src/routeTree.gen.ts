@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RoomsRouteImport } from './routes/rooms'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as BookRouteImport } from './routes/book'
@@ -36,6 +37,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const RoomsRoute = RoomsRouteImport.update({
   id: '/rooms',
   path: '/rooms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -125,6 +131,7 @@ export interface FileRoutesByFullPath {
   '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/llms.txt'
     | '/login'
+    | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/llms.txt'
     | '/login'
+    | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/llms.txt'
     | '/login'
+    | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
@@ -247,6 +259,7 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRouteWithChildren
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   RoomsRoute: typeof RoomsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       path: '/rooms'
       fullPath: '/rooms'
       preLoaderRoute: typeof RoomsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -426,6 +446,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookRoute: BookRouteWithChildren,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   RoomsRoute: RoomsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
