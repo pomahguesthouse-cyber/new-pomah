@@ -95,5 +95,12 @@ export const draftAiReply = createServerFn({ method: "POST" })
       return { draft: "Could not generate a draft right now." };
     }
     const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    return { draft: json.choices?.[0]?.message?.content?.trim() ?? "" };
+    const draft = json.choices?.[0]?.message?.content?.trim() ?? "";
+    const lastIn = [...(messages ?? [])].reverse().find((m) => m.direction === "in");
+    await context.supabase.from("ai_conversation_logs").insert({
+      thread_id: data.threadId,
+      user_message: lastIn?.body ?? null,
+      ai_response: draft,
+    });
+    return { draft };
   });
