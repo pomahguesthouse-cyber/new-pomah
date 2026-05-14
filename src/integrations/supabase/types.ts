@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_conversation_logs: {
+        Row: {
+          ai_response: string
+          correction: string | null
+          created_at: string
+          id: string
+          rating: string | null
+          thread_id: string | null
+          used: boolean
+          user_message: string | null
+        }
+        Insert: {
+          ai_response: string
+          correction?: string | null
+          created_at?: string
+          id?: string
+          rating?: string | null
+          thread_id?: string | null
+          used?: boolean
+          user_message?: string | null
+        }
+        Update: {
+          ai_response?: string
+          correction?: string | null
+          created_at?: string
+          id?: string
+          rating?: string | null
+          thread_id?: string | null
+          used?: boolean
+          user_message?: string | null
+        }
+        Relationships: []
+      }
       ai_suggestions: {
         Row: {
           action_payload: Json | null
@@ -366,6 +399,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seasonal_rates: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          min_stay: number
+          multiplier: number
+          name: string
+          nightly_rate: number | null
+          room_type_id: string
+          start_date: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          min_stay?: number
+          multiplier?: number
+          name: string
+          nightly_rate?: number | null
+          room_type_id: string
+          start_date: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          min_stay?: number
+          multiplier?: number
+          name?: string
+          nightly_rate?: number | null
+          room_type_id?: string
+          start_date?: string
+        }
+        Relationships: []
+      }
+      seo_pages: {
+        Row: {
+          description: string | null
+          id: string
+          og_image_url: string | null
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          og_image_url?: string | null
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          og_image_url?: string | null
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
