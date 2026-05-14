@@ -199,7 +199,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
       const k = (m.sent_at as string).slice(0, 10);
       const cur = waByDay.get(k);
       if (!cur) continue;
-      if (m.direction === "inbound") cur.inbound += 1;
+      if (m.direction === "in") cur.inbound += 1;
       else cur.outbound += 1;
     }
 
