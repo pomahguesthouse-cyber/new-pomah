@@ -42,7 +42,7 @@ function AdminLayout() {
       <SidebarInset className="bg-background">
         <AdminTopbar
           fullName={data.profile?.full_name}
-          email={data.profile?.email ?? null}
+          email={data.email ?? null}
         />
         <main className="flex-1 overflow-auto">
           <Outlet />
