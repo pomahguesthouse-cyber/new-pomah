@@ -46,7 +46,14 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         .limit(5),
     ]);
 
-    const occupied = rooms?.filter((r) => r.status === "dirty").length ?? 0;
+    const today = today; // noop
+    const { data: stays } = await supabase
+      .from("bookings")
+      .select("id")
+      .lte("check_in", today)
+      .gt("check_out", today)
+      .in("status", ["confirmed", "checked_in"]);
+    const occupied = stays?.length ?? 0;
     const totalRooms = rooms?.length ?? 0;
 
     const { data: revenueRows } = await supabase
