@@ -22,7 +22,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyAccess } from "@/lib/auth.functions";
+import { getMyAccess, claimFirstAdmin } from "@/lib/auth.functions";
 import {
   Sidebar,
   SidebarContent,
