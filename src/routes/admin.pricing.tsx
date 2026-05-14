@@ -35,6 +35,16 @@ function PricingPage() {
   const upsert = useServerFn(upsertSeasonalRate);
   const remove = useServerFn(deleteSeasonalRate);
 
+  type SeasonalInput = {
+    id?: string;
+    room_type_id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    multiplier: number;
+    nightly_rate?: number | null;
+    min_stay: number;
+  };
   const baseM = useMutation({
     mutationFn: (v: { id: string; base_rate: number }) => updateBase({ data: v }),
     onSuccess: () => {
@@ -43,7 +53,7 @@ function PricingPage() {
     },
   });
   const upsertM = useMutation({
-    mutationFn: (v: Parameters<typeof upsert>[0]["data"]) => upsert({ data: v }),
+    mutationFn: (v: SeasonalInput) => upsert({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pricing"] });
       toast.success("Seasonal rate saved");
