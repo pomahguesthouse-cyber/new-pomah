@@ -22,7 +22,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getMyAccess } from "@/lib/auth.functions";
+import { getMyAccess, claimFirstAdmin } from "@/lib/auth.functions";
 import {
   Sidebar,
   SidebarContent,
@@ -141,6 +141,7 @@ function AdminLayout() {
 
 function NoAccess() {
   const navigate = useNavigate();
+  const claim = useServerFn(claimFirstAdmin);
   const [granting, setGranting] = useState(false);
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
@@ -155,16 +156,7 @@ function NoAccess() {
           onClick={async () => {
             setGranting(true);
             try {
-              const { data: existing } = await supabase.from("user_roles").select("id").limit(1);
-              if ((existing?.length ?? 0) > 0) {
-                throw new Error("Admin already exists. Ask them to grant you access.");
-              }
-              const { data: u } = await supabase.auth.getUser();
-              if (!u.user) throw new Error("Not signed in");
-              const { error } = await supabase
-                .from("user_roles")
-                .insert({ user_id: u.user.id, role: "admin" });
-              if (error) throw error;
+              await claim();
               window.location.reload();
             } catch (e) {
               alert((e as Error).message);
