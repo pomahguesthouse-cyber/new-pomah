@@ -64,55 +64,83 @@ function BookPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white text-stone-900">
       <PublicNav />
-      <header className="border-b border-border">
-        <div className="mx-auto max-w-3xl px-6 py-12">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservation</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight">Book direct</h1>
-          <p className="mt-3 text-sm text-muted-foreground">
-            We confirm by WhatsApp within a few hours. No deposit required.
+
+      {/* Header */}
+      <header className="border-b border-stone-200 bg-stone-50">
+        <div className="mx-auto max-w-3xl px-6 py-14">
+          <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
+            <span className="h-px w-6 bg-amber-700" />
+            Reservasi
+          </span>
+          <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight">Pesan langsung</h1>
+          <p className="mt-3 text-sm text-stone-500">
+            Konfirmasi via WhatsApp dalam beberapa jam. Tidak perlu deposit. Pembatalan gratis.
           </p>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <form onSubmit={onSubmit} className="grid gap-6">
-          <div className="grid gap-2">
-            <Label>Room</Label>
-            <Select value={form.roomTypeId} onValueChange={(v) => setForm({ ...form, roomTypeId: v })}>
-              <SelectTrigger><SelectValue placeholder="Choose a room" /></SelectTrigger>
-              <SelectContent>
-                {rooms.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name} — ${Number(r.base_rate).toFixed(0)}/n
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Check-in"><Input type="date" required value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
-            <Field label="Check-out"><Input type="date" required value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
-          </div>
+      <main className="mx-auto max-w-3xl px-6 py-12">
+        <div className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+          <form onSubmit={onSubmit} className="grid gap-6">
+            <div className="grid gap-2">
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">Pilih Kamar</Label>
+              <Select value={form.roomTypeId} onValueChange={(v) => setForm({ ...form, roomTypeId: v })}>
+                <SelectTrigger className="border-stone-200">
+                  <SelectValue placeholder="Pilih tipe kamar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name} — Rp {Number(r.base_rate).toLocaleString("id-ID")}/malam
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Adults"><Input type="number" min={1} max={8} value={form.adults} onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })} /></Field>
-            <Field label="Children"><Input type="number" min={0} max={8} value={form.children} onChange={(e) => setForm({ ...form, children: Number(e.target.value) })} /></Field>
-          </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Check-in"><Input type="date" required value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
+              <Field label="Check-out"><Input type="date" required value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
+            </div>
 
-          <Field label="Full name"><Input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Email"><Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-            <Field label="WhatsApp / Phone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          </div>
-          <Field label="Special requests"><Textarea rows={3} value={form.specialRequests} onChange={(e) => setForm({ ...form, specialRequests: e.target.value })} /></Field>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Jumlah Tamu Dewasa"><Input type="number" min={1} max={8} value={form.adults} onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })} /></Field>
+              <Field label="Anak-anak"><Input type="number" min={0} max={8} value={form.children} onChange={(e) => setForm({ ...form, children: Number(e.target.value) })} /></Field>
+            </div>
 
-          <Button type="submit" size="lg" disabled={pending}>
-            {pending ? "Sending…" : "Request booking"}
-          </Button>
-        </form>
+            <div className="h-px bg-stone-100" />
+
+            <Field label="Nama Lengkap"><Input required placeholder="Nama sesuai identitas" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Email"><Input type="email" required placeholder="email@contoh.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="WhatsApp / Telepon"><Input placeholder="+62 ..." value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+            </div>
+            <Field label="Permintaan Khusus (opsional)">
+              <Textarea
+                rows={3}
+                placeholder="Contoh: kamar lantai atas, extra pillow, late check-in..."
+                value={form.specialRequests}
+                onChange={(e) => setForm({ ...form, specialRequests: e.target.value })}
+              />
+            </Field>
+
+            <Button
+              type="submit"
+              size="lg"
+              disabled={pending}
+              className="bg-amber-700 hover:bg-amber-800 text-white"
+            >
+              {pending ? "Mengirim…" : "Kirim Permintaan Reservasi"}
+            </Button>
+            <p className="text-center text-xs text-stone-400">
+              Dengan mengirim formulir ini, Anda setuju dengan kebijakan pemesanan kami.
+            </p>
+          </form>
+        </div>
       </main>
+
       <PublicFooter property={data?.property} />
     </div>
   );
@@ -121,7 +149,7 @@ function BookPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-2">
-      <Label className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{label}</Label>
+      <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">{label}</Label>
       {children}
     </div>
   );
