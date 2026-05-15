@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/lib/public.functions";
+import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/admin/settings")({
