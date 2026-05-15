@@ -120,6 +120,11 @@ function WhatsAppPage() {
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
   const threads = threadsData?.threads ?? [];
+  useRealtimeInvalidate(
+    "admin-wa-stream",
+    ["whatsapp_threads", "whatsapp_messages"],
+    [["wa-threads"], ["wa-thread"]],
+  );
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
