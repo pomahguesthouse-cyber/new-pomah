@@ -10,16 +10,14 @@ export const getCalendarData = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { supabase } = context;
     const [roomTypesRes, roomsRes, bookingsRes] = await Promise.all([
-      supabase.from("room_types").select("id, name, base_rate, capacity").order("name"),
-      supabase.from("rooms").select("id, number, room_type_id, status").order("number"),
-      supabase
-        .from("bookings")
-        .select("id, check_in, check_out, status, source, room_id, room_type_id, adults, children, nightly_rate, total_amount, special_requests, guests(id, full_name, email, phone)")
+      supabase.from("room_types").select("*").order("name"),
+      supabase.from("rooms").select("*").order("number"),
+      supabase.from("bookings")
+        .select("*, guests(*)") // Baris ini memastikan data tamu ikut terbawa
         .lt("check_in", data.to)
         .gt("check_out", data.from)
         .neq("status", "cancelled"),
     ]);
-
     return {
       roomTypes: roomTypesRes.data ?? [],
       rooms: roomsRes.data ?? [],
@@ -29,37 +27,71 @@ export const getCalendarData = createServerFn({ method: "GET" })
 
 export const createBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({
-    roomId: z.string().uuid(),
-    checkIn: isoDate,
-    checkOut: isoDate,
-    guestName: z.string().min(1),
-    guestEmail: z.string().email().optional().or(z.literal("")),
-    guestPhone: z.string().optional().or(z.literal("")),
-    adults: z.number().int().min(1),
-    children: z.number().int().min(0),
-    nightlyRate: z.number().min(0),
-    status: z.enum(["pending", "confirmed", "checked_in"]).default("confirmed"),
-    notes: z.string().optional().or(z.literal("")),
-  }))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }: any) => {
     const { supabase } = context;
-    if (data.checkOut <= data.checkIn) throw new Error("Check-out must be after check-in");
-
-    // Konflik: Hanya bentrok jika (NewIn < OldOut) AND (NewOut > OldIn)
-    const { data: conflicts } = await supabase
-      .from("bookings")
+    
+    // Logika Conflict: Check-in 14:00 & Check-out 12:00
+    // (NewIn < OldOut) AND (NewOut > OldIn)
+    const { data: conflicts } = await supabase.from("bookings")
       .select("id")
       .eq("room_id", data.roomId)
       .neq("status", "cancelled")
-      .lt("check_in", data.checkOut) // Baru masuk sebelum lama keluar
-      .gt("check_out", data.checkIn) // Baru keluar setelah lama masuk
+      .lt("check_in", data.checkOut)
+      .gt("check_out", data.checkIn)
       .limit(1);
 
-    if (conflicts && conflicts.length > 0) throw new Error("Room already booked");
+    if (conflicts && conflicts.length > 0) throw new Error("Conflict: Room already booked for these dates");
 
-    // Logika Guest & Insert tetap sama ...
-    // (Tambahkan logika pencarian/pembuatan guest di sini sesuai file asli Bapak)
-    
+    // Cari atau buat guest baru
+    let guestId: string | null = null;
+    const { data: existingGuest } = await supabase.from("guests")
+      .select("id")
+      .or(`email.eq.${data.guestEmail},phone.eq.${data.guestPhone}`)
+      .maybeSingle();
+
+    if (existingGuest) {
+      guestId = existingGuest.id;
+    } else {
+      const { data: newGuest, error: gErr } = await supabase.from("guests")
+        .insert({ full_name: data.guestName, email: data.guestEmail || null, phone: data.guestPhone || null })
+        .select("id").single();
+      if (gErr) throw gErr;
+      guestId = newGuest.id;
+    }
+
+    // Resolve room type & property
+    const { data: room } = await supabase.from("rooms").select("room_type_id, room_types(property_id)").eq("id", data.roomId).single();
+
+    // Insert booking
+    const { error: bErr } = await supabase.from("bookings").insert({
+      property_id: (room as any).room_types.property_id,
+      room_type_id: room?.room_type_id,
+      room_id: data.roomId,
+      guest_id: guestId,
+      check_in: data.checkIn,
+      check_out: data.checkOut,
+      status: data.status,
+      nightly_rate: data.nightlyRate,
+      total_amount: data.nightlyRate, // Sederhanakan untuk contoh
+      source: "direct",
+      special_requests: data.notes || null
+    });
+
+    if (bErr) throw bErr;
+    return { ok: true };
+  });
+
+export const updateBookingFromAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ data, context }: any) => {
+    const { supabase } = context;
+    const { error } = await supabase.from("bookings").update({
+      check_in: data.checkIn,
+      check_out: data.checkOut,
+      room_id: data.roomId,
+      status: data.status,
+      special_requests: data.notes || null
+    }).eq("id", data.id);
+    if (error) throw error;
     return { ok: true };
   });
