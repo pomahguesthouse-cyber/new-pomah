@@ -8,8 +8,8 @@ import {
   updateBaseRate,
   upsertSeasonalRate,
   deleteSeasonalRate,
-} from "@/modules/pricing/pricing.functions";
-import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
+} from "@/admin/modules/pricing/pricing.functions";
+import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

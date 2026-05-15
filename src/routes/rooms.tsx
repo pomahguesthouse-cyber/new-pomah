@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getPublicSiteData } from "@/lib/public.functions";
-import { PublicNav, PublicFooter } from "./index";
+import { getPublicSiteData } from "@/public/functions/public.functions";
+import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { isAdminHost } from "@/lib/host";
-import { AdminShell } from "@/components/admin/admin-shell";
-import { RoomsManageView } from "@/components/admin/rooms-manage-view";
+import { AdminShell } from "@/admin/components/admin-shell";
+import { RoomsManageView } from "@/admin/components/rooms-manage-view";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/rooms")({

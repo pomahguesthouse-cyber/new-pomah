@@ -17,7 +17,7 @@ import {
 import {
   createMultiRoomBooking,
   listRooms,
-} from "@/lib/bookings.functions";
+} from "@/admin/functions/bookings.functions";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";

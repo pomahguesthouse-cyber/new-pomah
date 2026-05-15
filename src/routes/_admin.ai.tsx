@@ -2,8 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles } from "lucide-react";
-import { getDashboardOverview } from "@/lib/dashboard.functions";
-import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
+import { getDashboardOverview } from "@/admin/functions/dashboard.functions";
+import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/_admin/ai")({

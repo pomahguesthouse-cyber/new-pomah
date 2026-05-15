@@ -12,8 +12,8 @@ import {
   BarChart,
   Bar,
 } from "recharts";
-import { getAnalytics } from "@/modules/analytics/analytics.functions";
-import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
+import { getAnalytics } from "@/admin/modules/analytics/analytics.functions";
+import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/_admin/analytics")({

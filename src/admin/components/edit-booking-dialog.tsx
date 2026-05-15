@@ -13,7 +13,7 @@ import {
   User,
 } from "lucide-react";
 
-import { listRooms, updateBookingFull } from "@/lib/bookings.functions";
+import { listRooms, updateBookingFull } from "@/admin/functions/bookings.functions";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";

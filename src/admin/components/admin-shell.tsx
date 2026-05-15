@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { AdminTopbar } from "@/components/admin/admin-topbar";
+import { AdminSidebar } from "@/admin/components/admin-sidebar";
+import { AdminTopbar } from "@/admin/components/admin-topbar";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (

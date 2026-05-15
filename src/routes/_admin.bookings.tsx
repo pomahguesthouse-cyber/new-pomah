@@ -4,8 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
-import { listBookings, updateBookingStatus } from "@/lib/bookings.functions";
-import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
+import { listBookings, updateBookingStatus } from "@/admin/functions/bookings.functions";
+import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,8 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NewBookingDialog } from "@/components/admin/new-booking-dialog";
-import { EditBookingDialog, type EditableBooking } from "@/components/admin/edit-booking-dialog";
+import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
+import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
 export const Route = createFileRoute("/_admin/bookings")({
   component: BookingsPage,
