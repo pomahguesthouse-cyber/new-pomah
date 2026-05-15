@@ -24,13 +24,17 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         .neq("status", "cancelled"),
       supabase
         .from("bookings")
-        .select("id, check_out, guest_id, room_type_id, status, guests(full_name), room_types(name)")
+        .select(
+          "id, check_out, guest_id, room_type_id, status, guests(full_name), room_types(name)",
+        )
         .eq("check_out", today)
         .in("status", ["checked_in", "confirmed"]),
       supabase.from("rooms").select("id, status, number, room_types(name)").order("number"),
       supabase
         .from("bookings")
-        .select("id, check_in, check_out, status, total_amount, source, guests(full_name), room_types(name)")
+        .select(
+          "id, check_in, check_out, status, total_amount, source, guests(full_name), room_types(name)",
+        )
         .order("created_at", { ascending: false })
         .limit(8),
       supabase
@@ -60,10 +64,7 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
       .from("bookings")
       .select("total_amount, status")
       .neq("status", "cancelled");
-    const revenue = (revenueRows ?? []).reduce(
-      (sum, b) => sum + Number(b.total_amount ?? 0),
-      0,
-    );
+    const revenue = (revenueRows ?? []).reduce((sum, b) => sum + Number(b.total_amount ?? 0), 0);
 
     return {
       kpis: {
@@ -139,9 +140,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
         .from("whatsapp_messages")
         .select("id, direction, sent_at, ai_draft, thread_id")
         .gte("sent_at", `${startISO}T00:00:00.000Z`),
-      supabase
-        .from("whatsapp_threads")
-        .select("id, status, guest_id, created_at"),
+      supabase.from("whatsapp_threads").select("id, status, guest_id, created_at"),
       supabase.from("rooms").select("*", { count: "exact", head: true }),
       supabase
         .from("bookings")
@@ -161,10 +160,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
       if (bookingByDay.has(k)) {
         bookingByDay.set(k, (bookingByDay.get(k) ?? 0) + 1);
         if (b.status !== "cancelled") {
-          revenueByDay.set(
-            k,
-            (revenueByDay.get(k) ?? 0) + Number(b.total_amount ?? 0),
-          );
+          revenueByDay.set(k, (revenueByDay.get(k) ?? 0) + Number(b.total_amount ?? 0));
         }
       }
     }
@@ -192,9 +188,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
       }
     }
 
-    const waByDay = new Map(
-      buckets.map((b) => [b.day, { inbound: 0, outbound: 0 }]),
-    );
+    const waByDay = new Map(buckets.map((b) => [b.day, { inbound: 0, outbound: 0 }]));
     for (const m of waMessages ?? []) {
       const k = (m.sent_at as string).slice(0, 10);
       const cur = waByDay.get(k);
@@ -208,9 +202,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
       label: b.label,
       bookings: bookingByDay.get(b.day) ?? 0,
       revenue: revenueByDay.get(b.day) ?? 0,
-      occupancy: totalRooms
-        ? Math.round(((occupancyByDay.get(b.day) ?? 0) / totalRooms) * 100)
-        : 0,
+      occupancy: totalRooms ? Math.round(((occupancyByDay.get(b.day) ?? 0) / totalRooms) * 100) : 0,
       aiTotal: aiByDay.get(b.day)?.total ?? 0,
       aiUsed: aiByDay.get(b.day)?.used ?? 0,
       waIn: waByDay.get(b.day)?.inbound ?? 0,
@@ -225,9 +217,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
     const waOut30d = trend.reduce((s, t) => s + t.waOut, 0);
 
     // WhatsApp -> booking conversion (rough): threads with linked guest who has a booking
-    const guestIds = (waThreads ?? [])
-      .map((t) => t.guest_id)
-      .filter((g): g is string => !!g);
+    const guestIds = (waThreads ?? []).map((t) => t.guest_id).filter((g): g is string => !!g);
     let convertedThreads = 0;
     if (guestIds.length) {
       const { data: convBookings } = await supabase
@@ -257,9 +247,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
         bookings30d,
         aiTotal30d,
         aiUsed30d,
-        aiAdoptionPct: aiTotal30d
-          ? Math.round((aiUsed30d / aiTotal30d) * 100)
-          : 0,
+        aiAdoptionPct: aiTotal30d ? Math.round((aiUsed30d / aiTotal30d) * 100) : 0,
         waIn30d,
         waOut30d,
         waThreads: waThreads?.length ?? 0,

@@ -57,10 +57,20 @@ function SeoPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Page metadata</h1>
         </div>
         <div className="flex items-center gap-3 text-xs">
-          <a href="/sitemap.xml" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+          <a
+            href="/sitemap.xml"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-accent hover:underline"
+          >
             sitemap.xml <ExternalLink className="h-3 w-3" />
           </a>
-          <a href="/llms.txt" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-accent hover:underline">
+          <a
+            href="/llms.txt"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-accent hover:underline"
+          >
             llms.txt <ExternalLink className="h-3 w-3" />
           </a>
         </div>

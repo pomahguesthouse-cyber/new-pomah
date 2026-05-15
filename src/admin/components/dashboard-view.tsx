@@ -28,10 +28,7 @@ import {
   YAxis,
 } from "recharts";
 
-import {
-  getDashboardOverview,
-  getDashboardMetrics,
-} from "@/admin/functions/dashboard.functions";
+import { getDashboardOverview, getDashboardMetrics } from "@/admin/functions/dashboard.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,27 +53,17 @@ export function DashboardView() {
   useEffect(() => {
     const ch = supabase
       .channel("dashboard-stream")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bookings" },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-        },
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_threads" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "whatsapp_threads" },
-        () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "whatsapp_messages" },
-        () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ai_conversation_logs" },
-        () => queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_conversation_logs" }, () =>
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
       )
       .subscribe();
     return () => {
@@ -85,15 +72,10 @@ export function DashboardView() {
   }, [queryClient]);
 
   if (overview.isLoading || !overview.data || metrics.isLoading || !metrics.data) {
-    return (
-      <div className="p-10 text-sm text-muted-foreground">
-        Loading the operations center…
-      </div>
-    );
+    return <div className="p-10 text-sm text-muted-foreground">Loading the operations center…</div>;
   }
 
-  const { kpis, arrivals, departures, recent, suggestions, threads } =
-    overview.data;
+  const { kpis, arrivals, departures, recent, suggestions, threads } = overview.data;
   const { trend, summary, pendingPayments, pendingPaymentTotal } = metrics.data;
 
   const fmtMoney = (n: number) =>
@@ -188,10 +170,7 @@ export function DashboardView() {
 
       {/* Charts */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title="Booking trend"
-          subtitle="New bookings · last 30 days"
-        >
+        <ChartCard title="Booking trend" subtitle="New bookings · last 30 days">
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={trend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <defs>
@@ -201,10 +180,26 @@ export function DashboardView() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
-              <YAxis tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" allowDecimals={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+                allowDecimals={false}
+              />
               <Tooltip content={<TooltipBox />} />
-              <Area type="monotone" dataKey="bookings" stroke="hsl(var(--accent))" fill="url(#gBookings)" strokeWidth={2} />
+              <Area
+                type="monotone"
+                dataKey="bookings"
+                stroke="hsl(var(--accent))"
+                fill="url(#gBookings)"
+                strokeWidth={2}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -213,8 +208,17 @@ export function DashboardView() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={trend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
-              <YAxis tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+              />
               <Tooltip content={<TooltipBox formatter={(v) => fmtMoney(Number(v))} />} />
               <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
             </BarChart>
@@ -225,10 +229,27 @@ export function DashboardView() {
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={trend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
-              <YAxis tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" domain={[0, 100]} unit="%" />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+                domain={[0, 100]}
+                unit="%"
+              />
               <Tooltip content={<TooltipBox formatter={(v) => `${v}%`} />} />
-              <Line type="monotone" dataKey="occupancy" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+              <Line
+                type="monotone"
+                dataKey="occupancy"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                dot={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -237,11 +258,26 @@ export function DashboardView() {
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={trend} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" />
-              <YAxis tick={{ fontSize: 10 }} stroke="currentColor" className="text-muted-foreground" allowDecimals={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+              />
+              <YAxis
+                tick={{ fontSize: 10 }}
+                stroke="currentColor"
+                className="text-muted-foreground"
+                allowDecimals={false}
+              />
               <Tooltip content={<TooltipBox />} />
               <Bar dataKey="waIn" stackId="a" fill="hsl(var(--accent))" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="waOut" stackId="a" fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} />
+              <Bar
+                dataKey="waOut"
+                stackId="a"
+                fill="hsl(var(--muted-foreground))"
+                radius={[3, 3, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -266,17 +302,13 @@ export function DashboardView() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs">
-                    {fmtMoney(Number(b.total_amount))}
-                  </span>
+                  <span className="font-mono text-xs">{fmtMoney(Number(b.total_amount))}</span>
                   <Badge variant="outline">{b.status}</Badge>
                 </div>
               </div>
             ))}
             {recent.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No bookings yet.
-              </p>
+              <p className="py-6 text-center text-sm text-muted-foreground">No bookings yet.</p>
             )}
           </div>
         </Card>
@@ -289,9 +321,7 @@ export function DashboardView() {
                 Arrivals · {arrivals.length}
               </p>
               <ul className="mt-1 space-y-1 text-sm">
-                {arrivals.length === 0 && (
-                  <li className="text-muted-foreground">— none</li>
-                )}
+                {arrivals.length === 0 && <li className="text-muted-foreground">— none</li>}
                 {arrivals.map((a) => (
                   <li key={a.id}>
                     {a.guests?.full_name}{" "}
@@ -305,9 +335,7 @@ export function DashboardView() {
                 Departures · {departures.length}
               </p>
               <ul className="mt-1 space-y-1 text-sm">
-                {departures.length === 0 && (
-                  <li className="text-muted-foreground">— none</li>
-                )}
+                {departures.length === 0 && <li className="text-muted-foreground">— none</li>}
                 {departures.map((d) => (
                   <li key={d.id}>
                     {d.guests?.full_name}{" "}
@@ -351,9 +379,7 @@ export function DashboardView() {
                 className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span className="truncate">{p.guests?.full_name ?? "Guest"}</span>
-                <span className="font-mono text-xs">
-                  {fmtMoney(Number(p.total_amount ?? 0))}
-                </span>
+                <span className="font-mono text-xs">{fmtMoney(Number(p.total_amount ?? 0))}</span>
               </li>
             ))}
           </ul>
@@ -375,9 +401,7 @@ export function DashboardView() {
             {suggestions.map((s) => (
               <li key={s.id} className="border-l-2 border-accent pl-3">
                 <p className="text-sm font-medium">{s.title}</p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {s.body}
-                </p>
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{s.body}</p>
               </li>
             ))}
             {suggestions.length === 0 && (
@@ -389,8 +413,7 @@ export function DashboardView() {
         <Card className="p-5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-semibold">
-              <MessageCircle className="h-4 w-4 text-emerald-500" /> Recent
-              conversations
+              <MessageCircle className="h-4 w-4 text-emerald-500" /> Recent conversations
             </h2>
             <Link to="/whatsapp" className="text-xs text-accent hover:underline">
               Open <ArrowRight className="ml-1 inline h-3 w-3" />
@@ -398,19 +421,13 @@ export function DashboardView() {
           </div>
           <ul className="mt-4 divide-y divide-border">
             {threads.length === 0 && (
-              <li className="py-3 text-sm text-muted-foreground">
-                No conversations yet.
-              </li>
+              <li className="py-3 text-sm text-muted-foreground">No conversations yet.</li>
             )}
             {threads.map((t) => (
               <li key={t.id} className="flex items-start justify-between py-2">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
-                    {t.display_name ?? "Guest"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {t.last_message_preview}
-                  </p>
+                  <p className="truncate text-sm font-medium">{t.display_name ?? "Guest"}</p>
+                  <p className="truncate text-xs text-muted-foreground">{t.last_message_preview}</p>
                 </div>
                 {t.unread_count > 0 && <Badge>{t.unread_count}</Badge>}
               </li>
@@ -441,9 +458,7 @@ function Kpi({
         </p>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="mt-3 font-mono text-3xl font-semibold tracking-tight">
-        {value}
-      </p>
+      <p className="mt-3 font-mono text-3xl font-semibold tracking-tight">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
@@ -519,14 +534,9 @@ function TooltipBox({
       </p>
       {payload.map((p) => (
         <p key={p.name} className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: p.color }}
-          />
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color }} />
           <span className="capitalize">{p.name}</span>
-          <span className="ml-auto font-mono">
-            {formatter ? formatter(p.value) : p.value}
-          </span>
+          <span className="ml-auto font-mono">{formatter ? formatter(p.value) : p.value}</span>
         </p>
       ))}
     </div>

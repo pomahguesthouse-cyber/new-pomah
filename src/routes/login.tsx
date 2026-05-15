@@ -10,10 +10,7 @@ import { isAdminHost, isDeveloperHost, adminUrl } from "@/lib/host";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
-    meta: [
-      { title: "Staff sign in — Pomah Guesthouse" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "Staff sign in — Pomah Guesthouse" }, { name: "robots", content: "noindex" }],
   }),
   component: LoginPage,
 });
@@ -86,15 +83,22 @@ function LoginPage() {
   return (
     <div className="grid min-h-screen md:grid-cols-2">
       <div className="hidden border-r border-border bg-card p-12 md:flex md:flex-col md:justify-between">
-        <Link to="/" className="font-mono text-sm font-semibold">POMAH<span className="text-accent">.</span></Link>
+        <Link to="/" className="font-mono text-sm font-semibold">
+          POMAH<span className="text-accent">.</span>
+        </Link>
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Staff</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Staff
+          </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight">The ledger.</h1>
           <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-            Sign in to manage bookings, rooms, and the WhatsApp inbox — with the AI front office on standby.
+            Sign in to manage bookings, rooms, and the WhatsApp inbox — with the AI front office on
+            standby.
           </p>
         </div>
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Curated Ledger</p>
+        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          Curated Ledger
+        </p>
       </div>
 
       <div className="flex items-center justify-center p-8">
@@ -113,8 +117,12 @@ function LoginPage() {
           </Button>
 
           <div className="relative">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-            <div className="relative flex justify-center text-xs"><span className="bg-background px-2 text-muted-foreground">or with email</span></div>
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-background px-2 text-muted-foreground">or with email</span>
+            </div>
           </div>
 
           {mode === "signup" && (
@@ -129,7 +137,13 @@ function LoginPage() {
           </div>
           <div className="grid gap-2">
             <Label>Password</Label>
-            <Input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
 
           <Button type="submit" className="w-full" disabled={pending}>

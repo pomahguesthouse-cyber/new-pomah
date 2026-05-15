@@ -21,7 +21,10 @@ export const Route = createFileRoute("/book")({
   head: () => ({
     meta: [
       { title: "Book a stay — Pomah Guesthouse" },
-      { name: "description", content: "Reserve direct at Pomah Guesthouse. No commissions, faster confirmation." },
+      {
+        name: "description",
+        content: "Reserve direct at Pomah Guesthouse. No commissions, faster confirmation.",
+      },
     ],
   }),
   component: BookPage,
@@ -85,8 +88,13 @@ function BookPage() {
         <div className="rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
           <form onSubmit={onSubmit} className="grid gap-6">
             <div className="grid gap-2">
-              <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">Pilih Kamar</Label>
-              <Select value={form.roomTypeId} onValueChange={(v) => setForm({ ...form, roomTypeId: v })}>
+              <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                Pilih Kamar
+              </Label>
+              <Select
+                value={form.roomTypeId}
+                onValueChange={(v) => setForm({ ...form, roomTypeId: v })}
+              >
                 <SelectTrigger className="border-stone-200">
                   <SelectValue placeholder="Pilih tipe kamar" />
                 </SelectTrigger>
@@ -101,21 +109,72 @@ function BookPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Check-in"><Input type="date" required value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
-              <Field label="Check-out"><Input type="date" required value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
+              <Field label="Check-in">
+                <Input
+                  type="date"
+                  required
+                  value={form.checkIn}
+                  onChange={(e) => setForm({ ...form, checkIn: e.target.value })}
+                />
+              </Field>
+              <Field label="Check-out">
+                <Input
+                  type="date"
+                  required
+                  value={form.checkOut}
+                  onChange={(e) => setForm({ ...form, checkOut: e.target.value })}
+                />
+              </Field>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Jumlah Tamu Dewasa"><Input type="number" min={1} max={8} value={form.adults} onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })} /></Field>
-              <Field label="Anak-anak"><Input type="number" min={0} max={8} value={form.children} onChange={(e) => setForm({ ...form, children: Number(e.target.value) })} /></Field>
+              <Field label="Jumlah Tamu Dewasa">
+                <Input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={form.adults}
+                  onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Anak-anak">
+                <Input
+                  type="number"
+                  min={0}
+                  max={8}
+                  value={form.children}
+                  onChange={(e) => setForm({ ...form, children: Number(e.target.value) })}
+                />
+              </Field>
             </div>
 
             <div className="h-px bg-stone-100" />
 
-            <Field label="Nama Lengkap"><Input required placeholder="Nama sesuai identitas" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></Field>
+            <Field label="Nama Lengkap">
+              <Input
+                required
+                placeholder="Nama sesuai identitas"
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+              />
+            </Field>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Email"><Input type="email" required placeholder="email@contoh.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-              <Field label="WhatsApp / Telepon"><Input placeholder="+62 ..." value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  required
+                  placeholder="email@contoh.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </Field>
+              <Field label="WhatsApp / Telepon">
+                <Input
+                  placeholder="+62 ..."
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
+              </Field>
             </div>
             <Field label="Permintaan Khusus (opsional)">
               <Textarea
@@ -149,7 +208,9 @@ function BookPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="grid gap-2">
-      <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">{label}</Label>
+      <Label className="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+        {label}
+      </Label>
       {children}
     </div>
   );

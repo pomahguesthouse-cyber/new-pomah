@@ -13,7 +13,10 @@ export const Route = createFileRoute("/rooms")({
   head: () => ({
     meta: [
       { title: "Rooms — Pomah Guesthouse" },
-      { name: "description", content: "Browse the rooms at Pomah Guesthouse — small, calm, and considered." },
+      {
+        name: "description",
+        content: "Browse the rooms at Pomah Guesthouse — small, calm, and considered.",
+      },
       { property: "og:title", content: "Rooms — Pomah Guesthouse" },
     ],
   }),

@@ -7,7 +7,9 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
     supabasePublic.from("properties").select("*").limit(1).maybeSingle(),
     supabasePublic
       .from("room_types")
-      .select("id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url")
+      .select(
+        "id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url",
+      )
       .order("base_rate"),
   ]);
   return { property, roomTypes: roomTypes ?? [] };
@@ -45,8 +47,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     if (!rt) throw new Error("Room type not found");
 
     const nights =
-      (new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) /
-      86400000;
+      (new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / 86400000;
     if (nights < 1) throw new Error("Check-out must be after check-in");
 
     const { data: guest, error: gerr } = await supabasePublic

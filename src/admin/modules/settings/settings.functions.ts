@@ -13,8 +13,8 @@ export const getDomainSettings = createServerFn({ method: "GET" })
       .maybeSingle();
     return {
       id: data?.id ?? null,
-      public_domain: (data as Record<string, unknown>)?.public_domain as string | null ?? null,
-      admin_domain: (data as Record<string, unknown>)?.admin_domain as string | null ?? null,
+      public_domain: ((data as Record<string, unknown>)?.public_domain as string | null) ?? null,
+      admin_domain: ((data as Record<string, unknown>)?.admin_domain as string | null) ?? null,
     };
   });
 

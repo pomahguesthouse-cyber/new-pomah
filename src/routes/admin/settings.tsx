@@ -4,7 +4,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Globe, ShieldCheck, ExternalLink, Check, Pencil, X } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
-import { getDomainSettings, updateDomainSettings } from "@/admin/modules/settings/settings.functions";
+import {
+  getDomainSettings,
+  updateDomainSettings,
+} from "@/admin/modules/settings/settings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,9 +123,7 @@ function DomainTab() {
         placeholder="contoh: pomahguesthouse.com"
         value={data?.public_domain ?? null}
         disabled={!data?.id || mutation.isPending}
-        onSave={(v) =>
-          data?.id && mutation.mutate({ id: data.id, public_domain: v })
-        }
+        onSave={(v) => data?.id && mutation.mutate({ id: data.id, public_domain: v })}
       />
 
       {/* Admin domain */}
@@ -133,9 +134,7 @@ function DomainTab() {
         placeholder="contoh: admin.pomahguesthouse.com"
         value={data?.admin_domain ?? null}
         disabled={!data?.id || mutation.isPending}
-        onSave={(v) =>
-          data?.id && mutation.mutate({ id: data.id, admin_domain: v })
-        }
+        onSave={(v) => data?.id && mutation.mutate({ id: data.id, admin_domain: v })}
       />
 
       <p className="text-xs text-muted-foreground">
@@ -233,11 +232,7 @@ function DomainCard({
             <div className="mt-2 flex items-center gap-2">
               {value ? (
                 <>
-                  <code
-                    className={cn(
-                      "rounded bg-muted px-2 py-0.5 font-mono text-sm",
-                    )}
-                  >
+                  <code className={cn("rounded bg-muted px-2 py-0.5 font-mono text-sm")}>
                     {value}
                   </code>
                   <a

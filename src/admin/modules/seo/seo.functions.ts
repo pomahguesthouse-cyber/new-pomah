@@ -5,10 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listSeoPages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data } = await context.supabase
-      .from("seo_pages")
-      .select("*")
-      .order("slug");
+    const { data } = await context.supabase.from("seo_pages").select("*").order("slug");
     return { pages: data ?? [] };
   });
 
@@ -18,7 +15,11 @@ export const upsertSeoPage = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid().optional(),
-        slug: z.string().min(1).max(200).regex(/^\/[a-zA-Z0-9/_-]*$/),
+        slug: z
+          .string()
+          .min(1)
+          .max(200)
+          .regex(/^\/[a-zA-Z0-9/_-]*$/),
         title: z.string().min(1).max(200),
         description: z.string().max(400).nullable().optional(),
         og_image_url: z.string().url().nullable().optional(),
@@ -36,7 +37,9 @@ export const upsertSeoPage = createServerFn({ method: "POST" })
       const { error } = await context.supabase.from("seo_pages").update(payload).eq("id", data.id);
       if (error) throw error;
     } else {
-      const { error } = await context.supabase.from("seo_pages").upsert(payload, { onConflict: "slug" });
+      const { error } = await context.supabase
+        .from("seo_pages")
+        .upsert(payload, { onConflict: "slug" });
       if (error) throw error;
     }
     return { ok: true };

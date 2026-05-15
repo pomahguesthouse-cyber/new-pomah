@@ -23,11 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   CommandDialog,
@@ -168,7 +164,9 @@ export function AdminTopbar({
             <PopoverContent align="end" className="w-80 p-0">
               <div className="border-b border-border p-3">
                 <p className="text-sm font-semibold">Notifications</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">Latest activity across your property</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Latest activity across your property
+                </p>
               </div>
               <div className="max-h-72 overflow-auto">
                 <div className="px-3 py-8 text-center text-xs text-muted-foreground">
@@ -176,7 +174,12 @@ export function AdminTopbar({
                 </div>
               </div>
               <div className="border-t border-border p-2">
-                <Button variant="ghost" size="sm" className="w-full justify-center text-xs" disabled>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center text-xs"
+                  disabled
+                >
                   View all
                 </Button>
               </div>
@@ -228,7 +231,10 @@ export function AdminTopbar({
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem
+                onClick={signOut}
+                className="text-destructive focus:text-destructive"
+              >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign out
               </DropdownMenuItem>

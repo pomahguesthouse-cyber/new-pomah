@@ -26,11 +26,10 @@ export const Route = createFileRoute("/sitemap.xml")({
         for (const p of pages ?? []) urls.add(p.slug);
         for (const r of roomTypes ?? []) urls.add(`/rooms/${r.slug}`);
         const lastmod = new Date().toISOString();
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...urls]
-          .map(
-            (u) =>
-              `  <url><loc>${origin}${u}</loc><lastmod>${lastmod}</lastmod></url>`,
-          )
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[
+          ...urls,
+        ]
+          .map((u) => `  <url><loc>${origin}${u}</loc><lastmod>${lastmod}</lastmod></url>`)
           .join("\n")}\n</urlset>`;
         return new Response(xml, {
           headers: {

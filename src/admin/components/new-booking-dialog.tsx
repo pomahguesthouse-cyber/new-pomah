@@ -14,10 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import {
-  createMultiRoomBooking,
-  listRooms,
-} from "@/admin/functions/bookings.functions";
+import { createMultiRoomBooking, listRooms } from "@/admin/functions/bookings.functions";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -58,9 +55,21 @@ const SOURCES = [
 ] as const;
 
 const PAYMENT_STATUSES = [
-  { value: "unpaid", label: "Belum Bayar", chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20" },
-  { value: "partial", label: "Sebagian", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20" },
-  { value: "paid", label: "Lunas", chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20" },
+  {
+    value: "unpaid",
+    label: "Belum Bayar",
+    chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20",
+  },
+  {
+    value: "partial",
+    label: "Sebagian",
+    chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20",
+  },
+  {
+    value: "paid",
+    label: "Lunas",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+  },
 ] as const;
 
 type RoomStatus = "clean" | "dirty" | "maintenance" | "out_of_order";
@@ -132,7 +141,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
   const [children, setChildren] = React.useState(0);
   const [status, setStatus] = React.useState<(typeof STATUSES)[number]["value"]>("confirmed");
   const [source, setSource] = React.useState<(typeof SOURCES)[number]["value"]>("direct");
-  const [paymentStatus, setPaymentStatus] = React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
+  const [paymentStatus, setPaymentStatus] =
+    React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
   const [paidAmount, setPaidAmount] = React.useState(0);
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
@@ -159,7 +169,10 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
 
   const totalsByRoom = selectedRooms.map((r) => r.nightly_rate * Math.max(nights, 1));
   const grandTotal = totalsByRoom.reduce((a, b) => a + b, 0);
-  const outstanding = Math.max(0, grandTotal - (paymentStatus === "paid" ? grandTotal : paidAmount));
+  const outstanding = Math.max(
+    0,
+    grandTotal - (paymentStatus === "paid" ? grandTotal : paidAmount),
+  );
 
   // Group rooms by type for display
   const roomsByType = React.useMemo(() => {
@@ -186,7 +199,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
     });
   }
   function setRoomRate(id: string, rate: number) {
-    setSelectedRooms((cur) => cur.map((r) => (r.room_id === id ? { ...r, nightly_rate: rate } : r)));
+    setSelectedRooms((cur) =>
+      cur.map((r) => (r.room_id === id ? { ...r, nightly_rate: rate } : r)),
+    );
   }
 
   const createMut = useMutation({
@@ -251,7 +266,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                   Booking Baru
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  1 tamu bisa pesan beberapa kamar sekaligus — tiap kamar jadi 1 booking dengan reference code sendiri.
+                  1 tamu bisa pesan beberapa kamar sekaligus — tiap kamar jadi 1 booking dengan
+                  reference code sendiri.
                 </DialogDescription>
               </div>
               <span
@@ -359,7 +375,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                     {nights} malam
                   </p>
                 ) : (
-                  <p className="mt-3 text-xs text-destructive">Tanggal check-out harus setelah check-in.</p>
+                  <p className="mt-3 text-xs text-destructive">
+                    Tanggal check-out harus setelah check-in.
+                  </p>
                 )}
               </Section>
 
@@ -370,7 +388,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 required
               >
                 {roomsByType.length === 0 && (
-                  <p className="text-xs text-muted-foreground">Belum ada kamar — tambah kamar dulu di halaman Rooms.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Belum ada kamar — tambah kamar dulu di halaman Rooms.
+                  </p>
                 )}
                 <div className="space-y-4">
                   {roomsByType.map((group) => (
@@ -404,7 +424,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                               <div className="flex-1">
                                 <p className="font-mono text-sm font-semibold">#{room.number}</p>
                                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                  {ooo ? "Tidak aktif" : `Kapasitas ${room.room_types?.capacity ?? "—"} tamu`}
+                                  {ooo
+                                    ? "Tidak aktif"
+                                    : `Kapasitas ${room.room_types?.capacity ?? "—"} tamu`}
                                 </p>
                               </div>
                               {sel && (
@@ -417,7 +439,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                                     min={0}
                                     step={10000}
                                     value={sel.nightly_rate}
-                                    onChange={(e) => setRoomRate(room.id, Number(e.target.value) || 0)}
+                                    onChange={(e) =>
+                                      setRoomRate(room.id, Number(e.target.value) || 0)
+                                    }
                                     className="h-7 w-28 text-right font-mono text-xs"
                                   />
                                 </div>
@@ -436,7 +460,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Status">
                     <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {STATUSES.map((s) => (
                           <SelectItem key={s.value} value={s.value}>
@@ -448,7 +474,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                   </Field>
                   <Field label="Sumber">
                     <Select value={source} onValueChange={(v) => setSource(v as any)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {SOURCES.map((s) => (
                           <SelectItem key={s.value} value={s.value}>
@@ -473,7 +501,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                         if (v === "unpaid") setPaidAmount(0);
                       }}
                     >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         {PAYMENT_STATUSES.map((p) => (
                           <SelectItem key={p.value} value={p.value}>
@@ -497,7 +527,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 </div>
                 {paymentStatus === "partial" && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    Untuk multi-kamar, jumlah ini akan dibagi proporsional antar kamar berdasarkan total per kamar.
+                    Untuk multi-kamar, jumlah ini akan dibagi proporsional antar kamar berdasarkan
+                    total per kamar.
                   </p>
                 )}
               </Section>
@@ -545,9 +576,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 <SummaryRow
                   label="Periode"
                   value={
-                    nights >= 1
-                      ? `${formatDateShort(checkIn)} → ${formatDateShort(checkOut)}`
-                      : "—"
+                    nights >= 1 ? `${formatDateShort(checkIn)} → ${formatDateShort(checkOut)}` : "—"
                   }
                 />
                 <SummaryRow label="Lama" value={`${nights} malam`} mono />
@@ -566,9 +595,15 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                       {selectedRooms.map((sr) => {
                         const room = allRooms.find((r) => r.id === sr.room_id);
                         return (
-                          <li key={sr.room_id} className="flex items-center justify-between text-xs">
+                          <li
+                            key={sr.room_id}
+                            className="flex items-center justify-between text-xs"
+                          >
                             <span className="font-mono">
-                              #{room?.number} <span className="text-muted-foreground">· {room?.room_types?.name}</span>
+                              #{room?.number}{" "}
+                              <span className="text-muted-foreground">
+                                · {room?.room_types?.name}
+                              </span>
                             </span>
                             <span className="font-mono tabular-nums">
                               {formatIDR(sr.nightly_rate * Math.max(nights, 1))}
@@ -601,7 +636,10 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
 
               <Badge
                 variant="outline"
-                className={cn("w-full justify-center font-mono text-[10px] uppercase tracking-widest", paymentChip)}
+                className={cn(
+                  "w-full justify-center font-mono text-[10px] uppercase tracking-widest",
+                  paymentChip,
+                )}
               >
                 {PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.label}
               </Badge>

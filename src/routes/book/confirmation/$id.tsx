@@ -33,12 +33,12 @@ function ConfirmationPage() {
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">Booking received</h1>
         <p className="mt-3 text-muted-foreground">
           We'll confirm by WhatsApp shortly. Your reference is{" "}
-          <span className="font-mono font-semibold text-foreground">
-            {reference ?? "…"}
-          </span>
-          .
+          <span className="font-mono font-semibold text-foreground">{reference ?? "…"}</span>.
         </p>
-        <Link to="/" className="mt-8 inline-block text-sm text-accent underline-offset-4 hover:underline">
+        <Link
+          to="/"
+          className="mt-8 inline-block text-sm text-accent underline-offset-4 hover:underline"
+        >
           Back to home →
         </Link>
       </main>

@@ -17,11 +17,7 @@ import {
   X,
 } from "lucide-react";
 
-import {
-  createRoom,
-  updateRoom,
-  updateRoomType,
-} from "@/admin/functions/bookings.functions";
+import { createRoom, updateRoom, updateRoomType } from "@/admin/functions/bookings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -54,10 +50,26 @@ const STATUSES = ["clean", "dirty", "maintenance", "out_of_order"] as const;
 type RoomStatus = (typeof STATUSES)[number];
 
 const STATUS_META: Record<RoomStatus, { label: string; dot: string; chip: string }> = {
-  clean: { label: "Bersih", dot: "bg-emerald-500", chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20" },
-  dirty: { label: "Kotor", dot: "bg-amber-500", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20" },
-  maintenance: { label: "Perawatan", dot: "bg-blue-500", chip: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20" },
-  out_of_order: { label: "Tidak Aktif", dot: "bg-rose-500", chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20" },
+  clean: {
+    label: "Bersih",
+    dot: "bg-emerald-500",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+  },
+  dirty: {
+    label: "Kotor",
+    dot: "bg-amber-500",
+    chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20",
+  },
+  maintenance: {
+    label: "Perawatan",
+    dot: "bg-blue-500",
+    chip: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20",
+  },
+  out_of_order: {
+    label: "Tidak Aktif",
+    dot: "bg-rose-500",
+    chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20",
+  },
 };
 
 const SUGGESTED_AMENITIES = [
@@ -191,9 +203,7 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
   }
 
   function toggleAmenity(label: string) {
-    setAmenities((cur) =>
-      cur.includes(label) ? cur.filter((a) => a !== label) : [...cur, label],
-    );
+    setAmenities((cur) => (cur.includes(label) ? cur.filter((a) => a !== label) : [...cur, label]));
   }
 
   function addCustomAmenity() {
@@ -332,9 +342,21 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
         <Tabs value={tab} onValueChange={setTab} className="flex flex-col">
           <div className="border-b border-border bg-muted/30 px-6">
             <TabsList className="h-11 w-full justify-start gap-1 bg-transparent p-0">
-              <TabTrigger value="info" icon={<Building2 className="h-3.5 w-3.5" />} label="Informasi" />
-              <TabTrigger value="capacity" icon={<Wallet className="h-3.5 w-3.5" />} label="Kapasitas & Harga" />
-              <TabTrigger value="amenities" icon={<Sparkles className="h-3.5 w-3.5" />} label="Fasilitas" />
+              <TabTrigger
+                value="info"
+                icon={<Building2 className="h-3.5 w-3.5" />}
+                label="Informasi"
+              />
+              <TabTrigger
+                value="capacity"
+                icon={<Wallet className="h-3.5 w-3.5" />}
+                label="Kapasitas & Harga"
+              />
+              <TabTrigger
+                value="amenities"
+                icon={<Sparkles className="h-3.5 w-3.5" />}
+                label="Fasilitas"
+              />
               <TabTrigger value="photo" icon={<ImageIcon className="h-3.5 w-3.5" />} label="Foto" />
             </TabsList>
           </div>
@@ -446,8 +468,14 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
                       onChange={(e) => setCapacity(Number(e.target.value))}
                     />
                   </FieldGroup>
-                  <FieldGroup label="Tipe Tempat Tidur" icon={<BedDouble className="h-3.5 w-3.5" />}>
-                    <Select value={bedType || "__none"} onValueChange={(v) => setBedType(v === "__none" ? "" : v)}>
+                  <FieldGroup
+                    label="Tipe Tempat Tidur"
+                    icon={<BedDouble className="h-3.5 w-3.5" />}
+                  >
+                    <Select
+                      value={bedType || "__none"}
+                      onValueChange={(v) => setBedType(v === "__none" ? "" : v)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Pilih…" />
                       </SelectTrigger>
@@ -466,7 +494,9 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
                       type="number"
                       min={0}
                       value={sizeSqm}
-                      onChange={(e) => setSizeSqm(e.target.value === "" ? "" : Number(e.target.value))}
+                      onChange={(e) =>
+                        setSizeSqm(e.target.value === "" ? "" : Number(e.target.value))
+                      }
                     />
                   </FieldGroup>
                 </div>
@@ -517,7 +547,12 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
                       placeholder="Ketik fasilitas lalu Enter…"
                       maxLength={60}
                     />
-                    <Button type="button" variant="outline" onClick={addCustomAmenity} className="gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addCustomAmenity}
+                      className="gap-1.5"
+                    >
                       <Plus className="h-4 w-4" />
                       Tambah
                     </Button>
@@ -531,11 +566,7 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       {amenities.map((a) => (
-                        <Badge
-                          key={a}
-                          variant="secondary"
-                          className="gap-1 pr-1 font-normal"
-                        >
+                        <Badge key={a} variant="secondary" className="gap-1 pr-1 font-normal">
                           {a}
                           <button
                             type="button"

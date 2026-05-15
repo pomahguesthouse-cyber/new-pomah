@@ -23,8 +23,16 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
   .inputValidator((d: any) => d)
   .handler(async ({ data, context }: any) => {
     const { supabase } = context;
-    const { data: g } = await supabase.from("guests").insert({ full_name: data.guestName }).select("id").single();
-    const { data: r } = await supabase.from("rooms").select("room_type_id, room_types(property_id)").eq("id", data.roomId).single();
+    const { data: g } = await supabase
+      .from("guests")
+      .insert({ full_name: data.guestName })
+      .select("id")
+      .single();
+    const { data: r } = await supabase
+      .from("rooms")
+      .select("room_type_id, room_types(property_id)")
+      .eq("id", data.roomId)
+      .single();
 
     await supabase.from("bookings").insert({
       property_id: (r as any).room_types.property_id,
@@ -36,7 +44,7 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       status: data.status,
       nightly_rate: data.nightlyRate,
       total_amount: data.nightlyRate,
-      source: "direct"
+      source: "direct",
     });
     return { ok: true };
   });

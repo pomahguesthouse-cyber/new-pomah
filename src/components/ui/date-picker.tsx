@@ -3,15 +3,21 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn, formatDateID } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ID_MONTHS = [
-  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
 ];
 const ID_DOW = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
@@ -69,9 +75,7 @@ export function DatePickerID({
   const minDate = parseIso(min ?? undefined);
 
   // Month currently shown in the grid
-  const [viewMonth, setViewMonth] = React.useState<Date>(
-    () => selected ?? new Date(),
-  );
+  const [viewMonth, setViewMonth] = React.useState<Date>(() => selected ?? new Date());
   React.useEffect(() => {
     if (open) setViewMonth(selected ?? new Date());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,7 +103,9 @@ export function DatePickerID({
   function isDisabled(d: Date) {
     if (!minDate) return false;
     // disable strictly-before min
-    return d.getTime() < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()).getTime();
+    return (
+      d.getTime() < new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate()).getTime()
+    );
   }
 
   return (
@@ -128,9 +134,7 @@ export function DatePickerID({
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() =>
-              setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
-            }
+            onClick={() => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
             aria-label="Bulan sebelumnya"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -143,9 +147,7 @@ export function DatePickerID({
             variant="ghost"
             size="icon"
             className="h-7 w-7"
-            onClick={() =>
-              setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
-            }
+            onClick={() => setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
             aria-label="Bulan berikutnya"
           >
             <ChevronRight className="h-4 w-4" />

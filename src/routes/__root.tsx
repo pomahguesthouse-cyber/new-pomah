@@ -92,11 +92,31 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Pomah Guesthouse — Booking & Hospitality OS" },
-      { name: "description", content: "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses." },
-      { property: "og:description", content: "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses." },
-      { name: "twitter:description", content: "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png" },
+      {
+        name: "description",
+        content:
+          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
+      },
+      {
+        property: "og:description",
+        content:
+          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
+      },
+      {
+        name: "twitter:description",
+        content:
+          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
+      },
+      {
+        property: "og:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png",
+      },
+      {
+        name: "twitter:image",
+        content:
+          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png",
+      },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),

@@ -55,21 +55,54 @@ export const Route = createFileRoute("/admin/whatsapp")({
 });
 
 const INTENT_STYLES: Record<string, { label: string; className: string }> = {
-  booking_inquiry: { label: "Booking", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
-  service_request: { label: "Service", className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30" },
-  complaint: { label: "Complaint", className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30" },
-  recommendation: { label: "Recco", className: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30" },
-  feedback: { label: "Feedback", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  booking_inquiry: {
+    label: "Booking",
+    className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
+  },
+  service_request: {
+    label: "Service",
+    className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  },
+  complaint: {
+    label: "Complaint",
+    className: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
+  },
+  recommendation: {
+    label: "Recco",
+    className: "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30",
+  },
+  feedback: {
+    label: "Feedback",
+    className: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
+  },
   other: { label: "Other", className: "bg-muted text-muted-foreground border-border" },
 };
 
 const TEMPLATES = [
-  { label: "Welcome", body: "Welcome to Pomah Guesthouse! Let us know if you need anything during your stay." },
-  { label: "Late check-out", body: "We can arrange a late check-out until 2 PM at no extra charge. Would that work?" },
-  { label: "Check availability", body: "Let me check availability for those dates and get back to you within a few minutes." },
-  { label: "Rate quote", body: "Our nightly rate for that room category starts at IDR 750.000, breakfast included. Want me to hold a room?" },
-  { label: "Maintenance ack", body: "Sorry about that — I'm sending someone up right away to take a look. Apologies for the inconvenience." },
-  { label: "Thank you", body: "Thank you so much for staying with us. We hope to welcome you back soon!" },
+  {
+    label: "Welcome",
+    body: "Welcome to Pomah Guesthouse! Let us know if you need anything during your stay.",
+  },
+  {
+    label: "Late check-out",
+    body: "We can arrange a late check-out until 2 PM at no extra charge. Would that work?",
+  },
+  {
+    label: "Check availability",
+    body: "Let me check availability for those dates and get back to you within a few minutes.",
+  },
+  {
+    label: "Rate quote",
+    body: "Our nightly rate for that room category starts at IDR 750.000, breakfast included. Want me to hold a room?",
+  },
+  {
+    label: "Maintenance ack",
+    body: "Sorry about that — I'm sending someone up right away to take a look. Apologies for the inconvenience.",
+  },
+  {
+    label: "Thank you",
+    body: "Thank you so much for staying with us. We hope to welcome you back soon!",
+  },
 ];
 
 function timeAgo(iso: string) {
@@ -246,7 +279,9 @@ function WhatsAppPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Inbox className="h-4 w-4 text-muted-foreground" />
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">Inbox</p>
+              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                Inbox
+              </p>
             </div>
             {totalUnread > 0 && (
               <Badge variant="default" className="h-5 px-2 text-[10px]">
@@ -323,7 +358,10 @@ function WhatsAppPage() {
                           {t.last_message_preview}
                         </p>
                         <div className="mt-1.5 flex items-center gap-1.5">
-                          <Badge variant="outline" className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}>
+                          <Badge
+                            variant="outline"
+                            className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}
+                          >
                             {intent.label}
                           </Badge>
                           {t.status === "closed" && (
@@ -374,7 +412,8 @@ function WhatsAppPage() {
                     variant="outline"
                     className={cn(
                       "ml-2",
-                      INTENT_STYLES[thread.thread.intent]?.className ?? INTENT_STYLES.other.className,
+                      INTENT_STYLES[thread.thread.intent]?.className ??
+                        INTENT_STYLES.other.className,
                     )}
                   >
                     <Tag className="mr-1 h-3 w-3" />
@@ -498,9 +537,7 @@ function WhatsAppPage() {
                 className="resize-none"
               />
               <div className="mt-2 flex items-center justify-between">
-                <p className="font-mono text-[10px] text-muted-foreground">
-                  {draft.length} chars
-                </p>
+                <p className="font-mono text-[10px] text-muted-foreground">{draft.length} chars</p>
                 <Button
                   size="sm"
                   disabled={!draft.trim() || sendMut.isPending}
@@ -566,13 +603,17 @@ function WhatsAppPage() {
                 {thread.guest ? (
                   <dl className="mt-2 space-y-2 text-xs">
                     <Row icon={UserIcon} label="Name" value={thread.guest.full_name} />
-                    {thread.guest.email && <Row icon={UserIcon} label="Email" value={thread.guest.email} />}
+                    {thread.guest.email && (
+                      <Row icon={UserIcon} label="Email" value={thread.guest.email} />
+                    )}
                     {thread.guest.country && (
                       <Row icon={UserIcon} label="Country" value={thread.guest.country} />
                     )}
                     {thread.guest.notes && (
                       <div className="rounded-md border border-border bg-card p-2">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Notes</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Notes
+                        </p>
                         <p className="mt-1 text-xs">{thread.guest.notes}</p>
                       </div>
                     )}
@@ -704,10 +745,7 @@ function MessageStream({ messages }: { messages: any[] }) {
             {g.items.map((m) => (
               <div
                 key={m.id}
-                className={cn(
-                  "flex",
-                  m.direction === "out" ? "justify-end" : "justify-start",
-                )}
+                className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}
               >
                 <div
                   className={cn(

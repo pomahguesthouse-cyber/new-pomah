@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 export function Calendar({ bookings = [], ...props }: any) {
   const bookingMap = React.useMemo(() => {
     const map = new Map();
-    bookings.forEach((b: any) => map.set(b.date.toISOString().split('T')[0], b.name));
+    bookings.forEach((b: any) => map.set(b.date.toISOString().split("T")[0], b.name));
     return map;
   }, [bookings]);
 
@@ -18,12 +18,15 @@ export function Calendar({ bookings = [], ...props }: any) {
       locale={id} // Menggunakan locale Indonesia
       components={{
         DayButton: (props) => {
-          const dateKey = props.day.date.toISOString().split('T')[0];
+          const dateKey = props.day.date.toISOString().split("T")[0];
           const name = bookingMap.get(dateKey);
           return (
             <Button
               variant="ghost"
-              className={cn("h-14 w-10 flex flex-col items-center pt-1 relative font-normal", name && "bg-blue-50")}
+              className={cn(
+                "h-14 w-10 flex flex-col items-center pt-1 relative font-normal",
+                name && "bg-blue-50",
+              )}
               {...props}
             >
               <span className="text-[10px]">{props.day.date.getDate()}</span>
