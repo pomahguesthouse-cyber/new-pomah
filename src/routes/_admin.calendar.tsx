@@ -175,7 +175,7 @@ function CalendarPage() {
 }
 
 function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
-  const cellWidth = 110;
+  const cellWidth = 72;
   const labelWidth = 160;
   const windowStart = days[0];
 
@@ -205,29 +205,37 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
               UNIT
             </div>
 
-            {days.map((d: Date) => (
-              <div 
-                key={d.toISOString()} 
-                style={{ width: cellWidth }} 
-                className={cn(
-                  "shrink-0 border-l border-border px-1 py-3 text-center transition-all",
-                  isToday(d) ? "bg-primary/5" : ""
-                )}
-              >
-                <div className={cn(
-                  "text-[10px] font-bold uppercase tracking-tighter mb-1",
-                  isToday(d) ? "text-primary" : "text-muted-foreground/70"
-                )}>
-                  {format(d, "EEEE", { locale: id })}
+            {days.map((d: Date) => {
+              const today = isToday(d);
+              return (
+                <div
+                  key={d.toISOString()}
+                  style={{ width: cellWidth }}
+                  className={cn(
+                    "shrink-0 border-l border-border px-1 py-2 text-center transition-all relative",
+                    today ? "bg-primary/5" : ""
+                  )}
+                >
+                  <div className={cn(
+                    "text-[9px] font-bold uppercase tracking-tight",
+                    today ? "text-primary" : "text-muted-foreground/70"
+                  )}>
+                    {format(d, "EEE", { locale: id })}
+                  </div>
+                  <div className={cn(
+                    "text-base font-black leading-tight mt-0.5",
+                    today ? "text-primary" : "text-foreground"
+                  )}>
+                    {format(d, "dd")}
+                  </div>
+                  {today && (
+                    <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-primary px-1.5 py-px text-[8px] font-black uppercase tracking-wider text-primary-foreground shadow-sm">
+                      Today
+                    </span>
+                  )}
                 </div>
-                <div className={cn(
-                  "text-xl font-black leading-none",
-                  isToday(d) ? "text-primary" : "text-foreground"
-                )}>
-                  {format(d, "dd")}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Body Kalender */}
