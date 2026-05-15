@@ -27,7 +27,7 @@ function LoginPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/admin" });
+      if (data.session) navigate({ to: "/" });
     });
   }, [navigate]);
 
@@ -40,7 +40,7 @@ function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + "/admin",
+            emailRedirectTo: window.location.origin + "/",
             data: { full_name: name },
           },
         });
@@ -50,7 +50,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      navigate({ to: "/admin" });
+      navigate({ to: "/" });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -60,7 +60,7 @@ function LoginPage() {
 
   const onGoogle = async () => {
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/admin",
+      redirect_uri: window.location.origin + "/",
       extraParams: { prompt: "select_account" },
     });
     if (result.error) toast.error(result.error.message);
