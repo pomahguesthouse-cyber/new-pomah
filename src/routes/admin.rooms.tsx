@@ -30,6 +30,7 @@ function RoomsPage() {
   const update = useServerFn(updateRoomStatus);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["rooms"], queryFn: () => fn() });
+  useRealtimeInvalidate("admin-rooms-stream", ["rooms", "room_types"], [["rooms"]]);
   const mut = useMutation({
     mutationFn: (v: { id: string; status: typeof STATUSES[number] }) => update({ data: v }),
     onSuccess: () => {
