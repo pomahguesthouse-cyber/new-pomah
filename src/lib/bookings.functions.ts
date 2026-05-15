@@ -133,6 +133,40 @@ export const updateRoom = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+const roomTypeUpdateSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
+  bed_type: z.string().max(60).nullable().optional(),
+  size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
+  capacity: z.number().int().min(1).max(20),
+  base_rate: z.number().min(0).max(100_000_000),
+  amenities: z.array(z.string().min(1).max(60)).max(40).nullable().optional(),
+  hero_image_url: z.string().url().max(500).nullable().optional(),
+});
+
+export const updateRoomType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => roomTypeUpdateSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { id, ...patch } = data;
+    const { error } = await context.supabase
+      .from("room_types")
+      .update({
+        name: patch.name,
+        description: patch.description ?? null,
+        bed_type: patch.bed_type ?? null,
+        size_sqm: patch.size_sqm ?? null,
+        capacity: patch.capacity,
+        base_rate: patch.base_rate,
+        amenities: patch.amenities ?? null,
+        hero_image_url: patch.hero_image_url ?? null,
+      })
+      .eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const deleteRoom = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))

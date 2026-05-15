@@ -8,16 +8,12 @@ import {
   listRooms,
   updateRoomStatus,
   listRoomTypes,
-  createRoom,
-  updateRoom,
   deleteRoom,
 } from "@/lib/bookings.functions";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RoomDetailDialog, type RoomDetailRow } from "@/components/admin/room-detail-dialog";
 
 const STATUSES = ["clean", "dirty", "maintenance", "out_of_order"] as const;
 const STATUS_LABEL: Record<(typeof STATUSES)[number], string> = {
@@ -49,14 +46,7 @@ const COLORS: Record<string, string> = {
 };
 
 type RoomStatus = (typeof STATUSES)[number];
-type RoomRow = {
-  id: string;
-  number: string;
-  status: RoomStatus;
-  notes: string | null;
-  room_type_id?: string;
-  room_types?: { id: string; name: string; base_rate: number; capacity: number } | null;
-};
+type RoomRow = RoomDetailRow;
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -206,18 +196,19 @@ export function RoomsManageView() {
         </div>
       )}
 
-      <RoomFormDialog
+      <RoomDetailDialog
         mode="create"
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         roomTypes={roomTypes}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["rooms"] });
+          qc.invalidateQueries({ queryKey: ["room-types"] });
           setCreateOpen(false);
         }}
       />
 
-      <RoomFormDialog
+      <RoomDetailDialog
         mode="edit"
         open={!!editCtx}
         room={editCtx}
@@ -225,6 +216,7 @@ export function RoomsManageView() {
         roomTypes={roomTypes}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["rooms"] });
+          qc.invalidateQueries({ queryKey: ["room-types"] });
           setEditCtx(null);
         }}
       />
@@ -255,152 +247,3 @@ export function RoomsManageView() {
   );
 }
 
-function RoomFormDialog({
-  mode,
-  open,
-  room,
-  roomTypes,
-  onClose,
-  onSaved,
-}: {
-  mode: "create" | "edit";
-  open: boolean;
-  room?: RoomRow | null;
-  roomTypes: { id: string; name: string }[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const fnCreate = useServerFn(createRoom);
-  const fnUpdate = useServerFn(updateRoom);
-
-  const [form, setForm] = React.useState({
-    room_type_id: "",
-    number: "",
-    status: "clean" as RoomStatus,
-    notes: "",
-  });
-
-  React.useEffect(() => {
-    if (!open) return;
-    if (mode === "edit" && room) {
-      setForm({
-        room_type_id: room.room_type_id ?? room.room_types?.id ?? "",
-        number: room.number,
-        status: room.status,
-        notes: room.notes ?? "",
-      });
-    } else {
-      setForm({
-        room_type_id: roomTypes[0]?.id ?? "",
-        number: "",
-        status: "clean",
-        notes: "",
-      });
-    }
-  }, [open, mode, room, roomTypes]);
-
-  const mut = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        room_type_id: form.room_type_id,
-        number: form.number.trim(),
-        status: form.status,
-        notes: form.notes.trim() || null,
-      };
-      if (mode === "edit" && room) {
-        return fnUpdate({ data: { ...payload, id: room.id } });
-      }
-      return fnCreate({ data: payload });
-    },
-    onSuccess: () => {
-      toast.success(mode === "edit" ? "Kamar diperbarui" : "Kamar ditambahkan");
-      onSaved();
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const canSubmit = form.room_type_id && form.number.trim().length > 0 && !mut.isPending;
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[440px]">
-        <DialogHeader>
-          <DialogTitle>{mode === "edit" ? `Edit Kamar #${room?.number}` : "Tambah Kamar Baru"}</DialogTitle>
-          <DialogDescription>
-            Kombinasi tipe kamar + nomor kamar harus unik.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Tipe Kamar</Label>
-            <Select
-              value={form.room_type_id}
-              onValueChange={(v) => setForm((f) => ({ ...f, room_type_id: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih tipe kamar" />
-              </SelectTrigger>
-              <SelectContent>
-                {roomTypes.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Nomor Kamar</Label>
-            <Input
-              value={form.number}
-              onChange={(e) => setForm((f) => ({ ...f, number: e.target.value }))}
-              placeholder="mis. 101, A-02"
-              maxLength={20}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select
-              value={form.status}
-              onValueChange={(v) => setForm((f) => ({ ...f, status: v as RoomStatus }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Catatan (opsional)</Label>
-            <Textarea
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              placeholder="Catatan internal untuk staff…"
-              rows={3}
-              maxLength={500}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Batal
-          </Button>
-          <Button disabled={!canSubmit} onClick={() => mut.mutate()}>
-            {mut.isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
