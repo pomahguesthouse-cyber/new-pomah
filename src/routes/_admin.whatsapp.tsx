@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { cn, formatDateID, formatRelativeDateID, formatTimeID } from "@/lib/utils";
 
 export const Route = createFileRoute("/_admin/whatsapp")({
   component: WhatsAppPage,
@@ -82,17 +82,11 @@ function timeAgo(iso: string) {
   if (h < 24) return `${h}h`;
   const days = Math.floor(h / 24);
   if (days < 7) return `${days}d`;
-  return new Date(iso).toLocaleDateString();
+  return formatDateID(iso);
 }
 
 function dateLabel(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const yest = new Date();
-  yest.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  return formatRelativeDateID(iso);
 }
 
 function initials(name?: string | null, fallback?: string) {
@@ -601,8 +595,8 @@ function WhatsAppPage() {
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 font-medium">
                         <CalendarDays className="h-3.5 w-3.5 text-primary" />
-                        {new Date(thread.booking.check_in).toLocaleDateString()} →{" "}
-                        {new Date(thread.booking.check_out).toLocaleDateString()}
+                        {formatDateID(thread.booking.check_in)} →{" "}
+                        {formatDateID(thread.booking.check_out)}
                       </span>
                       <Badge variant="outline" className="text-[9px]">
                         {thread.booking.status}
@@ -732,10 +726,7 @@ function MessageStream({ messages }: { messages: any[] }) {
                         : "text-muted-foreground",
                     )}
                   >
-                    {new Date(m.sent_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatTimeID(m.sent_at)}
                   </p>
                 </div>
               </div>
