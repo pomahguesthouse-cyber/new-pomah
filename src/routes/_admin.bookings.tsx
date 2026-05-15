@@ -55,7 +55,10 @@ function BookingsPage() {
   const fn = useServerFn(listBookings);
   const update = useServerFn(updateBookingStatus);
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["bookings"], queryFn: () => fn() });
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["bookings"],
+    queryFn: () => fn(),
+  });
   useRealtimeInvalidate(
     "admin-bookings-stream",
     ["bookings", "guests", "rooms"],
@@ -89,6 +92,28 @@ function BookingsPage() {
         </Button>
       </header>
 
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
+          <p className="text-sm font-semibold text-destructive">Gagal memuat booking</p>
+          <p className="mt-1 font-mono text-xs text-destructive/80">{(error as Error).message}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Kalau errornya menyebut kolom seperti <code>payment_status</code>, jalankan migration
+            terbaru di Supabase (SQL Editor → paste isi file <code>supabase/migrations/20260515130000_*.sql</code> dan
+            <code>20260515120000_*.sql</code> → Run).
+          </p>
+        </div>
+      )}
+
+      {data?.degraded && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+          <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Mode terbatas</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Kolom payment & internal notes belum ada di database — daftar tetap tampil tapi fitur
+            pembayaran tidak aktif. Apply migration <code>20260515130000_add_booking_payment_and_internal_notes.sql</code> untuk mengaktifkannya.
+          </p>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
@@ -104,6 +129,13 @@ function BookingsPage() {
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
+            {!isLoading && !error && (data?.bookings.length ?? 0) === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk membuat yang pertama.
+                </td>
+              </tr>
+            )}
             {data?.bookings.map((b) => (
               <tr
                 key={b.id}

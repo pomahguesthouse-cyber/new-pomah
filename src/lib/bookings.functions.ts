@@ -5,15 +5,36 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const listBookings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    // Try the full select (including the columns added by the
+    // 20260515130000 payment migration). If those columns aren't
+    // present yet (42703 = undefined_column) fall back to the base
+    // shape so the page still renders. Same applies to reference_code
+    // from the 20260515120000 migration.
+    const FULL =
+      "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, payment_status, paid_amount, internal_notes, special_requests, room_id, guests(id, full_name, email, phone, country), room_types(id, name), rooms(id, number)";
+    const BASE =
+      "id, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, special_requests, room_id, guests(id, full_name, email, phone), room_types(id, name), rooms(id, number)";
+
+    const tryFull = await context.supabase
       .from("bookings")
-      .select(
-        "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, payment_status, paid_amount, internal_notes, special_requests, room_id, guests(id, full_name, email, phone, country), room_types(id, name), rooms(id, number)",
-      )
+      .select(FULL)
       .order("check_in", { ascending: false })
       .limit(100);
-    if (error) throw error;
-    return { bookings: data ?? [] };
+
+    if (!tryFull.error) {
+      return { bookings: tryFull.data ?? [], degraded: false };
+    }
+    if ((tryFull.error as any).code !== "42703") {
+      throw tryFull.error;
+    }
+
+    const fallback = await context.supabase
+      .from("bookings")
+      .select(BASE)
+      .order("check_in", { ascending: false })
+      .limit(100);
+    if (fallback.error) throw fallback.error;
+    return { bookings: fallback.data ?? [], degraded: true };
   });
 
 export const updateBookingStatus = createServerFn({ method: "POST" })
