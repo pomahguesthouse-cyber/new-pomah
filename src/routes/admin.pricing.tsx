@@ -31,6 +31,11 @@ function PricingPage() {
   const fn = useServerFn(listPricing);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["pricing"], queryFn: () => fn() });
+  useRealtimeInvalidate(
+    "admin-pricing-stream",
+    ["room_types", "seasonal_rates"],
+    [["pricing"]],
+  );
 
   const updateBase = useServerFn(updateBaseRate);
   const upsert = useServerFn(upsertSeasonalRate);
