@@ -24,6 +24,11 @@ function BookingsPage() {
   const update = useServerFn(updateBookingStatus);
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["bookings"], queryFn: () => fn() });
+  useRealtimeInvalidate(
+    "admin-bookings-stream",
+    ["bookings", "guests", "rooms"],
+    [["bookings"], ["dashboard"]],
+  );
 
   const mut = useMutation({
     mutationFn: (vars: { id: string; status: typeof STATUSES[number] }) =>
