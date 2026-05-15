@@ -29,6 +29,7 @@ function SeoPage() {
   const upsert = useServerFn(upsertSeoPage);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["seo-pages"], queryFn: () => fn() });
+  useRealtimeInvalidate("admin-seo-stream", ["seo_pages"], [["seo-pages"]]);
 
   type SeoInput = {
     id?: string;
