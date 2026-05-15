@@ -13,6 +13,11 @@ export const Route = createFileRoute("/admin/ai")({
 function AiPage() {
   const fn = useServerFn(getDashboardOverview);
   const { data } = useQuery({ queryKey: ["dashboard"], queryFn: () => fn() });
+  useRealtimeInvalidate(
+    "admin-ai-stream",
+    ["ai_suggestions", "ai_conversation_logs"],
+    [["dashboard"]],
+  );
   const suggestions = data?.suggestions ?? [];
 
   return (
