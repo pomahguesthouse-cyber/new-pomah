@@ -27,6 +27,15 @@ function formatDateID(iso: string | null | undefined) {
   return `${d}/${m}/${y}`;
 }
 
+function nightsBetween(checkIn: string | null | undefined, checkOut: string | null | undefined) {
+  if (!checkIn || !checkOut) return 0;
+  // DATE columns: parse as UTC midnight to avoid timezone drift on the diff
+  const a = Date.parse(`${checkIn}T00:00:00Z`);
+  const b = Date.parse(`${checkOut}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
 function formatIDR(n: number) {
   return new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -94,7 +103,10 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3">{b.room_types?.name}</td>
                 <td className="px-4 py-3 font-mono text-xs tabular-nums">
-                  {formatDateID(b.check_in)} → {formatDateID(b.check_out)}
+                  <p>{formatDateID(b.check_in)} → {formatDateID(b.check_out)}</p>
+                  <p className="mt-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {nightsBetween(b.check_in, b.check_out)} malam
+                  </p>
                 </td>
                 <td className="px-4 py-3"><Badge variant="outline">{b.source}</Badge></td>
                 <td className="px-4 py-3 font-mono tabular-nums">{formatIDR(Number(b.total_amount))}</td>
