@@ -131,6 +131,9 @@ export type Database = {
           status: Database["public"]["Enums"]["booking_status"]
           total_amount: number
           updated_at: string
+          payment_status: "unpaid" | "partial" | "paid"
+          paid_amount: number
+          internal_notes: string | null
         }
         Insert: {
           adults?: number
@@ -150,6 +153,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["booking_status"]
           total_amount: number
           updated_at?: string
+          payment_status?: "unpaid" | "partial" | "paid"
+          paid_amount?: number
+          internal_notes?: string | null
         }
         Update: {
           adults?: number
@@ -169,6 +175,9 @@ export type Database = {
           status?: Database["public"]["Enums"]["booking_status"]
           total_amount?: number
           updated_at?: string
+          payment_status?: "unpaid" | "partial" | "paid"
+          paid_amount?: number
+          internal_notes?: string | null
         }
         Relationships: [
           {

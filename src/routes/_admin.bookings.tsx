@@ -1,10 +1,13 @@
+import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { Plus } from "lucide-react";
 import { listBookings, updateBookingStatus } from "@/lib/bookings.functions";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -12,6 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { NewBookingDialog } from "@/components/admin/new-booking-dialog";
+import { EditBookingDialog, type EditableBooking } from "@/components/admin/edit-booking-dialog";
 
 export const Route = createFileRoute("/_admin/bookings")({
   component: BookingsPage,
@@ -68,11 +73,20 @@ function BookingsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const [newOpen, setNewOpen] = React.useState(false);
+  const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
+
   return (
     <div className="space-y-6 p-6 md:p-10">
-      <header>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1>
+        </div>
+        <Button onClick={() => setNewOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Booking Baru
+        </Button>
       </header>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -91,7 +105,11 @@ function BookingsPage() {
           <tbody className="divide-y divide-border">
             {isLoading && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
             {data?.bookings.map((b) => (
-              <tr key={b.id}>
+              <tr
+                key={b.id}
+                onClick={() => setEditCtx(b as unknown as EditableBooking)}
+                className="cursor-pointer transition-colors hover:bg-muted/40"
+              >
                 <td className="px-4 py-3">
                   <span className="font-mono text-xs font-semibold text-foreground">
                     {b.reference_code ?? "—"}
@@ -117,7 +135,7 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3"><Badge variant="outline">{b.source}</Badge></td>
                 <td className="px-4 py-3 font-mono tabular-nums">{formatIDR(Number(b.total_amount))}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={b.status}
                     onValueChange={(v) => mut.mutate({ id: b.id, status: v as typeof STATUSES[number] })}
@@ -135,6 +153,13 @@ function BookingsPage() {
           </tbody>
         </table>
       </div>
+
+      <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      <EditBookingDialog
+        open={!!editCtx}
+        booking={editCtx}
+        onClose={() => setEditCtx(null)}
+      />
     </div>
   );
 }
