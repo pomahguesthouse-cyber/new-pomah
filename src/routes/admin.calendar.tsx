@@ -92,6 +92,11 @@ function CalendarPage() {
     queryKey: ["admin-calendar", from, to],
     queryFn: () => fetchCalendar({ data: { from, to } }),
   });
+  useRealtimeInvalidate(
+    "admin-calendar-stream",
+    ["bookings", "rooms", "room_types", "booking_events"],
+    [["admin-calendar"], ["dashboard"], ["bookings"]],
+  );
 
   const [createCtx, setCreateCtx] = React.useState<
     | { roomId: string; roomNumber: string; roomTypeName: string; baseRate: number; date: Date }
