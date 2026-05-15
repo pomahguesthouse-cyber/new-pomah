@@ -77,9 +77,20 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         status: "pending",
         special_requests: data.specialRequests || null,
       })
-      .select("id")
+      .select("id, reference_code")
       .single();
     if (berr || !booking) throw berr ?? new Error("Could not create booking");
 
-    return { id: booking.id, total, nights };
+    return { id: booking.id, reference_code: booking.reference_code, total, nights };
+  });
+
+export const getBookingReference = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { data: booking } = await supabasePublic
+      .from("bookings")
+      .select("reference_code")
+      .eq("id", data.id)
+      .maybeSingle();
+    return { reference_code: booking?.reference_code ?? null };
   });
