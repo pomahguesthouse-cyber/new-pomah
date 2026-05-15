@@ -42,7 +42,9 @@ export const getThread = createServerFn({ method: "GET" })
       if (g) {
         const { data: b } = await context.supabase
           .from("bookings")
-          .select("id, check_in, check_out, status, adults, children, total_amount, special_requests, room_type_id, room_id")
+          .select(
+            "id, check_in, check_out, status, adults, children, total_amount, special_requests, room_type_id, room_id",
+          )
           .eq("guest_id", g.id)
           .order("check_in", { ascending: false })
           .limit(1)
@@ -174,7 +176,10 @@ export const draftAiReply = createServerFn({ method: "POST" })
         content:
           "You are the front-desk concierge at Pomah Guesthouse. Reply to the guest in the same language they used. Be warm, concise (2-4 sentences), and professional. Confirm details when possible. Never invent prices or availability — if unsure, offer to check.",
       },
-      { role: "user", content: `Conversation so far:\n${transcript}\n\nDraft the next reply from the host.` },
+      {
+        role: "user",
+        content: `Conversation so far:\n${transcript}\n\nDraft the next reply from the host.`,
+      },
     ]);
 
     const final = draft ?? "Could not generate a draft right now.";
@@ -232,7 +237,14 @@ export const classifyIntent = createServerFn({ method: "POST" })
       },
       { role: "user", content: transcript },
     ]);
-    const allowed = ["booking_inquiry", "service_request", "complaint", "recommendation", "feedback", "other"];
+    const allowed = [
+      "booking_inquiry",
+      "service_request",
+      "complaint",
+      "recommendation",
+      "feedback",
+      "other",
+    ];
     const intent = allowed.find((a) => intentRaw?.toLowerCase().includes(a)) ?? "other";
     await context.supabase.from("whatsapp_threads").update({ intent }).eq("id", data.threadId);
     return { intent };

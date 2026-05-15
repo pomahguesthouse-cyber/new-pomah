@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_admin/pricing")({
+export const Route = createFileRoute("/admin/pricing")({
   component: PricingPage,
 });
 
@@ -31,11 +31,7 @@ function PricingPage() {
   const fn = useServerFn(listPricing);
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["pricing"], queryFn: () => fn() });
-  useRealtimeInvalidate(
-    "admin-pricing-stream",
-    ["room_types", "seasonal_rates"],
-    [["pricing"]],
-  );
+  useRealtimeInvalidate("admin-pricing-stream", ["room_types", "seasonal_rates"], [["pricing"]]);
 
   const updateBase = useServerFn(updateBaseRate);
   const upsert = useServerFn(upsertSeasonalRate);
@@ -84,7 +80,9 @@ function PricingPage() {
   return (
     <div className="space-y-8 p-6 md:p-10">
       <header>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Pricing</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Pricing
+        </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Rates &amp; seasons</h1>
       </header>
 
@@ -199,9 +197,7 @@ function PricingPage() {
               type="number"
               step="0.05"
               value={newRate.multiplier}
-              onChange={(e) =>
-                setNewRate({ ...newRate, multiplier: Number(e.target.value) })
-              }
+              onChange={(e) => setNewRate({ ...newRate, multiplier: Number(e.target.value) })}
             />
           </div>
           <div>
@@ -216,7 +212,12 @@ function PricingPage() {
           <div className="md:col-span-7">
             <Button
               onClick={() => {
-                if (!newRate.name || !newRate.room_type_id || !newRate.start_date || !newRate.end_date) {
+                if (
+                  !newRate.name ||
+                  !newRate.room_type_id ||
+                  !newRate.start_date ||
+                  !newRate.end_date
+                ) {
                   toast.error("Fill all fields");
                   return;
                 }

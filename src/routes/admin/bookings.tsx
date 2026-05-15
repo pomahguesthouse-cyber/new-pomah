@@ -18,7 +18,7 @@ import {
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
-export const Route = createFileRoute("/_admin/bookings")({
+export const Route = createFileRoute("/admin/bookings")({
   component: BookingsPage,
 });
 
@@ -66,8 +66,7 @@ function BookingsPage() {
   );
 
   const mut = useMutation({
-    mutationFn: (vars: { id: string; status: typeof STATUSES[number] }) =>
-      update({ data: vars }),
+    mutationFn: (vars: { id: string; status: (typeof STATUSES)[number] }) => update({ data: vars }),
     onSuccess: () => {
       toast.success("Updated");
       qc.invalidateQueries({ queryKey: ["bookings"] });
@@ -83,7 +82,9 @@ function BookingsPage() {
     <div className="space-y-6 p-6 md:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Reservations
+          </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1>
         </div>
         <Button onClick={() => setNewOpen(true)} className="gap-2">
@@ -98,7 +99,8 @@ function BookingsPage() {
           <p className="mt-1 font-mono text-xs text-destructive/80">{(error as Error).message}</p>
           <p className="mt-2 text-xs text-muted-foreground">
             Kalau errornya menyebut kolom seperti <code>payment_status</code>, jalankan migration
-            terbaru di Supabase (SQL Editor → paste isi file <code>supabase/migrations/20260515130000_*.sql</code> dan
+            terbaru di Supabase (SQL Editor → paste isi file{" "}
+            <code>supabase/migrations/20260515130000_*.sql</code> dan
             <code>20260515120000_*.sql</code> → Run).
           </p>
         </div>
@@ -109,7 +111,9 @@ function BookingsPage() {
           <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Mode terbatas</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Kolom payment & internal notes belum ada di database — daftar tetap tampil tapi fitur
-            pembayaran tidak aktif. Apply migration <code>20260515130000_add_booking_payment_and_internal_notes.sql</code> untuk mengaktifkannya.
+            pembayaran tidak aktif. Apply migration{" "}
+            <code>20260515130000_add_booking_payment_and_internal_notes.sql</code> untuk
+            mengaktifkannya.
           </p>
         </div>
       )}
@@ -128,11 +132,18 @@ function BookingsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {isLoading && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
+            {isLoading && (
+              <tr>
+                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                  Loading…
+                </td>
+              </tr>
+            )}
             {!isLoading && !error && (data?.bookings.length ?? 0) === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk membuat yang pertama.
+                  Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk membuat
+                  yang pertama.
                 </td>
               </tr>
             )}
@@ -160,22 +171,34 @@ function BookingsPage() {
                   </p>
                 </td>
                 <td className="px-4 py-3 font-mono text-xs tabular-nums">
-                  <p>{formatDateID(b.check_in)} → {formatDateID(b.check_out)}</p>
+                  <p>
+                    {formatDateID(b.check_in)} → {formatDateID(b.check_out)}
+                  </p>
                   <p className="mt-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
                 </td>
-                <td className="px-4 py-3"><Badge variant="outline">{b.source}</Badge></td>
-                <td className="px-4 py-3 font-mono tabular-nums">{formatIDR(Number(b.total_amount))}</td>
+                <td className="px-4 py-3">
+                  <Badge variant="outline">{b.source}</Badge>
+                </td>
+                <td className="px-4 py-3 font-mono tabular-nums">
+                  {formatIDR(Number(b.total_amount))}
+                </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={b.status}
-                    onValueChange={(v) => mut.mutate({ id: b.id, status: v as typeof STATUSES[number] })}
+                    onValueChange={(v) =>
+                      mut.mutate({ id: b.id, status: v as (typeof STATUSES)[number] })
+                    }
                   >
-                    <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-8 w-36">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -187,11 +210,7 @@ function BookingsPage() {
       </div>
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
-      <EditBookingDialog
-        open={!!editCtx}
-        booking={editCtx}
-        onClose={() => setEditCtx(null)}
-      />
+      <EditBookingDialog open={!!editCtx} booking={editCtx} onClose={() => setEditCtx(null)} />
     </div>
   );
 }

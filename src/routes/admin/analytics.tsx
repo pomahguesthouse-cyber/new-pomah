@@ -16,7 +16,7 @@ import { getAnalytics } from "@/admin/modules/analytics/analytics.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
-export const Route = createFileRoute("/_admin/analytics")({
+export const Route = createFileRoute("/admin/analytics")({
   component: AnalyticsPage,
 });
 
@@ -39,7 +39,9 @@ function AnalyticsPage() {
   return (
     <div className="space-y-8 p-6 md:p-10">
       <header>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Analytics</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Analytics
+        </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Last 30 days</h1>
       </header>
 
@@ -65,7 +67,12 @@ function AnalyticsPage() {
               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
-              <Area type="monotone" dataKey="occupancy" stroke="hsl(var(--accent))" fill="url(#occ)" />
+              <Area
+                type="monotone"
+                dataKey="occupancy"
+                stroke="hsl(var(--accent))"
+                fill="url(#occ)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -109,7 +116,9 @@ function AnalyticsPage() {
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="bg-card p-5">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-3 font-mono text-3xl font-semibold tracking-tight">{value}</p>
       {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>

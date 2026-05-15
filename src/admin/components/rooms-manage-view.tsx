@@ -136,7 +136,8 @@ export function RoomsManageView() {
                   <p className="font-mono text-2xl font-semibold">#{r.number}</p>
                   <p className="mt-1 text-sm text-muted-foreground">{r.room_types?.name ?? "—"}</p>
                   <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam · {r.room_types?.capacity ?? 0} tamu
+                    {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam ·{" "}
+                    {r.room_types?.capacity ?? 0} tamu
                   </p>
                 </div>
                 <span
@@ -246,4 +247,3 @@ export function RoomsManageView() {
     </div>
   );
 }
-

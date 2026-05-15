@@ -86,13 +86,7 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const BOOKING_STATUS = z.enum([
-  "pending",
-  "confirmed",
-  "checked_in",
-  "checked_out",
-  "cancelled",
-]);
+const BOOKING_STATUS = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]);
 const BOOKING_SOURCE = z.enum(["direct", "whatsapp", "walk_in", "website"]);
 const PAYMENT_STATUS = z.enum(["unpaid", "partial", "paid"]);
 
@@ -130,8 +124,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
   .inputValidator((d) => createMultiRoomBookingSchema.parse(d))
   .handler(async ({ data, context }) => {
     const nights =
-      (Date.parse(`${data.check_out}T00:00:00Z`) -
-        Date.parse(`${data.check_in}T00:00:00Z`)) /
+      (Date.parse(`${data.check_out}T00:00:00Z`) - Date.parse(`${data.check_in}T00:00:00Z`)) /
       86_400_000;
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
@@ -198,8 +191,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       const sumPrev = data.rooms
         .slice(0, -1)
         .reduce(
-          (acc, _r, j) =>
-            acc + Math.round((totalsPerRoom[j] / grandTotal) * data.paid_amount),
+          (acc, _r, j) => acc + Math.round((totalsPerRoom[j] / grandTotal) * data.paid_amount),
           0,
         );
       return Math.max(0, data.paid_amount - sumPrev);
@@ -270,8 +262,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
   .inputValidator((d) => updateBookingFullSchema.parse(d))
   .handler(async ({ data, context }) => {
     const nights =
-      (Date.parse(`${data.check_out}T00:00:00Z`) -
-        Date.parse(`${data.check_in}T00:00:00Z`)) /
+      (Date.parse(`${data.check_out}T00:00:00Z`) - Date.parse(`${data.check_in}T00:00:00Z`)) /
       86_400_000;
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
@@ -319,10 +310,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     };
     if (room_type_id) patch.room_type_id = room_type_id;
 
-    const { error: bErr } = await context.supabase
-      .from("bookings")
-      .update(patch)
-      .eq("id", data.id);
+    const { error: bErr } = await context.supabase.from("bookings").update(patch).eq("id", data.id);
     if (bErr) throw bErr;
 
     return { ok: true, total_amount, nights };
@@ -374,9 +362,7 @@ export const createRoom = createServerFn({ method: "POST" })
 
 export const updateRoom = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    roomInputSchema.extend({ id: z.string().uuid() }).parse(d),
-  )
+  .inputValidator((d) => roomInputSchema.extend({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("rooms")

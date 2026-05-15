@@ -52,9 +52,21 @@ const SOURCES = [
 ] as const;
 
 const PAYMENT_STATUSES = [
-  { value: "unpaid", label: "Belum Bayar", chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20" },
-  { value: "partial", label: "Sebagian", chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20" },
-  { value: "paid", label: "Lunas", chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20" },
+  {
+    value: "unpaid",
+    label: "Belum Bayar",
+    chip: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20",
+  },
+  {
+    value: "partial",
+    label: "Sebagian",
+    chip: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20",
+  },
+  {
+    value: "paid",
+    label: "Lunas",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+  },
 ] as const;
 
 type RoomRow = {
@@ -138,7 +150,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [children, setChildren] = React.useState(0);
   const [status, setStatus] = React.useState<(typeof STATUSES)[number]["value"]>("confirmed");
   const [source, setSource] = React.useState<(typeof SOURCES)[number]["value"]>("direct");
-  const [paymentStatus, setPaymentStatus] = React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
+  const [paymentStatus, setPaymentStatus] =
+    React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
   const [paidAmount, setPaidAmount] = React.useState(0);
   const [nightlyRate, setNightlyRate] = React.useState(0);
   const [specialRequests, setSpecialRequests] = React.useState("");
@@ -211,8 +224,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
   if (!booking) return null;
 
-  const canSave =
-    !updateMut.isPending && guest.full_name.trim().length > 0 && nights >= 1;
+  const canSave = !updateMut.isPending && guest.full_name.trim().length > 0 && nights >= 1;
 
   const paymentChip = PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.chip;
 
@@ -231,7 +243,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   Edit Booking
                 </DialogTitle>
                 <DialogDescription className="font-mono text-xs">
-                  <span className="font-semibold text-foreground">{booking.reference_code ?? booking.id.slice(0, 8)}</span>
+                  <span className="font-semibold text-foreground">
+                    {booking.reference_code ?? booking.id.slice(0, 8)}
+                  </span>
                   {booking.guests?.full_name && (
                     <span className="text-muted-foreground"> · {booking.guests.full_name}</span>
                   )}
@@ -295,7 +309,11 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   <Input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
                 </Field>
                 <Field label="Check-Out" required>
-                  <Input type="date" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={checkOut}
+                    onChange={(e) => setCheckOut(e.target.value)}
+                  />
                 </Field>
                 <Field label="Dewasa">
                   <Input
@@ -322,7 +340,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   {nights} malam
                 </p>
               ) : (
-                <p className="mt-3 text-xs text-destructive">Tanggal check-out harus setelah check-in.</p>
+                <p className="mt-3 text-xs text-destructive">
+                  Tanggal check-out harus setelah check-in.
+                </p>
               )}
             </Section>
 
@@ -330,7 +350,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             <Section icon={<BedDouble className="h-4 w-4" />} title="Kamar">
               <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
                 <Field label="Kamar Fisik">
-                  <Select value={roomId || "__none"} onValueChange={(v) => setRoomId(v === "__none" ? "" : v)}>
+                  <Select
+                    value={roomId || "__none"}
+                    onValueChange={(v) => setRoomId(v === "__none" ? "" : v)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Belum di-assign" />
                     </SelectTrigger>
@@ -355,7 +378,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                 </Field>
               </div>
               <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                Total: <span className="text-foreground">{formatIDR(total)}</span> ({formatIDR(nightlyRate)} × {Math.max(nights, 1)} malam)
+                Total: <span className="text-foreground">{formatIDR(total)}</span> (
+                {formatIDR(nightlyRate)} × {Math.max(nights, 1)} malam)
               </p>
             </Section>
 
@@ -364,20 +388,28 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status Booking">
                   <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {STATUSES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </Field>
                 <Field label="Sumber">
                   <Select value={source} onValueChange={(v) => setSource(v as any)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {SOURCES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        <SelectItem key={s.value} value={s.value}>
+                          {s.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -397,10 +429,14 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                       if (v === "unpaid") setPaidAmount(0);
                     }}
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       {PAYMENT_STATUSES.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                        <SelectItem key={p.value} value={p.value}>
+                          {p.label}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -419,7 +455,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3">
                 <SummaryStat label="Total" value={formatIDR(total)} />
-                <SummaryStat label="Dibayar" value={formatIDR(paymentStatus === "paid" ? total : paidAmount)} />
+                <SummaryStat
+                  label="Dibayar"
+                  value={formatIDR(paymentStatus === "paid" ? total : paidAmount)}
+                />
                 <SummaryStat
                   label="Sisa"
                   value={formatIDR(outstanding)}
@@ -519,7 +558,9 @@ function SummaryStat({
 }) {
   return (
     <div className="text-center">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </p>
       <p
         className={cn(
           "mt-0.5 font-mono text-xs font-semibold tabular-nums",

@@ -4,7 +4,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const getAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ days: z.number().int().min(7).max(180).default(30) }).parse(d ?? { days: 30 }))
+  .inputValidator((d) =>
+    z.object({ days: z.number().int().min(7).max(180).default(30) }).parse(d ?? { days: 30 }),
+  )
   .handler(async ({ data, context }) => {
     const days = data.days;
     const today = new Date();
@@ -22,7 +24,8 @@ export const getAnalytics = createServerFn({ method: "GET" })
     ]);
 
     const totalRooms = rooms?.length ?? 1;
-    const series: Array<{ date: string; occupancy: number; revenue: number; bookings: number }> = [];
+    const series: Array<{ date: string; occupancy: number; revenue: number; bookings: number }> =
+      [];
 
     for (let i = 0; i < days; i++) {
       const d = new Date(start);
@@ -48,7 +51,7 @@ export const getAnalytics = createServerFn({ method: "GET" })
       return s + Math.max(1, Math.round((+co - +ci) / 86400000));
     }, 0);
     const adr = nights ? totalRevenue / nights : 0;
-    const revpar = (totalRevenue / (totalRooms * days));
+    const revpar = totalRevenue / (totalRooms * days);
 
     const sourceMix: Record<string, number> = {};
     for (const b of bookings ?? []) {

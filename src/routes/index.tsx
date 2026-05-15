@@ -1,23 +1,10 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  ArrowRight,
-  MessageCircle,
-  Star,
-  Wifi,
-  Coffee,
-  ShowerHead,
-  MapPin,
-} from "lucide-react";
+import { ArrowRight, MessageCircle, Star, Wifi, Coffee, ShowerHead, MapPin } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { Button } from "@/components/ui/button";
-import { isAdminHost } from "@/lib/host";
-import { AdminShell } from "@/admin/components/admin-shell";
-import { DashboardView } from "@/admin/components/dashboard-view";
-import { supabase } from "@/integrations/supabase/client";
 import { cn, formatDateID } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -36,39 +23,8 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: IndexRoute,
+  component: PublicHome,
 });
-
-function IndexRoute() {
-  const [admin, setAdmin] = useState<boolean | null>(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isAdmin = isAdminHost(window.location.hostname);
-    if (!isAdmin) {
-      setAdmin(false);
-      return;
-    }
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        navigate({ to: "/login" });
-        return;
-      }
-      setAdmin(true);
-    });
-  }, [navigate]);
-
-  if (admin === null) return null;
-  if (admin) {
-    return (
-      <AdminShell>
-        <DashboardView />
-      </AdminShell>
-    );
-  }
-  return <PublicHome />;
-}
 
 /* ------------------------------------------------------------------ */
 /* Home page                                                            */
@@ -130,9 +86,7 @@ function PublicHome() {
                     <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                   ))}
                 </div>
-                <p className="mt-0.5 text-xs text-stone-500">
-                  Dipercaya ratusan tamu
-                </p>
+                <p className="mt-0.5 text-xs text-stone-500">Dipercaya ratusan tamu</p>
               </div>
             </div>
           </div>
@@ -225,7 +179,11 @@ function PublicHome() {
                   <div>
                     <h3 className="font-semibold text-stone-900">{rt.name}</h3>
                     <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                      {[rt.bed_type, rt.capacity && `${rt.capacity} tamu`, rt.size_sqm && `${rt.size_sqm}m²`]
+                      {[
+                        rt.bed_type,
+                        rt.capacity && `${rt.capacity} tamu`,
+                        rt.size_sqm && `${rt.size_sqm}m²`,
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -280,9 +238,7 @@ function PublicHome() {
               Fasilitas
               <span className="h-px w-6 bg-amber-700" />
             </span>
-            <h2 className="mt-3 font-serif text-3xl font-semibold">
-              Semua yang Anda butuhkan
-            </h2>
+            <h2 className="mt-3 font-serif text-3xl font-semibold">Semua yang Anda butuhkan</h2>
             <p className="mt-3 mx-auto max-w-md text-sm text-stone-500">
               Setiap kamar dilengkapi fasilitas modern untuk kenyamanan menginap Anda.
             </p>
@@ -291,9 +247,21 @@ function PublicHome() {
           <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {[
               { icon: Wifi, title: "WiFi Cepat", desc: "Koneksi internet stabil di seluruh area." },
-              { icon: Coffee, title: "Sarapan", desc: "Tersedia pilihan sarapan setiap pagi hari." },
-              { icon: ShowerHead, title: "Kamar Mandi Dalam", desc: "Kamar mandi pribadi di setiap kamar." },
-              { icon: MessageCircle, title: "WhatsApp 24 Jam", desc: "Kami selalu siap membantu kapan saja." },
+              {
+                icon: Coffee,
+                title: "Sarapan",
+                desc: "Tersedia pilihan sarapan setiap pagi hari.",
+              },
+              {
+                icon: ShowerHead,
+                title: "Kamar Mandi Dalam",
+                desc: "Kamar mandi pribadi di setiap kamar.",
+              },
+              {
+                icon: MessageCircle,
+                title: "WhatsApp 24 Jam",
+                desc: "Kami selalu siap membantu kapan saja.",
+              },
             ].map((f) => (
               <div
                 key={f.title}
@@ -360,8 +328,8 @@ function PublicHome() {
             ))}
           </div>
           <blockquote className="mt-6 font-serif text-2xl leading-relaxed text-stone-100 md:text-3xl">
-            "Pengalaman menginap yang luar biasa. Staf yang ramah, kamar yang bersih, dan
-            lokasinya sangat strategis. Pasti akan kembali lagi!"
+            "Pengalaman menginap yang luar biasa. Staf yang ramah, kamar yang bersih, dan lokasinya
+            sangat strategis. Pasti akan kembali lagi!"
           </blockquote>
           <div className="mt-6 flex items-center justify-center gap-3">
             <div className="h-10 w-10 rounded-full bg-amber-700/40" />
@@ -427,17 +395,15 @@ function PublicHome() {
             </span>
             <h2 className="mt-4 font-serif text-3xl font-semibold">Mudah dijangkau</h2>
             <p className="mt-4 text-sm leading-relaxed text-stone-500">
-              Terletak di lokasi strategis dengan akses mudah ke pusat kota, restoran, dan
-              tempat wisata populer.
+              Terletak di lokasi strategis dengan akses mudah ke pusat kota, restoran, dan tempat
+              wisata populer.
             </p>
             {property?.address && (
               <div className="mt-6 flex items-start gap-3 rounded-xl bg-stone-50 p-4">
                 <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
                 <div>
                   <p className="font-medium text-stone-900">{property.address}</p>
-                  {property.city && (
-                    <p className="text-sm text-stone-500">{property.city}</p>
-                  )}
+                  {property.city && <p className="text-sm text-stone-500">{property.city}</p>}
                 </div>
               </div>
             )}
