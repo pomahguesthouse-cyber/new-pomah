@@ -31,6 +31,7 @@ import {
   summarizeThread,
   classifyIntent,
 } from "@/lib/whatsapp.functions";
+import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
