@@ -10,7 +10,8 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, CalendarDays } from "lucide-react";
+import { id } from "date-fns/locale"; // Import locale Indonesia
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 import {
   getCalendarData,
@@ -36,7 +37,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -51,23 +51,26 @@ type BookingRow = {
   check_in: string;
   check_out: string;
   status: string;
-  source: string;
   room_id: string | null;
-  room_type_id: string;
-  adults: number;
-  children: number;
   nightly_rate: number;
-  total_amount: number;
-  special_requests: string | null;
-  guests: { id: string; full_name: string; email: string | null; phone: string | null } | null;
+  guests: { full_name: string; email: string | null; phone: string | null } | null;
 };
 
 const statusStyles: Record<string, string> = {
-  pending: "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300",
+  pending: "bg-amber-500/15 border-amber-500/40 text-amber-700",
   confirmed: "bg-primary/15 border-primary/40 text-primary",
-  checked_in: "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300",
+  checked_in: "bg-emerald-500/15 border-emerald-500/40 text-emerald-700",
   checked_out: "bg-muted border-border text-muted-foreground",
   cancelled: "bg-destructive/10 border-destructive/30 text-destructive line-through",
+};
+
+// Format Rupiah Indonesia
+const formatIDR = (amount: number) => {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount).replace("IDR", "Rp.");
 };
 
 function fmtIso(d: Date) {
@@ -90,13 +93,7 @@ function CalendarPage() {
     queryFn: () => fetchCalendar({ data: { from, to } }),
   });
 
-  const [createCtx, setCreateCtx] = React.useState<{
-    roomId: string;
-    roomNumber: string;
-    roomTypeName: string;
-    baseRate: number;
-    date: Date;
-  } | null>(null);
+  const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<BookingRow | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
@@ -108,10 +105,10 @@ function CalendarPage() {
           <CalendarDays className="h-5 w-5 text-primary" />
           <div>
             <h1 className="font-mono text-sm font-semibold uppercase tracking-[0.18em]">
-              Booking Calendar
+              Kalender Booking
             </h1>
             <p className="text-xs text-muted-foreground">
-              {format(anchor, "d MMM")} – {format(addDays(anchor, WINDOW_DAYS - 1), "d MMM yyyy")}
+              {format(anchor, "dd/MM/yyyy")} – {format(addDays(anchor, WINDOW_DAYS - 1), "dd/MM/yyyy")}
             </p>
           </div>
         </div>
@@ -120,7 +117,7 @@ function CalendarPage() {
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(startOfDay(new Date()))}>
-            Today
+            Hari Ini
           </Button>
           <Button variant="outline" size="sm" onClick={() => setAnchor(addDays(anchor, WINDOW_DAYS))}>
             <ChevronRight className="h-4 w-4" />
@@ -130,7 +127,7 @@ function CalendarPage() {
 
       <div className="flex-1 overflow-auto p-4">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Loading calendar…</p>
+          <p className="p-6 text-sm text-muted-foreground">Memuat kalender...</p>
         ) : (
           <CalendarGrid
             days={days}
@@ -154,116 +151,74 @@ function CalendarPage() {
         )}
       </div>
 
-      <CreateBookingDialog
-        ctx={createCtx}
-        onClose={() => setCreateCtx(null)}
-        onSaved={() => {
-          setCreateCtx(null);
-          invalidate();
-        }}
-      />
-      <EditBookingDialog
-        booking={editCtx}
-        rooms={data?.rooms ?? []}
-        roomTypes={data?.roomTypes ?? []}
-        onClose={() => setEditCtx(null)}
-        onSaved={() => {
-          setEditCtx(null);
-          invalidate();
-        }}
-      />
+      <CreateBookingDialog ctx={createCtx} onClose={() => setCreateCtx(null)} onSaved={invalidate} />
+      <EditBookingDialog booking={editCtx} rooms={data?.rooms ?? []} onClose={() => setEditCtx(null)} onSaved={invalidate} />
     </div>
   );
 }
 
-function CalendarGrid({
-  days,
-  rooms,
-  roomTypes,
-  bookings,
-  onCellClick,
-  onBookingClick,
-}: {
-  days: Date[];
-  rooms: any[];
-  roomTypes: any[];
-  bookings: BookingRow[];
-  onCellClick: (roomId: string, date: Date) => void;
-  onBookingClick: (b: BookingRow) => void;
-}) {
+function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
   const cellWidth = 100;
-  const labelWidth = 200;
+  const labelWidth = 180;
   const windowStart = days[0];
-
-  const grouped = React.useMemo(() => {
-    return roomTypes
-      .map((t) => ({
-        type: t,
-        rooms: rooms.filter((r) => r.room_type_id === t.id),
-      }))
-      .filter((g) => g.rooms.length > 0);
-  }, [rooms, roomTypes]);
 
   const bookingsByRoom = React.useMemo(() => {
     const m = new Map<string, BookingRow[]>();
-    for (const b of bookings) {
-      if (!b.room_id) continue;
-      if (!m.has(b.room_id)) m.set(b.room_id, []);
-      m.get(b.room_id)!.push(b);
-    }
+    bookings.forEach((b: any) => {
+      if (b.room_id) {
+        if (!m.has(b.room_id)) m.set(b.room_id, []);
+        m.get(b.room_id)!.push(b);
+      }
+    });
     return m;
   }, [bookings]);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <div style={{ minWidth: labelWidth + days.length * cellWidth }}>
+        {/* Header: Nama Hari Indonesia */}
         <div className="flex border-b border-border bg-muted/40 sticky top-0 z-30">
-          <div style={{ width: labelWidth }} className="shrink-0 px-3 py-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Room</div>
-          {days.map((d) => (
+          <div style={{ width: labelWidth }} className="shrink-0 px-3 py-4 text-[10px] font-bold uppercase text-muted-foreground">Kamar</div>
+          {days.map((d: Date) => (
             <div key={d.toISOString()} style={{ width: cellWidth }} className={cn("shrink-0 border-l border-border px-2 py-2 text-center", isToday(d) && "bg-primary/10")}>
-              <div className="text-[10px] uppercase text-muted-foreground">{format(d, "EEE")}</div>
-              <div className="text-sm font-semibold">{format(d, "d")}</div>
+              <div className="text-[10px] uppercase text-muted-foreground">
+                {format(d, "EEEE", { locale: id })}
+              </div>
+              <div className="text-sm font-semibold">{format(d, "dd/MM")}</div>
             </div>
           ))}
         </div>
 
-        {grouped.map((g) => (
-          <div key={g.type.id}>
-            <div className="flex bg-muted/20 border-b border-border">
-              <div style={{ width: labelWidth }} className="px-3 py-1.5 text-[10px] font-bold uppercase text-foreground/60">{g.type.name}</div>
+        {/* Body Kamar */}
+        {roomTypes.map((type: any) => (
+          <div key={type.id}>
+            <div className="flex bg-muted/20 border-b border-border px-3 py-1.5 text-[10px] font-bold uppercase text-foreground/60">
+              {type.name} · {formatIDR(type.base_rate)}/malam
             </div>
-            {g.rooms.map((room) => (
+            {rooms.filter((r: any) => r.room_type_id === type.id).map((room: any) => (
               <div key={room.id} className="relative flex border-b border-border h-[60px]">
                 <div style={{ width: labelWidth }} className="flex shrink-0 items-center px-3 border-r border-border font-medium text-sm">#{room.number}</div>
-                {days.map((d) => (
-                  <button key={d.toISOString()} onClick={() => onCellClick(room.id, d)} style={{ width: cellWidth }} className="shrink-0 border-l border-border hover:bg-accent/30 transition-colors" />
+                {days.map((d: Date) => (
+                  <button key={d.toISOString()} onClick={() => onCellClick(room.id, d)} style={{ width: cellWidth }} className="shrink-0 border-l border-border hover:bg-accent/30" />
                 ))}
+                
+                {/* Bar Booking: Visualisasi Check-in 14:00 & Check-out 12:00 */}
                 {(bookingsByRoom.get(room.id) ?? []).map((b) => {
                   const ci = parseISO(b.check_in);
                   const co = parseISO(b.check_out);
                   const startIdx = differenceInCalendarDays(ci, windowStart);
                   const endIdx = differenceInCalendarDays(co, windowStart);
-                  
-                  // Mulai dari tengah kolom check-in (14:00)
                   const left = labelWidth + (startIdx * cellWidth) + (cellWidth / 2);
-                  // Berakhir di tengah kolom check-out (12:00)
-                  const right = labelWidth + (endIdx * cellWidth) + (cellWidth / 2);
-                  const width = right - left;
-
-                  if (right <= labelWidth || left >= labelWidth + days.length * cellWidth) return null;
+                  const width = (endIdx - startIdx) * cellWidth;
 
                   return (
                     <button
                       key={b.id}
                       onClick={() => onBookingClick(b)}
-                      className={cn("absolute top-2 bottom-2 flex items-center px-2 rounded border shadow-sm text-[11px] font-bold overflow-hidden transition-all hover:z-20", statusStyles[b.status] ?? "bg-muted border-border")}
-                      style={{ 
-                        left: left + 2, 
-                        width: Math.max(width - 4, 40),
-                        zIndex: 10
-                      }}
+                      className={cn("absolute top-2 bottom-2 flex items-center px-2 rounded border shadow-sm text-[11px] font-bold transition-all hover:z-20", statusStyles[b.status])}
+                      style={{ left: left + 2, width: width - 4, zIndex: 10 }}
                     >
-                      <span className="truncate">{b.guests?.full_name ?? "Guest"}</span>
+                      <span className="truncate">{b.guests?.full_name ?? "Tamu"}</span>
                     </button>
                   );
                 })}
@@ -276,169 +231,85 @@ function CalendarGrid({
   );
 }
 
-function CreateBookingDialog({ ctx, onClose, onSaved }: { ctx: any; onClose: () => void; onSaved: () => void }) {
+// Dialog Komponen (Create & Edit)
+function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
   const createFn = useServerFn(createBookingFromAdmin);
-  const m = useMutation({
-    mutationFn: createFn,
-    onSuccess: () => {
-      toast.success("Booking created");
-      onSaved();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Failed to create booking"),
-  });
-
-  const [form, setForm] = React.useState({
-    guestName: "",
-    guestEmail: "",
-    guestPhone: "",
-    checkIn: "",
-    checkOut: "",
-    adults: 2,
-    children: 0,
-    nightlyRate: 0,
-    status: "confirmed" as any,
-    notes: ""
-  });
+  const [form, setForm] = React.useState({ guestName: "", checkIn: "", checkOut: "", nightlyRate: 0 });
 
   React.useEffect(() => {
-    if (ctx) {
-      setForm(f => ({ 
-        ...f, 
-        checkIn: fmtIso(ctx.date), 
-        checkOut: fmtIso(addDays(ctx.date, 1)), 
-        nightlyRate: ctx.baseRate 
-      }));
-    }
+    if (ctx) setForm({ ...form, checkIn: fmtIso(ctx.date), checkOut: fmtIso(addDays(ctx.date, 1)), nightlyRate: ctx.baseRate });
   }, [ctx]);
+
+  const handleSave = async () => {
+    try {
+      await createFn({ data: { ...form, roomId: ctx.roomId, adults: 1, children: 0 } });
+      toast.success("Booking berhasil dibuat");
+      onSaved();
+    } catch (e: any) { toast.error(e.message); }
+  };
 
   return (
     <Dialog open={!!ctx} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>New Booking: #{ctx?.roomNumber}</DialogTitle>
-          <DialogDescription>{ctx?.roomTypeName}</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <Field label="Guest Name">
-            <Input value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} placeholder="Full name" />
-          </Field>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Booking Baru: #{ctx?.roomNumber}</DialogTitle></DialogHeader>
+        <div className="grid gap-3 py-4">
+          <Field label="Nama Tamu"><Input value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Check-in">
-              <Input type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
-            </Field>
-            <Field label="Check-out">
-              <Input type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
-            </Field>
+            <Field label="Check-in (14:00)"><Input type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
+            <Field label="Check-out (12:00)"><Input type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Email">
-              <Input type="email" value={form.guestEmail} onChange={(e) => setForm({ ...form, guestEmail: e.target.value })} />
-            </Field>
-            <Field label="Phone">
-              <Input value={form.guestPhone} onChange={(e) => setForm({ ...form, guestPhone: e.target.value })} />
-            </Field>
-          </div>
-          <Field label="Notes">
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </Field>
+          <Field label="Harga/Malam"><Input type="number" value={form.nightlyRate} onChange={(e) => setForm({ ...form, nightlyRate: Number(e.target.value) })} /></Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={m.isPending} onClick={() => m.mutate({ data: { ...form, roomId: ctx.roomId } })}>
-            {m.isPending ? "Saving..." : "Create Booking"}
-          </Button>
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={handleSave}>Simpan Booking</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function EditBookingDialog({ booking, rooms, roomTypes, onClose, onSaved }: { booking: any; rooms: any[]; roomTypes: any[]; onClose: () => void; onSaved: () => void }) {
+function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
   const updateFn = useServerFn(updateBookingFromAdmin);
-  const m = useMutation({
-    mutationFn: updateFn,
-    onSuccess: () => {
-      toast.success("Updated");
-      onSaved();
-    },
-    onError: (e: any) => toast.error(e?.message ?? "Failed to update"),
-  });
-
-  const [form, setForm] = React.useState({
-    checkIn: "",
-    checkOut: "",
-    roomId: "",
-    status: "" as any,
-    nightlyRate: 0,
-    notes: ""
-  });
+  const [form, setForm] = React.useState<any>(null);
 
   React.useEffect(() => {
-    if (booking) {
-      setForm({
-        checkIn: booking.check_in,
-        checkOut: booking.check_out,
-        roomId: booking.room_id ?? "",
-        status: booking.status,
-        nightlyRate: Number(booking.nightly_rate),
-        notes: booking.special_requests ?? ""
-      });
-    }
+    if (booking) setForm({ id: booking.id, status: booking.status, roomId: booking.room_id });
   }, [booking]);
 
-  if (!booking) return null;
+  if (!booking || !form) return null;
 
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{booking.guests?.full_name ?? "Booking Details"}</DialogTitle>
-        </DialogHeader>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{booking.guests?.full_name}</DialogTitle></DialogHeader>
         <div className="grid gap-4 py-4">
-          <Field label="Room">
-            <Select value={form.roomId} onValueChange={(v) => setForm({ ...form, roomId: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {rooms.map(r => <SelectItem key={r.id} value={r.id}>#{r.number}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </Field>
           <Field label="Status">
-            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}>
+            <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="confirmed">Confirmed</SelectItem>
-                <SelectItem value="checked_in">Checked-in</SelectItem>
-                <SelectItem value="checked_out">Checked-out</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="confirmed">Dikonfirmasi</SelectItem>
+                <SelectItem value="checked_in">Check-in</SelectItem>
+                <SelectItem value="checked_out">Check-out</SelectItem>
+                <SelectItem value="cancelled">Dibatalkan</SelectItem>
               </SelectContent>
             </Select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Check-in">
-              <Input type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
-            </Field>
-            <Field label="Check-out">
-              <Input type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
-            </Field>
-          </div>
+          <p className="text-sm font-medium">Total: {formatIDR(booking.nightly_rate)}</p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button disabled={m.isPending} onClick={() => m.mutate({ data: { ...form, id: booking.id } })}>
-            {m.isPending ? "Saving..." : "Save Changes"}
-          </Button>
+          <Button variant="outline" onClick={onClose}>Tutup</Button>
+          <Button onClick={async () => { await updateFn({ data: form }); onSaved(); }}>Simpan Perubahan</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: any) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
+      <Label className="text-xs uppercase text-muted-foreground">{label}</Label>
       {children}
     </div>
   );
