@@ -35,7 +35,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -251,7 +250,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           </DialogHeader>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="space-y-5 p-6">
             {/* Tamu */}
             <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
@@ -451,7 +450,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               </div>
             </Section>
           </div>
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="shrink-0 border-t border-border bg-muted/30 px-6 py-3">
           <Button variant="outline" onClick={onClose} disabled={updateMut.isPending}>

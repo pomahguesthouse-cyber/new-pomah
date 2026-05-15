@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { formatDateTimeID } from "@/lib/utils";
 
 export const Route = createFileRoute("/_admin/training")({
   component: TrainingPage,
@@ -151,7 +152,7 @@ function LogRow({
         </div>
         <div className="flex flex-col items-end gap-2">
           <p className="font-mono text-[10px] text-muted-foreground">
-            {new Date(created_at).toLocaleString()}
+            {formatDateTimeID(created_at)}
           </p>
           {rating && (
             <Badge variant={rating === "good" ? "default" : "destructive"}>{rating}</Badge>

@@ -35,6 +35,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { formatDateID, formatDateLongID } from "@/lib/utils";
 
 export function DashboardView() {
   const queryClient = useQueryClient();
@@ -111,12 +112,7 @@ export function DashboardView() {
             Operations Center · Today
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            {new Date().toLocaleDateString("id-ID", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })}
+            {formatDateLongID(new Date())}
           </h1>
         </div>
         <div className="flex items-center gap-2">
@@ -266,7 +262,7 @@ export function DashboardView() {
                 <div>
                   <p className="font-medium">{b.guests?.full_name ?? "Guest"}</p>
                   <p className="font-mono text-xs text-muted-foreground">
-                    {b.check_in} → {b.check_out} · {b.room_types?.name}
+                    {formatDateID(b.check_in)} → {formatDateID(b.check_out)} · {b.room_types?.name}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
