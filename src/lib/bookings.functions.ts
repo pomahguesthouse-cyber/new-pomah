@@ -8,7 +8,7 @@ export const listBookings = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("bookings")
       .select(
-        "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, guests(id, full_name, email, phone), room_types(id, name)",
+        "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, guests(id, full_name, email, phone), room_types(id, name), rooms(id, number)",
       )
       .order("check_in", { ascending: false })
       .limit(100);
