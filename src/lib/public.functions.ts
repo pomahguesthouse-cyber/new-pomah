@@ -1,11 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabasePublic } from "@/integrations/supabase/client.server";
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const [{ data: property }, { data: roomTypes }] = await Promise.all([
-    supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
-    supabaseAdmin
+    supabasePublic.from("properties").select("*").limit(1).maybeSingle(),
+    supabasePublic
       .from("room_types")
       .select("id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url")
       .order("base_rate"),
@@ -30,14 +30,14 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const { data: property } = await supabaseAdmin
+    const { data: property } = await supabasePublic
       .from("properties")
       .select("id")
       .limit(1)
       .single();
     if (!property) throw new Error("Property not configured");
 
-    const { data: rt } = await supabaseAdmin
+    const { data: rt } = await supabasePublic
       .from("room_types")
       .select("id, base_rate")
       .eq("id", data.roomTypeId)
@@ -49,7 +49,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       86400000;
     if (nights < 1) throw new Error("Check-out must be after check-in");
 
-    const { data: guest, error: gerr } = await supabaseAdmin
+    const { data: guest, error: gerr } = await supabasePublic
       .from("guests")
       .insert({
         full_name: data.fullName,
@@ -61,7 +61,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
 
     const total = Number(rt.base_rate) * nights;
-    const { data: booking, error: berr } = await supabaseAdmin
+    const { data: booking, error: berr } = await supabasePublic
       .from("bookings")
       .insert({
         property_id: property.id,
