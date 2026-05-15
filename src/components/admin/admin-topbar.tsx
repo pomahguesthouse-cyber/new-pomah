@@ -91,7 +91,7 @@ export function AdminTopbar({
 
   const title =
     SECTION_TITLES[path] ??
-    (path.startsWith("/admin/") ? path.replace("/admin/", "").replace(/\b\w/g, (m) => m.toUpperCase()) : "Admin");
+    (path !== "/" ? path.replace(/^\//, "").replace(/\b\w/g, (m) => m.toUpperCase()) : "Overview");
 
   // Cmd/Ctrl + K
   useEffect(() => {
