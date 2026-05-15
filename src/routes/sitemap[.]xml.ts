@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabasePublic } from "@/integrations/supabase/client.server";
 import { isAdminHost } from "@/lib/host";
 
 export const Route = createFileRoute("/sitemap.xml")({
@@ -19,8 +19,8 @@ export const Route = createFileRoute("/sitemap.xml")({
           });
         }
         const [{ data: pages }, { data: roomTypes }] = await Promise.all([
-          supabaseAdmin.from("seo_pages").select("slug, updated_at"),
-          supabaseAdmin.from("room_types").select("slug"),
+          supabasePublic.from("seo_pages").select("slug, updated_at"),
+          supabasePublic.from("room_types").select("slug"),
         ]);
         const urls = new Set<string>(["/", "/rooms", "/book"]);
         for (const p of pages ?? []) urls.add(p.slug);
