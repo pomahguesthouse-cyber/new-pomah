@@ -19,6 +19,24 @@ export const Route = createFileRoute("/_admin/bookings")({
 
 const STATUSES = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"] as const;
 
+function formatDateID(iso: string | null | undefined) {
+  if (!iso) return "—";
+  // iso is "YYYY-MM-DD"; build manually to avoid timezone surprises
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
+function formatIDR(n: number) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  })
+    .format(n)
+    .replace("IDR", "Rp.");
+}
+
 function BookingsPage() {
   const fn = useServerFn(listBookings);
   const update = useServerFn(updateBookingStatus);
@@ -52,6 +70,7 @@ function BookingsPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <th className="px-4 py-3">Ref</th>
               <th className="px-4 py-3">Guest</th>
               <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
@@ -61,17 +80,24 @@ function BookingsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {isLoading && <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
+            {isLoading && <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
             {data?.bookings.map((b) => (
               <tr key={b.id}>
+                <td className="px-4 py-3">
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    {b.reference_code ?? "—"}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{b.guests?.full_name}</p>
                   <p className="text-xs text-muted-foreground">{b.guests?.email}</p>
                 </td>
                 <td className="px-4 py-3">{b.room_types?.name}</td>
-                <td className="px-4 py-3 font-mono text-xs">{b.check_in} → {b.check_out}</td>
+                <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                  {formatDateID(b.check_in)} → {formatDateID(b.check_out)}
+                </td>
                 <td className="px-4 py-3"><Badge variant="outline">{b.source}</Badge></td>
-                <td className="px-4 py-3 font-mono">${Number(b.total_amount).toFixed(0)}</td>
+                <td className="px-4 py-3 font-mono tabular-nums">{formatIDR(Number(b.total_amount))}</td>
                 <td className="px-4 py-3">
                   <Select
                     value={b.status}

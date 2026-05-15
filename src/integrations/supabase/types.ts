@@ -123,6 +123,7 @@ export type Database = {
           id: string
           nightly_rate: number
           property_id: string
+          reference_code: string
           room_id: string | null
           room_type_id: string
           source: Database["public"]["Enums"]["booking_source"]
@@ -141,6 +142,7 @@ export type Database = {
           id?: string
           nightly_rate: number
           property_id: string
+          reference_code?: string
           room_id?: string | null
           room_type_id: string
           source?: Database["public"]["Enums"]["booking_source"]
@@ -159,6 +161,7 @@ export type Database = {
           id?: string
           nightly_rate?: number
           property_id?: string
+          reference_code?: string
           room_id?: string | null
           room_type_id?: string
           source?: Database["public"]["Enums"]["booking_source"]

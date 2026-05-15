@@ -355,7 +355,14 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle className="font-black text-xl tracking-tighter uppercase">Update: {booking.guests?.full_name}</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="font-black text-xl tracking-tighter uppercase">Update: {booking.guests?.full_name}</DialogTitle>
+          {booking.reference_code && (
+            <p className="font-mono text-xs font-semibold text-muted-foreground tracking-wider">
+              Ref: <span className="text-foreground">{booking.reference_code}</span>
+            </p>
+          )}
+        </DialogHeader>
         <div className="grid gap-4 py-4">
           <Field label="Status">
             <Select value={status} onValueChange={setStatus}>
