@@ -8,6 +8,7 @@ import {
   format,
   isToday,
   parseISO,
+  startOfDay,
   startOfMonth,
   setMonth,
   setYear,
@@ -15,7 +16,7 @@ import {
   getMonth,
 } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CalendarDays, Filter } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 import {
   getCalendarData,
@@ -25,9 +26,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -48,18 +51,12 @@ export const Route = createFileRoute("/admin/calendar")({
 
 const WINDOW_DAYS = 14;
 
-// Opsi Bulan untuk Filter
 const MONTHS = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
   "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ];
 
-// Opsi Tahun (3 tahun ke depan)
 const YEARS = Array.from({ length: 5 }, (_, i) => getYear(new Date()) + i);
-
-function fmtIso(d: Date) {
-  return format(d, "yyyy-MM-dd");
-}
 
 const formatIDR = (amount: number) => {
   return new Intl.NumberFormat("id-ID", {
@@ -69,12 +66,13 @@ const formatIDR = (amount: number) => {
   }).format(amount).replace("IDR", "Rp.");
 };
 
+function fmtIso(d: Date) {
+  return format(d, "yyyy-MM-dd");
+}
+
 function CalendarPage() {
   const [anchor, setAnchor] = React.useState<Date>(startOfDay(new Date()));
-  
-  // State untuk Filter Bulan & Tahun
-  const currentMonth = getMonth(anchor);
-  const currentYear = getYear(anchor);
+  const queryClient = useQueryClient();
 
   const days = React.useMemo(
     () => Array.from({ length: WINDOW_DAYS }, (_, i) => addDays(anchor, i)),
@@ -85,7 +83,6 @@ function CalendarPage() {
   const to = fmtIso(addDays(anchor, WINDOW_DAYS));
 
   const fetchCalendar = useServerFn(getCalendarData);
-  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-calendar", from, to],
     queryFn: () => fetchCalendar({ data: { from, to } }),
@@ -94,47 +91,26 @@ function CalendarPage() {
   const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<any>(null);
 
-  const handleMonthChange = (monthIdx: string) => {
-    setAnchor(startOfMonth(setMonth(anchor, parseInt(monthIdx))));
-  };
-
-  const handleYearChange = (year: string) => {
-    setAnchor(setYear(anchor, parseInt(year)));
-  };
-
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/40 px-6 py-4">
         <div className="flex items-center gap-4">
+          <CalendarDays className="h-5 w-5 text-primary" />
           <div className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            <h1 className="font-mono text-sm font-semibold uppercase tracking-[0.18em] hidden sm:block">
-              Booking
-            </h1>
-          </div>
-          
-          {/* Filter Bulan */}
-          <div className="flex items-center gap-2">
-            <Select value={currentMonth.toString()} onValueChange={handleMonthChange}>
+            <Select value={getMonth(anchor).toString()} onValueChange={(v) => setAnchor(startOfMonth(setMonth(anchor, parseInt(v))))}>
               <SelectTrigger className="h-8 w-[130px] text-xs font-medium">
-                <SelectValue placeholder="Bulan" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MONTHS.map((name, i) => (
-                  <SelectItem key={name} value={i.toString()}>{name}</SelectItem>
-                ))}
+                {MONTHS.map((name, i) => <SelectItem key={i} value={i.toString()}>{name}</SelectItem>)}
               </SelectContent>
             </Select>
-
-            {/* Filter Tahun */}
-            <Select value={currentYear.toString()} onValueChange={handleYearChange}>
+            <Select value={getYear(anchor).toString()} onValueChange={(v) => setAnchor(setYear(anchor, parseInt(v)))}>
               <SelectTrigger className="h-8 w-[90px] text-xs font-medium">
-                <SelectValue placeholder="Tahun" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {YEARS.map((y) => (
-                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
-                ))}
+                {YEARS.map((y) => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -179,7 +155,7 @@ function CalendarPage() {
 }
 
 function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
-  const cellWidth = 90;
+  const cellWidth = 100;
   const labelWidth = 160;
   const windowStart = days[0];
 
@@ -195,7 +171,6 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
   return (
     <div className="overflow-x-auto rounded-lg border border-border bg-card">
       <div style={{ minWidth: labelWidth + days.length * cellWidth }}>
-        {/* Header Baris Tanggal */}
         <div className="flex border-b border-border bg-muted/40 sticky top-0 z-30">
           <div style={{ width: labelWidth }} className="shrink-0 px-3 py-4 text-[10px] font-bold uppercase text-muted-foreground">Unit</div>
           {days.map((d: Date) => (
@@ -209,7 +184,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
         {roomTypes.map((type: any) => (
           <div key={type.id}>
             <div className="flex bg-muted/10 border-b border-border px-3 py-1.5 text-[10px] font-bold text-foreground/50">
-              {type.name.toUpperCase()}
+              {type.name.toUpperCase()} · {formatIDR(type.base_rate)}
             </div>
             {rooms.filter((r: any) => r.room_type_id === type.id).map((room: any) => (
               <div key={room.id} className="relative flex border-b border-border h-[56px]">
@@ -217,8 +192,6 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                 {days.map((d: Date) => (
                   <button key={d.toISOString()} onClick={() => onCellClick(room.id, d)} style={{ width: cellWidth }} className="shrink-0 border-l border-border hover:bg-accent/30 transition-colors" />
                 ))}
-                
-                {/* Baris Booking Jam 14:00 - 12:00 */}
                 {(bookingsByRoom.get(room.id) ?? []).map((b: any) => {
                   const ci = parseISO(b.check_in);
                   const co = parseISO(b.check_out);
@@ -231,7 +204,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                     <button
                       key={b.id}
                       onClick={() => onBookingClick(b)}
-                      className={cn("absolute top-2 bottom-2 flex items-center px-2 rounded border text-[10px] font-bold shadow-sm", b.status === "confirmed" ? "bg-primary/20 border-primary/40 text-primary" : "bg-emerald-500/20 border-emerald-500/40 text-emerald-700")}
+                      className="absolute top-2 bottom-2 flex items-center px-2 rounded border text-[10px] font-bold shadow-sm bg-primary/20 border-primary/40 text-primary overflow-hidden"
                       style={{ left: left + 2, width: width - 4, zIndex: 10 }}
                     >
                       <span className="truncate">{b.guests?.full_name}</span>
@@ -247,4 +220,76 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
   );
 }
 
-// Dialog-dialog tetap sama dengan logika sebelumnya (CreateBookingDialog, EditBookingDialog, Field)
+function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
+  const createFn = useServerFn(createBookingFromAdmin);
+  const [form, setForm] = React.useState({ guestName: "", checkIn: "", checkOut: "", nightlyRate: 0 });
+
+  React.useEffect(() => {
+    if (ctx) setForm({ guestName: "", checkIn: fmtIso(ctx.date), checkOut: fmtIso(addDays(ctx.date, 1)), nightlyRate: ctx.baseRate });
+  }, [ctx]);
+
+  return (
+    <Dialog open={!!ctx} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Booking Baru: #{ctx?.roomNumber}</DialogTitle></DialogHeader>
+        <div className="grid gap-3 py-4">
+          <Field label="Nama Tamu"><Input value={form.guestName} onChange={(e) => setForm({ ...form, guestName: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Check-in (14:00)"><Input type="date" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} /></Field>
+            <Field label="Check-out (12:00)"><Input type="date" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} /></Field>
+          </div>
+          <Field label="Harga/Malam"><Input type="number" value={form.nightlyRate} onChange={(e) => setForm({ ...form, nightlyRate: Number(e.target.value) })} /></Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={async () => { await createFn({ data: { ...form, roomId: ctx.roomId, adults: 1, children: 0, status: "confirmed" } }); onSaved(); }}>Simpan</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
+  const updateFn = useServerFn(updateBookingFromAdmin);
+  const [status, setStatus] = React.useState("");
+
+  React.useEffect(() => {
+    if (booking) setStatus(booking.status);
+  }, [booking]);
+
+  if (!booking) return null;
+
+  return (
+    <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{booking.guests?.full_name}</DialogTitle></DialogHeader>
+        <div className="grid gap-4 py-4">
+          <Field label="Ubah Status">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="confirmed">Dikonfirmasi</SelectItem>
+                <SelectItem value="checked_in">Check-in</SelectItem>
+                <SelectItem value="checked_out">Check-out</SelectItem>
+                <SelectItem value="cancelled">Dibatalkan</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Tutup</Button>
+          <Button onClick={async () => { await updateFn({ data: { id: booking.id, status, roomId: booking.room_id } }); onSaved(); }}>Simpan</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({ label, children }: any) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs uppercase text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
