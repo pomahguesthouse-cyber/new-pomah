@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Globe, ShieldCheck, ExternalLink, Check, Pencil, X } from "lucide-react";
+import { Globe, ExternalLink, Check, Pencil, X } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
   getDomainSettings,
@@ -104,8 +104,7 @@ function DomainTab() {
   });
 
   const mutation = useMutation({
-    mutationFn: (v: { id: string; public_domain?: string | null; admin_domain?: string | null }) =>
-      updateFn({ data: v }),
+    mutationFn: (v: { id: string; public_domain?: string | null }) => updateFn({ data: v }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["domain-settings"] }),
   });
 
@@ -118,23 +117,12 @@ function DomainTab() {
       {/* Public domain */}
       <DomainCard
         icon={<Globe className="h-4 w-4" />}
-        label="Public Domain"
-        description="Domain utama yang diakses tamu untuk melihat halaman depan, kamar, dan pemesanan."
-        placeholder="contoh: pomahguesthouse.com"
+        label="Domain"
+        description="Domain utama aplikasi. Tamu mengakses halaman depan di domain ini, sementara staf membuka dashboard di /admin."
+        placeholder="contoh: pomahliving.com"
         value={data?.public_domain ?? null}
         disabled={!data?.id || mutation.isPending}
         onSave={(v) => data?.id && mutation.mutate({ id: data.id, public_domain: v })}
-      />
-
-      {/* Admin domain */}
-      <DomainCard
-        icon={<ShieldCheck className="h-4 w-4" />}
-        label="Admin Domain"
-        description="Domain khusus staf untuk mengakses dashboard admin."
-        placeholder="contoh: admin.pomahguesthouse.com"
-        value={data?.admin_domain ?? null}
-        disabled={!data?.id || mutation.isPending}
-        onSave={(v) => data?.id && mutation.mutate({ id: data.id, admin_domain: v })}
       />
 
       <p className="text-xs text-muted-foreground">

@@ -41,7 +41,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
       { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { to: "/admin/bookings", label: "Bookings", icon: CalendarDays },
-      { to: "/rooms", label: "Rooms", icon: BedDouble },
+      { to: "/admin/rooms", label: "Rooms", icon: BedDouble },
       { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
     ],
   },

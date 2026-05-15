@@ -1,15 +1,10 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, MessageCircle, Star, Wifi, Coffee, ShowerHead, MapPin } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { Button } from "@/components/ui/button";
-import { isAdminHost } from "@/lib/host";
-import { AdminShell } from "@/admin/components/admin-shell";
-import { DashboardView } from "@/admin/components/dashboard-view";
-import { supabase } from "@/integrations/supabase/client";
 import { cn, formatDateID } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -28,39 +23,8 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: IndexRoute,
+  component: PublicHome,
 });
-
-function IndexRoute() {
-  const [admin, setAdmin] = useState<boolean | null>(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isAdmin = isAdminHost(window.location.hostname);
-    if (!isAdmin) {
-      setAdmin(false);
-      return;
-    }
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        navigate({ to: "/login" });
-        return;
-      }
-      setAdmin(true);
-    });
-  }, [navigate]);
-
-  if (admin === null) return null;
-  if (admin) {
-    return (
-      <AdminShell>
-        <DashboardView />
-      </AdminShell>
-    );
-  }
-  return <PublicHome />;
-}
 
 /* ------------------------------------------------------------------ */
 /* Home page                                                            */

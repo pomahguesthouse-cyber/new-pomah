@@ -18,7 +18,6 @@ import "@fontsource/jetbrains-mono/500.css";
 
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useHostGuard } from "@/hooks/use-host-guard";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -155,7 +154,6 @@ function AuthSync() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useHostGuard();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSync />

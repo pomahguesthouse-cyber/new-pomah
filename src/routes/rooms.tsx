@@ -1,13 +1,8 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { isAdminHost } from "@/lib/host";
-import { AdminShell } from "@/admin/components/admin-shell";
-import { RoomsManageView } from "@/admin/components/rooms-manage-view";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/rooms")({
   head: () => ({
@@ -20,39 +15,8 @@ export const Route = createFileRoute("/rooms")({
       { property: "og:title", content: "Rooms — Pomah Guesthouse" },
     ],
   }),
-  component: RoomsRoute,
+  component: PublicRooms,
 });
-
-function RoomsRoute() {
-  const [admin, setAdmin] = useState<boolean | null>(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isAdmin = isAdminHost(window.location.hostname);
-    if (!isAdmin) {
-      setAdmin(false);
-      return;
-    }
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        navigate({ to: "/login" });
-        return;
-      }
-      setAdmin(true);
-    });
-  }, [navigate]);
-
-  if (admin === null) return null;
-  if (admin) {
-    return (
-      <AdminShell>
-        <RoomsManageView />
-      </AdminShell>
-    );
-  }
-  return <PublicRooms />;
-}
 
 function PublicRooms() {
   const fn = useServerFn(getPublicSiteData);

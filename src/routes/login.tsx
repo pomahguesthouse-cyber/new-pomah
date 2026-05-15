@@ -6,7 +6,6 @@ import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { isAdminHost, isDeveloperHost, adminUrl } from "@/lib/host";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -30,19 +29,11 @@ function LoginPage() {
   }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * After a successful login, redirect to the admin dashboard.
-   * - On admin / developer host → same-domain SPA navigation to "/"
-   * - On public domain (pomahliving.com) → cross-domain hard redirect
-   *   to admin.pomahguesthouse.com so staff land in the right app.
+   * After a successful login, redirect staff to the admin dashboard
+   * at /admin (single-domain app).
    */
   function redirectAfterLogin() {
-    const host = typeof window !== "undefined" ? window.location.hostname : "";
-    if (!isAdminHost(host) && !isDeveloperHost(host)) {
-      // Cross-domain: leave the public site and go to the admin domain
-      window.location.href = adminUrl("/");
-    } else {
-      navigate({ to: "/" });
-    }
+    navigate({ to: "/admin" });
   }
 
   const onSubmit = async (e: React.FormEvent) => {
