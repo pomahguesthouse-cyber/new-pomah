@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Outlet, redirect, useNavigate } from "@tanstack/react-router";
-import { AdminShell } from "@/components/admin/admin-shell";
+import { AdminShell } from "@/admin/components/admin-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { isAdminHost, isDeveloperHost } from "@/lib/host";
 

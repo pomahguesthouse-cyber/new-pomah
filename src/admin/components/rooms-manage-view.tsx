@@ -9,8 +9,8 @@ import {
   updateRoomStatus,
   listRoomTypes,
   deleteRoom,
-} from "@/lib/bookings.functions";
-import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
+} from "@/admin/functions/bookings.functions";
+import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RoomDetailDialog, type RoomDetailRow } from "@/components/admin/room-detail-dialog";
+import { RoomDetailDialog, type RoomDetailRow } from "@/admin/components/room-detail-dialog";
 
 const STATUSES = ["clean", "dirty", "maintenance", "out_of_order"] as const;
 const STATUS_LABEL: Record<(typeof STATUSES)[number], string> = {

@@ -31,7 +31,7 @@ import {
 import {
   getDashboardOverview,
   getDashboardMetrics,
-} from "@/lib/dashboard.functions";
+} from "@/admin/functions/dashboard.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

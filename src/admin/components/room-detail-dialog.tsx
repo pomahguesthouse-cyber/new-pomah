@@ -21,7 +21,7 @@ import {
   createRoom,
   updateRoom,
   updateRoomType,
-} from "@/lib/bookings.functions";
+} from "@/admin/functions/bookings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 

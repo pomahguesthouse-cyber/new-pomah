@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2 } from "lucide-react";
-import { PublicNav, PublicFooter } from "../../index";
-import { getBookingReference } from "@/lib/public.functions";
+import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { getBookingReference } from "@/public/functions/public.functions";
 
 export const Route = createFileRoute("/book/confirmation/$id")({
   head: () => ({

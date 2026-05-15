@@ -22,7 +22,7 @@ import {
   getCalendarData,
   createBookingFromAdmin,
   updateBookingFromAdmin,
-} from "@/lib/calendar.functions";
+} from "@/admin/functions/calendar.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +45,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/admin/calendar")({
+export const Route = createFileRoute("/_admin/calendar")({
   component: CalendarPage,
 });
 
