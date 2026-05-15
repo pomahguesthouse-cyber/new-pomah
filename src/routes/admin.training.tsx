@@ -30,6 +30,7 @@ function TrainingPage() {
     queryKey: ["ai-logs", filter],
     queryFn: () => fn({ data: { rating: filter } }),
   });
+  useRealtimeInvalidate("admin-training-stream", ["ai_conversation_logs"], [["ai-logs"]]);
 
   const m = useMutation({
     mutationFn: (v: { id: string; rating: "good" | "bad" | null; correction?: string | null }) =>
