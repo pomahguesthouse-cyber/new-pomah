@@ -36,11 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export const Route = createFileRoute("/admin/")({
-  component: DashboardPage,
-});
-
-function DashboardPage() {
+export function DashboardView() {
   const queryClient = useQueryClient();
   const overviewFn = useServerFn(getDashboardOverview);
   const metricsFn = useServerFn(getDashboardMetrics);
