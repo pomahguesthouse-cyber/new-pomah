@@ -7,9 +7,9 @@ export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <AdminSidebar propertyName="Pomah Guesthouse" />
-      <SidebarInset className="bg-background">
+      <SidebarInset className="bg-background min-w-0 overflow-hidden">
         <AdminTopbar fullName="Admin" email={null} />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto min-h-0">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );
