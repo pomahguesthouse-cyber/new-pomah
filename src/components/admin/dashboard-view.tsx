@@ -111,10 +111,11 @@ export function DashboardView() {
             Operations Center · Today
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-            {new Date().toLocaleDateString(undefined, {
+            {new Date().toLocaleDateString("id-ID", {
               weekday: "long",
-              month: "long",
               day: "numeric",
+              month: "long",
+              year: "numeric",
             })}
           </h1>
         </div>
