@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Sparkles } from "lucide-react";
 import { getDashboardOverview } from "@/lib/dashboard.functions";
+import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/admin/ai")({
