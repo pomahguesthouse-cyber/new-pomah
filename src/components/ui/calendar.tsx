@@ -11,9 +11,9 @@ export type Booking = {
   name: string;
 };
 
-interface CalendarProps extends DayPickerProps {
+type CalendarProps = DayPickerProps & {
   bookings?: Booking[];
-}
+};
 
 function Calendar({ 
   className, 
