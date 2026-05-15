@@ -95,3 +95,33 @@ export const getBookingReference = createServerFn({ method: "GET" })
       .maybeSingle();
     return { reference_code: booking?.reference_code ?? null };
   });
+
+/**
+ * Fetch a PUBLISHED landing page by slug for the public `/p/$slug` route.
+ * RLS restricts the anon key to `status = 'published'` rows, so drafts
+ * are never exposed. The builder tables are not in the generated types,
+ * hence the untyped client view.
+ */
+export const getPublishedLandingPage = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ slug: z.string().min(1).max(120) }).parse(d))
+  .handler(async ({ data }) => {
+    const client = supabasePublic as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (
+            k: string,
+            v: string,
+          ) => {
+            eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: unknown }> };
+          };
+        };
+      };
+    };
+    const { data: page } = await client
+      .from("landing_pages")
+      .select("title, slug, published_content, seo_title, seo_description, og_image_url, noindex")
+      .eq("slug", data.slug)
+      .eq("status", "published")
+      .maybeSingle();
+    return { page: page ?? null };
+  });
