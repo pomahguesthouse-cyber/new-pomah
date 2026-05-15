@@ -99,7 +99,7 @@ function CalendarPage() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 font-semibold text-lg">
             <CalendarDays className="h-5 w-5 text-primary" />
-            <span>Kalender Reservasi</span>
+            <span>Booking Calendar</span>
           </div>
           
           <div className="flex items-center gap-2">
