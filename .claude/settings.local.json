@@ -24,7 +24,10 @@
       "Bash(npm run *)",
       "Bash(git rm *)",
       "Bash(git commit -m 'Implement /admin path-based routing for admin pages *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(xargs cat)",
+      "Bash(node -e \"console.log\\('zustand', require\\('./node_modules/zustand/package.json'\\).version\\)\")",
+      "Bash(npx eslint *)"
     ]
   }
 }
