@@ -99,9 +99,16 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{b.guests?.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{b.guests?.email}</p>
+                  <p className="font-mono text-xs text-muted-foreground tabular-nums">
+                    {b.guests?.phone ?? "—"}
+                  </p>
                 </td>
-                <td className="px-4 py-3">{b.room_types?.name}</td>
+                <td className="px-4 py-3">
+                  <p>{b.room_types?.name}</p>
+                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {b.rooms?.number ? `#${b.rooms.number}` : "Belum di-assign"}
+                  </p>
+                </td>
                 <td className="px-4 py-3 font-mono text-xs tabular-nums">
                   <p>{formatDateID(b.check_in)} → {formatDateID(b.check_out)}</p>
                   <p className="mt-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
