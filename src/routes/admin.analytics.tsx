@@ -13,6 +13,7 @@ import {
   Bar,
 } from "recharts";
 import { getAnalytics } from "@/modules/analytics/analytics.functions";
+import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/admin/analytics")({
