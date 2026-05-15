@@ -6,6 +6,7 @@ import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isAdminHost, isDeveloperHost, adminUrl } from "@/lib/host";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -27,9 +28,25 @@ function LoginPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/" });
+      if (data.session) redirectAfterLogin();
     });
-  }, [navigate]);
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * After a successful login, redirect to the admin dashboard.
+   * - On admin / developer host → same-domain SPA navigation to "/"
+   * - On public domain (pomahliving.com) → cross-domain hard redirect
+   *   to admin.pomahguesthouse.com so staff land in the right app.
+   */
+  function redirectAfterLogin() {
+    const host = typeof window !== "undefined" ? window.location.hostname : "";
+    if (!isAdminHost(host) && !isDeveloperHost(host)) {
+      // Cross-domain: leave the public site and go to the admin domain
+      window.location.href = adminUrl("/");
+    } else {
+      navigate({ to: "/" });
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +67,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      navigate({ to: "/" });
+      redirectAfterLogin();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
