@@ -8,6 +8,7 @@ import {
   rateConversationLog,
   exportTrainingData,
 } from "@/modules/training/training.functions";
+import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
