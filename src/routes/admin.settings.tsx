@@ -12,6 +12,7 @@ export const Route = createFileRoute("/admin/settings")({
 function SettingsPage() {
   const fn = useServerFn(getPublicSiteData);
   const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
+  useRealtimeInvalidate("admin-settings-stream", ["properties"], [["public-site"]]);
   const p = data?.property;
 
   return (
