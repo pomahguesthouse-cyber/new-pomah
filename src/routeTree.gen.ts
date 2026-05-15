@@ -27,7 +27,7 @@ import { Route as AdminPricingRouteImport } from './routes/admin.pricing'
 import { Route as AdminCalendarRouteImport } from './routes/admin.calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin.bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
-import { Route as AdminAiRouteImport } from './routes/admin.ai'
+import { Route as AdminAiRouteImport } from './routes/_admin.ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -121,9 +121,9 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAiRoute = AdminAiRouteImport.update({
-  id: '/ai',
+  id: '/_admin/ai',
   path: '/ai',
-  getParentRoute: () => AdminRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   id: '/confirmation/$id',
@@ -140,7 +140,7 @@ export interface FileRoutesByFullPath {
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
+  '/ai': typeof AdminAiRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -161,7 +161,7 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
+  '/ai': typeof AdminAiRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -184,7 +184,7 @@ export interface FileRoutesById {
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
+  '/_admin/ai': typeof AdminAiRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -208,7 +208,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/admin/ai'
+    | '/ai'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -229,7 +229,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/admin/ai'
+    | '/ai'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -251,7 +251,7 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/admin/ai'
+    | '/_admin/ai'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -274,6 +274,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   RoomsRoute: typeof RoomsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  AdminAiRoute: typeof AdminAiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -404,12 +405,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/ai': {
-      id: '/admin/ai'
+    '/_admin/ai': {
+      id: '/_admin/ai'
       path: '/ai'
-      fullPath: '/admin/ai'
+      fullPath: '/ai'
       preLoaderRoute: typeof AdminAiRouteImport
-      parentRoute: typeof AdminRoute
+      parentRoute: typeof rootRouteImport
     }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
@@ -422,7 +423,6 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
-  AdminAiRoute: typeof AdminAiRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCalendarRoute: typeof AdminCalendarRoute
@@ -436,7 +436,6 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminAiRoute: AdminAiRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCalendarRoute: AdminCalendarRoute,
@@ -470,7 +469,18 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   RoomsRoute: RoomsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  AdminAiRoute: AdminAiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
