@@ -195,12 +195,12 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
           
           {/* Header Tanggal - STICKY VERTICAL (top-0) */}
           <div className="flex border-b border-border bg-card sticky top-0 z-30 shadow-sm">
-            
+
             {/* Pojok Kiri Atas (Label Unit) - STICKY VERTICAL & HORIZONTAL (top-0 & left-0) */}
             {/* Z-Index 40 agar selalu di atas Header Tanggal dan Kolom Kamar */}
-            <div 
-              style={{ width: labelWidth }} 
-              className="shrink-0 px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-end sticky top-0 left-0 z-40 bg-card border-r border-border"
+            <div
+              style={{ width: labelWidth }}
+              className="shrink-0 px-4 py-5 text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-end sticky top-0 left-0 z-40 bg-card border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
             >
               UNIT
             </div>
@@ -233,19 +233,26 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
           {/* Body Kalender */}
           {roomTypes.map((type: any) => (
             <div key={type.id} className="group">
-              {/* Tipe Kamar - STICKY HORIZONTAL (left-0) */}
-              <div className="flex bg-muted/50 border-b border-border px-4 py-2 text-[9px] font-black text-foreground/50 uppercase tracking-widest sticky left-0 z-20 w-full">
-                {type.name} <span className="mx-2 opacity-20">|</span> {formatIDR(type.base_rate)}
+              {/* Tipe Kamar - bar membentang seluruh grid, label sticky di kiri */}
+              <div className="relative flex bg-muted border-b border-border h-9">
+                <div
+                  style={{ width: labelWidth }}
+                  className="shrink-0 sticky left-0 z-20 bg-muted flex items-center px-4 text-[9px] font-black text-foreground/70 uppercase tracking-widest border-r border-border shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                >
+                  <span className="truncate">
+                    {type.name} <span className="mx-2 opacity-30">|</span> {formatIDR(type.base_rate)}
+                  </span>
+                </div>
               </div>
-              
+
               {rooms.filter((r: any) => r.room_type_id === type.id).map((room: any) => (
                 <div key={room.id} className="relative flex border-b border-border h-[60px] hover:bg-muted/5 transition-colors">
-                  
+
                   {/* Nomor Kamar - STICKY HORIZONTAL (left-0) */}
                   {/* Z-Index 20 agar bar booking terpotong di bawahnya saat scroll horizontal */}
-                  <div 
-                    style={{ width: labelWidth }} 
-                    className="flex shrink-0 items-center px-4 border-r border-border font-bold text-xs text-foreground/70 sticky left-0 z-20 bg-card"
+                  <div
+                    style={{ width: labelWidth }}
+                    className="flex shrink-0 items-center px-4 border-r border-border font-bold text-xs text-foreground/70 sticky left-0 z-20 bg-card shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                   >
                      #{room.number}
                   </div>
