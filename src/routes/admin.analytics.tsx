@@ -26,6 +26,11 @@ function AnalyticsPage() {
     queryKey: ["analytics", 30],
     queryFn: () => fn({ data: { days: 30 } }),
   });
+  useRealtimeInvalidate(
+    "admin-analytics-stream",
+    ["bookings", "ai_conversation_logs", "whatsapp_messages"],
+    [["analytics"]],
+  );
 
   if (!data) return <div className="p-10 text-sm text-muted-foreground">Crunching…</div>;
 
