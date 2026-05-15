@@ -1,9 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, MessageCircle, Sparkles } from "lucide-react";
 import { getPublicSiteData } from "@/lib/public.functions";
 import { Button } from "@/components/ui/button";
+import { isAdminHost } from "@/lib/host";
+import { AdminShell } from "@/components/admin/admin-shell";
+import { DashboardView } from "@/components/admin/dashboard-view";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -21,10 +26,41 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: HomePage,
+  component: IndexRoute,
 });
 
-function HomePage() {
+function IndexRoute() {
+  const [admin, setAdmin] = useState<boolean | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isAdmin = isAdminHost(window.location.hostname);
+    if (!isAdmin) {
+      setAdmin(false);
+      return;
+    }
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) {
+        navigate({ to: "/login" });
+        return;
+      }
+      setAdmin(true);
+    });
+  }, [navigate]);
+
+  if (admin === null) return null;
+  if (admin) {
+    return (
+      <AdminShell>
+        <DashboardView />
+      </AdminShell>
+    );
+  }
+  return <PublicHome />;
+}
+
+function PublicHome() {
   const fetchData = useServerFn(getPublicSiteData);
   const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fetchData() });
   const property = data?.property;

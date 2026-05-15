@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 
-export const Route = createFileRoute("/admin/training")({
+export const Route = createFileRoute("/_admin/training")({
   component: TrainingPage,
 });
 

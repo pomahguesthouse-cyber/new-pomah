@@ -6,7 +6,7 @@ import { getDashboardOverview } from "@/lib/dashboard.functions";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
-export const Route = createFileRoute("/admin/ai")({
+export const Route = createFileRoute("/_admin/ai")({
   component: AiPage,
 });
 

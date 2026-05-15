@@ -41,29 +41,29 @@ import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 
 const SECTION_TITLES: Record<string, string> = {
-  "/admin": "Overview",
-  "/admin/bookings": "Bookings",
-  "/admin/rooms": "Rooms",
-  "/admin/pricing": "Pricing",
-  "/admin/whatsapp": "WhatsApp",
-  "/admin/ai": "AI Suggestions",
-  "/admin/training": "Training",
-  "/admin/analytics": "Analytics",
-  "/admin/seo": "SEO",
-  "/admin/settings": "Settings",
+  "/": "Overview",
+  "/bookings": "Bookings",
+  "/rooms": "Rooms",
+  "/pricing": "Pricing",
+  "/whatsapp": "WhatsApp",
+  "/ai": "AI Suggestions",
+  "/training": "Training",
+  "/analytics": "Analytics",
+  "/seo": "SEO",
+  "/settings": "Settings",
 };
 
 const COMMANDS = [
-  { to: "/admin", label: "Overview" },
-  { to: "/admin/bookings", label: "Bookings" },
-  { to: "/admin/rooms", label: "Rooms" },
-  { to: "/admin/pricing", label: "Pricing" },
-  { to: "/admin/whatsapp", label: "WhatsApp" },
-  { to: "/admin/ai", label: "AI Suggestions" },
-  { to: "/admin/training", label: "Training" },
-  { to: "/admin/analytics", label: "Analytics" },
-  { to: "/admin/seo", label: "SEO" },
-  { to: "/admin/settings", label: "Settings" },
+  { to: "/", label: "Overview" },
+  { to: "/bookings", label: "Bookings" },
+  { to: "/rooms", label: "Rooms" },
+  { to: "/pricing", label: "Pricing" },
+  { to: "/whatsapp", label: "WhatsApp" },
+  { to: "/ai", label: "AI Suggestions" },
+  { to: "/training", label: "Training" },
+  { to: "/analytics", label: "Analytics" },
+  { to: "/seo", label: "SEO" },
+  { to: "/settings", label: "Settings" },
 ];
 
 function initials(name?: string | null) {
@@ -91,7 +91,7 @@ export function AdminTopbar({
 
   const title =
     SECTION_TITLES[path] ??
-    (path.startsWith("/admin/") ? path.replace("/admin/", "").replace(/\b\w/g, (m) => m.toUpperCase()) : "Admin");
+    (path !== "/" ? path.replace(/^\//, "").replace(/\b\w/g, (m) => m.toUpperCase()) : "Overview");
 
   // Cmd/Ctrl + K
   useEffect(() => {
@@ -219,11 +219,11 @@ export function AdminTopbar({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate({ to: "/admin/settings" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate({ to: "/admin/settings" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

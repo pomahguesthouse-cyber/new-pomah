@@ -5,7 +5,7 @@ import { getPublicSiteData } from "@/lib/public.functions";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
-export const Route = createFileRoute("/admin/settings")({
+export const Route = createFileRoute("/_admin/settings")({
   component: SettingsPage,
 });
 

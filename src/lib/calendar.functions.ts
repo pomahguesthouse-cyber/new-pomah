@@ -3,6 +3,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const getCalendarData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => d)
   .handler(async ({ data, context }: any) => {
     const { supabase } = context;
     const [roomTypesRes, roomsRes, bookingsRes] = await Promise.all([
@@ -19,9 +20,9 @@ export const getCalendarData = createServerFn({ method: "GET" })
 
 export const createBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => d)
   .handler(async ({ data, context }: any) => {
     const { supabase } = context;
-    // Otomatis buat guest sederhana
     const { data: g } = await supabase.from("guests").insert({ full_name: data.guestName }).select("id").single();
     const { data: r } = await supabase.from("rooms").select("room_type_id, room_types(property_id)").eq("id", data.roomId).single();
 
@@ -42,6 +43,7 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
 
 export const updateBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
+  .inputValidator((d: any) => d)
   .handler(async ({ data, context }: any) => {
     await context.supabase.from("bookings").update({ status: data.status }).eq("id", data.id);
     return { ok: true };

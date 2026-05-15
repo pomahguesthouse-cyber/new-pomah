@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/admin/pricing")({
+export const Route = createFileRoute("/_admin/pricing")({
   component: PricingPage,
 });
 

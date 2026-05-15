@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -13,10 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export const Route = createFileRoute("/admin/rooms")({
-  component: RoomsPage,
-});
-
 const STATUSES = ["clean", "dirty", "maintenance", "out_of_order"] as const;
 const COLORS: Record<string, string> = {
   clean: "bg-accent/15 text-accent",
@@ -25,7 +21,7 @@ const COLORS: Record<string, string> = {
   out_of_order: "bg-destructive/15 text-destructive",
 };
 
-function RoomsPage() {
+export function RoomsManageView() {
   const fn = useServerFn(listRooms);
   const update = useServerFn(updateRoomStatus);
   const qc = useQueryClient();
