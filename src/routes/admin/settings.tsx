@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_admin/settings")({
+export const Route = createFileRoute("/admin/settings")({
   component: SettingsPage,
 });
 

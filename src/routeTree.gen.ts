@@ -15,17 +15,18 @@ import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as BookRouteImport } from './routes/book'
-import { Route as AdminRouteImport } from './routes/_admin'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminWhatsappRouteImport } from './routes/_admin.whatsapp'
-import { Route as AdminTrainingRouteImport } from './routes/_admin.training'
-import { Route as AdminSettingsRouteImport } from './routes/_admin.settings'
-import { Route as AdminSeoRouteImport } from './routes/_admin.seo'
-import { Route as AdminPricingRouteImport } from './routes/_admin.pricing'
-import { Route as AdminCalendarRouteImport } from './routes/_admin.calendar'
-import { Route as AdminBookingsRouteImport } from './routes/_admin.bookings'
-import { Route as AdminAnalyticsRouteImport } from './routes/_admin.analytics'
-import { Route as AdminAiRouteImport } from './routes/_admin.ai'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
+import { Route as AdminTrainingRouteImport } from './routes/admin/training'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminSeoRouteImport } from './routes/admin/seo'
+import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
+import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
+import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
+import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -59,13 +60,19 @@ const BookRoute = BookRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
-  id: '/_admin',
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   id: '/whatsapp',
@@ -120,21 +127,23 @@ const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/ai': typeof AdminAiRoute
-  '/analytics': typeof AdminAnalyticsRoute
-  '/bookings': typeof AdminBookingsRoute
-  '/calendar': typeof AdminCalendarRoute
-  '/pricing': typeof AdminPricingRoute
-  '/seo': typeof AdminSeoRoute
-  '/settings': typeof AdminSettingsRoute
-  '/training': typeof AdminTrainingRoute
-  '/whatsapp': typeof AdminWhatsappRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/seo': typeof AdminSeoRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
@@ -145,57 +154,61 @@ export interface FileRoutesByTo {
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/ai': typeof AdminAiRoute
-  '/analytics': typeof AdminAnalyticsRoute
-  '/bookings': typeof AdminBookingsRoute
-  '/calendar': typeof AdminCalendarRoute
-  '/pricing': typeof AdminPricingRoute
-  '/seo': typeof AdminSeoRoute
-  '/settings': typeof AdminSettingsRoute
-  '/training': typeof AdminTrainingRoute
-  '/whatsapp': typeof AdminWhatsappRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/seo': typeof AdminSeoRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_admin': typeof AdminRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/_admin/ai': typeof AdminAiRoute
-  '/_admin/analytics': typeof AdminAnalyticsRoute
-  '/_admin/bookings': typeof AdminBookingsRoute
-  '/_admin/calendar': typeof AdminCalendarRoute
-  '/_admin/pricing': typeof AdminPricingRoute
-  '/_admin/seo': typeof AdminSeoRoute
-  '/_admin/settings': typeof AdminSettingsRoute
-  '/_admin/training': typeof AdminTrainingRoute
-  '/_admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/bookings': typeof AdminBookingsRoute
+  '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/pricing': typeof AdminPricingRoute
+  '/admin/seo': typeof AdminSeoRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/training': typeof AdminTrainingRoute
+  '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/': typeof AdminIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/book'
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/ai'
-    | '/analytics'
-    | '/bookings'
-    | '/calendar'
-    | '/pricing'
-    | '/seo'
-    | '/settings'
-    | '/training'
-    | '/whatsapp'
+    | '/admin/ai'
+    | '/admin/analytics'
+    | '/admin/bookings'
+    | '/admin/calendar'
+    | '/admin/pricing'
+    | '/admin/seo'
+    | '/admin/settings'
+    | '/admin/training'
+    | '/admin/whatsapp'
+    | '/admin/'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -206,35 +219,37 @@ export interface FileRouteTypes {
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/ai'
-    | '/analytics'
-    | '/bookings'
-    | '/calendar'
-    | '/pricing'
-    | '/seo'
-    | '/settings'
-    | '/training'
-    | '/whatsapp'
+    | '/admin/ai'
+    | '/admin/analytics'
+    | '/admin/bookings'
+    | '/admin/calendar'
+    | '/admin/pricing'
+    | '/admin/seo'
+    | '/admin/settings'
+    | '/admin/training'
+    | '/admin/whatsapp'
+    | '/admin'
     | '/book/confirmation/$id'
   id:
     | '__root__'
     | '/'
-    | '/_admin'
+    | '/admin'
     | '/book'
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
     | '/rooms'
     | '/sitemap.xml'
-    | '/_admin/ai'
-    | '/_admin/analytics'
-    | '/_admin/bookings'
-    | '/_admin/calendar'
-    | '/_admin/pricing'
-    | '/_admin/seo'
-    | '/_admin/settings'
-    | '/_admin/training'
-    | '/_admin/whatsapp'
+    | '/admin/ai'
+    | '/admin/analytics'
+    | '/admin/bookings'
+    | '/admin/calendar'
+    | '/admin/pricing'
+    | '/admin/seo'
+    | '/admin/settings'
+    | '/admin/training'
+    | '/admin/whatsapp'
+    | '/admin/'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
 }
@@ -293,10 +308,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_admin': {
-      id: '/_admin'
-      path: ''
-      fullPath: '/'
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -307,66 +322,73 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_admin/whatsapp': {
-      id: '/_admin/whatsapp'
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/whatsapp': {
+      id: '/admin/whatsapp'
       path: '/whatsapp'
-      fullPath: '/whatsapp'
+      fullPath: '/admin/whatsapp'
       preLoaderRoute: typeof AdminWhatsappRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/training': {
-      id: '/_admin/training'
+    '/admin/training': {
+      id: '/admin/training'
       path: '/training'
-      fullPath: '/training'
+      fullPath: '/admin/training'
       preLoaderRoute: typeof AdminTrainingRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/settings': {
-      id: '/_admin/settings'
+    '/admin/settings': {
+      id: '/admin/settings'
       path: '/settings'
-      fullPath: '/settings'
+      fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/seo': {
-      id: '/_admin/seo'
+    '/admin/seo': {
+      id: '/admin/seo'
       path: '/seo'
-      fullPath: '/seo'
+      fullPath: '/admin/seo'
       preLoaderRoute: typeof AdminSeoRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/pricing': {
-      id: '/_admin/pricing'
+    '/admin/pricing': {
+      id: '/admin/pricing'
       path: '/pricing'
-      fullPath: '/pricing'
+      fullPath: '/admin/pricing'
       preLoaderRoute: typeof AdminPricingRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/calendar': {
-      id: '/_admin/calendar'
+    '/admin/calendar': {
+      id: '/admin/calendar'
       path: '/calendar'
-      fullPath: '/calendar'
+      fullPath: '/admin/calendar'
       preLoaderRoute: typeof AdminCalendarRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/bookings': {
-      id: '/_admin/bookings'
+    '/admin/bookings': {
+      id: '/admin/bookings'
       path: '/bookings'
-      fullPath: '/bookings'
+      fullPath: '/admin/bookings'
       preLoaderRoute: typeof AdminBookingsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/analytics': {
-      id: '/_admin/analytics'
+    '/admin/analytics': {
+      id: '/admin/analytics'
       path: '/analytics'
-      fullPath: '/analytics'
+      fullPath: '/admin/analytics'
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/ai': {
-      id: '/_admin/ai'
+    '/admin/ai': {
+      id: '/admin/ai'
       path: '/ai'
-      fullPath: '/ai'
+      fullPath: '/admin/ai'
       preLoaderRoute: typeof AdminAiRouteImport
       parentRoute: typeof AdminRoute
     }
@@ -390,6 +412,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
+  AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -402,6 +425,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTrainingRoute: AdminTrainingRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
+  AdminIndexRoute: AdminIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

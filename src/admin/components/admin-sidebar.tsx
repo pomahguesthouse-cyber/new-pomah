@@ -38,31 +38,31 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: "Operations",
     items: [
-      { to: "/", label: "Overview", icon: LayoutDashboard, exact: true },
-      { to: "/calendar", label: "Calendar", icon: CalendarDays },
-      { to: "/bookings", label: "Bookings", icon: CalendarDays },
+      { to: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+      { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
+      { to: "/admin/bookings", label: "Bookings", icon: CalendarDays },
       { to: "/rooms", label: "Rooms", icon: BedDouble },
-      { to: "/pricing", label: "Pricing", icon: DollarSign },
+      { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
     ],
   },
   {
     label: "Guests & Comms",
     items: [
-      { to: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
-      { to: "/ai", label: "AI Suggestions", icon: Sparkles },
-      { to: "/training", label: "Training", icon: GraduationCap },
+      { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
+      { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
+      { to: "/admin/training", label: "Training", icon: GraduationCap },
     ],
   },
   {
     label: "Insights",
     items: [
-      { to: "/analytics", label: "Analytics", icon: BarChart3 },
-      { to: "/seo", label: "SEO", icon: Search },
+      { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+      { to: "/admin/seo", label: "SEO", icon: Search },
     ],
   },
   {
     label: "System",
-    items: [{ to: "/settings", label: "Settings", icon: Settings }],
+    items: [{ to: "/admin/settings", label: "Settings", icon: Settings }],
   },
 ];
 

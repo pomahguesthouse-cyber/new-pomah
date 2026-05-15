@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_admin/seo")({
+export const Route = createFileRoute("/admin/seo")({
   component: SeoPage,
 });
 

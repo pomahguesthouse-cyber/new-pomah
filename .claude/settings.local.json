@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git pull *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(gh pr *)",
+      "Bash(git fetch *)",
+      "Bash(git rebase *)",
+      "Bash(git push *)",
+      "Bash(npx supabase *)",
+      "Bash(grep -r \"domain\" supabase/ --include=\"*.sql\" -l)",
+      "Bash(grep -r \"domain\" src/ --include=\"*.ts\" --include=\"*.tsx\" -l)",
+      "Bash(npx tsc *)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(supabase --version)",
+      "Bash(supabase db *)",
+      "Bash(git mv *)",
+      "Bash(git diff *)",
+      "Bash(git checkout *)",
+      "Bash(bun install *)",
+      "PowerShell(cd \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\distracted-merkle-644231\"; Test-Path node_modules; \\(Get-ChildItem node_modules -ErrorAction SilentlyContinue | Measure-Object\\).Count)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(git rm *)",
+      "Bash(git commit -m 'Implement /admin path-based routing for admin pages *)"
+    ]
+  }
+}

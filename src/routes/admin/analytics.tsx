@@ -16,7 +16,7 @@ import { getAnalytics } from "@/admin/modules/analytics/analytics.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
 
-export const Route = createFileRoute("/_admin/analytics")({
+export const Route = createFileRoute("/admin/analytics")({
   component: AnalyticsPage,
 });
 

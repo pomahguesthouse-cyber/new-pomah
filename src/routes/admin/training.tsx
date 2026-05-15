@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTimeID } from "@/lib/utils";
 
-export const Route = createFileRoute("/_admin/training")({
+export const Route = createFileRoute("/admin/training")({
   component: TrainingPage,
 });
 

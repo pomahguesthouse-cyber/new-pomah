@@ -45,7 +45,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_admin/calendar")({
+export const Route = createFileRoute("/admin/calendar")({
   component: CalendarPage,
 });
 

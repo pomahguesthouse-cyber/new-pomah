@@ -50,7 +50,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatDateID, formatRelativeDateID, formatTimeID } from "@/lib/utils";
 
-export const Route = createFileRoute("/_admin/whatsapp")({
+export const Route = createFileRoute("/admin/whatsapp")({
   component: WhatsAppPage,
 });
 

@@ -18,7 +18,7 @@ import {
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
-export const Route = createFileRoute("/_admin/bookings")({
+export const Route = createFileRoute("/admin/bookings")({
   component: BookingsPage,
 });
 
