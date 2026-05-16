@@ -64,6 +64,28 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
 
 const PAGE_SIZE = 20;
 
+/** A booking row as rendered in the list (tolerates the degraded shape). */
+type BookingListRow = {
+  id: string;
+  reference_code?: string | null;
+  check_in: string;
+  check_out: string;
+  status: BookingStatus;
+  source: string;
+  total_amount: number;
+  payment_status?: "unpaid" | "partial" | "paid" | null;
+  guests?: { full_name?: string | null; phone?: string | null } | null;
+  booking_rooms?:
+    | {
+        id: string;
+        room_id: string | null;
+        nightly_rate: number;
+        room_types?: { name?: string | null } | null;
+        rooms?: { number?: string | null } | null;
+      }[]
+    | null;
+};
+
 function formatDateID(iso: string | null | undefined) {
   if (!iso) return "—";
   // iso is "YYYY-MM-DD"; build manually to avoid timezone surprises
@@ -161,6 +183,8 @@ function BookingsPage() {
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
 
+  // listBookings returns a union of full / degraded shapes — normalize.
+  const bookings = (data?.bookings ?? []) as BookingListRow[];
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -303,7 +327,7 @@ function BookingsPage() {
                 </td>
               </tr>
             )}
-            {!isLoading && !error && (data?.bookings.length ?? 0) === 0 && (
+            {!isLoading && !error && bookings.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
@@ -317,7 +341,7 @@ function BookingsPage() {
                 </td>
               </tr>
             )}
-            {data?.bookings.map((b) => (
+            {bookings.map((b) => (
               <tr
                 key={b.id}
                 onClick={() => setEditCtx(b as unknown as EditableBooking)}
@@ -335,10 +359,20 @@ function BookingsPage() {
                   </p>
                 </td>
                 <td className="px-4 py-3">
-                  <p>{b.room_types?.name}</p>
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {b.rooms?.number ? `#${b.rooms.number}` : "Belum di-assign"}
-                  </p>
+                  {(b.booking_rooms ?? []).length === 0 ? (
+                    <p className="text-muted-foreground">—</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {(b.booking_rooms ?? []).map((br) => (
+                        <p key={br.id} className="leading-tight">
+                          {br.room_types?.name ?? "—"}
+                          <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                            {br.rooms?.number ? `#${br.rooms.number}` : "belum di-assign"}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs tabular-nums">
                   <p>

@@ -1,20 +1,44 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export const getCalendarData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: any) => d)
-  .handler(async ({ data, context }: any) => {
+  .handler(async ({ context }: any) => {
     const { supabase } = context;
     const [roomTypesRes, roomsRes, bookingsRes] = await Promise.all([
       supabase.from("room_types").select("*").order("name"),
       supabase.from("rooms").select("*").order("number"),
-      supabase.from("bookings").select("*, guests(*)").neq("status", "cancelled"),
+      supabase
+        .from("bookings")
+        .select("*, guests(*), booking_rooms(id, room_id, room_type_id, nightly_rate)")
+        .neq("status", "cancelled"),
     ]);
+
+    // The calendar grid is per-room. A booking now spans several rooms,
+    // so flatten each booking into one entry per room — the entries keep
+    // the parent booking's id, dates, status and guest.
+    const bookings: any[] = [];
+    for (const b of bookingsRes.data ?? []) {
+      const rooms = (b as any).booking_rooms ?? [];
+      for (const br of rooms) {
+        bookings.push({
+          ...b,
+          booking_rooms: undefined,
+          booking_room_id: br.id,
+          room_id: br.room_id,
+          room_type_id: br.room_type_id,
+          nightly_rate: br.nightly_rate,
+        });
+      }
+    }
+
     return {
       roomTypes: roomTypesRes.data ?? [],
       rooms: roomsRes.data ?? [],
-      bookings: bookingsRes.data ?? [],
+      bookings,
     };
   });
 
@@ -34,17 +58,33 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       .eq("id", data.roomId)
       .single();
 
-    await supabase.from("bookings").insert({
-      property_id: (r as any).room_types.property_id,
-      room_type_id: r?.room_type_id,
+    const nights = Math.max(
+      1,
+      Math.round(
+        (Date.parse(`${data.checkOut}T00:00:00Z`) - Date.parse(`${data.checkIn}T00:00:00Z`)) /
+          86_400_000,
+      ),
+    );
+
+    const { data: booking } = await supabase
+      .from("bookings")
+      .insert({
+        property_id: (r as any).room_types.property_id,
+        guest_id: g?.id,
+        check_in: data.checkIn,
+        check_out: data.checkOut,
+        status: data.status,
+        total_amount: data.nightlyRate * nights,
+        source: "direct",
+      })
+      .select("id")
+      .single();
+
+    await supabase.from("booking_rooms").insert({
+      booking_id: booking?.id,
       room_id: data.roomId,
-      guest_id: g?.id,
-      check_in: data.checkIn,
-      check_out: data.checkOut,
-      status: data.status,
+      room_type_id: r?.room_type_id,
       nightly_rate: data.nightlyRate,
-      total_amount: data.nightlyRate,
-      source: "direct",
     });
     return { ok: true };
   });

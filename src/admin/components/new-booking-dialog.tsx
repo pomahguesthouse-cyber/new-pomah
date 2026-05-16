@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerID } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -228,16 +229,16 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
         },
       }),
     onSuccess: (res) => {
-      const refs = (res?.bookings ?? []).map((b: any) => b.reference_code).filter(Boolean);
+      const ref = (res as { booking?: { reference_code?: string | null } })?.booking
+        ?.reference_code;
+      const count = selectedRooms.length;
       toast.success(
-        refs.length === 1
-          ? `Booking dibuat: ${refs[0]}`
-          : `${refs.length} booking dibuat: ${refs.join(", ")}`,
+        ref ? `Booking dibuat: ${ref} (${count} kamar)` : `Booking dibuat (${count} kamar)`,
       );
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["admin-calendar"] });
-      onCreated?.(refs);
+      onCreated?.(ref ? [ref] : []);
       onClose();
     },
     onError: (e) => toast.error((e as Error).message),
@@ -266,8 +267,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                   Booking Baru
                 </DialogTitle>
                 <DialogDescription className="text-xs">
-                  1 tamu bisa pesan beberapa kamar sekaligus — tiap kamar jadi 1 booking dengan
-                  reference code sendiri.
+                  1 tamu bisa pesan beberapa kamar sekaligus — semua kamar masuk dalam satu booking
+                  dengan satu reference code.
                 </DialogDescription>
               </div>
               <span
@@ -331,23 +332,21 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
               <Section icon={<CalendarRange className="h-4 w-4" />} title="Tanggal Menginap">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Check-In" required>
-                    <Input
-                      type="date"
+                    <DatePickerID
                       value={checkIn}
-                      onChange={(e) => {
-                        setCheckIn(e.target.value);
-                        if (e.target.value && checkOut <= e.target.value) {
-                          setCheckOut(plusDaysIso(e.target.value, 1));
+                      onChange={(iso) => {
+                        setCheckIn(iso);
+                        if (iso && checkOut <= iso) {
+                          setCheckOut(plusDaysIso(iso, 1));
                         }
                       }}
                     />
                   </Field>
                   <Field label="Check-Out" required>
-                    <Input
-                      type="date"
+                    <DatePickerID
                       value={checkOut}
                       min={plusDaysIso(checkIn, 1)}
-                      onChange={(e) => setCheckOut(e.target.value)}
+                      onChange={(iso) => setCheckOut(iso)}
                     />
                   </Field>
                   <Field label="Dewasa" icon={<Users className="h-3 w-3" />}>

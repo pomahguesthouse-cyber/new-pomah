@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerID } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -76,6 +77,15 @@ type RoomRow = {
   room_types?: { id: string; name: string; base_rate: number; capacity: number } | null;
 };
 
+/** A room line of a booking, as returned by listBookings' booking_rooms join. */
+type BookingRoom = {
+  id: string;
+  room_id: string | null;
+  nightly_rate: number;
+  room_types?: { id: string; name: string } | null;
+  rooms?: { id: string; number: string } | null;
+};
+
 export type EditableBooking = {
   id: string;
   reference_code?: string | null;
@@ -87,9 +97,7 @@ export type EditableBooking = {
   source: (typeof SOURCES)[number]["value"];
   payment_status?: (typeof PAYMENT_STATUSES)[number]["value"] | null;
   paid_amount?: number | null;
-  nightly_rate: number;
   total_amount: number;
-  room_id?: string | null;
   special_requests?: string | null;
   internal_notes?: string | null;
   guests?: {
@@ -99,9 +107,10 @@ export type EditableBooking = {
     phone?: string | null;
     country?: string | null;
   } | null;
-  rooms?: { id: string; number: string } | null;
-  room_types?: { id: string; name: string } | null;
+  booking_rooms?: BookingRoom[] | null;
 };
+
+type SelectedRoom = { room_id: string; nightly_rate: number };
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -135,7 +144,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     queryFn: () => fnRooms(),
     enabled: open,
   });
-  const allRooms = (roomsData?.rooms ?? []) as RoomRow[];
+  const allRooms = React.useMemo(() => (roomsData?.rooms ?? []) as RoomRow[], [roomsData]);
 
   const [guest, setGuest] = React.useState({
     full_name: "",
@@ -143,7 +152,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     phone: "",
     country: "",
   });
-  const [roomId, setRoomId] = React.useState<string>("");
   const [checkIn, setCheckIn] = React.useState("");
   const [checkOut, setCheckOut] = React.useState("");
   const [adults, setAdults] = React.useState(2);
@@ -153,7 +161,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [paymentStatus, setPaymentStatus] =
     React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
   const [paidAmount, setPaidAmount] = React.useState(0);
-  const [nightlyRate, setNightlyRate] = React.useState(0);
+  const [selectedRooms, setSelectedRooms] = React.useState<SelectedRoom[]>([]);
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
@@ -166,7 +174,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
       phone: booking.guests?.phone ?? "",
       country: booking.guests?.country ?? "",
     });
-    setRoomId(booking.room_id ?? booking.rooms?.id ?? "");
     setCheckIn(booking.check_in);
     setCheckOut(booking.check_out);
     setAdults(booking.adults);
@@ -175,18 +182,53 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setSource(booking.source);
     setPaymentStatus(booking.payment_status ?? "unpaid");
     setPaidAmount(Number(booking.paid_amount ?? 0));
-    setNightlyRate(Number(booking.nightly_rate ?? 0));
     setSpecialRequests(booking.special_requests ?? "");
     setInternalNotes(booking.internal_notes ?? "");
-  }, [open, booking?.id]);
+    setSelectedRooms(
+      (booking.booking_rooms ?? [])
+        .filter((br): br is BookingRoom & { room_id: string } => !!br.room_id)
+        .map((br) => ({ room_id: br.room_id, nightly_rate: Number(br.nightly_rate) })),
+    );
+  }, [open, booking?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = nightsBetween(checkIn, checkOut);
-  const total = nightlyRate * Math.max(nights, 1);
+  const total = selectedRooms.reduce((s, r) => s + r.nightly_rate * Math.max(nights, 1), 0);
   const outstanding = Math.max(0, total - (paymentStatus === "paid" ? total : paidAmount));
+
+  // Group rooms by type for the picker
+  const roomsByType = React.useMemo(() => {
+    const m = new Map<string, { typeName: string; baseRate: number; rooms: RoomRow[] }>();
+    for (const r of allRooms) {
+      const tid = r.room_types?.id ?? "_none";
+      if (!m.has(tid)) {
+        m.set(tid, {
+          typeName: r.room_types?.name ?? "Tanpa Tipe",
+          baseRate: Number(r.room_types?.base_rate ?? 0),
+          rooms: [],
+        });
+      }
+      m.get(tid)!.rooms.push(r);
+    }
+    return [...m.values()];
+  }, [allRooms]);
+
+  function toggleRoom(room: RoomRow) {
+    setSelectedRooms((cur) => {
+      const exists = cur.find((r) => r.room_id === room.id);
+      if (exists) return cur.filter((r) => r.room_id !== room.id);
+      return [...cur, { room_id: room.id, nightly_rate: Number(room.room_types?.base_rate ?? 0) }];
+    });
+  }
+  function setRoomRate(id: string, rate: number) {
+    setSelectedRooms((cur) =>
+      cur.map((r) => (r.room_id === id ? { ...r, nightly_rate: rate } : r)),
+    );
+  }
 
   const updateMut = useMutation({
     mutationFn: () => {
       if (!booking || !booking.guests) throw new Error("Booking tidak valid");
+      if (selectedRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
       return fnUpdate({
         data: {
           id: booking.id,
@@ -197,7 +239,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             phone: guest.phone.trim() || null,
             country: guest.country.trim() || null,
           },
-          room_id: roomId || null,
           check_in: checkIn,
           check_out: checkOut,
           adults,
@@ -206,9 +247,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           source,
           payment_status: paymentStatus,
           paid_amount: paymentStatus === "paid" ? total : paidAmount,
-          nightly_rate: nightlyRate,
           special_requests: specialRequests.trim() || null,
           internal_notes: internalNotes.trim() || null,
+          rooms: selectedRooms,
         },
       });
     },
@@ -224,7 +265,11 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
   if (!booking) return null;
 
-  const canSave = !updateMut.isPending && guest.full_name.trim().length > 0 && nights >= 1;
+  const canSave =
+    !updateMut.isPending &&
+    guest.full_name.trim().length > 0 &&
+    nights >= 1 &&
+    selectedRooms.length > 0;
 
   const paymentChip = PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.chip;
 
@@ -306,13 +351,13 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             <Section icon={<CalendarRange className="h-4 w-4" />} title="Tanggal & Jumlah Tamu">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Check-In" required>
-                  <Input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+                  <DatePickerID value={checkIn} onChange={(iso) => setCheckIn(iso)} />
                 </Field>
                 <Field label="Check-Out" required>
-                  <Input
-                    type="date"
+                  <DatePickerID
                     value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
+                    min={checkIn || undefined}
+                    onChange={(iso) => setCheckOut(iso)}
                   />
                 </Field>
                 <Field label="Dewasa">
@@ -346,40 +391,80 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               )}
             </Section>
 
-            {/* Kamar */}
-            <Section icon={<BedDouble className="h-4 w-4" />} title="Kamar">
-              <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-                <Field label="Kamar Fisik">
-                  <Select
-                    value={roomId || "__none"}
-                    onValueChange={(v) => setRoomId(v === "__none" ? "" : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Belum di-assign" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Belum di-assign</SelectItem>
-                      {allRooms.map((r) => (
-                        <SelectItem key={r.id} value={r.id}>
-                          #{r.number} · {r.room_types?.name ?? "—"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Tarif/malam (Rp)">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={nightlyRate}
-                    onChange={(e) => setNightlyRate(Number(e.target.value) || 0)}
-                  />
-                </Field>
+            {/* Kamar — multi-select */}
+            <Section
+              icon={<BedDouble className="h-4 w-4" />}
+              title={`Kamar${selectedRooms.length ? ` · ${selectedRooms.length} dipilih` : ""}`}
+            >
+              {roomsByType.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada kamar — tambah kamar dulu di halaman Rooms.
+                </p>
+              )}
+              <div className="space-y-4">
+                {roomsByType.map((group) => (
+                  <div key={group.typeName} className="rounded-lg border border-border">
+                    <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
+                      <p className="text-xs font-semibold">{group.typeName}</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                        {formatIDR(group.baseRate)}/malam
+                      </p>
+                    </div>
+                    <div className="divide-y divide-border">
+                      {group.rooms.map((room) => {
+                        const sel = selectedRooms.find((s) => s.room_id === room.id);
+                        const ooo = room.status === "out_of_order";
+                        return (
+                          <div
+                            key={room.id}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2.5 transition-colors",
+                              sel ? "bg-primary/5" : "hover:bg-muted/30",
+                              ooo && "opacity-50",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={ooo}
+                              checked={!!sel}
+                              onChange={() => toggleRoom(room)}
+                              className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
+                            />
+                            <div className="flex-1">
+                              <p className="font-mono text-sm font-semibold">#{room.number}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                {ooo
+                                  ? "Tidak aktif"
+                                  : `Kapasitas ${room.room_types?.capacity ?? "—"} tamu`}
+                              </p>
+                            </div>
+                            {sel && (
+                              <div className="flex items-center gap-1">
+                                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                  Rp/malam
+                                </Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  step={10000}
+                                  value={sel.nightly_rate}
+                                  onChange={(e) =>
+                                    setRoomRate(room.id, Number(e.target.value) || 0)
+                                  }
+                                  className="h-7 w-28 text-right font-mono text-xs"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
               <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                Total: <span className="text-foreground">{formatIDR(total)}</span> (
-                {formatIDR(nightlyRate)} × {Math.max(nights, 1)} malam)
+                Total: <span className="text-foreground">{formatIDR(total)}</span> ·{" "}
+                {selectedRooms.length} kamar × {Math.max(nights, 1)} malam
               </p>
             </Section>
 
@@ -387,7 +472,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             <Section icon={<ClipboardList className="h-4 w-4" />} title="Status">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status Booking">
-                  <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+                  <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -401,7 +486,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   </Select>
                 </Field>
                 <Field label="Sumber">
-                  <Select value={source} onValueChange={(v) => setSource(v as any)}>
+                  <Select value={source} onValueChange={(v) => setSource(v as typeof source)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -424,7 +509,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   <Select
                     value={paymentStatus}
                     onValueChange={(v) => {
-                      setPaymentStatus(v as any);
+                      setPaymentStatus(v as typeof paymentStatus);
                       if (v === "paid") setPaidAmount(total);
                       if (v === "unpaid") setPaidAmount(0);
                     }}
