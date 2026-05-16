@@ -92,6 +92,7 @@ const BED_TYPES = ["Single", "Double", "Queen", "King", "Twin", "Bunk"];
 export type RoomTypeOption = {
   id: string;
   name: string;
+  slug?: string;
   base_rate?: number;
   capacity?: number;
   description?: string | null;
@@ -282,10 +283,17 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
       //    relative to the source). We send unconditionally because the
       //    backend handles it idempotently — easier than diffing.
       if (roomTypeId) {
+        const typeSlug =
+          selectedType?.slug ||
+          (typeName.trim() || selectedType?.name || "tipe-kamar")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
         await fnUpdateType({
           data: {
             id: roomTypeId,
             name: typeName.trim() || selectedType?.name || "Untitled",
+            slug: typeSlug,
             description: description.trim() || null,
             bed_type: bedType.trim() || null,
             size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
