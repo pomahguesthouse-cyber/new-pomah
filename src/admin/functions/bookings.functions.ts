@@ -364,7 +364,10 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     };
     if (room_type_id) patch.room_type_id = room_type_id;
 
-    const { error: bErr } = await context.supabase.from("bookings").update(patch).eq("id", data.id);
+    const { error: bErr } = await context.supabase
+      .from("bookings")
+      .update(patch as never)
+      .eq("id", data.id);
     if (bErr) throw bErr;
 
     return { ok: true, total_amount, nights };
