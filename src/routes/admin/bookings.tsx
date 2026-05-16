@@ -218,10 +218,11 @@ function BookingsPage() {
           <p className="text-sm font-semibold text-destructive">Gagal memuat booking</p>
           <p className="mt-1 font-mono text-xs text-destructive/80">{(error as Error).message}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Kalau errornya menyebut kolom seperti <code>payment_status</code>, jalankan migration
-            terbaru di Supabase (SQL Editor → paste isi file{" "}
-            <code>supabase/migrations/20260515130000_*.sql</code> dan
-            <code>20260515120000_*.sql</code> → Run).
+            Kalau errornya menyebut <code>booking_rooms</code> atau{" "}
+            <code>relationship</code>, jalankan migration multi-kamar di Supabase (SQL Editor →
+            paste isi file <code>supabase/migrations/20260516120000_create_booking_rooms.sql</code>{" "}
+            → Run). Kalau menyebut kolom seperti <code>payment_status</code>, jalankan juga{" "}
+            <code>20260515130000_*.sql</code> dan <code>20260515120000_*.sql</code>.
           </p>
         </div>
       )}
