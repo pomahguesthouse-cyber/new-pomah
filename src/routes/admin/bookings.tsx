@@ -47,6 +47,13 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+/** Display metadata for a booking's payment status. */
+const PAYMENT_META: Record<string, { label: string; cls: string }> = {
+  unpaid: { label: "Belum bayar", cls: "bg-destructive/15 text-destructive" },
+  partial: { label: "DP", cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" },
+  paid: { label: "Lunas", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+};
+
 const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Semua sumber" },
   { value: "direct", label: "Direct" },
@@ -278,7 +285,7 @@ function BookingsPage() {
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
             <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <th className="px-4 py-3">Ref</th>
+              <th className="px-4 py-3">Kode Booking</th>
               <th className="px-4 py-3">Guest</th>
               <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
@@ -348,21 +355,30 @@ function BookingsPage() {
                   {formatIDR(Number(b.total_amount))}
                 </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    value={b.status}
-                    onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
-                  >
-                    <SelectTrigger className="h-8 w-36">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={b.status}
+                      onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
+                    >
+                      <SelectTrigger className="h-7 w-28 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {b.payment_status && PAYMENT_META[b.payment_status] && (
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${PAYMENT_META[b.payment_status].cls}`}
+                      >
+                        {PAYMENT_META[b.payment_status].label}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <Button
