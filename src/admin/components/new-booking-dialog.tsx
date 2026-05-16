@@ -199,11 +199,6 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
       return [...cur, { room_id: room.id, nightly_rate: Number(room.room_types?.base_rate ?? 0) }];
     });
   }
-  function setRoomRate(id: string, rate: number) {
-    setSelectedRooms((cur) =>
-      cur.map((r) => (r.room_id === id ? { ...r, nightly_rate: rate } : r)),
-    );
-  }
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -421,30 +416,13 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                                 className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
                               />
                               <div className="flex-1">
-                                <p className="font-mono text-sm font-semibold">#{room.number}</p>
+                                <p className="font-mono text-sm font-semibold">{room.number}</p>
                                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
                                   {ooo
                                     ? "Tidak aktif"
                                     : `Kapasitas ${room.room_types?.capacity ?? "—"} tamu`}
                                 </p>
                               </div>
-                              {sel && (
-                                <div className="flex items-center gap-1">
-                                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                    Rp/malam
-                                  </Label>
-                                  <Input
-                                    type="number"
-                                    min={0}
-                                    step={10000}
-                                    value={sel.nightly_rate}
-                                    onChange={(e) =>
-                                      setRoomRate(room.id, Number(e.target.value) || 0)
-                                    }
-                                    className="h-7 w-28 text-right font-mono text-xs"
-                                  />
-                                </div>
-                              )}
                             </div>
                           );
                         })}
