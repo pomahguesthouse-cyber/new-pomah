@@ -1,13 +1,14 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { listBookings, updateBookingStatus } from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,26 @@ export const Route = createFileRoute("/admin/bookings")({
 });
 
 const STATUSES = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"] as const;
+type BookingStatus = (typeof STATUSES)[number];
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "Semua status" },
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "checked_in", label: "Checked-in" },
+  { value: "checked_out", label: "Checked-out" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+const SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "Semua sumber" },
+  { value: "direct", label: "Direct" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "walk_in", label: "Walk-in" },
+  { value: "website", label: "Website" },
+];
+
+const PAGE_SIZE = 20;
 
 function formatDateID(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -55,10 +76,40 @@ function BookingsPage() {
   const fn = useServerFn(listBookings);
   const update = useServerFn(updateBookingStatus);
   const qc = useQueryClient();
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["bookings"],
-    queryFn: () => fn(),
+
+  // ---- filter + pagination state ----
+  const [page, setPage] = React.useState(1);
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [sourceFilter, setSourceFilter] = React.useState("all");
+  const [searchInput, setSearchInput] = React.useState("");
+  const [search, setSearch] = React.useState("");
+
+  // Debounce the search box so we don't hit the server on every keystroke.
+  React.useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "";
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ["bookings", { page, statusFilter, sourceFilter, search }],
+    queryFn: () =>
+      fn({
+        data: {
+          page,
+          pageSize: PAGE_SIZE,
+          status: statusFilter === "all" ? undefined : (statusFilter as BookingStatus),
+          source: sourceFilter === "all" ? undefined : sourceFilter,
+          search: search || undefined,
+        },
+      }),
+    placeholderData: keepPreviousData,
   });
+
   useRealtimeInvalidate(
     "admin-bookings-stream",
     ["bookings", "guests", "rooms"],
@@ -66,7 +117,7 @@ function BookingsPage() {
   );
 
   const mut = useMutation({
-    mutationFn: (vars: { id: string; status: (typeof STATUSES)[number] }) => update({ data: vars }),
+    mutationFn: (vars: { id: string; status: BookingStatus }) => update({ data: vars }),
     onSuccess: () => {
       toast.success("Updated");
       qc.invalidateQueries({ queryKey: ["bookings"] });
@@ -77,6 +128,19 @@ function BookingsPage() {
 
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeTo = Math.min(page * PAGE_SIZE, total);
+
+  const resetFilters = () => {
+    setStatusFilter("all");
+    setSourceFilter("all");
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+  };
 
   return (
     <div className="space-y-6 p-6 md:p-10">
@@ -118,6 +182,73 @@ function BookingsPage() {
         </div>
       )}
 
+      {/* ---- filter bar ---- */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-56 flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Cari nama tamu atau kode referensi…"
+            className="h-9 pl-9"
+          />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label="Bersihkan pencarian"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => {
+            setStatusFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={sourceFilter}
+          onValueChange={(v) => {
+            setSourceFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="h-9 w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SOURCE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {filtersActive && (
+          <Button variant="ghost" size="sm" className="h-9 gap-1.5" onClick={resetFilters}>
+            <X className="h-3.5 w-3.5" />
+            Reset
+          </Button>
+        )}
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="border-b border-border bg-muted/40">
@@ -142,8 +273,14 @@ function BookingsPage() {
             {!isLoading && !error && (data?.bookings.length ?? 0) === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk membuat
-                  yang pertama.
+                  {filtersActive ? (
+                    <>Tidak ada booking yang cocok dengan filter ini.</>
+                  ) : (
+                    <>
+                      Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk
+                      membuat yang pertama.
+                    </>
+                  )}
                 </td>
               </tr>
             )}
@@ -187,9 +324,7 @@ function BookingsPage() {
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <Select
                     value={b.status}
-                    onValueChange={(v) =>
-                      mut.mutate({ id: b.id, status: v as (typeof STATUSES)[number] })
-                    }
+                    onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
                   >
                     <SelectTrigger className="h-8 w-36">
                       <SelectValue />
@@ -207,6 +342,43 @@ function BookingsPage() {
             ))}
           </tbody>
         </table>
+
+        {/* ---- pagination footer ---- */}
+        {!error && total > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3">
+            <p className="text-xs text-muted-foreground">
+              Menampilkan <span className="font-medium text-foreground">{rangeFrom}</span>–
+              <span className="font-medium text-foreground">{rangeTo}</span> dari{" "}
+              <span className="font-medium text-foreground">{total}</span> booking
+              {isFetching && <span className="ml-2 italic opacity-70">memuat…</span>}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                disabled={page <= 1 || isFetching}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Sebelumnya
+              </Button>
+              <span className="px-1 font-mono text-xs text-muted-foreground tabular-nums">
+                {page} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Berikutnya
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
