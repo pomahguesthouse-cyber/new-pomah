@@ -349,7 +349,7 @@ function BookingsPage() {
               >
                 <td className="px-4 py-3">
                   <span className="font-mono text-xs font-semibold text-foreground">
-                    {b.reference_code ?? "—"}
+                    {("reference_code" in b ? b.reference_code : null) ?? "—"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
