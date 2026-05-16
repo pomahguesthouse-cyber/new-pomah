@@ -125,11 +125,25 @@ type Props = {
   open: boolean;
   room?: RoomDetailRow | null;
   roomTypes: RoomTypeOption[];
+  /**
+   * Returns a suggested room number for a given room type id — based on
+   * the type's prefix and the highest existing number. Used to prefill
+   * the number field in create mode (the value stays freely editable).
+   */
+  suggestNumber?: (roomTypeId: string) => string;
   onClose: () => void;
   onSaved: () => void;
 };
 
-export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved }: Props) {
+export function RoomDetailDialog({
+  mode,
+  open,
+  room,
+  roomTypes,
+  suggestNumber,
+  onClose,
+  onSaved,
+}: Props) {
   const fnCreate = useServerFn(createRoom);
   const fnUpdate = useServerFn(updateRoom);
   const fnUpdateType = useServerFn(updateRoomType);
@@ -153,6 +167,9 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
   const [heroImageUrl, setHeroImageUrl] = React.useState<string | null>(null);
   const [customAmenity, setCustomAmenity] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
+  // The last number we auto-suggested — lets us safely replace it when the
+  // type changes, while never overwriting a number the user typed himself.
+  const lastSuggestionRef = React.useRef("");
 
   const selectedType = React.useMemo(
     () => roomTypes.find((t) => t.id === roomTypeId) ?? null,
@@ -173,6 +190,7 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
       hydrateTypeFields(t ?? null);
     } else {
       setNumber("");
+      lastSuggestionRef.current = "";
       setStatus("clean");
       setNotes("");
       const first = roomTypes[0] ?? null;
@@ -182,12 +200,18 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, room?.id]);
 
-  // When user switches type in CREATE mode, hydrate type fields from new selection
+  // When user switches type in CREATE mode: hydrate type fields and refresh
+  // the suggested room number (unless the user already typed a custom one).
   React.useEffect(() => {
     if (!open) return;
     if (mode === "create") {
       const t = roomTypes.find((rt) => rt.id === roomTypeId) ?? null;
       hydrateTypeFields(t);
+      if (suggestNumber && roomTypeId) {
+        const s = suggestNumber(roomTypeId);
+        setNumber((prev) => (prev === "" || prev === lastSuggestionRef.current ? s : prev));
+        lastSuggestionRef.current = s;
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomTypeId]);
@@ -375,12 +399,32 @@ export function RoomDetailDialog({ mode, open, room, roomTypes, onClose, onSaved
               <TabsContent value="info" className="m-0 space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FieldGroup label="Nomor Kamar" required>
-                    <Input
-                      value={number}
-                      onChange={(e) => setNumber(e.target.value)}
-                      placeholder="mis. 101, A-02"
-                      maxLength={20}
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={number}
+                        onChange={(e) => {
+                          setNumber(e.target.value);
+                          lastSuggestionRef.current = "";
+                        }}
+                        placeholder="mis. FS-101, 201"
+                        maxLength={20}
+                      />
+                      {mode === "create" && suggestNumber && roomTypeId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={() => {
+                            const s = suggestNumber(roomTypeId);
+                            lastSuggestionRef.current = s;
+                            setNumber(s);
+                          }}
+                        >
+                          Saran
+                        </Button>
+                      )}
+                    </div>
                   </FieldGroup>
                   <FieldGroup label="Tipe Kamar" required>
                     <Select value={roomTypeId} onValueChange={setRoomTypeId}>

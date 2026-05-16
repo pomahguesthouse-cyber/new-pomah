@@ -59,6 +59,23 @@ const formatIDR = (n: number) =>
     .format(n)
     .replace("IDR", "Rp");
 
+/** Short uppercase prefix from a room type name (initials of each word). */
+function roomTypePrefix(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
+
+/** Trailing run of digits in a room number ("FS-100" -> 100), or null. */
+function trailingNumber(value: string): number | null {
+  const m = value.match(/(\d+)(?!.*\d)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+
 export function RoomsManageView() {
   const fnList = useServerFn(listRooms);
   const fnTypes = useServerFn(listRoomTypes);
@@ -72,7 +89,7 @@ export function RoomsManageView() {
     queryKey: ["room-types"],
     queryFn: () => fnTypes(),
   });
-  const roomTypes = typesData?.roomTypes ?? [];
+  const roomTypes = React.useMemo(() => typesData?.roomTypes ?? [], [typesData]);
 
   useRealtimeInvalidate("admin-rooms-stream", ["rooms", "room_types"], [["rooms"], ["room-types"]]);
 
@@ -114,7 +131,28 @@ export function RoomsManageView() {
   const [typeEditCtx, setTypeEditCtx] = React.useState<ManagedRoomType | null>(null);
   const [typeDeleteCtx, setTypeDeleteCtx] = React.useState<ManagedRoomType | null>(null);
 
-  const rooms = (data?.rooms ?? []) as RoomRow[];
+  const rooms = React.useMemo(() => (data?.rooms ?? []) as RoomRow[], [data]);
+
+  /**
+   * Suggest the next room number for a type: "<PREFIX>-<n>", where the
+   * prefix comes from the type name and n is one past the highest
+   * existing number of that type. Falls back to 101 when the type is
+   * still empty. The suggestion is editable in the form.
+   */
+  const suggestRoomNumber = React.useCallback(
+    (typeId: string): string => {
+      const type = roomTypes.find((t) => t.id === typeId);
+      if (!type) return "";
+      const prefix = roomTypePrefix(type.name);
+      const used = rooms
+        .filter((r) => (r.room_types?.id ?? r.room_type_id) === typeId)
+        .map((r) => trailingNumber(r.number))
+        .filter((n): n is number => n != null);
+      const next = used.length ? Math.max(...used) + 1 : 101;
+      return prefix ? `${prefix}-${next}` : String(next);
+    },
+    [roomTypes, rooms],
+  );
 
   const invalidateTypes = () => {
     qc.invalidateQueries({ queryKey: ["room-types"] });
@@ -345,6 +383,7 @@ export function RoomsManageView() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         roomTypes={roomTypes}
+        suggestNumber={suggestRoomNumber}
         onSaved={() => {
           qc.invalidateQueries({ queryKey: ["rooms"] });
           qc.invalidateQueries({ queryKey: ["room-types"] });
