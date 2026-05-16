@@ -66,13 +66,11 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .from("bookings")
       .insert({
         property_id: property.id,
-        room_type_id: rt.id,
         guest_id: guest.id,
         check_in: data.checkIn,
         check_out: data.checkOut,
         adults: data.adults,
         children: data.children,
-        nightly_rate: rt.base_rate,
         total_amount: total,
         source: "direct",
         status: "pending",
@@ -81,6 +79,16 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .select("id, reference_code")
       .single();
     if (berr || !booking) throw berr ?? new Error("Could not create booking");
+
+    // One booking_rooms line for the chosen room type (room assigned
+    // later by staff).
+    const { error: brErr } = await supabasePublic.from("booking_rooms").insert({
+      booking_id: booking.id,
+      room_id: null,
+      room_type_id: rt.id,
+      nightly_rate: rt.base_rate,
+    });
+    if (brErr) throw brErr;
 
     return { id: booking.id, reference_code: booking.reference_code, total, nights };
   });

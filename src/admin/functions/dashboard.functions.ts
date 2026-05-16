@@ -1,6 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/** Comma-joined distinct room-type names of a booking (via booking_rooms). */
+function withRoomsLabel<T extends Record<string, any>>(row: T): T & { rooms_label: string } {
+  const names = ((row.booking_rooms as any[]) ?? [])
+    .map((br) => br?.room_types?.name)
+    .filter((n): n is string => !!n);
+  return { ...row, rooms_label: names.length ? [...new Set(names)].join(", ") : "—" };
+}
+
+/** Number of rooms attached to a booking row. */
+function roomCountOf(row: any): number {
+  return ((row?.booking_rooms as any[]) ?? []).length || 0;
+}
+
 export const getDashboardOverview = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -19,13 +34,15 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
       supabase.from("bookings").select("*", { count: "exact", head: true }),
       supabase
         .from("bookings")
-        .select("id, check_in, guest_id, room_type_id, status, guests(full_name), room_types(name)")
+        .select(
+          "id, check_in, guest_id, status, guests(full_name), booking_rooms(room_types(name))",
+        )
         .eq("check_in", today)
         .neq("status", "cancelled"),
       supabase
         .from("bookings")
         .select(
-          "id, check_out, guest_id, room_type_id, status, guests(full_name), room_types(name)",
+          "id, check_out, guest_id, status, guests(full_name), booking_rooms(room_types(name))",
         )
         .eq("check_out", today)
         .in("status", ["checked_in", "confirmed"]),
@@ -33,7 +50,7 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
       supabase
         .from("bookings")
         .select(
-          "id, check_in, check_out, status, total_amount, source, guests(full_name), room_types(name)",
+          "id, check_in, check_out, status, total_amount, source, guests(full_name), booking_rooms(room_types(name))",
         )
         .order("created_at", { ascending: false })
         .limit(8),
@@ -53,11 +70,12 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
     void 0;
     const { data: stays } = await supabase
       .from("bookings")
-      .select("id")
+      .select("id, booking_rooms(id)")
       .lte("check_in", today)
       .gt("check_out", today)
       .in("status", ["confirmed", "checked_in"]);
-    const occupied = stays?.length ?? 0;
+    // A stay can occupy several rooms — count rooms, not bookings.
+    const occupied = (stays ?? []).reduce((s: number, b: any) => s + roomCountOf(b), 0);
     const totalRooms = rooms?.length ?? 0;
 
     const { data: revenueRows } = await supabase
@@ -75,10 +93,10 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         revenue,
         unread: (threads ?? []).reduce((s, t) => s + (t.unread_count ?? 0), 0),
       },
-      arrivals: arrivals ?? [],
-      departures: departures ?? [],
+      arrivals: (arrivals ?? []).map(withRoomsLabel),
+      departures: (departures ?? []).map(withRoomsLabel),
       rooms: rooms ?? [],
-      recent: recent ?? [],
+      recent: (recent ?? []).map(withRoomsLabel),
       suggestions: suggestions ?? [],
       threads: threads ?? [],
     };
@@ -129,7 +147,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
         .gte("created_at", `${startISO}T00:00:00.000Z`),
       supabase
         .from("bookings")
-        .select("id, check_in, check_out, total_amount, status")
+        .select("id, check_in, check_out, total_amount, status, booking_rooms(id)")
         .gte("check_out", startISO)
         .neq("status", "cancelled"),
       supabase
@@ -170,10 +188,11 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
     for (const s of stayBookings ?? []) {
       const ci = new Date(s.check_in as string);
       const co = new Date(s.check_out as string);
+      const roomCount = roomCountOf(s);
       for (const b of buckets) {
         const d = new Date(b.day);
         if (d >= ci && d < co) {
-          occupancyByDay.set(b.day, (occupancyByDay.get(b.day) ?? 0) + 1);
+          occupancyByDay.set(b.day, (occupancyByDay.get(b.day) ?? 0) + roomCount);
         }
       }
     }
@@ -237,7 +256,7 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
     // Today occupancy snapshot
     let occupiedToday = 0;
     for (const s of stayBookings ?? []) {
-      if (s.check_in <= todayISO && s.check_out > todayISO) occupiedToday += 1;
+      if (s.check_in <= todayISO && s.check_out > todayISO) occupiedToday += roomCountOf(s);
     }
 
     return {

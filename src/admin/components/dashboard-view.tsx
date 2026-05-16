@@ -293,7 +293,7 @@ export function DashboardView() {
                 <div>
                   <p className="font-medium">{b.guests?.full_name ?? "Guest"}</p>
                   <p className="font-mono text-xs text-muted-foreground">
-                    {formatDateID(b.check_in)} → {formatDateID(b.check_out)} · {b.room_types?.name}
+                    {formatDateID(b.check_in)} → {formatDateID(b.check_out)} · {b.rooms_label}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -320,7 +320,7 @@ export function DashboardView() {
                 {arrivals.map((a) => (
                   <li key={a.id}>
                     {a.guests?.full_name}{" "}
-                    <span className="text-muted-foreground">· {a.room_types?.name}</span>
+                    <span className="text-muted-foreground">· {a.rooms_label}</span>
                   </li>
                 ))}
               </ul>
@@ -334,7 +334,7 @@ export function DashboardView() {
                 {departures.map((d) => (
                   <li key={d.id}>
                     {d.guests?.full_name}{" "}
-                    <span className="text-muted-foreground">· {d.room_types?.name}</span>
+                    <span className="text-muted-foreground">· {d.rooms_label}</span>
                   </li>
                 ))}
               </ul>
