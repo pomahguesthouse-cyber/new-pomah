@@ -99,3 +99,21 @@ export function formatRelativeDateID(input: string | number | Date | null | unde
   if (d.toDateString() === yest.toDateString()) return "Kemarin";
   return formatDateLongID(d);
 }
+
+/* ------------------------------------------------------------------ *
+ * Indonesian currency formatting
+ *
+ * Use this everywhere a money value is shown to a user so prices read
+ * consistently in Rupiah (e.g. "Rp 450.000").
+ * ------------------------------------------------------------------ */
+
+/** "Rp 450.000" — Rupiah, no decimals, Indonesian thousands separator. */
+export function formatIDR(input: number | string | null | undefined): string {
+  const n = typeof input === "string" ? Number(input) : input;
+  if (n == null || Number.isNaN(n)) return "Rp 0";
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
