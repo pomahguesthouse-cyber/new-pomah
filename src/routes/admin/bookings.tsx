@@ -3,8 +3,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Search, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { listBookings, updateBookingStatus } from "@/admin/functions/bookings.functions";
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import {
+  listBookings,
+  updateBookingStatus,
+  deleteBooking,
+} from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
@@ -75,6 +87,7 @@ function formatIDR(n: number) {
 function BookingsPage() {
   const fn = useServerFn(listBookings);
   const update = useServerFn(updateBookingStatus);
+  const removeFn = useServerFn(deleteBooking);
   const qc = useQueryClient();
 
   // ---- filter + pagination state ----
@@ -126,8 +139,20 @@ function BookingsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => removeFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Booking dihapus");
+      qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      setDeleteCtx(null);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
+  const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
 
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -260,19 +285,20 @@ function BookingsPage() {
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && !error && (data?.bookings.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
                     <>Tidak ada booking yang cocok dengan filter ini.</>
                   ) : (
@@ -338,6 +364,19 @@ function BookingsPage() {
                     </SelectContent>
                   </Select>
                 </td>
+                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    title="Hapus booking"
+                    onClick={() =>
+                      setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -383,6 +422,30 @@ function BookingsPage() {
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <EditBookingDialog open={!!editCtx} booking={editCtx} onClose={() => setEditCtx(null)} />
+
+      <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Hapus booking {deleteCtx?.ref}?</DialogTitle>
+            <DialogDescription>
+              Seluruh data booking ini akan dihapus permanen dan tidak bisa dikembalikan. Data tamu
+              tidak ikut terhapus.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteCtx(null)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              onClick={() => deleteCtx && deleteMut.mutate(deleteCtx.id)}
+            >
+              {deleteMut.isPending ? "Menghapus…" : "Hapus booking"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
