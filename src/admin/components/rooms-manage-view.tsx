@@ -441,7 +441,7 @@ export function RoomsManageView() {
       <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Hapus kamar #{deleteCtx?.number}?</DialogTitle>
+            <DialogTitle>Hapus kamar {deleteCtx?.number}?</DialogTitle>
             <DialogDescription>
               Tindakan ini permanen. Kamar yang masih punya booking aktif tidak bisa dihapus.
             </DialogDescription>
