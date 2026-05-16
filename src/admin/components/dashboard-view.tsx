@@ -32,7 +32,7 @@ import { getDashboardOverview, getDashboardMetrics } from "@/admin/functions/das
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDateID, formatDateLongID } from "@/lib/utils";
+import { formatDateID, formatDateLongID, formatIDR } from "@/lib/utils";
 
 export function DashboardView() {
   const queryClient = useQueryClient();
@@ -78,12 +78,7 @@ export function DashboardView() {
   const { kpis, arrivals, departures, recent, suggestions, threads } = overview.data;
   const { trend, summary, pendingPayments, pendingPaymentTotal } = metrics.data;
 
-  const fmtMoney = (n: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      maximumFractionDigits: 0,
-    }).format(n);
+  const fmtMoney = (n: number) => formatIDR(n);
 
   return (
     <div className="space-y-8 p-6 md:p-8">
