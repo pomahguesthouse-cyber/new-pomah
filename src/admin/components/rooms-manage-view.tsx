@@ -2,13 +2,14 @@ import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, BedDouble } from "lucide-react";
 
 import {
   listRooms,
   updateRoomStatus,
   listRoomTypes,
   deleteRoom,
+  deleteRoomType,
 } from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { RoomDetailDialog, type RoomDetailRow } from "@/admin/components/room-detail-dialog";
+import { RoomTypeDialog, type ManagedRoomType } from "@/admin/components/room-type-dialog";
 
 const STATUSES = ["clean", "dirty", "maintenance", "out_of_order"] as const;
 const STATUS_LABEL: Record<(typeof STATUSES)[number], string> = {
@@ -62,6 +64,7 @@ export function RoomsManageView() {
   const fnTypes = useServerFn(listRoomTypes);
   const fnUpdateStatus = useServerFn(updateRoomStatus);
   const fnDelete = useServerFn(deleteRoom);
+  const fnDeleteType = useServerFn(deleteRoomType);
   const qc = useQueryClient();
 
   const { data } = useQuery({ queryKey: ["rooms"], queryFn: () => fnList() });
@@ -92,111 +95,251 @@ export function RoomsManageView() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const deleteTypeMut = useMutation({
+    mutationFn: (id: string) => fnDeleteType({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Tipe kamar dihapus");
+      qc.invalidateQueries({ queryKey: ["room-types"] });
+      qc.invalidateQueries({ queryKey: ["rooms"] });
+      setTypeDeleteCtx(null);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<RoomRow | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<RoomRow | null>(null);
 
+  const [typeCreateOpen, setTypeCreateOpen] = React.useState(false);
+  const [typeEditCtx, setTypeEditCtx] = React.useState<ManagedRoomType | null>(null);
+  const [typeDeleteCtx, setTypeDeleteCtx] = React.useState<ManagedRoomType | null>(null);
+
   const rooms = (data?.rooms ?? []) as RoomRow[];
 
+  const invalidateTypes = () => {
+    qc.invalidateQueries({ queryKey: ["room-types"] });
+    qc.invalidateQueries({ queryKey: ["rooms"] });
+  };
+
   return (
-    <div className="space-y-6 p-6 md:p-10">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Housekeeping
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Kamar</h1>
-        </div>
-        <Button
-          onClick={() => setCreateOpen(true)}
-          disabled={roomTypes.length === 0}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Tambah Kamar
-        </Button>
+    <div className="space-y-8 p-6 md:p-10">
+      <header>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          Housekeeping
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Kamar</h1>
       </header>
 
-      {roomTypes.length === 0 && (
-        <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-          Belum ada tipe kamar. Tambah tipe kamar dulu di halaman Pricing sebelum membuat kamar.
+      {/* ---------------- Room types ---------------- */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Tipe Kamar</h2>
+            <p className="text-xs text-muted-foreground">
+              Detail bersama (tarif, kasur, kapasitas) untuk setiap kategori kamar.
+            </p>
+          </div>
+          <Button size="sm" className="gap-2" onClick={() => setTypeCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Tambah Tipe Kamar
+          </Button>
         </div>
-      )}
 
-      {rooms.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          Belum ada kamar. Klik <strong>Tambah Kamar</strong> untuk membuat yang pertama.
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {rooms.map((r) => (
-            <Card key={r.id} className="p-5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-mono text-2xl font-semibold">#{r.number}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{r.room_types?.name ?? "—"}</p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam ·{" "}
-                    {r.room_types?.capacity ?? 0} tamu
-                  </p>
+        {roomTypes.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            Belum ada tipe kamar. Klik <strong>Tambah Tipe Kamar</strong> untuk membuat yang
+            pertama.
+          </div>
+        ) : (
+          <Card className="divide-y divide-border p-0">
+            {roomTypes.map((rt) => (
+              <div key={rt.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <BedDouble className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{rt.name}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">
+                      {formatIDR(Number(rt.base_rate ?? 0))}/malam · {rt.capacity ?? 0} tamu
+                      {rt.bed_type ? ` · ${rt.bed_type}` : ""}
+                    </p>
+                  </div>
                 </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${COLORS[r.status]}`}
-                >
-                  {STATUS_LABEL[r.status]}
-                </span>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setTypeEditCtx(rt)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => setTypeDeleteCtx(rt)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Hapus
+                  </Button>
+                </div>
               </div>
+            ))}
+          </Card>
+        )}
+      </section>
 
-              {r.notes && (
-                <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">{r.notes}</p>
-              )}
-
-              <div className="mt-4">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                  Status
-                </Label>
-                <Select
-                  value={r.status}
-                  onValueChange={(v) => statusMut.mutate({ id: r.id, status: v as RoomStatus })}
-                >
-                  <SelectTrigger className="mt-1 h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 gap-1.5"
-                  onClick={() => setEditCtx(r)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-destructive hover:text-destructive"
-                  onClick={() => setDeleteCtx(r)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Hapus
-                </Button>
-              </div>
-            </Card>
-          ))}
+      {/* ---------------- Rooms ---------------- */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Daftar Kamar</h2>
+            <p className="text-xs text-muted-foreground">
+              Setiap kamar fisik dan status kebersihannya.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+            disabled={roomTypes.length === 0}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Tambah Kamar
+          </Button>
         </div>
-      )}
 
+        {rooms.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+            {roomTypes.length === 0 ? (
+              <>Tambah tipe kamar dulu, lalu buat kamar.</>
+            ) : (
+              <>
+                Belum ada kamar. Klik <strong>Tambah Kamar</strong> untuk membuat yang pertama.
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {rooms.map((r) => (
+              <Card key={r.id} className="p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-mono text-2xl font-semibold">#{r.number}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {r.room_types?.name ?? "—"}
+                    </p>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam ·{" "}
+                      {r.room_types?.capacity ?? 0} tamu
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${COLORS[r.status]}`}
+                  >
+                    {STATUS_LABEL[r.status]}
+                  </span>
+                </div>
+
+                {r.notes && (
+                  <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">{r.notes}</p>
+                )}
+
+                <div className="mt-4">
+                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    Status
+                  </Label>
+                  <Select
+                    value={r.status}
+                    onValueChange={(v) => statusMut.mutate({ id: r.id, status: v as RoomStatus })}
+                  >
+                    <SelectTrigger className="mt-1 h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {STATUS_LABEL[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 gap-1.5"
+                    onClick={() => setEditCtx(r)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteCtx(r)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Hapus
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ---------------- Room type dialogs ---------------- */}
+      <RoomTypeDialog
+        mode="create"
+        open={typeCreateOpen}
+        onClose={() => setTypeCreateOpen(false)}
+        onSaved={() => {
+          invalidateTypes();
+          setTypeCreateOpen(false);
+        }}
+      />
+      <RoomTypeDialog
+        mode="edit"
+        open={!!typeEditCtx}
+        roomType={typeEditCtx}
+        onClose={() => setTypeEditCtx(null)}
+        onSaved={() => {
+          invalidateTypes();
+          setTypeEditCtx(null);
+        }}
+      />
+      <Dialog open={!!typeDeleteCtx} onOpenChange={(o) => !o && setTypeDeleteCtx(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Hapus tipe kamar &ldquo;{typeDeleteCtx?.name}&rdquo;?</DialogTitle>
+            <DialogDescription>
+              Tindakan ini permanen. Tipe kamar yang masih punya kamar atau booking tidak bisa
+              dihapus.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTypeDeleteCtx(null)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteTypeMut.isPending}
+              onClick={() => typeDeleteCtx && deleteTypeMut.mutate(typeDeleteCtx.id)}
+            >
+              {deleteTypeMut.isPending ? "Menghapus..." : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------- Room dialogs ---------------- */}
       <RoomDetailDialog
         mode="create"
         open={createOpen}

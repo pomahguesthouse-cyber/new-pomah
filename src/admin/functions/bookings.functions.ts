@@ -375,7 +375,9 @@ export const listRoomTypes = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("room_types")
-      .select("id, name, base_rate, capacity")
+      .select(
+        "id, name, slug, description, bed_type, size_sqm, capacity, base_rate, amenities, hero_image_url",
+      )
       .order("name");
     if (error) throw error;
     return { roomTypes: data ?? [] };
@@ -436,37 +438,116 @@ export const updateRoom = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const roomTypeUpdateSchema = z.object({
-  id: z.string().uuid(),
+/** Shared editable fields of a room type (used by create + update). */
+const roomTypeFieldsSchema = z.object({
   name: z.string().trim().min(1).max(120),
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(140)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug hanya boleh huruf kecil, angka, dan tanda hubung"),
   description: z.string().max(2000).nullable().optional(),
   bed_type: z.string().max(60).nullable().optional(),
   size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
   capacity: z.number().int().min(1).max(20),
   base_rate: z.number().min(0).max(100_000_000),
   amenities: z.array(z.string().min(1).max(60)).max(40).nullable().optional(),
-  hero_image_url: z.string().url().max(500).nullable().optional(),
+  hero_image_url: z.string().url().max(500).nullable().optional().or(z.literal("")),
 });
+
+/** Map a validated room-type payload to a DB row patch. */
+function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
+  return {
+    name: d.name,
+    slug: d.slug,
+    description: d.description ?? null,
+    bed_type: d.bed_type ?? null,
+    size_sqm: d.size_sqm ?? null,
+    capacity: d.capacity,
+    base_rate: d.base_rate,
+    amenities: d.amenities ?? [],
+    hero_image_url: d.hero_image_url || null,
+  };
+}
+
+export const createRoomType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => roomTypeFieldsSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: property, error: propErr } = await context.supabase
+      .from("properties")
+      .select("id")
+      .limit(1)
+      .single();
+    if (propErr || !property) throw new Error("Property belum dikonfigurasi");
+
+    const { data: row, error } = await context.supabase
+      .from("room_types")
+      .insert({ property_id: property.id, ...roomTypeRow(data) })
+      .select("id")
+      .single();
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error(`Slug "${data.slug}" sudah dipakai tipe kamar lain.`);
+      }
+      throw error;
+    }
+    return { id: row?.id };
+  });
 
 export const updateRoomType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => roomTypeUpdateSchema.parse(d))
+  .inputValidator((d) => roomTypeFieldsSchema.extend({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { id, ...patch } = data;
+    const { id, ...fields } = data;
     const { error } = await context.supabase
       .from("room_types")
-      .update({
-        name: patch.name,
-        description: patch.description ?? null,
-        bed_type: patch.bed_type ?? null,
-        size_sqm: patch.size_sqm ?? null,
-        capacity: patch.capacity,
-        base_rate: patch.base_rate,
-        amenities: patch.amenities ?? null,
-        hero_image_url: patch.hero_image_url ?? null,
-      })
+      .update(roomTypeRow(fields))
       .eq("id", id);
-    if (error) throw error;
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error(`Slug "${data.slug}" sudah dipakai tipe kamar lain.`);
+      }
+      throw error;
+    }
+    return { ok: true };
+  });
+
+export const deleteRoomType = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    // Refuse if any room still uses this type (the FK cascades, so a
+    // silent delete would wipe those rooms — guard explicitly instead).
+    const { count: roomCount, error: rErr } = await context.supabase
+      .from("rooms")
+      .select("id", { count: "exact", head: true })
+      .eq("room_type_id", data.id);
+    if (rErr) throw rErr;
+    if ((roomCount ?? 0) > 0) {
+      throw new Error(
+        `Tidak bisa hapus: masih ada ${roomCount} kamar bertipe ini. Hapus kamarnya dulu.`,
+      );
+    }
+
+    // Refuse if any booking references this type.
+    const { count: bookingCount, error: bErr } = await context.supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("room_type_id", data.id);
+    if (bErr) throw bErr;
+    if ((bookingCount ?? 0) > 0) {
+      throw new Error(`Tidak bisa hapus: masih ada ${bookingCount} booking bertipe ini.`);
+    }
+
+    const { error } = await context.supabase.from("room_types").delete().eq("id", data.id);
+    if (error) {
+      if ((error as { code?: string }).code === "23503") {
+        throw new Error("Tidak bisa hapus: tipe kamar masih direferensikan data lain.");
+      }
+      throw error;
+    }
     return { ok: true };
   });
 
