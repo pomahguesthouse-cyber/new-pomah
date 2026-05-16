@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerID } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -331,23 +332,21 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
               <Section icon={<CalendarRange className="h-4 w-4" />} title="Tanggal Menginap">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Check-In" required>
-                    <Input
-                      type="date"
+                    <DatePickerID
                       value={checkIn}
-                      onChange={(e) => {
-                        setCheckIn(e.target.value);
-                        if (e.target.value && checkOut <= e.target.value) {
-                          setCheckOut(plusDaysIso(e.target.value, 1));
+                      onChange={(iso) => {
+                        setCheckIn(iso);
+                        if (iso && checkOut <= iso) {
+                          setCheckOut(plusDaysIso(iso, 1));
                         }
                       }}
                     />
                   </Field>
                   <Field label="Check-Out" required>
-                    <Input
-                      type="date"
+                    <DatePickerID
                       value={checkOut}
                       min={plusDaysIso(checkIn, 1)}
-                      onChange={(e) => setCheckOut(e.target.value)}
+                      onChange={(iso) => setCheckOut(iso)}
                     />
                   </Field>
                   <Field label="Dewasa" icon={<Users className="h-3 w-3" />}>

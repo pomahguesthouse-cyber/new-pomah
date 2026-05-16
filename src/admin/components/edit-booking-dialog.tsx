@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerID } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -306,13 +307,13 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             <Section icon={<CalendarRange className="h-4 w-4" />} title="Tanggal & Jumlah Tamu">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Check-In" required>
-                  <Input type="date" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} />
+                  <DatePickerID value={checkIn} onChange={(iso) => setCheckIn(iso)} />
                 </Field>
                 <Field label="Check-Out" required>
-                  <Input
-                    type="date"
+                  <DatePickerID
                     value={checkOut}
-                    onChange={(e) => setCheckOut(e.target.value)}
+                    min={checkIn || undefined}
+                    onChange={(iso) => setCheckOut(iso)}
                   />
                 </Field>
                 <Field label="Dewasa">
