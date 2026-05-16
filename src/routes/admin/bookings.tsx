@@ -368,7 +368,7 @@ function BookingsPage() {
                         <p key={br.id} className="leading-tight">
                           {br.room_types?.name ?? "—"}
                           <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                            {br.rooms?.number ? `#${br.rooms.number}` : "belum di-assign"}
+                            {br.rooms?.number ? br.rooms.number : "belum di-assign"}
                           </span>
                         </p>
                       ))}

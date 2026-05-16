@@ -266,7 +266,7 @@ export function RoomsManageView() {
               <Card key={r.id} className="p-5">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-mono text-2xl font-semibold">#{r.number}</p>
+                    <p className="font-mono text-2xl font-semibold">{r.number}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {r.room_types?.name ?? "—"}
                     </p>
@@ -407,7 +407,7 @@ export function RoomsManageView() {
       <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Hapus kamar #{deleteCtx?.number}?</DialogTitle>
+            <DialogTitle>Hapus kamar {deleteCtx?.number}?</DialogTitle>
             <DialogDescription>
               Tindakan ini permanen. Kamar yang masih punya booking aktif tidak bisa dihapus.
             </DialogDescription>

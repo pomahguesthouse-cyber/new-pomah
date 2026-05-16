@@ -314,7 +314,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                       style={{ width: labelWidth }}
                       className="flex shrink-0 items-center px-4 border-r border-border font-bold text-xs text-foreground/70 sticky left-0 z-20 bg-card shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
                     >
-                      #{room.number}
+                      {room.number}
                     </div>
 
                     {/* Day Cells */}
@@ -401,7 +401,7 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="font-black text-xl tracking-tighter uppercase">
-            New Booking #{ctx?.roomNumber}
+            New Booking {ctx?.roomNumber}
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
