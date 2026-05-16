@@ -2,39 +2,93 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+const listBookingsSchema = z.object({
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]).optional(),
+  source: z.enum(["direct", "whatsapp", "walk_in", "website"]).optional(),
+  search: z.string().trim().max(120).optional(),
+});
+
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+const FULL_BOOKING_SELECT =
+  "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, payment_status, paid_amount, internal_notes, special_requests, room_id, guests(id, full_name, email, phone, country), room_types(id, name), rooms(id, number)";
+const BASE_BOOKING_SELECT =
+  "id, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, special_requests, room_id, guests(id, full_name, email, phone), room_types(id, name), rooms(id, number)";
+
 export const listBookings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    // Try the full select (including the columns added by the
-    // 20260515130000 payment migration). If those columns aren't
-    // present yet (42703 = undefined_column) fall back to the base
-    // shape so the page still renders. Same applies to reference_code
-    // from the 20260515120000 migration.
-    const FULL =
-      "id, reference_code, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, payment_status, paid_amount, internal_notes, special_requests, room_id, guests(id, full_name, email, phone, country), room_types(id, name), rooms(id, number)";
-    const BASE =
-      "id, check_in, check_out, status, source, total_amount, nightly_rate, adults, children, special_requests, room_id, guests(id, full_name, email, phone), room_types(id, name), rooms(id, number)";
+  .inputValidator((d) => listBookingsSchema.parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    // Tries the full select (columns from the 20260515130000 payment
+    // migration). If those columns aren't present yet (42703) it falls
+    // back to the base shape so the page still renders.
+    const from = (data.page - 1) * data.pageSize;
+    const to = from + data.pageSize - 1;
 
-    const tryFull = await context.supabase
-      .from("bookings")
-      .select(FULL)
-      .order("check_in", { ascending: false })
-      .limit(100);
-
-    if (!tryFull.error) {
-      return { bookings: tryFull.data ?? [], degraded: false };
-    }
-    if ((tryFull.error as any).code !== "42703") {
-      throw tryFull.error;
+    // For a text search, resolve matching guest ids first (works in any
+    // migration state); reference_code is matched too when available.
+    const search = data.search?.replace(/[,()*:%]/g, " ").trim() || "";
+    let guestIds: string[] = [];
+    if (search) {
+      const { data: guests } = await context.supabase
+        .from("guests")
+        .select("id")
+        .ilike("full_name", `%${search}%`)
+        .limit(500);
+      guestIds = (guests ?? []).map((g) => g.id);
     }
 
-    const fallback = await context.supabase
-      .from("bookings")
-      .select(BASE)
-      .order("check_in", { ascending: false })
-      .limit(100);
-    if (fallback.error) throw fallback.error;
-    return { bookings: fallback.data ?? [], degraded: true };
+    /** PostgREST `or=` expression for the search term, or null. */
+    const searchOr = (includeRef: boolean): string | null => {
+      if (!search) return null;
+      const ors: string[] = [];
+      if (includeRef) ors.push(`reference_code.ilike.*${search}*`);
+      if (guestIds.length) ors.push(`guest_id.in.(${guestIds.join(",")})`);
+      return ors.length ? ors.join(",") : null;
+    };
+
+    // ---- attempt 1: full select ----
+    {
+      let q = context.supabase.from("bookings").select(FULL_BOOKING_SELECT, { count: "exact" });
+      if (data.status) q = q.eq("status", data.status);
+      if (data.source) q = q.eq("source", data.source);
+      if (search) {
+        const or = searchOr(true);
+        q = or ? q.or(or) : q.eq("id", ZERO_UUID);
+      }
+      const res = await q.order("check_in", { ascending: false }).range(from, to);
+      if (!res.error) {
+        return {
+          bookings: res.data ?? [],
+          total: res.count ?? 0,
+          page: data.page,
+          pageSize: data.pageSize,
+          degraded: false,
+        };
+      }
+      if ((res.error as { code?: string }).code !== "42703") throw res.error;
+    }
+
+    // ---- attempt 2: base select (no payment / reference columns) ----
+    {
+      let q = context.supabase.from("bookings").select(BASE_BOOKING_SELECT, { count: "exact" });
+      if (data.status) q = q.eq("status", data.status);
+      if (data.source) q = q.eq("source", data.source);
+      if (search) {
+        const or = searchOr(false);
+        q = or ? q.or(or) : q.eq("id", ZERO_UUID);
+      }
+      const res = await q.order("check_in", { ascending: false }).range(from, to);
+      if (res.error) throw res.error;
+      return {
+        bookings: res.data ?? [],
+        total: res.count ?? 0,
+        page: data.page,
+        pageSize: data.pageSize,
+        degraded: true,
+      };
+    }
   });
 
 export const updateBookingStatus = createServerFn({ method: "POST" })
