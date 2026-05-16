@@ -110,6 +110,20 @@ export const updateBookingStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteBooking = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("bookings").delete().eq("id", data.id);
+    if (error) {
+      if ((error as { code?: string }).code === "23503") {
+        throw new Error("Tidak bisa hapus: booking masih direferensikan data lain.");
+      }
+      throw error;
+    }
+    return { ok: true };
+  });
+
 export const listRooms = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
