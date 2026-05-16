@@ -261,74 +261,108 @@ export function RoomsManageView() {
             )}
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {rooms.map((r) => (
-              <Card key={r.id} className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-mono text-2xl font-semibold">#{r.number}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {r.room_types?.name ?? "—"}
-                    </p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam ·{" "}
-                      {r.room_types?.capacity ?? 0} tamu
-                    </p>
+          <div className="space-y-6">
+            {roomTypes.map((rt) => {
+              const typeRooms = rooms
+                .filter((r) => (r.room_types?.id ?? r.room_type_id) === rt.id)
+                .sort((a, b) => {
+                  const na = trailingNumber(a.number) ?? 0;
+                  const nb = trailingNumber(b.number) ?? 0;
+                  return na - nb || a.number.localeCompare(b.number);
+                });
+              return (
+                <div key={rt.id} className="space-y-3">
+                  <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2">
+                    <div className="flex items-baseline gap-2">
+                      <h3 className="text-base font-semibold">{rt.name}</h3>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {typeRooms.length} kamar
+                      </span>
+                    </div>
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                      {roomTypePrefix(rt.name) || "—"}
+                    </span>
                   </div>
-                  <span
-                    className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${COLORS[r.status]}`}
-                  >
-                    {STATUS_LABEL[r.status]}
-                  </span>
-                </div>
 
-                {r.notes && (
-                  <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">{r.notes}</p>
-                )}
+                  {typeRooms.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+                      Belum ada kamar untuk tipe ini.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {typeRooms.map((r) => (
+                        <Card key={r.id} className="p-5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="font-mono text-2xl font-semibold">#{r.number}</p>
+                              <p className="mt-1 font-mono text-xs text-muted-foreground">
+                                {formatIDR(Number(r.room_types?.base_rate ?? 0))}/malam ·{" "}
+                                {r.room_types?.capacity ?? 0} tamu
+                              </p>
+                            </div>
+                            <span
+                              className={`rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest ${COLORS[r.status]}`}
+                            >
+                              {STATUS_LABEL[r.status]}
+                            </span>
+                          </div>
 
-                <div className="mt-4">
-                  <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Status
-                  </Label>
-                  <Select
-                    value={r.status}
-                    onValueChange={(v) => statusMut.mutate({ id: r.id, status: v as RoomStatus })}
-                  >
-                    <SelectTrigger className="mt-1 h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {STATUS_LABEL[s]}
-                        </SelectItem>
+                          {r.notes && (
+                            <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
+                              {r.notes}
+                            </p>
+                          )}
+
+                          <div className="mt-4">
+                            <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                              Status
+                            </Label>
+                            <Select
+                              value={r.status}
+                              onValueChange={(v) =>
+                                statusMut.mutate({ id: r.id, status: v as RoomStatus })
+                              }
+                            >
+                              <SelectTrigger className="mt-1 h-8">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUSES.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {STATUS_LABEL[s]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="mt-4 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex-1 gap-1.5"
+                              onClick={() => setEditCtx(r)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1.5 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteCtx(r)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Hapus
+                            </Button>
+                          </div>
+                        </Card>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  )}
                 </div>
-
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 gap-1.5"
-                    onClick={() => setEditCtx(r)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteCtx(r)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Hapus
-                  </Button>
-                </div>
-              </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
