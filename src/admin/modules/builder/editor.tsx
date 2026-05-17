@@ -1,35 +1,34 @@
 /**
  * Visual Page Editor — editor shell.
  *
- * Layout:
- *   • Toolbar       — device switcher, undo/redo, save, publish
- *   • Left sidebar  — four panels: Page / Section / Elements / Theme
- *   • Canvas        — live, selectable preview rendered through the registry
- *   • Right panel   — auto-generated element property editor
+ * Layout, modelled on a modern site builder:
+ *   • Top bar      — page switcher, device toggle, zoom, undo/redo, save
+ *   • Icon rail    — narrow vertical strip; each icon opens a flyout panel
+ *   • Flyout panel — Page / Section / Elements / Theme (collapsible)
+ *   • Canvas       — live, selectable preview with rulers + zoom
+ *   • Right panel  — auto-generated element property editor
  *
  * Persistence: a debounced autosave writes the draft document 1.5s after
  * the last change; Save forces it immediately; Publish snapshots a
  * version and goes live. All editor state lives in `useEditorStore`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Undo2,
   Redo2,
   Monitor,
-  Tablet,
   Smartphone,
   Save,
   Rocket,
   ExternalLink,
   FileText,
   Rows3,
-  Boxes,
   Palette as PaletteIcon,
   Plus,
+  Minus,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -40,26 +39,24 @@ import { PagePanel, SectionPanel, ElementsPanel, ThemePanel } from "./panels";
 import type { DeviceMode, LandingPageRow } from "./types";
 import { updateLandingPage, publishLandingPage } from "./builder.functions";
 
-const DEVICE_WIDTH: Record<DeviceMode, string> = {
-  desktop: "100%",
-  tablet: "820px",
-  mobile: "390px",
+const DEVICE_WIDTH: Record<DeviceMode, number> = {
+  desktop: 1180,
+  tablet: 820,
+  mobile: 390,
 };
 
 const AUTOSAVE_MS = 1500;
+const ZOOM_STEPS = [0.5, 0.65, 0.8, 1, 1.15, 1.3];
 
 type PanelKey = "page" | "section" | "elements" | "theme";
 
-const PANELS: {
-  key: PanelKey;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}[] = [
-  { key: "page", label: "Page Properties", icon: FileText },
-  { key: "section", label: "Section", icon: Rows3 },
-  { key: "elements", label: "Elements", icon: Boxes },
-  { key: "theme", label: "Page Theme", icon: PaletteIcon },
-];
+const RAIL: { key: PanelKey; label: string; icon: React.ComponentType<{ className?: string }> }[] =
+  [
+    { key: "elements", label: "Elements", icon: Plus },
+    { key: "section", label: "Sections", icon: Rows3 },
+    { key: "page", label: "Page Properties", icon: FileText },
+    { key: "theme", label: "Page Theme", icon: PaletteIcon },
+  ];
 
 /* ================================================================== */
 /* Editor                                                              */
@@ -79,7 +76,8 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
   const updateFn = useServerFn(updateLandingPage);
   const publishFn = useServerFn(publishLandingPage);
 
-  const [panel, setPanel] = useState<PanelKey>("section");
+  const [panel, setPanel] = useState<PanelKey | null>("elements");
+  const [zoom, setZoom] = useState(1);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [publishing, setPublishing] = useState(false);
   const [meta, setMeta] = useState({ title: page.title, slug: page.slug, status: page.status });
@@ -103,7 +101,6 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
     }
   }, [updateFn, page.id, toContent, markSaved]);
 
-  // Debounced autosave on any document change.
   useEffect(() => {
     if (!dirty) return;
     if (timer.current) clearTimeout(timer.current);
@@ -113,7 +110,6 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
     };
   }, [sections, theme, dirty, save]);
 
-  // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -150,25 +146,30 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
-      <Toolbar
+    <div className="flex h-full flex-col overflow-hidden bg-muted/40">
+      <TopBar
         title={meta.title}
         slug={meta.slug}
         status={meta.status}
         dirty={dirty}
         saveState={saveState}
         publishing={publishing}
+        zoom={zoom}
+        onZoom={setZoom}
         onSave={save}
         onPublish={publish}
       />
       <div className="flex flex-1 overflow-hidden">
-        <LeftSidebar
-          panel={panel}
-          onPanel={setPanel}
-          page={page}
-          onMetaSaved={(m) => setMeta((prev) => ({ ...prev, ...m }))}
-        />
-        <Canvas device={device} />
+        <IconRail panel={panel} onPanel={setPanel} />
+        {panel && (
+          <FlyoutPanel
+            panel={panel}
+            page={page}
+            onClose={() => setPanel(null)}
+            onMetaSaved={(m) => setMeta((prev) => ({ ...prev, ...m }))}
+          />
+        )}
+        <Canvas device={device} zoom={zoom} />
         <PropertyPanel />
       </div>
     </div>
@@ -176,16 +177,18 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
 }
 
 /* ================================================================== */
-/* Toolbar                                                             */
+/* Top bar                                                             */
 /* ================================================================== */
 
-function Toolbar({
+function TopBar({
   title,
   slug,
   status,
   dirty,
   saveState,
   publishing,
+  zoom,
+  onZoom,
   onSave,
   onPublish,
 }: {
@@ -195,6 +198,8 @@ function Toolbar({
   dirty: boolean;
   saveState: "idle" | "saving" | "saved";
   publishing: boolean;
+  zoom: number;
+  onZoom: (z: number) => void;
   onSave: () => void;
   onPublish: () => void;
 }) {
@@ -205,21 +210,23 @@ function Toolbar({
   const canUndo = useEditorStore((s) => s.past.length > 0);
   const canRedo = useEditorStore((s) => s.future.length > 0);
 
+  const stepZoom = (dir: 1 | -1) => {
+    const i = ZOOM_STEPS.indexOf(zoom);
+    const base = i === -1 ? 3 : i;
+    onZoom(ZOOM_STEPS[Math.max(0, Math.min(base + dir, ZOOM_STEPS.length - 1))]);
+  };
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-3">
+      {/* Left — current page */}
       <div className="flex min-w-0 items-center gap-2">
-        <Button asChild size="icon" variant="ghost" className="h-8 w-8">
-          <Link to="/admin/pages">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold">{title}</p>
-          <p className="truncate font-mono text-[10px] text-muted-foreground">/p/{slug}</p>
+        <span className="hidden text-xs text-muted-foreground sm:inline">Page:</span>
+        <div className="flex h-8 items-center rounded-md border border-border px-2.5">
+          <span className="max-w-[180px] truncate text-sm font-medium">{title}</span>
         </div>
         <span
           className={cn(
-            "ml-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+            "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
             status === "published"
               ? "bg-emerald-100 text-emerald-700"
               : "bg-stone-100 text-stone-500",
@@ -229,30 +236,52 @@ function Toolbar({
         </span>
       </div>
 
-      <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-        {(
-          [
-            ["desktop", Monitor],
-            ["tablet", Tablet],
-            ["mobile", Smartphone],
-          ] as const
-        ).map(([mode, Icon]) => (
+      {/* Center — device toggle + zoom */}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+          {(
+            [
+              ["desktop", Monitor],
+              ["mobile", Smartphone],
+            ] as const
+          ).map(([mode, Icon]) => (
+            <button
+              key={mode}
+              onClick={() => setDevice(mode)}
+              title={mode}
+              className={cn(
+                "flex h-7 w-9 items-center justify-center rounded-md transition",
+                device === mode
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-0.5 rounded-lg border border-border">
           <button
-            key={mode}
-            onClick={() => setDevice(mode)}
-            title={mode}
-            className={cn(
-              "flex h-7 w-9 items-center justify-center rounded-md transition",
-              device === mode
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
+            onClick={() => stepZoom(-1)}
+            className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+            title="Zoom out"
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Minus className="h-3.5 w-3.5" />
           </button>
-        ))}
+          <span className="w-12 text-center text-xs font-medium tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => stepZoom(1)}
+            className="flex h-7 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+            title="Zoom in"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
+      {/* Right — history + actions */}
       <div className="flex items-center gap-1.5">
         <Button
           size="icon"
@@ -283,19 +312,16 @@ function Toolbar({
         >
           <ExternalLink className="h-4 w-4" />
         </a>
-
         <span className="mx-1 w-px self-stretch bg-border" />
-
         <span className="hidden text-[11px] text-muted-foreground sm:inline">
           {saveState === "saving"
             ? "Saving…"
             : dirty
               ? "Unsaved"
               : saveState === "saved"
-                ? "All changes saved"
+                ? "Saved"
                 : ""}
         </span>
-
         <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onSave}>
           <Save className="h-3.5 w-3.5" />
           Save
@@ -315,45 +341,65 @@ function Toolbar({
 }
 
 /* ================================================================== */
-/* Left sidebar — four panels                                          */
+/* Icon rail + flyout panel                                            */
 /* ================================================================== */
 
-function LeftSidebar({
+function IconRail({
   panel,
   onPanel,
+}: {
+  panel: PanelKey | null;
+  onPanel: (p: PanelKey | null) => void;
+}) {
+  return (
+    <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-border bg-card py-3">
+      {RAIL.map((r) => {
+        const active = panel === r.key;
+        return (
+          <button
+            key={r.key}
+            onClick={() => onPanel(active ? null : r.key)}
+            title={r.label}
+            className={cn(
+              "flex h-10 w-10 flex-col items-center justify-center rounded-lg transition",
+              active
+                ? "bg-teal-700 text-white"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <r.icon className="h-[18px] w-[18px]" />
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function FlyoutPanel({
+  panel,
   page,
+  onClose,
   onMetaSaved,
 }: {
   panel: PanelKey;
-  onPanel: (p: PanelKey) => void;
   page: LandingPageRow;
+  onClose: () => void;
   onMetaSaved: (m: { title: string; slug: string }) => void;
 }) {
-  const active = PANELS.find((p) => p.key === panel)!;
+  const label = RAIL.find((r) => r.key === panel)!.label;
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-card">
-      <div className="grid shrink-0 grid-cols-4 border-b border-border">
-        {PANELS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => onPanel(p.key)}
-            title={p.label}
-            className={cn(
-              "flex flex-col items-center gap-1 py-2.5 text-[9px] font-medium uppercase tracking-wide transition",
-              panel === p.key
-                ? "border-b-2 border-teal-700 text-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <p.icon className="h-4 w-4" />
-            {p.key}
-          </button>
-        ))}
-      </div>
-      <div className="border-b border-border bg-muted/40 px-4 py-2">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          {active.label}
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
+        <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+          {label}
         </p>
+        <button
+          onClick={onClose}
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Close panel"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
       {panel === "page" && <PagePanel page={page} onMetaSaved={onMetaSaved} />}
       {panel === "section" && <SectionPanel />}
@@ -364,15 +410,53 @@ function LeftSidebar({
 }
 
 /* ================================================================== */
-/* Canvas                                                              */
+/* Canvas — rulers + zoom                                              */
 /* ================================================================== */
 
-function Canvas({ device }: { device: DeviceMode }) {
+function Ruler({ orientation, length }: { orientation: "h" | "v"; length: number }) {
+  const marks = [];
+  for (let x = 0; x <= length; x += 50) {
+    marks.push(x);
+  }
+  if (orientation === "h") {
+    return (
+      <div className="relative h-5 shrink-0 border-b border-border bg-card">
+        {marks.map((x) => (
+          <div key={x} className="absolute top-0 h-full" style={{ left: x }}>
+            <div className={cn("w-px bg-border", x % 100 === 0 ? "h-2.5" : "h-1.5")} />
+            {x % 100 === 0 && (
+              <span className="absolute left-1 top-0 font-mono text-[8px] text-muted-foreground">
+                {x}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="relative w-5 shrink-0 border-r border-border bg-card">
+      {marks.map((y) => (
+        <div key={y} className="absolute left-0 w-full" style={{ top: y }}>
+          <div className={cn("h-px bg-border", y % 100 === 0 ? "w-2.5" : "w-1.5")} />
+          {y % 100 === 0 && (
+            <span className="absolute left-0 top-1 font-mono text-[8px] text-muted-foreground">
+              {y}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Canvas({ device, zoom }: { device: DeviceMode; zoom: number }) {
   const sections = useEditorStore((s) => s.sections);
   const theme = useEditorStore((s) => s.theme);
   const clearSelection = useEditorStore((s) => s.clearSelection);
   const addSection = useEditorStore((s) => s.addSection);
 
+  const width = DEVICE_WIDTH[device];
   const fontClass =
     theme.fontFamily === "serif"
       ? "font-serif"
@@ -381,36 +465,49 @@ function Canvas({ device }: { device: DeviceMode }) {
         : "font-sans";
 
   return (
-    <div className="flex-1 overflow-auto bg-muted/40 p-6" onClick={() => clearSelection()}>
-      <div
-        className={cn("mx-auto bg-white shadow-xl transition-all", fontClass)}
-        style={{
-          width: DEVICE_WIDTH[device],
-          maxWidth: "100%",
-          background: theme.bgColor,
-          color: theme.textColor,
-        }}
-      >
-        {sections.length === 0 ? (
-          <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-medium text-stone-500">This page has no sections</p>
-            <p className="text-xs text-stone-400">
-              Add one from the Section panel to start building.
-            </p>
+    <div className="flex min-w-0 flex-1 flex-col bg-[#eceae6]">
+      <div className="flex shrink-0">
+        <div className="h-5 w-5 shrink-0 border-b border-r border-border bg-card" />
+        <Ruler orientation="h" length={1400} />
+      </div>
+      <div className="flex flex-1 overflow-hidden">
+        <Ruler orientation="v" length={2400} />
+        <div className="flex-1 overflow-auto p-8" onClick={() => clearSelection()}>
+          <div
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: "top center",
+              width,
+              margin: "0 auto",
+            }}
+          >
+            <div
+              className={cn("bg-white shadow-2xl", fontClass)}
+              style={{ background: theme.bgColor, color: theme.textColor }}
+            >
+              {sections.length === 0 ? (
+                <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
+                  <p className="text-sm font-medium text-stone-500">This page has no sections</p>
+                  <p className="text-xs text-stone-400">
+                    Add one from the Sections panel to start building.
+                  </p>
+                </div>
+              ) : (
+                sections.map((s) => <CanvasSection key={s.id} sectionId={s.id} />)
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addSection();
+                }}
+                className="flex w-full items-center justify-center gap-2 border-t-2 border-dashed border-stone-200 py-5 text-xs font-medium text-stone-400 transition hover:bg-stone-50 hover:text-teal-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add section
+              </button>
+            </div>
           </div>
-        ) : (
-          sections.map((s) => <CanvasSection key={s.id} sectionId={s.id} />)
-        )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            addSection();
-          }}
-          className="flex w-full items-center justify-center gap-2 border-t-2 border-dashed border-stone-200 py-5 text-xs font-medium text-stone-400 transition hover:bg-stone-50 hover:text-teal-700"
-        >
-          <Plus className="h-4 w-4" />
-          Add section
-        </button>
+        </div>
       </div>
     </div>
   );
