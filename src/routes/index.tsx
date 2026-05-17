@@ -1,436 +1,457 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, MessageCircle, Star, Wifi, Coffee, ShowerHead, MapPin } from "lucide-react";
+import {
+  Wifi,
+  Building2,
+  Car,
+  Coffee,
+  MapPin,
+  Clock,
+  Star,
+  MessageCircle,
+  Menu,
+  Quote,
+  Instagram,
+} from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
-import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { Button } from "@/components/ui/button";
-import { cn, formatDateID } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Pomah Living — Boutique Guesthouse" },
+      { title: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang" },
       {
         name: "description",
         content:
-          "Pomah Living adalah guesthouse butik yang nyaman di jantung kota. Nikmati pengalaman menginap yang personal dengan sentuhan lokal.",
+          "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.",
       },
-      { property: "og:title", content: "Pomah Living — Boutique Guesthouse" },
+      { property: "og:title", content: "Pomah Guesthouse Semarang" },
       {
         property: "og:description",
-        content: "Menginap dengan nyaman, bukan sekadar tempat tidur.",
+        content: "Penginapan murah & nyaman di Kota Semarang.",
       },
     ],
   }),
-  component: PublicHome,
+  component: PomahHome,
 });
 
 /* ------------------------------------------------------------------ */
-/* Home page                                                            */
+/* Static content (no DB source)                                       */
 /* ------------------------------------------------------------------ */
-function PublicHome() {
+
+const FACILITIES = [
+  { icon: Wifi, title: "Free Wifi", desc: "Wifi di Ruang Publik" },
+  { icon: Building2, title: "Balkon", desc: "Balkon" },
+  { icon: Car, title: "Free Parking", desc: "Parkir Gratis" },
+  { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
+];
+
+const NEARBY = [
+  { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
+  { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
+  { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
+  { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
+  { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
+];
+
+const REVIEWS = [
+  "Kmr nya bersih, rapih dekat dgn Unnes.... pelayanan ramah sekali",
+  "Tempatnya nyaman, cocok untuk keluarga. Parkir luas dan aman.",
+  "Penginapan murah tapi kualitas oke, staff sangat membantu.",
+];
+
+const NAV = [
+  { label: "Home", to: "/" as const },
+  { label: "Rooms", to: "/rooms" as const },
+];
+
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
+
+function PomahHome() {
   const fetchData = useServerFn(getPublicSiteData);
   const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fetchData() });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
 
+  const propertyName = property?.name ?? "Pomah Guesthouse";
+  const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
+  const address = property?.address ?? "Pomah Guesthouse Semarang";
+
   return (
-    <div className="min-h-screen bg-white text-stone-900">
-      <PublicNav />
+    <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
+      <PomahNav name={propertyName} />
 
       {/* ── HERO ── */}
-      <section className="relative overflow-hidden bg-stone-50">
-        <div className="mx-auto grid max-w-6xl gap-0 px-6 py-16 md:grid-cols-2 md:py-24">
-          {/* Text */}
-          <div className="flex flex-col justify-center">
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-              <span className="h-px w-6 bg-amber-700" />
-              Boutique Guesthouse
-            </span>
-            <h1 className="mt-5 font-serif text-4xl font-semibold leading-[1.1] tracking-tight text-stone-900 md:text-6xl">
-              {property?.tagline ?? "Tempat istirahat\nyang terasa\nseperti rumah."}
+      <header className="relative">
+        <div className="relative h-[78vh] min-h-[460px] w-full overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+            <h1 className="max-w-3xl font-serif text-4xl font-bold tracking-tight text-white drop-shadow md:text-6xl">
+              Selamat Datang Di {propertyName}
             </h1>
-            <p className="mt-5 max-w-md text-base leading-relaxed text-stone-500">
-              {property?.description ??
-                "Pomah Living menawarkan pengalaman menginap yang nyaman dan personal. Kamar-kamar kami dirancang untuk kenyamanan, bukan sekadar tempat tidur."}
+            <span className="my-4 h-px w-40 bg-white/70" />
+            <p className="text-base text-white/90 md:text-lg">
+              {property?.tagline ?? "Penginapan Murah di Kota Semarang"}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
-                <Link to="/book">
-                  Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="border-stone-300 text-stone-700 hover:bg-stone-100"
-              >
-                <Link to="/rooms">Lihat Kamar</Link>
-              </Button>
-            </div>
-            {/* Rating badge */}
-            <div className="mt-8 flex items-center gap-3">
-              <div className="flex -space-x-2">
-                {[...Array(3)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-8 w-8 rounded-full border-2 border-white bg-amber-100"
-                  />
-                ))}
-              </div>
-              <div>
-                <div className="flex items-center gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="mt-0.5 text-xs text-stone-500">Dipercaya ratusan tamu</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Hero image placeholder */}
-          <div className="relative mt-10 md:mt-0 md:pl-10">
-            <div className="aspect-[4/5] w-full overflow-hidden rounded-2xl bg-amber-50">
-              <div className="h-full w-full bg-gradient-to-br from-amber-50 via-stone-100 to-amber-100 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="mx-auto h-24 w-24 rounded-full bg-amber-200/60" />
-                  <p className="mt-4 font-mono text-xs uppercase tracking-widest text-stone-400">
-                    Hero Image
-                  </p>
-                </div>
-              </div>
-            </div>
-            {/* Floating badge */}
-            <div className="absolute -bottom-4 -left-4 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-lg">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Check-in
-              </p>
-              <p className="mt-0.5 text-sm font-semibold text-stone-900">
-                {formatDateID(new Date())}
-              </p>
-            </div>
           </div>
         </div>
-      </section>
 
-      {/* ── STATS STRIP ── */}
-      <section className="border-y border-stone-200 bg-amber-700">
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px bg-amber-600 md:grid-cols-4">
-          {[
-            { value: `${rooms.length}+`, label: "Tipe Kamar" },
-            { value: "24/7", label: "Layanan WhatsApp" },
-            { value: "100%", label: "Respon Cepat" },
-            { value: "0%", label: "Biaya Booking" },
-          ].map((s) => (
-            <div key={s.label} className="bg-amber-700 px-8 py-6 text-center">
-              <p className="font-serif text-3xl font-semibold text-white">{s.value}</p>
-              <p className="mt-1 font-mono text-[10px] uppercase tracking-widest text-amber-200">
-                {s.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── ROOMS ── */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="flex items-end justify-between">
-          <div>
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-              <span className="h-px w-6 bg-amber-700" />
-              Kamar Kami
-            </span>
-            <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight">
-              Dipilih dengan cermat
-            </h2>
-          </div>
-          <Link
-            to="/rooms"
-            className="hidden text-sm font-medium text-amber-700 underline-offset-4 hover:underline md:block"
-          >
-            Lihat semua →
-          </Link>
-        </div>
-
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {rooms.slice(0, 3).map((rt, i) => (
-            <article
-              key={rt.id}
-              className="group overflow-hidden rounded-xl border border-stone-200 bg-white transition hover:shadow-lg"
+        {/* Booking bar */}
+        <div className="mx-auto -mt-12 max-w-4xl px-6">
+          <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-xl md:flex-row md:items-end">
+            <Field label="Check-In">
+              <input
+                type="date"
+                className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+              />
+            </Field>
+            <Field label="Check-Out">
+              <input
+                type="date"
+                className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+              />
+            </Field>
+            <Link
+              to="/book"
+              className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
             >
-              {/* Image placeholder */}
-              <div
-                className={cn(
-                  "aspect-[4/3] w-full overflow-hidden",
-                  i === 0 ? "bg-amber-50" : i === 1 ? "bg-stone-100" : "bg-emerald-50",
-                )}
-              >
-                <div className="flex h-full w-full items-center justify-center">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                    Foto Kamar
-                  </p>
-                </div>
-              </div>
-              <div className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-stone-900">{rt.name}</h3>
-                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                      {[
-                        rt.bed_type,
-                        rt.capacity && `${rt.capacity} tamu`,
-                        rt.size_sqm && `${rt.size_sqm}m²`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-semibold text-amber-700">
-                      Rp {Number(rt.base_rate).toLocaleString("id-ID")}
-                    </p>
-                    <p className="font-mono text-[10px] text-stone-400">/malam</p>
-                  </div>
-                </div>
-                <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">
-                  {rt.description}
-                </p>
-                {rt.amenities && rt.amenities.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {rt.amenities.slice(0, 3).map((a) => (
-                      <span
-                        key={a}
-                        className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-500"
-                      >
-                        {a}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <Button
-                  asChild
-                  size="sm"
-                  className="mt-4 w-full bg-stone-900 hover:bg-amber-700 text-white transition-colors"
-                >
-                  <Link to="/book">Pesan Kamar Ini</Link>
-                </Button>
-              </div>
-            </article>
-          ))}
+              Cek Ketersediaan
+            </Link>
+          </div>
         </div>
+      </header>
 
-        <div className="mt-6 text-center md:hidden">
-          <Button asChild variant="outline">
-            <Link to="/rooms">Lihat Semua Kamar</Link>
-          </Button>
+      {/* ── YOUR PERFECT STAY ── */}
+      <section className="mx-auto max-w-4xl px-6 py-20 text-center">
+        <SectionHeading>Your Perfect Stay</SectionHeading>
+        <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
+          <p>
+            Kata <strong className="text-stone-700">Pomah</strong> dalam bahasa Jawa berarti Rumah.
+            Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, {propertyName}{" "}
+            memiliki filosofi yang mencerminkan kehangatan, kenyamanan dan standar pelayanan terbaik
+            yang kami sajikan kepada tamu.
+          </p>
+          <p>
+            Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru
+            dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.
+          </p>
         </div>
       </section>
 
-      {/* ── FASILITAS ── */}
-      <section className="bg-stone-50 py-20">
+      {/* ── GOOGLE RATING ── */}
+      <section className="mx-auto max-w-4xl px-6 pb-16">
+        <div className="flex flex-col items-center">
+          <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
+            <span className="font-bold text-base">G</span> Google Rating
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex gap-0.5">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />
+              ))}
+            </div>
+            <span className="text-2xl font-bold text-stone-800">4.8</span>
+          </div>
+          <p className="mt-1 text-xs text-stone-400">Berdasarkan 76 ulasan Google</p>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {REVIEWS.map((r) => (
+            <div key={r} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+              <Quote className="h-5 w-5 text-teal-600/40" />
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">&ldquo;{r}&rdquo;</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── OUR ACCOMMODATIONS ── */}
+      <section className="bg-[#f3ece0] py-20">
         <div className="mx-auto max-w-6xl px-6">
           <div className="text-center">
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-              <span className="h-px w-6 bg-amber-700" />
-              Fasilitas
-              <span className="h-px w-6 bg-amber-700" />
-            </span>
-            <h2 className="mt-3 font-serif text-3xl font-semibold">Semua yang Anda butuhkan</h2>
-            <p className="mt-3 mx-auto max-w-md text-sm text-stone-500">
-              Setiap kamar dilengkapi fasilitas modern untuk kenyamanan menginap Anda.
+            <SectionHeading>Our Accommodations</SectionHeading>
+            <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
+              Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            {[
-              { icon: Wifi, title: "WiFi Cepat", desc: "Koneksi internet stabil di seluruh area." },
-              {
-                icon: Coffee,
-                title: "Sarapan",
-                desc: "Tersedia pilihan sarapan setiap pagi hari.",
-              },
-              {
-                icon: ShowerHead,
-                title: "Kamar Mandi Dalam",
-                desc: "Kamar mandi pribadi di setiap kamar.",
-              },
-              {
-                icon: MessageCircle,
-                title: "WhatsApp 24 Jam",
-                desc: "Kami selalu siap membantu kapan saja.",
-              },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="rounded-xl border border-stone-200 bg-white p-6 text-center"
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {rooms.map((rt) => (
+              <article
+                key={rt.id}
+                className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl"
               >
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
-                  <f.icon className="h-5 w-5 text-amber-700" />
+                <div className="aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                  {rt.hero_image_url ? (
+                    <img
+                      src={rt.hero_image_url}
+                      alt={rt.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
+                      Foto Kamar
+                    </div>
+                  )}
                 </div>
-                <h3 className="mt-4 font-semibold text-stone-900">{f.title}</h3>
-                <p className="mt-1.5 text-sm text-stone-500">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── ABOUT / STORY ── */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-12 md:grid-cols-2 md:items-center">
-          {/* Image placeholder */}
-          <div className="order-2 md:order-1">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="aspect-square rounded-xl bg-amber-50" />
-              <div className="aspect-square rounded-xl bg-stone-100 mt-8" />
-              <div className="aspect-square rounded-xl bg-stone-100 -mt-4" />
-              <div className="aspect-square rounded-xl bg-amber-50 mt-4" />
-            </div>
-          </div>
-          {/* Text */}
-          <div className="order-1 md:order-2">
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-              <span className="h-px w-6 bg-amber-700" />
-              Cerita Kami
-            </span>
-            <h2 className="mt-4 font-serif text-3xl font-semibold leading-snug">
-              Bukan sekadar tempat menginap
-            </h2>
-            <p className="mt-4 text-sm leading-relaxed text-stone-500">
-              {property?.description ??
-                "Pomah Living lahir dari keinginan sederhana: menciptakan tempat yang terasa seperti rumah. Setiap sudut dirancang dengan penuh perhatian, setiap tamu disambut seperti teman."}
-            </p>
-            <p className="mt-3 text-sm leading-relaxed text-stone-500">
-              Kami percaya perjalanan terbaik dimulai dari akomodasi yang tepat — nyaman, bersih,
-              dan dikelola oleh orang-orang yang peduli.
-            </p>
-            <div className="mt-8 flex items-center gap-4">
-              <Button asChild className="bg-amber-700 hover:bg-amber-800">
-                <Link to="/book">Pesan Sekarang</Link>
-              </Button>
-              <Button asChild variant="ghost" className="text-stone-700">
-                <Link to="/rooms">Jelajahi Kamar →</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── TESTIMONIAL ── */}
-      <section className="bg-stone-900 py-20 text-white">
-        <div className="mx-auto max-w-4xl px-6 text-center">
-          <div className="flex justify-center gap-0.5">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />
-            ))}
-          </div>
-          <blockquote className="mt-6 font-serif text-2xl leading-relaxed text-stone-100 md:text-3xl">
-            "Pengalaman menginap yang luar biasa. Staf yang ramah, kamar yang bersih, dan lokasinya
-            sangat strategis. Pasti akan kembali lagi!"
-          </blockquote>
-          <div className="mt-6 flex items-center justify-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-amber-700/40" />
-            <div className="text-left">
-              <p className="font-semibold text-white">Dewi R.</p>
-              <p className="text-xs text-stone-400">Tamu dari Jakarta · Google Review</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── BOOKING CTA ── */}
-      <section className="border-y border-stone-200 bg-amber-50 py-20">
-        <div className="mx-auto max-w-3xl px-6 text-center">
-          <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-            <span className="h-px w-6 bg-amber-700" />
-            Reservasi
-            <span className="h-px w-6 bg-amber-700" />
-          </span>
-          <h2 className="mt-4 font-serif text-4xl font-semibold tracking-tight">
-            Rencanakan menginap Anda
-          </h2>
-          <p className="mt-4 text-stone-500">
-            Pesan langsung tanpa biaya tambahan. Konfirmasi via WhatsApp dalam hitungan jam.
-          </p>
-          <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
-              <Link to="/book">
-                Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            {property?.whatsapp_number && (
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="border-stone-300 text-stone-700 hover:bg-white"
-              >
-                <a
-                  href={`https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}?text=Halo%2C%20saya%20ingin%20bertanya%20tentang%20kamar%20di%20Pomah%20Living`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageCircle className="mr-2 h-4 w-4" />
-                  Chat WhatsApp
-                </a>
-              </Button>
-            )}
-          </div>
-          <p className="mt-5 text-xs text-stone-400">
-            Tidak perlu deposit. Pembatalan gratis 24 jam sebelum check-in.
-          </p>
-        </div>
-      </section>
-
-      {/* ── LOKASI ── */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-12 md:grid-cols-2 md:items-center">
-          <div>
-            <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
-              <span className="h-px w-6 bg-amber-700" />
-              Lokasi
-            </span>
-            <h2 className="mt-4 font-serif text-3xl font-semibold">Mudah dijangkau</h2>
-            <p className="mt-4 text-sm leading-relaxed text-stone-500">
-              Terletak di lokasi strategis dengan akses mudah ke pusat kota, restoran, dan tempat
-              wisata populer.
-            </p>
-            {property?.address && (
-              <div className="mt-6 flex items-start gap-3 rounded-xl bg-stone-50 p-4">
-                <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-                <div>
-                  <p className="font-medium text-stone-900">{property.address}</p>
-                  {property.city && <p className="text-sm text-stone-500">{property.city}</p>}
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+                        {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[10px] text-stone-400">Harga hari ini</p>
+                      <p className="text-lg font-bold text-teal-700">
+                        Rp {Number(rt.base_rate).toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                  </div>
+                  {rt.description && (
+                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">
+                      {rt.description}
+                    </p>
+                  )}
+                  <Link
+                    to="/book"
+                    className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    Pesan Kamar
+                  </Link>
                 </div>
-              </div>
-            )}
-            <Button asChild variant="outline" className="mt-6 border-stone-300">
-              <a
-                href={`https://www.google.com/maps/search/${encodeURIComponent(property?.address ?? "Pomah Living Guesthouse")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <MapPin className="mr-2 h-4 w-4" />
-                Buka di Google Maps
-              </a>
-            </Button>
-          </div>
-          {/* Map placeholder */}
-          <div className="aspect-video overflow-hidden rounded-2xl bg-stone-100 flex items-center justify-center border border-stone-200">
-            <div className="text-center">
-              <MapPin className="mx-auto h-8 w-8 text-stone-300" />
-              <p className="mt-2 font-mono text-xs uppercase tracking-widest text-stone-400">
-                Google Maps
+              </article>
+            ))}
+            {rooms.length === 0 && (
+              <p className="col-span-full text-center text-sm text-stone-400">
+                Belum ada kamar tersedia.
               </p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ── FACILITIES ── */}
+      <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
+        <div className="text-center">
+          <SectionHeading>Facilities</SectionHeading>
+          <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+            Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
+          </p>
+        </div>
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {FACILITIES.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+                <f.icon className="h-6 w-6" />
+              </div>
+              <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
+              <p className="mt-1 text-sm text-stone-500">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── LOKASI KAMI ── */}
+      <section id="lokasi" className="bg-[#f3ece0] py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="text-center">
+            <h2 className="font-serif text-3xl font-bold tracking-tight text-teal-700 md:text-4xl">
+              Lokasi Kami
+            </h2>
+            <p className="mt-3 text-sm text-stone-500">
+              Temukan kami di lokasi strategis yang mudah diakses
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
+              <iframe
+                title="Lokasi Pomah Guesthouse"
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+                className="h-80 w-full"
+                loading="lazy"
+              />
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+              <p className="flex items-center gap-2 font-serif text-lg font-semibold text-teal-700">
+                <MapPin className="h-5 w-5" />
+                Lokasi Terdekat (Radius 5km)
+              </p>
+              <div className="mt-3 space-y-2">
+                {NEARBY.map((n) => (
+                  <div
+                    key={n.name}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50/60 px-3 py-2.5"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="h-6 w-6 shrink-0 rounded-full border-2 border-teal-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-stone-800">{n.name}</p>
+                        <p className="text-xs text-stone-400">{n.type}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="flex items-center gap-1 text-sm font-medium text-teal-700">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {n.distance}
+                      </p>
+                      <p className="flex items-center gap-1 text-xs text-stone-400">
+                        <Clock className="h-3 w-3" />
+                        {n.time}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <PublicFooter property={property} />
+      <PomahFooter name={propertyName} />
+
+      {/* Floating WhatsApp */}
+      {wa && (
+        <a
+          href={`https://wa.me/${wa}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Hubungi via WhatsApp"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+        >
+          <MessageCircle className="h-7 w-7" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Pieces                                                               */
+/* ------------------------------------------------------------------ */
+
+function PomahNav({ name }: { name: string }) {
+  return (
+    <nav className="sticky top-0 z-40 bg-teal-700 text-white shadow-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <Link to="/" className="flex items-baseline gap-1.5">
+          <span className="font-serif text-2xl font-bold">Pomah</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
+            guesthouse
+          </span>
+        </Link>
+        <div className="hidden items-center gap-7 text-sm font-medium md:flex">
+          {NAV.map((n) => (
+            <Link key={n.label} to={n.to} className="transition hover:text-white/70">
+              {n.label}
+            </Link>
+          ))}
+          <a href="#facilities" className="transition hover:text-white/70">
+            Facilities
+          </a>
+          <a href="#lokasi" className="transition hover:text-white/70">
+            Lokasi
+          </a>
+        </div>
+        <Link
+          to="/book"
+          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-white/90"
+        >
+          Pesan Kamar
+        </Link>
+        <button className="text-white md:hidden" aria-label="Menu">
+          <Menu className="h-5 w-5" />
+        </button>
+      </div>
+      <span className="sr-only">{name}</span>
+    </nav>
+  );
+}
+
+function PomahFooter({ name }: { name: string }) {
+  return (
+    <footer className="bg-teal-800 text-teal-100">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
+        <div>
+          <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
+          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
+            Experience comfort and hospitality at {name}.
+          </p>
+        </div>
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+            Quick Links
+          </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li>
+              <Link to="/" className="transition hover:text-white">
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link to="/rooms" className="transition hover:text-white">
+                Rooms
+              </Link>
+            </li>
+            <li>
+              <a href="#facilities" className="transition hover:text-white">
+                Amenities
+              </a>
+            </li>
+            <li>
+              <a href="#lokasi" className="transition hover:text-white">
+                Lokasi
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+            Follow Us
+          </p>
+          <a
+            href="#"
+            aria-label="Instagram"
+            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-600 text-teal-200 transition hover:border-white hover:text-white"
+          >
+            <Instagram className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+      <div className="border-t border-teal-700/60 py-5 text-center text-xs text-teal-300/70">
+        © {new Date().getFullYear()} {name}. Semua hak dilindungi.
+      </div>
+    </footer>
+  );
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center">
+      <h2 className="font-serif text-3xl font-bold uppercase tracking-tight text-stone-800 md:text-4xl">
+        {children}
+      </h2>
+      <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex-1">
+      <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-stone-400">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
