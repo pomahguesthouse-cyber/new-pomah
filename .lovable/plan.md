@@ -1,51 +1,33 @@
 ## Tujuan
+Upload seluruh codebase project ini ke Google Drive di dalam folder bernama `new-pomah`, menggunakan koneksi **New Pomah G-Drive** yang sudah tersedia di workspace.
 
-Satu project Lovable, dua domain:
-- `pomahguesthouse.com` → halaman publik (`/`, `/rooms`, `/book`, `/login`)
-- `admin.pomahguesthouse.com` → dashboard (`/admin/*`)
+## Pendekatan
+Ini bukan fitur aplikasi — tidak ada UI atau route yang ditambahkan. Ini adalah task one-off yang dijalankan langsung dari sandbox via `code--exec` menggunakan Google Drive connector gateway.
 
-Backend (server functions, database) tetap satu — memang harus, karena halaman publik juga perlu booking/WhatsApp.
+## Langkah
 
-## Yang akan dibangun
+1. **Link koneksi Google Drive ke project**
+   Pakai connector `google_drive` (connection: *New Pomah G-Drive*) supaya `LOVABLE_API_KEY` dan `GOOGLE_DRIVE_API_KEY` tersedia di environment sandbox.
 
-### 1. Hook deteksi hostname
-File baru: `src/hooks/use-hostname.ts`
-- Return hostname saat ini (SSR-safe — pakai `request.url` lewat root context atau `window.location.hostname` di client).
-- Helper: `isAdminHost(hostname)` → true jika hostname diawali `admin.` atau hostname dev preview yang ditandai sebagai admin.
+2. **Siapkan arsip codebase**
+   - Buat archive `.zip` dari project root, mengecualikan: `node_modules`, `.git`, `dist`, `build`, `.cache`, `.vite`, `.wrangler`, `.turbo`, `.next`, `bun.lock`, file binary cache.
+   - Simpan sementara di `/tmp/new-pomah-codebase.zip`.
+   - Tujuannya: 1 file upload, jauh lebih cepat & andal dibanding upload ribuan file kecil satu-per-satu lewat REST API.
 
-### 2. Host-aware redirect di `__root.tsx`
-Tambah logic di `RootComponent` (atau lebih baik di `beforeLoad` root):
-- Jika hostname = `admin.*` DAN pathname = `/` → redirect ke `/admin`.
-- Jika hostname = `pomahguesthouse.com` (non-admin) DAN pathname diawali `/admin` → redirect ke `/` (atau tampilkan 404).
-- Untuk preview Lovable (`*.lovable.app`) — semua route tetap bisa diakses (developer convenience).
+3. **Buat folder `new-pomah` di Drive (jika belum ada)**
+   - `GET /files?q=name='new-pomah' and mimeType='application/vnd.google-apps.folder' and trashed=false`
+   - Jika kosong → `POST /files` dengan `mimeType: application/vnd.google-apps.folder`, name `new-pomah`.
+   - Simpan `folderId` hasilnya.
 
-### 3. Sembunyikan link admin di situs publik
-Komponen header/nav publik: jangan render link "Admin" jika `!isAdminHost`.
+4. **Upload zip ke folder tersebut**
+   - Gunakan multipart upload endpoint: `POST /upload/drive/v3/files?uploadType=multipart`
+   - Metadata: `{ name: "new-pomah-codebase-<timestamp>.zip", parents: [folderId] }`
+   - Body: zip binary dengan boundary multipart.
+   - Verifikasi response berisi `id` file.
 
-### 4. SEO per-host
-- `sitemap.xml` & `robots.txt`: hanya expose route publik di domain utama; di `admin.*` set `robots.txt` → `Disallow: /`.
-- Implementasi: server route `sitemap[.]xml.ts` baca `request.headers.host`, balikkan content sesuai host. Sama untuk `robots.txt` (route baru `robots[.]txt.ts`).
-- Set `<meta name="robots" content="noindex">` di root jika `isAdminHost`.
+5. **Konfirmasi ke user**
+   Tampilkan: nama folder, nama file, ukuran zip, dan link `https://drive.google.com/drive/folders/<folderId>`.
 
-### 5. Hubungkan domain (manual oleh user)
-Di **Project Settings → Domains**:
-- Tambah `pomahguesthouse.com` (sudah ada / connect ulang sebagai primary publik)
-- Tambah `admin.pomahguesthouse.com` sebagai subdomain
-- Atur DNS: A record `admin` → `185.158.133.1`, plus TXT verifikasi yang Lovable sediakan
-- Tunggu propagasi + SSL otomatis
-
-Saya tidak bisa otomatisasi langkah DNS — itu di registrar Anda. Tapi setelah DNS jalan, kode di atas otomatis aktif.
-
-## Catatan teknis
-
-- Pendekatan ini **bukan pemisahan keamanan keras** — kalau seseorang tahu URL `pomahguesthouse.com/admin` mereka tetap di-redirect, tapi assets JS admin sudah ter-bundle ke browser publik. Auth + RLS di Supabase tetap pertahanan utama (sudah ada).
-- Kalau nanti butuh pemisahan bundle (admin tidak ke-download di situs publik), perlu pindah ke **2 project terpisah** (Opsi 2). Sekarang belum perlu.
-- SSR-aware: redirect harus dilakukan di `beforeLoad` root supaya jalan saat first request, bukan flash di client.
-
-## File yang berubah
-
-- `src/hooks/use-hostname.ts` (baru)
-- `src/routes/__root.tsx` (tambah `beforeLoad` host check + meta robots conditional)
-- `src/routes/sitemap[.]xml.ts` (host-aware)
-- `src/routes/robots[.]txt.ts` (baru, host-aware)
-- Komponen nav publik (sembunyikan link admin)
+## Catatan
+- Codebase di-upload sebagai **single zip**, bukan tree mirror. Kalau Anda lebih suka folder mirror (tiap file/folder asli direplikasi di Drive), beri tahu — itu butuh ratusan-ribuan API call dan jauh lebih lambat.
+- Secret API key tetap di server (`process.env`), tidak ada perubahan kode aplikasi.

@@ -33,7 +33,7 @@ export const updateDomainSettings = createServerFn({ method: "POST" })
       .from("properties")
       .update({
         public_domain: data.public_domain ?? null,
-      } as Record<string, unknown>)
+      } as never)
       .eq("id", data.id);
     if (error) throw error;
     return { ok: true };
