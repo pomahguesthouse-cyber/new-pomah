@@ -73,6 +73,7 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
         guest_id: g?.id,
         check_in: data.checkIn,
         check_out: data.checkOut,
+        nights,
         status: data.status,
         total_amount: data.nightlyRate * nights,
         source: "direct",
