@@ -1,19 +1,36 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Globe, ExternalLink, Check, Pencil, X } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Globe,
+  ExternalLink,
+  Check,
+  Pencil,
+  X,
+  Upload,
+  Trash2,
+  Loader2,
+  Image as ImageIcon,
+} from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
   getDomainSettings,
   updateDomainSettings,
+  getBrandingSettings,
+  updateBrandingSettings,
 } from "@/admin/modules/settings/settings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
+import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+
+/** Storage bucket reused for branding assets (logos / favicon). */
+const BRANDING_BUCKET = "room-images";
 
 export const Route = createFileRoute("/admin/settings")({
   component: SettingsPage,
@@ -32,11 +49,16 @@ function SettingsPage() {
       <Tabs defaultValue="properti" className="space-y-6">
         <TabsList>
           <TabsTrigger value="properti">Properti</TabsTrigger>
+          <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="domain">Domain</TabsTrigger>
         </TabsList>
 
         <TabsContent value="properti">
           <PropertyTab />
+        </TabsContent>
+
+        <TabsContent value="branding">
+          <BrandingTab />
         </TabsContent>
 
         <TabsContent value="domain">
@@ -238,6 +260,184 @@ function DomainCard({
               )}
             </div>
           )}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Branding tab — guesthouse logo, invoice logo, favicon                */
+/* ------------------------------------------------------------------ */
+
+function BrandingTab() {
+  const getFn = useServerFn(getBrandingSettings);
+  const updateFn = useServerFn(updateBrandingSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["branding-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      logo_url?: string | null;
+      invoice_logo_url?: string | null;
+      favicon_url?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["branding-settings"] });
+      toast.success("Branding tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          Data properti belum ada — branding belum bisa disimpan.
+        </p>
+      )}
+      <LogoUploadCard
+        label="Logo Penginapan"
+        description="Logo utama penginapan, tampil di header & halaman publik."
+        value={data?.logo_url ?? null}
+        disabled={!id}
+        onChange={(url) => id && mutation.mutate({ id, logo_url: url })}
+      />
+      <LogoUploadCard
+        label="Logo Invoice"
+        description="Logo yang tampil pada dokumen invoice / struk pemesanan."
+        value={data?.invoice_logo_url ?? null}
+        disabled={!id}
+        onChange={(url) => id && mutation.mutate({ id, invoice_logo_url: url })}
+      />
+      <LogoUploadCard
+        label="Favicon"
+        description="Ikon kecil pada tab browser. Disarankan gambar persegi."
+        square
+        value={data?.favicon_url ?? null}
+        disabled={!id}
+        onChange={(url) => id && mutation.mutate({ id, favicon_url: url })}
+      />
+      <p className="text-xs text-muted-foreground">Format gambar (PNG/JPG/SVG), maksimal 2 MB.</p>
+    </div>
+  );
+}
+
+/** A single image-upload card: preview + upload/replace/remove. */
+function LogoUploadCard({
+  label,
+  description,
+  value,
+  square,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: string | null;
+  square?: boolean;
+  disabled?: boolean;
+  onChange: (url: string | null) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus berupa gambar");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Ukuran gambar maksimal 2 MB");
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() ?? "png";
+      const path = `branding/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage
+        .from(BRANDING_BUCKET)
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) throw error;
+      const { data } = supabase.storage.from(BRANDING_BUCKET).getPublicUrl(path);
+      onChange(data.publicUrl);
+      toast.success(`${label} terupload`);
+    } catch (e) {
+      toast.error(
+        `Upload gagal: ${(e as Error).message}. Pastikan bucket "${BRANDING_BUCKET}" sudah dibuat (public) di Supabase Storage.`,
+      );
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start gap-4">
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted",
+            square ? "h-16 w-16" : "h-16 w-28",
+          )}
+        >
+          {value ? (
+            <img src={value} alt={label} className="h-full w-full object-contain" />
+          ) : (
+            <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleFile(f);
+              }}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              disabled={disabled || uploading}
+              onClick={() => inputRef.current?.click()}
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              {uploading ? "Mengupload…" : value ? "Ganti" : "Upload"}
+            </Button>
+            {value && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 gap-1.5 text-destructive hover:text-destructive"
+                disabled={disabled || uploading}
+                onClick={() => onChange(null)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Hapus
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Card>
