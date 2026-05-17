@@ -47,13 +47,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-/** Display metadata for a booking's payment status. */
-const PAYMENT_META: Record<string, { label: string; cls: string }> = {
-  unpaid: { label: "Belum bayar", cls: "bg-destructive/15 text-destructive" },
-  partial: { label: "DP", cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" },
-  paid: { label: "Lunas", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
-};
-
 const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Semua sumber" },
   { value: "direct", label: "Direct" },
@@ -313,7 +306,8 @@ function BookingsPage() {
             <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               <th className="px-4 py-3">Kode Booking</th>
               <th className="px-4 py-3">Guest</th>
-              <th className="px-4 py-3">Room</th>
+              <th className="px-4 py-3">Kamar</th>
+              <th className="px-4 py-3">Kamar</th>
               <th className="px-4 py-3">Dates</th>
               <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3">Status</th>
@@ -324,14 +318,14 @@ function BookingsPage() {
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && !error && bookings.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
                     <>Tidak ada booking yang cocok dengan filter ini.</>
                   ) : (
@@ -363,6 +357,7 @@ function BookingsPage() {
                 <td className="px-4 py-3">
                   <RoomSummary rooms={b.booking_rooms} />
                 </td>
+                <td className="px-4 py-3 font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</td>
                 <td className="px-4 py-3 text-xs">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                     Check-In
@@ -384,30 +379,21 @@ function BookingsPage() {
                   />
                 </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={b.status}
-                      onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
-                    >
-                      <SelectTrigger className="h-7 w-28 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STATUSES.map((s) => (
-                          <SelectItem key={s} value={s} className="text-xs">
-                            {s}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {b.payment_status && PAYMENT_META[b.payment_status] && (
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${PAYMENT_META[b.payment_status].cls}`}
-                      >
-                        {PAYMENT_META[b.payment_status].label}
-                      </span>
-                    )}
-                  </div>
+                  <Select
+                    value={b.status}
+                    onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
+                  >
+                    <SelectTrigger className="h-7 w-28 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s} className="text-xs">
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline">{b.source}</Badge>
