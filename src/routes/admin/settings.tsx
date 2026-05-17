@@ -13,6 +13,11 @@ import {
   Trash2,
   Loader2,
   Image as ImageIcon,
+  MessageCircle,
+  MapPin,
+  BarChart3,
+  Tag,
+  Search,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -20,6 +25,8 @@ import {
   updateDomainSettings,
   getBrandingSettings,
   updateBrandingSettings,
+  getIntegrationSettings,
+  updateIntegrationSettings,
 } from "@/admin/modules/settings/settings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,6 +57,7 @@ function SettingsPage() {
         <TabsList>
           <TabsTrigger value="properti">Properti</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
+          <TabsTrigger value="integrasi">Integrasi</TabsTrigger>
           <TabsTrigger value="domain">Domain</TabsTrigger>
         </TabsList>
 
@@ -59,6 +67,10 @@ function SettingsPage() {
 
         <TabsContent value="branding">
           <BrandingTab />
+        </TabsContent>
+
+        <TabsContent value="integrasi">
+          <IntegrationTab />
         </TabsContent>
 
         <TabsContent value="domain">
@@ -438,6 +450,196 @@ function LogoUploadCard({
               </Button>
             )}
           </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Integrasi tab — Fonnte WhatsApp + Google services                   */
+/* ------------------------------------------------------------------ */
+
+function IntegrationTab() {
+  const getFn = useServerFn(getIntegrationSettings);
+  const updateFn = useServerFn(updateIntegrationSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["integration-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      fonnte_token?: string | null;
+      google_place_id?: string | null;
+      google_analytics_id?: string | null;
+      google_tag_manager_id?: string | null;
+      google_search_console?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integration-settings"] });
+      toast.success("Integrasi tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+  const disabled = !id || mutation.isPending;
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          Data properti belum ada — integrasi belum bisa disimpan.
+        </p>
+      )}
+      <TextSettingCard
+        icon={<MessageCircle className="h-4 w-4" />}
+        label="WhatsApp Token — Fonnte"
+        description="Token API dari fonnte.com untuk menghubungkan WhatsApp dengan aplikasi ini."
+        placeholder="Token Fonnte"
+        secret
+        value={data?.fonnte_token ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
+      />
+      <TextSettingCard
+        icon={<MapPin className="h-4 w-4" />}
+        label="Google Place ID"
+        description="ID lokasi Google Maps penginapan (untuk ulasan & peta)."
+        placeholder="contoh: ChIJ..."
+        value={data?.google_place_id ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, google_place_id: v })}
+      />
+      <TextSettingCard
+        icon={<BarChart3 className="h-4 w-4" />}
+        label="Google Analytics ID"
+        description="Measurement ID Google Analytics 4."
+        placeholder="contoh: G-XXXXXXXXXX"
+        value={data?.google_analytics_id ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, google_analytics_id: v })}
+      />
+      <TextSettingCard
+        icon={<Tag className="h-4 w-4" />}
+        label="Google Tag Manager ID"
+        description="Container ID Google Tag Manager."
+        placeholder="contoh: GTM-XXXXXXX"
+        value={data?.google_tag_manager_id ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, google_tag_manager_id: v })}
+      />
+      <TextSettingCard
+        icon={<Search className="h-4 w-4" />}
+        label="Google Search Console"
+        description="Kode verifikasi Search Console (isi meta tag verification)."
+        placeholder="kode verifikasi"
+        value={data?.google_search_console ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
+      />
+    </div>
+  );
+}
+
+/** Generic inline-edit card for a single text setting. */
+function TextSettingCard({
+  icon,
+  label,
+  description,
+  placeholder,
+  value,
+  secret,
+  disabled,
+  onSave,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  placeholder: string;
+  value: string | null;
+  secret?: boolean;
+  disabled?: boolean;
+  onSave: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  function startEdit() {
+    setDraft(value ?? "");
+    setEditing(true);
+  }
+  function cancel() {
+    setEditing(false);
+    setDraft(value ?? "");
+  }
+  function save() {
+    onSave(draft.trim() || null);
+    setEditing(false);
+  }
+
+  const display = secret && value ? `${value.slice(0, 4)}••••••••` : value;
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 text-muted-foreground">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+              {label}
+            </p>
+            {!editing && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs"
+                disabled={disabled}
+                onClick={startEdit}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+
+          {editing ? (
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={placeholder}
+                className="h-8 font-mono text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") save();
+                  if (e.key === "Escape") cancel();
+                }}
+              />
+              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={save}>
+                <Check className="h-4 w-4 text-green-600" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancel}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-2">
+              {value ? (
+                <code className="break-all rounded bg-muted px-2 py-0.5 font-mono text-sm">
+                  {display}
+                </code>
+              ) : (
+                <span className="text-sm italic text-muted-foreground/60">Belum diatur</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </Card>
