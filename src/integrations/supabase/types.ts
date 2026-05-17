@@ -172,6 +172,7 @@ export type Database = {
           id: string
           internal_notes: string | null
           nightly_rate: number | null
+          nights: number | null
           paid_amount: number
           payment_status: Database["public"]["Enums"]["payment_status"]
           property_id: string
@@ -194,6 +195,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           nightly_rate?: number | null
+          nights?: number | null
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id: string
@@ -216,6 +218,7 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           nightly_rate?: number | null
+          nights?: number | null
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id?: string
