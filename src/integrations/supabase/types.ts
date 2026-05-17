@@ -298,6 +298,101 @@ export type Database = {
         }
         Relationships: []
       }
+      landing_page_versions: {
+        Row: {
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          page_id: string
+          version_number: number
+        }
+        Insert: {
+          content: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          page_id: string
+          version_number: number
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          page_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_page_versions_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landing_pages: {
+        Row: {
+          canonical_url: string | null
+          content: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          noindex: boolean
+          og_image_url: string | null
+          published_at: string | null
+          published_content: Json | null
+          seo_description: string | null
+          seo_title: string | null
+          slug: string
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_url?: string | null
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          noindex?: boolean
+          og_image_url?: string | null
+          published_at?: string | null
+          published_content?: Json | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug: string
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_url?: string | null
+          content?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          noindex?: boolean
+          og_image_url?: string | null
+          published_at?: string | null
+          published_content?: Json | null
+          seo_description?: string | null
+          seo_title?: string | null
+          slug?: string
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -331,8 +426,16 @@ export type Database = {
           currency: string
           description: string | null
           email: string | null
+          favicon_url: string | null
+          fonnte_token: string | null
+          google_analytics_id: string | null
+          google_place_id: string | null
+          google_search_console: string | null
+          google_tag_manager_id: string | null
           hero_image_url: string | null
           id: string
+          invoice_logo_url: string | null
+          logo_url: string | null
           name: string
           phone: string | null
           public_domain: string | null
@@ -349,8 +452,16 @@ export type Database = {
           currency?: string
           description?: string | null
           email?: string | null
+          favicon_url?: string | null
+          fonnte_token?: string | null
+          google_analytics_id?: string | null
+          google_place_id?: string | null
+          google_search_console?: string | null
+          google_tag_manager_id?: string | null
           hero_image_url?: string | null
           id?: string
+          invoice_logo_url?: string | null
+          logo_url?: string | null
           name: string
           phone?: string | null
           public_domain?: string | null
@@ -367,8 +478,16 @@ export type Database = {
           currency?: string
           description?: string | null
           email?: string | null
+          favicon_url?: string | null
+          fonnte_token?: string | null
+          google_analytics_id?: string | null
+          google_place_id?: string | null
+          google_search_console?: string | null
+          google_tag_manager_id?: string | null
           hero_image_url?: string | null
           id?: string
+          invoice_logo_url?: string | null
+          logo_url?: string | null
           name?: string
           phone?: string | null
           public_domain?: string | null
