@@ -60,6 +60,11 @@ export interface HomepageConfig {
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
   };
+  /** The "Your Perfect Stay" text section — an H1 plus text blocks. */
+  story: {
+    heading: string;
+    paragraphs: string[];
+  };
   roomCarousel: {
     cardsPerView: number;
     slideMs: number;
@@ -114,6 +119,13 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     buttonLabel: "Cek Ketersediaan",
     layer: 30,
   },
+  story: {
+    heading: "Your Perfect Stay",
+    paragraphs: [
+      "Kata Pomah dalam bahasa Jawa berarti Rumah. Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, Pomah Guesthouse memiliki filosofi yang mencerminkan kehangatan, kenyamanan dan standar pelayanan terbaik yang kami sajikan kepada tamu.",
+      "Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.",
+    ],
+  },
   roomCarousel: {
     cardsPerView: 3,
     slideMs: 4000,
@@ -130,6 +142,7 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     header: { ...d.header, ...c.header },
     hero: { ...d.hero, ...c.hero },
     datePicker: { ...d.datePicker, ...c.datePicker },
+    story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
   };
 }

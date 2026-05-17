@@ -24,6 +24,7 @@ import {
   Save,
   Film,
   ArrowLeft,
+  Type,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import {
   getHomepageConfig,
@@ -48,7 +50,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "datepicker" | "carousel" | "media";
+type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel" | "media";
 
 const SECTIONS: {
   key: SectionKey;
@@ -58,6 +60,7 @@ const SECTIONS: {
   { key: "header", label: "Header", icon: LayoutPanelTop },
   { key: "hero", label: "Hero Slider", icon: GalleryHorizontal },
   { key: "datepicker", label: "Date Picker", icon: CalendarCheck },
+  { key: "story", label: "Teks", icon: Type },
   { key: "carousel", label: "Carousel Kamar", icon: RectangleHorizontal },
   { key: "media", label: "Media Library", icon: Images },
 ];
@@ -196,6 +199,8 @@ function HomepageBuilder() {
               <HeroTab cfg={cfg} setCfg={setCfg} />
             ) : section === "datepicker" ? (
               <DatePickerTab cfg={cfg} setCfg={setCfg} />
+            ) : section === "story" ? (
+              <StoryTab cfg={cfg} setCfg={setCfg} />
             ) : section === "carousel" ? (
               <CarouselTab cfg={cfg} setCfg={setCfg} />
             ) : (
@@ -696,6 +701,57 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
 /* ================================================================== */
 /* 5. Room carousel                                                    */
 /* ================================================================== */
+
+function StoryTab({ cfg, setCfg }: TabProps) {
+  const story = cfg.story;
+  const set = (patch: Partial<HomepageConfig["story"]>) =>
+    setCfg((c) => ({ ...c, story: { ...c.story, ...patch } }));
+  return (
+    <Section title="Konten Teks" desc="Judul (H1) dan blok teks bagian 'Your Perfect Stay'.">
+      <FieldRow label="Judul (H1)">
+        <Input value={story.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Blok teks</Label>
+        {story.paragraphs.map((p, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Text {String(i + 1).padStart(2, "0")}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-destructive"
+                onClick={() => set({ paragraphs: story.paragraphs.filter((_, x) => x !== i) })}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <Textarea
+              rows={4}
+              value={p}
+              onChange={(e) => {
+                const ps = [...story.paragraphs];
+                ps[i] = e.target.value;
+                set({ paragraphs: ps });
+              }}
+            />
+          </div>
+        ))}
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => set({ paragraphs: [...story.paragraphs, ""] })}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Tambah teks
+        </Button>
+      </div>
+    </Section>
+  );
+}
 
 function CarouselTab({ cfg, setCfg }: TabProps) {
   const rc = cfg.roomCarousel;
