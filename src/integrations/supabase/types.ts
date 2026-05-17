@@ -165,6 +165,7 @@ export type Database = {
           guest_id: string;
           id: string;
           nightly_rate: number | null;
+          nights: number | null;
           property_id: string;
           reference_code: string;
           room_id: string | null;
@@ -187,6 +188,7 @@ export type Database = {
           guest_id: string;
           id?: string;
           nightly_rate?: number | null;
+          nights?: number | null;
           property_id: string;
           reference_code?: string;
           room_id?: string | null;
@@ -209,6 +211,7 @@ export type Database = {
           guest_id?: string;
           id?: string;
           nightly_rate?: number | null;
+          nights?: number | null;
           property_id?: string;
           reference_code?: string;
           room_id?: string | null;

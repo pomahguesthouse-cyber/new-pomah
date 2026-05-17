@@ -255,6 +255,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
         guest_id: guestId,
         check_in: data.check_in,
         check_out: data.check_out,
+        nights: Math.round(nights),
         adults: data.adults,
         children: data.children,
         total_amount: grandTotal,
@@ -356,6 +357,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       .update({
         check_in: data.check_in,
         check_out: data.check_out,
+        nights: Math.round(nights),
         adults: data.adults,
         children: data.children,
         status: data.status,

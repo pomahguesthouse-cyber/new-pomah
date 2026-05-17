@@ -69,6 +69,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         guest_id: guest.id,
         check_in: data.checkIn,
         check_out: data.checkOut,
+        nights: Math.round(nights),
         adults: data.adults,
         children: data.children,
         total_amount: total,
