@@ -314,9 +314,9 @@ function BookingsPage() {
               <th className="px-4 py-3">Guest</th>
               <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
-              <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -375,9 +375,6 @@ function BookingsPage() {
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
                 </td>
-                <td className="px-4 py-3">
-                  <Badge variant="outline">{b.source}</Badge>
-                </td>
                 <td className="px-4 py-3 font-mono tabular-nums">
                   {formatIDR(Number(b.total_amount))}
                 </td>
@@ -406,6 +403,9 @@ function BookingsPage() {
                       </span>
                     )}
                   </div>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge variant="outline">{b.source}</Badge>
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <Button
