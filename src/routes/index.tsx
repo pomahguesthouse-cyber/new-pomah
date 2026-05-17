@@ -78,10 +78,12 @@ function PomahHome() {
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
   const address = property?.address ?? "Pomah Guesthouse Semarang";
+  // logo_url comes from Settings → Branding; not in the generated types.
+  const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
 
   return (
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} />
+      <PomahNav name={propertyName} logo={logoUrl} />
 
       {/* ── HERO ── */}
       <header className="relative">
@@ -339,15 +341,21 @@ function PomahHome() {
 /* Pieces                                                               */
 /* ------------------------------------------------------------------ */
 
-function PomahNav({ name }: { name: string }) {
+function PomahNav({ name, logo }: { name: string; logo: string | null }) {
   return (
     <nav className="sticky top-0 z-40 bg-teal-700 text-white shadow-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-baseline gap-1.5">
-          <span className="font-serif text-2xl font-bold">Pomah</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
-            guesthouse
-          </span>
+        <Link to="/" className="flex items-baseline gap-1.5" title={name}>
+          {logo ? (
+            <img src={logo} alt={name} className="h-10 w-auto max-w-[180px] object-contain" />
+          ) : (
+            <>
+              <span className="font-serif text-2xl font-bold">Pomah</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
+                guesthouse
+              </span>
+            </>
+          )}
         </Link>
         <div className="hidden items-center gap-7 text-sm font-medium md:flex">
           {NAV.map((n) => (
