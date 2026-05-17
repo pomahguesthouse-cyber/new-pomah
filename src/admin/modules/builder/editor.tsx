@@ -13,11 +13,9 @@
  * version and goes live. All editor state lives in `useEditorStore`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  ChevronDown,
   Undo2,
   Redo2,
   Monitor,
@@ -220,15 +218,12 @@ function TopBar({
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-3">
-      {/* Left — page switcher */}
+      {/* Left — current page */}
       <div className="flex min-w-0 items-center gap-2">
         <span className="hidden text-xs text-muted-foreground sm:inline">Page:</span>
-        <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
-          <Link to="/admin/pages">
-            <span className="max-w-[160px] truncate font-medium">{title}</span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </Link>
-        </Button>
+        <div className="flex h-8 items-center rounded-md border border-border px-2.5">
+          <span className="max-w-[180px] truncate text-sm font-medium">{title}</span>
+        </div>
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",

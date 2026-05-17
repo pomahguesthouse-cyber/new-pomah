@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { EMPTY_PAGE, type LandingPageVersionRow } from "./types";
+import { HOME_SLUG, HOME_TEMPLATE } from "./home-template";
 
 /** View the authed Supabase client without the generated table types. */
 function db(supabase: unknown): SupabaseClient {
@@ -58,6 +59,40 @@ export const getLandingPage = createServerFn({ method: "GET" })
     // `page` is untyped (builder tables absent from generated types);
     // the editor route re-types it as LandingPageRow.
     return { page };
+  });
+
+/**
+ * Fetch the homepage document, creating it on first use.
+ *
+ * The editor opens straight onto the public homepage — there is no
+ * "create a page" step. If no `home` landing page exists yet it is
+ * seeded from the built-in `HOME_TEMPLATE`.
+ */
+export const getOrCreateHomePage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const sb = db(context.supabase);
+    const { data: existing, error } = await sb
+      .from("landing_pages")
+      .select("*")
+      .eq("slug", HOME_SLUG)
+      .maybeSingle();
+    if (error) throw error;
+    if (existing) return { page: existing };
+
+    const { data: created, error: insertError } = await sb
+      .from("landing_pages")
+      .insert({
+        title: "Halaman Depan",
+        slug: HOME_SLUG,
+        status: "draft",
+        content: HOME_TEMPLATE,
+        created_by: context.userId,
+      })
+      .select("*")
+      .single();
+    if (insertError) throw insertError;
+    return { page: created };
   });
 
 /* ------------------------------------------------------------------ */
