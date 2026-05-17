@@ -360,20 +360,7 @@ function BookingsPage() {
                   </p>
                 </td>
                 <td className="px-4 py-3">
-                  {(b.booking_rooms ?? []).length === 0 ? (
-                    <p className="text-muted-foreground">—</p>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {(b.booking_rooms ?? []).map((br) => (
-                        <p key={br.id} className="leading-tight">
-                          {br.room_types?.name ?? "—"}
-                          <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                            {br.rooms?.number ? br.rooms.number : "belum di-assign"}
-                          </span>
-                        </p>
-                      ))}
-                    </div>
-                  )}
+                  <RoomSummary rooms={b.booking_rooms} />
                 </td>
                 <td className="px-4 py-3 font-mono text-xs tabular-nums">
                   <p>
@@ -497,6 +484,28 @@ function BookingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Room column: rooms grouped by type — type name, then its room numbers. */
+function RoomSummary({ rooms }: { rooms: BookingListRow["booking_rooms"] }) {
+  const groups = new Map<string, string[]>();
+  for (const br of rooms ?? []) {
+    const name = br.room_types?.name ?? "—";
+    const num = br.rooms?.number ?? "belum di-assign";
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name)!.push(num);
+  }
+  if (groups.size === 0) return <p className="text-muted-foreground">—</p>;
+  return (
+    <div className="space-y-1.5">
+      {[...groups].map(([name, nums]) => (
+        <div key={name} className="leading-tight">
+          <p className="font-medium">{name}</p>
+          <p className="font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p>
+        </div>
+      ))}
     </div>
   );
 }
