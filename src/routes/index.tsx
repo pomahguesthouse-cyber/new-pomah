@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { DatePickerID } from "@/components/ui/date-picker";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -99,6 +100,10 @@ function PomahHome() {
   };
   const pb = { isBuilder, sel, onSelect: pbSelect };
 
+  // Booking date-picker state.
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
@@ -122,15 +127,20 @@ function PomahHome() {
               )}
               <div className="flex flex-col gap-3 md:flex-row md:items-end">
                 <Field label="Check-In">
-                  <input
-                    type="date"
-                    className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                  <DatePickerID
+                    value={checkIn}
+                    onChange={setCheckIn}
+                    placeholder="Pilih tanggal"
+                    className="h-10"
                   />
                 </Field>
                 <Field label="Check-Out">
-                  <input
-                    type="date"
-                    className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                  <DatePickerID
+                    value={checkOut}
+                    onChange={setCheckOut}
+                    min={checkIn || undefined}
+                    placeholder="Pilih tanggal"
+                    className="h-10"
                   />
                 </Field>
                 <Link
