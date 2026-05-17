@@ -80,10 +80,27 @@ function HomepageBuilder() {
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (data?.config) setCfg(data.config);
   }, [data]);
+
+  // Selecting an element inside the preview iframe.
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.source === "pb" && typeof e.data.section === "string") {
+        setSection(e.data.section as SectionKey);
+      }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
+  // Mirror the active section into the preview so it highlights there.
+  useEffect(() => {
+    iframeRef.current?.contentWindow?.postMessage({ source: "pb-host", section }, "*");
+  }, [section, previewKey]);
 
   const save = async () => {
     if (!data?.id) {
@@ -137,9 +154,10 @@ function HomepageBuilder() {
         <div className="flex flex-1 items-start justify-center overflow-auto p-6">
           <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-white shadow-lg">
             <iframe
+              ref={iframeRef}
               key={previewKey}
               title="Preview Halaman Depan"
-              src="/"
+              src="/?builder=1"
               className="h-[calc(100vh-9rem)] w-full"
             />
           </div>
@@ -385,12 +403,32 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
         </FieldRow>
       )}
 
-      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
-        <div>
-          <p className="text-sm font-medium">Header sticky</p>
-          <p className="text-xs text-muted-foreground">Header tetap menempel saat di-scroll.</p>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Saat pengunjung scroll, header:</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["scroll", "Ikut scroll", "Header ikut tergulung ke atas."],
+              ["freeze", "Diam (freeze)", "Header tetap menempel di atas."],
+              ["disappear", "Menghilang", "Sembunyi saat scroll turun, muncul saat naik."],
+              ["fade", "Memudar", "Header memudar saat halaman di-scroll."],
+            ] as const
+          ).map(([value, title, desc]) => (
+            <button
+              key={value}
+              onClick={() => set({ scrollBehavior: value })}
+              className={cn(
+                "rounded-lg border p-3 text-left transition",
+                header.scrollBehavior === value
+                  ? "border-teal-600 bg-teal-50"
+                  : "border-border hover:bg-muted",
+              )}
+            >
+              <p className="text-xs font-semibold">{title}</p>
+              <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground">{desc}</p>
+            </button>
+          ))}
         </div>
-        <Switch checked={header.sticky} onCheckedChange={(v) => set({ sticky: v })} />
       </div>
 
       <FieldRow label={`Ukuran logo — ${header.logoSize}px`}>

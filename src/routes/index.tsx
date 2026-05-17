@@ -79,43 +79,67 @@ function PomahHome() {
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
+  // Page Builder integration: when loaded inside the builder iframe
+  // (`?builder=1`), sections become click-to-select and report back.
+  const [isBuilder, setIsBuilder] = useState(false);
+  const [sel, setSel] = useState<string | null>(null);
+  useEffect(() => {
+    const builder = new URLSearchParams(window.location.search).get("builder") === "1";
+    setIsBuilder(builder);
+    if (!builder) return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.source === "pb-host") setSel(e.data.section ?? null);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+  const pbSelect = (key: string) => {
+    setSel(key);
+    window.parent?.postMessage({ source: "pb", section: key }, "*");
+  };
+  const pb = { isBuilder, sel, onSelect: pbSelect };
+
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
-      <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
+      <PbZone id="hero" label="Hero Slider" pb={pb}>
+        <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
+      </PbZone>
 
       {/* ── DATE PICKER WIDGET ── */}
       {cfg.datePicker.enabled && (
-        <div className="mx-auto -mt-12 max-w-4xl px-6">
-          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
-            {cfg.datePicker.heading && (
-              <p className="mb-3 text-center font-serif text-lg font-semibold text-teal-700">
-                {cfg.datePicker.heading}
-              </p>
-            )}
-            <div className="flex flex-col gap-3 md:flex-row md:items-end">
-              <Field label="Check-In">
-                <input
-                  type="date"
-                  className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
-                />
-              </Field>
-              <Field label="Check-Out">
-                <input
-                  type="date"
-                  className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
-                />
-              </Field>
-              <Link
-                to="/book"
-                className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
-              >
-                {cfg.datePicker.buttonLabel}
-              </Link>
+        <PbZone id="datepicker" label="Date Picker" pb={pb}>
+          <div className="mx-auto -mt-12 max-w-4xl px-6">
+            <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
+              {cfg.datePicker.heading && (
+                <p className="mb-3 text-center font-serif text-lg font-semibold text-teal-700">
+                  {cfg.datePicker.heading}
+                </p>
+              )}
+              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                <Field label="Check-In">
+                  <input
+                    type="date"
+                    className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                  />
+                </Field>
+                <Field label="Check-Out">
+                  <input
+                    type="date"
+                    className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                  />
+                </Field>
+                <Link
+                  to="/book"
+                  className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
+                >
+                  {cfg.datePicker.buttonLabel}
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
+        </PbZone>
       )}
 
       {/* ── YOUR PERFECT STAY ── */}
@@ -162,17 +186,19 @@ function PomahHome() {
       </section>
 
       {/* ── OUR ACCOMMODATIONS (CAROUSEL) ── */}
-      <section className="bg-[#f3ece0] py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="text-center">
-            <SectionHeading>Our Accommodations</SectionHeading>
-            <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
-              Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar
-            </p>
+      <PbZone id="carousel" label="Carousel Kamar" pb={pb}>
+        <section className="bg-[#f3ece0] py-20">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="text-center">
+              <SectionHeading>Our Accommodations</SectionHeading>
+              <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
+                Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar
+              </p>
+            </div>
+            <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} />
           </div>
-          <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} />
-        </div>
-      </section>
+        </section>
+      </PbZone>
 
       {/* ── FACILITIES ── */}
       <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
@@ -489,32 +515,97 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+/** Page Builder integration props passed down to selectable sections. */
+type Pb = { isBuilder: boolean; sel: string | null; onSelect: (key: string) => void };
+
+/** Wraps a homepage section so it is click-to-select inside the builder. */
+function PbZone({
+  id,
+  label,
+  pb,
+  children,
+}: {
+  id: string;
+  label: string;
+  pb: Pb;
+  children: React.ReactNode;
+}) {
+  if (!pb.isBuilder) return <>{children}</>;
+  const active = pb.sel === id;
+  return (
+    <div
+      onClickCapture={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pb.onSelect(id);
+      }}
+      className={`relative ${
+        active
+          ? "outline outline-2 -outline-offset-2 outline-orange-500"
+          : "hover:outline hover:outline-2 hover:-outline-offset-2 hover:outline-orange-300"
+      }`}
+    >
+      {active && (
+        <span className="pointer-events-none absolute right-0 top-0 z-[60] rounded-bl bg-orange-500 px-2 py-0.5 text-[10px] font-medium text-white">
+          {label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
 function PomahNav({
   name,
   logo,
   header,
+  pb,
 }: {
   name: string;
   logo: string | null;
   header: HomepageConfig["header"];
+  pb: Pb;
 }) {
   const background = header.transparent
     ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
     : header.bgColor;
 
-  // Sticky headers use `position: fixed` — reliable regardless of any
-  // ancestor `overflow`, which can silently break `position: sticky`.
-  // A solid sticky header also needs a spacer so content isn't hidden.
+  // Scroll behaviour: "scroll" leaves the header in flow; the others pin
+  // it with `position: fixed` (reliable regardless of ancestor overflow).
+  const mode = header.scrollBehavior;
+  const pinned = mode !== "scroll";
   const headerHeight = Math.max(header.logoSize, 36) + 32;
+
+  const [hidden, setHidden] = useState(false);
+  const [faded, setFaded] = useState(false);
+  useEffect(() => {
+    if (mode !== "disappear" && mode !== "fade") {
+      setHidden(false);
+      setFaded(false);
+      return;
+    }
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (mode === "disappear") setHidden(y > 120 && y > last);
+      if (mode === "fade") setFaded(y > 120);
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [mode]);
+
   let positionClass: string;
-  if (header.sticky) {
+  if (pinned) {
     positionClass = "fixed inset-x-0 top-0";
   } else if (header.transparent) {
     positionClass = "absolute inset-x-0 top-0";
   } else {
     positionClass = "relative";
   }
-  const needsSpacer = header.sticky && !header.transparent;
+  const needsSpacer = pinned && !header.transparent;
+  const selected = pb.isBuilder && pb.sel === "header";
 
   const logoEl = (
     <Link to="/" className="flex items-baseline gap-1.5" title={name} key="logo">
@@ -571,9 +662,22 @@ function PomahNav({
   return (
     <>
       <nav
-        className={`z-40 text-white ${positionClass} ${header.dropShadow ? "shadow-md" : ""}`}
+        onClickCapture={
+          pb.isBuilder
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                pb.onSelect("header");
+              }
+            : undefined
+        }
+        className={`z-40 text-white transition-all duration-300 ${positionClass} ${
+          header.dropShadow ? "shadow-md" : ""
+        } ${selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""}`}
         style={{
           background,
+          transform: hidden ? "translateY(-110%)" : undefined,
+          opacity: faded ? 0 : undefined,
           ...(header.blur
             ? {
                 backdropFilter: `blur(${header.blurAmount}px)`,
@@ -582,6 +686,11 @@ function PomahNav({
             : {}),
         }}
       >
+        {selected && (
+          <span className="pointer-events-none absolute right-0 top-0 z-[60] rounded-bl bg-orange-500 px-2 py-0.5 text-[10px] font-medium text-white">
+            Header
+          </span>
+        )}
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
         <span className="sr-only">{name}</span>
       </nav>
