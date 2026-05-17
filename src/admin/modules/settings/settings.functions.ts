@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+/** Untyped client view — branding columns aren't in the generated types. */
+function db(client: unknown): SupabaseClient {
+  return client as SupabaseClient;
+}
 
 /** Read domain settings from the first property row. */
 export const getDomainSettings = createServerFn({ method: "GET" })
@@ -35,6 +41,51 @@ export const updateDomainSettings = createServerFn({ method: "POST" })
         public_domain: data.public_domain ?? null,
       } as never)
       .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Branding — guesthouse logo, invoice logo, favicon                    */
+/* ------------------------------------------------------------------ */
+
+/** Read the property's branding asset URLs. */
+export const getBrandingSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("properties")
+      .select("id, logo_url, invoice_logo_url, favicon_url")
+      .limit(1)
+      .maybeSingle();
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id: (row.id as string | undefined) ?? null,
+      logo_url: (row.logo_url as string | null) ?? null,
+      invoice_logo_url: (row.invoice_logo_url as string | null) ?? null,
+      favicon_url: (row.favicon_url as string | null) ?? null,
+    };
+  });
+
+/** Persist one or more branding asset URLs for the property. */
+export const updateBrandingSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        logo_url: z.string().url().max(1000).nullable().optional(),
+        invoice_logo_url: z.string().url().max(1000).nullable().optional(),
+        favicon_url: z.string().url().max(1000).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    if (data.logo_url !== undefined) patch.logo_url = data.logo_url;
+    if (data.invoice_logo_url !== undefined) patch.invoice_logo_url = data.invoice_logo_url;
+    if (data.favicon_url !== undefined) patch.favicon_url = data.favicon_url;
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
     if (error) throw error;
     return { ok: true };
   });
