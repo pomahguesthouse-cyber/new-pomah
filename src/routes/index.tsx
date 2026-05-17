@@ -58,7 +58,7 @@ function PublicHome() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
                 <Link to="/book">
-                  Pesan tamu <ArrowRight className="ml-2 h-4 w-4" />
+                  Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button
@@ -67,7 +67,7 @@ function PublicHome() {
                 variant="outline"
                 className="border-stone-300 text-stone-700 hover:bg-stone-100"
               >
-                <Link to="/rooms">Lihat tamu</Link>
+                <Link to="/rooms">Lihat Kamar</Link>
               </Button>
             </div>
             {/* Rating badge */}
@@ -104,7 +104,7 @@ function PublicHome() {
               </div>
             </div>
             {/* Floating badge */}
-            <div className="absolute -bottom-4 -left-4 rounded-xl border border-stone-200 bg-white font-sans text-sm font-bold shadow-lg">
+            <div className="absolute -bottom-4 -left-4 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-lg">
               <p className="font-mono text-[10px] uppercase tracking-widest text-stone-500">
                 Check-in
               </p>
@@ -120,7 +120,7 @@ function PublicHome() {
       <section className="border-y border-stone-200 bg-amber-700">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px bg-amber-600 md:grid-cols-4">
           {[
-            { value: `${rooms.length}+`, label: "Tipe tamu" },
+            { value: `${rooms.length}+`, label: "Tipe Kamar" },
             { value: "24/7", label: "Layanan WhatsApp" },
             { value: "100%", label: "Respon Cepat" },
             { value: "0%", label: "Biaya Booking" },
@@ -141,7 +141,7 @@ function PublicHome() {
           <div>
             <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
               <span className="h-px w-6 bg-amber-700" />
-              tamu Kami
+              Kamar Kami
             </span>
             <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight">
               Dipilih dengan cermat
@@ -170,7 +170,7 @@ function PublicHome() {
               >
                 <div className="flex h-full w-full items-center justify-center">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                    Foto tamu
+                    Foto Kamar
                   </p>
                 </div>
               </div>
@@ -215,7 +215,7 @@ function PublicHome() {
                   size="sm"
                   className="mt-4 w-full bg-stone-900 hover:bg-amber-700 text-white transition-colors"
                 >
-                  <Link to="/book">Pesan tamu Ini</Link>
+                  <Link to="/book">Pesan Kamar Ini</Link>
                 </Button>
               </div>
             </article>
@@ -358,7 +358,7 @@ function PublicHome() {
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
               <Link to="/book">
-                Pesan tamu <ArrowRight className="ml-2 h-4 w-4" />
+                Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             {property?.whatsapp_number && (

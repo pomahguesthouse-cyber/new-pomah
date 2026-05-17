@@ -32,7 +32,7 @@ function PublicRooms() {
         <div className="mx-auto max-w-6xl px-6 py-16">
           <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
             <span className="h-px w-6 bg-amber-700" />
-            tamu Kami
+            Kamar Kami
           </span>
           <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight md:text-5xl">
             Dipilih dengan cermat
@@ -63,7 +63,7 @@ function PublicRooms() {
               >
                 <div className="flex h-full w-full items-center justify-center">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                    Foto tamu
+                    Foto Kamar
                   </p>
                 </div>
               </div>
@@ -111,7 +111,7 @@ function PublicRooms() {
                     to="/book"
                     className="flex-1 rounded-lg bg-stone-900 py-2.5 text-center text-sm font-medium text-white transition hover:bg-amber-700"
                   >
-                    Pesan tamu Ini
+                    Pesan Kamar Ini
                   </Link>
                   <Link
                     to="/book"

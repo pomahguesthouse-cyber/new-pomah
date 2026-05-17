@@ -305,13 +305,13 @@ function BookingsPage() {
           <thead className="border-b border-border bg-muted/40">
             <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               <th className="px-4 py-3">Kode Booking</th>
-              <th className="px-4 py-3">Guest</th>
+              <th className="px-4 py-3">Nama Tamu</th>
               <th className="px-4 py-3">Kamar</th>
-              <th className="px-4 py-3">Kamar</th>
-              <th className="px-4 py-3">Dates</th>
-              <th className="px-4 py-3">Payment</th>
+              <th className="px-4 py-3">Jumlah Kamar</th>
+              <th className="px-4 py-3">Tanggal</th>
+              <th className="px-4 py-3">Pembayaran</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Sumber</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
