@@ -80,7 +80,7 @@ function PomahHome() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
+    <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} />
 
       <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
@@ -481,6 +481,14 @@ function RoomCarousel({ rooms, rc }: { rooms: RoomType[]; rc: HomepageConfig["ro
 /* Pieces                                                               */
 /* ------------------------------------------------------------------ */
 
+/** Convert a `#rrggbb` hex color to an `rgba()` string with the given alpha. */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 function PomahNav({
   name,
   logo,
@@ -490,8 +498,16 @@ function PomahNav({
   logo: string | null;
   header: HomepageConfig["header"];
 }) {
+  const background = header.transparent
+    ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
+    : header.bgColor;
   return (
-    <nav className="sticky top-0 z-40 text-white shadow-md" style={{ background: header.bgColor }}>
+    <nav
+      className={`z-40 text-white ${
+        header.transparent ? "absolute inset-x-0 top-0" : "sticky top-0"
+      } ${header.dropShadow ? "shadow-md" : ""}`}
+      style={{ background }}
+    >
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link to="/" className="flex items-baseline gap-1.5" title={name}>
           {logo ? (

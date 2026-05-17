@@ -322,6 +322,37 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
         <Input value={header.bookLabel} onChange={(e) => set({ bookLabel: e.target.value })} />
       </FieldRow>
 
+      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">Drop shadow</p>
+          <p className="text-xs text-muted-foreground">Bayangan halus di bawah header.</p>
+        </div>
+        <Switch checked={header.dropShadow} onCheckedChange={(v) => set({ dropShadow: v })} />
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">Header transparan</p>
+          <p className="text-xs text-muted-foreground">
+            Header tembus pandang dan menumpuk di atas hero.
+          </p>
+        </div>
+        <Switch checked={header.transparent} onCheckedChange={(v) => set({ transparent: v })} />
+      </div>
+
+      {header.transparent && (
+        <FieldRow label={`Tingkat transparansi — opasitas latar ${header.opacity}%`}>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={header.opacity}
+            onChange={(e) => set({ opacity: Number(e.target.value) })}
+            className="w-full accent-teal-700"
+          />
+        </FieldRow>
+      )}
+
       <div className="space-y-2">
         <Label className="text-xs font-medium">Menu navigasi</Label>
         {header.links.map((link, i) => (
