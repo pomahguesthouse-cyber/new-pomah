@@ -74,6 +74,7 @@ type BookingListRow = {
   source: string;
   total_amount: number;
   payment_status?: "unpaid" | "partial" | "paid" | null;
+  paid_amount?: number | null;
   guests?: { full_name?: string | null; phone?: string | null } | null;
   booking_rooms?:
     | {
@@ -314,7 +315,7 @@ function BookingsPage() {
               <th className="px-4 py-3">Guest</th>
               <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
-              <th className="px-4 py-3">Total</th>
+              <th className="px-4 py-3">Payment</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3" />
@@ -375,8 +376,12 @@ function BookingsPage() {
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
                 </td>
-                <td className="px-4 py-3 font-mono tabular-nums">
-                  {formatIDR(Number(b.total_amount))}
+                <td className="px-4 py-3">
+                  <PaymentCell
+                    total={Number(b.total_amount)}
+                    paid={Number(b.paid_amount ?? 0)}
+                    status={b.payment_status}
+                  />
                 </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
@@ -511,6 +516,50 @@ function RoomSummary({ rooms }: { rooms: BookingListRow["booking_rooms"] }) {
           <p className="font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Payment column: total plus a DP/Sisa breakdown or a Lunas / Belum bayar label. */
+function PaymentCell({
+  total,
+  paid,
+  status,
+}: {
+  total: number;
+  paid: number;
+  status?: "unpaid" | "partial" | "paid" | null;
+}) {
+  return (
+    <div className="space-y-0.5 font-mono text-xs tabular-nums">
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">Total</span>
+        <span className="font-semibold text-foreground">{formatIDR(total)}</span>
+      </div>
+      {status === "partial" && (
+        <>
+          <div className="flex justify-between gap-4 text-muted-foreground">
+            <span>DP</span>
+            <span>{formatIDR(paid)}</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">Sisa</span>
+            <span className="text-amber-700 dark:text-amber-400">
+              {formatIDR(Math.max(0, total - paid))}
+            </span>
+          </div>
+        </>
+      )}
+      {status === "paid" && (
+        <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+          Lunas
+        </p>
+      )}
+      {(!status || status === "unpaid") && (
+        <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-destructive">
+          Belum bayar
+        </p>
+      )}
     </div>
   );
 }
