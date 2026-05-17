@@ -10,6 +10,7 @@ import {
   deleteBooking,
 } from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -313,6 +314,7 @@ function BookingsPage() {
               <th className="px-4 py-3">Guest</th>
               <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
+              <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Total</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3" />
@@ -321,14 +323,14 @@ function BookingsPage() {
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && !error && bookings.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
                     <>Tidak ada booking yang cocok dengan filter ini.</>
                   ) : (
@@ -372,6 +374,9 @@ function BookingsPage() {
                   <p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
+                </td>
+                <td className="px-4 py-3">
+                  <Badge variant="outline">{b.source}</Badge>
                 </td>
                 <td className="px-4 py-3 font-mono tabular-nums">
                   {formatIDR(Number(b.total_amount))}
