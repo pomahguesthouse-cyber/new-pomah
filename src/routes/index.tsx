@@ -572,7 +572,15 @@ function PomahNav({
     <>
       <nav
         className={`z-40 text-white ${positionClass} ${header.dropShadow ? "shadow-md" : ""}`}
-        style={{ background }}
+        style={{
+          background,
+          ...(header.blur
+            ? {
+                backdropFilter: `blur(${header.blurAmount}px)`,
+                WebkitBackdropFilter: `blur(${header.blurAmount}px)`,
+              }
+            : {}),
+        }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
         <span className="sr-only">{name}</span>
