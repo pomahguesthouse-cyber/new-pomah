@@ -1,4 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -10,10 +12,10 @@ import {
   BarChart3,
   Search,
   Settings,
-  Hotel,
   LayoutTemplate,
 } from "lucide-react";
 
+import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
 import {
   Sidebar,
   SidebarContent,
@@ -73,25 +75,36 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
+  const brandingFn = useServerFn(getBrandingSettings);
+  const { data: branding } = useQuery({
+    queryKey: ["branding-settings"],
+    queryFn: () => brandingFn(),
+  });
+  const logoUrl = branding?.logo_url ?? null;
+
   const isActive = (item: NavItem) =>
     item.exact ? path === item.to : path === item.to || path.startsWith(item.to + "/");
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader>
-        <Link to="/" className="flex items-center gap-2.5 px-2 py-1.5 group/brand">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
-            <Hotel className="h-4 w-4" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="font-mono text-[13px] font-semibold leading-tight tracking-tight">
-                POMAH<span className="text-accent">.</span>
-              </p>
-              <p className="truncate font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-                {propertyName ?? "Hospitality OS"}
-              </p>
-            </div>
+        <Link
+          to="/admin"
+          className="flex items-center justify-center px-2 py-1.5"
+          title={propertyName ?? "Dashboard"}
+        >
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={propertyName ?? "Logo"}
+              className={
+                collapsed ? "h-8 w-8 object-contain" : "h-10 w-auto max-w-[170px] object-contain"
+              }
+            />
+          ) : (
+            <span className="truncate font-mono text-[13px] font-semibold tracking-tight">
+              {collapsed ? "P" : (propertyName ?? "POMAH")}
+            </span>
           )}
         </Link>
       </SidebarHeader>
