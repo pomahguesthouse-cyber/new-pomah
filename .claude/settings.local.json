@@ -27,7 +27,10 @@
       "Bash(git commit *)",
       "Bash(xargs cat)",
       "Bash(node -e \"console.log\\('zustand', require\\('./node_modules/zustand/package.json'\\).version\\)\")",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(xargs grep -A 20 \"create table public.room_types\")",
+      "Bash(grep -rn '#\\\\$\\\\|#{' src/routes/admin/bookings.tsx src/admin/components/edit-booking-dialog.tsx)",
+      "Bash(grep -n \"canSave\\\\|selectedRooms\\\\|Kamar — multi\\\\|BedDouble.*title\\\\|Section$\\\\|total:\" src/admin/components/edit-booking-dialog.tsx)"
     ]
   }
 }
