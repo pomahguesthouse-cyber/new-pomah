@@ -97,7 +97,10 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
     }
   }
 
-  // Reset the form whenever the dialog opens.
+  // Initialise the form when the dialog opens or the edited room
+  // changes. Depending on `roomType.id` (not the object) prevents
+  // background refetches — which produce a new object reference — from
+  // re-running this effect and wiping what the user is typing.
   React.useEffect(() => {
     if (!open) return;
     if (mode === "edit" && roomType) {
@@ -123,7 +126,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setAmenities("");
       setHeroImageUrl("");
     }
-  }, [open, mode, roomType]);
+  }, [open, mode, roomType?.id]);
 
   const saveMut = useMutation({
     mutationFn: async () => {
