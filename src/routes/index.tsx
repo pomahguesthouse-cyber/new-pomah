@@ -156,21 +156,16 @@ function PomahHome() {
       )}
 
       {/* ── YOUR PERFECT STAY ── */}
-      <section className="mx-auto max-w-4xl px-6 py-20 text-center">
-        <SectionHeading>Your Perfect Stay</SectionHeading>
-        <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
-          <p>
-            Kata <strong className="text-stone-700">Pomah</strong> dalam bahasa Jawa berarti Rumah.
-            Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, {propertyName}{" "}
-            memiliki filosofi yang mencerminkan kehangatan, kenyamanan dan standar pelayanan terbaik
-            yang kami sajikan kepada tamu.
-          </p>
-          <p>
-            Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru
-            dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.
-          </p>
-        </div>
-      </section>
+      <PbZone id="story" label="Your Perfect Stay" pb={pb}>
+        <section className="mx-auto max-w-4xl px-6 py-20 text-center">
+          <SectionHeading>{cfg.story.heading}</SectionHeading>
+          <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
+            {cfg.story.paragraphs.map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+        </section>
+      </PbZone>
 
       {/* ── GOOGLE RATING ── */}
       <section className="mx-auto max-w-4xl px-6 pb-16">
