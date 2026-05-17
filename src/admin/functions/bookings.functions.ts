@@ -351,23 +351,23 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     const roomTypeById = new Map<string, string>();
     for (const r of roomRows ?? []) roomTypeById.set(r.id, r.room_type_id);
 
-    // Update the booking header
+    const patch = {
+      check_in: data.check_in,
+      check_out: data.check_out,
+      adults: data.adults,
+      children: data.children,
+      status: data.status,
+      source: data.source,
+      payment_status: data.payment_status,
+      paid_amount: data.paid_amount,
+      special_requests: data.special_requests ?? null,
+      internal_notes: data.internal_notes ?? null,
+      total_amount,
+      nights,
+    };
     const { error: bErr } = await context.supabase
       .from("bookings")
-      .update({
-        check_in: data.check_in,
-        check_out: data.check_out,
-        nights: Math.round(nights),
-        adults: data.adults,
-        children: data.children,
-        status: data.status,
-        source: data.source,
-        payment_status: data.payment_status,
-        paid_amount: data.payment_status === "paid" ? total_amount : data.paid_amount,
-        total_amount,
-        special_requests: data.special_requests || null,
-        internal_notes: data.internal_notes || null,
-      })
+      .update(patch as never)
       .eq("id", data.id);
     if (bErr) throw bErr;
 
