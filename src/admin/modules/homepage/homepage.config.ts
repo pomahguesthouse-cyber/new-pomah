@@ -33,8 +33,8 @@ export interface HomepageConfig {
     blur: boolean;
     /** Blur strength in pixels, used when `blur` is on. */
     blurAmount: number;
-    /** Pin the header to the top while scrolling. */
-    sticky: boolean;
+    /** How the header behaves when the visitor scrolls. */
+    scrollBehavior: "scroll" | "freeze" | "disappear" | "fade";
     /** Logo height in pixels. */
     logoSize: number;
     /** Logo placement within the header. */
@@ -73,7 +73,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     dropShadow: true,
     blur: false,
     blurAmount: 8,
-    sticky: true,
+    scrollBehavior: "freeze",
     logoSize: 40,
     logoPosition: "left",
   },
