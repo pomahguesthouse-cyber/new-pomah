@@ -501,44 +501,70 @@ function PomahNav({
   const background = header.transparent
     ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
     : header.bgColor;
+  const positionClass = header.transparent
+    ? "absolute inset-x-0 top-0"
+    : header.sticky
+      ? "sticky top-0"
+      : "relative";
+
+  const logoEl = (
+    <Link to="/" className="flex items-baseline gap-1.5" title={name} key="logo">
+      {logo ? (
+        <img
+          src={logo}
+          alt={name}
+          style={{ height: header.logoSize }}
+          className="w-auto max-w-[240px] object-contain"
+        />
+      ) : (
+        <>
+          <span className="font-serif text-2xl font-bold">Pomah</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
+            guesthouse
+          </span>
+        </>
+      )}
+    </Link>
+  );
+
+  const linksEl = (
+    <div className="hidden items-center gap-7 text-sm font-medium md:flex" key="links">
+      {header.links.map((n) => (
+        <a key={n.label} href={n.href} className="transition hover:text-white/70">
+          {n.label}
+        </a>
+      ))}
+    </div>
+  );
+
+  const actionsEl = (
+    <div className="flex items-center gap-3" key="actions">
+      <Link
+        to="/book"
+        className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
+        style={{ color: header.bgColor }}
+      >
+        {header.bookLabel}
+      </Link>
+      <button className="text-white md:hidden" aria-label="Menu">
+        <Menu className="h-5 w-5" />
+      </button>
+    </div>
+  );
+
+  const slots =
+    header.logoPosition === "center"
+      ? [linksEl, logoEl, actionsEl]
+      : header.logoPosition === "right"
+        ? [linksEl, actionsEl, logoEl]
+        : [logoEl, linksEl, actionsEl];
+
   return (
     <nav
-      className={`z-40 text-white ${
-        header.transparent ? "absolute inset-x-0 top-0" : "sticky top-0"
-      } ${header.dropShadow ? "shadow-md" : ""}`}
+      className={`z-40 text-white ${positionClass} ${header.dropShadow ? "shadow-md" : ""}`}
       style={{ background }}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-baseline gap-1.5" title={name}>
-          {logo ? (
-            <img src={logo} alt={name} className="h-10 w-auto max-w-[180px] object-contain" />
-          ) : (
-            <>
-              <span className="font-serif text-2xl font-bold">Pomah</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
-                guesthouse
-              </span>
-            </>
-          )}
-        </Link>
-        <div className="hidden items-center gap-7 text-sm font-medium md:flex">
-          {header.links.map((n) => (
-            <a key={n.label} href={n.href} className="transition hover:text-white/70">
-              {n.label}
-            </a>
-          ))}
-        </div>
-        <Link
-          to="/book"
-          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
-          style={{ color: header.bgColor }}
-        >
-          {header.bookLabel}
-        </Link>
-        <button className="text-white md:hidden" aria-label="Menu">
-          <Menu className="h-5 w-5" />
-        </button>
-      </div>
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
       <span className="sr-only">{name}</span>
     </nav>
   );

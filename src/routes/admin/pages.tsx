@@ -353,6 +353,44 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
         </FieldRow>
       )}
 
+      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+        <div>
+          <p className="text-sm font-medium">Header sticky</p>
+          <p className="text-xs text-muted-foreground">Header tetap menempel saat di-scroll.</p>
+        </div>
+        <Switch checked={header.sticky} onCheckedChange={(v) => set({ sticky: v })} />
+      </div>
+
+      <FieldRow label={`Ukuran logo — ${header.logoSize}px`}>
+        <input
+          type="range"
+          min={24}
+          max={96}
+          value={header.logoSize}
+          onChange={(e) => set({ logoSize: Number(e.target.value) })}
+          className="w-full accent-teal-700"
+        />
+      </FieldRow>
+
+      <FieldRow label="Posisi logo">
+        <div className="flex gap-2">
+          {(["left", "center", "right"] as const).map((pos) => (
+            <button
+              key={pos}
+              onClick={() => set({ logoPosition: pos })}
+              className={cn(
+                "flex-1 rounded-md border px-3 py-2 text-sm capitalize transition",
+                header.logoPosition === pos
+                  ? "border-teal-600 bg-teal-50 font-medium text-teal-900"
+                  : "border-border hover:bg-muted",
+              )}
+            >
+              {pos === "left" ? "Kiri" : pos === "center" ? "Tengah" : "Kanan"}
+            </button>
+          ))}
+        </div>
+      </FieldRow>
+
       <div className="space-y-2">
         <Label className="text-xs font-medium">Menu navigasi</Label>
         {header.links.map((link, i) => (
