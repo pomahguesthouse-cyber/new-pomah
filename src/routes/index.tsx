@@ -446,15 +446,15 @@ function RoomCarousel({ rooms, rc }: { rooms: RoomType[]; rc: HomepageConfig["ro
           {rooms.map((rt) => (
             <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / per}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
-                <div className="aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                   {rt.hero_image_url ? (
                     <img
                       src={rt.hero_image_url}
                       alt={rt.name}
-                      className="h-full w-full object-cover"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
+                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
                       Foto Kamar
                     </div>
                   )}
