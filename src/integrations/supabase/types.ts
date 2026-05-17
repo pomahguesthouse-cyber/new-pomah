@@ -112,6 +112,55 @@ export type Database = {
           },
         ]
       }
+      booking_rooms: {
+        Row: {
+          booking_id: string
+          created_at: string
+          id: string
+          nightly_rate: number
+          room_id: string | null
+          room_type_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          id?: string
+          nightly_rate?: number
+          room_id?: string | null
+          room_type_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          id?: string
+          nightly_rate?: number
+          room_id?: string | null
+          room_type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_rooms_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_rooms_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_rooms_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookings: {
         Row: {
           adults: number
@@ -122,13 +171,13 @@ export type Database = {
           guest_id: string
           id: string
           internal_notes: string | null
-          nightly_rate: number
+          nightly_rate: number | null
           paid_amount: number
           payment_status: Database["public"]["Enums"]["payment_status"]
           property_id: string
           reference_code: string
           room_id: string | null
-          room_type_id: string
+          room_type_id: string | null
           source: Database["public"]["Enums"]["booking_source"]
           special_requests: string | null
           status: Database["public"]["Enums"]["booking_status"]
@@ -144,13 +193,13 @@ export type Database = {
           guest_id: string
           id?: string
           internal_notes?: string | null
-          nightly_rate: number
+          nightly_rate?: number | null
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id: string
           reference_code?: string
           room_id?: string | null
-          room_type_id: string
+          room_type_id?: string | null
           source?: Database["public"]["Enums"]["booking_source"]
           special_requests?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
@@ -166,13 +215,13 @@ export type Database = {
           guest_id?: string
           id?: string
           internal_notes?: string | null
-          nightly_rate?: number
+          nightly_rate?: number | null
           paid_amount?: number
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id?: string
           reference_code?: string
           room_id?: string | null
-          room_type_id?: string
+          room_type_id?: string | null
           source?: Database["public"]["Enums"]["booking_source"]
           special_requests?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
