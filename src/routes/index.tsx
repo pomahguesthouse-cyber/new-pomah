@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -13,8 +14,11 @@ import {
   Menu,
   Quote,
   Instagram,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
+import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -26,10 +30,7 @@ export const Route = createFileRoute("/")({
           "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.",
       },
       { property: "og:title", content: "Pomah Guesthouse Semarang" },
-      {
-        property: "og:description",
-        content: "Penginapan murah & nyaman di Kota Semarang.",
-      },
+      { property: "og:description", content: "Penginapan murah & nyaman di Kota Semarang." },
     ],
   }),
   component: PomahHome,
@@ -60,11 +61,6 @@ const REVIEWS = [
   "Penginapan murah tapi kualitas oke, staff sangat membantu.",
 ];
 
-const NAV = [
-  { label: "Home", to: "/" as const },
-  { label: "Rooms", to: "/rooms" as const },
-];
-
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
@@ -78,53 +74,49 @@ function PomahHome() {
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
   const address = property?.address ?? "Pomah Guesthouse Semarang";
-  // logo_url comes from Settings → Branding; not in the generated types.
   const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
+  const cfg = mergeHomepageConfig(
+    (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
+  );
 
   return (
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} />
 
-      {/* ── HERO ── */}
-      <header className="relative">
-        <div className="relative h-[78vh] min-h-[460px] w-full overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
-          <div className="absolute inset-0 bg-black/30" />
-          <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
-            <h1 className="max-w-3xl font-serif text-4xl font-bold tracking-tight text-white drop-shadow md:text-6xl">
-              Selamat Datang Di {propertyName}
-            </h1>
-            <span className="my-4 h-px w-40 bg-white/70" />
-            <p className="text-base text-white/90 md:text-lg">
-              {property?.tagline ?? "Penginapan Murah di Kota Semarang"}
-            </p>
-          </div>
-        </div>
+      <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
 
-        {/* Booking bar */}
+      {/* ── DATE PICKER WIDGET ── */}
+      {cfg.datePicker.enabled && (
         <div className="mx-auto -mt-12 max-w-4xl px-6">
-          <div className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-xl md:flex-row md:items-end">
-            <Field label="Check-In">
-              <input
-                type="date"
-                className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
-              />
-            </Field>
-            <Field label="Check-Out">
-              <input
-                type="date"
-                className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
-              />
-            </Field>
-            <Link
-              to="/book"
-              className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
-            >
-              Cek Ketersediaan
-            </Link>
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
+            {cfg.datePicker.heading && (
+              <p className="mb-3 text-center font-serif text-lg font-semibold text-teal-700">
+                {cfg.datePicker.heading}
+              </p>
+            )}
+            <div className="flex flex-col gap-3 md:flex-row md:items-end">
+              <Field label="Check-In">
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                />
+              </Field>
+              <Field label="Check-Out">
+                <input
+                  type="date"
+                  className="h-10 w-full rounded-lg border border-stone-200 px-3 text-sm"
+                />
+              </Field>
+              <Link
+                to="/book"
+                className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
+              >
+                {cfg.datePicker.buttonLabel}
+              </Link>
+            </div>
           </div>
         </div>
-      </header>
+      )}
 
       {/* ── YOUR PERFECT STAY ── */}
       <section className="mx-auto max-w-4xl px-6 py-20 text-center">
@@ -169,7 +161,7 @@ function PomahHome() {
         </div>
       </section>
 
-      {/* ── OUR ACCOMMODATIONS ── */}
+      {/* ── OUR ACCOMMODATIONS (CAROUSEL) ── */}
       <section className="bg-[#f3ece0] py-20">
         <div className="mx-auto max-w-6xl px-6">
           <div className="text-center">
@@ -178,63 +170,7 @@ function PomahHome() {
               Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar
             </p>
           </div>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {rooms.map((rt) => (
-              <article
-                key={rt.id}
-                className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl"
-              >
-                <div className="aspect-[4/3] w-full overflow-hidden bg-teal-50">
-                  {rt.hero_image_url ? (
-                    <img
-                      src={rt.hero_image_url}
-                      alt={rt.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
-                      Foto Kamar
-                    </div>
-                  )}
-                </div>
-                <div className="p-6">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
-                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-                        {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-[10px] text-stone-400">Harga hari ini</p>
-                      <p className="text-lg font-bold text-teal-700">
-                        Rp {Number(rt.base_rate).toLocaleString("id-ID")}
-                      </p>
-                    </div>
-                  </div>
-                  {rt.description && (
-                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">
-                      {rt.description}
-                    </p>
-                  )}
-                  <Link
-                    to="/book"
-                    className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    Pesan Kamar
-                  </Link>
-                </div>
-              </article>
-            ))}
-            {rooms.length === 0 && (
-              <p className="col-span-full text-center text-sm text-stone-400">
-                Belum ada kamar tersedia.
-              </p>
-            )}
-          </div>
+          <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} />
         </div>
       </section>
 
@@ -321,7 +257,6 @@ function PomahHome() {
 
       <PomahFooter name={propertyName} />
 
-      {/* Floating WhatsApp */}
       {wa && (
         <a
           href={`https://wa.me/${wa}`}
@@ -338,12 +273,225 @@ function PomahHome() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Hero slider                                                          */
+/* ------------------------------------------------------------------ */
+
+function HeroSlider({
+  hero,
+  fallbackTitle,
+}: {
+  hero: HomepageConfig["hero"];
+  fallbackTitle: string;
+}) {
+  const slides = hero.slides.length
+    ? hero.slides
+    : [{ imageUrl: "", heading: fallbackTitle, subheading: "" }];
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    if (slides.length < 2 || hero.autoplayMs <= 0) return;
+    const t = setInterval(() => setI((v) => (v + 1) % slides.length), hero.autoplayMs);
+    return () => clearInterval(t);
+  }, [slides.length, hero.autoplayMs]);
+
+  const active = slides[i % slides.length];
+  const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+
+  return (
+    <header className="relative w-full overflow-hidden" style={{ height: hero.height }}>
+      {active.imageUrl ? (
+        <img
+          src={active.imageUrl}
+          alt={active.heading}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+      )}
+      <div className="absolute inset-0 bg-black/35" />
+      <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+        <h1 className="max-w-3xl font-serif text-4xl font-bold tracking-tight text-white drop-shadow md:text-6xl">
+          {active.heading}
+        </h1>
+        {active.subheading && (
+          <>
+            <span className="my-4 h-px w-40 bg-white/70" />
+            <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
+          </>
+        )}
+      </div>
+      {slides.length > 1 && (
+        <>
+          <button
+            onClick={() => go(-1)}
+            aria-label="Sebelumnya"
+            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => go(1)}
+            aria-label="Berikutnya"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
+            {slides.map((s, d) => (
+              <button
+                key={d}
+                onClick={() => setI(d)}
+                aria-label={`Slide ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${
+                  d === i % slides.length ? "w-6 bg-white" : "w-2 bg-white/50"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Room carousel                                                        */
+/* ------------------------------------------------------------------ */
+
+type RoomType = {
+  id: string;
+  name: string;
+  description?: string | null;
+  base_rate: number | string;
+  capacity?: number | null;
+  size_sqm?: number | null;
+  hero_image_url?: string | null;
+};
+
+function RoomCarousel({ rooms, rc }: { rooms: RoomType[]; rc: HomepageConfig["roomCarousel"] }) {
+  const per = Math.max(1, Math.min(rc.cardsPerView, 4));
+  const maxIndex = Math.max(0, rooms.length - per);
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    if (!rc.autoplay || maxIndex < 1 || rc.slideMs <= 0) return;
+    const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), rc.slideMs);
+    return () => clearInterval(t);
+  }, [rc.autoplay, rc.slideMs, maxIndex]);
+
+  if (rooms.length === 0) {
+    return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
+  }
+
+  const index = Math.min(i, maxIndex);
+
+  return (
+    <div className="relative mt-12">
+      <div className="overflow-hidden">
+        <div
+          className="flex transition-transform duration-500 ease-out"
+          style={{ transform: `translateX(-${index * (100 / per)}%)` }}
+        >
+          {rooms.map((rt) => (
+            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / per}%` }}>
+              <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
+                <div className="aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                  {rt.hero_image_url ? (
+                    <img
+                      src={rt.hero_image_url}
+                      alt={rt.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
+                      Foto Kamar
+                    </div>
+                  )}
+                </div>
+                <div className="p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+                        {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[10px] text-stone-400">Harga hari ini</p>
+                      <p className="text-lg font-bold text-teal-700">
+                        Rp {Number(rt.base_rate).toLocaleString("id-ID")}
+                      </p>
+                    </div>
+                  </div>
+                  {rt.description && (
+                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">
+                      {rt.description}
+                    </p>
+                  )}
+                  <Link
+                    to="/book"
+                    className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                  >
+                    Pesan Kamar
+                  </Link>
+                </div>
+              </article>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {maxIndex > 0 && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            onClick={() => setI((v) => Math.max(0, v - 1))}
+            aria-label="Sebelumnya"
+            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex gap-1.5">
+            {Array.from({ length: maxIndex + 1 }).map((_, d) => (
+              <button
+                key={d}
+                onClick={() => setI(d)}
+                aria-label={`Halaman ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${
+                  d === index ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => setI((v) => Math.min(maxIndex, v + 1))}
+            aria-label="Berikutnya"
+            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Pieces                                                               */
 /* ------------------------------------------------------------------ */
 
-function PomahNav({ name, logo }: { name: string; logo: string | null }) {
+function PomahNav({
+  name,
+  logo,
+  header,
+}: {
+  name: string;
+  logo: string | null;
+  header: HomepageConfig["header"];
+}) {
   return (
-    <nav className="sticky top-0 z-40 bg-teal-700 text-white shadow-md">
+    <nav className="sticky top-0 z-40 text-white shadow-md" style={{ background: header.bgColor }}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link to="/" className="flex items-baseline gap-1.5" title={name}>
           {logo ? (
@@ -358,23 +506,18 @@ function PomahNav({ name, logo }: { name: string; logo: string | null }) {
           )}
         </Link>
         <div className="hidden items-center gap-7 text-sm font-medium md:flex">
-          {NAV.map((n) => (
-            <Link key={n.label} to={n.to} className="transition hover:text-white/70">
+          {header.links.map((n) => (
+            <a key={n.label} href={n.href} className="transition hover:text-white/70">
               {n.label}
-            </Link>
+            </a>
           ))}
-          <a href="#facilities" className="transition hover:text-white/70">
-            Facilities
-          </a>
-          <a href="#lokasi" className="transition hover:text-white/70">
-            Lokasi
-          </a>
         </div>
         <Link
           to="/book"
-          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-white/90"
+          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
+          style={{ color: header.bgColor }}
         >
-          Pesan Kamar
+          {header.bookLabel}
         </Link>
         <button className="text-white md:hidden" aria-label="Menu">
           <Menu className="h-5 w-5" />
