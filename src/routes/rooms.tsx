@@ -32,7 +32,7 @@ function PublicRooms() {
         <div className="mx-auto max-w-6xl px-6 py-16">
           <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
             <span className="h-px w-6 bg-amber-700" />
-            Kamar Kami
+            tamu Kami
           </span>
           <h1 className="mt-4 font-serif text-4xl font-semibold tracking-tight md:text-5xl">
             Dipilih dengan cermat

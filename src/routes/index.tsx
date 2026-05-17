@@ -104,7 +104,7 @@ function PublicHome() {
               </div>
             </div>
             {/* Floating badge */}
-            <div className="absolute -bottom-4 -left-4 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-lg">
+            <div className="absolute -bottom-4 -left-4 rounded-xl border border-stone-200 bg-white font-sans text-sm font-bold shadow-lg">
               <p className="font-mono text-[10px] uppercase tracking-widest text-stone-500">
                 Check-in
               </p>
@@ -120,7 +120,7 @@ function PublicHome() {
       <section className="border-y border-stone-200 bg-amber-700">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-px bg-amber-600 md:grid-cols-4">
           {[
-            { value: `${rooms.length}+`, label: "Tipe Kamar" },
+            { value: `${rooms.length}+`, label: "Tipe tamu" },
             { value: "24/7", label: "Layanan WhatsApp" },
             { value: "100%", label: "Respon Cepat" },
             { value: "0%", label: "Biaya Booking" },
@@ -141,7 +141,7 @@ function PublicHome() {
           <div>
             <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.25em] text-amber-700">
               <span className="h-px w-6 bg-amber-700" />
-              Kamar Kami
+              tamu Kami
             </span>
             <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight">
               Dipilih dengan cermat
