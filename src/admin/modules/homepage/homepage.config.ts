@@ -29,6 +29,12 @@ export interface HomepageConfig {
     opacity: number;
     /** Render a drop shadow under the header. */
     dropShadow: boolean;
+    /** Pin the header to the top while scrolling. */
+    sticky: boolean;
+    /** Logo height in pixels. */
+    logoSize: number;
+    /** Logo placement within the header. */
+    logoPosition: "left" | "center" | "right";
   };
   hero: {
     slides: HeroSlide[];
@@ -61,6 +67,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     transparent: false,
     opacity: 60,
     dropShadow: true,
+    sticky: true,
+    logoSize: 40,
+    logoPosition: "left",
   },
   hero: {
     slides: [
