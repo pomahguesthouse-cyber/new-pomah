@@ -29,6 +29,10 @@ export interface HomepageConfig {
     opacity: number;
     /** Render a drop shadow under the header. */
     dropShadow: boolean;
+    /** Blur the page content showing behind the header. */
+    blur: boolean;
+    /** Blur strength in pixels, used when `blur` is on. */
+    blurAmount: number;
     /** Pin the header to the top while scrolling. */
     sticky: boolean;
     /** Logo height in pixels. */
@@ -67,6 +71,8 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     transparent: false,
     opacity: 60,
     dropShadow: true,
+    blur: false,
+    blurAmount: 8,
     sticky: true,
     logoSize: 40,
     logoPosition: "left",

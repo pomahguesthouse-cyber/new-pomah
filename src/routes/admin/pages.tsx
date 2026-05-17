@@ -355,6 +355,29 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
 
       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
         <div>
+          <p className="text-sm font-medium">Blur latar belakang</p>
+          <p className="text-xs text-muted-foreground">
+            Konten yang lewat di belakang header tampak buram (efek frosted glass).
+          </p>
+        </div>
+        <Switch checked={header.blur} onCheckedChange={(v) => set({ blur: v })} />
+      </div>
+
+      {header.blur && (
+        <FieldRow label={`Kekuatan blur — ${header.blurAmount}px`}>
+          <input
+            type="range"
+            min={2}
+            max={24}
+            value={header.blurAmount}
+            onChange={(e) => set({ blurAmount: Number(e.target.value) })}
+            className="w-full accent-teal-700"
+          />
+        </FieldRow>
+      )}
+
+      <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+        <div>
           <p className="text-sm font-medium">Header sticky</p>
           <p className="text-xs text-muted-foreground">Header tetap menempel saat di-scroll.</p>
         </div>
