@@ -39,6 +39,7 @@ import {
   type HomepageConfig,
   type HeroSlide,
 } from "@/admin/modules/homepage/homepage.functions";
+import { LAYER_MIN, LAYER_MAX } from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/admin/pages")({
   component: HomepageBuilder,
@@ -242,6 +243,38 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
       <Label className="text-xs font-medium">{label}</Label>
       {children}
     </div>
+  );
+}
+
+/** Layer-arrange control — sets a section's CSS stacking order (z-index). */
+function LayerArrange({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const clamp = (v: number) => Math.max(LAYER_MIN, Math.min(v, LAYER_MAX));
+  return (
+    <FieldRow label={`Susunan layer (z-index: ${value})`}>
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            ["Paling depan", () => LAYER_MAX],
+            ["Paling belakang", () => LAYER_MIN],
+            ["Maju satu", () => value + 10],
+            ["Mundur satu", () => value - 10],
+          ] as const
+        ).map(([label, next]) => (
+          <Button
+            key={label}
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={() => onChange(clamp(next()))}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Atur bagian ini berada di depan atau di belakang bagian lain.
+      </p>
+    </FieldRow>
   );
 }
 
@@ -584,6 +617,8 @@ function HeroTab({ cfg, setCfg }: TabProps) {
           Tambah slide
         </Button>
       </div>
+
+      <LayerArrange value={hero.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
 }
@@ -615,6 +650,7 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Teks tombol">
         <Input value={dp.buttonLabel} onChange={(e) => set({ buttonLabel: e.target.value })} />
       </FieldRow>
+      <LayerArrange value={dp.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
 }
@@ -657,6 +693,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
           onChange={(e) => set({ slideMs: Number(e.target.value) })}
         />
       </FieldRow>
+      <LayerArrange value={rc.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
 }

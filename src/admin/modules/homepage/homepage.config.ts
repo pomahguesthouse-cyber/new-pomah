@@ -44,18 +44,28 @@ export interface HomepageConfig {
     slides: HeroSlide[];
     autoplayMs: number;
     height: number;
+    /** Stacking order (CSS z-index) of the section. */
+    layer: number;
   };
   datePicker: {
     enabled: boolean;
     heading: string;
     buttonLabel: string;
+    /** Stacking order (CSS z-index) of the section. */
+    layer: number;
   };
   roomCarousel: {
     cardsPerView: number;
     slideMs: number;
     autoplay: boolean;
+    /** Stacking order (CSS z-index) of the section. */
+    layer: number;
   };
 }
+
+/** Lowest / highest z-index a section layer can take. */
+export const LAYER_MIN = 0;
+export const LAYER_MAX = 50;
 
 /** Sensible defaults used before an admin has saved anything. */
 export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
@@ -87,16 +97,19 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     ],
     autoplayMs: 5000,
     height: 480,
+    layer: 10,
   },
   datePicker: {
     enabled: true,
     heading: "Cek Ketersediaan",
     buttonLabel: "Cek Ketersediaan",
+    layer: 30,
   },
   roomCarousel: {
     cardsPerView: 3,
     slideMs: 4000,
     autoplay: true,
+    layer: 10,
   },
 };
 

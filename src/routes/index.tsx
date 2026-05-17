@@ -110,7 +110,10 @@ function PomahHome() {
       {/* ── DATE PICKER WIDGET ── */}
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
-          <div className="mx-auto -mt-12 max-w-4xl px-6">
+          <div
+            className="relative mx-auto -mt-12 max-w-4xl px-6"
+            style={{ zIndex: cfg.datePicker.layer }}
+          >
             <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
               {cfg.datePicker.heading && (
                 <p className="mb-3 text-center font-serif text-lg font-semibold text-teal-700">
@@ -187,7 +190,7 @@ function PomahHome() {
 
       {/* ── OUR ACCOMMODATIONS (CAROUSEL) ── */}
       <PbZone id="carousel" label="Carousel Kamar" pb={pb}>
-        <section className="bg-[#f3ece0] py-20">
+        <section className="relative bg-[#f3ece0] py-20" style={{ zIndex: cfg.roomCarousel.layer }}>
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
               <SectionHeading>Our Accommodations</SectionHeading>
@@ -324,7 +327,10 @@ function HeroSlider({
   const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
 
   return (
-    <header className="relative w-full overflow-hidden" style={{ height: hero.height }}>
+    <header
+      className="relative w-full overflow-hidden"
+      style={{ height: hero.height, zIndex: hero.layer }}
+    >
       {active.imageUrl ? (
         <img
           src={active.imageUrl}
