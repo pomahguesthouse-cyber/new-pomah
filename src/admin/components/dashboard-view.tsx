@@ -283,7 +283,7 @@ export function DashboardView() {
         <Card className="p-5 lg:col-span-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Recent bookings</h2>
-            <Link to="/bookings" className="text-xs text-accent hover:underline">
+            <Link to="/admin/bookings" className="text-xs text-accent hover:underline">
               View all →
             </Link>
           </div>
@@ -388,7 +388,7 @@ export function DashboardView() {
             <h2 className="flex items-center gap-2 font-semibold">
               <Activity className="h-4 w-4 text-violet-500" /> AI activity
             </h2>
-            <Link to="/ai" className="text-xs text-accent hover:underline">
+            <Link to="/admin/ai" className="text-xs text-accent hover:underline">
               More →
             </Link>
           </div>
@@ -410,7 +410,7 @@ export function DashboardView() {
             <h2 className="flex items-center gap-2 font-semibold">
               <MessageCircle className="h-4 w-4 text-emerald-500" /> Recent conversations
             </h2>
-            <Link to="/whatsapp" className="text-xs text-accent hover:underline">
+            <Link to="/admin/whatsapp" className="text-xs text-accent hover:underline">
               Open <ArrowRight className="ml-1 inline h-3 w-3" />
             </Link>
           </div>

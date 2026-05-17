@@ -1,15 +1,15 @@
 /**
- * Visual Page Builder — editor shell.
+ * Visual Page Editor — editor shell.
  *
- * Composes the four editor regions:
- *   • Toolbar      — device switcher, undo/redo, save, publish, settings
- *   • Left sidebar — component palette + layers tree
- *   • Canvas       — live, selectable preview rendered through the registry
- *   • Right panel  — auto-generated property editor (see property-panel.tsx)
+ * Layout:
+ *   • Toolbar       — device switcher, undo/redo, save, publish
+ *   • Left sidebar  — four panels: Page / Section / Elements / Theme
+ *   • Canvas        — live, selectable preview rendered through the registry
+ *   • Right panel   — auto-generated element property editor
  *
- * Persistence: a debounced autosave writes the draft 1.5s after the last
- * change; Save forces it immediately; Publish snapshots a version and
- * goes live. All state lives in the Zustand `useEditorStore`.
+ * Persistence: a debounced autosave writes the draft document 1.5s after
+ * the last change; Save forces it immediately; Publish snapshots a
+ * version and goes live. All editor state lives in `useEditorStore`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
@@ -24,58 +24,21 @@ import {
   Smartphone,
   Save,
   Rocket,
-  Settings2,
-  Plus,
-  Layers,
-  ChevronUp,
-  ChevronDown,
-  Copy,
-  Trash2,
   ExternalLink,
-  LayoutTemplate,
-  PanelTop,
-  PanelBottom,
-  Megaphone,
-  Type,
-  Image as ImageIcon,
-  Grid3x3,
-  BedDouble,
-  CalendarCheck,
-  Images,
+  FileText,
+  Rows3,
+  Boxes,
+  Palette as PaletteIcon,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "./store";
-import { PALETTE, getComponent } from "./registry";
-import { NodeRenderer } from "./renderer";
+import { WIDTH_CLASS, ElementView } from "./renderer";
 import { PropertyPanel } from "./property-panel";
-import type { ComponentType, DeviceMode, LandingPageRow } from "./types";
+import { PagePanel, SectionPanel, ElementsPanel, ThemePanel } from "./panels";
+import type { DeviceMode, LandingPageRow } from "./types";
 import { updateLandingPage, publishLandingPage } from "./builder.functions";
-
-/* Map registry icon names → lucide components for the palette. */
-const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  LayoutTemplate,
-  PanelTop,
-  PanelBottom,
-  Megaphone,
-  Type,
-  Image: ImageIcon,
-  Grid3x3,
-  BedDouble,
-  CalendarCheck,
-  Images,
-};
 
 const DEVICE_WIDTH: Record<DeviceMode, string> = {
   desktop: "100%",
@@ -85,44 +48,49 @@ const DEVICE_WIDTH: Record<DeviceMode, string> = {
 
 const AUTOSAVE_MS = 1500;
 
+type PanelKey = "page" | "section" | "elements" | "theme";
+
+const PANELS: {
+  key: PanelKey;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { key: "page", label: "Page Properties", icon: FileText },
+  { key: "section", label: "Section", icon: Rows3 },
+  { key: "elements", label: "Elements", icon: Boxes },
+  { key: "theme", label: "Page Theme", icon: PaletteIcon },
+];
+
 /* ================================================================== */
 /* Editor                                                              */
 /* ================================================================== */
 
 export function PageEditor({ page }: { page: LandingPageRow }) {
   const load = useEditorStore((s) => s.load);
-  const nodes = useEditorStore((s) => s.nodes);
+  const sections = useEditorStore((s) => s.sections);
+  const theme = useEditorStore((s) => s.theme);
   const dirty = useEditorStore((s) => s.dirty);
   const device = useEditorStore((s) => s.device);
-  const selectedId = useEditorStore((s) => s.selectedId);
   const markSaved = useEditorStore((s) => s.markSaved);
   const toContent = useEditorStore((s) => s.toContent);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
-  const removeNode = useEditorStore((s) => s.removeNode);
-  const select = useEditorStore((s) => s.select);
 
   const updateFn = useServerFn(updateLandingPage);
   const publishFn = useServerFn(publishLandingPage);
 
+  const [panel, setPanel] = useState<PanelKey>("section");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [publishing, setPublishing] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [meta, setMeta] = useState({
-    title: page.title,
-    slug: page.slug,
-    status: page.status,
-  });
+  const [meta, setMeta] = useState({ title: page.title, slug: page.slug, status: page.status });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load the page document into the store once per page id.
   useEffect(() => {
     load(page.content);
     setMeta({ title: page.title, slug: page.slug, status: page.status });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.id]);
 
-  /** Persist the current draft immediately. */
   const save = useCallback(async () => {
     setSaveState("saving");
     try {
@@ -135,7 +103,7 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
     }
   }, [updateFn, page.id, toContent, markSaved]);
 
-  // Debounced autosave whenever the tree changes.
+  // Debounced autosave on any document change.
   useEffect(() => {
     if (!dirty) return;
     if (timer.current) clearTimeout(timer.current);
@@ -143,34 +111,29 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [nodes, dirty, save]);
+  }, [sections, theme, dirty, save]);
 
   // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const meta = e.ctrlKey || e.metaKey;
-      const target = e.target as HTMLElement;
-      const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-      if (meta && e.key.toLowerCase() === "z" && !e.shiftKey) {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
       } else if (
-        meta &&
+        mod &&
         (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))
       ) {
         e.preventDefault();
         redo();
-      } else if (meta && e.key.toLowerCase() === "s") {
+      } else if (mod && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void save();
-      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedId && !typing) {
-        e.preventDefault();
-        removeNode(selectedId);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo, save, removeNode, selectedId]);
+  }, [undo, redo, save]);
 
   const publish = async () => {
     setPublishing(true);
@@ -197,21 +160,17 @@ export function PageEditor({ page }: { page: LandingPageRow }) {
         publishing={publishing}
         onSave={save}
         onPublish={publish}
-        onOpenSettings={() => setSettingsOpen(true)}
       />
-
       <div className="flex flex-1 overflow-hidden">
-        <LeftSidebar />
+        <LeftSidebar
+          panel={panel}
+          onPanel={setPanel}
+          page={page}
+          onMetaSaved={(m) => setMeta((prev) => ({ ...prev, ...m }))}
+        />
         <Canvas device={device} />
         <PropertyPanel />
       </div>
-
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        page={page}
-        onSaved={(m) => setMeta((prev) => ({ ...prev, ...m }))}
-      />
     </div>
   );
 }
@@ -229,7 +188,6 @@ function Toolbar({
   publishing,
   onSave,
   onPublish,
-  onOpenSettings,
 }: {
   title: string;
   slug: string;
@@ -239,7 +197,6 @@ function Toolbar({
   publishing: boolean;
   onSave: () => void;
   onPublish: () => void;
-  onOpenSettings: () => void;
 }) {
   const device = useEditorStore((s) => s.device);
   const setDevice = useEditorStore((s) => s.setDevice);
@@ -250,7 +207,6 @@ function Toolbar({
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-3">
-      {/* Left */}
       <div className="flex min-w-0 items-center gap-2">
         <Button asChild size="icon" variant="ghost" className="h-8 w-8">
           <Link to="/admin/pages">
@@ -273,7 +229,6 @@ function Toolbar({
         </span>
       </div>
 
-      {/* Center — device switcher */}
       <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
         {(
           [
@@ -289,7 +244,7 @@ function Toolbar({
             className={cn(
               "flex h-7 w-9 items-center justify-center rounded-md transition",
               device === mode
-                ? "bg-background shadow-sm text-foreground"
+                ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
@@ -298,7 +253,6 @@ function Toolbar({
         ))}
       </div>
 
-      {/* Right */}
       <div className="flex items-center gap-1.5">
         <Button
           size="icon"
@@ -320,15 +274,15 @@ function Toolbar({
         >
           <Redo2 className="h-4 w-4" />
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8"
-          onClick={onOpenSettings}
-          title="Page settings & SEO"
+        <a
+          href={`/p/${slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View live"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
         >
-          <Settings2 className="h-4 w-4" />
-        </Button>
+          <ExternalLink className="h-4 w-4" />
+        </a>
 
         <span className="mx-1 w-px self-stretch bg-border" />
 
@@ -348,7 +302,7 @@ function Toolbar({
         </Button>
         <Button
           size="sm"
-          className="h-8 gap-1.5 bg-amber-700 text-white hover:bg-amber-800"
+          className="h-8 gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
           disabled={publishing}
           onClick={onPublish}
         >
@@ -361,133 +315,51 @@ function Toolbar({
 }
 
 /* ================================================================== */
-/* Left sidebar — palette + layers                                     */
+/* Left sidebar — four panels                                          */
 /* ================================================================== */
 
-function LeftSidebar() {
-  const [tab, setTab] = useState<"add" | "layers">("add");
-
+function LeftSidebar({
+  panel,
+  onPanel,
+  page,
+  onMetaSaved,
+}: {
+  panel: PanelKey;
+  onPanel: (p: PanelKey) => void;
+  page: LandingPageRow;
+  onMetaSaved: (m: { title: string; slug: string }) => void;
+}) {
+  const active = PANELS.find((p) => p.key === panel)!;
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-card">
-      <div className="flex shrink-0 border-b border-border">
-        {(
-          [
-            ["add", "Add", Plus],
-            ["layers", "Layers", Layers],
-          ] as const
-        ).map(([key, label, Icon]) => (
+    <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-card">
+      <div className="grid shrink-0 grid-cols-4 border-b border-border">
+        {PANELS.map((p) => (
           <button
-            key={key}
-            onClick={() => setTab(key)}
+            key={p.key}
+            onClick={() => onPanel(p.key)}
+            title={p.label}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition",
-              tab === key
-                ? "border-b-2 border-amber-700 text-foreground"
+              "flex flex-col items-center gap-1 py-2.5 text-[9px] font-medium uppercase tracking-wide transition",
+              panel === p.key
+                ? "border-b-2 border-teal-700 text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
+            <p.icon className="h-4 w-4" />
+            {p.key}
           </button>
         ))}
       </div>
-      {tab === "add" ? <Palette /> : <LayersTree />}
+      <div className="border-b border-border bg-muted/40 px-4 py-2">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          {active.label}
+        </p>
+      </div>
+      {panel === "page" && <PagePanel page={page} onMetaSaved={onMetaSaved} />}
+      {panel === "section" && <SectionPanel />}
+      {panel === "elements" && <ElementsPanel />}
+      {panel === "theme" && <ThemePanel />}
     </aside>
-  );
-}
-
-function Palette() {
-  const addNode = useEditorStore((s) => s.addNode);
-  return (
-    <div className="flex-1 overflow-y-auto p-3">
-      <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-        Components
-      </p>
-      <div className="grid grid-cols-2 gap-2">
-        {PALETTE.map((type) => {
-          const def = getComponent(type);
-          if (!def) return null;
-          const Icon = ICONS[def.icon] ?? LayoutTemplate;
-          return (
-            <button
-              key={type}
-              onClick={() => addNode(type)}
-              title={def.description}
-              className="group flex flex-col items-start gap-2 rounded-lg border border-border bg-background p-2.5 text-left transition hover:border-amber-700 hover:shadow-sm"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground group-hover:bg-amber-700 group-hover:text-white">
-                <Icon className="h-3.5 w-3.5" />
-              </span>
-              <span className="text-[11px] font-medium leading-tight">{def.label}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-3 text-[10px] leading-relaxed text-muted-foreground">
-        Click a component to append it to the page. Select it on the canvas to edit.
-      </p>
-    </div>
-  );
-}
-
-function LayersTree() {
-  const nodes = useEditorStore((s) => s.nodes);
-  const selectedId = useEditorStore((s) => s.selectedId);
-  const select = useEditorStore((s) => s.select);
-  const moveNode = useEditorStore((s) => s.moveNode);
-
-  return (
-    <div className="flex-1 overflow-y-auto p-2">
-      <p className="mb-2 px-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-        Page structure
-      </p>
-      {nodes.length === 0 && (
-        <p className="px-1 py-4 text-[11px] text-muted-foreground">No components yet.</p>
-      )}
-      <div className="space-y-0.5">
-        {nodes.map((node, i) => {
-          const def = getComponent(node.type);
-          const Icon = ICONS[def?.icon ?? ""] ?? LayoutTemplate;
-          return (
-            <div
-              key={node.id}
-              onClick={() => select(node.id)}
-              className={cn(
-                "group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-xs",
-                node.id === selectedId
-                  ? "bg-amber-50 text-amber-900"
-                  : "hover:bg-muted text-foreground",
-              )}
-            >
-              <Icon className="h-3.5 w-3.5 shrink-0 opacity-60" />
-              <span className="flex-1 truncate">{def?.label ?? node.type}</span>
-              <span className="hidden gap-0.5 group-hover:flex">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    moveNode(node.id, "up");
-                  }}
-                  disabled={i === 0}
-                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                >
-                  <ChevronUp className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    moveNode(node.id, "down");
-                  }}
-                  disabled={i === nodes.length - 1}
-                  className="rounded p-0.5 hover:bg-background disabled:opacity-30"
-                >
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }
 
@@ -496,284 +368,127 @@ function LayersTree() {
 /* ================================================================== */
 
 function Canvas({ device }: { device: DeviceMode }) {
-  const nodes = useEditorStore((s) => s.nodes);
-  const select = useEditorStore((s) => s.select);
+  const sections = useEditorStore((s) => s.sections);
+  const theme = useEditorStore((s) => s.theme);
+  const clearSelection = useEditorStore((s) => s.clearSelection);
+  const addSection = useEditorStore((s) => s.addSection);
+
+  const fontClass =
+    theme.fontFamily === "serif"
+      ? "font-serif"
+      : theme.fontFamily === "mono"
+        ? "font-mono"
+        : "font-sans";
 
   return (
-    <div className="flex-1 overflow-auto bg-muted/40 p-6" onClick={() => select(null)}>
+    <div className="flex-1 overflow-auto bg-muted/40 p-6" onClick={() => clearSelection()}>
       <div
-        className="mx-auto bg-white shadow-xl transition-all"
-        style={{ width: DEVICE_WIDTH[device], maxWidth: "100%" }}
+        className={cn("mx-auto bg-white shadow-xl transition-all", fontClass)}
+        style={{
+          width: DEVICE_WIDTH[device],
+          maxWidth: "100%",
+          background: theme.bgColor,
+          color: theme.textColor,
+        }}
       >
-        {nodes.length === 0 ? (
+        {sections.length === 0 ? (
           <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center">
-            <p className="text-sm font-medium text-stone-500">Your page is empty</p>
+            <p className="text-sm font-medium text-stone-500">This page has no sections</p>
             <p className="text-xs text-stone-400">
-              Add components from the left panel to start building.
+              Add one from the Section panel to start building.
             </p>
           </div>
         ) : (
-          nodes.map((node, i) => (
-            <NodeFrame key={node.id} nodeId={node.id} index={i} total={nodes.length}>
-              <NodeRenderer node={node} />
-            </NodeFrame>
-          ))
+          sections.map((s) => <CanvasSection key={s.id} sectionId={s.id} />)
         )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            addSection();
+          }}
+          className="flex w-full items-center justify-center gap-2 border-t-2 border-dashed border-stone-200 py-5 text-xs font-medium text-stone-400 transition hover:bg-stone-50 hover:text-teal-700"
+        >
+          <Plus className="h-4 w-4" />
+          Add section
+        </button>
       </div>
     </div>
   );
 }
 
-/** Wraps a rendered node with selection, hover outline and a quick toolbar. */
-function NodeFrame({
-  nodeId,
-  index,
-  total,
-  children,
-}: {
-  nodeId: string;
-  index: number;
-  total: number;
-  children: React.ReactNode;
-}) {
-  const selectedId = useEditorStore((s) => s.selectedId);
-  const select = useEditorStore((s) => s.select);
-  const moveNode = useEditorStore((s) => s.moveNode);
-  const duplicateNode = useEditorStore((s) => s.duplicateNode);
-  const removeNode = useEditorStore((s) => s.removeNode);
-  const nodeType = useEditorStore((s) => s.nodes.find((n) => n.id === nodeId)?.type);
-  const def = nodeType ? getComponent(nodeType) : undefined;
-  const selected = selectedId === nodeId;
+function CanvasSection({ sectionId }: { sectionId: string }) {
+  const section = useEditorStore((s) => s.sections.find((x) => x.id === sectionId));
+  const selectedSectionId = useEditorStore((s) => s.selectedSectionId);
+  const selectedElementId = useEditorStore((s) => s.selectedElementId);
+  const selectSection = useEditorStore((s) => s.selectSection);
+  const selectElement = useEditorStore((s) => s.selectElement);
+  if (!section) return null;
+
+  const selected = selectedSectionId === section.id && !selectedElementId;
+  const cols = Math.max(1, Math.min(section.columns, 4));
 
   return (
-    <div
+    <section
       onClick={(e) => {
         e.stopPropagation();
-        select(nodeId);
+        selectSection(section.id);
       }}
       className={cn(
-        "group/node relative cursor-pointer outline-offset-[-2px]",
+        "relative cursor-pointer outline-offset-[-2px] transition",
         selected
-          ? "outline outline-2 outline-amber-600"
-          : "hover:outline hover:outline-2 hover:outline-amber-300",
+          ? "outline outline-2 outline-teal-600"
+          : "hover:outline hover:outline-1 hover:outline-teal-300",
       )}
+      style={{
+        background: section.bgColor,
+        paddingTop: section.paddingY,
+        paddingBottom: section.paddingY,
+      }}
     >
-      {/* Label tab */}
       <span
         className={cn(
-          "absolute left-0 top-0 z-10 rounded-br-md px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white transition-opacity",
-          selected
-            ? "bg-amber-600 opacity-100"
-            : "bg-amber-400 opacity-0 group-hover/node:opacity-100",
+          "absolute left-0 top-0 z-10 rounded-br-md px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-white",
+          selected ? "bg-teal-600" : "bg-teal-400/80",
         )}
       >
-        {def?.label}
+        {section.name}
       </span>
-
-      {/* Quick toolbar */}
-      {selected && (
-        <div className="absolute right-2 top-2 z-10 flex gap-0.5 rounded-md bg-stone-900/90 p-0.5 shadow-lg">
-          <ToolbarBtn title="Move up" disabled={index === 0} onClick={() => moveNode(nodeId, "up")}>
-            <ChevronUp className="h-3.5 w-3.5" />
-          </ToolbarBtn>
-          <ToolbarBtn
-            title="Move down"
-            disabled={index === total - 1}
-            onClick={() => moveNode(nodeId, "down")}
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </ToolbarBtn>
-          <ToolbarBtn title="Duplicate" onClick={() => duplicateNode(nodeId)}>
-            <Copy className="h-3.5 w-3.5" />
-          </ToolbarBtn>
-          <ToolbarBtn title="Delete" onClick={() => removeNode(nodeId)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </ToolbarBtn>
-        </div>
-      )}
-
-      {/* Rendered component — pointer-events disabled so clicks select. */}
-      <div className="pointer-events-none">{children}</div>
-    </div>
-  );
-}
-
-function ToolbarBtn({
-  title,
-  disabled,
-  onClick,
-  children,
-}: {
-  title: string;
-  disabled?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      title={title}
-      disabled={disabled}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className="rounded p-1 text-white/80 transition hover:bg-white/15 hover:text-white disabled:opacity-30"
-    >
-      {children}
-    </button>
-  );
-}
-
-/* ================================================================== */
-/* Page settings + SEO dialog                                          */
-/* ================================================================== */
-
-function SettingsDialog({
-  open,
-  onOpenChange,
-  page,
-  onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  page: LandingPageRow;
-  onSaved: (meta: { title: string; slug: string }) => void;
-}) {
-  const updateFn = useServerFn(updateLandingPage);
-  const [form, setForm] = useState({
-    title: page.title,
-    slug: page.slug,
-    seo_title: page.seo_title ?? "",
-    seo_description: page.seo_description ?? "",
-    og_image_url: page.og_image_url ?? "",
-    noindex: page.noindex,
-  });
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      await updateFn({
-        data: {
-          id: page.id,
-          title: form.title,
-          slug: form.slug,
-          seo_title: form.seo_title || null,
-          seo_description: form.seo_description || null,
-          og_image_url: form.og_image_url || null,
-          noindex: form.noindex,
-        },
-      });
-      onSaved({ title: form.title, slug: form.slug });
-      toast.success("Page settings saved");
-      onOpenChange(false);
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Page settings & SEO</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-1">
-          <Field label="Page title">
-            <Input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-          </Field>
-          <Field label="Slug" hint="Lowercase letters, numbers and hyphens. Page lives at /p/slug">
-            <Input
-              value={form.slug}
-              onChange={(e) => setForm({ ...form, slug: e.target.value })}
-              className="font-mono"
-            />
-          </Field>
-          <div className="h-px bg-border" />
-          <Field label="SEO title">
-            <Input
-              value={form.seo_title}
-              onChange={(e) => setForm({ ...form, seo_title: e.target.value })}
-              placeholder={form.title}
-            />
-          </Field>
-          <Field label="Meta description">
-            <Textarea
-              rows={2}
-              value={form.seo_description}
-              onChange={(e) => setForm({ ...form, seo_description: e.target.value })}
-            />
-          </Field>
-          <Field label="OG image URL">
-            <Input
-              value={form.og_image_url}
-              onChange={(e) => setForm({ ...form, og_image_url: e.target.value })}
-              placeholder="https://…"
-              className="font-mono"
-            />
-          </Field>
-          <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-            <div>
-              <p className="text-sm font-medium">Hide from search engines</p>
-              <p className="text-xs text-muted-foreground">Adds a noindex tag to this page.</p>
-            </div>
-            <Switch
-              checked={form.noindex}
-              onCheckedChange={(c) => setForm({ ...form, noindex: c })}
-            />
+      <div className={cn("mx-auto px-6", WIDTH_CLASS[section.width] ?? "max-w-6xl")}>
+        {section.elements.length === 0 ? (
+          <div className="flex min-h-24 items-center justify-center rounded-lg border-2 border-dashed border-stone-200 text-[11px] text-stone-400">
+            Empty section — add elements from the Elements panel
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            className="bg-amber-700 text-white hover:bg-amber-800"
-            disabled={saving}
-            onClick={save}
+        ) : (
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gap: section.gap }}
           >
-            {saving ? "Saving…" : "Save settings"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs font-medium">{label}</Label>
-      {children}
-      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-/** Re-exported so the editor route can show a "view live" affordance. */
-export function ViewLiveLink({ slug }: { slug: string }) {
-  return (
-    <a
-      href={`/p/${slug}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-    >
-      <ExternalLink className="h-3 w-3" />
-      View live
-    </a>
+            {section.elements.map((el) => {
+              const elSelected = selectedElementId === el.id;
+              return (
+                <div
+                  key={el.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectElement(section.id, el.id);
+                  }}
+                  style={{ gridColumn: `span ${Math.min(el.colSpan ?? cols, cols)}` }}
+                  className={cn(
+                    "relative cursor-pointer outline-offset-[-2px] transition",
+                    elSelected
+                      ? "outline outline-2 outline-amber-500"
+                      : "hover:outline hover:outline-1 hover:outline-amber-300",
+                  )}
+                >
+                  <div className="pointer-events-none">
+                    <ElementView element={el} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

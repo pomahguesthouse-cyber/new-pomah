@@ -79,11 +79,11 @@ function PagesIndex() {
       <header className="flex items-end justify-between gap-4">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Visual Builder
+            Visual Editor
           </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Pages</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Page Editor</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Build and publish landing pages without code.
+            Design and publish pages visually — sections, grid layout and elements.
           </p>
         </div>
         <Button

@@ -20,16 +20,12 @@ function db(supabase: unknown): SupabaseClient {
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-const pageContentSchema = z.object({
-  version: z.number(),
-  nodes: z.array(
-    z.object({
-      id: z.string(),
-      type: z.string(),
-      props: z.record(z.string(), z.unknown()),
-    }),
-  ),
-});
+/**
+ * The page document is a free-form JSONB blob (sections + theme, or the
+ * legacy `nodes` shape). The client `normalizePage()` enforces structure
+ * on read, so the server only needs a permissive object check here.
+ */
+const pageContentSchema = z.record(z.string(), z.unknown());
 
 /* ------------------------------------------------------------------ */
 /* Read                                                                */
@@ -164,6 +160,7 @@ export const updateLandingPage = createServerFn({ method: "POST" })
         og_image_url: z.string().url().nullable().optional().or(z.literal("")),
         canonical_url: z.string().url().nullable().optional().or(z.literal("")),
         noindex: z.boolean().optional(),
+        tags: z.array(z.string().max(60)).max(30).optional(),
       })
       .parse(d),
   )
@@ -177,6 +174,7 @@ export const updateLandingPage = createServerFn({ method: "POST" })
     if (data.og_image_url !== undefined) patch.og_image_url = data.og_image_url || null;
     if (data.canonical_url !== undefined) patch.canonical_url = data.canonical_url || null;
     if (data.noindex !== undefined) patch.noindex = data.noindex;
+    if (data.tags !== undefined) patch.tags = data.tags;
 
     const { error } = await db(context.supabase)
       .from("landing_pages")

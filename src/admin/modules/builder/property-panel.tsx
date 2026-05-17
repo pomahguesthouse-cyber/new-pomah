@@ -1,13 +1,12 @@
 /**
- * Property panel — the right sidebar of the editor.
+ * Property panel — the contextual right sidebar of the editor.
  *
- * For the selected node it reads the component's `fields` schema from
- * the registry and auto-generates grouped, live-updating controls.
- * Every change is pushed straight into the editor store, so the canvas
- * re-renders instantly.
+ * For the selected element it reads the registry `fields` schema and
+ * auto-generates grouped, live-updating controls. Every change is pushed
+ * straight into the editor store, so the canvas re-renders instantly.
  */
 import { useMemo } from "react";
-import { Trash2, Copy } from "lucide-react";
+import { Trash2, Copy, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,15 +18,24 @@ import { getComponent } from "./registry";
 import type { FieldDef } from "./types";
 
 export function PropertyPanel() {
-  const selectedId = useEditorStore((s) => s.selectedId);
-  const node = useEditorStore((s) => s.nodes.find((n) => n.id === s.selectedId) ?? null);
-  const updateProps = useEditorStore((s) => s.updateProps);
-  const removeNode = useEditorStore((s) => s.removeNode);
-  const duplicateNode = useEditorStore((s) => s.duplicateNode);
+  const sectionId = useEditorStore((s) => s.selectedSectionId);
+  const elementId = useEditorStore((s) => s.selectedElementId);
+  const element = useEditorStore(
+    (s) =>
+      s.sections
+        .find((x) => x.id === s.selectedSectionId)
+        ?.elements.find((e) => e.id === s.selectedElementId) ?? null,
+  );
+  const section = useEditorStore(
+    (s) => s.sections.find((x) => x.id === s.selectedSectionId) ?? null,
+  );
+  const updateElementProps = useEditorStore((s) => s.updateElementProps);
+  const updateElement = useEditorStore((s) => s.updateElement);
+  const removeElement = useEditorStore((s) => s.removeElement);
+  const duplicateElement = useEditorStore((s) => s.duplicateElement);
 
-  const def = node ? getComponent(node.type) : undefined;
+  const def = element ? getComponent(element.type) : undefined;
 
-  // Group fields by their `group` label, preserving declaration order.
   const groups = useMemo(() => {
     if (!def) return [] as { name: string; fields: FieldDef[] }[];
     const order: string[] = [];
@@ -43,20 +51,21 @@ export function PropertyPanel() {
     return order.map((name) => ({ name, fields: map.get(name)! }));
   }, [def]);
 
-  if (!node || !def) {
+  if (!element || !def || !section || !sectionId || !elementId) {
     return (
       <aside className="flex w-72 shrink-0 flex-col border-l border-border bg-card">
-        <div className="border-b border-border px-4 py-3">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
-            Properties
+        <PanelHeader title="Properties" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+          <SlidersHorizontal className="h-5 w-5 text-muted-foreground/50" />
+          <p className="text-xs text-muted-foreground">
+            Select an element on the canvas to edit its properties.
           </p>
-        </div>
-        <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground">
-          Select a component on the canvas to edit its properties.
         </div>
       </aside>
     );
   }
+
+  const cols = Math.max(1, Math.min(section.columns, 4));
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l border-border bg-card">
@@ -65,7 +74,7 @@ export function PropertyPanel() {
           <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
             {def.label}
           </p>
-          <p className="text-xs text-muted-foreground/70">Component properties</p>
+          <p className="text-xs text-muted-foreground/70">Element properties</p>
         </div>
         <div className="flex gap-1">
           <Button
@@ -73,7 +82,7 @@ export function PropertyPanel() {
             variant="ghost"
             className="h-7 w-7"
             title="Duplicate"
-            onClick={() => duplicateNode(node.id)}
+            onClick={() => duplicateElement(sectionId, elementId)}
           >
             <Copy className="h-3.5 w-3.5" />
           </Button>
@@ -82,7 +91,7 @@ export function PropertyPanel() {
             variant="ghost"
             className="h-7 w-7 text-destructive"
             title="Delete"
-            onClick={() => removeNode(node.id)}
+            onClick={() => removeElement(sectionId, elementId)}
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -90,6 +99,28 @@ export function PropertyPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {cols > 1 && (
+          <div className="border-b border-border/60 px-4 py-3">
+            <p className="mb-2.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Grid
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-medium text-foreground/80">
+                Column span ({Math.min(element.colSpan ?? 1, cols)} / {cols})
+              </Label>
+              <input
+                type="range"
+                min={1}
+                max={cols}
+                value={Math.min(element.colSpan ?? 1, cols)}
+                onChange={(e) =>
+                  updateElement(sectionId, elementId, { colSpan: Number(e.target.value) })
+                }
+                className="w-full accent-teal-700"
+              />
+            </div>
+          </div>
+        )}
         {groups.map((group) => (
           <div key={group.name} className="border-b border-border/60 px-4 py-3">
             <p className="mb-2.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -100,8 +131,8 @@ export function PropertyPanel() {
                 <FieldControl
                   key={field.key}
                   field={field}
-                  value={node.props[field.key]}
-                  onChange={(v) => updateProps(node.id, { [field.key]: v })}
+                  value={element.props[field.key]}
+                  onChange={(v) => updateElementProps(sectionId, elementId, { [field.key]: v })}
                 />
               ))}
             </div>
@@ -112,11 +143,21 @@ export function PropertyPanel() {
   );
 }
 
+export function PanelHeader({ title }: { title: string }) {
+  return (
+    <div className="border-b border-border px-4 py-3">
+      <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        {title}
+      </p>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Field controls                                                      */
 /* ------------------------------------------------------------------ */
 
-function FieldControl({
+export function FieldControl({
   field,
   value,
   onChange,
@@ -125,7 +166,7 @@ function FieldControl({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
-  const str = typeof value === "string" ? value : value == null ? "" : String(value);
+  const s = typeof value === "string" ? value : value == null ? "" : String(value);
 
   return (
     <div className="space-y-1.5">
@@ -134,12 +175,12 @@ function FieldControl({
       )}
 
       {field.type === "text" && (
-        <Input value={str} onChange={(e) => onChange(e.target.value)} className="h-8 text-sm" />
+        <Input value={s} onChange={(e) => onChange(e.target.value)} className="h-8 text-sm" />
       )}
 
       {field.type === "textarea" && (
         <Textarea
-          value={str}
+          value={s}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
           className="text-sm"
@@ -149,7 +190,7 @@ function FieldControl({
       {field.type === "number" && (
         <Input
           type="number"
-          value={str}
+          value={s}
           onChange={(e) => onChange(Number(e.target.value))}
           className="h-8 text-sm"
         />
@@ -157,7 +198,7 @@ function FieldControl({
 
       {field.type === "image" && (
         <Input
-          value={str}
+          value={s}
           placeholder="https://…"
           onChange={(e) => onChange(e.target.value)}
           className="h-8 text-sm font-mono"
@@ -168,12 +209,12 @@ function FieldControl({
         <div className="flex items-center gap-2">
           <input
             type="color"
-            value={/^#[0-9a-fA-F]{6}$/.test(str) ? str : "#000000"}
+            value={/^#[0-9a-fA-F]{6}$/.test(s) ? s : "#000000"}
             onChange={(e) => onChange(e.target.value)}
             className="h-8 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent"
           />
           <Input
-            value={str}
+            value={s}
             onChange={(e) => onChange(e.target.value)}
             className="h-8 text-sm font-mono"
           />
@@ -182,7 +223,7 @@ function FieldControl({
 
       {field.type === "select" && (
         <select
-          value={str}
+          value={s}
           onChange={(e) => onChange(e.target.value)}
           className={cn(
             "h-8 w-full rounded-md border border-input bg-background px-2 text-sm",
