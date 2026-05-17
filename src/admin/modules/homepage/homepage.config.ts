@@ -23,6 +23,12 @@ export interface HomepageConfig {
     bgColor: string;
     bookLabel: string;
     links: NavLink[];
+    /** Overlay the hero with a see-through header. */
+    transparent: boolean;
+    /** Background opacity (0–100) used when `transparent` is on. */
+    opacity: number;
+    /** Render a drop shadow under the header. */
+    dropShadow: boolean;
   };
   hero: {
     slides: HeroSlide[];
@@ -52,6 +58,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
       { label: "Facilities", href: "#facilities" },
       { label: "Lokasi", href: "#lokasi" },
     ],
+    transparent: false,
+    opacity: 60,
+    dropShadow: true,
   },
   hero: {
     slides: [
