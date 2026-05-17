@@ -46,6 +46,12 @@ export interface HomepageConfig {
     height: number;
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
+    /** Heading font family (tipe). */
+    fontFamily: "sans" | "serif" | "mono";
+    /** Heading font size in pixels. */
+    fontSize: number;
+    /** Heading font style. */
+    fontStyle: "normal" | "bold" | "italic";
   };
   datePicker: {
     enabled: boolean;
@@ -98,6 +104,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     autoplayMs: 5000,
     height: 480,
     layer: 10,
+    fontFamily: "serif",
+    fontSize: 48,
+    fontStyle: "bold",
   },
   datePicker: {
     enabled: true,
