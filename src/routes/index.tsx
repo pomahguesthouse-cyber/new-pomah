@@ -58,7 +58,7 @@ function PublicHome() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
                 <Link to="/book">
-                  Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
+                  Pesan tamu <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
               <Button
@@ -67,7 +67,7 @@ function PublicHome() {
                 variant="outline"
                 className="border-stone-300 text-stone-700 hover:bg-stone-100"
               >
-                <Link to="/rooms">Lihat Kamar</Link>
+                <Link to="/rooms">Lihat tamu</Link>
               </Button>
             </div>
             {/* Rating badge */}
@@ -170,7 +170,7 @@ function PublicHome() {
               >
                 <div className="flex h-full w-full items-center justify-center">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                    Foto Kamar
+                    Foto tamu
                   </p>
                 </div>
               </div>
@@ -215,7 +215,7 @@ function PublicHome() {
                   size="sm"
                   className="mt-4 w-full bg-stone-900 hover:bg-amber-700 text-white transition-colors"
                 >
-                  <Link to="/book">Pesan Kamar Ini</Link>
+                  <Link to="/book">Pesan tamu Ini</Link>
                 </Button>
               </div>
             </article>
@@ -358,7 +358,7 @@ function PublicHome() {
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Button asChild size="lg" className="bg-amber-700 hover:bg-amber-800 text-white">
               <Link to="/book">
-                Pesan Kamar <ArrowRight className="ml-2 h-4 w-4" />
+                Pesan tamu <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
             {property?.whatsapp_number && (
