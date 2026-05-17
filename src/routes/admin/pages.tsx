@@ -12,7 +12,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
-  Monitor,
   LayoutPanelTop,
   GalleryHorizontal,
   CalendarCheck,
@@ -48,17 +47,25 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type TabKey = "preview" | "header" | "hero" | "datepicker" | "carousel" | "media";
+type SectionKey = "header" | "hero" | "datepicker" | "carousel" | "media";
 
-const TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: "preview", label: "Preview Halaman Depan", icon: Monitor },
-  { key: "header", label: "Desain Header", icon: LayoutPanelTop },
-  { key: "hero", label: "Desain Hero Slider", icon: GalleryHorizontal },
-  { key: "datepicker", label: "Widget Date Picker", icon: CalendarCheck },
+const SECTIONS: {
+  key: SectionKey;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { key: "header", label: "Header", icon: LayoutPanelTop },
+  { key: "hero", label: "Hero Slider", icon: GalleryHorizontal },
+  { key: "datepicker", label: "Date Picker", icon: CalendarCheck },
   { key: "carousel", label: "Carousel Kamar", icon: RectangleHorizontal },
   { key: "media", label: "Media Library", icon: Images },
 ];
 
+/**
+ * Page Builder — a live preview canvas in the centre with a contextual
+ * editor panel on the right. Pick a section to edit; the right panel
+ * swaps to that section's controls.
+ */
 function HomepageBuilder() {
   const getFn = useServerFn(getHomepageConfig);
   const updateFn = useServerFn(updateHomepageConfig);
@@ -69,9 +76,10 @@ function HomepageBuilder() {
     refetchOnWindowFocus: false,
   });
 
-  const [tab, setTab] = useState<TabKey>("preview");
+  const [section, setSection] = useState<SectionKey>("header");
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
   const [saving, setSaving] = useState(false);
+  const [previewKey, setPreviewKey] = useState(0);
 
   useEffect(() => {
     if (data?.config) setCfg(data.config);
@@ -86,6 +94,7 @@ function HomepageBuilder() {
     try {
       await updateFn({ data: { id: data.id, config: cfg as unknown as Record<string, unknown> } });
       toast.success("Halaman depan tersimpan");
+      setPreviewKey((k) => k + 1);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -93,9 +102,12 @@ function HomepageBuilder() {
     }
   };
 
+  const active = SECTIONS.find((s) => s.key === section)!;
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4 md:px-10">
+    <div className="flex h-full flex-col bg-stone-100">
+      {/* ── Top bar ── */}
+      <header className="flex items-center justify-between gap-4 border-b border-border bg-card px-5 py-3">
         <div className="flex items-center gap-3">
           <Button asChild variant="outline" size="sm" className="gap-1.5">
             <Link to="/admin">
@@ -104,60 +116,74 @@ function HomepageBuilder() {
             </Link>
           </Button>
           <div>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               Homepage Builder
             </p>
-            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Page Builder</h1>
+            <h1 className="text-lg font-semibold tracking-tight">Page Builder</h1>
           </div>
         </div>
-        {tab !== "preview" && tab !== "media" && (
-          <Button
-            className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
-            disabled={saving || isLoading}
-            onClick={save}
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Menyimpan…" : "Simpan"}
-          </Button>
-        )}
+        <Button
+          className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
+          disabled={saving || isLoading}
+          onClick={save}
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {saving ? "Menyimpan…" : "Simpan"}
+        </Button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <nav className="w-60 shrink-0 space-y-1 border-r border-border p-3">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition",
-                tab === t.key
-                  ? "bg-teal-50 font-medium text-teal-900"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <t.icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{t.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <p className="p-8 text-sm text-muted-foreground">Memuat…</p>
-          ) : tab === "preview" ? (
-            <PreviewTab />
-          ) : tab === "header" ? (
-            <HeaderTab cfg={cfg} setCfg={setCfg} />
-          ) : tab === "hero" ? (
-            <HeroTab cfg={cfg} setCfg={setCfg} />
-          ) : tab === "datepicker" ? (
-            <DatePickerTab cfg={cfg} setCfg={setCfg} />
-          ) : tab === "carousel" ? (
-            <CarouselTab cfg={cfg} setCfg={setCfg} />
-          ) : (
-            <MediaTab />
-          )}
+        {/* ── Centre: live preview ── */}
+        <div className="flex flex-1 items-start justify-center overflow-auto p-6">
+          <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-white shadow-lg">
+            <iframe
+              key={previewKey}
+              title="Preview Halaman Depan"
+              src="/"
+              className="h-[calc(100vh-9rem)] w-full"
+            />
+          </div>
         </div>
+
+        {/* ── Right: contextual editor ── */}
+        <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-sm font-semibold">Edit — {active.label}</p>
+          </div>
+          <div className="flex gap-1 border-b border-border p-2">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setSection(s.key)}
+                title={s.label}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-1 rounded-md py-2 transition",
+                  section === s.key
+                    ? "bg-teal-50 text-teal-900"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <s.icon className="h-4 w-4" />
+                <span className="text-[8px] font-medium uppercase tracking-wide">{s.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {isLoading ? (
+              <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
+            ) : section === "header" ? (
+              <HeaderTab cfg={cfg} setCfg={setCfg} />
+            ) : section === "hero" ? (
+              <HeroTab cfg={cfg} setCfg={setCfg} />
+            ) : section === "datepicker" ? (
+              <DatePickerTab cfg={cfg} setCfg={setCfg} />
+            ) : section === "carousel" ? (
+              <CarouselTab cfg={cfg} setCfg={setCfg} />
+            ) : (
+              <MediaTab />
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );
@@ -182,10 +208,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="max-w-2xl space-y-4 p-6 md:p-8">
+    <div className="space-y-4 p-4">
       <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {desc && <p className="mt-0.5 text-sm text-muted-foreground">{desc}</p>}
+        <h2 className="text-sm font-semibold">{title}</h2>
+        {desc && <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>}
       </div>
       {children}
     </div>
@@ -285,24 +311,7 @@ function ImageField({ value, onChange }: { value: string; onChange: (url: string
 }
 
 /* ================================================================== */
-/* 1. Preview                                                          */
-/* ================================================================== */
-
-function PreviewTab() {
-  return (
-    <div className="flex h-full flex-col p-6 md:p-8">
-      <p className="mb-3 text-sm text-muted-foreground">
-        Tampilan langsung halaman depan. Simpan perubahan di tab lain lalu refresh preview ini.
-      </p>
-      <div className="flex-1 overflow-hidden rounded-xl border border-border shadow-sm">
-        <iframe title="Preview Halaman Depan" src="/" className="h-full min-h-[600px] w-full" />
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================== */
-/* 2. Header                                                           */
+/* Header                                                              */
 /* ================================================================== */
 
 function HeaderTab({ cfg, setCfg }: TabProps) {
