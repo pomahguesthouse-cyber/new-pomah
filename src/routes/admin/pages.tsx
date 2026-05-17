@@ -7,7 +7,7 @@
  * `homepage_config` JSONB document.
  */
 import { useEffect, useRef, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   Loader2,
   Save,
   Film,
+  ArrowLeft,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -95,11 +96,19 @@ function HomepageBuilder() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between gap-4 border-b border-border px-6 py-4 md:px-10">
-        <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Homepage Builder
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Halaman Depan</h1>
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <Link to="/admin">
+              <ArrowLeft className="h-4 w-4" />
+              Keluar
+            </Link>
+          </Button>
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              Homepage Builder
+            </p>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight">Page Builder</h1>
+          </div>
         </div>
         {tab !== "preview" && tab !== "media" && (
           <Button
