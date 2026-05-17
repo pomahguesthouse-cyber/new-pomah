@@ -8,7 +8,9 @@ import {
   CircleDollarSign,
   ClipboardList,
   Loader2,
+  Minus,
   Pencil,
+  Plus,
   Receipt,
   User,
 } from "lucide-react";
@@ -162,6 +164,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     React.useState<(typeof PAYMENT_STATUSES)[number]["value"]>("unpaid");
   const [paidAmount, setPaidAmount] = React.useState(0);
   const [selectedRooms, setSelectedRooms] = React.useState<SelectedRoom[]>([]);
+  const [allotmentMode, setAllotmentMode] = React.useState<"auto" | "manual">("manual");
+  const [autoCounts, setAutoCounts] = React.useState<Record<string, number>>({});
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
@@ -189,19 +193,34 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         .filter((br): br is BookingRoom & { room_id: string } => !!br.room_id)
         .map((br) => ({ room_id: br.room_id, nightly_rate: Number(br.nightly_rate) })),
     );
+    // Pre-fill the auto-allotment counts from the current room set, and
+    // open in manual mode so the existing rooms stay visible.
+    const counts: Record<string, number> = {};
+    for (const br of booking.booking_rooms ?? []) {
+      const tid = br.room_types?.id;
+      if (tid) counts[tid] = (counts[tid] ?? 0) + 1;
+    }
+    setAutoCounts(counts);
+    setAllotmentMode("manual");
   }, [open, booking?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = nightsBetween(checkIn, checkOut);
-  const total = selectedRooms.reduce((s, r) => s + r.nightly_rate * Math.max(nights, 1), 0);
-  const outstanding = Math.max(0, total - (paymentStatus === "paid" ? total : paidAmount));
+
+  /** A room can't be booked while it's out of order or under maintenance. */
+  const isUnavailable = (r: RoomRow) =>
+    r.status === "out_of_order" || r.status === "maintenance";
 
   // Group rooms by type for the picker
   const roomsByType = React.useMemo(() => {
-    const m = new Map<string, { typeName: string; baseRate: number; rooms: RoomRow[] }>();
+    const m = new Map<
+      string,
+      { typeId: string; typeName: string; baseRate: number; rooms: RoomRow[] }
+    >();
     for (const r of allRooms) {
       const tid = r.room_types?.id ?? "_none";
       if (!m.has(tid)) {
         m.set(tid, {
+          typeId: tid,
           typeName: r.room_types?.name ?? "Tanpa Tipe",
           baseRate: Number(r.room_types?.base_rate ?? 0),
           rooms: [],
@@ -212,6 +231,25 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return [...m.values()];
   }, [allRooms]);
 
+  // Rooms actually sent on save: the manual picks, or — in auto mode —
+  // the first N available rooms of each chosen type.
+  const effectiveRooms = React.useMemo<SelectedRoom[]>(() => {
+    if (allotmentMode === "manual") return selectedRooms;
+    const out: SelectedRoom[] = [];
+    for (const group of roomsByType) {
+      const want = autoCounts[group.typeId] ?? 0;
+      const available = group.rooms.filter((r) => !isUnavailable(r));
+      for (let i = 0; i < Math.min(want, available.length); i++) {
+        out.push({ room_id: available[i].id, nightly_rate: group.baseRate });
+      }
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allotmentMode, selectedRooms, roomsByType, autoCounts]);
+
+  const total = effectiveRooms.reduce((s, r) => s + r.nightly_rate * Math.max(nights, 1), 0);
+  const outstanding = Math.max(0, total - (paymentStatus === "paid" ? total : paidAmount));
+
   function toggleRoom(room: RoomRow) {
     setSelectedRooms((cur) => {
       const exists = cur.find((r) => r.room_id === room.id);
@@ -220,10 +258,14 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     });
   }
 
+  function setAutoCount(typeId: string, n: number) {
+    setAutoCounts((cur) => ({ ...cur, [typeId]: Math.max(0, n) }));
+  }
+
   const updateMut = useMutation({
     mutationFn: () => {
       if (!booking || !booking.guests) throw new Error("Booking tidak valid");
-      if (selectedRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
+      if (effectiveRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
       return fnUpdate({
         data: {
           id: booking.id,
@@ -244,7 +286,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           paid_amount: paymentStatus === "paid" ? total : paidAmount,
           special_requests: specialRequests.trim() || null,
           internal_notes: internalNotes.trim() || null,
-          rooms: selectedRooms,
+          rooms: effectiveRooms,
         },
       });
     },
@@ -264,7 +306,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     !updateMut.isPending &&
     guest.full_name.trim().length > 0 &&
     nights >= 1 &&
-    selectedRooms.length > 0;
+    effectiveRooms.length > 0;
 
   const paymentChip = PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.chip;
 
@@ -389,60 +431,129 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
             {/* Kamar — multi-select */}
             <Section
               icon={<BedDouble className="h-4 w-4" />}
-              title={`Kamar${selectedRooms.length ? ` · ${selectedRooms.length} dipilih` : ""}`}
+              title={`Kamar${effectiveRooms.length ? ` · ${effectiveRooms.length} dipilih` : ""}`}
             >
+              {/* Mode: auto allotment vs manual */}
+              <div className="mb-2 flex gap-0.5 rounded-lg bg-muted p-0.5">
+                {(
+                  [
+                    ["auto", "Otomatis"],
+                    ["manual", "Manual"],
+                  ] as const
+                ).map(([m, label]) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setAllotmentMode(m)}
+                    className={cn(
+                      "flex-1 rounded-md py-1.5 text-xs font-medium transition",
+                      allotmentMode === m
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-3 text-[10px] text-muted-foreground">
+                {allotmentMode === "auto"
+                  ? "Otomatis — tentukan jumlah kamar per tipe, sistem yang memilih kamarnya."
+                  : "Manual — pilih kamar tertentu satu per satu."}
+              </p>
+
               {roomsByType.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   Belum ada kamar — tambah kamar dulu di halaman Rooms.
                 </p>
               )}
-              <div className="space-y-4">
-                {roomsByType.map((group) => (
-                  <div key={group.typeName} className="rounded-lg border border-border">
-                    <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
-                      <p className="text-xs font-semibold">{group.typeName}</p>
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                        {formatIDR(group.baseRate)}/malam
-                      </p>
-                    </div>
-                    <div className="divide-y divide-border">
-                      {group.rooms.map((room) => {
-                        const sel = selectedRooms.find((s) => s.room_id === room.id);
-                        const ooo = room.status === "out_of_order";
-                        return (
-                          <div
-                            key={room.id}
-                            className={cn(
-                              "flex items-center gap-3 px-3 py-2.5 transition-colors",
-                              sel ? "bg-primary/5" : "hover:bg-muted/30",
-                              ooo && "opacity-50",
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              disabled={ooo}
-                              checked={!!sel}
-                              onChange={() => toggleRoom(room)}
-                              className="h-4 w-4 cursor-pointer rounded border-border accent-primary"
-                            />
-                            <div className="flex-1">
-                              <p className="font-mono text-sm font-semibold">{room.number}</p>
-                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                {ooo
-                                  ? "Tidak aktif"
-                                  : `Kapasitas ${room.room_types?.capacity ?? "—"} tamu`}
-                              </p>
-                            </div>
+              <div className="space-y-3">
+                {roomsByType.map((group) => {
+                  const availableCount = group.rooms.filter((r) => !isUnavailable(r)).length;
+                  const count = autoCounts[group.typeId] ?? 0;
+                  return (
+                    <div key={group.typeId} className="rounded-lg border border-border">
+                      <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
+                        <p className="text-xs font-semibold">{group.typeName}</p>
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                          {formatIDR(group.baseRate)}/malam
+                        </p>
+                      </div>
+
+                      {allotmentMode === "auto" ? (
+                        <div className="flex items-center justify-between px-3 py-2.5">
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                            {availableCount} kamar tersedia
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={count <= 0}
+                              onClick={() => setAutoCount(group.typeId, count - 1)}
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
+                              {Math.min(count, availableCount)}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={count >= availableCount}
+                              onClick={() => setAutoCount(group.typeId, count + 1)}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                        );
-                      })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 p-2">
+                          {group.rooms.map((room) => {
+                            const sel = selectedRooms.find((s) => s.room_id === room.id);
+                            const unavailable = isUnavailable(room);
+                            return (
+                              <label
+                                key={room.id}
+                                className={cn(
+                                  "flex items-center gap-1.5 rounded px-1.5 py-1 transition-colors",
+                                  unavailable
+                                    ? "cursor-not-allowed opacity-50"
+                                    : "cursor-pointer hover:bg-muted/40",
+                                  sel && "bg-primary/5",
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={unavailable}
+                                  checked={!!sel}
+                                  onChange={() => toggleRoom(room)}
+                                  className="h-3.5 w-3.5 cursor-pointer rounded border-border accent-primary"
+                                />
+                                <span className="font-mono text-xs font-semibold">
+                                  {room.number}
+                                </span>
+                                {unavailable && (
+                                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                    tidak tersedia
+                                  </span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <p className="mt-2 font-mono text-[11px] text-muted-foreground">
                 Total: <span className="text-foreground">{formatIDR(total)}</span> ·{" "}
-                {selectedRooms.length} kamar × {Math.max(nights, 1)} malam
+                {effectiveRooms.length} kamar × {Math.max(nights, 1)} malam
               </p>
             </Section>
 
