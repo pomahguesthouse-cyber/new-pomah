@@ -501,11 +501,20 @@ function PomahNav({
   const background = header.transparent
     ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
     : header.bgColor;
-  const positionClass = header.transparent
-    ? "absolute inset-x-0 top-0"
-    : header.sticky
-      ? "sticky top-0"
-      : "relative";
+
+  // Sticky headers use `position: fixed` — reliable regardless of any
+  // ancestor `overflow`, which can silently break `position: sticky`.
+  // A solid sticky header also needs a spacer so content isn't hidden.
+  const headerHeight = Math.max(header.logoSize, 36) + 32;
+  let positionClass: string;
+  if (header.sticky) {
+    positionClass = "fixed inset-x-0 top-0";
+  } else if (header.transparent) {
+    positionClass = "absolute inset-x-0 top-0";
+  } else {
+    positionClass = "relative";
+  }
+  const needsSpacer = header.sticky && !header.transparent;
 
   const logoEl = (
     <Link to="/" className="flex items-baseline gap-1.5" title={name} key="logo">
@@ -560,13 +569,16 @@ function PomahNav({
         : [logoEl, linksEl, actionsEl];
 
   return (
-    <nav
-      className={`z-40 text-white ${positionClass} ${header.dropShadow ? "shadow-md" : ""}`}
-      style={{ background }}
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
-      <span className="sr-only">{name}</span>
-    </nav>
+    <>
+      <nav
+        className={`z-40 text-white ${positionClass} ${header.dropShadow ? "shadow-md" : ""}`}
+        style={{ background }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
+        <span className="sr-only">{name}</span>
+      </nav>
+      {needsSpacer && <div style={{ height: headerHeight }} aria-hidden />}
+    </>
   );
 }
 
