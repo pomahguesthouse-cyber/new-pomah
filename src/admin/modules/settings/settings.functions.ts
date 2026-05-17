@@ -89,3 +89,60 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+/* ------------------------------------------------------------------ */
+/* Integrations — Fonnte WhatsApp + Google services                    */
+/* ------------------------------------------------------------------ */
+
+const INTEGRATION_FIELDS = [
+  "fonnte_token",
+  "google_place_id",
+  "google_analytics_id",
+  "google_tag_manager_id",
+  "google_search_console",
+] as const;
+
+/** Read the property's third-party integration settings. */
+export const getIntegrationSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("properties")
+      .select(`id, ${INTEGRATION_FIELDS.join(", ")}`)
+      .limit(1)
+      .maybeSingle();
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id: (row.id as string | undefined) ?? null,
+      fonnte_token: (row.fonnte_token as string | null) ?? null,
+      google_place_id: (row.google_place_id as string | null) ?? null,
+      google_analytics_id: (row.google_analytics_id as string | null) ?? null,
+      google_tag_manager_id: (row.google_tag_manager_id as string | null) ?? null,
+      google_search_console: (row.google_search_console as string | null) ?? null,
+    };
+  });
+
+/** Persist one or more integration settings for the property. */
+export const updateIntegrationSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        fonnte_token: z.string().max(500).nullable().optional(),
+        google_place_id: z.string().max(300).nullable().optional(),
+        google_analytics_id: z.string().max(100).nullable().optional(),
+        google_tag_manager_id: z.string().max(100).nullable().optional(),
+        google_search_console: z.string().max(500).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    for (const k of INTEGRATION_FIELDS) {
+      if (data[k] !== undefined) patch[k] = data[k];
+    }
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
