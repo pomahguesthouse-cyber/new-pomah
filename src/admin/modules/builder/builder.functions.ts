@@ -67,8 +67,11 @@ export const getLandingPage = createServerFn({ method: "GET" })
  * The editor opens straight onto the public homepage — there is no
  * "create a page" step. If no `home` landing page exists yet it is
  * seeded from the built-in `HOME_TEMPLATE`.
+ *
+ * Declared as a GET server function so it can be safely awaited from a
+ * route loader during SSR (POST server functions fail there).
  */
-export const getOrCreateHomePage = createServerFn({ method: "POST" })
+export const getOrCreateHomePage = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const sb = db(context.supabase);
