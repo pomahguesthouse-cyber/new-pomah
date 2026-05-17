@@ -7,6 +7,7 @@ import {
   differenceInCalendarDays,
   format,
   isToday,
+  isSunday,
   parseISO,
   startOfDay,
   startOfMonth,
@@ -50,6 +51,8 @@ export const Route = createFileRoute("/admin/calendar")({
 });
 
 const WINDOW_DAYS = 14;
+/** Extra day(s) shown before the anchor, at the far left of the grid. */
+const LEAD_DAYS = 1;
 const MONTHS = [
   "Januari",
   "Februari",
@@ -85,12 +88,13 @@ function CalendarPage() {
   const queryClient = useQueryClient();
 
   const days = React.useMemo(
-    () => Array.from({ length: WINDOW_DAYS }, (_, i) => addDays(anchor, i)),
+    () =>
+      Array.from({ length: WINDOW_DAYS + LEAD_DAYS }, (_, i) => addDays(anchor, i - LEAD_DAYS)),
     [anchor],
   );
 
-  const from = fmtIso(anchor);
-  const to = fmtIso(addDays(anchor, WINDOW_DAYS));
+  const from = fmtIso(days[0]);
+  const to = fmtIso(days[days.length - 1]);
 
   const fetchCalendar = useServerFn(getCalendarData);
   const { data, isLoading } = useQuery({
@@ -256,7 +260,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                   style={{ width: cellWidth }}
                   className={cn(
                     "shrink-0 border-l border-border px-1 py-2 text-center transition-all relative",
-                    today ? "bg-primary/5" : "",
+                    isSunday(d) ? "bg-rose-100" : today ? "bg-primary/5" : "",
                   )}
                 >
                   <div
@@ -325,7 +329,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                         style={{ width: cellWidth }}
                         className={cn(
                           "shrink-0 border-l border-border/50 transition-colors focus:outline-none",
-                          isToday(d) ? "bg-primary/[0.02]" : "",
+                          isSunday(d) ? "bg-rose-50" : isToday(d) ? "bg-primary/[0.02]" : "",
                         )}
                       />
                     ))}
@@ -337,7 +341,7 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                       const startIdx = differenceInCalendarDays(ci, windowStart);
                       const endIdx = differenceInCalendarDays(co, windowStart);
 
-                      if (endIdx < 0 || startIdx >= WINDOW_DAYS) return null;
+                      if (endIdx < 0 || startIdx >= days.length) return null;
 
                       const left = labelWidth + startIdx * cellWidth + cellWidth / 2;
                       const width = (endIdx - startIdx) * cellWidth;
