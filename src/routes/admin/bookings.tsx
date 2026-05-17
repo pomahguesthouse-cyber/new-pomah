@@ -4,22 +4,12 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tansta
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
-import {
-  listBookings,
-  updateBookingStatus,
-  deleteBooking,
-} from "@/admin/functions/bookings.functions";
+import { listBookings, updateBookingStatus, deleteBooking } from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +37,13 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+/** Display metadata for a booking's payment status. */
+const PAYMENT_META: Record<string, { label: string; cls: string }> = {
+  unpaid: { label: "Belum bayar", cls: "bg-destructive/15 text-destructive" },
+  partial: { label: "DP", cls: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" },
+  paid: { label: "Lunas", cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+};
+
 const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Semua sumber" },
   { value: "direct", label: "Direct" },
@@ -67,7 +64,6 @@ type BookingListRow = {
   source: string;
   total_amount: number;
   payment_status?: "unpaid" | "partial" | "paid" | null;
-  paid_amount?: number | null;
   guests?: { full_name?: string | null; phone?: string | null } | null;
   booking_rooms?:
     | {
@@ -146,11 +142,7 @@ function BookingsPage() {
     placeholderData: keepPreviousData,
   });
 
-  useRealtimeInvalidate(
-    "admin-bookings-stream",
-    ["bookings", "guests", "rooms"],
-    [["bookings"], ["dashboard"]],
-  );
+  useRealtimeInvalidate("admin-bookings-stream", ["bookings", "guests", "rooms"], [["bookings"], ["dashboard"]]);
 
   const mut = useMutation({
     mutationFn: (vars: { id: string; status: BookingStatus }) => update({ data: vars }),
@@ -196,9 +188,7 @@ function BookingsPage() {
     <div className="space-y-6 p-6 md:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Reservations
-          </p>
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1>
         </div>
         <Button onClick={() => setNewOpen(true)} className="gap-2">
@@ -212,11 +202,11 @@ function BookingsPage() {
           <p className="text-sm font-semibold text-destructive">Gagal memuat booking</p>
           <p className="mt-1 font-mono text-xs text-destructive/80">{(error as Error).message}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Kalau errornya menyebut <code>booking_rooms</code> atau <code>relationship</code>,
-            jalankan migration multi-kamar di Supabase (SQL Editor → paste isi file{" "}
-            <code>supabase/migrations/20260516120000_create_booking_rooms.sql</code> → Run). Kalau
-            menyebut kolom seperti <code>payment_status</code>, jalankan juga{" "}
-            <code>20260515130000_*.sql</code> dan <code>20260515120000_*.sql</code>.
+            Kalau errornya menyebut <code>booking_rooms</code> atau <code>relationship</code>, jalankan migration
+            multi-kamar di Supabase (SQL Editor → paste isi file{" "}
+            <code>supabase/migrations/20260516120000_create_booking_rooms.sql</code> → Run). Kalau menyebut kolom
+            seperti <code>payment_status</code>, jalankan juga <code>20260515130000_*.sql</code> dan{" "}
+            <code>20260515120000_*.sql</code>.
           </p>
         </div>
       )}
@@ -225,9 +215,8 @@ function BookingsPage() {
         <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
           <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Mode terbatas</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Kolom payment & internal notes belum ada di database — daftar tetap tampil tapi fitur
-            pembayaran tidak aktif. Apply migration{" "}
-            <code>20260515130000_add_booking_payment_and_internal_notes.sql</code> untuk
+            Kolom payment & internal notes belum ada di database — daftar tetap tampil tapi fitur pembayaran tidak
+            aktif. Apply migration <code>20260515130000_add_booking_payment_and_internal_notes.sql</code> untuk
             mengaktifkannya.
           </p>
         </div>
@@ -240,7 +229,7 @@ function BookingsPage() {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Cari nama tamu atau kode referensi…"
+            placeholder="Cari nama tamu atau kode booking…"
             className="h-9 pl-9"
           />
           {searchInput && (
@@ -306,32 +295,30 @@ function BookingsPage() {
             <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               <th className="px-4 py-3">Kode Booking</th>
               <th className="px-4 py-3">Guest</th>
-              <th className="px-4 py-3">Kamar</th>
-              <th className="px-4 py-3">Kamar</th>
+              <th className="px-4 py-3">Room</th>
               <th className="px-4 py-3">Dates</th>
-              <th className="px-4 py-3">Payment</th>
-              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Source</th>
+              <th className="px-4 py-3">Total</th>
+              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && !error && bookings.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
                     <>Tidak ada booking yang cocok dengan filter ini.</>
                   ) : (
                     <>
-                      Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk
-                      membuat yang pertama.
+                      Belum ada booking. Klik <strong>Booking Baru</strong> di kanan atas untuk membuat yang pertama.
                     </>
                   )}
                 </td>
@@ -350,53 +337,61 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{b.guests?.full_name}</p>
-                  <p className="font-mono text-xs text-muted-foreground tabular-nums">
-                    {b.guests?.phone ?? "—"}
-                  </p>
+                  <p className="font-mono text-xs text-muted-foreground tabular-nums">{b.guests?.phone ?? "—"}</p>
                 </td>
                 <td className="px-4 py-3">
-                  <RoomSummary rooms={b.booking_rooms} />
+                  {(b.booking_rooms ?? []).length === 0 ? (
+                    <p className="text-muted-foreground">—</p>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {(b.booking_rooms ?? []).map((br) => (
+                        <p key={br.id} className="leading-tight">
+                          {br.room_types?.name ?? "—"}
+                          <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                            {br.rooms?.number ? br.rooms.number : "belum di-assign"}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </td>
-                <td className="px-4 py-3 font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</td>
-                <td className="px-4 py-3 text-xs">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Check-In
+                <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                  <p>
+                    {formatDateID(b.check_in)} → {formatDateID(b.check_out)}
                   </p>
-                  <p className="font-mono tabular-nums">{formatDateID(b.check_in)}</p>
-                  <p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    Check-Out
-                  </p>
-                  <p className="font-mono tabular-nums">{formatDateID(b.check_out)}</p>
-                  <p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <p className="mt-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
                 </td>
                 <td className="px-4 py-3">
-                  <PaymentCell
-                    total={Number(b.total_amount)}
-                    paid={Number(b.paid_amount ?? 0)}
-                    status={b.payment_status}
-                  />
-                </td>
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    value={b.status}
-                    onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
-                  >
-                    <SelectTrigger className="h-7 w-28 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s} className="text-xs">
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </td>
-                <td className="px-4 py-3">
                   <Badge variant="outline">{b.source}</Badge>
+                </td>
+                <td className="px-4 py-3 font-mono tabular-nums">{formatIDR(Number(b.total_amount))}</td>
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={b.status}
+                      onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}
+                    >
+                      <SelectTrigger className="h-7 w-28 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s} className="text-xs">
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {b.payment_status && PAYMENT_META[b.payment_status] && (
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide ${PAYMENT_META[b.payment_status].cls}`}
+                      >
+                        {PAYMENT_META[b.payment_status].label}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <Button
@@ -404,9 +399,7 @@ function BookingsPage() {
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     title="Hapus booking"
-                    onClick={() =>
-                      setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })
-                    }
+                    onClick={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -462,8 +455,7 @@ function BookingsPage() {
           <DialogHeader>
             <DialogTitle>Hapus booking {deleteCtx?.ref}?</DialogTitle>
             <DialogDescription>
-              Seluruh data booking ini akan dihapus permanen dan tidak bisa dikembalikan. Data tamu
-              tidak ikut terhapus.
+              Seluruh data booking ini akan dihapus permanen dan tidak bisa dikembalikan. Data tamu tidak ikut terhapus.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -480,72 +472,6 @@ function BookingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-/** Room column: rooms grouped by type — type name, then its room numbers. */
-function RoomSummary({ rooms }: { rooms: BookingListRow["booking_rooms"] }) {
-  const groups = new Map<string, string[]>();
-  for (const br of rooms ?? []) {
-    const name = br.room_types?.name ?? "—";
-    const num = br.rooms?.number ?? "belum di-assign";
-    if (!groups.has(name)) groups.set(name, []);
-    groups.get(name)!.push(num);
-  }
-  if (groups.size === 0) return <p className="text-muted-foreground">—</p>;
-  return (
-    <div className="space-y-1.5">
-      {[...groups].map(([name, nums]) => (
-        <div key={name} className="leading-tight">
-          <p className="font-medium">{name}</p>
-          <p className="font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Payment column: total plus a DP/Sisa breakdown or a Lunas / Belum bayar label. */
-function PaymentCell({
-  total,
-  paid,
-  status,
-}: {
-  total: number;
-  paid: number;
-  status?: "unpaid" | "partial" | "paid" | null;
-}) {
-  return (
-    <div className="space-y-0.5 font-mono text-xs tabular-nums">
-      <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground">Total</span>
-        <span className="font-semibold text-foreground">{formatIDR(total)}</span>
-      </div>
-      {status === "partial" && (
-        <>
-          <div className="flex justify-between gap-4 text-muted-foreground">
-            <span>DP</span>
-            <span>{formatIDR(paid)}</span>
-          </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-muted-foreground">Sisa</span>
-            <span className="text-amber-700 dark:text-amber-400">
-              {formatIDR(Math.max(0, total - paid))}
-            </span>
-          </div>
-        </>
-      )}
-      {status === "paid" && (
-        <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-          Lunas
-        </p>
-      )}
-      {(!status || status === "unpaid") && (
-        <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-destructive">
-          Belum bayar
-        </p>
-      )}
     </div>
   );
 }
