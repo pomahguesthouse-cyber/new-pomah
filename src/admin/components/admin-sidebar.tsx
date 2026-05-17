@@ -12,7 +12,6 @@ import {
   BarChart3,
   Search,
   Settings,
-  LayoutTemplate,
 } from "lucide-react";
 
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
@@ -45,7 +44,6 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin/calendar", label: "Calendar", icon: CalendarDays },
       { to: "/admin/bookings", label: "Bookings", icon: CalendarDays },
       { to: "/admin/rooms", label: "Rooms", icon: BedDouble },
-      { to: "/admin/pages", label: "Editor", icon: LayoutTemplate },
       { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
     ],
   },
