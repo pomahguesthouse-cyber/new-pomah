@@ -8,12 +8,11 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { getPublishedLandingPage } from "@/public/functions/public.functions";
 import { PageRenderer } from "@/admin/modules/builder/renderer";
-import type { PageContent } from "@/admin/modules/builder/types";
 
 interface PublishedPage {
   title: string;
   slug: string;
-  published_content: PageContent | null;
+  published_content: unknown;
   seo_title: string | null;
   seo_description: string | null;
   og_image_url: string | null;
@@ -44,11 +43,10 @@ export const Route = createFileRoute("/p/$slug")({
 
 function PublicLandingPage() {
   const { page } = Route.useLoaderData();
-  const content: PageContent = page.published_content ?? { version: 1, nodes: [] };
 
   return (
     <div className="min-h-screen bg-white">
-      <PageRenderer content={content} />
+      <PageRenderer content={page.published_content} />
     </div>
   );
 }

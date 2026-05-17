@@ -1,177 +1,272 @@
 /**
  * Editor state store (Zustand).
  *
- * Holds the working component tree, selection, preview device and a
- * full undo/redo history. Every structural mutation goes through
- * `commit()`, which snapshots the previous node list onto the undo
- * stack — so undo/redo, dirty tracking and autosave all stay correct.
+ * Holds the working section tree, the page theme, the current selection
+ * and a full undo/redo history. Every structural mutation goes through
+ * `commit()`, which snapshots the previous state — so undo/redo, dirty
+ * tracking and autosave all stay correct.
  */
 import { create } from "zustand";
-import type { ComponentType, DeviceMode, PageContent, PageNode } from "./types";
+import type { DeviceMode, Element, ElementType, PageContent, PageTheme, Section } from "./types";
+import { DEFAULT_THEME, emptySection, normalizePage, uid } from "./types";
 import { getComponent } from "./registry";
 
 /** Max snapshots kept on the undo stack. */
 const HISTORY_LIMIT = 50;
 
-function uid(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `n_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+/** A point-in-time snapshot used by undo/redo. */
+interface Snapshot {
+  sections: Section[];
+  theme: PageTheme;
 }
 
 interface EditorState {
-  /** Current component tree. */
-  nodes: PageNode[];
-  /** Currently selected node id, or null. */
-  selectedId: string | null;
+  /** Ordered section tree. */
+  sections: Section[];
+  /** Global page theme. */
+  theme: PageTheme;
+  /** Selected section id, or null. */
+  selectedSectionId: string | null;
+  /** Selected element id, or null. */
+  selectedElementId: string | null;
   /** Active responsive preview device. */
   device: DeviceMode;
   /** Unsaved changes since last `markSaved()`. */
   dirty: boolean;
   /** Undo / redo snapshot stacks. */
-  past: PageNode[][];
-  future: PageNode[][];
+  past: Snapshot[];
+  future: Snapshot[];
 
   /* lifecycle */
-  load: (content: PageContent) => void;
+  load: (content: unknown) => void;
   markSaved: () => void;
   toContent: () => PageContent;
 
   /* selection + device */
-  select: (id: string | null) => void;
+  selectSection: (id: string | null) => void;
+  selectElement: (sectionId: string, elementId: string) => void;
+  clearSelection: () => void;
   setDevice: (device: DeviceMode) => void;
 
-  /* mutations */
-  addNode: (type: ComponentType, atIndex?: number) => void;
-  updateProps: (id: string, patch: Record<string, unknown>) => void;
-  removeNode: (id: string) => void;
-  duplicateNode: (id: string) => void;
-  moveNode: (id: string, direction: "up" | "down") => void;
-  reorder: (fromIndex: number, toIndex: number) => void;
+  /* section mutations */
+  addSection: (atIndex?: number) => void;
+  updateSection: (id: string, patch: Partial<Section>) => void;
+  removeSection: (id: string) => void;
+  duplicateSection: (id: string) => void;
+  moveSection: (fromIndex: number, toIndex: number) => void;
+
+  /* element mutations */
+  addElement: (sectionId: string, type: ElementType) => void;
+  updateElementProps: (
+    sectionId: string,
+    elementId: string,
+    patch: Record<string, unknown>,
+  ) => void;
+  updateElement: (sectionId: string, elementId: string, patch: Partial<Element>) => void;
+  removeElement: (sectionId: string, elementId: string) => void;
+  duplicateElement: (sectionId: string, elementId: string) => void;
+  moveElement: (sectionId: string, elementId: string, direction: "up" | "down") => void;
+
+  /* theme */
+  updateTheme: (patch: Partial<PageTheme>) => void;
 
   /* history */
   undo: () => void;
   redo: () => void;
-  canUndo: () => boolean;
-  canRedo: () => boolean;
 }
 
 export const useEditorStore = create<EditorState>((set, get) => {
-  /** Apply a structural change while recording an undo snapshot. */
-  const commit = (next: PageNode[]) => {
-    const { nodes, past } = get();
+  /** Apply a change while recording an undo snapshot. */
+  const commit = (next: Partial<Snapshot>) => {
+    const { sections, theme, past } = get();
     set({
-      nodes: next,
-      past: [...past, nodes].slice(-HISTORY_LIMIT),
+      sections: next.sections ?? sections,
+      theme: next.theme ?? theme,
+      past: [...past, { sections, theme }].slice(-HISTORY_LIMIT),
       future: [],
       dirty: true,
     });
   };
 
+  const mapSection = (id: string, fn: (s: Section) => Section) =>
+    get().sections.map((s) => (s.id === id ? fn(s) : s));
+
   return {
-    nodes: [],
-    selectedId: null,
+    sections: [],
+    theme: { ...DEFAULT_THEME },
+    selectedSectionId: null,
+    selectedElementId: null,
     device: "desktop",
     dirty: false,
     past: [],
     future: [],
 
-    load: (content) =>
+    load: (content) => {
+      const doc = normalizePage(content);
       set({
-        nodes: content?.nodes ?? [],
-        selectedId: null,
+        sections: doc.sections,
+        theme: doc.theme,
+        selectedSectionId: doc.sections[0]?.id ?? null,
+        selectedElementId: null,
         past: [],
         future: [],
         dirty: false,
-      }),
+      });
+    },
 
     markSaved: () => set({ dirty: false }),
 
-    toContent: () => ({ version: 1, nodes: get().nodes }),
+    toContent: () => ({ version: 2, sections: get().sections, theme: get().theme }),
 
-    select: (id) => set({ selectedId: id }),
+    selectSection: (id) => set({ selectedSectionId: id, selectedElementId: null }),
+
+    selectElement: (sectionId, elementId) =>
+      set({ selectedSectionId: sectionId, selectedElementId: elementId }),
+
+    clearSelection: () => set({ selectedElementId: null }),
 
     setDevice: (device) => set({ device }),
 
-    addNode: (type, atIndex) => {
+    /* ---- sections -------------------------------------------------- */
+
+    addSection: (atIndex) => {
+      const section = emptySection(`Section ${get().sections.length + 1}`);
+      const sections = [...get().sections];
+      sections.splice(atIndex ?? sections.length, 0, section);
+      commit({ sections });
+      set({ selectedSectionId: section.id, selectedElementId: null });
+    },
+
+    updateSection: (id, patch) => commit({ sections: mapSection(id, (s) => ({ ...s, ...patch })) }),
+
+    removeSection: (id) => {
+      commit({ sections: get().sections.filter((s) => s.id !== id) });
+      if (get().selectedSectionId === id) set({ selectedSectionId: null, selectedElementId: null });
+    },
+
+    duplicateSection: (id) => {
+      const sections = [...get().sections];
+      const i = sections.findIndex((s) => s.id === id);
+      if (i === -1) return;
+      const src = sections[i];
+      const copy: Section = {
+        ...src,
+        id: uid("s"),
+        name: `${src.name} copy`,
+        elements: src.elements.map((e) => ({ ...e, id: uid("e"), props: { ...e.props } })),
+      };
+      sections.splice(i + 1, 0, copy);
+      commit({ sections });
+      set({ selectedSectionId: copy.id, selectedElementId: null });
+    },
+
+    moveSection: (fromIndex, toIndex) => {
+      const sections = [...get().sections];
+      if (fromIndex < 0 || fromIndex >= sections.length) return;
+      const [moved] = sections.splice(fromIndex, 1);
+      sections.splice(Math.max(0, Math.min(toIndex, sections.length)), 0, moved);
+      commit({ sections });
+    },
+
+    /* ---- elements -------------------------------------------------- */
+
+    addElement: (sectionId, type) => {
       const def = getComponent(type);
       if (!def) return;
-      const node: PageNode = { id: uid(), type, props: { ...def.defaults } };
-      const nodes = [...get().nodes];
-      const index = atIndex ?? nodes.length;
-      nodes.splice(index, 0, node);
-      commit(nodes);
-      set({ selectedId: node.id });
+      const element: Element = { id: uid("e"), type, props: { ...def.defaults }, colSpan: 1 };
+      commit({
+        sections: mapSection(sectionId, (s) => ({ ...s, elements: [...s.elements, element] })),
+      });
+      set({ selectedSectionId: sectionId, selectedElementId: element.id });
     },
 
-    updateProps: (id, patch) => {
-      const nodes = get().nodes.map((n) =>
-        n.id === id ? { ...n, props: { ...n.props, ...patch } } : n,
-      );
-      commit(nodes);
+    updateElementProps: (sectionId, elementId, patch) =>
+      commit({
+        sections: mapSection(sectionId, (s) => ({
+          ...s,
+          elements: s.elements.map((e) =>
+            e.id === elementId ? { ...e, props: { ...e.props, ...patch } } : e,
+          ),
+        })),
+      }),
+
+    updateElement: (sectionId, elementId, patch) =>
+      commit({
+        sections: mapSection(sectionId, (s) => ({
+          ...s,
+          elements: s.elements.map((e) => (e.id === elementId ? { ...e, ...patch } : e)),
+        })),
+      }),
+
+    removeElement: (sectionId, elementId) => {
+      commit({
+        sections: mapSection(sectionId, (s) => ({
+          ...s,
+          elements: s.elements.filter((e) => e.id !== elementId),
+        })),
+      });
+      if (get().selectedElementId === elementId) set({ selectedElementId: null });
     },
 
-    removeNode: (id) => {
-      commit(get().nodes.filter((n) => n.id !== id));
-      if (get().selectedId === id) set({ selectedId: null });
+    duplicateElement: (sectionId, elementId) => {
+      let newId: string | null = null;
+      commit({
+        sections: mapSection(sectionId, (s) => {
+          const i = s.elements.findIndex((e) => e.id === elementId);
+          if (i === -1) return s;
+          newId = uid("e");
+          const copy: Element = { ...s.elements[i], id: newId, props: { ...s.elements[i].props } };
+          const elements = [...s.elements];
+          elements.splice(i + 1, 0, copy);
+          return { ...s, elements };
+        }),
+      });
+      if (newId) set({ selectedElementId: newId });
     },
 
-    duplicateNode: (id) => {
-      const nodes = [...get().nodes];
-      const index = nodes.findIndex((n) => n.id === id);
-      if (index === -1) return;
-      const copy: PageNode = {
-        id: uid(),
-        type: nodes[index].type,
-        props: { ...nodes[index].props },
-      };
-      nodes.splice(index + 1, 0, copy);
-      commit(nodes);
-      set({ selectedId: copy.id });
-    },
+    moveElement: (sectionId, elementId, direction) =>
+      commit({
+        sections: mapSection(sectionId, (s) => {
+          const i = s.elements.findIndex((e) => e.id === elementId);
+          if (i === -1) return s;
+          const target = direction === "up" ? i - 1 : i + 1;
+          if (target < 0 || target >= s.elements.length) return s;
+          const elements = [...s.elements];
+          [elements[i], elements[target]] = [elements[target], elements[i]];
+          return { ...s, elements };
+        }),
+      }),
 
-    moveNode: (id, direction) => {
-      const nodes = [...get().nodes];
-      const index = nodes.findIndex((n) => n.id === id);
-      if (index === -1) return;
-      const target = direction === "up" ? index - 1 : index + 1;
-      if (target < 0 || target >= nodes.length) return;
-      [nodes[index], nodes[target]] = [nodes[target], nodes[index]];
-      commit(nodes);
-    },
+    /* ---- theme ----------------------------------------------------- */
 
-    reorder: (fromIndex, toIndex) => {
-      const nodes = [...get().nodes];
-      if (fromIndex < 0 || fromIndex >= nodes.length) return;
-      const [moved] = nodes.splice(fromIndex, 1);
-      nodes.splice(Math.max(0, Math.min(toIndex, nodes.length)), 0, moved);
-      commit(nodes);
-    },
+    updateTheme: (patch) => commit({ theme: { ...get().theme, ...patch } }),
+
+    /* ---- history --------------------------------------------------- */
 
     undo: () => {
-      const { past, future, nodes } = get();
+      const { past, future, sections, theme } = get();
       if (past.length === 0) return;
       const previous = past[past.length - 1];
       set({
-        nodes: previous,
+        sections: previous.sections,
+        theme: previous.theme,
         past: past.slice(0, -1),
-        future: [nodes, ...future].slice(0, HISTORY_LIMIT),
+        future: [{ sections, theme }, ...future].slice(0, HISTORY_LIMIT),
         dirty: true,
       });
     },
 
     redo: () => {
-      const { past, future, nodes } = get();
+      const { past, future, sections, theme } = get();
       if (future.length === 0) return;
       const next = future[0];
       set({
-        nodes: next,
-        past: [...past, nodes].slice(-HISTORY_LIMIT),
+        sections: next.sections,
+        theme: next.theme,
+        past: [...past, { sections, theme }].slice(-HISTORY_LIMIT),
         future: future.slice(1),
         dirty: true,
       });
     },
-
-    canUndo: () => get().past.length > 0,
-    canRedo: () => get().future.length > 0,
   };
 });

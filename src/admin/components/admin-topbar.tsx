@@ -222,11 +222,11 @@ export function AdminTopbar({
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: "/admin/settings" })}>
                 <UserIcon className="mr-2 h-4 w-4" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate({ to: "/settings" })}>
+              <DropdownMenuItem onClick={() => navigate({ to: "/admin/settings" })}>
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

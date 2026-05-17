@@ -25,6 +25,8 @@ create table if not exists public.landing_pages (
   og_image_url     text,
   canonical_url    text,
   noindex          boolean not null default false,
+  -- free-form organisational tags, edited from the Page Properties panel
+  tags             text[] not null default '{}',
   created_by       uuid,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
