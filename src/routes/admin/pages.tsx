@@ -618,6 +618,44 @@ function HeroTab({ cfg, setCfg }: TabProps) {
         </Button>
       </div>
 
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Font judul</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={hero.fontFamily}
+            onChange={(e) =>
+              set({ fontFamily: e.target.value as HomepageConfig["hero"]["fontFamily"] })
+            }
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="sans">Sans-serif</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monospace</option>
+          </select>
+          <select
+            value={hero.fontStyle}
+            onChange={(e) =>
+              set({ fontStyle: e.target.value as HomepageConfig["hero"]["fontStyle"] })
+            }
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="normal">Normal</option>
+            <option value="bold">Tebal</option>
+            <option value="italic">Miring</option>
+          </select>
+        </div>
+        <FieldRow label={`Ukuran font — ${hero.fontSize}px`}>
+          <input
+            type="range"
+            min={24}
+            max={96}
+            value={hero.fontSize}
+            onChange={(e) => set({ fontSize: Number(e.target.value) })}
+            className="w-full accent-teal-700"
+          />
+        </FieldRow>
+      </div>
+
       <LayerArrange value={hero.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );

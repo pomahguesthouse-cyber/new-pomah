@@ -352,7 +352,21 @@ function HeroSlider({
       )}
       <div className="absolute inset-0 bg-black/35" />
       <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
-        <h1 className="max-w-3xl font-serif text-4xl font-bold tracking-tight text-white drop-shadow md:text-6xl">
+        <h1
+          className={`max-w-3xl tracking-tight text-white drop-shadow ${
+            hero.fontFamily === "mono"
+              ? "font-mono"
+              : hero.fontFamily === "sans"
+                ? "font-sans"
+                : "font-serif"
+          }`}
+          style={{
+            fontSize: hero.fontSize,
+            lineHeight: 1.1,
+            fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+            fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+          }}
+        >
           {active.heading}
         </h1>
         {active.subheading && (
