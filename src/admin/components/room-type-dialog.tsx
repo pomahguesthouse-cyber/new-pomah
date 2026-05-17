@@ -9,7 +9,9 @@ import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { Loader2, Upload } from "lucide-react";
 import { createRoomType, updateRoomType } from "@/admin/functions/bookings.functions";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +71,31 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [description, setDescription] = React.useState("");
   const [amenities, setAmenities] = React.useState("");
   const [heroImageUrl, setHeroImageUrl] = React.useState("");
+  const [uploading, setUploading] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  async function uploadPhoto(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus berupa gambar");
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `room-types/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("room-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) throw error;
+      setHeroImageUrl(supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl);
+      toast.success("Foto terupload");
+    } catch (e) {
+      toast.error(`Upload gagal: ${(e as Error).message}`);
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   // Reset the form whenever the dialog opens.
   React.useEffect(() => {
@@ -238,13 +265,63 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">URL foto utama</Label>
-            <Input
-              value={heroImageUrl}
-              placeholder="https://…"
-              className="font-mono"
-              onChange={(e) => setHeroImageUrl(e.target.value)}
-            />
+            <Label className="text-xs">Foto utama</Label>
+            <div className="flex items-start gap-3">
+              <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-input bg-muted">
+                {heroImageUrl ? (
+                  <img src={heroImageUrl} alt="Foto kamar" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-[10px] text-muted-foreground">Belum ada</span>
+                )}
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <Input
+                  value={heroImageUrl}
+                  placeholder="https://… atau upload"
+                  className="font-mono"
+                  onChange={(e) => setHeroImageUrl(e.target.value)}
+                />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void uploadPhoto(f);
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="h-3.5 w-3.5" />
+                    )}
+                    {uploading ? "Mengupload…" : "Upload foto"}
+                  </Button>
+                  {heroImageUrl && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 text-destructive hover:text-destructive"
+                      disabled={uploading}
+                      onClick={() => setHeroImageUrl("")}
+                    >
+                      Hapus
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
