@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt } from "lucide-react";
 import {
   listBookings,
   updateBookingStatus,
@@ -176,6 +176,7 @@ function BookingsPage() {
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
+  const [invoiceCtx, setInvoiceCtx] = React.useState<BookingListRow | null>(null);
 
   // listBookings returns a union of full / degraded shapes — normalize.
   const bookings = (data?.bookings ?? []) as BookingListRow[];
@@ -376,6 +377,7 @@ function BookingsPage() {
                     total={Number(b.total_amount)}
                     paid={Number(b.paid_amount ?? 0)}
                     status={b.payment_status}
+                    onInvoice={() => setInvoiceCtx(b)}
                   />
                 </td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -456,6 +458,7 @@ function BookingsPage() {
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <EditBookingDialog open={!!editCtx} booking={editCtx} onClose={() => setEditCtx(null)} />
+      <InvoiceDialog booking={invoiceCtx} onClose={() => setInvoiceCtx(null)} />
 
       <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}>
         <DialogContent className="sm:max-w-[440px]">
@@ -511,10 +514,12 @@ function PaymentCell({
   total,
   paid,
   status,
+  onInvoice,
 }: {
   total: number;
   paid: number;
   status?: "unpaid" | "partial" | "paid" | null;
+  onInvoice: () => void;
 }) {
   return (
     <div className="space-y-0.5 font-mono text-xs tabular-nums">
@@ -546,6 +551,143 @@ function PaymentCell({
           Belum bayar
         </p>
       )}
+      <button
+        type="button"
+        title="Lihat invoice"
+        onClick={(e) => {
+          e.stopPropagation();
+          onInvoice();
+        }}
+        className="mt-1 inline-flex items-center gap-1 font-sans text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <Receipt className="h-3.5 w-3.5" />
+        Invoice
+      </button>
     </div>
+  );
+}
+
+/** Read-only invoice dialog for a booking. */
+function InvoiceDialog({
+  booking,
+  onClose,
+}: {
+  booking: BookingListRow | null;
+  onClose: () => void;
+}) {
+  if (!booking) return null;
+  const nights = Math.max(1, nightsBetween(booking.check_in, booking.check_out));
+  const rooms = booking.booking_rooms ?? [];
+  const total = Number(booking.total_amount);
+  const paid = Number(booking.paid_amount ?? 0);
+  const sisa = Math.max(0, total - paid);
+
+  return (
+    <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Invoice Pemesanan</DialogTitle>
+          <DialogDescription className="font-mono">
+            {booking.reference_code ?? booking.id.slice(0, 8)}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 text-sm">
+          {/* Guest */}
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Tamu
+            </p>
+            <p className="font-medium">{booking.guests?.full_name ?? "—"}</p>
+            {booking.guests?.phone && (
+              <p className="font-mono text-xs text-muted-foreground">{booking.guests.phone}</p>
+            )}
+          </div>
+
+          {/* Stay */}
+          <div className="grid grid-cols-3 gap-2 rounded-md border border-border p-3 text-xs">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                Check-In
+              </p>
+              <p className="font-mono tabular-nums">{formatDateID(booking.check_in)}</p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                Check-Out
+              </p>
+              <p className="font-mono tabular-nums">{formatDateID(booking.check_out)}</p>
+            </div>
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                Malam
+              </p>
+              <p className="font-mono tabular-nums">{nights}</p>
+            </div>
+          </div>
+
+          {/* Line items */}
+          <div>
+            <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Rincian Kamar
+            </p>
+            <div className="divide-y divide-border rounded-md border border-border">
+              {rooms.length === 0 && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Belum ada kamar.</p>
+              )}
+              {rooms.map((br) => {
+                const rate = Number(br.nightly_rate);
+                return (
+                  <div key={br.id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <div>
+                      <p className="font-medium">
+                        {br.room_types?.name ?? "—"}{" "}
+                        {br.rooms?.number && (
+                          <span className="text-muted-foreground">{br.rooms.number}</span>
+                        )}
+                      </p>
+                      <p className="font-mono text-[11px] text-muted-foreground">
+                        {formatIDR(rate)} × {nights} malam
+                      </p>
+                    </div>
+                    <p className="font-mono tabular-nums">{formatIDR(rate * nights)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Totals */}
+          <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 font-mono text-xs tabular-nums">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-semibold">{formatIDR(total)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Dibayar</span>
+              <span>{formatIDR(paid)}</span>
+            </div>
+            <div className="flex justify-between border-t border-border pt-1">
+              <span className="text-muted-foreground">Sisa</span>
+              <span
+                className={
+                  sisa > 0
+                    ? "font-semibold text-amber-700 dark:text-amber-400"
+                    : "font-semibold text-emerald-600 dark:text-emerald-400"
+                }
+              >
+                {formatIDR(sisa)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Tutup
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
