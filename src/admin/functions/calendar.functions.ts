@@ -94,6 +94,14 @@ export const updateBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: any) => d)
   .handler(async ({ data, context }: any) => {
-    await context.supabase.from("bookings").update({ status: data.status }).eq("id", data.id);
+    const { supabase } = context;
+    await supabase.from("bookings").update({ status: data.status }).eq("id", data.id);
+    // Assign (or clear) the physical room on the booking_rooms line.
+    if (data.bookingRoomId) {
+      await supabase
+        .from("booking_rooms")
+        .update({ room_id: data.roomId || null })
+        .eq("id", data.bookingRoomId);
+    }
     return { ok: true };
   });
