@@ -454,6 +454,24 @@ export const chatWithAI = createServerFn({ method: "POST" })
         } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`,
     );
 
+    // SOP knowledge base — uploaded documents the agents draw on. Read
+    // with the service-role client (sop_documents is staff-RLS).
+    let sopText = "";
+    if (cfg.tools["sop-knowledge"]?.enabled) {
+      const { data: sopDocs } = await db(supabaseAdmin)
+        .from("sop_documents")
+        .select("name, content")
+        .order("created_at", { ascending: true })
+        .limit(30);
+      const parts: string[] = [];
+      for (const d of sopDocs ?? []) {
+        const dd = d as Record<string, unknown>;
+        const c = (dd.content as string | undefined)?.trim();
+        if (c) parts.push(`### ${dd.name as string}\n${c}`);
+      }
+      sopText = parts.join("\n\n").slice(0, 8000);
+    }
+
     // Today in WIB (UTC+7) so "hari ini" is correct for Indonesia.
     const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
     const nextDay = (d: string) =>
@@ -466,6 +484,9 @@ export const chatWithAI = createServerFn({ method: "POST" })
       agentLines.length ? `Panduan tiap agent:\n${agentLines.join("\n")}` : "",
       roomLines.length
         ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
+        : "",
+      sopText
+        ? `Basis Pengetahuan SOP (rujuk dokumen ini untuk menjawab kebijakan & prosedur):\n${sopText}`
         : "",
       "KETERSEDIAAN KAMAR: Anda memiliki tool `check_room_availability`. Setiap kali tamu " +
         "menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin " +
