@@ -61,7 +61,7 @@ const SECTIONS: {
   { key: "hero", label: "Hero Slider", icon: GalleryHorizontal },
   { key: "datepicker", label: "Date Picker", icon: CalendarCheck },
   { key: "story", label: "Teks", icon: Type },
-  { key: "carousel", label: "Carousel Kamar", icon: RectangleHorizontal },
+  { key: "carousel", label: "Our Room", icon: RectangleHorizontal },
   { key: "media", label: "Media Library", icon: Images },
 ];
 
@@ -800,10 +800,17 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
     setCfg((c) => ({ ...c, roomCarousel: { ...c.roomCarousel, ...patch } }));
 
   return (
-    <Section
-      title="Carousel Kamar"
-      desc="Kartu kamar tampil sebagai carousel yang bergeser otomatis."
-    >
+    <Section title="Our Room" desc="Bagian kartu kamar yang bergeser otomatis di halaman depan.">
+      <FieldRow label="Judul section">
+        <Input value={rc.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <FieldRow label="Teks di bawah judul">
+        <Textarea
+          rows={2}
+          value={rc.subheading}
+          onChange={(e) => set({ subheading: e.target.value })}
+        />
+      </FieldRow>
       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
         <div>
           <p className="text-sm font-medium">Geser otomatis</p>
@@ -811,7 +818,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
         </div>
         <Switch checked={rc.autoplay} onCheckedChange={(v) => set({ autoplay: v })} />
       </div>
-      <FieldRow label={`Jumlah kartu sekali tampil (${rc.cardsPerView})`}>
+      <FieldRow label={`Jumlah kartu kamar ditampilkan (${rc.cardsPerView})`}>
         <input
           type="range"
           min={1}
@@ -821,7 +828,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
           className="w-full accent-teal-700"
         />
       </FieldRow>
-      <FieldRow label="Waktu slide (ms)">
+      <FieldRow label="Kecepatan slider — waktu antar slide (ms)">
         <Input
           type="number"
           value={rc.slideMs}

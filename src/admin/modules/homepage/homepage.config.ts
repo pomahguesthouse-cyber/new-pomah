@@ -70,6 +70,8 @@ export interface HomepageConfig {
     paragraphs: string[];
   };
   roomCarousel: {
+    heading: string;
+    subheading: string;
     cardsPerView: number;
     slideMs: number;
     autoplay: boolean;
@@ -133,6 +135,8 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     ],
   },
   roomCarousel: {
+    heading: "Our Room",
+    subheading: "Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar",
     cardsPerView: 3,
     slideMs: 4000,
     autoplay: true,

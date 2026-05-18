@@ -212,15 +212,17 @@ function PomahHome() {
         />
       </section>
 
-      {/* ── OUR ACCOMMODATIONS (CAROUSEL) ── */}
-      <PbZone id="carousel" label="Carousel Kamar" pb={pb}>
+      {/* ── OUR ROOM (CAROUSEL) ── */}
+      <PbZone id="carousel" label="Our Room" pb={pb}>
         <section className="relative bg-[#f3ece0] py-20" style={{ zIndex: cfg.roomCarousel.layer }}>
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
-              <SectionHeading>Our Accommodations</SectionHeading>
-              <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
-                Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar
-              </p>
+              <SectionHeading>{cfg.roomCarousel.heading}</SectionHeading>
+              {cfg.roomCarousel.subheading && (
+                <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
+                  {cfg.roomCarousel.subheading}
+                </p>
+              )}
             </div>
             <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} />
           </div>
