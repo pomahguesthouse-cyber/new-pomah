@@ -7,7 +7,9 @@
  * simulator uses.
  */
 import { useEffect, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { MessageSquare, X, Send } from "lucide-react";
+import { chatWithAI } from "@/public/functions/public.functions";
 import { cn } from "@/lib/utils";
 
 type ChatMsg = { who: "bot" | "user"; text: string };
@@ -52,20 +54,35 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
     },
   ]);
   const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const chatFn = useServerFn(chatWithAI);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [msgs, open]);
+  }, [msgs, open, busy]);
 
-  const send = () => {
+  const send = async () => {
     const text = input.trim();
-    if (!text) return;
-    setMsgs((m) => [...m, { who: "user", text }]);
+    if (!text || busy) return;
+    const next: ChatMsg[] = [...msgs, { who: "user", text }];
+    setMsgs(next);
     setInput("");
-    setTimeout(() => {
+    setBusy(true);
+    try {
+      // Try the real LLM; fall back to the rule-based engine on failure.
+      const history = next.map((m) => ({
+        role: m.who === "user" ? ("user" as const) : ("assistant" as const),
+        content: m.text,
+      }));
+      const res = await chatFn({ data: { messages: history } });
+      const reply = res.reply || botReply(text, rooms);
+      setMsgs((m) => [...m, { who: "bot", text: reply }]);
+    } catch {
       setMsgs((m) => [...m, { who: "bot", text: botReply(text, rooms) }]);
-    }, 350);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -99,6 +116,13 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
                 </div>
               </div>
             ))}
+            {busy && (
+              <div className="flex justify-start">
+                <div className="rounded-2xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-400">
+                  Mengetik…
+                </div>
+              </div>
+            )}
             <div ref={endRef} />
           </div>
           <div className="flex items-center gap-2 border-t border-stone-200 p-2">

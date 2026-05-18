@@ -18,6 +18,7 @@ import {
   BarChart3,
   Tag,
   Search,
+  Sparkles,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -479,6 +480,9 @@ function IntegrationTab() {
       google_analytics_id?: string | null;
       google_tag_manager_id?: string | null;
       google_search_console?: string | null;
+      ai_api_key?: string | null;
+      ai_base_url?: string | null;
+      ai_model?: string | null;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integration-settings"] });
@@ -553,6 +557,34 @@ function IntegrationTab() {
         value={data?.google_search_console ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — API Key"
+        description="API key LLM (OpenAI-compatible) untuk webchat AI di halaman depan."
+        placeholder="sk-…"
+        secret
+        value={data?.ai_api_key ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_api_key: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — Base URL"
+        description="Endpoint OpenAI-compatible. Kosongkan untuk OpenAI default."
+        placeholder="https://api.openai.com/v1"
+        value={data?.ai_base_url ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_base_url: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — Model"
+        description="Nama model, mis. gpt-4o-mini. Kosongkan untuk default."
+        placeholder="gpt-4o-mini"
+        value={data?.ai_model ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_model: v })}
       />
     </div>
   );
