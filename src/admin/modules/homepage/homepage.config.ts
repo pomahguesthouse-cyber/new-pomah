@@ -61,6 +61,12 @@ export interface HomepageConfig {
     enabled: boolean;
     heading: string;
     buttonLabel: string;
+    /** Heading font family. */
+    fontFamily: "sans" | "serif" | "mono";
+    /** Heading font size in pixels. */
+    fontSize: number;
+    /** Heading font style. */
+    fontStyle: "normal" | "bold" | "italic";
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
   };
@@ -125,6 +131,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     enabled: true,
     heading: "Cek Ketersediaan",
     buttonLabel: "Cek Ketersediaan",
+    fontFamily: "serif",
+    fontSize: 18,
+    fontStyle: "bold",
     layer: 30,
   },
   story: {

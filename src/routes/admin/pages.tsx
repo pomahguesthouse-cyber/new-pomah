@@ -734,6 +734,45 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Teks tombol">
         <Input value={dp.buttonLabel} onChange={(e) => set({ buttonLabel: e.target.value })} />
       </FieldRow>
+
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Font judul</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <select
+            value={dp.fontFamily}
+            onChange={(e) =>
+              set({ fontFamily: e.target.value as HomepageConfig["datePicker"]["fontFamily"] })
+            }
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="sans">Sans-serif</option>
+            <option value="serif">Serif</option>
+            <option value="mono">Monospace</option>
+          </select>
+          <select
+            value={dp.fontStyle}
+            onChange={(e) =>
+              set({ fontStyle: e.target.value as HomepageConfig["datePicker"]["fontStyle"] })
+            }
+            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="normal">Normal</option>
+            <option value="bold">Tebal</option>
+            <option value="italic">Miring</option>
+          </select>
+        </div>
+        <FieldRow label={`Ukuran font — ${dp.fontSize}px`}>
+          <input
+            type="range"
+            min={12}
+            max={40}
+            value={dp.fontSize}
+            onChange={(e) => set({ fontSize: Number(e.target.value) })}
+            className="w-full accent-teal-700"
+          />
+        </FieldRow>
+      </div>
+
       <LayerArrange value={dp.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
