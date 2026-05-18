@@ -582,6 +582,21 @@ function HeroTab({ cfg, setCfg }: TabProps) {
         </FieldRow>
       </div>
 
+      <FieldRow label="Animasi transisi antar slide">
+        <select
+          value={hero.transition}
+          onChange={(e) =>
+            set({ transition: e.target.value as HomepageConfig["hero"]["transition"] })
+          }
+          className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="fade">Fade — memudar</option>
+          <option value="slide">Slide — menggeser</option>
+          <option value="zoom">Zoom — membesar</option>
+          <option value="none">Tanpa animasi</option>
+        </select>
+      </FieldRow>
+
       <div className="space-y-3">
         <Label className="text-xs font-medium">Slide ({hero.slides.length})</Label>
         {hero.slides.map((slide, i) => (
