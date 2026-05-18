@@ -326,7 +326,17 @@ export const chatWithAI = createServerFn({ method: "POST" })
         "Lalu tiap tipe kamar satu baris — gunakan ✅ bila ada kamar tersedia atau ❌ bila penuh, " +
         "diikuti nama kamar, jumlah kamar tersedia, dan harga per malam. " +
         "Tutup dengan ajakan memilih kamar untuk lanjut booking.",
-      "Untuk pemesanan, arahkan tamu memilih tanggal di widget pemesanan lalu klik 'Cek Ketersediaan' atau 'Pesan Kamar'.",
+      "BOOKING VIA CHAT: Anda dapat membuatkan pesanan kamar langsung. Alurnya: (1) cek " +
+        "ketersediaan dengan tool, (2) setelah tamu memilih satu tipe kamar, minta nama " +
+        "lengkap, email, dan nomor HP tamu, (3) setelah SEMUA data lengkap baru panggil tool " +
+        "`create_booking`. JANGAN pernah mengarang data tamu — bila ada yang belum diberikan, " +
+        "tanyakan dulu dan jangan panggil tool.",
+      "Setelah `create_booking` berhasil: sampaikan sapaan dengan nama tamu, kode booking, " +
+        "total harga, lalu instruksi transfer ke rekening (bank, nomor rekening, atas nama) " +
+        "bila tersedia, dan minta tamu mengirim bukti pembayaran. Bila info rekening kosong, " +
+        "beritahu tamu bahwa detail pembayaran akan dikirim staf. Bila tool gagal, sampaikan " +
+        "alasannya dengan sopan.",
+      "Untuk pemesanan, tamu juga bisa memakai widget pemesanan di halaman lalu klik 'Cek Ketersediaan' atau 'Pesan Kamar'.",
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -367,6 +377,112 @@ export const chatWithAI = createServerFn({ method: "POST" })
       return JSON.stringify({ check_in: checkIn, check_out: checkOut, kamar });
     };
 
+    /** Execute the booking tool — creates a real booking, returns JSON. */
+    const runCreateBooking = async (raw: Record<string, unknown>): Promise<string> => {
+      const isDate = (v: unknown): v is string =>
+        typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+      const fullName = str(raw.full_name);
+      const email = str(raw.email);
+      const phone = str(raw.phone);
+      const roomTypeName = str(raw.room_type).toLowerCase();
+      const checkIn = isDate(raw.check_in) ? raw.check_in : "";
+      const checkOut = isDate(raw.check_out) ? raw.check_out : "";
+      const adults = Math.max(1, Math.min(8, Number(raw.adults) || 1));
+      const children = Math.max(0, Math.min(8, Number(raw.children) || 0));
+
+      if (!fullName || !email || !phone)
+        return JSON.stringify({ ok: false, error: "Data tamu belum lengkap (nama, email, HP)." });
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+        return JSON.stringify({ ok: false, error: "Format email tidak valid." });
+      if (!checkIn || !checkOut || checkOut <= checkIn)
+        return JSON.stringify({ ok: false, error: "Tanggal check-in/check-out tidak valid." });
+
+      // Match the chosen room type by name.
+      const rt =
+        roomRows.find((r) => String(r.name).toLowerCase() === roomTypeName) ??
+        roomRows.find((r) => {
+          const n = String(r.name).toLowerCase();
+          return n.includes(roomTypeName) || roomTypeName.includes(n);
+        });
+      if (!rt)
+        return JSON.stringify({
+          ok: false,
+          error: `Tipe kamar "${str(raw.room_type)}" tidak ditemukan.`,
+        });
+
+      // Re-check availability so we never overbook.
+      const { data: availRows } = await rpcClient.rpc("room_type_availability_detail", {
+        p_check_in: checkIn,
+        p_check_out: checkOut,
+      });
+      const detail = (availRows ?? []).find((r) => r.room_type_id === (rt.id as string));
+      if (detail && detail.available < 1)
+        return JSON.stringify({
+          ok: false,
+          error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+        });
+
+      const propId = p.id as string | undefined;
+      if (!propId) return JSON.stringify({ ok: false, error: "Properti belum dikonfigurasi." });
+
+      const nights = Math.round(
+        (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
+      );
+      const rate = Number(rt.base_rate ?? 0);
+      const total = rate * nights;
+
+      const { data: guest, error: gerr } = await supabasePublic
+        .from("guests")
+        .insert({ full_name: fullName, email, phone })
+        .select("id")
+        .single();
+      if (gerr || !guest) return JSON.stringify({ ok: false, error: "Gagal menyimpan data tamu." });
+
+      const { data: booking, error: berr } = await supabasePublic
+        .from("bookings")
+        .insert({
+          property_id: propId,
+          guest_id: guest.id,
+          check_in: checkIn,
+          check_out: checkOut,
+          nights,
+          adults,
+          children,
+          total_amount: total,
+          source: "direct",
+          status: "pending",
+        })
+        .select("id, reference_code")
+        .single();
+      if (berr || !booking) return JSON.stringify({ ok: false, error: "Gagal membuat booking." });
+
+      const { error: brErr } = await supabasePublic.from("booking_rooms").insert({
+        booking_id: booking.id,
+        room_id: null,
+        room_type_id: rt.id as string,
+        nightly_rate: rate,
+      });
+      if (brErr) return JSON.stringify({ ok: false, error: "Gagal menyimpan detail kamar." });
+
+      return JSON.stringify({
+        ok: true,
+        reference_code: booking.reference_code,
+        room_type: rt.name,
+        check_in: checkIn,
+        check_out: checkOut,
+        nights,
+        nightly_rate: rate,
+        total,
+        guest: { full_name: fullName, email, phone },
+        pembayaran: {
+          bank: (p.payment_bank_name as string | undefined) || null,
+          no_rekening: (p.payment_account_number as string | undefined) || null,
+          atas_nama: (p.payment_account_holder as string | undefined) || null,
+        },
+      });
+    };
+
     const tools = [
       {
         type: "function",
@@ -387,6 +503,37 @@ export const chatWithAI = createServerFn({ method: "POST" })
                   "Tanggal check-out format YYYY-MM-DD. Kosongkan untuk sehari setelah check-in.",
               },
             },
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_booking",
+          description:
+            "Buat pesanan/booking kamar untuk tamu. Panggil HANYA setelah tamu memilih tipe kamar dan memberikan nama lengkap, email, dan nomor HP. Jangan panggil bila data belum lengkap.",
+          parameters: {
+            type: "object",
+            properties: {
+              room_type: {
+                type: "string",
+                description: "Nama tipe kamar yang dipilih tamu, mis. 'Single'.",
+              },
+              full_name: { type: "string", description: "Nama lengkap tamu." },
+              email: { type: "string", description: "Alamat email tamu." },
+              phone: { type: "string", description: "Nomor HP/WhatsApp tamu." },
+              check_in: {
+                type: "string",
+                description: "Tanggal check-in format YYYY-MM-DD.",
+              },
+              check_out: {
+                type: "string",
+                description: "Tanggal check-out format YYYY-MM-DD.",
+              },
+              adults: { type: "number", description: "Jumlah tamu dewasa. Default 1." },
+              children: { type: "number", description: "Jumlah anak. Default 0." },
+            },
+            required: ["room_type", "full_name", "email", "phone", "check_in", "check_out"],
           },
         },
       },
@@ -438,14 +585,16 @@ export const chatWithAI = createServerFn({ method: "POST" })
           messages.push(msg as LlmMsg);
           for (const tc of toolCalls) {
             let out = JSON.stringify({ error: "unknown tool" });
+            let args: Record<string, unknown> = {};
+            try {
+              args = JSON.parse(tc.function?.arguments || "{}");
+            } catch {
+              args = {};
+            }
             if (tc.function?.name === "check_room_availability") {
-              let args: Record<string, unknown> = {};
-              try {
-                args = JSON.parse(tc.function.arguments || "{}");
-              } catch {
-                args = {};
-              }
               out = await runAvailability(args);
+            } else if (tc.function?.name === "create_booking") {
+              out = await runCreateBooking(args);
             }
             messages.push({ role: "tool", tool_call_id: tc.id, content: out });
           }

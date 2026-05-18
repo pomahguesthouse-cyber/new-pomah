@@ -104,6 +104,9 @@ const INTEGRATION_FIELDS = [
   "ai_api_key",
   "ai_base_url",
   "ai_model",
+  "payment_bank_name",
+  "payment_account_number",
+  "payment_account_holder",
 ] as const;
 
 /** Read the property's third-party integration settings. */
@@ -127,6 +130,9 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       ai_api_key: (row.ai_api_key as string | null) ?? null,
       ai_base_url: (row.ai_base_url as string | null) ?? null,
       ai_model: (row.ai_model as string | null) ?? null,
+      payment_bank_name: (row.payment_bank_name as string | null) ?? null,
+      payment_account_number: (row.payment_account_number as string | null) ?? null,
+      payment_account_holder: (row.payment_account_holder as string | null) ?? null,
     };
   });
 
@@ -146,6 +152,9 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         ai_api_key: z.string().max(500).nullable().optional(),
         ai_base_url: z.string().max(300).nullable().optional(),
         ai_model: z.string().max(120).nullable().optional(),
+        payment_bank_name: z.string().max(120).nullable().optional(),
+        payment_account_number: z.string().max(60).nullable().optional(),
+        payment_account_holder: z.string().max(120).nullable().optional(),
       })
       .parse(d),
   )

@@ -19,6 +19,7 @@ import {
   Tag,
   Search,
   Sparkles,
+  Landmark,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -483,6 +484,9 @@ function IntegrationTab() {
       ai_api_key?: string | null;
       ai_base_url?: string | null;
       ai_model?: string | null;
+      payment_bank_name?: string | null;
+      payment_account_number?: string | null;
+      payment_account_holder?: string | null;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integration-settings"] });
@@ -585,6 +589,33 @@ function IntegrationTab() {
         value={data?.ai_model ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, ai_model: v })}
+      />
+      <TextSettingCard
+        icon={<Landmark className="h-4 w-4" />}
+        label="Pembayaran — Nama Bank"
+        description="Bank tujuan transfer yang disampaikan chatbot setelah tamu booking."
+        placeholder="contoh: Bank BCA"
+        value={data?.payment_bank_name ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, payment_bank_name: v })}
+      />
+      <TextSettingCard
+        icon={<Landmark className="h-4 w-4" />}
+        label="Pembayaran — Nomor Rekening"
+        description="Nomor rekening tujuan transfer."
+        placeholder="contoh: 0095584379"
+        value={data?.payment_account_number ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, payment_account_number: v })}
+      />
+      <TextSettingCard
+        icon={<Landmark className="h-4 w-4" />}
+        label="Pembayaran — Atas Nama"
+        description="Nama pemilik rekening."
+        placeholder="contoh: Faizal Abdurachman"
+        value={data?.payment_account_holder ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, payment_account_holder: v })}
       />
     </div>
   );
