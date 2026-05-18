@@ -2,12 +2,15 @@
  * /admin/ai-lab — AI LAB dashboard.
  *
  * A full-screen control room for the Pomah Guesthouse AI chatbot
- * (sidebar hidden, like the Page Builder): live AI KPIs, the specialized
- * agents, the knowledge/tools they use, and the conversation pipeline.
+ * (sidebar hidden, like the Page Builder): live AI KPIs, the conversation
+ * pipeline, and the specialized agents and knowledge tools — each with
+ * its own configuration dialog.
  */
+import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
@@ -25,28 +28,57 @@ import {
   BookOpen,
   TrendingUp,
   Brain,
+  Settings2,
 } from "lucide-react";
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
+import {
+  getAiLabConfig,
+  updateAiLabConfig,
+  mergeAiLabConfig,
+  type AiLabConfig,
+} from "@/admin/modules/ai-lab/ai-lab.functions";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/admin/ai-lab")({
   component: AiLab,
 });
 
 const AGENTS = [
-  { name: "Front Office Agent", icon: Building2, desc: "Reservasi, check-in, info tamu" },
-  { name: "Pricing Agent", icon: DollarSign, desc: "Tarif dinamis & promo" },
-  { name: "Housekeeping Agent", icon: BedDouble, desc: "Status & kesiapan kamar" },
-  { name: "Maintenance Agent", icon: Wrench, desc: "Perbaikan & fasilitas" },
-  { name: "Finance Agent", icon: Calculator, desc: "Pembayaran & tagihan" },
+  {
+    key: "front-office",
+    name: "Front Office Agent",
+    icon: Building2,
+    desc: "Reservasi, check-in, info tamu",
+  },
+  { key: "pricing", name: "Pricing Agent", icon: DollarSign, desc: "Tarif dinamis & promo" },
+  {
+    key: "housekeeping",
+    name: "Housekeeping Agent",
+    icon: BedDouble,
+    desc: "Status & kesiapan kamar",
+  },
+  { key: "maintenance", name: "Maintenance Agent", icon: Wrench, desc: "Perbaikan & fasilitas" },
+  { key: "finance", name: "Finance Agent", icon: Calculator, desc: "Pembayaran & tagihan" },
 ];
 
 const TOOLS = [
-  { name: "PMS Database", icon: Database },
-  { name: "Room Availability", icon: CalendarCheck },
-  { name: "SOP Knowledge Base", icon: BookOpen },
-  { name: "Pricing Engine", icon: TrendingUp },
-  { name: "FAQ Memory", icon: Brain },
+  { key: "pms-database", name: "PMS Database", icon: Database },
+  { key: "room-availability", name: "Room Availability", icon: CalendarCheck },
+  { key: "sop-knowledge", name: "SOP Knowledge Base", icon: BookOpen },
+  { key: "pricing-engine", name: "Pricing Engine", icon: TrendingUp },
+  { key: "faq-memory", name: "FAQ Memory", icon: Brain },
 ];
 
 const PIPELINE = [
@@ -58,10 +90,45 @@ const PIPELINE = [
   { label: "Balasan ke Tamu", icon: Send },
 ];
 
+type EditTarget = { type: "agent" | "tool"; key: string } | null;
+
 function AiLab() {
-  const fn = useServerFn(getDashboardMetrics);
-  const { data } = useQuery({ queryKey: ["dashboard-metrics"], queryFn: () => fn() });
-  const s = data?.summary;
+  const metricsFn = useServerFn(getDashboardMetrics);
+  const { data: metrics } = useQuery({
+    queryKey: ["dashboard-metrics"],
+    queryFn: () => metricsFn(),
+  });
+  const s = metrics?.summary;
+
+  const cfgFn = useServerFn(getAiLabConfig);
+  const updateFn = useServerFn(updateAiLabConfig);
+  const { data: cfgData } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => cfgFn() });
+
+  const [cfg, setCfg] = useState<AiLabConfig>(() => mergeAiLabConfig({}));
+  const [edit, setEdit] = useState<EditTarget>(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (cfgData?.config) setCfg(cfgData.config);
+  }, [cfgData]);
+
+  const save = async () => {
+    if (!cfgData?.id) {
+      toast.error("Properti belum tersedia.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateFn({
+        data: { id: cfgData.id, config: cfg as unknown as Record<string, unknown> },
+      });
+      toast.success("Konfigurasi AI tersimpan");
+      setEdit(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const kpis = [
     {
@@ -158,20 +225,39 @@ function AiLab() {
               Specialized AI Agents
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {AGENTS.map((a) => (
-                <Card key={a.name} className="flex items-start gap-3 p-5">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-                    <a.icon className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{a.name}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                    Aktif
-                  </span>
-                </Card>
-              ))}
+              {AGENTS.map((a) => {
+                const ac = cfg.agents[a.key];
+                return (
+                  <Card
+                    key={a.key}
+                    onClick={() => setEdit({ type: "agent", key: a.key })}
+                    className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                      <a.icon className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{a.name}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {ac?.autoReply ? "Balas otomatis" : "Perlu persetujuan"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          ac?.enabled
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-stone-200 text-stone-500"
+                        }`}
+                      >
+                        {ac?.enabled ? "Aktif" : "Nonaktif"}
+                      </span>
+                      <Settings2 className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </section>
 
@@ -181,21 +267,190 @@ function AiLab() {
               Knowledge &amp; Tools
             </h2>
             <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {TOOLS.map((t) => (
-                <Card key={t.name} className="flex flex-col items-center gap-2 p-5 text-center">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                    <t.icon className="h-5 w-5" />
-                  </span>
-                  <p className="text-xs font-medium leading-tight">{t.name}</p>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                    Terhubung
-                  </span>
-                </Card>
-              ))}
+              {TOOLS.map((t) => {
+                const tc = cfg.tools[t.key];
+                return (
+                  <Card
+                    key={t.key}
+                    onClick={() => setEdit({ type: "tool", key: t.key })}
+                    className="group flex cursor-pointer flex-col items-center gap-2 p-5 text-center transition hover:border-sky-300 hover:shadow-md"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                      <t.icon className="h-5 w-5" />
+                    </span>
+                    <p className="text-xs font-medium leading-tight">{t.name}</p>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        tc?.enabled
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-stone-200 text-stone-500"
+                      }`}
+                    >
+                      {tc?.enabled ? "Terhubung" : "Nonaktif"}
+                    </span>
+                  </Card>
+                );
+              })}
             </div>
           </section>
         </div>
       </div>
+
+      <ConfigDialog
+        edit={edit}
+        cfg={cfg}
+        setCfg={setCfg}
+        saving={saving}
+        onClose={() => setEdit(null)}
+        onSave={save}
+      />
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Config dialog                                                       */
+/* ------------------------------------------------------------------ */
+
+function Row({
+  title,
+  desc,
+  children,
+}: {
+  title: string;
+  desc?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
+      <div>
+        <p className="text-sm font-medium">{title}</p>
+        {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ConfigDialog({
+  edit,
+  cfg,
+  setCfg,
+  saving,
+  onClose,
+  onSave,
+}: {
+  edit: EditTarget;
+  cfg: AiLabConfig;
+  setCfg: React.Dispatch<React.SetStateAction<AiLabConfig>>;
+  saving: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const agent = edit?.type === "agent" ? AGENTS.find((a) => a.key === edit.key) : null;
+  const tool = edit?.type === "tool" ? TOOLS.find((t) => t.key === edit.key) : null;
+  const label = agent?.name ?? tool?.name ?? "";
+
+  return (
+    <Dialog open={!!edit} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>Konfigurasi — {label}</DialogTitle>
+          <DialogDescription>
+            {agent ? "Atur perilaku agent AI ini." : "Atur akses dan catatan sumber data ini."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {agent && edit && (
+          <div className="space-y-3">
+            <Row title="Aktif" desc="Agent ikut menangani percakapan.">
+              <Switch
+                checked={cfg.agents[edit.key]?.enabled ?? false}
+                onCheckedChange={(v) =>
+                  setCfg((c) => ({
+                    ...c,
+                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], enabled: v } },
+                  }))
+                }
+              />
+            </Row>
+            <Row title="Balas otomatis" desc="Jika mati, balasan menunggu persetujuan staf.">
+              <Switch
+                checked={cfg.agents[edit.key]?.autoReply ?? false}
+                onCheckedChange={(v) =>
+                  setCfg((c) => ({
+                    ...c,
+                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], autoReply: v } },
+                  }))
+                }
+              />
+            </Row>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Instruksi / persona</Label>
+              <Textarea
+                rows={5}
+                placeholder="Contoh: Ramah, gunakan sapaan 'kak', jawab singkat dan jelas…"
+                value={cfg.agents[edit.key]?.instructions ?? ""}
+                onChange={(e) =>
+                  setCfg((c) => ({
+                    ...c,
+                    agents: {
+                      ...c.agents,
+                      [edit.key]: { ...c.agents[edit.key], instructions: e.target.value },
+                    },
+                  }))
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {tool && edit && (
+          <div className="space-y-3">
+            <Row title="Aktif" desc="Agent boleh memakai sumber data ini.">
+              <Switch
+                checked={cfg.tools[edit.key]?.enabled ?? false}
+                onCheckedChange={(v) =>
+                  setCfg((c) => ({
+                    ...c,
+                    tools: { ...c.tools, [edit.key]: { ...c.tools[edit.key], enabled: v } },
+                  }))
+                }
+              />
+            </Row>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Catatan / konfigurasi sumber</Label>
+              <Textarea
+                rows={5}
+                placeholder="Endpoint, kredensial, atau catatan sumber data…"
+                value={cfg.tools[edit.key]?.note ?? ""}
+                onChange={(e) =>
+                  setCfg((c) => ({
+                    ...c,
+                    tools: {
+                      ...c.tools,
+                      [edit.key]: { ...c.tools[edit.key], note: e.target.value },
+                    },
+                  }))
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Tutup
+          </Button>
+          <Button
+            className="bg-teal-700 text-white hover:bg-teal-800"
+            disabled={saving}
+            onClick={onSave}
+          >
+            {saving ? "Menyimpan…" : "Simpan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
