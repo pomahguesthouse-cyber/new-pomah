@@ -78,6 +78,13 @@ function PomahHome() {
   const gTotal = gr?.total ?? 76;
   const gReviews = gr?.reviews ?? [];
 
+  // Diagnostic: log why the Google reviews widget falls back to static.
+  useEffect(() => {
+    if (gr && gr.status !== "OK") {
+      console.warn(`[Google Reviews] tidak tampil — status: ${gr.status}`);
+    }
+  }, [gr]);
+
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
   const address = property?.address ?? "Pomah Guesthouse Semarang";
