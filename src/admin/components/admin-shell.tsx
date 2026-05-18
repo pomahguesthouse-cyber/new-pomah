@@ -5,7 +5,7 @@ import { AdminSidebar } from "@/admin/components/admin-sidebar";
 import { AdminTopbar } from "@/admin/components/admin-topbar";
 
 /** Routes that render full-screen, without the admin sidebar / topbar. */
-const BARE_ROUTES = ["/admin/pages"];
+const BARE_ROUTES = ["/admin/pages", "/admin/ai-lab"];
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
