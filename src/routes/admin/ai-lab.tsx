@@ -23,6 +23,7 @@ import {
   BedDouble,
   Wrench,
   Calculator,
+  UserCog,
   Database,
   CalendarCheck,
   BookOpen,
@@ -74,6 +75,12 @@ const AGENTS = [
   },
   { key: "maintenance", name: "Maintenance Agent", icon: Wrench, desc: "Perbaikan & fasilitas" },
   { key: "finance", name: "Finance Agent", icon: Calculator, desc: "Pembayaran & tagihan" },
+  {
+    key: "manager",
+    name: "Manager Agent",
+    icon: UserCog,
+    desc: "Khusus menangani percakapan manager",
+  },
 ];
 
 const TOOLS = [
