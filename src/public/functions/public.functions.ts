@@ -454,7 +454,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
         .insert({ full_name: fullName, email, phone })
         .select("id")
         .single();
-      if (gerr || !guest) return JSON.stringify({ ok: false, error: "Gagal menyimpan data tamu." });
+      if (gerr || !guest)
+        return JSON.stringify({
+          ok: false,
+          error: `Gagal menyimpan data tamu: ${gerr?.message ?? "tidak diketahui"}`,
+        });
 
       const { data: booking, error: berr } = await supabasePublic
         .from("bookings")
@@ -472,7 +476,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
         })
         .select("id, reference_code")
         .single();
-      if (berr || !booking) return JSON.stringify({ ok: false, error: "Gagal membuat booking." });
+      if (berr || !booking)
+        return JSON.stringify({
+          ok: false,
+          error: `Gagal membuat booking: ${berr?.message ?? "tidak diketahui"}`,
+        });
 
       const { error: brErr } = await supabasePublic.from("booking_rooms").insert({
         booking_id: booking.id,
@@ -480,7 +488,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
         room_type_id: rt.id as string,
         nightly_rate: rate,
       });
-      if (brErr) return JSON.stringify({ ok: false, error: "Gagal menyimpan detail kamar." });
+      if (brErr)
+        return JSON.stringify({
+          ok: false,
+          error: `Gagal menyimpan detail kamar: ${brErr.message}`,
+        });
 
       return JSON.stringify({
         ok: true,
