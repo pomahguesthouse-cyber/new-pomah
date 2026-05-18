@@ -130,7 +130,7 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
     if (checkIn >= checkOut) return { availability: {} as Record<string, boolean> };
 
     const [{ data: roomsData }, { data: bookings }] = await Promise.all([
-      supabasePublic.from("rooms").select("room_type_id"),
+      supabasePublic.from("rooms").select("id, room_type_id"),
       supabasePublic
         .from("bookings")
         .select("id")
@@ -139,10 +139,14 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
         .in("status", ["pending", "confirmed", "checked_in"]),
     ]);
 
+    // Total rooms per type, plus a room-id → type lookup.
     const totals: Record<string, number> = {};
+    const roomIdToType: Record<string, string> = {};
     for (const r of roomsData ?? []) {
-      const t = (r as { room_type_id?: string }).room_type_id;
-      if (t) totals[t] = (totals[t] ?? 0) + 1;
+      const row = r as { id?: string; room_type_id?: string };
+      if (!row.room_type_id) continue;
+      totals[row.room_type_id] = (totals[row.room_type_id] ?? 0) + 1;
+      if (row.id) roomIdToType[row.id] = row.room_type_id;
     }
 
     const activeIds = (bookings ?? []).map((b) => (b as { id: string }).id);
@@ -150,10 +154,12 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
     if (activeIds.length) {
       const { data: brs } = await supabasePublic
         .from("booking_rooms")
-        .select("room_type_id")
+        .select("room_type_id, room_id")
         .in("booking_id", activeIds);
       for (const br of brs ?? []) {
-        const t = (br as { room_type_id?: string }).room_type_id;
+        const b = br as { room_type_id?: string | null; room_id?: string | null };
+        // Bookings may carry the type directly, or only a room id.
+        const t = b.room_type_id ?? (b.room_id ? roomIdToType[b.room_id] : undefined);
         if (t) occupied[t] = (occupied[t] ?? 0) + 1;
       }
     }

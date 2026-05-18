@@ -130,6 +130,13 @@ function PomahHome() {
   });
   const availability = availData?.availability ?? null;
 
+  // Diagnostic: log the availability result for the chosen dates.
+  useEffect(() => {
+    if (availData) {
+      console.log("[Availability]", { checkIn, checkOut, availability: availData.availability });
+    }
+  }, [availData, checkIn, checkOut]);
+
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
