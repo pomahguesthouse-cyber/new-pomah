@@ -12,6 +12,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Send, Trash2 } from "lucide-react";
 import { listRoomTypes } from "@/admin/functions/bookings.functions";
+import { chatWithAI } from "@/public/functions/public.functions";
 import { saveTrainingExample } from "@/admin/modules/training/training.functions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -135,11 +136,13 @@ export function TrainingView() {
   const rooms = (roomData?.roomTypes ?? []) as RoomTypeRow[];
 
   const fnSave = useServerFn(saveTrainingExample);
+  const fnChat = useServerFn(chatWithAI);
 
   const [role, setRole] = useState<"tamu" | "manager">("tamu");
   const [input, setInput] = useState("");
   const [response, setResponse] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const intent = response
     ? role === "manager"
@@ -149,12 +152,27 @@ export function TrainingView() {
       ? "Menganalisa…"
       : "";
 
-  const send = () => {
-    if (!input.trim()) {
+  // Live: run the real LLM, falling back to the templated reply.
+  const send = async () => {
+    const text = input.trim();
+    if (!text) {
       toast.error("Tulis pesan dulu");
       return;
     }
-    setResponse(composeResponse(rooms, role));
+    if (sending) return;
+    setSending(true);
+    setResponse("");
+    try {
+      const content = role === "manager" ? `[Pesan dari Manager] ${text}` : text;
+      const res = await fnChat({ data: { messages: [{ role: "user", content }] } });
+      if (res.error) console.warn("[Training AI] LLM error:", res.error);
+      setResponse(res.reply || composeResponse(rooms, role));
+    } catch (e) {
+      console.warn("[Training AI] gagal:", (e as Error).message);
+      setResponse(composeResponse(rooms, role));
+    } finally {
+      setSending(false);
+    }
   };
 
   const persist = async (accepted: boolean) => {
@@ -245,11 +263,16 @@ export function TrainingView() {
                   </Button>
                   <Button
                     size="sm"
+                    disabled={sending}
                     className="h-8 bg-teal-700 text-white hover:bg-teal-800"
                     onClick={send}
                   >
-                    <Send className="mr-1 h-3.5 w-3.5" />
-                    Kirim
+                    {sending ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Send className="mr-1 h-3.5 w-3.5" />
+                    )}
+                    {sending ? "Mengirim…" : "Kirim"}
                   </Button>
                 </div>
               </div>
@@ -259,10 +282,17 @@ export function TrainingView() {
             <div>
               <p className="mb-1.5 text-xs font-semibold text-stone-600">Response</p>
               <div className="min-h-[160px] whitespace-pre-line rounded-lg border border-border bg-stone-50 p-3 text-sm text-stone-700">
-                {response || (
-                  <span className="text-stone-400">
-                    Tekan “Kirim” untuk membuat draft jawaban AI.
+                {sending ? (
+                  <span className="flex items-center gap-2 text-stone-400">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Menghubungi AI…
                   </span>
+                ) : (
+                  response || (
+                    <span className="text-stone-400">
+                      Tekan “Kirim” untuk menjalankan AI secara live.
+                    </span>
+                  )
                 )}
               </div>
             </div>
