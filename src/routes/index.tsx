@@ -203,24 +203,13 @@ function PomahHome() {
           </div>
           <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
         </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {gReviews.length > 0
-            ? gReviews.map((rv, i) => (
-                <div key={i} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-                  <Quote className="h-5 w-5 text-teal-600/40" />
-                  <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-stone-600">
-                    &ldquo;{rv.text}&rdquo;
-                  </p>
-                  <p className="mt-3 text-xs font-semibold text-stone-700">— {rv.author}</p>
-                </div>
-              ))
-            : REVIEWS.map((r) => (
-                <div key={r} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-                  <Quote className="h-5 w-5 text-teal-600/40" />
-                  <p className="mt-2 text-sm leading-relaxed text-stone-600">&ldquo;{r}&rdquo;</p>
-                </div>
-              ))}
-        </div>
+        <ReviewSlider
+          items={
+            gReviews.length > 0
+              ? gReviews.map((rv) => ({ text: rv.text, author: rv.author }))
+              : REVIEWS.map((r) => ({ text: r, author: null }))
+          }
+        />
       </section>
 
       {/* ── OUR ACCOMMODATIONS (CAROUSEL) ── */}
@@ -457,6 +446,66 @@ function HeroSlider({
 /* ------------------------------------------------------------------ */
 /* Room carousel                                                        */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* Review slider                                                        */
+/* ------------------------------------------------------------------ */
+
+function ReviewSlider({ items }: { items: { text: string; author: string | null }[] }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (items.length < 2) return;
+    const t = setInterval(() => setI((v) => (v + 1) % items.length), 5000);
+    return () => clearInterval(t);
+  }, [items.length]);
+
+  if (items.length === 0) return null;
+  const idx = i % items.length;
+  const cur = items[idx];
+
+  return (
+    <div className="mx-auto mt-6 max-w-xl">
+      <div
+        key={idx}
+        className="animate-in fade-in rounded-2xl border border-stone-200 bg-white p-7 text-center shadow-sm duration-500"
+      >
+        <Quote className="mx-auto h-6 w-6 text-teal-600/40" />
+        <p className="mt-3 text-sm leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
+        {cur.author && <p className="mt-4 text-xs font-semibold text-stone-700">— {cur.author}</p>}
+      </div>
+      {items.length > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <button
+            onClick={() => setI((v) => (v - 1 + items.length) % items.length)}
+            aria-label="Sebelumnya"
+            className="rounded-full border border-stone-300 bg-white p-1.5 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex gap-1.5">
+            {items.map((_, d) => (
+              <button
+                key={d}
+                onClick={() => setI(d)}
+                aria-label={`Ulasan ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${
+                  d === idx ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => setI((v) => (v + 1) % items.length)}
+            aria-label="Berikutnya"
+            className="rounded-full border border-stone-300 bg-white p-1.5 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 type RoomType = {
   id: string;
