@@ -17,7 +17,11 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { getPublicSiteData, getGoogleReviews } from "@/public/functions/public.functions";
+import {
+  getPublicSiteData,
+  getGoogleReviews,
+  checkRoomTypeAvailability,
+} from "@/public/functions/public.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
 
@@ -116,6 +120,15 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+
+  // Room availability for the chosen dates — filters the Our Room cards.
+  const availFn = useServerFn(checkRoomTypeAvailability);
+  const { data: availData } = useQuery({
+    queryKey: ["availability", checkIn, checkOut],
+    queryFn: () => availFn({ data: { checkIn, checkOut } }),
+    enabled: !!checkIn && !!checkOut && checkIn < checkOut,
+  });
+  const availability = availData?.availability ?? null;
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
@@ -237,7 +250,7 @@ function PomahHome() {
                 </p>
               )}
             </div>
-            <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} />
+            <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} availability={availability} />
           </div>
         </section>
       </PbZone>
@@ -532,7 +545,15 @@ type RoomType = {
   hero_image_url?: string | null;
 };
 
-function RoomCarousel({ rooms, rc }: { rooms: RoomType[]; rc: HomepageConfig["roomCarousel"] }) {
+function RoomCarousel({
+  rooms,
+  rc,
+  availability,
+}: {
+  rooms: RoomType[];
+  rc: HomepageConfig["roomCarousel"];
+  availability: Record<string, boolean> | null;
+}) {
   const per = Math.max(1, Math.min(rc.cardsPerView, 4));
   const maxIndex = Math.max(0, rooms.length - per);
   const [i, setI] = useState(0);
@@ -594,12 +615,18 @@ function RoomCarousel({ rooms, rc }: { rooms: RoomType[]; rc: HomepageConfig["ro
                       {rt.description}
                     </p>
                   )}
-                  <Link
-                    to="/book"
-                    className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
-                  >
-                    Pesan Kamar
-                  </Link>
+                  {availability && availability[rt.id] === false ? (
+                    <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">
+                      Tidak Tersedia
+                    </span>
+                  ) : (
+                    <Link
+                      to="/book"
+                      className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                    >
+                      Pesan Kamar
+                    </Link>
+                  )}
                 </div>
               </article>
             </div>
