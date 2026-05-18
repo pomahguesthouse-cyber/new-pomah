@@ -10,13 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as RoomsRouteImport } from './routes/rooms'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
@@ -36,11 +36,6 @@ import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmati
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoomsRoute = RoomsRouteImport.update({
-  id: '/rooms',
-  path: '/rooms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -73,15 +68,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoomsIndexRoute = RoomsIndexRouteImport.update({
+  id: '/rooms/',
+  path: '/rooms/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
 const RoomsSlugRoute = RoomsSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => RoomsRoute,
+  id: '/rooms/$slug',
+  path: '/rooms/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   id: '/whatsapp',
@@ -156,7 +156,6 @@ export interface FileRoutesByFullPath {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/rooms': typeof RoomsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
@@ -172,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/rooms/': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
@@ -180,7 +180,6 @@ export interface FileRoutesByTo {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/rooms': typeof RoomsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
@@ -196,6 +195,7 @@ export interface FileRoutesByTo {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/rooms': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesById {
@@ -206,7 +206,6 @@ export interface FileRoutesById {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
-  '/rooms': typeof RoomsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
@@ -222,6 +221,7 @@ export interface FileRoutesById {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/rooms/': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRouteTypes {
@@ -233,7 +233,6 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
-    | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
     | '/admin/ai-lab'
@@ -249,6 +248,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin/'
+    | '/rooms/'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -257,7 +257,6 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
-    | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
     | '/admin/ai-lab'
@@ -273,6 +272,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin'
+    | '/rooms'
     | '/book/confirmation/$id'
   id:
     | '__root__'
@@ -282,7 +282,6 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
-    | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
     | '/admin/ai-lab'
@@ -298,6 +297,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin/'
+    | '/rooms/'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
 }
@@ -308,8 +308,9 @@ export interface RootRouteChildren {
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
-  RoomsRoute: typeof RoomsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  RoomsSlugRoute: typeof RoomsSlugRoute
+  RoomsIndexRoute: typeof RoomsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -319,13 +320,6 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rooms': {
-      id: '/rooms'
-      path: '/rooms'
-      fullPath: '/rooms'
-      preLoaderRoute: typeof RoomsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -370,6 +364,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/rooms/': {
+      id: '/rooms/'
+      path: '/rooms'
+      fullPath: '/rooms/'
+      preLoaderRoute: typeof RoomsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -379,10 +380,10 @@ declare module '@tanstack/react-router' {
     }
     '/rooms/$slug': {
       id: '/rooms/$slug'
-      path: '/$slug'
+      path: '/rooms/$slug'
       fullPath: '/rooms/$slug'
       preLoaderRoute: typeof RoomsSlugRouteImport
-      parentRoute: typeof RoomsRoute
+      parentRoute: typeof rootRouteImport
     }
     '/admin/whatsapp': {
       id: '/admin/whatsapp'
@@ -522,16 +523,6 @@ const BookRouteChildren: BookRouteChildren = {
 
 const BookRouteWithChildren = BookRoute._addFileChildren(BookRouteChildren)
 
-interface RoomsRouteChildren {
-  RoomsSlugRoute: typeof RoomsSlugRoute
-}
-
-const RoomsRouteChildren: RoomsRouteChildren = {
-  RoomsSlugRoute: RoomsSlugRoute,
-}
-
-const RoomsRouteWithChildren = RoomsRoute._addFileChildren(RoomsRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
@@ -539,8 +530,9 @@ const rootRouteChildren: RootRouteChildren = {
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
-  RoomsRoute: RoomsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  RoomsSlugRoute: RoomsSlugRoute,
+  RoomsIndexRoute: RoomsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

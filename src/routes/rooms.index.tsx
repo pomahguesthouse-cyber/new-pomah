@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 
-export const Route = createFileRoute("/rooms")({
+export const Route = createFileRoute("/rooms/")({
   head: () => ({
     meta: [
       { title: "Rooms — Pomah Guesthouse" },
