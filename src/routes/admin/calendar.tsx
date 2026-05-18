@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -88,8 +89,7 @@ function CalendarPage() {
   const queryClient = useQueryClient();
 
   const days = React.useMemo(
-    () =>
-      Array.from({ length: WINDOW_DAYS + LEAD_DAYS }, (_, i) => addDays(anchor, i - LEAD_DAYS)),
+    () => Array.from({ length: WINDOW_DAYS + LEAD_DAYS }, (_, i) => addDays(anchor, i - LEAD_DAYS)),
     [anchor],
   );
 
@@ -231,11 +231,56 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
   const bookingsByRoom = React.useMemo(() => {
     const m = new Map();
     bookings.forEach((b: any) => {
+      if (!b.room_id) return;
       if (!m.has(b.room_id)) m.set(b.room_id, []);
       m.get(b.room_id).push(b);
     });
     return m;
   }, [bookings]);
+
+  // Bookings without a room yet (e.g. from the website or AI chatbot),
+  // grouped by room type so staff can see and assign them.
+  const unassignedByType = React.useMemo(() => {
+    const m = new Map();
+    bookings.forEach((b: any) => {
+      if (b.room_id) return;
+      if (!m.has(b.room_type_id)) m.set(b.room_type_id, []);
+      m.get(b.room_type_id).push(b);
+    });
+    return m;
+  }, [bookings]);
+
+  /** Render the absolutely-positioned booking bars for one row. */
+  const renderBars = (list: any[]) =>
+    list.map((b: any) => {
+      const ci = parseISO(b.check_in);
+      const co = parseISO(b.check_out);
+      const startIdx = differenceInCalendarDays(ci, windowStart);
+      const endIdx = differenceInCalendarDays(co, windowStart);
+      if (endIdx < 0 || startIdx >= days.length) return null;
+      const left = labelWidth + startIdx * cellWidth + cellWidth / 2;
+      const width = (endIdx - startIdx) * cellWidth;
+      return (
+        <button
+          key={b.booking_room_id ?? b.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            onBookingClick(b);
+          }}
+          className={cn(
+            "absolute top-2.5 bottom-2.5 flex items-center px-3 rounded-lg border text-[10px] font-black shadow-md transition-all hover:scale-[1.01] overflow-hidden z-10",
+            b.status === "confirmed"
+              ? "bg-blue-100 border-blue-300 text-blue-800"
+              : b.status === "checked_in"
+                ? "bg-emerald-100 border-emerald-300 text-emerald-800"
+                : "bg-amber-100 border-amber-300 text-amber-800",
+          )}
+          style={{ left: left + 2, width: Math.max(width - 4, 40) }}
+        >
+          <span className="truncate uppercase tracking-tighter">{b.guests?.full_name}</span>
+        </button>
+      );
+    });
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-xl overflow-hidden ring-1 ring-black/5">
@@ -335,45 +380,29 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                     ))}
 
                     {/* Bar Booking */}
-                    {(bookingsByRoom.get(room.id) ?? []).map((b: any) => {
-                      const ci = parseISO(b.check_in);
-                      const co = parseISO(b.check_out);
-                      const startIdx = differenceInCalendarDays(ci, windowStart);
-                      const endIdx = differenceInCalendarDays(co, windowStart);
-
-                      if (endIdx < 0 || startIdx >= days.length) return null;
-
-                      const left = labelWidth + startIdx * cellWidth + cellWidth / 2;
-                      const width = (endIdx - startIdx) * cellWidth;
-
-                      return (
-                        <button
-                          key={b.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onBookingClick(b);
-                          }}
-                          className={cn(
-                            "absolute top-2.5 bottom-2.5 flex items-center px-3 rounded-lg border text-[10px] font-black shadow-md transition-all hover:scale-[1.01] overflow-hidden z-10",
-                            b.status === "confirmed"
-                              ? "bg-blue-100 border-blue-300 text-blue-800"
-                              : b.status === "checked_in"
-                                ? "bg-emerald-100 border-emerald-300 text-emerald-800"
-                                : "bg-amber-100 border-amber-300 text-amber-800",
-                          )}
-                          style={{
-                            left: left + 2,
-                            width: Math.max(width - 4, 40),
-                          }}
-                        >
-                          <span className="truncate uppercase tracking-tighter">
-                            {b.guests?.full_name}
-                          </span>
-                        </button>
-                      );
-                    })}
+                    {renderBars(bookingsByRoom.get(room.id) ?? [])}
                   </div>
                 ))}
+
+              {/* Bookings of this type without a room assigned yet */}
+              {(unassignedByType.get(type.id) ?? []).length > 0 && (
+                <div className="relative flex border-b border-border h-[60px] bg-amber-50/50">
+                  <div
+                    style={{ width: labelWidth }}
+                    className="flex shrink-0 items-center gap-1.5 px-4 border-r border-border text-[10px] font-black uppercase tracking-tight text-amber-700 sticky left-0 z-20 bg-amber-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                  >
+                    Belum ditugaskan
+                  </div>
+                  {days.map((d: Date) => (
+                    <div
+                      key={d.toISOString()}
+                      style={{ width: cellWidth }}
+                      className="shrink-0 border-l border-border/50"
+                    />
+                  ))}
+                  {renderBars(unassignedByType.get(type.id) ?? [])}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -469,10 +498,15 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
 function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
   const updateFn = useServerFn(updateBookingFromAdmin);
   const [status, setStatus] = React.useState("");
+  const [roomId, setRoomId] = React.useState("");
   React.useEffect(() => {
-    if (booking) setStatus(booking.status);
+    if (booking) {
+      setStatus(booking.status);
+      setRoomId(booking.room_id ?? "");
+    }
   }, [booking]);
   if (!booking) return null;
+  const typeRooms = (rooms ?? []).filter((r: any) => r.room_type_id === booking.room_type_id);
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
@@ -487,6 +521,24 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
           )}
         </DialogHeader>
         <div className="grid gap-4 py-4">
+          <Field label="Kamar">
+            <Select
+              value={roomId || "none"}
+              onValueChange={(v) => setRoomId(v === "none" ? "" : v)}
+            >
+              <SelectTrigger className="font-bold">
+                <SelectValue placeholder="Pilih kamar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">BELUM DITUGASKAN</SelectItem>
+                {typeRooms.map((r: any) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.number}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Status">
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger className="font-bold">
@@ -508,7 +560,14 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
           <Button
             className="font-bold"
             onClick={async () => {
-              await updateFn({ data: { id: booking.id, status, roomId: booking.room_id } });
+              await updateFn({
+                data: {
+                  id: booking.id,
+                  status,
+                  bookingRoomId: booking.booking_room_id,
+                  roomId,
+                },
+              });
               toast.success("UPDATE BERHASIL!");
               onSaved();
             }}
