@@ -132,7 +132,7 @@ function initials(name?: string | null, fallback?: string) {
     .join("");
 }
 
-function WhatsAppPage() {
+export function WhatsAppPage() {
   const listFn = useServerFn(listThreads);
   const getFn = useServerFn(getThread);
   const sendFn = useServerFn(sendMessage);
@@ -719,6 +719,7 @@ function Row({
   );
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 function MessageStream({ messages }: { messages: any[] }) {
   // Group by date
   const groups: { label: string; items: any[] }[] = [];

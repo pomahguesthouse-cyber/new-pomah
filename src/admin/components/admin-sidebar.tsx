@@ -6,7 +6,6 @@ import {
   CalendarDays,
   BedDouble,
   DollarSign,
-  MessageCircle,
   Sparkles,
   GraduationCap,
   BarChart3,
@@ -53,7 +52,6 @@ const groups: { label: string; items: NavItem[] }[] = [
   {
     label: "Guests & Comms",
     items: [
-      { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
       { to: "/admin/training", label: "Training", icon: GraduationCap },

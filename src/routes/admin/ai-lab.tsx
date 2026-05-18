@@ -1,10 +1,8 @@
 /**
- * /admin/ai-lab — AI LAB dashboard.
+ * /admin/ai-lab — AI LAB.
  *
- * A full-screen control room for the Pomah Guesthouse AI chatbot
- * (sidebar hidden, like the Page Builder): live AI KPIs, the conversation
- * pipeline, and the specialized agents and knowledge tools — each with
- * its own configuration dialog.
+ * A full-screen AI control room (sidebar hidden, like the Page Builder)
+ * with its own left navigation: an AI dashboard and the WhatsApp inbox.
  */
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -14,6 +12,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
+  LayoutDashboard,
   MessageCircle,
   Sparkles,
   Bot,
@@ -37,6 +36,8 @@ import {
   mergeAiLabConfig,
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { WhatsAppPage } from "@/routes/admin/whatsapp";
+import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -90,9 +91,80 @@ const PIPELINE = [
   { label: "Balasan ke Tamu", icon: Send },
 ];
 
+type ViewKey = "dashboard" | "whatsapp";
+const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+];
+
 type EditTarget = { type: "agent" | "tool"; key: string } | null;
 
+/* ================================================================== */
+/* Shell                                                               */
+/* ================================================================== */
+
 function AiLab() {
+  const [view, setView] = useState<ViewKey>("dashboard");
+
+  return (
+    <div className="flex h-full flex-col bg-stone-100">
+      {/* Top bar */}
+      <header className="flex items-center justify-between gap-4 border-b border-border bg-card px-5 py-3">
+        <div className="flex items-center gap-3">
+          <Link
+            to="/admin"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Keluar
+          </Link>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Pomah Guesthouse
+            </p>
+            <h1 className="text-lg font-semibold tracking-tight">AI LAB</h1>
+          </div>
+        </div>
+        <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          AI Aktif
+        </span>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left nav */}
+        <nav className="flex w-48 shrink-0 flex-col gap-1 border-r border-border bg-card p-3">
+          {NAV.map((n) => (
+            <button
+              key={n.key}
+              onClick={() => setView(n.key)}
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition",
+                view === n.key
+                  ? "bg-teal-50 font-medium text-teal-900"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <n.icon className="h-4 w-4 shrink-0" />
+              {n.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* View */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {view === "dashboard" ? <DashboardView /> : <WhatsAppPage />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Dashboard view                                                      */
+/* ================================================================== */
+
+function DashboardView() {
   const metricsFn = useServerFn(getDashboardMetrics);
   const { data: metrics } = useQuery({
     queryKey: ["dashboard-metrics"],
@@ -158,142 +230,116 @@ function AiLab() {
   ];
 
   return (
-    <div className="flex h-full flex-col bg-stone-100">
-      {/* Top bar */}
-      <header className="flex items-center justify-between gap-4 border-b border-border bg-card px-5 py-3">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/admin"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Keluar
-          </Link>
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Pomah Guesthouse
-            </p>
-            <h1 className="text-lg font-semibold tracking-tight">AI LAB</h1>
-          </div>
-        </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          AI Aktif
-        </span>
-      </header>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
-          {/* KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {kpis.map((k) => (
-              <Card key={k.label} className="p-5">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
-                  <k.icon className="h-4 w-4 text-teal-600" />
-                </div>
-                <p className="mt-2 text-2xl font-semibold tracking-tight">{k.value}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{k.hint}</p>
-              </Card>
-            ))}
-          </div>
-
-          {/* Conversation pipeline */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Conversation Pipeline
-            </h2>
-            <Card className="flex flex-wrap items-center gap-2 p-5">
-              {PIPELINE.map((step, i) => (
-                <div key={step.label} className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                    <step.icon className="h-4 w-4 text-teal-600" />
-                    <span className="text-xs font-medium">{step.label}</span>
-                  </div>
-                  {i < PIPELINE.length - 1 && (
-                    <ArrowRight className="h-4 w-4 shrink-0 text-stone-300" />
-                  )}
-                </div>
-              ))}
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+        {/* KPIs */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {kpis.map((k) => (
+            <Card key={k.label} className="p-5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
+                <k.icon className="h-4 w-4 text-teal-600" />
+              </div>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">{k.value}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{k.hint}</p>
             </Card>
-          </section>
+          ))}
+        </div>
 
-          {/* Specialized agents */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Specialized AI Agents
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {AGENTS.map((a) => {
-                const ac = cfg.agents[a.key];
-                return (
-                  <Card
-                    key={a.key}
-                    onClick={() => setEdit({ type: "agent", key: a.key })}
-                    className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-                      <a.icon className="h-5 w-5" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{a.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
-                        {ac?.autoReply ? "Balas otomatis" : "Perlu persetujuan"}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          ac?.enabled
-                            ? "bg-emerald-100 text-emerald-700"
-                            : "bg-stone-200 text-stone-500"
-                        }`}
-                      >
-                        {ac?.enabled ? "Aktif" : "Nonaktif"}
-                      </span>
-                      <Settings2 className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
+        {/* Conversation pipeline */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Conversation Pipeline
+          </h2>
+          <Card className="flex flex-wrap items-center gap-2 p-5">
+            {PIPELINE.map((step, i) => (
+              <div key={step.label} className="flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                  <step.icon className="h-4 w-4 text-teal-600" />
+                  <span className="text-xs font-medium">{step.label}</span>
+                </div>
+                {i < PIPELINE.length - 1 && (
+                  <ArrowRight className="h-4 w-4 shrink-0 text-stone-300" />
+                )}
+              </div>
+            ))}
+          </Card>
+        </section>
 
-          {/* Knowledge & tools */}
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Knowledge &amp; Tools
-            </h2>
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {TOOLS.map((t) => {
-                const tc = cfg.tools[t.key];
-                return (
-                  <Card
-                    key={t.key}
-                    onClick={() => setEdit({ type: "tool", key: t.key })}
-                    className="group flex cursor-pointer flex-col items-center gap-2 p-5 text-center transition hover:border-sky-300 hover:shadow-md"
-                  >
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
-                      <t.icon className="h-5 w-5" />
-                    </span>
-                    <p className="text-xs font-medium leading-tight">{t.name}</p>
+        {/* Specialized agents */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Specialized AI Agents
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {AGENTS.map((a) => {
+              const ac = cfg.agents[a.key];
+              return (
+                <Card
+                  key={a.key}
+                  onClick={() => setEdit({ type: "agent", key: a.key })}
+                  className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                    <a.icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{a.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      {ac?.autoReply ? "Balas otomatis" : "Perlu persetujuan"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        tc?.enabled
+                        ac?.enabled
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-stone-200 text-stone-500"
                       }`}
                     >
-                      {tc?.enabled ? "Terhubung" : "Nonaktif"}
+                      {ac?.enabled ? "Aktif" : "Nonaktif"}
                     </span>
-                  </Card>
-                );
-              })}
-            </div>
-          </section>
-        </div>
+                    <Settings2 className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Knowledge & tools */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Knowledge &amp; Tools
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {TOOLS.map((t) => {
+              const tc = cfg.tools[t.key];
+              return (
+                <Card
+                  key={t.key}
+                  onClick={() => setEdit({ type: "tool", key: t.key })}
+                  className="group flex cursor-pointer flex-col items-center gap-2 p-5 text-center transition hover:border-sky-300 hover:shadow-md"
+                >
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                    <t.icon className="h-5 w-5" />
+                  </span>
+                  <p className="text-xs font-medium leading-tight">{t.name}</p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                      tc?.enabled
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-stone-200 text-stone-500"
+                    }`}
+                  >
+                    {tc?.enabled ? "Terhubung" : "Nonaktif"}
+                  </span>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
       </div>
 
       <ConfigDialog
