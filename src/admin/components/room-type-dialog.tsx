@@ -9,7 +9,17 @@ import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Star, X } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  Trash2,
+  Star,
+  X,
+  FileText,
+  Banknote,
+  ListChecks,
+  Image as ImageIcon,
+} from "lucide-react";
 import {
   createRoomType,
   updateRoomType,
@@ -21,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +40,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+type RoomTab = "general" | "pricing" | "features" | "media";
+const TABS: { key: RoomTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: "general", label: "General", icon: FileText },
+  { key: "pricing", label: "Pricing", icon: Banknote },
+  { key: "features", label: "Features", icon: ListChecks },
+  { key: "media", label: "Media", icon: ImageIcon },
+];
 
 /** A room type as managed in this dialog. */
 export type ManagedRoomType = {
@@ -81,6 +100,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [images, setImages] = React.useState<string[]>([]);
   const [roomNumbers, setRoomNumbers] = React.useState<string[]>([]);
   const [roomNumberInput, setRoomNumberInput] = React.useState("");
+  const [tab, setTab] = React.useState<RoomTab>("general");
 
   // Existing room numbers for the edited type.
   const { data: numbersData } = useQuery({
@@ -133,6 +153,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   // re-running this effect and wiping what the user is typing.
   React.useEffect(() => {
     if (!open) return;
+    setTab("general");
     if (mode === "edit" && roomType) {
       setName(roomType.name ?? "");
       setSlug(roomType.slug ?? "");
@@ -206,234 +227,275 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[820px]">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4 text-left">
           <DialogTitle>{mode === "edit" ? "Edit tipe kamar" : "Tambah tipe kamar"}</DialogTitle>
           <DialogDescription>
             Detail ini berlaku untuk semua kamar dengan tipe yang sama.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-1">
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Nama tipe</Label>
-            <Input
-              autoFocus
-              value={name}
-              placeholder="Garden Room"
-              onChange={(e) => {
-                setName(e.target.value);
-                if (!slugTouched) setSlug(slugify(e.target.value));
-              }}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Slug</Label>
-            <Input
-              value={slug}
-              placeholder="garden-room"
-              className="font-mono"
-              onChange={(e) => {
-                setSlug(slugify(e.target.value));
-                setSlugTouched(true);
-              }}
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Dipakai di URL kamar publik. Huruf kecil, angka, dan tanda hubung.
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-1.5">
-              <Label className="text-xs">Tipe kasur</Label>
-              <select
-                value={bedType}
-                onChange={(e) => setBedType(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">—</option>
-                {BED_TYPES.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs">Kapasitas</Label>
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                value={capacity}
-                onChange={(e) => setCapacity(Number(e.target.value))}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label className="text-xs">Luas (m²)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={sizeSqm}
-                onChange={(e) => setSizeSqm(e.target.value === "" ? "" : Number(e.target.value))}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Tarif dasar (per malam, Rp)</Label>
-            <Input
-              type="number"
-              min={0}
-              step={1000}
-              value={baseRate}
-              onChange={(e) => setBaseRate(Number(e.target.value))}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Deskripsi</Label>
-            <Textarea
-              rows={3}
-              value={description}
-              placeholder="Kamar tenang menghadap taman, dengan kamar mandi dalam."
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Fasilitas</Label>
-            <Input
-              value={amenities}
-              placeholder="WiFi, AC, Sarapan, TV"
-              onChange={(e) => setAmenities(e.target.value)}
-            />
-            <p className="text-[10px] text-muted-foreground">Pisahkan dengan koma.</p>
-          </div>
-
-          <div className="grid gap-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Nomor kamar</Label>
-              <span className="text-[10px] text-muted-foreground">
-                Total: {roomNumbers.length} kamar
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input p-2">
-              {roomNumbers.map((num) => (
-                <span
-                  key={num}
-                  className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium"
-                >
-                  {num}
-                  <button
-                    type="button"
-                    title="Hapus"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => setRoomNumbers(roomNumbers.filter((n) => n !== num))}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              <input
-                value={roomNumberInput}
-                placeholder="Ketik nomor lalu Enter"
-                className="min-w-[140px] flex-1 bg-transparent text-xs outline-none"
-                onChange={(e) => setRoomNumberInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addRoomNumber();
-                  }
-                }}
-                onBlur={addRoomNumber}
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              Satu tipe kamar bisa punya beberapa nomor kamar (mis. FS100, FS222).
-            </p>
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs">Foto kamar</Label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files?.length) void uploadPhotos(e.target.files);
-              }}
-            />
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (e.dataTransfer.files?.length) void uploadPhotos(e.dataTransfer.files);
-              }}
-              onClick={() => !uploading && fileRef.current?.click()}
-              className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input bg-muted/40 py-6 text-center transition hover:border-primary"
-            >
-              {uploading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <Upload className="h-5 w-5 text-muted-foreground" />
+        {/* Tab bar */}
+        <div className="flex shrink-0 gap-1 border-b border-border bg-muted/40 px-4 py-2">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md py-2 text-sm font-medium transition",
+                tab === t.key
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
               )}
-              <p className="text-xs font-medium">
-                {uploading ? "Mengupload…" : "Tarik foto ke sini atau klik untuk pilih"}
-              </p>
-              <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP — bisa banyak</p>
-            </div>
-
-            {images.length > 0 && (
-              <>
-                <p className="text-[10px] text-muted-foreground">
-                  Foto pertama menjadi cover. {images.length} foto.
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {images.map((url, i) => (
-                    <div
-                      key={url}
-                      className="group relative overflow-hidden rounded-md border border-input"
-                    >
-                      <img src={url} alt="" className="aspect-video w-full object-cover" />
-                      {i === 0 && (
-                        <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground">
-                          Cover
-                        </span>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-black/55 p-1 opacity-0 transition group-hover:opacity-100">
-                        {i !== 0 && (
-                          <button
-                            type="button"
-                            title="Jadikan cover"
-                            className="mr-auto flex items-center gap-0.5 text-[9px] font-medium text-white"
-                            onClick={() => setImages([url, ...images.filter((x) => x !== url)])}
-                          >
-                            <Star className="h-3 w-3" />
-                            Cover
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          title="Hapus foto"
-                          className="text-white hover:text-red-300"
-                          onClick={() => setImages(images.filter((x) => x !== url))}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+            >
+              <t.icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <DialogFooter>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {tab === "general" && (
+            <div className="grid gap-4">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Nama tipe</Label>
+                <Input
+                  autoFocus
+                  value={name}
+                  placeholder="Garden Room"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    if (!slugTouched) setSlug(slugify(e.target.value));
+                  }}
+                />
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Slug</Label>
+                <Input
+                  value={slug}
+                  placeholder="garden-room"
+                  className="font-mono"
+                  onChange={(e) => {
+                    setSlug(slugify(e.target.value));
+                    setSlugTouched(true);
+                  }}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Dipakai di URL kamar publik. Huruf kecil, angka, dan tanda hubung.
+                </p>
+              </div>
+
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Deskripsi</Label>
+                <Textarea
+                  rows={4}
+                  value={description}
+                  placeholder="Kamar tenang menghadap taman, dengan kamar mandi dalam."
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Kapasitas (tamu)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={capacity}
+                    onChange={(e) => setCapacity(Number(e.target.value))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Luas (m²)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={sizeSqm}
+                    onChange={(e) =>
+                      setSizeSqm(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Nomor kamar</Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Total: {roomNumbers.length} kamar
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input p-2">
+                  {roomNumbers.map((num) => (
+                    <span
+                      key={num}
+                      className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                    >
+                      {num}
+                      <button
+                        type="button"
+                        title="Hapus"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setRoomNumbers(roomNumbers.filter((n) => n !== num))}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    value={roomNumberInput}
+                    placeholder="Ketik nomor lalu Enter"
+                    className="min-w-[140px] flex-1 bg-transparent text-xs outline-none"
+                    onChange={(e) => setRoomNumberInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addRoomNumber();
+                      }
+                    }}
+                    onBlur={addRoomNumber}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Satu tipe kamar bisa punya beberapa nomor kamar (mis. FS100, FS222).
+                </p>
+              </div>
+            </div>
+          )}
+
+          {tab === "pricing" && (
+            <div className="grid gap-4">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Tarif dasar (per malam, Rp)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1000}
+                  value={baseRate}
+                  onChange={(e) => setBaseRate(Number(e.target.value))}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Harga acuan per malam untuk tipe kamar ini.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {tab === "features" && (
+            <div className="grid gap-4">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Tipe kasur</Label>
+                <select
+                  value={bedType}
+                  onChange={(e) => setBedType(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">—</option>
+                  {BED_TYPES.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Fasilitas</Label>
+                <Input
+                  value={amenities}
+                  placeholder="WiFi, AC, Sarapan, TV"
+                  onChange={(e) => setAmenities(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">Pisahkan dengan koma.</p>
+              </div>
+            </div>
+          )}
+
+          {tab === "media" && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs">Foto kamar</Label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) void uploadPhotos(e.target.files);
+                }}
+              />
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files?.length) void uploadPhotos(e.dataTransfer.files);
+                }}
+                onClick={() => !uploading && fileRef.current?.click()}
+                className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input bg-muted/40 py-8 text-center transition hover:border-primary"
+              >
+                {uploading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                ) : (
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                )}
+                <p className="text-sm font-medium">
+                  {uploading ? "Mengupload…" : "Tarik foto ke sini atau klik untuk pilih"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP — bisa banyak</p>
+              </div>
+
+              {images.length > 0 && (
+                <>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Foto pertama menjadi cover. {images.length} foto.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                    {images.map((url, i) => (
+                      <div
+                        key={url}
+                        className="group relative overflow-hidden rounded-md border border-input"
+                      >
+                        <img src={url} alt="" className="aspect-video w-full object-cover" />
+                        {i === 0 && (
+                          <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground">
+                            Cover
+                          </span>
+                        )}
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-black/55 p-1 opacity-0 transition group-hover:opacity-100">
+                          {i !== 0 && (
+                            <button
+                              type="button"
+                              title="Jadikan cover"
+                              className="mr-auto flex items-center gap-0.5 text-[9px] font-medium text-white"
+                              onClick={() => setImages([url, ...images.filter((x) => x !== url)])}
+                            >
+                              <Star className="h-3 w-3" />
+                              Cover
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            title="Hapus foto"
+                            className="text-white hover:text-red-300"
+                            onClick={() => setImages(images.filter((x) => x !== url))}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Pinned footer — always visible */}
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-3">
           <Button variant="outline" onClick={onClose}>
             Batal
           </Button>
