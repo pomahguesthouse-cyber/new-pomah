@@ -160,12 +160,16 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
         .gte("sent_at", `${startISO}T00:00:00.000Z`),
       supabase.from("whatsapp_threads").select("id, status, guest_id, created_at"),
       supabase.from("rooms").select("*", { count: "exact", head: true }),
+      // Pending payment = bookings not fully paid (unpaid / partial),
+      // regardless of the booking lifecycle status.
       supabase
         .from("bookings")
-        .select("id, total_amount, status, created_at, guests(full_name)")
-        .eq("status", "pending")
-        .order("created_at", { ascending: false })
-        .limit(8),
+        .select(
+          "id, total_amount, paid_amount, payment_status, status, created_at, guests(full_name)",
+        )
+        .in("payment_status", ["unpaid", "partial"])
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false }),
     ]);
 
     const totalRooms = roomCount ?? 0;
@@ -248,8 +252,9 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
       convertedThreads = set.size;
     }
 
+    // Outstanding balance = total minus what has been paid so far.
     const pendingPaymentTotal = (pendingBookings ?? []).reduce(
-      (s, b) => s + Number(b.total_amount ?? 0),
+      (s, b) => s + Math.max(0, Number(b.total_amount ?? 0) - Number(b.paid_amount ?? 0)),
       0,
     );
 
@@ -277,7 +282,8 @@ export const getDashboardMetrics = createServerFn({ method: "GET" })
         totalRooms,
         availableToday: Math.max(0, totalRooms - occupiedToday),
       },
-      pendingPayments: pendingBookings ?? [],
+      pendingPayments: (pendingBookings ?? []).slice(0, 8),
+      pendingPaymentCount: (pendingBookings ?? []).length,
       pendingPaymentTotal,
     };
   });
