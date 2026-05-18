@@ -19,10 +19,24 @@ import { Textarea } from "@/components/ui/textarea";
 
 type RoomTypeRow = { id: string; name: string; base_rate?: number | string | null };
 
-/** Build a draft chatbot reply from the room types. */
-function composeResponse(rooms: RoomTypeRow[]): string {
+/** Build a draft chatbot reply — guest- or manager-oriented by role. */
+function composeResponse(rooms: RoomTypeRow[], role: "tamu" | "manager"): string {
   if (rooms.length === 0) {
-    return "Halo, Kak 😊 Mohon maaf, untuk saat ini belum ada data kamar yang bisa kami tampilkan.";
+    return role === "manager"
+      ? "Halo, Pak/Bu Manager. Belum ada data kamar terdaftar untuk ditinjau."
+      : "Halo, Kak 😊 Mohon maaf, untuk saat ini belum ada data kamar yang bisa kami tampilkan.";
+  }
+  if (role === "manager") {
+    const lines = rooms.map(
+      (r, i) =>
+        `${i + 1}. ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam`,
+    );
+    return [
+      "Baik, Pak/Bu Manager. Berikut ringkasan inventori kamar:",
+      ...lines,
+      "",
+      `Total ${rooms.length} tipe kamar aktif. Beri tahu bila ingin menyesuaikan tarif atau promo.`,
+    ].join("\n");
   }
   const lines = rooms.map(
     (r, i) =>
@@ -76,7 +90,15 @@ function FlowArrow({ active }: { active: boolean }) {
   );
 }
 
-function FlowDiagram({ active, intent }: { active: boolean; intent: string }) {
+function FlowDiagram({
+  active,
+  intent,
+  role,
+}: {
+  active: boolean;
+  intent: string;
+  role: "tamu" | "manager";
+}) {
   return (
     <div className="mx-auto max-w-xs">
       <div className="flex items-start gap-3">
@@ -87,7 +109,11 @@ function FlowDiagram({ active, intent }: { active: boolean; intent: string }) {
         </div>
       </div>
       <FlowArrow active={active} />
-      <FlowBox label="Front Office Agent" tone="dark" active={active} />
+      <FlowBox
+        label={role === "manager" ? "Manager Agent" : "Front Office Agent"}
+        tone="dark"
+        active={active}
+      />
       <FlowArrow active={active} />
       <FlowBox label="Pricing Agent" tone="blue" active={active} />
       <FlowArrow active={active} />
@@ -115,14 +141,20 @@ export function TrainingView() {
   const [response, setResponse] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const intent = response ? "Kamar, ready, hari ini" : input.trim() ? "Menganalisa…" : "";
+  const intent = response
+    ? role === "manager"
+      ? "Manager, ringkasan, operasional"
+      : "Kamar, ready, hari ini"
+    : input.trim()
+      ? "Menganalisa…"
+      : "";
 
   const send = () => {
     if (!input.trim()) {
       toast.error("Tulis pesan dulu");
       return;
     }
-    setResponse(composeResponse(rooms));
+    setResponse(composeResponse(rooms, role));
   };
 
   const persist = async (accepted: boolean) => {
@@ -162,7 +194,7 @@ export function TrainingView() {
             <p className="mb-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Alur Orkestrasi AI
             </p>
-            <FlowDiagram active={!!response} intent={intent} />
+            <FlowDiagram active={!!response} intent={intent} role={role} />
           </div>
 
           {/* Simulation panel */}

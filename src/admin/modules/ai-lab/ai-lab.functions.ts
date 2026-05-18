@@ -19,6 +19,7 @@ export const AGENT_KEYS = [
   "housekeeping",
   "maintenance",
   "finance",
+  "manager",
 ] as const;
 export const TOOL_KEYS = [
   "pms-database",
