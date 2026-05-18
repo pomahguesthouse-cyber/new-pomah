@@ -76,9 +76,12 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
         content: m.text,
       }));
       const res = await chatFn({ data: { messages: history } });
+      if (res.error) console.warn("[Webchat AI] LLM tidak dipakai — error:", res.error);
+      else console.log("[Webchat AI] balasan dari LLM ✓");
       const reply = res.reply || botReply(text, rooms);
       setMsgs((m) => [...m, { who: "bot", text: reply }]);
-    } catch {
+    } catch (e) {
+      console.warn("[Webchat AI] panggilan gagal:", (e as Error).message);
       setMsgs((m) => [...m, { who: "bot", text: botReply(text, rooms) }]);
     } finally {
       setBusy(false);
