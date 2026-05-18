@@ -20,6 +20,7 @@ import {
   Search,
   Sparkles,
   Landmark,
+  FileText,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -35,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
@@ -487,6 +489,7 @@ function IntegrationTab() {
       payment_bank_name?: string | null;
       payment_account_number?: string | null;
       payment_account_holder?: string | null;
+      hotel_policy?: string | null;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integration-settings"] });
@@ -617,6 +620,16 @@ function IntegrationTab() {
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, payment_account_holder: v })}
       />
+      <TextSettingCard
+        icon={<FileText className="h-4 w-4" />}
+        label="Kebijakan Hotel"
+        description="Ditampilkan di dialog konfirmasi pemesanan. Satu poin kebijakan per baris."
+        placeholder={"Tidak boleh merokok di dalam kamar\nTidak diperbolehkan membawa durian\n…"}
+        value={data?.hotel_policy ?? null}
+        multiline
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, hotel_policy: v })}
+      />
     </div>
   );
 }
@@ -629,6 +642,7 @@ function TextSettingCard({
   placeholder,
   value,
   secret,
+  multiline,
   disabled,
   onSave,
 }: {
@@ -638,6 +652,7 @@ function TextSettingCard({
   placeholder: string;
   value: string | null;
   secret?: boolean;
+  multiline?: boolean;
   disabled?: boolean;
   onSave: (v: string | null) => void;
 }) {
@@ -684,31 +699,60 @@ function TextSettingCard({
           <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
 
           {editing ? (
-            <div className="mt-3 flex items-center gap-2">
-              <Input
-                autoFocus
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder={placeholder}
-                className="h-8 font-mono text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") save();
-                  if (e.key === "Escape") cancel();
-                }}
-              />
-              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={save}>
-                <Check className="h-4 w-4 text-green-600" />
-              </Button>
-              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancel}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            multiline ? (
+              <div className="mt-3 space-y-2">
+                <Textarea
+                  autoFocus
+                  rows={6}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={placeholder}
+                  className="text-sm"
+                />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" className="h-8" onClick={cancel}>
+                    <X className="mr-1 h-4 w-4" />
+                    Batal
+                  </Button>
+                  <Button size="sm" className="h-8" onClick={save}>
+                    <Check className="mr-1 h-4 w-4" />
+                    Simpan
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-2">
+                <Input
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder={placeholder}
+                  className="h-8 font-mono text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") save();
+                    if (e.key === "Escape") cancel();
+                  }}
+                />
+                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={save}>
+                  <Check className="h-4 w-4 text-green-600" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancel}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )
           ) : (
             <div className="mt-2">
               {value ? (
-                <code className="break-all rounded bg-muted px-2 py-0.5 font-mono text-sm">
-                  {display}
-                </code>
+                multiline ? (
+                  <p className="whitespace-pre-line rounded bg-muted px-2 py-1.5 text-sm">
+                    {value}
+                  </p>
+                ) : (
+                  <code className="break-all rounded bg-muted px-2 py-0.5 font-mono text-sm">
+                    {display}
+                  </code>
+                )
               ) : (
                 <span className="text-sm italic text-muted-foreground/60">Belum diatur</span>
               )}

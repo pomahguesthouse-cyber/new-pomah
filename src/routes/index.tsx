@@ -326,7 +326,13 @@ function PomahHome() {
                 </p>
               )}
             </div>
-            <RoomCarousel rooms={rooms} rc={cfg.roomCarousel} availability={availability} />
+            <RoomCarousel
+              rooms={rooms}
+              rc={cfg.roomCarousel}
+              availability={availability}
+              checkIn={checkIn}
+              checkOut={checkOut}
+            />
           </div>
         </section>
       </PbZone>
@@ -628,10 +634,14 @@ function RoomCarousel({
   rooms,
   rc,
   availability,
+  checkIn,
+  checkOut,
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
   availability: Record<string, boolean> | null;
+  checkIn?: string;
+  checkOut?: string;
 }) {
   const per = Math.max(1, Math.min(rc.cardsPerView, 4));
   const maxIndex = Math.max(0, rooms.length - per);
@@ -702,6 +712,10 @@ function RoomCarousel({
                     <Link
                       to="/rooms/$slug"
                       params={{ slug: rt.slug }}
+                      search={{
+                        checkIn: checkIn || undefined,
+                        checkOut: checkOut || undefined,
+                      }}
                       className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                     >
                       Pesan Kamar
@@ -800,7 +814,7 @@ function PbZone({
   );
 }
 
-function PomahNav({
+export function PomahNav({
   name,
   logo,
   header,

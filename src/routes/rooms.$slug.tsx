@@ -2,13 +2,15 @@
  * /rooms/$slug — dedicated booking page for one room type.
  *
  * Image gallery, room details, facilities & specs, and a sticky booking
- * widget (dates, room/guest counts, live availability). "Book This Room"
- * carries the selection to the /book form to collect guest details.
+ * widget. "Book This Room" opens a full confirmation dialog (dates,
+ * times, guest details, hotel policy, payment method) that creates the
+ * reservation directly.
  */
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import {
   ChevronRight,
   Home,
@@ -18,12 +20,39 @@ import {
   BedDouble,
   Maximize,
   CheckCircle2,
+  Loader2,
+  CalendarDays,
+  Clock,
+  AlertCircle,
+  FileText,
+  CreditCard,
+  Building2,
 } from "lucide-react";
-import { getRoomTypeDetail, checkRoomTypeAvailability } from "@/public/functions/public.functions";
-import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import {
+  getRoomTypeDetail,
+  checkRoomTypeAvailability,
+  submitPublicBooking,
+} from "@/public/functions/public.functions";
+import { PomahNav } from "@/routes/index";
+import { PublicFooter } from "@/public/components/public-shell";
+import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/rooms/$slug")({
+  // Optional date prefill carried from the homepage date picker.
+  validateSearch: (s: Record<string, unknown>): { checkIn?: string; checkOut?: string } => {
+    const out: { checkIn?: string; checkOut?: string } = {};
+    if (typeof s.checkIn === "string") out.checkIn = s.checkIn;
+    if (typeof s.checkOut === "string") out.checkOut = s.checkOut;
+    return out;
+  },
   component: RoomBookingPage,
 });
 
@@ -41,6 +70,44 @@ type RoomRow = {
   images: string[] | null;
 };
 
+const DEFAULT_HOTEL_POLICY = [
+  "Tidak diperbolehkan membawa makanan/buah berbau menyengat seperti durian",
+  "Tidak diperbolehkan mengkonsumsi alkohol di penginapan ini",
+  "Tidak diperbolehkan melakukan pesta",
+  "Tidak boleh merokok di dalam kamar",
+  "Area merokok pada lokasi tertentu seperti balkon dan lobby lantai 2",
+].join("\n");
+
+/* ---- date helpers (Indonesian) ----------------------------------- */
+const MONTHS_ID = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+function fmtDateID(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} ${MONTHS_ID[m - 1]} ${y}`;
+}
+const todayISO = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+function isoAddDays(iso: string, n: number): string {
+  return new Date(new Date(`${iso}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
+}
+function nightsBetween(a: string, b: string): number {
+  if (!a || !b) return 0;
+  return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000));
+}
+
 const idr = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
 /** All gallery images for a room, cover first, with sensible fallbacks. */
@@ -51,9 +118,13 @@ function galleryOf(room: RoomRow): string[] {
   return [];
 }
 
+/* ================================================================== */
+/* Page                                                                */
+/* ================================================================== */
+
 function RoomBookingPage() {
   const { slug } = Route.useParams();
-  const navigate = useNavigate();
+  const search = Route.useSearch();
   const fn = useServerFn(getRoomTypeDetail);
   const availFn = useServerFn(checkRoomTypeAvailability);
 
@@ -65,20 +136,26 @@ function RoomBookingPage() {
   const room = (data?.room ?? null) as RoomRow | null;
   const others = (data?.others ?? []) as RoomRow[];
   const roomCount = data?.roomCount ?? 0;
+  const property = useMemo(() => (data?.property ?? {}) as Record<string, unknown>, [data]);
+  const cfg = useMemo(() => mergeHomepageConfig(property.homepage_config), [property]);
 
   const gallery = useMemo(() => (room ? galleryOf(room) : []), [room]);
   const [active, setActive] = useState(0);
 
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
+  // Defaults: today → +1 night, unless the homepage date picker passed dates.
+  const today = todayISO();
+  const [checkIn, setCheckIn] = useState(search.checkIn || today);
+  const [checkOut, setCheckOut] = useState(
+    search.checkOut || isoAddDays(search.checkIn || today, 1),
+  );
   const [rooms, setRooms] = useState(1);
   const [guests, setGuests] = useState(1);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const capacity = room?.capacity ?? 2;
   const maxRooms = Math.max(1, roomCount || 1);
   const maxGuests = Math.max(1, capacity * rooms);
 
-  // Live availability once both dates are chosen.
   const { data: availData } = useQuery({
     queryKey: ["room-avail", checkIn, checkOut],
     queryFn: () => availFn({ data: { checkIn, checkOut } }),
@@ -97,10 +174,19 @@ function RoomBookingPage() {
             : "Tersedia"
           : "Mengecek…";
 
+  const header = (
+    <PomahNav
+      name={(property.name as string) ?? "Pomah Guesthouse"}
+      logo={(property.logo_url as string | null) ?? null}
+      header={cfg.header}
+      pb={{ isBuilder: false, sel: null, onSelect: () => {} }}
+    />
+  );
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-stone-50">
-        <PublicNav />
+        {header}
         <div className="mx-auto max-w-6xl px-6 py-24 text-center text-sm text-stone-400">
           Memuat kamar…
         </div>
@@ -111,7 +197,7 @@ function RoomBookingPage() {
   if (!room) {
     return (
       <div className="min-h-screen bg-stone-50">
-        <PublicNav />
+        {header}
         <div className="mx-auto max-w-6xl px-6 py-24 text-center">
           <h1 className="text-2xl font-semibold">Kamar tidak ditemukan</h1>
           <Link to="/rooms" className="mt-4 inline-block text-sm text-teal-700 underline">
@@ -123,21 +209,9 @@ function RoomBookingPage() {
     );
   }
 
-  const book = () => {
-    navigate({
-      to: "/book",
-      search: {
-        room: room.slug,
-        checkIn: checkIn || undefined,
-        checkOut: checkOut || undefined,
-        adults: guests || undefined,
-      },
-    });
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
-      <PublicNav />
+      {header}
 
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
@@ -157,7 +231,6 @@ function RoomBookingPage() {
         <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
           {/* Left — gallery + details */}
           <div>
-            {/* Gallery */}
             <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
               <div className="aspect-[16/10] w-full bg-stone-100">
                 {gallery[active] ? (
@@ -190,13 +263,11 @@ function RoomBookingPage() {
               </div>
             )}
 
-            {/* Title + description */}
             <h1 className="mt-8 text-3xl font-bold tracking-tight">{room.name}</h1>
             {room.description && (
               <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">{room.description}</p>
             )}
 
-            {/* Facilities */}
             {room.amenities && room.amenities.length > 0 && (
               <section className="mt-8">
                 <h2 className="text-lg font-bold">Fasilitas Kamar</h2>
@@ -214,7 +285,6 @@ function RoomBookingPage() {
               </section>
             )}
 
-            {/* Specs */}
             <section className="mt-8">
               <h2 className="text-lg font-bold">Spesifikasi Kamar</h2>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -246,21 +316,10 @@ function RoomBookingPage() {
 
               <div className="mt-5 space-y-4">
                 <Labeled label="Check-in">
-                  <input
-                    type="date"
-                    value={checkIn}
-                    onChange={(e) => setCheckIn(e.target.value)}
-                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                  />
+                  <DateField value={checkIn} min={today} onChange={setCheckIn} />
                 </Labeled>
                 <Labeled label="Check-out">
-                  <input
-                    type="date"
-                    value={checkOut}
-                    min={checkIn || undefined}
-                    onChange={(e) => setCheckOut(e.target.value)}
-                    className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                  />
+                  <DateField value={checkOut} min={isoAddDays(checkIn, 1)} onChange={setCheckOut} />
                 </Labeled>
 
                 <Stepper
@@ -281,7 +340,13 @@ function RoomBookingPage() {
                 />
 
                 <button
-                  onClick={book}
+                  onClick={() => {
+                    if (checkIn >= checkOut) {
+                      toast.error("Tanggal check-out harus setelah check-in");
+                      return;
+                    }
+                    setDialogOpen(true);
+                  }}
                   className="w-full rounded-lg bg-rose-400 py-3 text-sm font-semibold text-white transition hover:bg-rose-500"
                 >
                   Book This Room
@@ -314,6 +379,7 @@ function RoomBookingPage() {
                     key={o.id}
                     to="/rooms/$slug"
                     params={{ slug: o.slug }}
+                    search={{}}
                     className="group overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:shadow-lg"
                   >
                     <div className="aspect-[4/3] bg-stone-100">
@@ -344,9 +410,278 @@ function RoomBookingPage() {
       </main>
 
       <PublicFooter property={data?.property} />
+
+      <BookingDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        room={room}
+        checkIn={checkIn}
+        checkOut={checkOut}
+        rooms={rooms}
+        maxRooms={maxRooms}
+        guests={guests}
+        hotelPolicy={(property.hotel_policy as string | null) || DEFAULT_HOTEL_POLICY}
+      />
     </div>
   );
 }
+
+/* ================================================================== */
+/* Booking confirmation dialog                                         */
+/* ================================================================== */
+
+function BookingDialog({
+  open,
+  onClose,
+  room,
+  checkIn,
+  checkOut,
+  rooms: initialRooms,
+  maxRooms,
+  guests,
+  hotelPolicy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  room: RoomRow;
+  checkIn: string;
+  checkOut: string;
+  rooms: number;
+  maxRooms: number;
+  guests: number;
+  hotelPolicy: string;
+}) {
+  const navigate = useNavigate();
+  const submit = useServerFn(submitPublicBooking);
+
+  const [rooms, setRooms] = useState(initialRooms);
+  const [checkInTime, setCheckInTime] = useState("14:00");
+  const [checkOutTime, setCheckOutTime] = useState("12:00");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [payment, setPayment] = useState<"transfer" | "onsite">("transfer");
+  const [pending, setPending] = useState(false);
+
+  const nights = nightsBetween(checkIn, checkOut);
+  const rate = Number(room.base_rate ?? 0);
+  const total = rate * nights * rooms;
+  const policyLines = hotelPolicy
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const submitBooking = async () => {
+    if (!fullName.trim() || !email.trim() || !phone.trim()) {
+      toast.error("Lengkapi nama, email, dan nomor telepon");
+      return;
+    }
+    if (!agreed) {
+      toast.error("Setujui kebijakan hotel terlebih dahulu");
+      return;
+    }
+    setPending(true);
+    try {
+      const res = await submit({
+        data: {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          roomTypeId: room.id,
+          checkIn,
+          checkOut,
+          adults: guests,
+          children: 0,
+          rooms,
+          checkInTime,
+          checkOutTime,
+          paymentMethod: payment,
+          specialRequests: "",
+        },
+      });
+      toast.success("Pemesanan berhasil dibuat");
+      navigate({ to: "/book/confirmation/$id", params: { id: res.id }, search: {} });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold">Book {room.name}</DialogTitle>
+          <DialogDescription>Isi formulir di bawah untuk melakukan reservasi</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <ReadOnlyDate label="Check-in" value={checkIn} />
+            <ReadOnlyDate label="Check-out" value={checkOut} />
+          </div>
+
+          {/* Rooms */}
+          <div className="rounded-lg bg-stone-100 p-4">
+            <p className="mb-2 font-semibold">Jumlah Kamar</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setRooms((v) => Math.max(1, v - 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-teal-300 text-teal-700"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
+              <span className="w-8 text-center text-xl font-bold text-teal-700">{rooms}</span>
+              <button
+                onClick={() => setRooms((v) => Math.min(maxRooms, v + 1))}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-teal-300 text-teal-700"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <span className="text-sm text-stone-400">Maks: {maxRooms} kamar</span>
+            </div>
+          </div>
+
+          {/* Times */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="mb-1 font-semibold">Waktu Check-in</p>
+              <div className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2">
+                <Clock className="h-4 w-4 text-stone-400" />
+                <input
+                  type="time"
+                  value={checkInTime}
+                  onChange={(e) => setCheckInTime(e.target.value)}
+                  className="w-full text-sm outline-none"
+                />
+              </div>
+              <p className="mt-1 text-xs text-stone-400">Default: 14:00</p>
+            </div>
+            <div>
+              <p className="mb-1 font-semibold">Waktu Check-out</p>
+              <div className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2">
+                <Clock className="h-4 w-4 text-stone-400" />
+                <input
+                  type="time"
+                  value={checkOutTime}
+                  onChange={(e) => setCheckOutTime(e.target.value)}
+                  className="w-full text-sm outline-none"
+                />
+              </div>
+              <p className="mt-1 text-xs text-stone-400">Default: 12:00</p>
+            </div>
+          </div>
+
+          {/* Guest details */}
+          <Input2
+            label="Nama Lengkap"
+            required
+            value={fullName}
+            onChange={setFullName}
+            placeholder="Faizal"
+          />
+          <Input2
+            label="Email"
+            required
+            type="email"
+            value={email}
+            onChange={setEmail}
+            placeholder="email@contoh.com"
+          />
+          <Input2
+            label="Nomor Telepon"
+            required
+            value={phone}
+            onChange={setPhone}
+            placeholder="+62 812 3456 7890"
+          />
+
+          {/* Price breakdown */}
+          <div className="rounded-lg bg-stone-100 p-4 text-sm">
+            <div className="flex items-center justify-between text-stone-600">
+              <span>
+                Kamar: {idr(rate)} × {nights} malam × {rooms} kamar
+              </span>
+              <span>{idr(total)}</span>
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2">
+              <span className="text-base font-bold">Total</span>
+              <span className="text-xl font-bold text-teal-700">{idr(total)}</span>
+            </div>
+          </div>
+
+          {/* Non-refundable */}
+          <div className="flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Harga Non-Refundable</p>
+              <p className="text-xs text-amber-700">
+                Pemesanan ini tidak dapat dibatalkan dan tidak ada pengembalian dana.
+              </p>
+            </div>
+          </div>
+
+          {/* Hotel policy */}
+          <div className="rounded-lg border border-stone-200 p-4">
+            <p className="mb-2 flex items-center gap-1.5 font-semibold">
+              <FileText className="h-4 w-4 text-stone-500" />
+              Kebijakan Hotel
+            </p>
+            <ul className="max-h-32 list-disc space-y-1 overflow-y-auto rounded bg-stone-50 px-5 py-3 text-sm text-stone-600">
+              {policyLines.map((p, i) => (
+                <li key={i}>{p}</li>
+              ))}
+            </ul>
+            <label className="mt-3 flex cursor-pointer items-center gap-2 border-t border-stone-100 pt-3 text-sm">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                className="h-4 w-4 accent-teal-700"
+              />
+              Saya telah membaca dan menyetujui kebijakan hotel di atas
+            </label>
+          </div>
+
+          {/* Payment method */}
+          <div>
+            <p className="mb-2 font-semibold">Metode Pembayaran</p>
+            <div className="space-y-2">
+              <PaymentOption
+                active={payment === "transfer"}
+                onClick={() => setPayment("transfer")}
+                icon={<CreditCard className="h-4 w-4" />}
+                title="Transfer Bank"
+                desc="Bayar via transfer bank sebelum check-in. Detail rekening dikirim setelah konfirmasi."
+              />
+              <PaymentOption
+                active={payment === "onsite"}
+                onClick={() => setPayment("onsite")}
+                icon={<Building2 className="h-4 w-4" />}
+                title="Bayar di Tempat"
+                desc="Bayar tunai/transfer saat check-in. Reservasi dikonfirmasi admin via WhatsApp lebih dulu."
+              />
+            </div>
+          </div>
+
+          <button
+            onClick={submitBooking}
+            disabled={pending}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-700 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60"
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {pending ? "Memproses…" : `Konfirmasi Pemesanan · ${idr(total)}`}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ---- small components -------------------------------------------- */
 
 function Spec({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
@@ -366,6 +701,113 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
       <p className="mb-1 text-sm font-medium text-stone-600">{label}</p>
       {children}
     </div>
+  );
+}
+
+/** Native date input with an Indonesian-formatted caption below it. */
+function DateField({
+  value,
+  min,
+  onChange,
+}: {
+  value: string;
+  min?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <input
+        type="date"
+        value={value}
+        min={min}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
+      />
+      {value && <p className="mt-1 text-xs font-medium text-teal-700">{fmtDateID(value)}</p>}
+    </div>
+  );
+}
+
+function ReadOnlyDate({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 font-semibold">{label}</p>
+      <div className="flex items-center gap-2 rounded-lg border border-teal-500 px-3 py-2.5 text-sm font-medium text-teal-700">
+        <CalendarDays className="h-4 w-4" />
+        {fmtDateID(value)}
+      </div>
+    </div>
+  );
+}
+
+function Input2({
+  label,
+  required,
+  type = "text",
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  required?: boolean;
+  type?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <p className="mb-1 font-semibold">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </p>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+      />
+    </div>
+  );
+}
+
+function PaymentOption({
+  active,
+  onClick,
+  icon,
+  title,
+  desc,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full gap-3 rounded-lg border p-3 text-left transition",
+        active ? "border-teal-500 bg-teal-50/50" : "border-stone-200 hover:bg-stone-50",
+      )}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
+          active ? "border-teal-600" : "border-stone-300",
+        )}
+      >
+        {active && <span className="h-2 w-2 rounded-full bg-teal-600" />}
+      </span>
+      <div>
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <span className="text-teal-600">{icon}</span>
+          {title}
+        </p>
+        <p className="mt-0.5 text-xs text-stone-500">{desc}</p>
+      </div>
+    </button>
   );
 }
 

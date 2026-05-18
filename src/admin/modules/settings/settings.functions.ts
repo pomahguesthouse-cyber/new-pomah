@@ -107,7 +107,17 @@ const INTEGRATION_FIELDS = [
   "payment_bank_name",
   "payment_account_number",
   "payment_account_holder",
+  "hotel_policy",
 ] as const;
+
+/** Default hotel policy used until the property sets its own. */
+export const DEFAULT_HOTEL_POLICY = [
+  "Tidak diperbolehkan membawa makanan/buah berbau menyengat seperti durian",
+  "Tidak diperbolehkan mengkonsumsi alkohol di penginapan ini",
+  "Tidak diperbolehkan melakukan pesta",
+  "Tidak boleh merokok di dalam kamar",
+  "Area merokok pada lokasi tertentu seperti balkon dan lobby lantai 2",
+].join("\n");
 
 /** Read the property's third-party integration settings. */
 export const getIntegrationSettings = createServerFn({ method: "GET" })
@@ -133,6 +143,7 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       payment_bank_name: (row.payment_bank_name as string | null) ?? null,
       payment_account_number: (row.payment_account_number as string | null) ?? null,
       payment_account_holder: (row.payment_account_holder as string | null) ?? null,
+      hotel_policy: (row.hotel_policy as string | null) ?? null,
     };
   });
 
@@ -155,6 +166,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         payment_bank_name: z.string().max(120).nullable().optional(),
         payment_account_number: z.string().max(60).nullable().optional(),
         payment_account_holder: z.string().max(120).nullable().optional(),
+        hotel_policy: z.string().max(4000).nullable().optional(),
       })
       .parse(d),
   )
