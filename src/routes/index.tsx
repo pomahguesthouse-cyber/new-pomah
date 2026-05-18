@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { getPublicSiteData } from "@/public/functions/public.functions";
+import { getPublicSiteData, getGoogleReviews } from "@/public/functions/public.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
 
@@ -71,6 +71,12 @@ function PomahHome() {
   const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fetchData() });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
+
+  const reviewsFn = useServerFn(getGoogleReviews);
+  const { data: gr } = useQuery({ queryKey: ["google-reviews"], queryFn: () => reviewsFn() });
+  const gRating = gr?.rating ?? 4.8;
+  const gTotal = gr?.total ?? 76;
+  const gReviews = gr?.reviews ?? [];
 
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
@@ -176,20 +182,37 @@ function PomahHome() {
           <div className="mt-2 flex items-center gap-2">
             <div className="flex gap-0.5">
               {[0, 1, 2, 3, 4].map((i) => (
-                <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" />
+                <Star
+                  key={i}
+                  className={`h-5 w-5 ${
+                    i < Math.round(gRating)
+                      ? "fill-amber-400 text-amber-400"
+                      : "fill-stone-200 text-stone-200"
+                  }`}
+                />
               ))}
             </div>
-            <span className="text-2xl font-bold text-stone-800">4.8</span>
+            <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
           </div>
-          <p className="mt-1 text-xs text-stone-400">Berdasarkan 76 ulasan Google</p>
+          <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
         </div>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {REVIEWS.map((r) => (
-            <div key={r} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-              <Quote className="h-5 w-5 text-teal-600/40" />
-              <p className="mt-2 text-sm leading-relaxed text-stone-600">&ldquo;{r}&rdquo;</p>
-            </div>
-          ))}
+          {gReviews.length > 0
+            ? gReviews.map((rv, i) => (
+                <div key={i} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <Quote className="h-5 w-5 text-teal-600/40" />
+                  <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-stone-600">
+                    &ldquo;{rv.text}&rdquo;
+                  </p>
+                  <p className="mt-3 text-xs font-semibold text-stone-700">— {rv.author}</p>
+                </div>
+              ))
+            : REVIEWS.map((r) => (
+                <div key={r} className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <Quote className="h-5 w-5 text-teal-600/40" />
+                  <p className="mt-2 text-sm leading-relaxed text-stone-600">&ldquo;{r}&rdquo;</p>
+                </div>
+              ))}
         </div>
       </section>
 

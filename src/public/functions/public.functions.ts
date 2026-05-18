@@ -104,3 +104,73 @@ export const getBookingReference = createServerFn({ method: "GET" })
       .maybeSingle();
     return { reference_code: booking?.reference_code ?? null };
   });
+
+/* ------------------------------------------------------------------ */
+/* Google reviews (Places API)                                         */
+/* ------------------------------------------------------------------ */
+
+export interface GoogleReview {
+  author: string;
+  text: string;
+  rating: number;
+}
+export interface GoogleReviewsResult {
+  rating: number | null;
+  total: number | null;
+  reviews: GoogleReview[];
+}
+
+const EMPTY_REVIEWS: GoogleReviewsResult = { rating: null, total: null, reviews: [] };
+
+/**
+ * Fetch the property's Google rating, review count and recent reviews
+ * from the Google Places API. The Place ID comes from the property's
+ * integration settings; the API key from the GOOGLE_PLACES_API_KEY env
+ * var. Returns empty data (so the homepage falls back) on any failure.
+ */
+export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key) return EMPTY_REVIEWS;
+
+  const { data: prop } = await supabasePublic
+    .from("properties")
+    .select("google_place_id")
+    .limit(1)
+    .maybeSingle();
+  const placeId = (prop as Record<string, unknown> | null)?.google_place_id as string | undefined;
+  if (!placeId) return EMPTY_REVIEWS;
+
+  try {
+    const url =
+      "https://maps.googleapis.com/maps/api/place/details/json" +
+      `?place_id=${encodeURIComponent(placeId)}` +
+      "&fields=rating,user_ratings_total,reviews&language=id" +
+      `&key=${encodeURIComponent(key)}`;
+    const res = await fetch(url);
+    const json = (await res.json()) as {
+      result?: {
+        rating?: number;
+        user_ratings_total?: number;
+        reviews?: { author_name?: string; text?: string; rating?: number }[];
+      };
+    };
+    const r = json.result ?? {};
+    const reviews: GoogleReview[] = Array.isArray(r.reviews)
+      ? r.reviews
+          .slice(0, 6)
+          .map((rv) => ({
+            author: String(rv.author_name ?? "Tamu"),
+            text: String(rv.text ?? ""),
+            rating: Number(rv.rating ?? 0),
+          }))
+          .filter((rv) => rv.text)
+      : [];
+    return {
+      rating: typeof r.rating === "number" ? r.rating : null,
+      total: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
+      reviews,
+    };
+  } catch {
+    return EMPTY_REVIEWS;
+  }
+});
