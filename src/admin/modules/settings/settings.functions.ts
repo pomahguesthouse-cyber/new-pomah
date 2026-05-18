@@ -97,6 +97,7 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
 const INTEGRATION_FIELDS = [
   "fonnte_token",
   "google_place_id",
+  "google_places_api_key",
   "google_analytics_id",
   "google_tag_manager_id",
   "google_search_console",
@@ -116,6 +117,7 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       id: (row.id as string | undefined) ?? null,
       fonnte_token: (row.fonnte_token as string | null) ?? null,
       google_place_id: (row.google_place_id as string | null) ?? null,
+      google_places_api_key: (row.google_places_api_key as string | null) ?? null,
       google_analytics_id: (row.google_analytics_id as string | null) ?? null,
       google_tag_manager_id: (row.google_tag_manager_id as string | null) ?? null,
       google_search_console: (row.google_search_console as string | null) ?? null,
@@ -131,6 +133,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         id: z.string().uuid(),
         fonnte_token: z.string().max(500).nullable().optional(),
         google_place_id: z.string().max(300).nullable().optional(),
+        google_places_api_key: z.string().max(500).nullable().optional(),
         google_analytics_id: z.string().max(100).nullable().optional(),
         google_tag_manager_id: z.string().max(100).nullable().optional(),
         google_search_console: z.string().max(500).nullable().optional(),
