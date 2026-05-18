@@ -312,14 +312,29 @@ async function uploadToBucket(file: File): Promise<string> {
   return supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-function ImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+function ImageField({
+  value,
+  onChange,
+  kind = "image",
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  kind?: "image" | "video";
+}) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const isVideo = kind === "video";
   return (
     <div className="flex items-center gap-3">
       <div className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-muted">
         {value ? (
-          <img src={value} alt="" className="h-full w-full object-cover" />
+          isVideo ? (
+            <video src={value} muted className="h-full w-full object-cover" />
+          ) : (
+            <img src={value} alt="" className="h-full w-full object-cover" />
+          )
+        ) : isVideo ? (
+          <Film className="h-4 w-4 text-muted-foreground/50" />
         ) : (
           <Images className="h-4 w-4 text-muted-foreground/50" />
         )}
@@ -327,14 +342,14 @@ function ImageField({ value, onChange }: { value: string; onChange: (url: string
       <div className="flex-1 space-y-1.5">
         <Input
           value={value}
-          placeholder="URL gambar"
+          placeholder={isVideo ? "URL video" : "URL gambar"}
           className="font-mono text-xs"
           onChange={(e) => onChange(e.target.value)}
         />
         <input
           ref={ref}
           type="file"
-          accept="image/*"
+          accept={isVideo ? "video/*" : "image/*"}
           className="hidden"
           onChange={async (e) => {
             const f = e.target.files?.[0];
@@ -342,7 +357,7 @@ function ImageField({ value, onChange }: { value: string; onChange: (url: string
             setBusy(true);
             try {
               onChange(await uploadToBucket(f));
-              toast.success("Gambar terupload");
+              toast.success(isVideo ? "Video terupload" : "Gambar terupload");
             } catch (err) {
               toast.error(`Upload gagal: ${(err as Error).message}`);
             } finally {
@@ -612,7 +627,16 @@ function HeroTab({ cfg, setCfg }: TabProps) {
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
+            <Label className="text-[10px] text-muted-foreground">Gambar</Label>
             <ImageField value={slide.imageUrl} onChange={(url) => setSlide(i, { imageUrl: url })} />
+            <Label className="text-[10px] text-muted-foreground">
+              Video (opsional — diutamakan di atas gambar)
+            </Label>
+            <ImageField
+              kind="video"
+              value={slide.videoUrl}
+              onChange={(url) => setSlide(i, { videoUrl: url })}
+            />
             <Input
               value={slide.heading}
               placeholder="Judul"
@@ -630,7 +654,9 @@ function HeroTab({ cfg, setCfg }: TabProps) {
           variant="outline"
           className="gap-1.5"
           onClick={() =>
-            set({ slides: [...hero.slides, { imageUrl: "", heading: "", subheading: "" }] })
+            set({
+              slides: [...hero.slides, { imageUrl: "", videoUrl: "", heading: "", subheading: "" }],
+            })
           }
         >
           <Plus className="h-3.5 w-3.5" />

@@ -14,6 +14,8 @@ export interface NavLink {
 
 export interface HeroSlide {
   imageUrl: string;
+  /** Optional background video — takes precedence over the image. */
+  videoUrl: string;
   heading: string;
   subheading: string;
 }
@@ -104,6 +106,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     slides: [
       {
         imageUrl: "",
+        videoUrl: "",
         heading: "Selamat Datang Di Pomah Guesthouse",
         subheading: "Penginapan Murah di Kota Semarang",
       },
