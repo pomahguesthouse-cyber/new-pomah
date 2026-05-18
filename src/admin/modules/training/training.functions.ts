@@ -42,6 +42,33 @@ export const rateConversationLog = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Save a simulated conversation as a training example. Accepted examples
+ * (promoted) are marked `used` so the chatbot treats them as a basis for
+ * future answers; rejected ones are kept as negative examples.
+ */
+export const saveTrainingExample = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        userMessage: z.string().min(1).max(4000),
+        aiResponse: z.string().min(1).max(8000),
+        accepted: z.boolean(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.from("ai_conversation_logs").insert({
+      user_message: data.userMessage,
+      ai_response: data.aiResponse,
+      used: data.accepted,
+      rating: data.accepted ? "good" : "bad",
+    });
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const exportTrainingData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

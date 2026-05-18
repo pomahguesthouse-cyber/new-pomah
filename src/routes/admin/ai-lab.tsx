@@ -14,6 +14,7 @@ import {
   ArrowRight,
   LayoutDashboard,
   MessageCircle,
+  GraduationCap,
   Sparkles,
   Bot,
   Send,
@@ -37,6 +38,7 @@ import {
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { WhatsAppPage } from "@/routes/admin/whatsapp";
+import { TrainingView } from "@/admin/modules/ai-lab/training-view";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -91,10 +93,11 @@ const PIPELINE = [
   { label: "Balasan ke Tamu", icon: Send },
 ];
 
-type ViewKey = "dashboard" | "whatsapp";
+type ViewKey = "dashboard" | "whatsapp" | "training";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { key: "training", label: "Training", icon: GraduationCap },
 ];
 
 type EditTarget = { type: "agent" | "tool"; key: string } | null;
@@ -153,7 +156,13 @@ function AiLab() {
 
         {/* View */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {view === "dashboard" ? <DashboardView /> : <WhatsAppPage />}
+          {view === "dashboard" ? (
+            <DashboardView />
+          ) : view === "whatsapp" ? (
+            <WhatsAppPage />
+          ) : (
+            <TrainingView />
+          )}
         </div>
       </div>
     </div>
