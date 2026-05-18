@@ -101,6 +101,9 @@ const INTEGRATION_FIELDS = [
   "google_analytics_id",
   "google_tag_manager_id",
   "google_search_console",
+  "ai_api_key",
+  "ai_base_url",
+  "ai_model",
 ] as const;
 
 /** Read the property's third-party integration settings. */
@@ -121,6 +124,9 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       google_analytics_id: (row.google_analytics_id as string | null) ?? null,
       google_tag_manager_id: (row.google_tag_manager_id as string | null) ?? null,
       google_search_console: (row.google_search_console as string | null) ?? null,
+      ai_api_key: (row.ai_api_key as string | null) ?? null,
+      ai_base_url: (row.ai_base_url as string | null) ?? null,
+      ai_model: (row.ai_model as string | null) ?? null,
     };
   });
 
@@ -137,6 +143,9 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         google_analytics_id: z.string().max(100).nullable().optional(),
         google_tag_manager_id: z.string().max(100).nullable().optional(),
         google_search_console: z.string().max(500).nullable().optional(),
+        ai_api_key: z.string().max(500).nullable().optional(),
+        ai_base_url: z.string().max(300).nullable().optional(),
+        ai_model: z.string().max(120).nullable().optional(),
       })
       .parse(d),
   )

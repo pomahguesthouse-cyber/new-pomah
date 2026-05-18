@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const [{ data: property }, { data: roomTypes }] = await Promise.all([
@@ -245,3 +246,97 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
     return empty(`FETCH_ERROR: ${(e as Error).message}`);
   }
 });
+
+/* ------------------------------------------------------------------ */
+/* AI webchat (LLM)                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Run one turn of the public AI chatbot. The system prompt is built from
+ * the AI LAB agent instructions and live room data ("tools"); the LLM is
+ * any OpenAI-compatible endpoint configured in Settings → Integrasi.
+ */
+export const chatWithAI = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        messages: z
+          .array(
+            z.object({
+              role: z.enum(["user", "assistant"]),
+              content: z.string().min(1).max(2000),
+            }),
+          )
+          .min(1)
+          .max(24),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { data: prop } = await supabasePublic
+      .from("properties")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
+    const p = (prop ?? {}) as Record<string, unknown>;
+    const key = (p.ai_api_key as string | undefined)?.trim();
+    if (!key) return { reply: null as string | null, error: "NO_AI_KEY" };
+
+    const baseUrl = ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1")
+      .trim()
+      .replace(/\/+$/, "");
+    const model = ((p.ai_model as string | undefined) || "gpt-4o-mini").trim();
+
+    const cfg = mergeAiLabConfig(p.ai_lab_config);
+    const { data: rooms } = await supabasePublic
+      .from("room_types")
+      .select("name, base_rate, capacity, bed_type, description")
+      .order("base_rate");
+
+    const agentLines = AGENT_KEYS.filter(
+      (k) => cfg.agents[k]?.enabled && cfg.agents[k]?.instructions?.trim(),
+    ).map((k) => `• ${k}: ${cfg.agents[k].instructions.trim()}`);
+
+    const roomLines = (rooms ?? []).map((r) => {
+      const rr = r as Record<string, unknown>;
+      return `• ${rr.name} — Rp ${Number(rr.base_rate ?? 0).toLocaleString("id-ID")}/malam, kapasitas ${
+        rr.capacity ?? "-"
+      } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`;
+    });
+
+    const system = [
+      `Anda adalah asisten AI untuk ${(p.name as string) ?? "Pomah Guesthouse"}, sebuah penginapan.`,
+      "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
+      agentLines.length ? `Panduan tiap agent:\n${agentLines.join("\n")}` : "",
+      roomLines.length
+        ? `Data kamar (pakai sebagai sumber jawaban, jangan mengarang):\n${roomLines.join("\n")}`
+        : "",
+      "Untuk pemesanan, arahkan tamu memilih tanggal di widget pemesanan lalu klik 'Cek Ketersediaan' atau 'Pesan Kamar'.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          temperature: 0.6,
+          max_tokens: 500,
+          messages: [{ role: "system", content: system }, ...data.messages],
+        }),
+      });
+      const json = (await res.json()) as {
+        choices?: { message?: { content?: string } }[];
+        error?: { message?: string };
+      };
+      const reply = json.choices?.[0]?.message?.content;
+      if (!reply) {
+        return { reply: null as string | null, error: json.error?.message ?? "NO_REPLY" };
+      }
+      return { reply: String(reply).trim(), error: null as string | null };
+    } catch (e) {
+      return { reply: null as string | null, error: (e as Error).message };
+    }
+  });
