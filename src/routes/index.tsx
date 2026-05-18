@@ -66,6 +66,49 @@ const REVIEWS = [
   "Penginapan murah tapi kualitas oke, staff sangat membantu.",
 ];
 
+const ID_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const ID_MONTHS = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+/** Add `n` days to a `YYYY-MM-DD` string. */
+function isoAddDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+/** "2026-05-18" → "18 Mei 2026". */
+function fmtDateID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+/** "2026-05-18" → "Senin, 18 Mei 2026". */
+function fmtFullDateID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return `${ID_DAYS[d.getDay()]}, ${fmtDateID(iso)}`;
+}
+/** Whole nights between two `YYYY-MM-DD` strings. */
+function nightsBetween(a: string, b: string): number {
+  return Math.max(
+    0,
+    Math.round(
+      (new Date(`${b}T00:00:00`).getTime() - new Date(`${a}T00:00:00`).getTime()) / 86400000,
+    ),
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
@@ -120,31 +163,29 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    const d = new Date();
+    setToday(
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+        d.getDate(),
+      ).padStart(2, "0")}`,
+    );
+  }, []);
 
-  // Room availability for the chosen dates — filters the Our Room cards.
+  // Room availability — uses the picked dates, or today → tomorrow by
+  // default so the cards always reflect today's availability.
+  const usingDateFilter = !!checkIn && !!checkOut && checkIn < checkOut;
+  const effCheckIn = usingDateFilter ? checkIn : today;
+  const effCheckOut = usingDateFilter ? checkOut : today ? isoAddDays(today, 1) : "";
+
   const availFn = useServerFn(checkRoomTypeAvailability);
   const { data: availData } = useQuery({
-    queryKey: ["availability", checkIn, checkOut],
-    queryFn: () => availFn({ data: { checkIn, checkOut } }),
-    enabled: !!checkIn && !!checkOut && checkIn < checkOut,
+    queryKey: ["availability", effCheckIn, effCheckOut],
+    queryFn: () => availFn({ data: { checkIn: effCheckIn, checkOut: effCheckOut } }),
+    enabled: !!effCheckIn && !!effCheckOut && effCheckIn < effCheckOut,
   });
   const availability = availData?.availability ?? null;
-
-  // Diagnostic: log per-room-type availability for the chosen dates.
-  useEffect(() => {
-    if (availData) {
-      console.log(
-        `[Availability] ${checkIn} → ${checkOut}`,
-        rooms.map((rt) => ({
-          name: rt.name,
-          id: rt.id,
-          available: availData.availability[rt.id],
-        })),
-        "debug:",
-        availData.debug,
-      );
-    }
-  }, [availData, checkIn, checkOut, rooms]);
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
@@ -272,6 +313,15 @@ function PomahHome() {
               {cfg.roomCarousel.subheading && (
                 <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
                   {cfg.roomCarousel.subheading}
+                </p>
+              )}
+              {(usingDateFilter || today) && (
+                <p className="mt-2 text-xs font-semibold text-teal-700">
+                  {usingDateFilter
+                    ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
+                        checkOut,
+                      )} (${nightsBetween(checkIn, checkOut)} Malam)`
+                    : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
                 </p>
               )}
             </div>
