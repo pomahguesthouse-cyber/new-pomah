@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabasePublic } from "@/integrations/supabase/client.server";
+import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
@@ -51,7 +51,10 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       (new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / 86400000;
     if (nights < 1) throw new Error("Check-out must be after check-in");
 
-    const { data: guest, error: gerr } = await supabasePublic
+    // Writes use the service-role client — the anon role can INSERT but
+    // has no SELECT policy on guests/bookings, so `.select()` after an
+    // anon insert returns nothing.
+    const { data: guest, error: gerr } = await supabaseAdmin
       .from("guests")
       .insert({
         full_name: data.fullName,
@@ -63,7 +66,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
 
     const total = Number(rt.base_rate) * nights;
-    const { data: booking, error: berr } = await supabasePublic
+    const { data: booking, error: berr } = await supabaseAdmin
       .from("bookings")
       .insert({
         property_id: property.id,
@@ -84,7 +87,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
 
     // One booking_rooms line for the chosen room type (room assigned
     // later by staff).
-    const { error: brErr } = await supabasePublic.from("booking_rooms").insert({
+    const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert({
       booking_id: booking.id,
       room_id: null,
       room_type_id: rt.id,
@@ -449,7 +452,10 @@ export const chatWithAI = createServerFn({ method: "POST" })
       const rate = Number(rt.base_rate ?? 0);
       const total = rate * nights;
 
-      const { data: guest, error: gerr } = await supabasePublic
+      // Writes use the service-role client: booking creation is a
+      // trusted server-side action and the anon role cannot read back
+      // the inserted rows (no SELECT policy on guests/bookings).
+      const { data: guest, error: gerr } = await supabaseAdmin
         .from("guests")
         .insert({ full_name: fullName, email, phone })
         .select("id")
@@ -460,7 +466,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal menyimpan data tamu: ${gerr?.message ?? "tidak diketahui"}`,
         });
 
-      const { data: booking, error: berr } = await supabasePublic
+      const { data: booking, error: berr } = await supabaseAdmin
         .from("bookings")
         .insert({
           property_id: propId,
@@ -482,7 +488,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal membuat booking: ${berr?.message ?? "tidak diketahui"}`,
         });
 
-      const { error: brErr } = await supabasePublic.from("booking_rooms").insert({
+      const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert({
         booking_id: booking.id,
         room_id: null,
         room_type_id: rt.id as string,
