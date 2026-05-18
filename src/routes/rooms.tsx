@@ -46,30 +46,30 @@ function PublicRooms() {
       {/* Rooms grid */}
       <section className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-8 md:grid-cols-2">
-          {rooms.map((rt, i) => (
+          {rooms.map((rt) => (
             <article
               key={rt.id}
-              className="group overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:shadow-xl"
+              className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:shadow-xl"
             >
               {/* Image */}
-              <div
-                className={
-                  i % 3 === 0
-                    ? "aspect-[4/3] bg-amber-50"
-                    : i % 3 === 1
-                      ? "aspect-[4/3] bg-stone-100"
-                      : "aspect-[4/3] bg-emerald-50"
-                }
-              >
-                <div className="flex h-full w-full items-center justify-center">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                    Foto Kamar
-                  </p>
-                </div>
+              <div className="aspect-[4/3] overflow-hidden bg-stone-100">
+                {rt.hero_image_url ? (
+                  <img
+                    src={rt.hero_image_url}
+                    alt={rt.name}
+                    className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
+                      Foto Kamar
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Info */}
-              <div className="p-7">
+              <div className="flex flex-1 flex-col p-7">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-semibold text-stone-900">{rt.name}</h2>
@@ -106,7 +106,7 @@ function PublicRooms() {
                   </div>
                 )}
 
-                <div className="mt-6 flex items-center gap-3">
+                <div className="mt-auto flex items-center gap-3 pt-6">
                   <Link
                     to="/rooms/$slug"
                     params={{ slug: rt.slug }}
