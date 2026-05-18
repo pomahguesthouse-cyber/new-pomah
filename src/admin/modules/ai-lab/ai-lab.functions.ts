@@ -52,16 +52,51 @@ export interface AiLabConfig {
   tools: Record<string, ToolConfig>;
 }
 
-const defaultAgent = (): AgentConfig => ({ enabled: true, autoReply: false, instructions: "" });
-const defaultTool = (): ToolConfig => ({ enabled: true, note: "" });
+/** Default persona prompt for each specialized agent. */
+export const AGENT_DEFAULTS: Record<string, string> = {
+  "front-office":
+    "Anda Front Office Agent Pomah Guesthouse. Tangani reservasi, check-in/check-out, dan pertanyaan umum tamu. Ramah, sapa tamu dengan 'Kak', jawab singkat dan jelas. Bantu cek ketersediaan kamar dan arahkan tamu untuk memesan.",
+  pricing:
+    "Anda Pricing Agent Pomah Guesthouse. Jawab pertanyaan soal tarif kamar dan promo. Gunakan harga dari data kamar yang diberikan — jangan mengarang harga. Sebutkan promo yang berlaku bila relevan.",
+  housekeeping:
+    "Anda Housekeeping Agent Pomah Guesthouse. Beri informasi kesiapan dan kebersihan kamar, jam check-in (14.00) dan check-out (12.00), serta permintaan kebersihan tamu.",
+  maintenance:
+    "Anda Maintenance Agent Pomah Guesthouse. Tangani keluhan fasilitas atau kerusakan dengan tanggap dan sopan. Catat detail masalah dan informasikan bahwa staf akan segera menindaklanjuti.",
+  finance:
+    "Anda Finance Agent Pomah Guesthouse. Tangani pertanyaan pembayaran, tagihan, metode pembayaran, dan konfirmasi pembayaran. Jangan meminta data kartu atau identitas sensitif lewat chat.",
+  manager:
+    "Anda Manager Agent Pomah Guesthouse, khusus melayani manajer/pemilik. Berikan ringkasan operasional, okupansi, performa penjualan, dan rekomendasi tarif. Gunakan bahasa profesional dan ringkas.",
+};
+
+/** Default source note for each knowledge/tool. */
+export const TOOL_DEFAULTS: Record<string, string> = {
+  "pms-database": "Sumber data utama: kamar, tipe kamar, dan booking.",
+  "room-availability": "Pengecekan ketersediaan kamar per tanggal.",
+  "sop-knowledge": "Panduan SOP & kebijakan penginapan untuk jawaban yang konsisten.",
+  "pricing-engine": "Tarif dasar dan aturan harga/promo kamar.",
+  "faq-memory": "Kumpulan pertanyaan umum tamu beserta jawabannya.",
+};
 
 /** Coerce a stored (possibly partial) document into a full `AiLabConfig`. */
 export function mergeAiLabConfig(raw: unknown): AiLabConfig {
   const c = (raw ?? {}) as Partial<AiLabConfig>;
   const agents: Record<string, AgentConfig> = {};
-  for (const k of AGENT_KEYS) agents[k] = { ...defaultAgent(), ...c.agents?.[k] };
+  for (const k of AGENT_KEYS) {
+    const a = c.agents?.[k];
+    agents[k] = {
+      enabled: a?.enabled ?? true,
+      autoReply: a?.autoReply ?? false,
+      instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
+    };
+  }
   const tools: Record<string, ToolConfig> = {};
-  for (const k of TOOL_KEYS) tools[k] = { ...defaultTool(), ...c.tools?.[k] };
+  for (const k of TOOL_KEYS) {
+    const t = c.tools?.[k];
+    tools[k] = {
+      enabled: t?.enabled ?? true,
+      note: t?.note?.trim() ? t.note : (TOOL_DEFAULTS[k] ?? ""),
+    };
+  }
   return { agents, tools };
 }
 

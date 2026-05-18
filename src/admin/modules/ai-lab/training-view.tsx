@@ -52,76 +52,146 @@ function composeResponse(rooms: RoomTypeRow[], role: "tamu" | "manager"): string
 }
 
 /* ------------------------------------------------------------------ */
-/* Flow diagram                                                        */
+/* Orchestration flow diagram                                          */
 /* ------------------------------------------------------------------ */
 
-const FLOW_TONES: Record<string, string> = {
-  dark: "bg-teal-800 text-white border-teal-800",
-  blue: "bg-blue-600 text-white border-blue-600",
-  light: "bg-sky-100 text-sky-800 border-sky-300",
-};
+/** The 6 specialized agents, in routing order. */
+const FLOW_AGENTS: { key: string; label: string; roles: ("tamu" | "manager")[] }[] = [
+  { key: "front-office", label: "Front Office", roles: ["tamu"] },
+  { key: "pricing", label: "Pricing", roles: ["tamu", "manager"] },
+  { key: "housekeeping", label: "Housekeeping", roles: ["tamu"] },
+  { key: "maintenance", label: "Maintenance", roles: ["tamu"] },
+  { key: "finance", label: "Finance", roles: ["tamu", "manager"] },
+  { key: "manager", label: "Manager", roles: ["manager"] },
+];
 
-function FlowBox({
+/** The knowledge/tool sources agents can call. */
+const FLOW_TOOLS = ["PMS Database", "Room Availability", "SOP", "Pricing Engine", "FAQ Memory"];
+
+/** A labelled stage box in the vertical flow. */
+function FlowStage({
   label,
-  tone,
+  sub,
   active,
+  tone = "dark",
 }: {
   label: string;
-  tone: keyof typeof FLOW_TONES;
+  sub?: string;
   active: boolean;
+  tone?: "dark" | "accent";
 }) {
   return (
     <div
       className={cn(
-        "rounded-lg border px-4 py-3 text-center text-sm font-semibold transition",
-        FLOW_TONES[tone],
+        "rounded-lg border px-4 py-2.5 text-center transition",
+        tone === "dark"
+          ? "bg-teal-800 text-white border-teal-800"
+          : "bg-blue-600 text-white border-blue-600",
         active ? "ring-2 ring-emerald-400 ring-offset-2" : "opacity-90",
       )}
     >
-      {label}
+      <p className="text-sm font-semibold">{label}</p>
+      {sub ? <p className="text-[10px] font-medium text-white/70">{sub}</p> : null}
     </div>
   );
 }
 
+/** Vertical connector between stages — glows emerald once a reply exists. */
 function FlowArrow({ active }: { active: boolean }) {
   return (
-    <div className="flex justify-center py-1">
-      <div className={cn("h-5 w-0.5", active ? "bg-emerald-500" : "bg-stone-300")} />
+    <div className="flex justify-center">
+      <div className={cn("h-4 w-0.5", active ? "bg-emerald-500" : "bg-stone-300")} />
     </div>
   );
 }
 
-function FlowDiagram({
-  active,
-  intent,
-  role,
-}: {
-  active: boolean;
-  intent: string;
-  role: "tamu" | "manager";
-}) {
+/**
+ * Full orchestration map: an inbound message is classified by the
+ * orchestrator, routed to one or more specialized agents, those agents
+ * pull from shared knowledge/tools, and a composer returns the reply.
+ */
+function FlowDiagram({ role, responded }: { role: "tamu" | "manager"; responded: boolean }) {
+  const a = responded;
   return (
-    <div className="mx-auto max-w-xs">
-      <div className="flex items-start gap-3">
-        <FlowBox label="ORCHESTRATOR" tone="dark" active={active} />
-        <div className="pt-1 text-xs">
-          <p className="font-semibold text-stone-500">Intent :</p>
-          <p className="text-teal-700">{intent || "—"}</p>
+    <div className="mx-auto max-w-sm">
+      {/* Inbound */}
+      <FlowStage
+        label="Pesan Masuk"
+        sub={role === "manager" ? "Saluran: Manager" : "Saluran: Tamu / Webchat"}
+        active={a}
+      />
+      <FlowArrow active={a} />
+
+      {/* Orchestrator */}
+      <FlowStage label="AI Orchestrator" sub="Deteksi intent & routing" active={a} />
+      <FlowArrow active={a} />
+
+      {/* Agent fan-out */}
+      <p className="mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+        Specialized Agents
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {FLOW_AGENTS.map((ag) => {
+          const routed = a && ag.roles.includes(role);
+          return (
+            <div
+              key={ag.key}
+              className={cn(
+                "rounded-md border px-1.5 py-1.5 text-center text-[10px] font-semibold transition",
+                routed
+                  ? "border-emerald-400 bg-emerald-50 text-emerald-800 ring-1 ring-emerald-300"
+                  : "border-stone-200 bg-stone-50 text-stone-400",
+              )}
+            >
+              {ag.label}
+            </div>
+          );
+        })}
+      </div>
+      <FlowArrow active={a} />
+
+      {/* Tools / knowledge */}
+      <div
+        className={cn(
+          "rounded-lg border px-3 py-2.5 transition",
+          a ? "border-sky-300 bg-sky-50" : "border-stone-200 bg-stone-50 opacity-90",
+        )}
+      >
+        <p
+          className={cn(
+            "mb-1.5 text-center text-[11px] font-semibold",
+            a ? "text-sky-800" : "text-stone-500",
+          )}
+        >
+          Knowledge &amp; Tools
+        </p>
+        <div className="flex flex-wrap justify-center gap-1">
+          {FLOW_TOOLS.map((t) => (
+            <span
+              key={t}
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[9px] font-medium",
+                a ? "bg-white text-sky-700" : "bg-white text-stone-400",
+              )}
+            >
+              {t}
+            </span>
+          ))}
         </div>
       </div>
-      <FlowArrow active={active} />
-      <FlowBox
-        label={role === "manager" ? "Manager Agent" : "Front Office Agent"}
-        tone="dark"
-        active={active}
+      <FlowArrow active={a} />
+
+      {/* Composer */}
+      <FlowStage
+        label="Response Composer"
+        sub="Gabung jawaban & nada bicara"
+        tone="accent"
+        active={a}
       />
-      <FlowArrow active={active} />
-      <FlowBox label="Pricing Agent" tone="blue" active={active} />
-      <FlowArrow active={active} />
-      <div className="grid grid-cols-2 gap-3">
-        <FlowBox label="Promo" tone="light" active={active} />
-        <FlowBox label="Room Availability" tone="light" active={active} />
-      </div>
+      <FlowArrow active={a} />
+
+      {/* Outbound */}
+      <FlowStage label={role === "manager" ? "Balasan ke Manager" : "Balasan ke Tamu"} active={a} />
     </div>
   );
 }
@@ -143,14 +213,6 @@ export function TrainingView() {
   const [response, setResponse] = useState("");
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
-
-  const intent = response
-    ? role === "manager"
-      ? "Manager, ringkasan, operasional"
-      : "Kamar, ready, hari ini"
-    : input.trim()
-      ? "Menganalisa…"
-      : "";
 
   // Live: run the real LLM, falling back to the templated reply.
   const send = async () => {
@@ -212,7 +274,7 @@ export function TrainingView() {
             <p className="mb-5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Alur Orkestrasi AI
             </p>
-            <FlowDiagram active={!!response} intent={intent} role={role} />
+            <FlowDiagram role={role} responded={!!response} />
           </div>
 
           {/* Simulation panel */}
