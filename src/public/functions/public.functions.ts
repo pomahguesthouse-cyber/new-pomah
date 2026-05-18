@@ -47,6 +47,45 @@ async function pickAvailableRoom(
   return free ? (free.id as string) : null;
 }
 
+/**
+ * Like pickAvailableRoom but returns `n` room ids — one per requested
+ * room. Slots beyond the free-room count are filled with null (left for
+ * staff to assign).
+ */
+async function pickAvailableRooms(
+  roomTypeId: string,
+  checkIn: string,
+  checkOut: string,
+  n: number,
+): Promise<(string | null)[]> {
+  const { data: rooms } = await supabaseAdmin
+    .from("rooms")
+    .select("id, number")
+    .eq("room_type_id", roomTypeId)
+    .order("number");
+  const roomRows = (rooms ?? []) as Record<string, unknown>[];
+
+  const { data: activeBookings } = await supabaseAdmin
+    .from("bookings")
+    .select("id")
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .lt("check_in", checkOut)
+    .gt("check_out", checkIn);
+  const activeIds = (activeBookings ?? []).map((b) => (b as Record<string, unknown>).id as string);
+
+  let taken = new Set<unknown>();
+  if (activeIds.length) {
+    const { data: occ } = await supabaseAdmin
+      .from("booking_rooms")
+      .select("room_id")
+      .not("room_id", "is", null)
+      .in("booking_id", activeIds);
+    taken = new Set((occ ?? []).map((r) => (r as Record<string, unknown>).room_id));
+  }
+  const free = roomRows.filter((r) => !taken.has(r.id)).map((r) => r.id as string);
+  return Array.from({ length: n }, (_, i) => free[i] ?? null);
+}
+
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const [{ data: property }, { data: roomTypes }] = await Promise.all([
     supabasePublic.from("properties").select("*").limit(1).maybeSingle(),
@@ -72,6 +111,10 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         adults: z.number().int().min(1).max(8),
         children: z.number().int().min(0).max(8),
+        rooms: z.number().int().min(1).max(8).optional(),
+        checkInTime: z.string().max(10).optional().or(z.literal("")),
+        checkOutTime: z.string().max(10).optional().or(z.literal("")),
+        paymentMethod: z.enum(["transfer", "onsite"]).optional(),
         specialRequests: z.string().max(2000).optional().or(z.literal("")),
       })
       .parse(d),
@@ -109,8 +152,9 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .single();
     if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
 
-    const total = Number(rt.base_rate) * nights;
-    const { data: booking, error: berr } = await supabaseAdmin
+    const roomsCount = data.rooms ?? 1;
+    const total = Number(rt.base_rate) * nights * roomsCount;
+    const { data: booking, error: berr } = await db(supabaseAdmin)
       .from("bookings")
       .insert({
         property_id: property.id,
@@ -124,22 +168,34 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         source: "direct",
         status: "pending",
         special_requests: data.specialRequests || null,
+        check_in_time: data.checkInTime || null,
+        check_out_time: data.checkOutTime || null,
+        payment_method: data.paymentMethod || null,
       })
       .select("id, reference_code")
       .single();
     if (berr || !booking) throw berr ?? new Error("Could not create booking");
 
-    // Auto room allotment — assign a free physical room if one exists.
-    const assignedRoomId = await pickAvailableRoom(rt.id, data.checkIn, data.checkOut);
-    const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert({
-      booking_id: booking.id,
-      room_id: assignedRoomId,
-      room_type_id: rt.id,
-      nightly_rate: rt.base_rate,
-    });
+    // Auto room allotment — one booking_rooms line per room, each
+    // assigned a free physical room where one exists.
+    const assigned = await pickAvailableRooms(rt.id, data.checkIn, data.checkOut, roomsCount);
+    const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert(
+      assigned.map((roomId) => ({
+        booking_id: booking.id,
+        room_id: roomId,
+        room_type_id: rt.id,
+        nightly_rate: rt.base_rate,
+      })),
+    );
     if (brErr) throw brErr;
 
-    return { id: booking.id, reference_code: booking.reference_code, total, nights };
+    return {
+      id: booking.id,
+      reference_code: booking.reference_code,
+      total,
+      nights,
+      rooms: roomsCount,
+    };
   });
 
 export const getBookingReference = createServerFn({ method: "GET" })

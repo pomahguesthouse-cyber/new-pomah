@@ -110,6 +110,7 @@ function PublicRooms() {
                   <Link
                     to="/rooms/$slug"
                     params={{ slug: rt.slug }}
+                    search={{}}
                     className="flex-1 rounded-lg bg-stone-900 py-2.5 text-center text-sm font-medium text-white transition hover:bg-amber-700"
                   >
                     Pesan Kamar Ini
@@ -117,6 +118,7 @@ function PublicRooms() {
                   <Link
                     to="/rooms/$slug"
                     params={{ slug: rt.slug }}
+                    search={{}}
                     className="rounded-lg border border-stone-200 px-4 py-2.5 text-sm text-stone-600 transition hover:bg-stone-50"
                   >
                     Detail
