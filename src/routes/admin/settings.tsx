@@ -565,8 +565,8 @@ function IntegrationTab() {
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
         label="AI Chatbot — API Key"
-        description="API key LLM (OpenAI-compatible) untuk webchat AI di halaman depan."
-        placeholder="sk-…"
+        description="Kosongkan untuk memakai Lovable AI (default). Isi hanya bila ingin LLM lain (OpenAI-compatible)."
+        placeholder="Kosong = Lovable AI"
         secret
         value={data?.ai_api_key ?? null}
         disabled={disabled}
@@ -575,7 +575,7 @@ function IntegrationTab() {
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
         label="AI Chatbot — Base URL"
-        description="Endpoint OpenAI-compatible. Kosongkan untuk OpenAI default."
+        description="Endpoint OpenAI-compatible. Hanya dipakai bila API Key di atas diisi."
         placeholder="https://api.openai.com/v1"
         value={data?.ai_base_url ?? null}
         disabled={disabled}
@@ -584,8 +584,8 @@ function IntegrationTab() {
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
         label="AI Chatbot — Model"
-        description="Nama model, mis. gpt-4o-mini. Kosongkan untuk default."
-        placeholder="gpt-4o-mini"
+        description="Kosongkan untuk default. Lewat Lovable AI gunakan format mis. google/gemini-2.5-flash."
+        placeholder="google/gemini-2.5-flash"
         value={data?.ai_model ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, ai_model: v })}

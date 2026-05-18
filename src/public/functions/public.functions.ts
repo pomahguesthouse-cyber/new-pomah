@@ -281,13 +281,28 @@ export const chatWithAI = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     const p = (prop ?? {}) as Record<string, unknown>;
-    const key = (p.ai_api_key as string | undefined)?.trim();
+
+    // LLM resolution: prefer an explicitly configured key (Settings →
+    // Integrasi); otherwise fall back to the Lovable AI gateway, which is
+    // available via the LOVABLE_API_KEY env var in Lovable Cloud projects.
+    const explicitKey = (p.ai_api_key as string | undefined)?.trim();
+    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
+    const useLovable = !explicitKey && !!lovableKey;
+    const key = explicitKey || lovableKey;
     if (!key) return { reply: null as string | null, error: "NO_AI_KEY" };
 
-    const baseUrl = ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1")
-      .trim()
-      .replace(/\/+$/, "");
-    const model = ((p.ai_model as string | undefined) || "gpt-4o-mini").trim();
+    const configuredModel = (p.ai_model as string | undefined)?.trim();
+    const baseUrl = useLovable
+      ? "https://ai.gateway.lovable.dev/v1"
+      : ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1")
+          .trim()
+          .replace(/\/+$/, "");
+    // Lovable gateway expects namespaced model ids (e.g. google/gemini-2.5-flash).
+    const model = useLovable
+      ? configuredModel && configuredModel.includes("/")
+        ? configuredModel
+        : "google/gemini-2.5-flash"
+      : configuredModel || "gpt-4o-mini";
 
     const cfg = mergeAiLabConfig(p.ai_lab_config);
     const { data: rooms } = await supabasePublic

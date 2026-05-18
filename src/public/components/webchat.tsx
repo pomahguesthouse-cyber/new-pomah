@@ -80,7 +80,14 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
       const res = await chatFn({ data: { messages: history, threadId: threadId.current } });
       if (res.error) console.warn("[Webchat AI] LLM tidak dipakai — error:", res.error);
       else console.log("[Webchat AI] balasan dari LLM ✓");
-      const reply = res.reply || botReply(text, rooms);
+      // When the LLM is rate-limited/over quota, say so honestly instead
+      // of the rule-based "belum paham" fallback.
+      const rateLimited = !!res.error && /\b429\b|quota|rate.?limit/i.test(res.error);
+      const reply =
+        res.reply ||
+        (rateLimited
+          ? "Maaf, Kak 🙏 Asisten AI sedang sibuk sebentar. Mohon coba lagi beberapa saat lagi, atau hubungi kami langsung via WhatsApp ya."
+          : botReply(text, rooms));
       setMsgs((m) => [...m, { who: "bot", text: reply }]);
     } catch (e) {
       console.warn("[Webchat AI] panggilan gagal:", (e as Error).message);
