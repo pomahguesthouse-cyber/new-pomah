@@ -310,6 +310,14 @@ function PomahHome() {
 /* Hero slider                                                          */
 /* ------------------------------------------------------------------ */
 
+/** Per-slide enter animation, keyed by the configured transition. */
+const HERO_ANIM: Record<string, string> = {
+  fade: "animate-in fade-in duration-700",
+  slide: "animate-in slide-in-from-right-full duration-500 ease-out",
+  zoom: "animate-in zoom-in-95 duration-700",
+  none: "",
+};
+
 function HeroSlider({
   hero,
   fallbackTitle,
@@ -336,40 +344,42 @@ function HeroSlider({
       className="relative w-full overflow-hidden"
       style={{ height: hero.height, zIndex: hero.layer }}
     >
-      {active.imageUrl ? (
-        <img
-          src={active.imageUrl}
-          alt={active.heading}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
-      )}
-      <div className="absolute inset-0 bg-black/35" />
-      <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
-        <h1
-          className={`max-w-3xl tracking-tight text-white drop-shadow ${
-            hero.fontFamily === "mono"
-              ? "font-mono"
-              : hero.fontFamily === "sans"
-                ? "font-sans"
-                : "font-serif"
-          }`}
-          style={{
-            fontSize: hero.fontSize,
-            lineHeight: 1.1,
-            fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
-            fontWeight: hero.fontStyle === "bold" ? 700 : 400,
-          }}
-        >
-          {active.heading}
-        </h1>
-        {active.subheading && (
-          <>
-            <span className="my-4 h-px w-40 bg-white/70" />
-            <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
-          </>
+      <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
+        {active.imageUrl ? (
+          <img
+            src={active.imageUrl}
+            alt={active.heading}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
         )}
+        <div className="absolute inset-0 bg-black/35" />
+        <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+          <h1
+            className={`max-w-3xl tracking-tight text-white drop-shadow ${
+              hero.fontFamily === "mono"
+                ? "font-mono"
+                : hero.fontFamily === "sans"
+                  ? "font-sans"
+                  : "font-serif"
+            }`}
+            style={{
+              fontSize: hero.fontSize,
+              lineHeight: 1.1,
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+            }}
+          >
+            {active.heading}
+          </h1>
+          {active.subheading && (
+            <>
+              <span className="my-4 h-px w-40 bg-white/70" />
+              <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
+            </>
+          )}
+        </div>
       </div>
       {slides.length > 1 && (
         <>

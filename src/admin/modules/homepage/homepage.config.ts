@@ -44,6 +44,8 @@ export interface HomepageConfig {
     slides: HeroSlide[];
     autoplayMs: number;
     height: number;
+    /** Transition animation between slides. */
+    transition: "fade" | "slide" | "zoom" | "none";
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
     /** Heading font family (tipe). */
@@ -108,6 +110,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     ],
     autoplayMs: 5000,
     height: 480,
+    transition: "fade",
     layer: 10,
     fontFamily: "serif",
     fontSize: 48,
