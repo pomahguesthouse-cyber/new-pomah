@@ -127,7 +127,12 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const { checkIn, checkOut } = data;
-    if (checkIn >= checkOut) return { availability: {} as Record<string, boolean> };
+    if (checkIn >= checkOut) {
+      return {
+        availability: {} as Record<string, boolean>,
+        debug: { activeBookings: 0, totalsByType: {}, occupiedByType: {} },
+      };
+    }
 
     const [{ data: roomsData }, { data: bookings }] = await Promise.all([
       supabasePublic.from("rooms").select("id, room_type_id"),
@@ -168,7 +173,14 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
     for (const t of Object.keys(totals)) {
       availability[t] = totals[t] > (occupied[t] ?? 0);
     }
-    return { availability };
+    return {
+      availability,
+      debug: {
+        activeBookings: activeIds.length,
+        totalsByType: totals,
+        occupiedByType: occupied,
+      },
+    };
   });
 
 /* ------------------------------------------------------------------ */

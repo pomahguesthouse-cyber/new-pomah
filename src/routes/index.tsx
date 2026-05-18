@@ -140,6 +140,8 @@ function PomahHome() {
           id: rt.id,
           available: availData.availability[rt.id],
         })),
+        "debug:",
+        availData.debug,
       );
     }
   }, [availData, checkIn, checkOut, rooms]);
