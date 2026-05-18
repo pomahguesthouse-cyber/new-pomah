@@ -1,102 +1,95 @@
 /**
- * /admin/ai-lab — AI LAB.
+ * /admin/ai-lab — AI LAB dashboard.
  *
- * A full-screen reference page (sidebar hidden, like the Page Builder)
- * showing the AI chatbot conversation-flow diagrams for Pomah Guesthouse.
+ * A full-screen control room for the Pomah Guesthouse AI chatbot
+ * (sidebar hidden, like the Page Builder): live AI KPIs, the specialized
+ * agents, the knowledge/tools they use, and the conversation pipeline.
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowDown, MessageSquare, Bot } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import {
+  ArrowLeft,
+  ArrowRight,
+  MessageCircle,
+  Sparkles,
+  Bot,
+  Send,
+  Building2,
+  DollarSign,
+  BedDouble,
+  Wrench,
+  Calculator,
+  Database,
+  CalendarCheck,
+  BookOpen,
+  TrendingUp,
+  Brain,
+} from "lucide-react";
+import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
+import { Card } from "@/components/ui/card";
 
 export const Route = createFileRoute("/admin/ai-lab")({
   component: AiLab,
 });
 
-/* ------------------------------------------------------------------ */
-/* Flow primitives                                                     */
-/* ------------------------------------------------------------------ */
+const AGENTS = [
+  { name: "Front Office Agent", icon: Building2, desc: "Reservasi, check-in, info tamu" },
+  { name: "Pricing Agent", icon: DollarSign, desc: "Tarif dinamis & promo" },
+  { name: "Housekeeping Agent", icon: BedDouble, desc: "Status & kesiapan kamar" },
+  { name: "Maintenance Agent", icon: Wrench, desc: "Perbaikan & fasilitas" },
+  { name: "Finance Agent", icon: Calculator, desc: "Pembayaran & tagihan" },
+];
 
-const TONES: Record<string, string> = {
-  default: "border-stone-200 bg-white",
-  guest: "border-stone-300 bg-stone-100",
-  accent: "border-teal-300 bg-teal-50",
-  agent: "border-amber-300 bg-amber-50",
-  tool: "border-sky-300 bg-sky-50",
-};
+const TOOLS = [
+  { name: "PMS Database", icon: Database },
+  { name: "Room Availability", icon: CalendarCheck },
+  { name: "SOP Knowledge Base", icon: BookOpen },
+  { name: "Pricing Engine", icon: TrendingUp },
+  { name: "FAQ Memory", icon: Brain },
+];
 
-function Node({
-  title,
-  lines,
-  tone = "default",
-  className,
-}: {
-  title: string;
-  lines?: string[];
-  tone?: keyof typeof TONES;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        "mx-auto w-full max-w-md rounded-xl border px-5 py-3 text-center shadow-sm",
-        TONES[tone],
-        className,
-      )}
-    >
-      <p className="text-sm font-semibold text-stone-800">{title}</p>
-      {lines && lines.length > 0 && (
-        <ul className="mt-1 space-y-0.5 text-xs text-stone-500">
-          {lines.map((l) => (
-            <li key={l}>{l}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function Down() {
-  return (
-    <div className="flex justify-center py-1.5">
-      <ArrowDown className="h-5 w-5 text-stone-300" />
-    </div>
-  );
-}
-
-function Bubble({ who, text }: { who: "guest" | "ai"; text: string }) {
-  const guest = who === "guest";
-  return (
-    <div className={cn("flex", guest ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-sm rounded-2xl px-4 py-2.5 text-sm shadow-sm",
-          guest ? "bg-stone-200 text-stone-800" : "bg-teal-600 text-white",
-        )}
-      >
-        <p className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide opacity-70">
-          {guest ? <MessageSquare className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
-          {guest ? "Guest" : "AI"}
-        </p>
-        <p className="whitespace-pre-line">{text}</p>
-      </div>
-    </div>
-  );
-}
-
-function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: string }) {
-  return (
-    <div className="mb-6 text-center">
-      <h2 className="text-xl font-semibold tracking-tight text-stone-900">{children}</h2>
-      {sub && <p className="mt-1 text-sm text-stone-500">{sub}</p>}
-    </div>
-  );
-}
-
-/* ================================================================== */
-/* Page                                                                */
-/* ================================================================== */
+const PIPELINE = [
+  { label: "Pesan Masuk", icon: MessageCircle },
+  { label: "AI Orchestrator", icon: Bot },
+  { label: "Specialized Agent", icon: Sparkles },
+  { label: "Knowledge / Tools", icon: Database },
+  { label: "Response Composer", icon: Brain },
+  { label: "Balasan ke Tamu", icon: Send },
+];
 
 function AiLab() {
+  const fn = useServerFn(getDashboardMetrics);
+  const { data } = useQuery({ queryKey: ["dashboard-metrics"], queryFn: () => fn() });
+  const s = data?.summary;
+
+  const kpis = [
+    {
+      label: "Percakapan AI (30 hari)",
+      value: (s?.aiTotal30d ?? 0).toLocaleString("id-ID"),
+      icon: Bot,
+      hint: `${(s?.aiUsed30d ?? 0).toLocaleString("id-ID")} dipakai staf`,
+    },
+    {
+      label: "AI Adoption",
+      value: `${s?.aiAdoptionPct ?? 0}%`,
+      icon: Sparkles,
+      hint: "Saran AI yang dipakai",
+    },
+    {
+      label: "Pesan WhatsApp (30 hari)",
+      value: `${(s?.waIn30d ?? 0).toLocaleString("id-ID")} / ${(s?.waOut30d ?? 0).toLocaleString("id-ID")}`,
+      icon: MessageCircle,
+      hint: "Masuk / keluar",
+    },
+    {
+      label: "Konversi WhatsApp",
+      value: `${s?.waConversionPct ?? 0}%`,
+      icon: TrendingUp,
+      hint: `${s?.waThreads ?? 0} percakapan`,
+    },
+  ];
+
   return (
     <div className="flex h-full flex-col bg-stone-100">
       {/* Top bar */}
@@ -116,137 +109,89 @@ function AiLab() {
             <h1 className="text-lg font-semibold tracking-tight">AI LAB</h1>
           </div>
         </div>
+        <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          AI Aktif
+        </span>
       </header>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-10">
-          <div className="mb-10 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-stone-900">
-              Diagram Alur Percakapan AI Chatbot Hotel
-            </h1>
-            <p className="mt-1 text-sm text-stone-500">Pomah Guesthouse</p>
+        <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+          {/* KPIs */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {kpis.map((k) => (
+              <Card key={k.label} className="p-5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
+                  <k.icon className="h-4 w-4 text-teal-600" />
+                </div>
+                <p className="mt-2 text-2xl font-semibold tracking-tight">{k.value}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{k.hint}</p>
+              </Card>
+            ))}
           </div>
 
-          {/* ── High-Level Conversation Flow ── */}
-          <section className="mb-14">
-            <SectionTitle>High-Level Conversation Flow</SectionTitle>
+          {/* Conversation pipeline */}
+          <section>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Conversation Pipeline
+            </h2>
+            <Card className="flex flex-wrap items-center gap-2 p-5">
+              {PIPELINE.map((step, i) => (
+                <div key={step.label} className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <step.icon className="h-4 w-4 text-teal-600" />
+                    <span className="text-xs font-medium">{step.label}</span>
+                  </div>
+                  {i < PIPELINE.length - 1 && (
+                    <ArrowRight className="h-4 w-4 shrink-0 text-stone-300" />
+                  )}
+                </div>
+              ))}
+            </Card>
+          </section>
 
-            <Node title="Guest Sends Message" lines={["WhatsApp / Web / OTA"]} tone="guest" />
-            <Down />
-            <Node
-              title="AI Orchestrator"
-              lines={["Intent Detection", "Context Analysis"]}
-              tone="accent"
-            />
-            <Down />
-
-            {/* Three intents */}
-            <div className="grid grid-cols-3 gap-3">
-              <Node title="Booking Intent" />
-              <Node title="Support Intent" />
-              <Node title="Information Intent" />
-            </div>
-            <Down />
-
-            <Node title="Route to Appropriate AI Agent" tone="accent" />
-            <Down />
-            <Node
-              title="Specialized AI Agent"
-              lines={[
-                "Front Office Agent",
-                "Pricing Agent",
-                "Housekeeping Agent",
-                "Maintenance Agent",
-                "Finance Agent",
-              ]}
-              tone="agent"
-            />
-            <Down />
-            <Node
-              title="Access Knowledge / Tools"
-              lines={[
-                "PMS Database",
-                "Room Availability",
-                "SOP Knowledge Base",
-                "Pricing Engine",
-                "FAQ Memory",
-              ]}
-              tone="tool"
-            />
-            <Down />
-            <Node
-              title="AI Response Composer"
-              lines={["Human-like Response", "Tone Adjustment", "Language Adaptation"]}
-              tone="accent"
-            />
-            <Down />
-            <Node title="Human Approval Needed?" />
-            <Down />
-
-            {/* Yes / No branch */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-amber-600">
-                  Yes
-                </p>
-                <Node title="Human Admin Review" tone="agent" />
-                <Down />
-                <Node title="Send Reply" tone="accent" />
-              </div>
-              <div>
-                <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-teal-600">
-                  No
-                </p>
-                <Node title="Send Reply to Guest" tone="accent" />
-              </div>
+          {/* Specialized agents */}
+          <section>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Specialized AI Agents
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {AGENTS.map((a) => (
+                <Card key={a.name} className="flex items-start gap-3 p-5">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                    <a.icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{a.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                    Aktif
+                  </span>
+                </Card>
+              ))}
             </div>
           </section>
 
-          {/* ── Detailed Booking Conversation Flow ── */}
+          {/* Knowledge & tools */}
           <section>
-            <SectionTitle>Detailed Booking Conversation Flow</SectionTitle>
-
-            <div className="space-y-2">
-              <Bubble who="guest" text="Mas masih ada kamar untuk malam ini?" />
-              <Down />
-              <Node title="Intent Detection" lines={["→ Booking Inquiry"]} tone="accent" />
-              <Down />
-              <Node
-                title="Extract Entities"
-                lines={["Date", "Guest Count", "Room Type"]}
-                tone="tool"
-              />
-              <Down />
-              <Node title="Missing Information Detection" tone="accent" />
-              <Down />
-              <Bubble who="ai" text="Untuk berapa orang kak?" />
-              <Down />
-              <Bubble who="guest" text="2 orang" />
-              <Down />
-              <Node title="Availability Check" lines={["PMS / Database"]} tone="tool" />
-              <Down />
-              <Node title="Pricing Agent" lines={["Dynamic Pricing"]} tone="agent" />
-              <Down />
-              <Bubble who="ai" text={"Masih tersedia kak 😊\nDeluxe Room Rp450.000/malam"} />
-              <Down />
-              <Bubble who="guest" text="boleh lihat foto?" />
-              <Down />
-              <Node title="Media Retrieval" lines={["Room Gallery"]} tone="tool" />
-              <Down />
-              <Bubble who="ai" text={"AI sends:\n- room photos\n- facilities\n- booking CTA"} />
-              <Down />
-              <Bubble who="guest" text="oke saya booking" />
-              <Down />
-              <Node title="Reservation Flow" tone="accent" />
-              <Down />
-              <Node
-                title="Collect"
-                lines={["name", "phone", "payment", "arrival time"]}
-                tone="tool"
-              />
-              <Down />
-              <Node title="Booking Confirmation" tone="agent" />
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Knowledge &amp; Tools
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {TOOLS.map((t) => (
+                <Card key={t.name} className="flex flex-col items-center gap-2 p-5 text-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                    <t.icon className="h-5 w-5" />
+                  </span>
+                  <p className="text-xs font-medium leading-tight">{t.name}</p>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                    Terhubung
+                  </span>
+                </Card>
+              ))}
             </div>
           </section>
         </div>
