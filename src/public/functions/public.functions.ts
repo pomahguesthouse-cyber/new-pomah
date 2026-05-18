@@ -269,6 +269,8 @@ export const chatWithAI = createServerFn({ method: "POST" })
           )
           .min(1)
           .max(24),
+        // Stable per-session id so a webchat conversation is logged as one thread.
+        threadId: z.string().uuid().optional(),
       })
       .parse(d),
   )
@@ -602,7 +604,23 @@ export const chatWithAI = createServerFn({ method: "POST" })
         }
         const reply = msg?.content;
         if (reply && reply.trim()) {
-          return { reply: reply.trim(), error: null as string | null };
+          const finalReply = reply.trim();
+          // Log the exchange as one webchat thread (best-effort).
+          if (data.threadId) {
+            const lastUser = [...data.messages].reverse().find((m) => m.role === "user");
+            if (lastUser) {
+              try {
+                await rpcClient.rpc("log_webchat_message", {
+                  p_thread_id: data.threadId,
+                  p_user_message: lastUser.content,
+                  p_ai_response: finalReply,
+                });
+              } catch {
+                /* logging must never break the reply */
+              }
+            }
+          }
+          return { reply: finalReply, error: null as string | null };
         }
         const detail = json.error?.message ?? `HTTP ${res.status} · ${raw.slice(0, 400)}`;
         return { reply: null as string | null, error: detail };

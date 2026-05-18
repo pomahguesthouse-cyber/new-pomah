@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+/** Untyped client view — `source` column isn't in the generated types. */
+function db(client: unknown): SupabaseClient {
+  return client as SupabaseClient;
+}
 
 export const listConversationLogs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -67,6 +73,27 @@ export const saveTrainingExample = createServerFn({ method: "POST" })
     });
     if (error) throw error;
     return { ok: true };
+  });
+
+export type WebchatLogRow = {
+  id: string;
+  thread_id: string | null;
+  user_message: string | null;
+  ai_response: string | null;
+  created_at: string;
+};
+
+/** List logged public webchat exchanges, oldest first (grouped by thread). */
+export const listWebchatLogs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("ai_conversation_logs")
+      .select("id, thread_id, user_message, ai_response, created_at")
+      .eq("source", "webchat")
+      .order("created_at", { ascending: true })
+      .limit(500);
+    return { logs: (data ?? []) as unknown as WebchatLogRow[] };
   });
 
 export const exportTrainingData = createServerFn({ method: "GET" })

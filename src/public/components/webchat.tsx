@@ -56,6 +56,8 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  // Stable per-session id so the whole webchat is logged as one thread.
+  const threadId = useRef<string>(crypto.randomUUID());
   const chatFn = useServerFn(chatWithAI);
 
   useEffect(() => {
@@ -75,7 +77,7 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
         role: m.who === "user" ? ("user" as const) : ("assistant" as const),
         content: m.text,
       }));
-      const res = await chatFn({ data: { messages: history } });
+      const res = await chatFn({ data: { messages: history, threadId: threadId.current } });
       if (res.error) console.warn("[Webchat AI] LLM tidak dipakai — error:", res.error);
       else console.log("[Webchat AI] balasan dari LLM ✓");
       const reply = res.reply || botReply(text, rooms);
