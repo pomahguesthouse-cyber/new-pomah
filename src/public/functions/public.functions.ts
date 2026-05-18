@@ -106,6 +106,66 @@ export const getBookingReference = createServerFn({ method: "GET" })
   });
 
 /* ------------------------------------------------------------------ */
+/* Room-type availability                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * For a chosen date range, return which room types still have a free
+ * room. A room type is available when its total room count exceeds the
+ * number of active (pending/confirmed/checked-in) bookings that overlap
+ * the range. Room types with no rooms defined are omitted (treated as
+ * available by the caller).
+ */
+export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
+  .inputValidator((d) =>
+    z
+      .object({
+        checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { checkIn, checkOut } = data;
+    if (checkIn >= checkOut) return { availability: {} as Record<string, boolean> };
+
+    const [{ data: roomsData }, { data: bookings }] = await Promise.all([
+      supabasePublic.from("rooms").select("room_type_id"),
+      supabasePublic
+        .from("bookings")
+        .select("id")
+        .lt("check_in", checkOut)
+        .gt("check_out", checkIn)
+        .in("status", ["pending", "confirmed", "checked_in"]),
+    ]);
+
+    const totals: Record<string, number> = {};
+    for (const r of roomsData ?? []) {
+      const t = (r as { room_type_id?: string }).room_type_id;
+      if (t) totals[t] = (totals[t] ?? 0) + 1;
+    }
+
+    const activeIds = (bookings ?? []).map((b) => (b as { id: string }).id);
+    const occupied: Record<string, number> = {};
+    if (activeIds.length) {
+      const { data: brs } = await supabasePublic
+        .from("booking_rooms")
+        .select("room_type_id")
+        .in("booking_id", activeIds);
+      for (const br of brs ?? []) {
+        const t = (br as { room_type_id?: string }).room_type_id;
+        if (t) occupied[t] = (occupied[t] ?? 0) + 1;
+      }
+    }
+
+    const availability: Record<string, boolean> = {};
+    for (const t of Object.keys(totals)) {
+      availability[t] = totals[t] > (occupied[t] ?? 0);
+    }
+    return { availability };
+  });
+
+/* ------------------------------------------------------------------ */
 /* Google reviews (Places API)                                         */
 /* ------------------------------------------------------------------ */
 
