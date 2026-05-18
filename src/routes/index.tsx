@@ -130,12 +130,21 @@ function PomahHome() {
   });
   const availability = availData?.availability ?? null;
 
-  // Diagnostic: log the availability result for the chosen dates.
+  // Diagnostic: log per-room-type availability for the chosen dates.
   useEffect(() => {
     if (availData) {
-      console.log("[Availability]", { checkIn, checkOut, availability: availData.availability });
+      console.log(
+        `[Availability] ${checkIn} → ${checkOut}`,
+        rooms.map((rt) => ({
+          name: rt.name,
+          id: rt.id,
+          available: availData.availability[rt.id],
+        })),
+        "debug:",
+        availData.debug,
+      );
     }
-  }, [availData, checkIn, checkOut]);
+  }, [availData, checkIn, checkOut, rooms]);
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
