@@ -118,9 +118,16 @@ export interface GoogleReviewsResult {
   rating: number | null;
   total: number | null;
   reviews: GoogleReview[];
+  /** Diagnostic — Places API status or a local error code. */
+  status: string;
 }
 
-const EMPTY_REVIEWS: GoogleReviewsResult = { rating: null, total: null, reviews: [] };
+const empty = (status: string): GoogleReviewsResult => ({
+  rating: null,
+  total: null,
+  reviews: [],
+  status,
+});
 
 /**
  * Fetch the property's Google rating, review count and recent reviews
@@ -136,10 +143,12 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
     .limit(1)
     .maybeSingle();
   const row = (prop as Record<string, unknown> | null) ?? {};
-  const placeId = row.google_place_id as string | undefined;
-  const key =
-    (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY;
-  if (!key || !placeId) return EMPTY_REVIEWS;
+  const placeId = (row.google_place_id as string | undefined)?.trim();
+  const key = (
+    (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY
+  )?.trim();
+  if (!key) return empty("NO_API_KEY");
+  if (!placeId) return empty("NO_PLACE_ID");
 
   try {
     const url =
@@ -149,12 +158,20 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
       `&key=${encodeURIComponent(key)}`;
     const res = await fetch(url);
     const json = (await res.json()) as {
+      status?: string;
+      error_message?: string;
       result?: {
         rating?: number;
         user_ratings_total?: number;
         reviews?: { author_name?: string; text?: string; rating?: number }[];
       };
     };
+    if (json.status !== "OK") {
+      // e.g. REQUEST_DENIED (key restricted / Places API off), NOT_FOUND.
+      return empty(
+        json.status ? `${json.status}: ${json.error_message ?? ""}`.trim() : "API_ERROR",
+      );
+    }
     const r = json.result ?? {};
     const reviews: GoogleReview[] = Array.isArray(r.reviews)
       ? r.reviews
@@ -170,8 +187,9 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
       rating: typeof r.rating === "number" ? r.rating : null,
       total: typeof r.user_ratings_total === "number" ? r.user_ratings_total : null,
       reviews,
+      status: "OK",
     };
-  } catch {
-    return EMPTY_REVIEWS;
+  } catch (e) {
+    return empty(`FETCH_ERROR: ${(e as Error).message}`);
   }
 });
