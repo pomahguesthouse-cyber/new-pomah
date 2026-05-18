@@ -9,7 +9,7 @@ import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, Upload, Trash2, Star } from "lucide-react";
 import { createRoomType, updateRoomType } from "@/admin/functions/bookings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ export type ManagedRoomType = {
   base_rate?: number | null;
   amenities?: string[] | null;
   hero_image_url?: string | null;
+  images?: string[] | null;
 };
 
 const BED_TYPES = ["Single", "Double", "Queen", "King", "Twin", "Bunk"];
@@ -70,25 +71,28 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [sizeSqm, setSizeSqm] = React.useState<number | "">("");
   const [description, setDescription] = React.useState("");
   const [amenities, setAmenities] = React.useState("");
-  const [heroImageUrl, setHeroImageUrl] = React.useState("");
+  const [images, setImages] = React.useState<string[]>([]);
   const [uploading, setUploading] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  async function uploadPhoto(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.error("File harus berupa gambar");
-      return;
-    }
+  async function uploadPhotos(files: FileList) {
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `room-types/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage
-        .from("room-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (error) throw error;
-      setHeroImageUrl(supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl);
-      toast.success("Foto terupload");
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) continue;
+        const ext = file.name.split(".").pop() ?? "jpg";
+        const path = `room-types/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error } = await supabase.storage
+          .from("room-images")
+          .upload(path, file, { cacheControl: "3600", upsert: false });
+        if (error) throw error;
+        urls.push(supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl);
+      }
+      if (urls.length) {
+        setImages((cur) => [...cur, ...urls]);
+        toast.success(`${urls.length} foto terupload`);
+      }
     } catch (e) {
       toast.error(`Upload gagal: ${(e as Error).message}`);
     } finally {
@@ -113,7 +117,13 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSizeSqm(roomType.size_sqm ?? "");
       setDescription(roomType.description ?? "");
       setAmenities((roomType.amenities ?? []).join(", "));
-      setHeroImageUrl(roomType.hero_image_url ?? "");
+      setImages(
+        roomType.images?.length
+          ? roomType.images
+          : roomType.hero_image_url
+            ? [roomType.hero_image_url]
+            : [],
+      );
     } else {
       setName("");
       setSlug("");
@@ -124,7 +134,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSizeSqm("");
       setDescription("");
       setAmenities("");
-      setHeroImageUrl("");
+      setImages([]);
     }
   }, [open, mode, roomType?.id]);
 
@@ -142,7 +152,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
           .split(",")
           .map((a) => a.trim())
           .filter(Boolean),
-        hero_image_url: heroImageUrl.trim() || null,
+        images,
       };
       if (mode === "edit" && roomType) {
         await fnUpdate({ data: { id: roomType.id, ...payload } });
@@ -268,63 +278,80 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
           </div>
 
           <div className="grid gap-1.5">
-            <Label className="text-xs">Foto utama</Label>
-            <div className="flex items-start gap-3">
-              <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-md border border-input bg-muted">
-                {heroImageUrl ? (
-                  <img src={heroImageUrl} alt="Foto kamar" className="h-full w-full object-cover" />
-                ) : (
-                  <span className="text-[10px] text-muted-foreground">Belum ada</span>
-                )}
-              </div>
-              <div className="flex-1 space-y-1.5">
-                <Input
-                  value={heroImageUrl}
-                  placeholder="https://… atau upload"
-                  className="font-mono"
-                  onChange={(e) => setHeroImageUrl(e.target.value)}
-                />
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void uploadPhoto(f);
-                  }}
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5"
-                    disabled={uploading}
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    {uploading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="h-3.5 w-3.5" />
-                    )}
-                    {uploading ? "Mengupload…" : "Upload foto"}
-                  </Button>
-                  {heroImageUrl && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 text-destructive hover:text-destructive"
-                      disabled={uploading}
-                      onClick={() => setHeroImageUrl("")}
-                    >
-                      Hapus
-                    </Button>
-                  )}
-                </div>
-              </div>
+            <Label className="text-xs">Foto kamar</Label>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) void uploadPhotos(e.target.files);
+              }}
+            />
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files?.length) void uploadPhotos(e.dataTransfer.files);
+              }}
+              onClick={() => !uploading && fileRef.current?.click()}
+              className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-input bg-muted/40 py-6 text-center transition hover:border-primary"
+            >
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <Upload className="h-5 w-5 text-muted-foreground" />
+              )}
+              <p className="text-xs font-medium">
+                {uploading ? "Mengupload…" : "Tarik foto ke sini atau klik untuk pilih"}
+              </p>
+              <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP — bisa banyak</p>
             </div>
+
+            {images.length > 0 && (
+              <>
+                <p className="text-[10px] text-muted-foreground">
+                  Foto pertama menjadi cover. {images.length} foto.
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {images.map((url, i) => (
+                    <div
+                      key={url}
+                      className="group relative overflow-hidden rounded-md border border-input"
+                    >
+                      <img src={url} alt="" className="aspect-video w-full object-cover" />
+                      {i === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground">
+                          Cover
+                        </span>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 flex items-center justify-end gap-1 bg-black/55 p-1 opacity-0 transition group-hover:opacity-100">
+                        {i !== 0 && (
+                          <button
+                            type="button"
+                            title="Jadikan cover"
+                            className="mr-auto flex items-center gap-0.5 text-[9px] font-medium text-white"
+                            onClick={() => setImages([url, ...images.filter((x) => x !== url)])}
+                          >
+                            <Star className="h-3 w-3" />
+                            Cover
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          title="Hapus foto"
+                          className="text-white hover:text-red-300"
+                          onClick={() => setImages(images.filter((x) => x !== url))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

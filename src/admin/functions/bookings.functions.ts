@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+
+/** Untyped client view — for columns absent from the generated types. */
+function db(client: unknown): SupabaseClient {
+  return client as SupabaseClient;
+}
 
 const listBookingsSchema = z.object({
   page: z.number().int().min(1).default(1),
@@ -397,10 +403,10 @@ export const updateBookingFull = createServerFn({ method: "POST" })
 export const listRoomTypes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { data, error } = await db(context.supabase)
       .from("room_types")
       .select(
-        "id, name, slug, description, bed_type, size_sqm, capacity, base_rate, amenities, hero_image_url",
+        "id, name, slug, description, bed_type, size_sqm, capacity, base_rate, amenities, hero_image_url, images",
       )
       .order("name");
     if (error) throw error;
@@ -432,7 +438,7 @@ export const createRoom = createServerFn({ method: "POST" })
       .single();
     if (error) {
       // 23505 = unique_violation (room_type_id, number) UNIQUE constraint
-      if ((error as any).code === "23505") {
+      if ((error as { code?: string }).code === "23505") {
         throw new Error(`Nomor kamar "${data.number}" sudah ada untuk tipe ini.`);
       }
       throw error;
@@ -454,7 +460,7 @@ export const updateRoom = createServerFn({ method: "POST" })
       })
       .eq("id", data.id);
     if (error) {
-      if ((error as any).code === "23505") {
+      if ((error as { code?: string }).code === "23505") {
         throw new Error(`Nomor kamar "${data.number}" sudah ada untuk tipe ini.`);
       }
       throw error;
@@ -478,6 +484,7 @@ const roomTypeFieldsSchema = z.object({
   base_rate: z.number().min(0).max(100_000_000),
   amenities: z.array(z.string().min(1).max(60)).max(40).nullable().optional(),
   hero_image_url: z.string().url().max(500).nullable().optional().or(z.literal("")),
+  images: z.array(z.string().url().max(500)).max(30).nullable().optional(),
 });
 
 /** Map a validated room-type payload to a DB row patch. */
@@ -491,7 +498,9 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     capacity: d.capacity,
     base_rate: d.base_rate,
     amenities: d.amenities ?? [],
-    hero_image_url: d.hero_image_url || null,
+    images: d.images ?? [],
+    // The first gallery image is the cover; keep hero_image_url synced.
+    hero_image_url: d.images?.[0] ?? (d.hero_image_url || null),
   };
 }
 
@@ -506,7 +515,7 @@ export const createRoomType = createServerFn({ method: "POST" })
       .single();
     if (propErr || !property) throw new Error("Property belum dikonfigurasi");
 
-    const { data: row, error } = await context.supabase
+    const { data: row, error } = await db(context.supabase)
       .from("room_types")
       .insert({ property_id: property.id, ...roomTypeRow(data) })
       .select("id")
@@ -525,7 +534,7 @@ export const updateRoomType = createServerFn({ method: "POST" })
   .inputValidator((d) => roomTypeFieldsSchema.extend({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
-    const { error } = await context.supabase
+    const { error } = await db(context.supabase)
       .from("room_types")
       .update(roomTypeRow(fields))
       .eq("id", id);
@@ -594,7 +603,7 @@ export const deleteRoom = createServerFn({ method: "POST" })
 
     const { error } = await context.supabase.from("rooms").delete().eq("id", data.id);
     if (error) {
-      if ((error as any).code === "23503") {
+      if ((error as { code?: string }).code === "23503") {
         throw new Error("Tidak bisa hapus: kamar masih direferensikan oleh data lain.");
       }
       throw error;
