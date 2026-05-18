@@ -24,6 +24,7 @@ import {
 } from "@/public/functions/public.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
+import { Webchat } from "@/public/components/webchat";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -419,11 +420,13 @@ function PomahHome() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Hubungi via WhatsApp"
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+          className="fixed bottom-5 right-24 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
         >
           <MessageCircle className="h-7 w-7" />
         </a>
       )}
+
+      <Webchat rooms={rooms} />
     </div>
   );
 }
