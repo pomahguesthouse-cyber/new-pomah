@@ -327,15 +327,23 @@ export const chatWithAI = createServerFn({ method: "POST" })
           messages: [{ role: "system", content: system }, ...data.messages],
         }),
       });
-      const json = (await res.json()) as {
-        choices?: { message?: { content?: string } }[];
+      const raw = await res.text();
+      let json: {
+        choices?: { message?: { content?: string }; finish_reason?: string }[];
         error?: { message?: string };
       };
-      const reply = json.choices?.[0]?.message?.content;
-      if (!reply) {
-        return { reply: null as string | null, error: json.error?.message ?? "NO_REPLY" };
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        return { reply: null as string | null, error: `HTTP ${res.status}: ${raw.slice(0, 200)}` };
       }
-      return { reply: String(reply).trim(), error: null as string | null };
+      const reply = json.choices?.[0]?.message?.content;
+      if (reply && reply.trim()) {
+        return { reply: reply.trim(), error: null as string | null };
+      }
+      // No usable reply — surface the raw response for diagnostics.
+      const detail = json.error?.message ?? `HTTP ${res.status} · ${raw.slice(0, 400)}`;
+      return { reply: null as string | null, error: detail };
     } catch (e) {
       return { reply: null as string | null, error: (e as Error).message };
     }
