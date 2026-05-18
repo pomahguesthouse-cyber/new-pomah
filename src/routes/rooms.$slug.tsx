@@ -33,9 +33,7 @@ import {
   checkRoomTypeAvailability,
   submitPublicBooking,
 } from "@/public/functions/public.functions";
-import { PomahNav } from "@/routes/index";
 import { PublicFooter } from "@/public/components/public-shell";
-import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -137,7 +135,6 @@ function RoomBookingPage() {
   const others = (data?.others ?? []) as RoomRow[];
   const roomCount = data?.roomCount ?? 0;
   const property = useMemo(() => (data?.property ?? {}) as Record<string, unknown>, [data]);
-  const cfg = useMemo(() => mergeHomepageConfig(property.homepage_config), [property]);
 
   const gallery = useMemo(() => (room ? galleryOf(room) : []), [room]);
   const [active, setActive] = useState(0);
@@ -174,19 +171,9 @@ function RoomBookingPage() {
             : "Tersedia"
           : "Mengecek…";
 
-  const header = (
-    <PomahNav
-      name={(property.name as string) ?? "Pomah Guesthouse"}
-      logo={(property.logo_url as string | null) ?? null}
-      header={cfg.header}
-      pb={{ isBuilder: false, sel: null, onSelect: () => {} }}
-    />
-  );
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-stone-50">
-        {header}
         <div className="mx-auto max-w-6xl px-6 py-24 text-center text-sm text-stone-400">
           Memuat kamar…
         </div>
@@ -197,7 +184,6 @@ function RoomBookingPage() {
   if (!room) {
     return (
       <div className="min-h-screen bg-stone-50">
-        {header}
         <div className="mx-auto max-w-6xl px-6 py-24 text-center">
           <h1 className="text-2xl font-semibold">Kamar tidak ditemukan</h1>
           <Link to="/rooms" className="mt-4 inline-block text-sm text-teal-700 underline">
@@ -211,8 +197,6 @@ function RoomBookingPage() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
-      {header}
-
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">
