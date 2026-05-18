@@ -475,6 +475,7 @@ function IntegrationTab() {
       id: string;
       fonnte_token?: string | null;
       google_place_id?: string | null;
+      google_places_api_key?: string | null;
       google_analytics_id?: string | null;
       google_tag_manager_id?: string | null;
       google_search_console?: string | null;
@@ -515,6 +516,16 @@ function IntegrationTab() {
         value={data?.google_place_id ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, google_place_id: v })}
+      />
+      <TextSettingCard
+        icon={<MapPin className="h-4 w-4" />}
+        label="Google Places API Key"
+        description="API key Google Cloud (Places API aktif) untuk widget ulasan Google di halaman depan."
+        placeholder="API key"
+        secret
+        value={data?.google_places_api_key ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, google_places_api_key: v })}
       />
       <TextSettingCard
         icon={<BarChart3 className="h-4 w-4" />}

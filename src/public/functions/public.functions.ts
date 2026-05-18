@@ -124,21 +124,22 @@ const EMPTY_REVIEWS: GoogleReviewsResult = { rating: null, total: null, reviews:
 
 /**
  * Fetch the property's Google rating, review count and recent reviews
- * from the Google Places API. The Place ID comes from the property's
- * integration settings; the API key from the GOOGLE_PLACES_API_KEY env
- * var. Returns empty data (so the homepage falls back) on any failure.
+ * from the Google Places API. The Place ID and API key come from the
+ * property's integration settings (Settings → Integrasi); the key also
+ * falls back to the GOOGLE_PLACES_API_KEY env var. Returns empty data
+ * (so the homepage falls back) on any failure.
  */
 export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
-  const key = process.env.GOOGLE_PLACES_API_KEY;
-  if (!key) return EMPTY_REVIEWS;
-
   const { data: prop } = await supabasePublic
     .from("properties")
-    .select("google_place_id")
+    .select("google_place_id, google_places_api_key")
     .limit(1)
     .maybeSingle();
-  const placeId = (prop as Record<string, unknown> | null)?.google_place_id as string | undefined;
-  if (!placeId) return EMPTY_REVIEWS;
+  const row = (prop as Record<string, unknown> | null) ?? {};
+  const placeId = row.google_place_id as string | undefined;
+  const key =
+    (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY;
+  if (!key || !placeId) return EMPTY_REVIEWS;
 
   try {
     const url =
