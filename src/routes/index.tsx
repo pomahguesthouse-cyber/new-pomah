@@ -182,12 +182,17 @@ function PomahHome() {
                     className="h-10"
                   />
                 </Field>
-                <Link
-                  to="/book"
+                <button
+                  type="button"
+                  onClick={() =>
+                    document
+                      .getElementById("our-room")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
                   className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
                 >
                   {cfg.datePicker.buttonLabel}
-                </Link>
+                </button>
               </div>
             </div>
           </div>
@@ -240,7 +245,11 @@ function PomahHome() {
 
       {/* ── OUR ROOM (CAROUSEL) ── */}
       <PbZone id="carousel" label="Our Room" pb={pb}>
-        <section className="relative bg-[#f3ece0] py-20" style={{ zIndex: cfg.roomCarousel.layer }}>
+        <section
+          id="our-room"
+          className="relative scroll-mt-20 bg-[#f3ece0] py-20"
+          style={{ zIndex: cfg.roomCarousel.layer }}
+        >
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
               <SectionHeading>{cfg.roomCarousel.heading}</SectionHeading>
