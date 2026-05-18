@@ -3,6 +3,44 @@ import { z } from "zod";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 
+/**
+ * Auto room allotment — pick the first physical room of a room type that
+ * has no active (pending/confirmed/checked-in) booking overlapping the
+ * date range. Returns null when no room is free, so the caller leaves the
+ * booking unassigned for staff to handle.
+ */
+async function pickAvailableRoom(
+  roomTypeId: string,
+  checkIn: string,
+  checkOut: string,
+): Promise<string | null> {
+  const { data: rooms } = await supabaseAdmin
+    .from("rooms")
+    .select("id, number")
+    .eq("room_type_id", roomTypeId)
+    .order("number");
+  const roomRows = (rooms ?? []) as Record<string, unknown>[];
+  if (roomRows.length === 0) return null;
+
+  const { data: activeBookings } = await supabaseAdmin
+    .from("bookings")
+    .select("id")
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .lt("check_in", checkOut)
+    .gt("check_out", checkIn);
+  const activeIds = (activeBookings ?? []).map((b) => (b as Record<string, unknown>).id as string);
+  if (activeIds.length === 0) return roomRows[0].id as string;
+
+  const { data: occ } = await supabaseAdmin
+    .from("booking_rooms")
+    .select("room_id")
+    .not("room_id", "is", null)
+    .in("booking_id", activeIds);
+  const taken = new Set((occ ?? []).map((r) => (r as Record<string, unknown>).room_id));
+  const free = roomRows.find((r) => !taken.has(r.id));
+  return free ? (free.id as string) : null;
+}
+
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const [{ data: property }, { data: roomTypes }] = await Promise.all([
     supabasePublic.from("properties").select("*").limit(1).maybeSingle(),
@@ -85,11 +123,11 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .single();
     if (berr || !booking) throw berr ?? new Error("Could not create booking");
 
-    // One booking_rooms line for the chosen room type (room assigned
-    // later by staff).
+    // Auto room allotment — assign a free physical room if one exists.
+    const assignedRoomId = await pickAvailableRoom(rt.id, data.checkIn, data.checkOut);
     const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert({
       booking_id: booking.id,
-      room_id: null,
+      room_id: assignedRoomId,
       room_type_id: rt.id,
       nightly_rate: rt.base_rate,
     });
@@ -488,9 +526,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal membuat booking: ${berr?.message ?? "tidak diketahui"}`,
         });
 
+      // Auto room allotment — assign a free physical room if one exists.
+      const assignedRoomId = await pickAvailableRoom(rt.id as string, checkIn, checkOut);
       const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert({
         booking_id: booking.id,
-        room_id: null,
+        room_id: assignedRoomId,
         room_type_id: rt.id as string,
         nightly_rate: rate,
       });
