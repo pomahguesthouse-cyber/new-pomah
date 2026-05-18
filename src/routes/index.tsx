@@ -327,7 +327,7 @@ function HeroSlider({
 }) {
   const slides = hero.slides.length
     ? hero.slides
-    : [{ imageUrl: "", heading: fallbackTitle, subheading: "" }];
+    : [{ imageUrl: "", videoUrl: "", heading: fallbackTitle, subheading: "" }];
   const [i, setI] = useState(0);
 
   useEffect(() => {
@@ -345,7 +345,16 @@ function HeroSlider({
       style={{ height: hero.height, zIndex: hero.layer }}
     >
       <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
-        {active.imageUrl ? (
+        {active.videoUrl ? (
+          <video
+            src={active.videoUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : active.imageUrl ? (
           <img
             src={active.imageUrl}
             alt={active.heading}
