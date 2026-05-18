@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
+
+/** Untyped client view — `images` column isn't in the generated types. */
+function db(client: unknown): SupabaseClient {
+  return client as SupabaseClient;
+}
 
 /**
  * Auto room allotment — pick the first physical room of a room type that
@@ -145,6 +151,35 @@ export const getBookingReference = createServerFn({ method: "GET" })
       .eq("id", data.id)
       .maybeSingle();
     return { reference_code: booking?.reference_code ?? null };
+  });
+
+/**
+ * One room type by slug, for its dedicated booking page: the room (with
+ * gallery images), how many physical rooms it has, the property, and the
+ * other room types for the "Kamar Lainnya" section.
+ */
+export const getRoomTypeDetail = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ slug: z.string().min(1).max(200) }).parse(d))
+  .handler(async ({ data }) => {
+    const fields =
+      "id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url, images";
+    const sb = db(supabasePublic);
+    const [{ data: property }, { data: room }, { data: others }] = await Promise.all([
+      sb.from("properties").select("*").limit(1).maybeSingle(),
+      sb.from("room_types").select(fields).eq("slug", data.slug).maybeSingle(),
+      sb.from("room_types").select(fields).neq("slug", data.slug).order("base_rate"),
+    ]);
+
+    let roomCount = 0;
+    if (room) {
+      const { count } = await sb
+        .from("rooms")
+        .select("id", { count: "exact", head: true })
+        .eq("room_type_id", (room as Record<string, unknown>).id as string);
+      roomCount = count ?? 0;
+    }
+
+    return { property, room: room ?? null, others: others ?? [], roomCount };
   });
 
 /* ------------------------------------------------------------------ */

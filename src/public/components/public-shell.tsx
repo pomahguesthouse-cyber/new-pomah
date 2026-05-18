@@ -29,18 +29,22 @@ export function PublicNav() {
           </Link>
           <Link
             to="/book"
+            search={{}}
             className="text-sm text-stone-600 transition-colors hover:text-stone-900"
           >
             Fasilitas
           </Link>
           <Link
             to="/book"
+            search={{}}
             className="text-sm text-stone-600 transition-colors hover:text-stone-900"
           >
             Lokasi
           </Link>
           <Button asChild size="sm" className="bg-amber-700 hover:bg-amber-800">
-            <Link to="/book">Pesan Sekarang</Link>
+            <Link to="/book" search={{}}>
+              Pesan Sekarang
+            </Link>
           </Button>
         </div>
 
@@ -73,7 +77,7 @@ export function PublicNav() {
               </Link>
             ))}
             <Button asChild size="sm" className="mt-2 bg-amber-700 hover:bg-amber-800">
-              <Link to="/book" onClick={() => setOpen(false)}>
+              <Link to="/book" search={{}} onClick={() => setOpen(false)}>
                 Pesan Sekarang
               </Link>
             </Button>

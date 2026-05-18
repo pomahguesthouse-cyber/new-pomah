@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -17,7 +17,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+/** Optional prefill carried from a room's dedicated booking page. */
+type BookSearch = { room?: string; checkIn?: string; checkOut?: string; adults?: number };
+
 export const Route = createFileRoute("/book")({
+  validateSearch: (s: Record<string, unknown>): BookSearch => {
+    const out: BookSearch = {};
+    if (typeof s.room === "string") out.room = s.room;
+    if (typeof s.checkIn === "string") out.checkIn = s.checkIn;
+    if (typeof s.checkOut === "string") out.checkOut = s.checkOut;
+    if (s.adults != null && !Number.isNaN(Number(s.adults))) out.adults = Number(s.adults);
+    return out;
+  },
   head: () => ({
     meta: [
       { title: "Book a stay — Pomah Guesthouse" },
@@ -32,10 +43,11 @@ export const Route = createFileRoute("/book")({
 
 function BookPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const fn = useServerFn(getPublicSiteData);
   const submit = useServerFn(submitPublicBooking);
   const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
-  const rooms = data?.roomTypes ?? [];
+  const rooms = useMemo(() => data?.roomTypes ?? [], [data]);
 
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
@@ -43,13 +55,21 @@ function BookPage() {
     email: "",
     phone: "",
     roomTypeId: "",
-    checkIn: today,
-    checkOut: "",
-    adults: 2,
+    checkIn: search.checkIn ?? today,
+    checkOut: search.checkOut ?? "",
+    adults: search.adults ?? 2,
     children: 0,
     specialRequests: "",
   });
   const [pending, setPending] = useState(false);
+
+  // Prefill the room from the ?room=<slug> param once room types load.
+  const prefillRoom = search.room;
+  useEffect(() => {
+    if (!prefillRoom || rooms.length === 0) return;
+    const match = rooms.find((r) => r.slug === prefillRoom || r.id === prefillRoom);
+    if (match) setForm((f) => (f.roomTypeId ? f : { ...f, roomTypeId: match.id }));
+  }, [prefillRoom, rooms]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +78,7 @@ function BookPage() {
     try {
       const res = await submit({ data: form });
       toast.success("Booking received");
-      navigate({ to: "/book/confirmation/$id", params: { id: res.id } });
+      navigate({ to: "/book/confirmation/$id", params: { id: res.id }, search: {} });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {

@@ -30,7 +30,18 @@
       "Bash(npx eslint *)",
       "Bash(xargs grep -A 20 \"create table public.room_types\")",
       "Bash(grep -rn '#\\\\$\\\\|#{' src/routes/admin/bookings.tsx src/admin/components/edit-booking-dialog.tsx)",
-      "Bash(grep -n \"canSave\\\\|selectedRooms\\\\|Kamar — multi\\\\|BedDouble.*title\\\\|Section$\\\\|total:\" src/admin/components/edit-booking-dialog.tsx)"
+      "Bash(grep -n \"canSave\\\\|selectedRooms\\\\|Kamar — multi\\\\|BedDouble.*title\\\\|Section$\\\\|total:\" src/admin/components/edit-booking-dialog.tsx)",
+      "Bash(git merge *)",
+      "WebFetch(domain:www.pomahguesthouse.com)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__navigate",
+      "Bash(cd \"C:/Users/LENOVO/Documents/GitHub/new-pomah/.claude/worktrees/distracted-merkle-644231\" && ls src/routes/ && echo \"---p.slug---\" && cat src/routes/p.\\\\$slug.tsx 2>/dev/null | head -40)",
+      "Bash(git ls-tree *)",
+      "Bash(sed -n '1,14p' src/admin/functions/bookings.functions.ts)",
+      "Bash(sed -n '598,602p' src/admin/functions/bookings.functions.ts)",
+      "Bash(sed -n '10,30p' supabase/migrations/20260514130930_910da695-a448-4870-98ae-281fd4d2c729.sql)",
+      "Bash(sed -n '103,120p' supabase/migrations/20260514130900_e36e071d-7267-42e8-9e53-90c6b879e118.sql)"
     ]
   }
 }
