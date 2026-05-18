@@ -547,6 +547,80 @@ export const updateRoomType = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** List the room numbers belonging to a room type. */
+export const listRoomNumbers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ room_type_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await context.supabase
+      .from("rooms")
+      .select("number")
+      .eq("room_type_id", data.room_type_id)
+      .order("number");
+    if (error) throw error;
+    return { numbers: (rows ?? []).map((r) => r.number as string) };
+  });
+
+/**
+ * Sync the room numbers of a room type: create the new ones, delete the
+ * removed ones. Rooms still referenced by bookings cannot be deleted.
+ */
+export const setRoomNumbers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        room_type_id: z.string().uuid(),
+        numbers: z.array(z.string().trim().min(1).max(20)).max(200),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const wanted = [...new Set(data.numbers.map((n) => n.trim()).filter(Boolean))];
+    const { data: existing, error: e1 } = await context.supabase
+      .from("rooms")
+      .select("id, number")
+      .eq("room_type_id", data.room_type_id);
+    if (e1) throw e1;
+
+    const rows = existing ?? [];
+    const have = new Set(rows.map((r) => r.number as string));
+    const toAdd = wanted.filter((n) => !have.has(n));
+    const toDelete = rows.filter((r) => !wanted.includes(r.number as string));
+
+    if (toAdd.length) {
+      const { error } = await context.supabase.from("rooms").insert(
+        toAdd.map((number) => ({
+          room_type_id: data.room_type_id,
+          number,
+          status: "clean" as const,
+        })),
+      );
+      if (error) {
+        if ((error as { code?: string }).code === "23505") {
+          throw new Error("Ada nomor kamar yang sudah dipakai tipe lain.");
+        }
+        throw error;
+      }
+    }
+    if (toDelete.length) {
+      const { error } = await context.supabase
+        .from("rooms")
+        .delete()
+        .in(
+          "id",
+          toDelete.map((r) => r.id),
+        );
+      if (error) {
+        if ((error as { code?: string }).code === "23503") {
+          throw new Error("Sebagian nomor kamar masih dipakai booking dan tidak bisa dihapus.");
+        }
+        throw error;
+      }
+    }
+    return { ok: true, added: toAdd.length, removed: toDelete.length };
+  });
+
 export const deleteRoomType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))

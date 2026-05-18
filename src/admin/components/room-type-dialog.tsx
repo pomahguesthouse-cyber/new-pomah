@@ -6,11 +6,16 @@
  * managed separately on the same page.
  */
 import * as React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, Star } from "lucide-react";
-import { createRoomType, updateRoomType } from "@/admin/functions/bookings.functions";
+import { Loader2, Upload, Trash2, Star, X } from "lucide-react";
+import {
+  createRoomType,
+  updateRoomType,
+  listRoomNumbers,
+  setRoomNumbers as setRoomNumbersFn,
+} from "@/admin/functions/bookings.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +66,8 @@ type Props = {
 export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props) {
   const fnCreate = useServerFn(createRoomType);
   const fnUpdate = useServerFn(updateRoomType);
+  const fnListNumbers = useServerFn(listRoomNumbers);
+  const fnSetNumbers = useServerFn(setRoomNumbersFn);
 
   const [name, setName] = React.useState("");
   const [slug, setSlug] = React.useState("");
@@ -72,6 +79,25 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [description, setDescription] = React.useState("");
   const [amenities, setAmenities] = React.useState("");
   const [images, setImages] = React.useState<string[]>([]);
+  const [roomNumbers, setRoomNumbers] = React.useState<string[]>([]);
+  const [roomNumberInput, setRoomNumberInput] = React.useState("");
+
+  // Existing room numbers for the edited type.
+  const { data: numbersData } = useQuery({
+    queryKey: ["room-numbers", roomType?.id],
+    queryFn: () => fnListNumbers({ data: { room_type_id: roomType!.id } }),
+    enabled: open && mode === "edit" && !!roomType?.id,
+  });
+  React.useEffect(() => {
+    if (numbersData?.numbers) setRoomNumbers(numbersData.numbers);
+  }, [numbersData]);
+
+  const addRoomNumber = () => {
+    const n = roomNumberInput.trim();
+    if (!n) return;
+    if (!roomNumbers.includes(n)) setRoomNumbers([...roomNumbers, n]);
+    setRoomNumberInput("");
+  };
   const [uploading, setUploading] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -124,6 +150,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
             ? [roomType.hero_image_url]
             : [],
       );
+      setRoomNumberInput("");
+      // roomNumbers is filled by the listRoomNumbers query.
     } else {
       setName("");
       setSlug("");
@@ -135,6 +163,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setDescription("");
       setAmenities("");
       setImages([]);
+      setRoomNumbers([]);
+      setRoomNumberInput("");
     }
   }, [open, mode, roomType?.id]);
 
@@ -154,10 +184,15 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
           .filter(Boolean),
         images,
       };
+      let typeId: string | undefined = roomType?.id;
       if (mode === "edit" && roomType) {
         await fnUpdate({ data: { id: roomType.id, ...payload } });
       } else {
-        await fnCreate({ data: payload });
+        const res = await fnCreate({ data: payload });
+        typeId = res?.id;
+      }
+      if (typeId) {
+        await fnSetNumbers({ data: { room_type_id: typeId, numbers: roomNumbers } });
       }
     },
     onSuccess: () => {
@@ -275,6 +310,49 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
               onChange={(e) => setAmenities(e.target.value)}
             />
             <p className="text-[10px] text-muted-foreground">Pisahkan dengan koma.</p>
+          </div>
+
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">Nomor kamar</Label>
+              <span className="text-[10px] text-muted-foreground">
+                Total: {roomNumbers.length} kamar
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input p-2">
+              {roomNumbers.map((num) => (
+                <span
+                  key={num}
+                  className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-medium"
+                >
+                  {num}
+                  <button
+                    type="button"
+                    title="Hapus"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setRoomNumbers(roomNumbers.filter((n) => n !== num))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={roomNumberInput}
+                placeholder="Ketik nomor lalu Enter"
+                className="min-w-[140px] flex-1 bg-transparent text-xs outline-none"
+                onChange={(e) => setRoomNumberInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addRoomNumber();
+                  }
+                }}
+                onBlur={addRoomNumber}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Satu tipe kamar bisa punya beberapa nomor kamar (mis. FS100, FS222).
+            </p>
           </div>
 
           <div className="grid gap-1.5">
