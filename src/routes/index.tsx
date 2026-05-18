@@ -700,6 +700,7 @@ function RoomCarousel({
                   ) : (
                     <Link
                       to="/book"
+                      search={{}}
                       className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                     >
                       Pesan Kamar
@@ -884,6 +885,7 @@ function PomahNav({
     <div className="flex items-center gap-3" key="actions">
       <Link
         to="/book"
+        search={{}}
         className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
         style={{ color: header.bgColor }}
       >

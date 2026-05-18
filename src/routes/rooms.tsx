@@ -108,13 +108,15 @@ function PublicRooms() {
 
                 <div className="mt-6 flex items-center gap-3">
                   <Link
-                    to="/book"
+                    to="/rooms/$slug"
+                    params={{ slug: rt.slug }}
                     className="flex-1 rounded-lg bg-stone-900 py-2.5 text-center text-sm font-medium text-white transition hover:bg-amber-700"
                   >
                     Pesan Kamar Ini
                   </Link>
                   <Link
-                    to="/book"
+                    to="/rooms/$slug"
+                    params={{ slug: rt.slug }}
                     className="rounded-lg border border-stone-200 px-4 py-2.5 text-sm text-stone-600 transition hover:bg-stone-50"
                   >
                     Detail
