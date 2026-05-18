@@ -41,7 +41,8 @@
       "Bash(sed -n '1,14p' src/admin/functions/bookings.functions.ts)",
       "Bash(sed -n '598,602p' src/admin/functions/bookings.functions.ts)",
       "Bash(sed -n '10,30p' supabase/migrations/20260514130930_910da695-a448-4870-98ae-281fd4d2c729.sql)",
-      "Bash(sed -n '103,120p' supabase/migrations/20260514130900_e36e071d-7267-42e8-9e53-90c6b879e118.sql)"
+      "Bash(sed -n '103,120p' supabase/migrations/20260514130900_e36e071d-7267-42e8-9e53-90c6b879e118.sql)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('mammoth:',p.dependencies?.mammoth||'NO'\\); console.log\\('pdfjs:',p.dependencies?.['pdfjs-dist']||'NO'\\);\")"
     ]
   }
 }
