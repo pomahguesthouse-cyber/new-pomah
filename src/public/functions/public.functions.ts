@@ -290,60 +290,175 @@ export const chatWithAI = createServerFn({ method: "POST" })
     const cfg = mergeAiLabConfig(p.ai_lab_config);
     const { data: rooms } = await supabasePublic
       .from("room_types")
-      .select("name, base_rate, capacity, bed_type, description")
+      .select("id, name, base_rate, capacity, bed_type, description")
       .order("base_rate");
+    const roomRows = (rooms ?? []) as Record<string, unknown>[];
 
     const agentLines = AGENT_KEYS.filter(
       (k) => cfg.agents[k]?.enabled && cfg.agents[k]?.instructions?.trim(),
     ).map((k) => `• ${k}: ${cfg.agents[k].instructions.trim()}`);
 
-    const roomLines = (rooms ?? []).map((r) => {
-      const rr = r as Record<string, unknown>;
-      return `• ${rr.name} — Rp ${Number(rr.base_rate ?? 0).toLocaleString("id-ID")}/malam, kapasitas ${
-        rr.capacity ?? "-"
-      } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`;
-    });
+    const roomLines = roomRows.map(
+      (rr) =>
+        `• ${rr.name} — Rp ${Number(rr.base_rate ?? 0).toLocaleString("id-ID")}/malam, kapasitas ${
+          rr.capacity ?? "-"
+        } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`,
+    );
+
+    // Today in WIB (UTC+7) so "hari ini" is correct for Indonesia.
+    const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    const nextDay = (d: string) =>
+      new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10);
 
     const system = [
       `Anda adalah asisten AI untuk ${(p.name as string) ?? "Pomah Guesthouse"}, sebuah penginapan.`,
       "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
+      `Hari ini tanggal ${todayStr}.`,
       agentLines.length ? `Panduan tiap agent:\n${agentLines.join("\n")}` : "",
       roomLines.length
-        ? `Data kamar (pakai sebagai sumber jawaban, jangan mengarang):\n${roomLines.join("\n")}`
+        ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
         : "",
+      "KETERSEDIAAN KAMAR: Anda memiliki tool `check_room_availability`. Setiap kali tamu " +
+        "menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin " +
+        "booking, WAJIB panggil tool ini lebih dulu — jangan pernah menebak ketersediaan. " +
+        "Jika tamu tidak menyebut tanggal, anggap untuk hari ini (check-in hari ini, 1 malam).",
+      "Saat menyampaikan hasil tool: awali dengan baris 'Ketersediaan kamar untuk <tanggal>'. " +
+        "Lalu tiap tipe kamar satu baris — gunakan ✅ bila ada kamar tersedia atau ❌ bila penuh, " +
+        "diikuti nama kamar, jumlah kamar tersedia, dan harga per malam. " +
+        "Tutup dengan ajakan memilih kamar untuk lanjut booking.",
       "Untuk pemesanan, arahkan tamu memilih tanggal di widget pemesanan lalu klik 'Cek Ketersediaan' atau 'Pesan Kamar'.",
     ]
       .filter(Boolean)
       .join("\n\n");
 
-    try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify({
-          model,
-          temperature: 0.6,
-          max_tokens: 500,
-          messages: [{ role: "system", content: system }, ...data.messages],
-        }),
+    // SECURITY DEFINER RPC — returns aggregate counts only, no guest data.
+    const rpcClient = supabasePublic as unknown as {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{
+        data: { room_type_id: string; total: number; taken: number; available: number }[] | null;
+        error: { message: string } | null;
+      }>;
+    };
+
+    /** Execute the availability tool — returns a JSON string for the LLM. */
+    const runAvailability = async (rawArgs: Record<string, unknown>): Promise<string> => {
+      const isDate = (v: unknown): v is string =>
+        typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      const checkIn = isDate(rawArgs.check_in) ? rawArgs.check_in : todayStr;
+      let checkOut = isDate(rawArgs.check_out) ? rawArgs.check_out : nextDay(checkIn);
+      if (checkOut <= checkIn) checkOut = nextDay(checkIn);
+      const { data: rows } = await rpcClient.rpc("room_type_availability_detail", {
+        p_check_in: checkIn,
+        p_check_out: checkOut,
       });
-      const raw = await res.text();
-      let json: {
-        choices?: { message?: { content?: string }; finish_reason?: string }[];
-        error?: { message?: string };
-      };
-      try {
-        json = JSON.parse(raw);
-      } catch {
-        return { reply: null as string | null, error: `HTTP ${res.status}: ${raw.slice(0, 200)}` };
+      const byId = new Map((rows ?? []).map((r) => [r.room_type_id, r]));
+      const kamar = roomRows.map((rr) => {
+        const d = byId.get(rr.id as string);
+        return {
+          nama: rr.name,
+          harga_per_malam: Number(rr.base_rate ?? 0),
+          kamar_tersedia: d ? d.available : null,
+          total_kamar: d ? d.total : null,
+          catatan: d ? undefined : "jumlah kamar belum diatur di sistem",
+        };
+      });
+      return JSON.stringify({ check_in: checkIn, check_out: checkOut, kamar });
+    };
+
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "check_room_availability",
+          description:
+            "Cek ketersediaan kamar nyata (jumlah kamar kosong per tipe) untuk rentang tanggal. Gunakan saat tamu menanyakan kamar tersedia/kosong atau ingin booking.",
+          parameters: {
+            type: "object",
+            properties: {
+              check_in: {
+                type: "string",
+                description: "Tanggal check-in format YYYY-MM-DD. Kosongkan untuk hari ini.",
+              },
+              check_out: {
+                type: "string",
+                description:
+                  "Tanggal check-out format YYYY-MM-DD. Kosongkan untuk sehari setelah check-in.",
+              },
+            },
+          },
+        },
+      },
+    ];
+
+    type LlmMsg = Record<string, unknown>;
+    const messages: LlmMsg[] = [{ role: "system", content: system }, ...data.messages];
+
+    try {
+      // Tool-calling loop: the model may call the availability tool, we
+      // run it, feed results back, and let it compose the final reply.
+      for (let turn = 0; turn < 4; turn++) {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model,
+            temperature: 0.6,
+            max_tokens: 600,
+            messages,
+            tools,
+            tool_choice: "auto",
+          }),
+        });
+        const raw = await res.text();
+        let json: {
+          choices?: {
+            message?: {
+              content?: string | null;
+              tool_calls?: {
+                id?: string;
+                function?: { name?: string; arguments?: string };
+              }[];
+            };
+          }[];
+          error?: { message?: string };
+        };
+        try {
+          json = JSON.parse(raw);
+        } catch {
+          return {
+            reply: null as string | null,
+            error: `HTTP ${res.status}: ${raw.slice(0, 200)}`,
+          };
+        }
+        const msg = json.choices?.[0]?.message;
+        const toolCalls = msg?.tool_calls ?? [];
+        if (toolCalls.length) {
+          messages.push(msg as LlmMsg);
+          for (const tc of toolCalls) {
+            let out = JSON.stringify({ error: "unknown tool" });
+            if (tc.function?.name === "check_room_availability") {
+              let args: Record<string, unknown> = {};
+              try {
+                args = JSON.parse(tc.function.arguments || "{}");
+              } catch {
+                args = {};
+              }
+              out = await runAvailability(args);
+            }
+            messages.push({ role: "tool", tool_call_id: tc.id, content: out });
+          }
+          continue;
+        }
+        const reply = msg?.content;
+        if (reply && reply.trim()) {
+          return { reply: reply.trim(), error: null as string | null };
+        }
+        const detail = json.error?.message ?? `HTTP ${res.status} · ${raw.slice(0, 400)}`;
+        return { reply: null as string | null, error: detail };
       }
-      const reply = json.choices?.[0]?.message?.content;
-      if (reply && reply.trim()) {
-        return { reply: reply.trim(), error: null as string | null };
-      }
-      // No usable reply — surface the raw response for diagnostics.
-      const detail = json.error?.message ?? `HTTP ${res.status} · ${raw.slice(0, 400)}`;
-      return { reply: null as string | null, error: detail };
+      return { reply: null as string | null, error: "TOOL_LOOP_LIMIT" };
     } catch (e) {
       return { reply: null as string | null, error: (e as Error).message };
     }
