@@ -616,6 +616,7 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null 
 type RoomType = {
   id: string;
   name: string;
+  slug: string;
   description?: string | null;
   base_rate: number | string;
   capacity?: number | null;
@@ -699,8 +700,8 @@ function RoomCarousel({
                     </span>
                   ) : (
                     <Link
-                      to="/book"
-                      search={{}}
+                      to="/rooms/$slug"
+                      params={{ slug: rt.slug }}
                       className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                     >
                       Pesan Kamar
