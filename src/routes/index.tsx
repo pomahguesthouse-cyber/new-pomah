@@ -134,7 +134,20 @@ function PomahHome() {
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
               {cfg.datePicker.heading && (
-                <p className="mb-3 text-center font-serif text-lg font-semibold text-teal-700">
+                <p
+                  className={`mb-3 text-center text-teal-700 ${
+                    cfg.datePicker.fontFamily === "mono"
+                      ? "font-mono"
+                      : cfg.datePicker.fontFamily === "sans"
+                        ? "font-sans"
+                        : "font-serif"
+                  }`}
+                  style={{
+                    fontSize: cfg.datePicker.fontSize,
+                    fontStyle: cfg.datePicker.fontStyle === "italic" ? "italic" : "normal",
+                    fontWeight: cfg.datePicker.fontStyle === "bold" ? 700 : 400,
+                  }}
+                >
                   {cfg.datePicker.heading}
                 </p>
               )}
