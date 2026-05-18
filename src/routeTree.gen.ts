@@ -28,6 +28,7 @@ import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
+import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 
@@ -126,6 +127,11 @@ const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAiLabRoute = AdminAiLabRouteImport.update({
+  id: '/ai-lab',
+  path: '/ai-lab',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAiRoute = AdminAiRouteImport.update({
   id: '/ai',
   path: '/ai',
@@ -147,6 +153,7 @@ export interface FileRoutesByFullPath {
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -169,6 +176,7 @@ export interface FileRoutesByTo {
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -193,6 +201,7 @@ export interface FileRoutesById {
   '/rooms': typeof RoomsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai': typeof AdminAiRoute
+  '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
@@ -218,6 +227,7 @@ export interface FileRouteTypes {
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
+    | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -240,6 +250,7 @@ export interface FileRouteTypes {
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
+    | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -263,6 +274,7 @@ export interface FileRouteTypes {
     | '/rooms'
     | '/sitemap.xml'
     | '/admin/ai'
+    | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
@@ -423,6 +435,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAnalyticsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/ai-lab': {
+      id: '/admin/ai-lab'
+      path: '/ai-lab'
+      fullPath: '/admin/ai-lab'
+      preLoaderRoute: typeof AdminAiLabRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/ai': {
       id: '/admin/ai'
       path: '/ai'
@@ -442,6 +461,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminAiRoute: typeof AdminAiRoute
+  AdminAiLabRoute: typeof AdminAiLabRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCalendarRoute: typeof AdminCalendarRoute
@@ -457,6 +477,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAiRoute: AdminAiRoute,
+  AdminAiLabRoute: AdminAiLabRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCalendarRoute: AdminCalendarRoute,
