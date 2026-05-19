@@ -23,6 +23,7 @@ import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
+import { getBookingState, processBookingState } from "./state-machine/booking-machine";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -169,6 +170,8 @@ async function runAgent(
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export interface MultiAgentInput {
+  /** User phone number for state tracking */
+  phone: string;
   /** Full conversation history (ascending) */
   messages:  Array<{ direction: string; body: string }>;
   /** Pre-fetched context for agents */
@@ -196,7 +199,33 @@ export async function runMultiAgentOrchestration(
     .find((m) => m.direction === "in")
     ?.body ?? "";
 
-  // 2. Classify intent
+  // 2. State Machine Interception
+  const stateRecord = await getBookingState(input.toolCtx.supabasePublic, input.phone);
+  
+  if (stateRecord.state !== "IDLE") {
+    console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
+    const stateResult = await processBookingState(
+      input.toolCtx.supabasePublic,
+      input.phone,
+      lastUserMsg,
+      stateRecord
+    );
+
+    if (stateResult.handled && stateResult.reply) {
+      return {
+        reply:             stateResult.reply,
+        toolsUsed:         ["booking_state_machine"],
+        agentKey:          "front-office",
+        intent:            "booking_flow",
+        routingConfidence: 1.0,
+        escalated:         false,
+      };
+    }
+    // If not handled or needs LLM processing, we can either fall through or force front-office
+    // For now, if the state machine didn't handle it with a direct reply, we let the normal flow run.
+  }
+
+  // 3. Classify intent
   const classified = classifyIntent(lastUserMsg);
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
