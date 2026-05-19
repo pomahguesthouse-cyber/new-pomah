@@ -216,10 +216,11 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allotmentMode, selectedRooms, roomsByType, autoCounts]);
 
-  const grandTotal = effectiveRooms.reduce(
+  const baseTotal = effectiveRooms.reduce(
     (sum, r) => sum + r.nightly_rate * Math.max(nights, 1),
     0,
   );
+  const grandTotal = paymentStatus === "paid" ? paidAmount : baseTotal;
   const outstanding = Math.max(0, grandTotal - paidAmount);
 
   function toggleRoom(room: RoomRow) {
@@ -577,7 +578,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                       value={paymentStatus}
                       onValueChange={(v) => {
                         setPaymentStatus(v as any);
-                        if (v === "paid") setPaidAmount(grandTotal);
+                        if (v === "paid") setPaidAmount(baseTotal);
                         if (v === "unpaid") setPaidAmount(0);
                       }}
                     >

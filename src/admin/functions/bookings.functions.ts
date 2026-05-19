@@ -251,7 +251,15 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     const roomTypeById = new Map<string, string>();
     for (const r of roomRows ?? []) roomTypeById.set(r.id, r.room_type_id);
 
-    const grandTotal = data.rooms.reduce((sum, r) => sum + Number(r.nightly_rate) * nights, 0);
+    let grandTotal = data.rooms.reduce((sum, r) => sum + Number(r.nightly_rate) * nights, 0);
+    let finalPaidAmount = data.paid_amount;
+
+    if (data.payment_status === "paid") {
+      grandTotal = data.paid_amount;
+      finalPaidAmount = data.paid_amount;
+    } else if (data.payment_status === "unpaid") {
+      finalPaidAmount = 0;
+    }
 
     // 1 booking header covers every room in this reservation.
     const { data: booking, error: bookErr } = await context.supabase
@@ -268,7 +276,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
         status: data.status,
         source: data.source,
         payment_status: data.payment_status,
-        paid_amount: data.payment_status === "paid" ? grandTotal : data.paid_amount,
+        paid_amount: finalPaidAmount,
         special_requests: data.special_requests || null,
         internal_notes: data.internal_notes || null,
       })
@@ -333,7 +341,15 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
     }
-    const total_amount = data.rooms.reduce((s, r) => s + Number(r.nightly_rate) * nights, 0);
+    let total_amount = data.rooms.reduce((s, r) => s + Number(r.nightly_rate) * nights, 0);
+    let final_paid_amount = data.paid_amount;
+
+    if (data.payment_status === "paid") {
+      total_amount = data.paid_amount;
+      final_paid_amount = data.paid_amount;
+    } else if (data.payment_status === "unpaid") {
+      final_paid_amount = 0;
+    }
 
     // Update guest contact info
     const { error: gErr } = await context.supabase
@@ -365,7 +381,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       status: data.status,
       source: data.source,
       payment_status: data.payment_status,
-      paid_amount: data.paid_amount,
+      paid_amount: final_paid_amount,
       special_requests: data.special_requests ?? null,
       internal_notes: data.internal_notes ?? null,
       total_amount,
