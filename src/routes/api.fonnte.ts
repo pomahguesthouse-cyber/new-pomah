@@ -23,6 +23,9 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
+import { waitUntil } from "@vercel/functions";
+
+export const maxDuration = 60;
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // ── Webhook layer ──────────────────────────────────────────────────────────────
@@ -61,7 +64,7 @@ interface SmartDelayConfig {
 }
 
 const DEFAULT_DELAY: SmartDelayConfig = {
-  enabled:      false,
+  enabled:      true,
   shortMs:      6000,
   mediumMs:     3000,
   longMs:       1000,
@@ -172,208 +175,211 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // 7. Smart Delay — sleep then winner check
-        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}), enabled: false };
-        const delayMs = calcDelayMs(message, delayCfg);
-        let queueEntryId: string | null = null;
+        // 7. Mulai Background Job untuk AI & Delay
+        waitUntil(async () => {
+          const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}) };
+          const delayMs = calcDelayMs(message, delayCfg);
+          let queueEntryId: string | null = null;
 
-        if (delayMs > 0) {
-          try {
-            const { data: qid, error: qErr } = await (supabasePublic as any).rpc(
-              "claim_queue_winner",
-              {
-                p_phone:      sender,
-                p_message_id: messageId ?? null,
-                p_body:       message,
-                p_delay_ms:   delayMs,
-                p_thread_id:  c.thread_id,
-              },
-            );
-            if (qErr) {
-              console.warn("[SmartDelay] claim error (migration missing?):", qErr);
-            } else {
-              queueEntryId = qid as string | null;
-              console.log("[SmartDelay] sleeping", delayMs, "ms | queue:", queueEntryId);
-              await sleep(delayMs);
-
-              const { data: still } = await (supabasePublic as any).rpc(
-                "is_still_winner",
-                { p_entry_id: queueEntryId },
-              );
-              if (!still) {
-                console.log("[SmartDelay] superseded — skipping");
-                return new Response("OK", { status: 200 });
-              }
-            }
-          } catch (e) {
-            console.warn("[SmartDelay] error, continuing without delay:", e);
-          }
-        }
-
-        // Re-fetch messages after sleep window so AI sees the full burst
-        let freshMessages = c.messages;
-        if (delayMs > 0) {
-          const { data: freshCtx } = await (supabasePublic as any).rpc(
-            "get_autoreply_context",
-            { p_phone: sender },
-          ).catch(() => ({ data: null }));
-          if (freshCtx) {
-            freshMessages = (freshCtx as typeof c).messages ?? c.messages;
-            console.log("[SmartDelay] refreshed context:", freshMessages.length, "messages");
-          }
-        }
-
-        // In-progress guard (same Worker instance)
-        if (_inProgress.has(c.thread_id)) {
-          console.log("[AutoReply] already in-progress:", c.thread_id, "— skipping");
-          return new Response("OK", { status: 200 });
-        }
-        _inProgress.add(c.thread_id);
-
-        try {
-          // 8. Load property + rooms + SOP for agent contexts
-          const { data: prop } = await (supabasePublic as any)
-            .from("properties").select("*").limit(1).maybeSingle();
-          const p = (prop ?? {}) as Record<string, unknown>;
-
-          const { data: rooms } = await (supabasePublic as any)
-            .from("room_types")
-            .select("id, name, base_rate, capacity, bed_type, description")
-            .order("base_rate");
-
-          // SOP (only if enabled in ai_lab_config)
-          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
-          const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
-          let sopText = "";
-          if (sopEnabled) {
+          if (delayMs > 0) {
             try {
-              const { data: sopDocs } = await (supabaseAdmin as any)
-                .from("sop_documents")
-                .select("name, content, source_url")
-                .order("created_at", { ascending: true })
-                .limit(40);
-              const parts: string[] = [];
-              for (const d of (sopDocs ?? []) as any[]) {
-                const content = d.content?.trim();
-                const url     = d.source_url?.trim();
-                if (!content && !url) continue;
-                const head = url ? `### ${d.name} (Tautan: ${url})` : `### ${d.name}`;
-                parts.push(content ? `${head}\n${content}` : head);
+              const { data: qid, error: qErr } = await (supabasePublic as any).rpc(
+                "claim_queue_winner",
+                {
+                  p_phone:      sender,
+                  p_message_id: messageId ?? null,
+                  p_body:       message,
+                  p_delay_ms:   delayMs,
+                  p_thread_id:  c.thread_id,
+                },
+              );
+              if (qErr) {
+                console.warn("[SmartDelay] claim error (migration missing?):", qErr);
+              } else {
+                queueEntryId = qid as string | null;
+                console.log("[SmartDelay] sleeping", delayMs, "ms | queue:", queueEntryId);
+                await sleep(delayMs);
+
+                const { data: still } = await (supabasePublic as any).rpc(
+                  "is_still_winner",
+                  { p_entry_id: queueEntryId },
+                );
+                if (!still) {
+                  console.log("[SmartDelay] superseded — skipping");
+                  return;
+                }
               }
-              sopText = parts.join("\n\n").slice(0, 8000);
             } catch (e) {
-              console.warn("[AutoReply] SOP load error:", e);
+              console.warn("[SmartDelay] error, continuing without delay:", e);
             }
           }
 
-          // Resolve AI credentials
-          const explicitKey = (p.ai_api_key as string | undefined)?.trim();
-          const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
-          const useLovable  = !explicitKey && !!lovableKey;
-          const apiKey      = explicitKey || lovableKey;
-
-          if (!apiKey) {
-            console.error("[AutoReply] No AI key configured");
-            return new Response("OK", { status: 200 });
+          // Re-fetch messages after sleep window so AI sees the full burst
+          let freshMessages = c.messages;
+          if (delayMs > 0) {
+            const { data: freshCtx } = await (supabasePublic as any).rpc(
+              "get_autoreply_context",
+              { p_phone: sender },
+            ).catch(() => ({ data: null }));
+            if (freshCtx) {
+              freshMessages = (freshCtx as typeof c).messages ?? c.messages;
+              console.log("[SmartDelay] refreshed context:", freshMessages.length, "messages");
+            }
           }
 
-          const baseUrl = useLovable
-            ? "https://ai.gateway.lovable.dev/v1"
-            : ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1")
-                .trim().replace(/\/+$/, "");
-          const cfgModel = (p.ai_model as string | undefined)?.trim();
-          const model = useLovable
-            ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
-            : cfgModel || "gpt-4o-mini";
-
-          const today    = todayWIB();
-          const roomList = (rooms ?? []) as any[];
-
-          // 8. Run Multi-Agent Orchestration
-          console.log(
-            "[AutoReply] multi-agent pipeline | messages:", freshMessages.length,
-            "| model:", model,
-          );
-
-          const result = await runMultiAgentOrchestration({
-            messages:  freshMessages,
-            agentCtx: {
-              property:    p as any,
-              rooms:       roomList,
-              sopText,
-              today,
-              lastMessage: message,
-            },
-            toolCtx: {
-              supabasePublic: supabasePublic as any,
-              supabaseAdmin:  supabaseAdmin  as any,
-              rooms:          roomList,
-              property:       p as any,
-              today,
-            },
-            llmConfig: { apiKey, baseUrl, model },
-          });
-
-          const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
-
-          console.log(
-            "[AutoReply] routed →", agentKey,
-            "| intent:", intent,
-            "| confidence:", routingConfidence.toFixed(2),
-            "| escalated:", escalated,
-            "| tools:", toolsUsed,
-          );
-
-          if (!reply) {
-            console.error("[AutoReply] no reply generated — check AI key / LLM gateway");
-            return new Response("OK", { status: 200 });
+          // In-progress guard (same Worker instance)
+          if (_inProgress.has(c.thread_id)) {
+            console.log("[AutoReply] already in-progress:", c.thread_id, "— skipping");
+            return;
           }
+          _inProgress.add(c.thread_id);
 
-          // 9. Send via Fonnte
-          const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-            c.fonnte_token, sender, reply,
-          );
-          if (!sent) {
-            console.error("[AutoReply] send failed:", sendErr);
-            return new Response("OK", { status: 200 });
+          try {
+            // 8. Load property + rooms + SOP for agent contexts
+            const { data: prop } = await (supabasePublic as any)
+              .from("properties").select("*").limit(1).maybeSingle();
+            const p = (prop ?? {}) as Record<string, unknown>;
+
+            const { data: rooms } = await (supabasePublic as any)
+              .from("room_types")
+              .select("id, name, base_rate, capacity, bed_type, description")
+              .order("base_rate");
+
+            // SOP (only if enabled in ai_lab_config)
+            const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
+            const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
+            let sopText = "";
+            if (sopEnabled) {
+              try {
+                const { data: sopDocs } = await (supabaseAdmin as any)
+                  .from("sop_documents")
+                  .select("name, content, source_url")
+                  .order("created_at", { ascending: true })
+                  .limit(40);
+                const parts: string[] = [];
+                for (const d of (sopDocs ?? []) as any[]) {
+                  const content = d.content?.trim();
+                  const url     = d.source_url?.trim();
+                  if (!content && !url) continue;
+                  const head = url ? `### ${d.name} (Tautan: ${url})` : `### ${d.name}`;
+                  parts.push(content ? `${head}\n${content}` : head);
+                }
+                sopText = parts.join("\n\n").slice(0, 8000);
+              } catch (e) {
+                console.warn("[AutoReply] SOP load error:", e);
+              }
+            }
+
+            // Resolve AI credentials
+            const explicitKey = (p.ai_api_key as string | undefined)?.trim();
+            const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
+            const useLovable  = !explicitKey && !!lovableKey;
+            const apiKey      = explicitKey || lovableKey;
+
+            if (!apiKey) {
+              console.error("[AutoReply] No AI key configured");
+              return;
+            }
+
+            const baseUrl = useLovable
+              ? "https://ai.gateway.lovable.dev/v1"
+              : ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1")
+                  .trim().replace(/\/+$/, "");
+            const cfgModel = (p.ai_model as string | undefined)?.trim();
+            const model = useLovable
+              ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
+              : cfgModel || "gpt-4o-mini";
+
+            const today    = todayWIB();
+            const roomList = (rooms ?? []) as any[];
+
+            // 8. Run Multi-Agent Orchestration
+            console.log(
+              "[AutoReply] multi-agent pipeline | messages:", freshMessages.length,
+              "| model:", model,
+            );
+
+            const result = await runMultiAgentOrchestration({
+              messages:  freshMessages,
+              agentCtx: {
+                property:    p as any,
+                rooms:       roomList,
+                sopText,
+                today,
+                lastMessage: message,
+              },
+              toolCtx: {
+                supabasePublic: supabasePublic as any,
+                supabaseAdmin:  supabaseAdmin  as any,
+                rooms:          roomList,
+                property:       p as any,
+                today,
+              },
+              llmConfig: { apiKey, baseUrl, model },
+            });
+
+            const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
+
+            console.log(
+              "[AutoReply] routed →", agentKey,
+              "| intent:", intent,
+              "| confidence:", routingConfidence.toFixed(2),
+              "| escalated:", escalated,
+              "| tools:", toolsUsed,
+            );
+
+            if (!reply) {
+              console.error("[AutoReply] no reply generated — check AI key / LLM gateway");
+              return;
+            }
+
+            // 9. Send via Fonnte
+            const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
+              c.fonnte_token, sender, reply,
+            );
+            if (!sent) {
+              console.error("[AutoReply] send failed:", sendErr);
+              return;
+            }
+
+            // Mark smart delay entry done
+            if (queueEntryId) {
+              void (supabasePublic as any).rpc("mark_queue_done", { p_entry_id: queueEntryId })
+                .catch((e: unknown) => console.warn("[SmartDelay] mark_done error:", e));
+            }
+
+            // 10. Save outbound + update thread analytics
+            const agentLabel = deriveAgentLabelFromKey(agentKey);
+            await saveOutboundMessage(supabasePublic, {
+              threadId: c.thread_id,
+              body:     reply,
+              metadata: {
+                agent:              agentLabel,
+                agent_key:          agentKey,
+                intent,
+                routing_confidence: routingConfidence,
+                escalated,
+                tools_used:         toolsUsed,
+              },
+            });
+            void updateThreadAutoReplyMeta(supabasePublic, {
+              threadId:  c.thread_id,
+              toolsUsed,
+            }).catch((e: unknown) => console.warn("[AutoReply] meta update error:", e));
+
+            console.log(
+              "[AutoReply] ✓ sent to", sender,
+              "| delay:", delayMs, "ms",
+              "| agent:", agentLabel,
+              "| tools:", toolsUsed,
+            );
+
+          } finally {
+            _inProgress.delete(c.thread_id);
           }
+        }); // End of waitUntil
 
-          // Mark smart delay entry done
-          if (queueEntryId) {
-            void (supabasePublic as any).rpc("mark_queue_done", { p_entry_id: queueEntryId })
-              .catch((e: unknown) => console.warn("[SmartDelay] mark_done error:", e));
-          }
-
-          // 10. Save outbound + update thread analytics
-          const agentLabel = deriveAgentLabelFromKey(agentKey);
-          await saveOutboundMessage(supabasePublic, {
-            threadId: c.thread_id,
-            body:     reply,
-            metadata: {
-              agent:              agentLabel,
-              agent_key:          agentKey,
-              intent,
-              routing_confidence: routingConfidence,
-              escalated,
-              tools_used:         toolsUsed,
-            },
-          });
-          void updateThreadAutoReplyMeta(supabasePublic, {
-            threadId:  c.thread_id,
-            toolsUsed,
-          }).catch((e: unknown) => console.warn("[AutoReply] meta update error:", e));
-
-          console.log(
-            "[AutoReply] ✓ sent to", sender,
-            "| delay:", delayMs, "ms",
-            "| agent:", agentLabel,
-            "| tools:", toolsUsed,
-          );
-
-        } finally {
-          _inProgress.delete(c.thread_id);
-        }
-
+        // Return immediately to Fonnte
         return new Response("OK", { status: 200 });
       },
 
