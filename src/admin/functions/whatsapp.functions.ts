@@ -289,7 +289,13 @@ export const classifyIntent = createServerFn({ method: "POST" })
           '{\n' +
           '  "intent": "<salah satu: booking_inquiry|service_request|complaint|recommendation|feedback|other>",\n' +
           '  "intent_label": "<label singkat 2-5 kata Bahasa Indonesia mendeskripsikan kebutuhan tamu>",\n' +
-          '  "agent": "<salah satu: Front Office Agent|Housekeeping Agent|Maintenance Agent|Finance Agent|Manager Agent>",\n' +
+          '  "agent": "<pilih agent yang PALING DOMINAN dalam percakapan ini:\n' +
+          '    - Pricing Agent: jika percakapan utamanya membahas harga/tarif/biaya kamar (meski ada booking juga)\n' +
+          '    - Front Office Agent: reservasi/check-in/check-out/pertanyaan umum\n' +
+          '    - Housekeeping Agent: kebersihan/fasilitas/kesiapan kamar\n' +
+          '    - Maintenance Agent: kerusakan/perbaikan peralatan\n' +
+          '    - Finance Agent: pembayaran/tagihan/konfirmasi transfer\n' +
+          '    - Manager Agent: laporan/manajemen/eskalasi>",\n' +
           '  "confidence": <angka 0.0 sampai 1.0>\n' +
           '}',
       },
