@@ -58,6 +58,7 @@ export type ManagedRoomType = {
   bed_type?: string | null;
   size_sqm?: number | null;
   capacity?: number | null;
+  extrabed_capacity?: number | null;
   base_rate?: number | null;
   amenities?: string[] | null;
   hero_image_url?: string | null;
@@ -93,6 +94,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [slugTouched, setSlugTouched] = React.useState(false);
   const [bedType, setBedType] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
+  const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
   const [baseRate, setBaseRate] = React.useState(0);
   const [sizeSqm, setSizeSqm] = React.useState<number | "">("");
   const [description, setDescription] = React.useState("");
@@ -160,6 +162,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlugTouched(true);
       setBedType(roomType.bed_type ?? "");
       setCapacity(roomType.capacity ?? 2);
+      setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
       setBaseRate(Number(roomType.base_rate ?? 0));
       setSizeSqm(roomType.size_sqm ?? "");
       setDescription(roomType.description ?? "");
@@ -179,6 +182,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlugTouched(false);
       setBedType("");
       setCapacity(2);
+      setExtrabedCapacity(0);
       setBaseRate(0);
       setSizeSqm("");
       setDescription("");
@@ -198,6 +202,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         bed_type: bedType.trim() || null,
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
         capacity: Number(capacity) || 1,
+        extrabed_capacity: Number(extrabedCapacity) || 0,
         base_rate: Number(baseRate) || 0,
         amenities: amenities
           .split(",")
@@ -298,7 +303,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Kapasitas (tamu)</Label>
                   <Input
@@ -307,6 +312,16 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                     max={20}
                     value={capacity}
                     onChange={(e) => setCapacity(Number(e.target.value))}
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Extrabed</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={10}
+                    value={extrabedCapacity}
+                    onChange={(e) => setExtrabedCapacity(Number(e.target.value))}
                   />
                 </div>
                 <div className="grid gap-1.5">

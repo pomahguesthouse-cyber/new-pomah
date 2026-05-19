@@ -96,6 +96,7 @@ export function RoomsManageView() {
                   <p className="truncate font-medium">{rt.name}</p>
                   <p className="truncate font-mono text-xs text-muted-foreground">
                     {formatIDR(Number(rt.base_rate ?? 0))}/malam · {rt.capacity ?? 0} tamu
+                    {rt.extrabed_capacity ? ` (+${rt.extrabed_capacity} extrabed)` : ""}
                     {rt.bed_type ? ` · ${rt.bed_type}` : ""}
                   </p>
                 </div>

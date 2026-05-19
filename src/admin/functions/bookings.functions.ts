@@ -422,7 +422,7 @@ export const listRoomTypes = createServerFn({ method: "GET" })
     const { data, error } = await db(context.supabase)
       .from("room_types")
       .select(
-        "id, name, slug, description, bed_type, size_sqm, capacity, base_rate, amenities, hero_image_url, images",
+        "id, name, slug, description, bed_type, size_sqm, capacity, extrabed_capacity, base_rate, amenities, hero_image_url, images",
       )
       .order("name");
     if (error) throw error;
@@ -497,6 +497,7 @@ const roomTypeFieldsSchema = z.object({
   bed_type: z.string().max(60).nullable().optional(),
   size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
   capacity: z.number().int().min(1).max(20),
+  extrabed_capacity: z.number().int().min(0).max(10).default(0),
   base_rate: z.number().min(0).max(100_000_000),
   amenities: z.array(z.string().min(1).max(60)).max(40).nullable().optional(),
   hero_image_url: z.string().url().max(500).nullable().optional().or(z.literal("")),
@@ -512,6 +513,7 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     bed_type: d.bed_type ?? null,
     size_sqm: d.size_sqm ?? null,
     capacity: d.capacity,
+    extrabed_capacity: d.extrabed_capacity,
     base_rate: d.base_rate,
     amenities: d.amenities ?? [],
     images: d.images ?? [],
