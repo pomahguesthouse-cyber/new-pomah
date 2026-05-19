@@ -850,6 +850,10 @@ export type Database = {
     }
     Functions: {
       generate_booking_reference: { Args: never; Returns: string }
+      receive_whatsapp_message: {
+        Args: { p_phone: string; p_name: string; p_body: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
