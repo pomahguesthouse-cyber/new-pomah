@@ -528,6 +528,64 @@ async function generateAiReply(
 }
 
 // ---------------------------------------------------------------------------
+// Smart Response Delay Engine
+//
+// When a guest sends multiple messages in quick succession the bot waits for
+// a configurable window before generating a reply.  The DB-backed queue
+// (wa_message_queue) is the coordination point between Worker instances:
+//
+//   1. Incoming webhook → save to DB → call claim_queue_winner()
+//      • The claim atomically supersedes all older pending entries for the
+//        same phone number and inserts this message as the new winner.
+//   2. Server sleeps synchronously (safe in Cloudflare Workers — request
+//      stays alive up to 30s wall-clock while sleeping before returning Response).
+//   3. After sleeping, call is_still_winner() against the DB.
+//      • If another message arrived during the sleep it will have superseded
+//        this entry → is_still_winner() returns false → skip AI generation.
+//      • If still winner → re-fetch fresh messages from DB → generate reply.
+//
+// This ensures:
+//   ✓ Bot sees the full thought, not just the first fragment.
+//   ✓ No duplicate replies for burst messages.
+//   ✓ Works across multiple Cloudflare Worker instances (DB is shared state).
+// ---------------------------------------------------------------------------
+
+// ─── Smart delay types & defaults ────────────────────────────────────────────
+
+interface SmartDelayConfig {
+  enabled:      boolean;
+  shortMs:      number;   // < 15 chars
+  mediumMs:     number;   // 15–80 chars
+  longMs:       number;   // > 80 chars
+  waitSignalMs: number;   // "bentar", "wait", etc.
+  maxDelayMs:   number;   // absolute cap
+}
+
+const DEFAULT_SMART_DELAY: SmartDelayConfig = {
+  enabled:      true,
+  shortMs:      6000,
+  mediumMs:     3000,
+  longMs:       1000,
+  waitSignalMs: 8000,
+  maxDelayMs:   10000,
+};
+
+const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek)\b|\.\.\./i;
+
+function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
+  if (!cfg.enabled) return 0;
+  let base: number;
+  if (WAIT_SIGNALS.test(body))    base = cfg.waitSignalMs ?? DEFAULT_SMART_DELAY.waitSignalMs;
+  else if (body.trim().length < 15)  base = cfg.shortMs      ?? DEFAULT_SMART_DELAY.shortMs;
+  else if (body.trim().length <= 80) base = cfg.mediumMs     ?? DEFAULT_SMART_DELAY.mediumMs;
+  else                               base = cfg.longMs        ?? DEFAULT_SMART_DELAY.longMs;
+  return Math.min(base, cfg.maxDelayMs ?? DEFAULT_SMART_DELAY.maxDelayMs);
+}
+
+/** Pause execution for ms milliseconds (synchronous within the async context). */
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// ---------------------------------------------------------------------------
 // Duplicate-reply prevention (2 layers)
 //
 // Layer 1 — In-memory key map (same Worker instance, any timing).
@@ -539,11 +597,9 @@ async function generateAiReply(
 //   request arriving before the first finishes cannot start a parallel
 //   generation cycle.
 //
-// NOTE: A DB-level atomic claim (e.g. INSERT … ON CONFLICT on a dedup table)
-// would be needed to cover cross-instance races on Cloudflare Workers.  The
-// previous Layer 3 "recent outbound" DB check was removed because it
-// incorrectly blocked legitimate AI replies when a guest responded within
-// 15 seconds of the previous bot message.
+// Layer 3 (NEW) — DB-backed queue via wa_message_queue.
+//   Cross-instance coordination.  claim_queue_winner() supersedes older
+//   pending entries for the same phone; is_still_winner() checks after sleep.
 // ---------------------------------------------------------------------------
 
 const _processedKeys = new Map<string, number>();
@@ -824,7 +880,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // -----------------------------------------------------------------------
         // Process AI reply SYNCHRONOUSLY before returning to Fonnte.
-        // See commit message for rationale (Cloudflare Workers fire-and-forget).
+        // Smart Response Delay Engine: wait, check winner, then generate reply.
         // -----------------------------------------------------------------------
         try {
           console.log("[AutoReply] fetching autoreply context for", sender);
@@ -857,11 +913,77 @@ export const Route = createFileRoute("/api/fonnte")({
             thread_id: string;
             fonnte_token: string;
             messages: Array<{ direction: string; body: string }>;
+            smart_delay_config: SmartDelayConfig | null;
           };
 
           if (!c.fonnte_token) {
             console.error("[AutoReply] fonnte_token not set in properties — cannot send reply");
             return new Response("OK", { status: 200 });
+          }
+
+          // ── Smart Delay: claim queue winner & sleep ──────────────────────
+          const delayCfg: SmartDelayConfig = {
+            ...DEFAULT_SMART_DELAY,
+            ...(c.smart_delay_config ?? {}),
+          };
+          const delayMs = calcDelayMs(message, delayCfg);
+          let queueEntryId: string | null = null;
+
+          if (delayMs > 0) {
+            try {
+              const { data: qid, error: qErr } = await rpc.rpc("claim_queue_winner", {
+                p_phone:      sender,
+                p_message_id: inboundId as string | null,
+                p_body:       message,
+                p_delay_ms:   delayMs,
+                p_thread_id:  c.thread_id,
+              });
+              if (qErr) {
+                // wa_message_queue table may not exist yet — fall through without delay
+                console.warn("[SmartDelay] claim_queue_winner error (table missing?):", qErr);
+              } else {
+                queueEntryId = qid as string | null;
+                console.log("[SmartDelay] claimed queueId:", queueEntryId, "| sleeping", delayMs, "ms");
+                await sleep(delayMs);
+                console.log("[SmartDelay] woke up — checking winner status");
+              }
+            } catch (e) {
+              console.warn("[SmartDelay] queue operation failed, continuing without delay:", e);
+            }
+          }
+
+          // After sleep: check if this entry is still the winner
+          if (queueEntryId) {
+            try {
+              const { data: still } = await rpc.rpc("is_still_winner", {
+                p_entry_id: queueEntryId,
+              });
+              if (!still) {
+                console.log("[SmartDelay] superseded by newer message — skipping AI reply");
+                return new Response("OK", { status: 200 });
+              }
+              console.log("[SmartDelay] still winner ✓ — proceeding to generate reply");
+            } catch (e) {
+              console.warn("[SmartDelay] is_still_winner error, proceeding anyway:", e);
+            }
+          }
+
+          // Re-fetch fresh message context AFTER the sleep window so the AI
+          // sees all messages the guest sent during the wait period.
+          let freshMessages = c.messages;
+          if (delayMs > 0) {
+            try {
+              const { data: freshCtx } = await supabasePublic.rpc("get_autoreply_context", {
+                p_phone: sender,
+              });
+              if (freshCtx) {
+                const fc = freshCtx as { messages: Array<{ direction: string; body: string }> };
+                freshMessages = fc.messages ?? c.messages;
+                console.log("[SmartDelay] refreshed message context:", freshMessages.length, "messages");
+              }
+            } catch (e) {
+              console.warn("[SmartDelay] context refresh failed, using original messages:", e);
+            }
           }
 
           // Concurrent-request guard: skip if another request on this Worker
@@ -873,8 +995,8 @@ export const Route = createFileRoute("/api/fonnte")({
           _inProgress.add(c.thread_id);
 
           try {
-            console.log("[AutoReply] generating reply for", sender, "| messages in context:", c.messages.length);
-            const { reply, toolsUsed } = await generateAiReply(c.messages);
+            console.log("[AutoReply] generating reply for", sender, "| messages in context:", freshMessages.length);
+            const { reply, toolsUsed } = await generateAiReply(freshMessages);
             console.log("[AutoReply] reply generated:", !!reply, "| tools:", toolsUsed);
 
             if (!reply) {
@@ -887,6 +1009,12 @@ export const Route = createFileRoute("/api/fonnte")({
             if (!sent) {
               console.error("[AutoReply] sendViaFonnte failed");
               return new Response("OK", { status: 200 });
+            }
+
+            // Mark queue entry as done
+            if (queueEntryId) {
+              void rpc.rpc("mark_queue_done", { p_entry_id: queueEntryId })
+                .catch((e: unknown) => console.warn("[SmartDelay] mark_queue_done error:", e));
             }
 
             const agent = deriveAgent(toolsUsed);
@@ -906,7 +1034,7 @@ export const Route = createFileRoute("/api/fonnte")({
               p_thread_id: c.thread_id,
               p_tools_used: toolsUsed,
             }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
-            console.log("[AutoReply] ✓ reply sent to", sender, "| agent:", agent, "| tools:", toolsUsed);
+            console.log("[AutoReply] ✓ reply sent to", sender, "| delay:", delayMs, "ms | agent:", agent, "| tools:", toolsUsed);
           } finally {
             _inProgress.delete(c.thread_id);
           }
