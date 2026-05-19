@@ -258,11 +258,27 @@ export const deleteThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    // Delete conversation memory in the correct dependency order so foreign-key
+    // constraints are not violated.
+    // 1. AI conversation logs referencing this thread
+    await context.supabase
+      .from("ai_conversation_logs")
+      .delete()
+      .eq("thread_id", data.threadId);
+
+    // 2. Individual messages
+    await context.supabase
+      .from("whatsapp_messages")
+      .delete()
+      .eq("thread_id", data.threadId);
+
+    // 3. The thread itself
     const { error } = await context.supabase
       .from("whatsapp_threads")
       .delete()
       .eq("id", data.threadId);
     if (error) throw error;
+
     return { ok: true };
   });
 
