@@ -39,7 +39,6 @@ import {
   setTrainingExample,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -201,23 +200,6 @@ export function WhatsAppPage() {
       });
     }
   }, [current, threads, markReadFn, qc]);
-
-  // Realtime subscription
-  useEffect(() => {
-    const ch = supabase
-      .channel("wa-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_threads" }, () => {
-        qc.invalidateQueries({ queryKey: ["wa-threads"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, () => {
-        qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-        qc.invalidateQueries({ queryKey: ["wa-threads"] });
-      })
-      .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [qc, current]);
 
   // Auto scroll on new messages
   const scrollRef = useRef<HTMLDivElement>(null);
