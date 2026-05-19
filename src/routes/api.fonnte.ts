@@ -800,100 +800,108 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("Error", { status: 500 });
         }
 
-        // Fire-and-forget the rest — return 200 to Fonnte immediately so it doesn't retry.
-        void (async () => {
-          try {
-            // Save intent badge on inbound message.
-            if (inboundId) {
-              rpc.rpc("save_message_metadata", {
-                p_message_id: inboundId as string,
-                p_metadata: { intent_label: classifyMessageIntent(message) },
-              }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
-            }
+        // Save intent badge (truly fire-and-forget — non-critical, fast DB write).
+        if (inboundId) {
+          void rpc.rpc("save_message_metadata", {
+            p_message_id: inboundId as string,
+            p_metadata: { intent_label: classifyMessageIntent(message) },
+          }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
+        }
 
-            // Auto-reply using the full AI chat engine.
-            const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
-              p_phone: sender,
-            });
+        // -----------------------------------------------------------------------
+        // Process AI reply SYNCHRONOUSLY before returning to Fonnte.
+        //
+        // Previously this was fire-and-forget (void async IIFE), but Cloudflare
+        // Workers terminates un-awaited background tasks when the handler returns
+        // a Response — `ctx.waitUntil()` is required to keep them alive, and it
+        // is not accessible from inside a TanStack Start route handler.
+        //
+        // Processing synchronously is safe because:
+        //   • The full pipeline (DB + AI + Fonnte send) typically takes 5–10 s,
+        //     well within Fonnte's 30-second webhook timeout.
+        //   • Layer 1 dedup (content-based key stored before we reach this line)
+        //     catches any Fonnte retries — they return 200 immediately without
+        //     re-running the AI, so duplicates are impossible.
+        // -----------------------------------------------------------------------
+        try {
+          const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
+            p_phone: sender,
+          });
 
-            if (!ctx || !(ctx as Record<string, unknown>).auto_reply_enabled) return;
-
-            const c = ctx as {
-              thread_id: string;
-              fonnte_token: string;
-              messages: Array<{ direction: string; body: string }>;
-            };
-
-            // Layer 2 dedup: in-progress Set — prevents a second concurrent task on
-            // the same instance from starting a parallel AI generation for the same
-            // thread.  The lock is held only during generation+send, so subsequent
-            // messages are processed normally once the current reply is sent.
-            if (_inProgress.has(c.thread_id)) {
-              console.log("[AutoReply] thread already in-progress:", c.thread_id, "— skipping");
-              return;
-            }
-            _inProgress.add(c.thread_id);
-
-            try {
-              console.log("[AutoReply] generating reply for", sender);
-              const { reply, toolsUsed } = await generateAiReply(c.messages);
-              console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
-
-              if (!reply) {
-                console.error("[AutoReply] no reply generated");
-                return;
-              }
-
-              // Post-generation debounce gate: if the guest sent a follow-up message
-              // while the AI was generating (typically 3–7 s), discard this reply and
-              // let that follow-up's background task handle the response with full
-              // context. This gives a natural debounce window without a sleep that
-              // would risk the Cloudflare Worker being recycled mid-task.
-              if (inboundId) {
-                const { data: latestIn } = await supabaseAdmin
-                  .from("whatsapp_messages")
-                  .select("id")
-                  .eq("thread_id", c.thread_id)
-                  .eq("direction", "in")
-                  .order("sent_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (latestIn && (latestIn as { id: string }).id !== String(inboundId)) {
-                  console.log("[AutoReply] follow-up detected after generation, deferring for", sender);
-                  return;
-                }
-              }
-
-              const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
-              if (!sent) return;
-
-              const agent = deriveAgent(toolsUsed);
-              try {
-                await rpc.rpc("save_outbound_whatsapp", {
-                  p_thread_id: c.thread_id,
-                  p_body: reply,
-                  p_metadata: { agent, tools_used: toolsUsed },
-                });
-              } catch {
-                await supabasePublic.rpc("save_outbound_whatsapp", {
-                  p_thread_id: c.thread_id,
-                  p_body: reply,
-                });
-              }
-              rpc.rpc("update_thread_autoreply_meta", {
-                p_thread_id: c.thread_id,
-                p_tools_used: toolsUsed,
-              }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
-              console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
-            } finally {
-              _inProgress.delete(c.thread_id);
-            }
-          } catch (e) {
-            console.error("[AutoReply] background error", e);
+          if (!ctx || !(ctx as Record<string, unknown>).auto_reply_enabled) {
+            return new Response("OK", { status: 200 });
           }
-        })();
 
-        // Return immediately — do NOT wait for the AI. This prevents Fonnte retries.
+          const c = ctx as {
+            thread_id: string;
+            fonnte_token: string;
+            messages: Array<{ direction: string; body: string }>;
+          };
+
+          // Concurrent-request guard: skip if another request on this Worker
+          // instance is already generating a reply for the same thread.
+          if (_inProgress.has(c.thread_id)) {
+            console.log("[AutoReply] thread already in-progress:", c.thread_id, "— skipping");
+            return new Response("OK", { status: 200 });
+          }
+          _inProgress.add(c.thread_id);
+
+          try {
+            console.log("[AutoReply] generating reply for", sender);
+            const { reply, toolsUsed } = await generateAiReply(c.messages);
+            console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
+
+            if (!reply) {
+              console.error("[AutoReply] no reply generated");
+              return new Response("OK", { status: 200 });
+            }
+
+            // Post-generation follow-up gate: if the guest sent another message
+            // while the AI was generating (typically 3–7 s), skip sending so the
+            // follow-up's handler can reply with full context.
+            if (inboundId) {
+              const { data: latestIn } = await supabaseAdmin
+                .from("whatsapp_messages")
+                .select("id")
+                .eq("thread_id", c.thread_id)
+                .eq("direction", "in")
+                .order("sent_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (latestIn && (latestIn as { id: string }).id !== String(inboundId)) {
+                console.log("[AutoReply] follow-up detected, deferring reply for", sender);
+                return new Response("OK", { status: 200 });
+              }
+            }
+
+            const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
+            if (!sent) return new Response("OK", { status: 200 });
+
+            const agent = deriveAgent(toolsUsed);
+            try {
+              await rpc.rpc("save_outbound_whatsapp", {
+                p_thread_id: c.thread_id,
+                p_body: reply,
+                p_metadata: { agent, tools_used: toolsUsed },
+              });
+            } catch {
+              await supabasePublic.rpc("save_outbound_whatsapp", {
+                p_thread_id: c.thread_id,
+                p_body: reply,
+              });
+            }
+            void rpc.rpc("update_thread_autoreply_meta", {
+              p_thread_id: c.thread_id,
+              p_tools_used: toolsUsed,
+            }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
+            console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
+          } finally {
+            _inProgress.delete(c.thread_id);
+          }
+        } catch (e) {
+          console.error("[AutoReply] pipeline error:", e);
+        }
+
         return new Response("OK", { status: 200 });
       },
     },
