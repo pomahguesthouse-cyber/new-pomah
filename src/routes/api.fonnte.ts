@@ -757,15 +757,29 @@ export const Route = createFileRoute("/api/fonnte")({
           for (const [k, v] of params.entries()) body[k] = v;
         }
 
-        const sender = (body.sender as string) || (body.pengirim as string) || undefined;
-        const message = (body.message as string) || (body.pesan as string) || undefined;
-        const name = (body.name as string) || (body.pushname as string) || sender;
-        // Fonnte sends a unique message ID — use it to deduplicate retries.
-        const fonnteId = (body.id as string) || (body.message_id as string) || undefined;
+        // Log the full raw payload once so we can see every field Fonnte sends.
+        console.log("[Fonnte Webhook] raw body keys:", Object.keys(body).join(", "));
+        console.log("[Fonnte Webhook] raw body:", JSON.stringify(body).slice(0, 400));
 
-        console.log("[Fonnte Webhook] POST", { sender, fonnteId, msg: message?.slice(0, 50) });
+        const sender  = (body.sender  as string) || (body.pengirim as string) || undefined;
+        const message = (body.message as string) || (body.pesan    as string) || undefined;
+        const name    = (body.name    as string) || (body.pushname as string) || sender;
+        const fonnteId = (body.id as string) || (body.message_id as string) || undefined;
+        // Fonnte identifies the WhatsApp device (our number) in `device`.
+        // If sender == device the webhook is for a message WE sent — skip it.
+        const device  = (body.device  as string) || undefined;
+
+        console.log("[Fonnte Webhook] parsed", { sender, device, fonnteId, msg: message?.slice(0, 50) });
 
         if (!sender || !message) {
+          console.log("[Fonnte Webhook] missing sender or message — skipping");
+          return new Response("OK", { status: 200 });
+        }
+
+        // Filter out outgoing messages (messages we sent via Fonnte API).
+        // Fonnte webhooks both incoming and outgoing; only reply to incoming.
+        if (device && sender === device) {
+          console.log("[Fonnte Webhook] outgoing message detected (sender==device) — skipping");
           return new Response("OK", { status: 200 });
         }
 
@@ -810,25 +824,32 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // -----------------------------------------------------------------------
         // Process AI reply SYNCHRONOUSLY before returning to Fonnte.
-        //
-        // Previously this was fire-and-forget (void async IIFE), but Cloudflare
-        // Workers terminates un-awaited background tasks when the handler returns
-        // a Response — `ctx.waitUntil()` is required to keep them alive, and it
-        // is not accessible from inside a TanStack Start route handler.
-        //
-        // Processing synchronously is safe because:
-        //   • The full pipeline (DB + AI + Fonnte send) typically takes 5–10 s,
-        //     well within Fonnte's 30-second webhook timeout.
-        //   • Layer 1 dedup (content-based key stored before we reach this line)
-        //     catches any Fonnte retries — they return 200 immediately without
-        //     re-running the AI, so duplicates are impossible.
+        // See commit message for rationale (Cloudflare Workers fire-and-forget).
         // -----------------------------------------------------------------------
         try {
-          const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
+          console.log("[AutoReply] fetching autoreply context for", sender);
+          const { data: ctx, error: ctxErr } = await supabasePublic.rpc("get_autoreply_context", {
             p_phone: sender,
           });
 
-          if (!ctx || !(ctx as Record<string, unknown>).auto_reply_enabled) {
+          if (ctxErr) {
+            console.error("[AutoReply] get_autoreply_context error:", ctxErr);
+            return new Response("OK", { status: 200 });
+          }
+          if (!ctx) {
+            console.log("[AutoReply] no context returned (thread may not exist yet) for", sender);
+            return new Response("OK", { status: 200 });
+          }
+
+          const ctxObj = ctx as Record<string, unknown>;
+          console.log("[AutoReply] context:", {
+            auto_reply_enabled: ctxObj.auto_reply_enabled,
+            fonnte_token_set: !!ctxObj.fonnte_token,
+            message_count: Array.isArray(ctxObj.messages) ? ctxObj.messages.length : 0,
+          });
+
+          if (!ctxObj.auto_reply_enabled) {
+            console.log("[AutoReply] auto_reply disabled — skipping. Enable it in Admin → AI Lab → Front Office Agent → Balas Otomatis");
             return new Response("OK", { status: 200 });
           }
 
@@ -837,6 +858,11 @@ export const Route = createFileRoute("/api/fonnte")({
             fonnte_token: string;
             messages: Array<{ direction: string; body: string }>;
           };
+
+          if (!c.fonnte_token) {
+            console.error("[AutoReply] fonnte_token not set in properties — cannot send reply");
+            return new Response("OK", { status: 200 });
+          }
 
           // Concurrent-request guard: skip if another request on this Worker
           // instance is already generating a reply for the same thread.
@@ -847,35 +873,21 @@ export const Route = createFileRoute("/api/fonnte")({
           _inProgress.add(c.thread_id);
 
           try {
-            console.log("[AutoReply] generating reply for", sender);
+            console.log("[AutoReply] generating reply for", sender, "| messages in context:", c.messages.length);
             const { reply, toolsUsed } = await generateAiReply(c.messages);
-            console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
+            console.log("[AutoReply] reply generated:", !!reply, "| tools:", toolsUsed);
 
             if (!reply) {
-              console.error("[AutoReply] no reply generated");
+              console.error("[AutoReply] generateAiReply returned null — check LOVABLE_API_KEY / LLM gateway");
               return new Response("OK", { status: 200 });
             }
 
-            // Post-generation follow-up gate: if the guest sent another message
-            // while the AI was generating (typically 3–7 s), skip sending so the
-            // follow-up's handler can reply with full context.
-            if (inboundId) {
-              const { data: latestIn } = await supabaseAdmin
-                .from("whatsapp_messages")
-                .select("id")
-                .eq("thread_id", c.thread_id)
-                .eq("direction", "in")
-                .order("sent_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (latestIn && (latestIn as { id: string }).id !== String(inboundId)) {
-                console.log("[AutoReply] follow-up detected, deferring reply for", sender);
-                return new Response("OK", { status: 200 });
-              }
-            }
-
+            console.log("[AutoReply] sending via Fonnte to", sender);
             const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
-            if (!sent) return new Response("OK", { status: 200 });
+            if (!sent) {
+              console.error("[AutoReply] sendViaFonnte failed");
+              return new Response("OK", { status: 200 });
+            }
 
             const agent = deriveAgent(toolsUsed);
             try {
@@ -894,7 +906,7 @@ export const Route = createFileRoute("/api/fonnte")({
               p_thread_id: c.thread_id,
               p_tools_used: toolsUsed,
             }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
-            console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
+            console.log("[AutoReply] ✓ reply sent to", sender, "| agent:", agent, "| tools:", toolsUsed);
           } finally {
             _inProgress.delete(c.thread_id);
           }
