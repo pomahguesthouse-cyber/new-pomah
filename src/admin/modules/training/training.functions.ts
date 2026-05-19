@@ -75,12 +75,19 @@ export const saveTrainingExample = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export type WebchatLogMeta = {
+  intent?: string;
+  confidence?: number;
+  tools?: string[];
+};
+
 export type WebchatLogRow = {
   id: string;
   thread_id: string | null;
   user_message: string | null;
   ai_response: string | null;
   used: boolean | null;
+  metadata: WebchatLogMeta | null;
   created_at: string;
 };
 
@@ -90,7 +97,7 @@ export const listWebchatLogs = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data } = await db(context.supabase)
       .from("ai_conversation_logs")
-      .select("id, thread_id, user_message, ai_response, used, created_at")
+      .select("id, thread_id, user_message, ai_response, used, metadata, created_at")
       .eq("source", "webchat")
       .order("created_at", { ascending: true })
       .limit(500);
