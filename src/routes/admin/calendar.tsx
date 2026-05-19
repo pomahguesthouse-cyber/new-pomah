@@ -51,7 +51,7 @@ export const Route = createFileRoute("/admin/calendar")({
   component: CalendarPage,
 });
 
-const WINDOW_DAYS = 14;
+const WINDOW_DAYS = 30;
 /** Extra day(s) shown before the anchor, at the far left of the grid. */
 const LEAD_DAYS = 1;
 const MONTHS = [
