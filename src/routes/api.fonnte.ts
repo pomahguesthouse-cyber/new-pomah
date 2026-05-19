@@ -5,16 +5,17 @@
  * │  WEBHOOK HANDLER                                                     │
  * │                                                                     │
  * │  Flow (synchronous — safe in Cloudflare Workers up to 30s):         │
- * │    1. Verify Fonnte token                                            │
- * │    2. Parse raw body → ParsedWebhookEvent                           │
- * │    3. Skip outgoing messages (sender === device)                    │
- * │    4. Deduplicate (in-memory Map, Layer 1)                          │
- * │    5. Save inbound message to DB                                    │
- * │    6. Load autoreply context (auto_reply_enabled, config, messages) │
- * │    7. Smart Delay — sleep, then winner check (Layer 2)              │
- * │    8. Run AI orchestration + tool calls                             │
- * │    9. Send reply via Fonnte                                         │
- * │   10. Save outbound + return HTTP 200                               │
+ * │    1.  Verify Fonnte token                                           │
+ * │    2.  Parse raw body → ParsedWebhookEvent                          │
+ * │    3.  Skip outgoing messages (sender === device)                   │
+ * │    4.  Deduplicate (in-memory Map, 5-min TTL)                       │
+ * │    5.  Save inbound message to DB                                   │
+ * │    6.  Load autoreply context (auto_reply_enabled, config, messages)│
+ * │    7.  Smart Delay — sleep, then winner check                       │
+ * │    8.  Multi-Agent Orchestration:                                   │
+ * │          classify → route → agent(own prompt+tools) → reply        │
+ * │    9.  Send reply via Fonnte                                        │
+ * │   10.  Save outbound + return HTTP 200                              │
  * │                                                                     │
  * │  All AI logic is in typed modules (src/ai/, src/tools/, etc.)       │
  * │  — this file is only the HTTP boundary layer.                       │
@@ -41,11 +42,12 @@ import {
 // ── Services ───────────────────────────────────────────────────────────────────
 import { sendWhatsAppMessage }         from "@/services/whatsapp.service";
 
-// ── AI pipeline ────────────────────────────────────────────────────────────────
-import { runOrchestration, deriveAgentLabel } from "@/ai/orchestrator";
-import { buildSystemPrompt }                  from "@/ai/context-builder";
-import { TOOL_DEFINITIONS }                   from "@/tools/registry";
-import { todayWIB }                           from "@/lib/date";
+// ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
+import {
+  runMultiAgentOrchestration,
+  deriveAgentLabelFromKey,
+}                                      from "@/ai/multi-agent-orchestrator";
+import { todayWIB }                    from "@/lib/date";
 
 // ─── Smart Delay (in-process, no external deps needed) ────────────────────────
 
@@ -81,7 +83,7 @@ function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-// ─── In-progress guard (Layer 2 dedup — same Worker instance) ─────────────────
+// ─── In-progress guard (same Worker instance) ─────────────────────────────────
 const _inProgress = new Set<string>();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,12 +163,6 @@ export const Route = createFileRoute("/api/fonnte")({
           smart_delay_config: SmartDelayConfig | null;
         };
 
-        console.log("[AutoReply] context:", {
-          auto_reply_enabled: c.auto_reply_enabled,
-          fonnte_token_set:   !!c.fonnte_token,
-          messages:           c.messages?.length ?? 0,
-        });
-
         if (!c.auto_reply_enabled) {
           console.log("[AutoReply] disabled — enable in AI Lab → Front Office Agent → Balas Otomatis");
           return new Response("OK", { status: 200 });
@@ -235,7 +231,7 @@ export const Route = createFileRoute("/api/fonnte")({
         _inProgress.add(c.thread_id);
 
         try {
-          // 8. Load property + rooms + SOP for system prompt
+          // 8. Load property + rooms + SOP for agent contexts
           const { data: prop } = await (supabasePublic as any)
             .from("properties").select("*").limit(1).maybeSingle();
           const p = (prop ?? {}) as Record<string, unknown>;
@@ -246,7 +242,7 @@ export const Route = createFileRoute("/api/fonnte")({
             .order("base_rate");
 
           // SOP (only if enabled in ai_lab_config)
-          const aiCfgRaw = p.ai_lab_config as Record<string, unknown> | undefined;
+          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
           const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
           let sopText = "";
           if (sopEnabled) {
@@ -290,32 +286,42 @@ export const Route = createFileRoute("/api/fonnte")({
             ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
             : cfgModel || "gpt-4o-mini";
 
-          // Merge ai_lab_config for system prompt
-          const aiLabConfig = mergeAiLabConfig(p.ai_lab_config);
+          const today    = todayWIB();
+          const roomList = (rooms ?? []) as any[];
 
-          const systemPrompt = buildSystemPrompt({
-            property:    p as any,
-            aiLabConfig,
-            rooms:       (rooms ?? []) as any[],
-            sopText,
-          });
+          // 8. Run Multi-Agent Orchestration
+          console.log(
+            "[AutoReply] multi-agent pipeline | messages:", freshMessages.length,
+            "| model:", model,
+          );
 
-          // 8. Run AI orchestration
-          console.log("[AutoReply] generating reply | messages:", freshMessages.length, "| model:", model);
-          const { reply, toolsUsed } = await runOrchestration(
-            {
-              messages:     freshMessages,
-              systemPrompt,
-              client:       { apiKey, baseUrl, model },
-              tools:        TOOL_DEFINITIONS,
+          const result = await runMultiAgentOrchestration({
+            messages:  freshMessages,
+            agentCtx: {
+              property:    p as any,
+              rooms:       roomList,
+              sopText,
+              today,
+              lastMessage: message,
             },
-            {
+            toolCtx: {
               supabasePublic: supabasePublic as any,
               supabaseAdmin:  supabaseAdmin  as any,
-              rooms:          (rooms ?? []) as any[],
+              rooms:          roomList,
               property:       p as any,
-              today:          todayWIB(),
+              today,
             },
+            llmConfig: { apiKey, baseUrl, model },
+          });
+
+          const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
+
+          console.log(
+            "[AutoReply] routed →", agentKey,
+            "| intent:", intent,
+            "| confidence:", routingConfidence.toFixed(2),
+            "| escalated:", escalated,
+            "| tools:", toolsUsed,
           );
 
           if (!reply) {
@@ -339,18 +345,30 @@ export const Route = createFileRoute("/api/fonnte")({
           }
 
           // 10. Save outbound + update thread analytics
-          const agent = deriveAgentLabel(toolsUsed);
+          const agentLabel = deriveAgentLabelFromKey(agentKey);
           await saveOutboundMessage(supabasePublic, {
             threadId: c.thread_id,
             body:     reply,
-            metadata: { agent, tools_used: toolsUsed },
+            metadata: {
+              agent:              agentLabel,
+              agent_key:          agentKey,
+              intent,
+              routing_confidence: routingConfidence,
+              escalated,
+              tools_used:         toolsUsed,
+            },
           });
           void updateThreadAutoReplyMeta(supabasePublic, {
             threadId:  c.thread_id,
             toolsUsed,
           }).catch((e: unknown) => console.warn("[AutoReply] meta update error:", e));
 
-          console.log("[AutoReply] ✓ sent to", sender, "| delay:", delayMs, "ms | agent:", agent, "| tools:", toolsUsed);
+          console.log(
+            "[AutoReply] ✓ sent to", sender,
+            "| delay:", delayMs, "ms",
+            "| agent:", agentLabel,
+            "| tools:", toolsUsed,
+          );
 
         } finally {
           _inProgress.delete(c.thread_id);
@@ -413,12 +431,19 @@ export const Route = createFileRoute("/api/fonnte")({
               const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
                 method: "POST",
                 headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ model: "google/gemini-2.5-flash", max_tokens: 5, messages: [{ role: "user", content: "ping" }] }),
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash",
+                  max_tokens: 5,
+                  messages: [{ role: "user", content: "ping" }],
+                }),
               });
               report.llm_reachable = r.ok;
               report.llm_status    = r.status;
               if (!r.ok) report.llm_error = await r.text();
-            } catch (e) { report.llm_reachable = false; report.llm_error = String(e); }
+            } catch (e) {
+              report.llm_reachable = false;
+              report.llm_error     = String(e);
+            }
           } else {
             report.llm_reachable = false;
             report.llm_error     = "LOVABLE_API_KEY not set";
@@ -444,7 +469,7 @@ export const Route = createFileRoute("/api/fonnte")({
               "get_autoreply_context", { p_phone: testPhone },
             );
             if (ctxErr || !ctx) {
-              result.error = "get_autoreply_context failed";
+              result.error  = "get_autoreply_context failed";
               result.detail = (ctxErr as any)?.message ?? "null ctx";
             } else {
               const c = ctx as {
@@ -465,38 +490,56 @@ export const Route = createFileRoute("/api/fonnte")({
                   .from("properties").select("*").limit(1).maybeSingle();
                 const p = (prop ?? {}) as Record<string, unknown>;
                 const { data: rooms } = await (supabasePublic as any)
-                  .from("room_types").select("id, name, base_rate, capacity, bed_type, description").order("base_rate");
+                  .from("room_types")
+                  .select("id, name, base_rate, capacity, bed_type, description")
+                  .order("base_rate");
 
                 const explicitKey = (p.ai_api_key as string | undefined)?.trim();
                 const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
                 const useLovable  = !explicitKey && !!lovableKey;
                 const apiKey      = explicitKey || lovableKey;
 
-                if (!apiKey) { result.error = "No AI key configured"; }
-                else {
+                if (!apiKey) {
+                  result.error = "No AI key configured";
+                } else {
                   const baseUrl = useLovable
                     ? "https://ai.gateway.lovable.dev/v1"
                     : ((p.ai_base_url as string) || "https://api.openai.com/v1").replace(/\/+$/, "");
                   const cfgModel = (p.ai_model as string | undefined)?.trim();
-                  const model    = useLovable ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash") : cfgModel || "gpt-4o-mini";
-
-                  const systemPrompt = buildSystemPrompt({
-                    property: p as any,
-                    aiLabConfig: mergeAiLabConfig(p.ai_lab_config),
-                    rooms: (rooms ?? []) as any[],
-                    sopText: "",
-                  });
+                  const model    = useLovable
+                    ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
+                    : cfgModel || "gpt-4o-mini";
+                  const today    = todayWIB();
+                  const roomList = (rooms ?? []) as any[];
 
                   const t0 = Date.now();
-                  const { reply, toolsUsed, error: orchErr } = await runOrchestration(
-                    { messages: c.messages, systemPrompt, client: { apiKey, baseUrl, model }, tools: TOOL_DEFINITIONS },
-                    { supabasePublic: supabasePublic as any, supabaseAdmin: supabaseAdmin as any, rooms: (rooms ?? []) as any[], property: p as any, today: todayWIB() },
-                  );
-                  result.elapsed_ms = Date.now() - t0;
-                  result.reply      = reply;
-                  result.tools_used = toolsUsed;
-                  result.reply_ok   = !!reply;
-                  if (orchErr) result.error = orchErr;
+                  const orchResult = await runMultiAgentOrchestration({
+                    messages:  c.messages,
+                    agentCtx: {
+                      property: p as any,
+                      rooms:    roomList,
+                      sopText:  "",
+                      today,
+                    },
+                    toolCtx: {
+                      supabasePublic: supabasePublic as any,
+                      supabaseAdmin:  supabaseAdmin  as any,
+                      rooms:          roomList,
+                      property:       p as any,
+                      today,
+                    },
+                    llmConfig: { apiKey, baseUrl, model },
+                  });
+
+                  result.elapsed_ms         = Date.now() - t0;
+                  result.reply              = orchResult.reply;
+                  result.tools_used         = orchResult.toolsUsed;
+                  result.agent_key          = orchResult.agentKey;
+                  result.intent             = orchResult.intent;
+                  result.routing_confidence = orchResult.routingConfidence;
+                  result.escalated          = orchResult.escalated;
+                  result.reply_ok           = !!orchResult.reply;
+                  if (orchResult.error) result.error = orchResult.error;
                 }
               }
             }
@@ -512,28 +555,3 @@ export const Route = createFileRoute("/api/fonnte")({
     },
   },
 });
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const AGENT_KEYS = ["front-office","pricing","housekeeping","maintenance","finance","manager"] as const;
-const AGENT_DEFAULTS: Record<string, string> = {
-  "front-office": "Anda Front Office Agent Pomah Guesthouse. Tangani reservasi, check-in/check-out, dan pertanyaan umum tamu. Ramah, sapa tamu dengan 'Kak', jawab singkat dan jelas. Bantu cek ketersediaan kamar dan arahkan tamu untuk memesan.",
-};
-
-function mergeAiLabConfig(raw: unknown) {
-  const c = (raw ?? {}) as any;
-  const agents: Record<string, any> = {};
-  for (const k of AGENT_KEYS) {
-    const a = c?.agents?.[k];
-    agents[k] = {
-      enabled:      a?.enabled      ?? true,
-      autoReply:    a?.autoReply    ?? false,
-      instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
-    };
-  }
-  const tools: Record<string, any> = {};
-  for (const k of ["pms-database","room-availability","sop-knowledge","pricing-engine","faq-memory"]) {
-    tools[k] = { enabled: c?.tools?.[k]?.enabled ?? true, note: c?.tools?.[k]?.note ?? "" };
-  }
-  return { agents, tools };
-}

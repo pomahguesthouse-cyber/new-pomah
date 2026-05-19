@@ -6,16 +6,22 @@
  * The orchestrator never needs to change when a new tool is added.
  */
 
-import { TOOL_LABELS } from "./registry";
-import { checkRoomAvailability } from "./availability.tool";
-import { createBooking          } from "./booking.tool";
-import type { ToolContext, ToolHandler } from "./types";
+import { TOOL_LABELS }                   from "./registry";
+import { checkRoomAvailability }          from "./availability.tool";
+import { createBooking }                  from "./booking.tool";
+import { requestHousekeepingService }     from "./housekeeping/request-service.tool";
+import { reportMaintenanceIssue }         from "./maintenance/report-issue.tool";
+import { getPaymentInfo }                 from "./finance/get-payment-info.tool";
+import type { ToolContext, ToolHandler }  from "./types";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
 
 const HANDLERS: Record<string, ToolHandler> = {
-  check_room_availability: checkRoomAvailability,
-  create_booking:          createBooking,
+  check_room_availability:       checkRoomAvailability,
+  create_booking:                createBooking,
+  request_housekeeping_service:  requestHousekeepingService,
+  report_maintenance_issue:      reportMaintenanceIssue,
+  get_payment_info:              getPaymentInfo,
 };
 
 // ─── Executor ─────────────────────────────────────────────────────────────────
