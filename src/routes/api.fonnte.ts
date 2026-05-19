@@ -651,6 +651,56 @@ export const Route = createFileRoute("/api/fonnte")({
           });
         }
 
+        // ?test_reply=1&phone=628xxx — run full AI pipeline and return result without sending
+        if (url.searchParams.get("test_reply") === "1") {
+          const testPhone = url.searchParams.get("phone");
+          if (!testPhone) {
+            return new Response(JSON.stringify({ error: "phone param required" }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          const result: Record<string, unknown> = { phone: testPhone };
+          try {
+            const { data: ctx, error: ctxErr } = await supabasePublic.rpc("get_autoreply_context", {
+              p_phone: testPhone,
+            });
+            if (ctxErr || !ctx) {
+              result.error = "get_autoreply_context failed";
+              result.detail = ctxErr ? { code: ctxErr.code, message: ctxErr.message } : "null ctx";
+            } else {
+              const c = ctx as {
+                auto_reply_enabled: boolean;
+                fonnte_token: string;
+                messages: Array<{ direction: string; body: string }>;
+              };
+              result.auto_reply_enabled = c.auto_reply_enabled;
+              result.message_count = c.messages?.length ?? 0;
+              result.last_messages = (c.messages ?? []).slice(-3).map((m) => ({
+                direction: m.direction,
+                body: m.body?.slice(0, 60),
+              }));
+              if (!c.auto_reply_enabled) {
+                result.skipped = "auto_reply_enabled is false";
+              } else {
+                const t0 = Date.now();
+                const { reply, toolsUsed } = await generateAiReply(c.messages);
+                result.elapsed_ms = Date.now() - t0;
+                result.reply = reply;
+                result.tools_used = toolsUsed;
+                result.reply_ok = !!reply;
+                if (!reply) result.note = "generateAiReply returned null — check LOVABLE_API_KEY and LLM gateway";
+              }
+            }
+          } catch (e) {
+            result.error = String(e);
+          }
+          return new Response(JSON.stringify(result, null, 2), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
         return new Response("Webhook is active", { status: 200 });
       },
       POST: async ({ request }) => {
