@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2 } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { getBookingReference } from "@/public/functions/public.functions";
+import { getBookingReference, getPublicSiteData } from "@/public/functions/public.functions";
 
 export const Route = createFileRoute("/book/confirmation/$id")({
   head: () => ({
@@ -19,15 +19,20 @@ export const Route = createFileRoute("/book/confirmation/$id")({
 function ConfirmationPage() {
   const { id } = Route.useParams();
   const fn = useServerFn(getBookingReference);
+  const siteFn = useServerFn(getPublicSiteData);
   const { data } = useQuery({
     queryKey: ["booking-reference", id],
     queryFn: () => fn({ data: { id } }),
+  });
+  const { data: siteData } = useQuery({
+    queryKey: ["public-site"],
+    queryFn: () => siteFn(),
   });
   const reference = data?.reference_code ?? null;
 
   return (
     <div className="min-h-screen bg-background">
-      <PublicNav />
+      <PublicNav property={siteData?.property} />
       <main className="mx-auto max-w-2xl px-6 py-24 text-center">
         <CheckCircle2 className="mx-auto h-12 w-12 text-accent" />
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">Booking received</h1>
@@ -42,7 +47,7 @@ function ConfirmationPage() {
           Back to home →
         </Link>
       </main>
-      <PublicFooter />
+      <PublicFooter property={siteData?.property} />
     </div>
   );
 }

@@ -6,17 +6,27 @@ import { Button } from "@/components/ui/button";
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
 /* ------------------------------------------------------------------ */
-export function PublicNav() {
+export function PublicNav({
+  property,
+}: {
+  property?: { name?: string | null } | null;
+}) {
   const [open, setOpen] = useState(false);
+  const fullName = property?.name || "Pomah Guesthouse";
+  const parts = fullName.split(" ");
+  const firstWord = parts[0];
+  const restWords = parts.slice(1).join(" ");
   return (
     <nav className="sticky top-0 z-50 border-b border-stone-200 bg-white/95 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <Link to="/" className="flex items-baseline gap-1">
           <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">
-            Pomah
+            {firstWord}
           </span>
-          <span className="font-serif text-xl font-light text-amber-700">Living</span>
+          {restWords && (
+            <span className="font-serif text-xl font-light text-amber-700">{restWords}</span>
+          )}
         </Link>
 
         {/* Desktop menu */}
@@ -102,6 +112,11 @@ export function PublicFooter({
     email?: string | null;
   } | null;
 }) {
+  const fullName = property?.name || "Pomah Guesthouse";
+  const parts = fullName.split(" ");
+  const firstWord = parts[0];
+  const restWords = parts.slice(1).join(" ");
+
   return (
     <footer className="border-t border-stone-200 bg-stone-900 text-stone-300">
       <div className="mx-auto max-w-6xl px-6 py-16">
@@ -109,8 +124,10 @@ export function PublicFooter({
           {/* Brand */}
           <div className="md:col-span-2">
             <div className="flex items-baseline gap-1">
-              <span className="font-serif text-2xl font-semibold text-white">Pomah</span>
-              <span className="font-serif text-2xl font-light text-amber-400">Living</span>
+              <span className="font-serif text-2xl font-semibold text-white">{firstWord}</span>
+              {restWords && (
+                <span className="font-serif text-2xl font-light text-amber-400">{restWords}</span>
+              )}
             </div>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-400">
               Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
@@ -196,7 +213,7 @@ export function PublicFooter({
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-stone-800 pt-8 md:flex-row">
           <p className="text-xs text-stone-600">
-            © {new Date().getFullYear()} Pomah Living. Semua hak dilindungi.
+            © {new Date().getFullYear()} {fullName}. Semua hak dilindungi.
           </p>
           <Link
             to="/login"
