@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
-// Create an admin client to bypass RLS for webhooks
-function getAdminClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Use anon key — inserts are done via SECURITY DEFINER RPC, no service_role needed
+function getAnonClient() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase env for webhook");
   return createClient<Database>(url, key, {
     auth: { persistSession: false },
@@ -49,64 +50,41 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         try {
-          const body = await request.json().catch(() => null);
-          if (!body) {
-            // Sometimes Fonnte sends form-urlencoded
-            const text = await request.clone().text();
-            console.log("[Fonnte Webhook] raw body:", text);
-            return new Response("OK", { status: 200 });
-          }
+          const contentType = request.headers.get("content-type") ?? "";
+          let sender: string | undefined;
+          let message: string | undefined;
+          let name: string | undefined;
 
-          // Fonnte typical payload: device, sender, message, name
-          const { sender, message, name, device } = body;
+          if (contentType.includes("application/json")) {
+            const body = await request.json().catch(() => ({}));
+            sender = body.sender;
+            message = body.message;
+            name = body.name;
+          } else {
+            // Fonnte sends form-urlencoded by default
+            const text = await request.text();
+            const params = new URLSearchParams(text);
+            sender = params.get("sender") ?? undefined;
+            message = params.get("message") ?? undefined;
+            name = params.get("name") ?? undefined;
+            console.log("[Fonnte Webhook] form body:", text);
+          }
           if (!sender || !message) {
+            console.log("[Fonnte Webhook] missing sender or message, ignoring");
             return new Response("OK", { status: 200 });
           }
 
-          const supabase = getAdminClient();
+          const supabase = getAnonClient();
 
-          // Best-effort: Find existing thread or create one
-          let { data: thread } = await supabase
-            .from("whatsapp_threads")
-            .select("id")
-            .eq("phone", sender)
-            .maybeSingle();
+          const { error } = await supabase.rpc("receive_whatsapp_message", {
+            p_phone: sender,
+            p_name: name ?? sender,
+            p_body: message,
+          });
 
-          if (!thread) {
-            // Find guest by phone to link
-            const { data: guest } = await supabase
-              .from("guests")
-              .select("id")
-              .eq("phone", sender)
-              .maybeSingle();
-
-            const { data: newThread } = await supabase
-              .from("whatsapp_threads")
-              .insert({
-                phone: sender,
-                display_name: name || sender,
-                guest_id: guest?.id || null,
-              })
-              .select("id")
-              .single();
-            thread = newThread;
-          }
-
-          if (thread) {
-            await supabase.from("whatsapp_messages").insert({
-              thread_id: thread.id,
-              direction: "in",
-              body: message,
-            });
-
-            await supabase
-              .from("whatsapp_threads")
-              .update({
-                last_message_preview: message.slice(0, 120),
-                last_message_at: new Date().toISOString(),
-                unread_count: 1, // Actually we might want to increment it, but for simplicity set to 1 or you'd need a raw SQL update
-              })
-              .eq("id", thread.id);
+          if (error) {
+            console.error("[Fonnte Webhook] RPC error:", error);
+            return new Response("Error", { status: 500 });
           }
 
           // Note: Automatic AI Reply logic could go here if enabled.
