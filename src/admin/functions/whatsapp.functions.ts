@@ -279,14 +279,23 @@ export const classifyIntent = createServerFn({ method: "POST" })
     const transcript = (messages ?? [])
       .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
-    const intentRaw = await callAI([
+
+    // Single LLM call that returns a structured JSON with all metadata.
+    const raw = await callAI([
       {
         role: "system",
         content:
-          "Classify this guest conversation into ONE intent label. Reply with ONLY one of: booking_inquiry, service_request, complaint, recommendation, feedback, other.",
+          'Analisis percakapan tamu hotel ini dan balas HANYA dengan JSON (tanpa teks lain):\n' +
+          '{\n' +
+          '  "intent": "<salah satu: booking_inquiry|service_request|complaint|recommendation|feedback|other>",\n' +
+          '  "intent_label": "<label singkat 2-5 kata Bahasa Indonesia mendeskripsikan kebutuhan tamu>",\n' +
+          '  "agent": "<salah satu: Front Office Agent|Housekeeping Agent|Maintenance Agent|Finance Agent|Manager Agent>",\n' +
+          '  "confidence": <angka 0.0 sampai 1.0>\n' +
+          '}',
       },
       { role: "user", content: transcript },
     ]);
+
     const allowed = [
       "booking_inquiry",
       "service_request",
@@ -295,7 +304,57 @@ export const classifyIntent = createServerFn({ method: "POST" })
       "feedback",
       "other",
     ];
-    const intent = allowed.find((a) => intentRaw?.toLowerCase().includes(a)) ?? "other";
-    await context.supabase.from("whatsapp_threads").update({ intent }).eq("id", data.threadId);
-    return { intent };
+
+    let intent = "other";
+    let intentLabel = "";
+    let agent = "Front Office Agent";
+    let confidence = 0.7;
+
+    try {
+      const match = raw?.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]) as {
+          intent?: string;
+          intent_label?: string;
+          agent?: string;
+          confidence?: number;
+        };
+        intent = allowed.find((a) => a === parsed.intent) ?? "other";
+        intentLabel = String(parsed.intent_label ?? "").slice(0, 80);
+        agent = String(parsed.agent ?? "Front Office Agent").slice(0, 60);
+        confidence = Math.max(0, Math.min(1, Number(parsed.confidence) || 0.7));
+      } else {
+        intent = allowed.find((a) => raw?.toLowerCase().includes(a)) ?? "other";
+      }
+    } catch {
+      intent = allowed.find((a) => raw?.toLowerCase().includes(a)) ?? "other";
+    }
+
+    const aiAnalysis = {
+      intent_label: intentLabel || intent.replace(/_/g, " "),
+      confidence,
+      agent,
+      tools_used: [] as string[],
+      analyzed_at: new Date().toISOString(),
+    };
+
+    await context.supabase
+      .from("whatsapp_threads")
+      .update({ intent, ai_analysis: aiAnalysis } as never)
+      .eq("id", data.threadId);
+
+    return { intent, ai_analysis: aiAnalysis };
+  });
+
+export const setTrainingExample = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ threadId: z.string().uuid(), value: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await context.supabase
+      .from("whatsapp_threads")
+      .update({ is_training_example: data.value } as never)
+      .eq("id", data.threadId);
+    return { ok: true };
   });
