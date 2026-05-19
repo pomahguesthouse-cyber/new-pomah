@@ -643,8 +643,22 @@ function RoomCarousel({
   checkIn?: string;
   checkOut?: string;
 }) {
-  const per = Math.max(1, Math.min(rc.cardsPerView, 4));
-  const maxIndex = Math.max(0, rooms.length - per);
+  const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
+  // Adjust cards per view for mobile screens (show 1 card on small widths)
+  useEffect(() => {
+    const update = () => {
+      const width = window.innerWidth;
+      if (width < 640) { // Tailwind 'sm' breakpoint approx 640px
+        setCardsPerView(1);
+      } else {
+        setCardsPerView(Math.max(1, Math.min(rc.cardsPerView, 4)));
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [rc.cardsPerView]);
+  const maxIndex = Math.max(0, rooms.length - cardsPerView);
   const [i, setI] = useState(0);
 
   useEffect(() => {
@@ -664,10 +678,10 @@ function RoomCarousel({
       <div className="overflow-hidden">
         <div
           className="flex transition-transform duration-500 ease-out"
-          style={{ transform: `translateX(-${index * (100 / per)}%)` }}
+          style={{ transform: `translateX(-${index * (100 / cardsPerView)}%)` }}
         >
           {rooms.map((rt) => (
-            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / per}%` }}>
+            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                   {rt.hero_image_url ? (
