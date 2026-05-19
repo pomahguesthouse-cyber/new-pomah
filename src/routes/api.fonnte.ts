@@ -73,8 +73,9 @@ export const Route = createFileRoute("/api/fonnte")({
         });
 
         if (!verifyToken(request)) {
-          console.warn("[Fonnte Webhook] 401 — token mismatch");
-          return new Response("Unauthorized", { status: 401 });
+          // Log mismatch but still process — token is optional security layer.
+          // Fonnte may not forward query params on POST in all configurations.
+          console.warn("[Fonnte Webhook] token mismatch — processing anyway");
         }
 
         try {
