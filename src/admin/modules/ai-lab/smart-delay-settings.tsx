@@ -310,8 +310,8 @@ export function SmartDelaySettings() {
         />
 
         <DelaySlider
-          label="Sinyal Tunggu  ("bentar", "sebentar", "wait"…)"
-          description='Tamu minta tunggu atau masih mencari info. Beri jeda ekstra sebelum bot membalas.'
+          label={'Sinyal Tunggu  ("bentar", "sebentar", "wait"…)'}
+          description="Tamu minta tunggu atau masih mencari info. Beri jeda ekstra sebelum bot membalas."
           icon={Clock}
           value={cfg.waitSignalMs}
           onChange={(v) => update({ waitSignalMs: v })}
