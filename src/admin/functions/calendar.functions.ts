@@ -23,15 +23,27 @@ export const getCalendarData = createServerFn({ method: "GET" })
     const bookings: any[] = [];
     for (const b of bookingsRes.data ?? []) {
       const rooms = (b as any).booking_rooms ?? [];
-      for (const br of rooms) {
+      if (rooms.length === 0) {
+        // Fallback for legacy bookings or bookings imported without booking_rooms
         bookings.push({
           ...b,
           booking_rooms: undefined,
-          booking_room_id: br.id,
-          room_id: br.room_id,
-          room_type_id: br.room_type_id,
-          nightly_rate: br.nightly_rate,
+          booking_room_id: null,
+          room_id: null,
+          // b.room_type_id should be present on the booking table if it was used
+          nightly_rate: b.nightly_rate || (b.total_amount ? b.total_amount / Math.max(1, b.nights || 1) : 0),
         });
+      } else {
+        for (const br of rooms) {
+          bookings.push({
+            ...b,
+            booking_rooms: undefined,
+            booking_room_id: br.id,
+            room_id: br.room_id,
+            room_type_id: br.room_type_id,
+            nightly_rate: br.nightly_rate,
+          });
+        }
       }
     }
 
