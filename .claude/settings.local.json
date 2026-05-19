@@ -65,7 +65,13 @@
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" status)",
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log --oneline origin/main..HEAD)",
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" add .claude/settings.local.json)",
-      "Bash(git -C 'C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e' commit -m ' *)"
+      "Bash(git -C 'C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e' commit -m ' *)",
+      "Bash(gh -R pomahguesthouse-cyber/new-pomah api repos/pomahguesthouse-cyber/new-pomah/deployments --jq '.[0]')",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" add src/admin/functions/whatsapp.functions.ts)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log origin/main..HEAD --oneline)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log origin/claude/confident-wiles-8b551e..HEAD --oneline)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log main..origin/claude/confident-wiles-8b551e --oneline)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" diff .claude/settings.local.json)"
     ]
   }
 }
