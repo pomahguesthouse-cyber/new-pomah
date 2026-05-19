@@ -20,7 +20,7 @@ import {
 /** Optional prefill carried from a room's dedicated booking page. */
 type BookSearch = { room?: string; checkIn?: string; checkOut?: string; adults?: number };
 
-export const Route = createFileRoute("/book")({
+export const Route = createFileRoute("/book/")({
   validateSearch: (s: Record<string, unknown>): BookSearch => {
     const out: BookSearch = {};
     if (typeof s.room === "string") out.room = s.room;

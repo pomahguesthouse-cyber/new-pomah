@@ -13,10 +13,10 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
-import { Route as BookRouteImport } from './routes/book'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
+import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
@@ -53,11 +53,6 @@ const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
   path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookRoute = BookRouteImport.update({
-  id: '/book',
-  path: '/book',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -71,6 +66,11 @@ const IndexRoute = IndexRouteImport.update({
 const RoomsIndexRoute = RoomsIndexRouteImport.update({
   id: '/rooms/',
   path: '/rooms/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookIndexRoute = BookIndexRouteImport.update({
+  id: '/book/',
+  path: '/book/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -144,15 +144,14 @@ const AdminAiRoute = AdminAiRouteImport.update({
   getParentRoute: () => AdminRoute,
 } as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
-  id: '/confirmation/$id',
-  path: '/confirmation/$id',
-  getParentRoute: () => BookRoute,
+  id: '/book/confirmation/$id',
+  path: '/book/confirmation/$id',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -171,12 +170,12 @@ export interface FileRoutesByFullPath {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -195,6 +194,7 @@ export interface FileRoutesByTo {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
+  '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -202,7 +202,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/book': typeof BookRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -221,6 +220,7 @@ export interface FileRoutesById {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
+  '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -229,7 +229,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
-    | '/book'
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
@@ -248,12 +247,12 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin/'
+    | '/book/'
     | '/rooms/'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/book'
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
@@ -272,13 +271,13 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin'
+    | '/book'
     | '/rooms'
     | '/book/confirmation/$id'
   id:
     | '__root__'
     | '/'
     | '/admin'
-    | '/book'
     | '/llms.txt'
     | '/login'
     | '/robots.txt'
@@ -297,6 +296,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/rooms/$slug'
     | '/admin/'
+    | '/book/'
     | '/rooms/'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
@@ -304,13 +304,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
-  BookRoute: typeof BookRouteWithChildren
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
+  BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  BookConfirmationIdRoute: typeof BookConfirmationIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -343,13 +344,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/book': {
-      id: '/book'
-      path: '/book'
-      fullPath: '/book'
-      preLoaderRoute: typeof BookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -369,6 +363,13 @@ declare module '@tanstack/react-router' {
       path: '/rooms'
       fullPath: '/rooms/'
       preLoaderRoute: typeof RoomsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book/': {
+      id: '/book/'
+      path: '/book'
+      fullPath: '/book/'
+      preLoaderRoute: typeof BookIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -471,10 +472,10 @@ declare module '@tanstack/react-router' {
     }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
-      path: '/confirmation/$id'
+      path: '/book/confirmation/$id'
       fullPath: '/book/confirmation/$id'
       preLoaderRoute: typeof BookConfirmationIdRouteImport
-      parentRoute: typeof BookRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -513,26 +514,17 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
-interface BookRouteChildren {
-  BookConfirmationIdRoute: typeof BookConfirmationIdRoute
-}
-
-const BookRouteChildren: BookRouteChildren = {
-  BookConfirmationIdRoute: BookConfirmationIdRoute,
-}
-
-const BookRouteWithChildren = BookRoute._addFileChildren(BookRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
-  BookRoute: BookRouteWithChildren,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   RoomsSlugRoute: RoomsSlugRoute,
+  BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  BookConfirmationIdRoute: BookConfirmationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
