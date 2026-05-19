@@ -89,7 +89,7 @@ async function pickAvailableRoom(roomTypeId: string, checkIn: string, checkOut: 
  */
 async function generateAiReply(
   waMessages: Array<{ direction: string; body: string }>,
-): Promise<string | null> {
+): Promise<{ reply: string | null; toolsUsed: string[] }> {
   const { data: prop } = await supabasePublic
     .from("properties")
     .select("*")
@@ -103,7 +103,7 @@ async function generateAiReply(
   const key = explicitKey || lovableKey;
   if (!key) {
     console.error("[AutoReply] No AI key configured");
-    return null;
+    return { reply: null, toolsUsed: [] };
   }
 
   const configuredModel = (p.ai_model as string | undefined)?.trim();
@@ -408,6 +408,11 @@ async function generateAiReply(
 
   // Convert WhatsApp message history to OpenAI format (newest last for proper context).
   // The RPC returns messages in ascending order already.
+  const TOOL_LABELS: Record<string, string> = {
+    check_room_availability: "Room Availability",
+    create_booking: "Booking Engine",
+  };
+
   const openAiMessages: Record<string, unknown>[] = [
     { role: "system", content: system },
     ...waMessages.map((m) => ({
@@ -415,6 +420,8 @@ async function generateAiReply(
       content: m.body,
     })),
   ];
+
+  const toolsUsed = new Set<string>();
 
   try {
     for (let turn = 0; turn < 4; turn++) {
@@ -433,7 +440,7 @@ async function generateAiReply(
 
       if (!res.ok) {
         console.error("[AutoReply] AI gateway error", res.status, await res.text());
-        return null;
+        return { reply: null, toolsUsed: [] };
       }
 
       let json: {
@@ -451,7 +458,7 @@ async function generateAiReply(
       try {
         json = await res.json();
       } catch {
-        return null;
+        return { reply: null, toolsUsed: [] };
       }
 
       const msg = json.choices?.[0]?.message;
@@ -469,8 +476,10 @@ async function generateAiReply(
           }
           if (tc.function?.name === "check_room_availability") {
             out = await runAvailability(args);
+            toolsUsed.add(TOOL_LABELS.check_room_availability);
           } else if (tc.function?.name === "create_booking") {
             out = await runCreateBooking(args);
+            toolsUsed.add(TOOL_LABELS.create_booking);
           }
           openAiMessages.push({ role: "tool", tool_call_id: tc.id, content: out });
         }
@@ -478,17 +487,17 @@ async function generateAiReply(
       }
 
       const reply = msg?.content?.trim();
-      if (reply) return reply;
+      if (reply) return { reply, toolsUsed: Array.from(toolsUsed) };
 
       const detail = json.error?.message ?? `HTTP ${res.status}`;
       console.error("[AutoReply] LLM error:", detail);
-      return null;
+      return { reply: null, toolsUsed: [] };
     }
     console.error("[AutoReply] tool loop limit reached");
-    return null;
+    return { reply: null, toolsUsed: [] };
   } catch (e) {
     console.error("[AutoReply] fetch error", e);
-    return null;
+    return { reply: null, toolsUsed: [] };
   }
 }
 
@@ -656,7 +665,7 @@ export const Route = createFileRoute("/api/fonnte")({
                 messages: Array<{ direction: string; body: string }>;
               };
 
-              const reply = await generateAiReply(c.messages);
+              const { reply, toolsUsed } = await generateAiReply(c.messages);
               if (reply) {
                 const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
                 if (sent) {
@@ -664,7 +673,14 @@ export const Route = createFileRoute("/api/fonnte")({
                     p_thread_id: c.thread_id,
                     p_body: reply,
                   });
-                  console.log("[AutoReply] sent to", sender, ":", reply.slice(0, 60));
+                  // Persist which tools were actually called so the sidebar can show them.
+                  await (supabasePublic as unknown as {
+                    rpc: (fn: string, args: Record<string, unknown>) => Promise<unknown>;
+                  }).rpc("update_thread_autoreply_meta", {
+                    p_thread_id: c.thread_id,
+                    p_tools_used: toolsUsed,
+                  });
+                  console.log("[AutoReply] sent to", sender, "tools:", toolsUsed, "reply:", reply.slice(0, 60));
                 }
               }
             }

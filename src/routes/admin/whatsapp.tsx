@@ -713,12 +713,7 @@ export function WhatsAppPage() {
   );
 }
 
-const ESCALATION_STEPS = [
-  "AI Orchestrator",
-  "Front Office Agent",
-  "Tanpa tool",
-  "Response Composer",
-];
+const BASE_ESCALATION = ["AI Orchestrator", "Agent", "Tool", "Response Composer"];
 
 function ConvProperties({
   thread,
@@ -748,14 +743,15 @@ function ConvProperties({
     ? (analysis.tools_used as string[])
     : [];
 
-  // Build escalation steps: highlight the active agent step.
-  const escalationSteps = ESCALATION_STEPS.map((s, i) => {
-    const isAgent = i === 1 && !!agent;
-    const isTool = i === 2;
-    return {
-      label: isAgent ? (agent ?? s) : isTool && toolsUsed.length ? toolsUsed.join(", ") : s,
-      active: isAgent || (isTool && toolsUsed.length > 0),
+  // Build escalation steps from live data.
+  const escalationSteps = BASE_ESCALATION.map((_, i) => {
+    if (i === 0) return { label: "AI Orchestrator", active: false };
+    if (i === 1) return { label: agent ?? "Front Office Agent", active: !!agent };
+    if (i === 2) return {
+      label: toolsUsed.length ? toolsUsed.join(" + ") : "Tanpa tool",
+      active: toolsUsed.length > 0,
     };
+    return { label: "Response Composer", active: false };
   });
 
   return (
@@ -844,7 +840,7 @@ function ConvProperties({
                 {toolsUsed.map((t) => (
                   <span
                     key={t}
-                    className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                    className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
                   >
                     {t}
                   </span>
