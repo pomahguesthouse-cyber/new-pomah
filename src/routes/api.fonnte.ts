@@ -574,29 +574,35 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         if (url.searchParams.get("debug") === "1") {
+          // Use a real phone if provided: ?debug=1&phone=6282226749990
+          const debugPhone = url.searchParams.get("phone") ?? "debug_test_000";
           const report: Record<string, unknown> = {
             env_token_set: !!process.env.FONNTE_WEBHOOK_TOKEN,
             env_supabase_url_set: !!process.env.SUPABASE_URL,
             env_supabase_key_set: !!process.env.SUPABASE_PUBLISHABLE_KEY,
             env_lovable_api_key_set: !!process.env.LOVABLE_API_KEY,
+            debug_phone: debugPhone,
           };
 
-          try {
-            const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
-              p_phone: "debug_test_000",
-              p_name: "Debug Test",
-              p_body: "[DEBUG] Webhook test message — safe to delete",
-            });
-            report.rpc_receive_ok = !error;
-            report.rpc_receive_error = error ? { code: error.code, message: error.message } : null;
-          } catch (e) {
-            report.rpc_receive_ok = false;
-            report.rpc_receive_error = String(e);
+          // Only insert test message for the dummy phone, not real numbers.
+          if (debugPhone === "debug_test_000") {
+            try {
+              const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
+                p_phone: "debug_test_000",
+                p_name: "Debug Test",
+                p_body: "[DEBUG] Webhook test message — safe to delete",
+              });
+              report.rpc_receive_ok = !error;
+              report.rpc_receive_error = error ? { code: error.code, message: error.message } : null;
+            } catch (e) {
+              report.rpc_receive_ok = false;
+              report.rpc_receive_error = String(e);
+            }
           }
 
           try {
             const { data: ctx, error } = await supabasePublic.rpc("get_autoreply_context", {
-              p_phone: "debug_test_000",
+              p_phone: debugPhone,
             });
             report.rpc_autoreply_ok = !error;
             report.rpc_autoreply_error = error ? { code: error.code, message: error.message } : null;
@@ -606,10 +612,37 @@ export const Route = createFileRoute("/api/fonnte")({
               report.fonnte_token_set = !!c.fonnte_token;
               report.instructions_set = !!(c.instructions as string)?.length;
               report.message_count = Array.isArray(c.messages) ? c.messages.length : 0;
+            } else {
+              report.autoreply_ctx = "null — thread not found or function returned NULL";
             }
           } catch (e) {
             report.rpc_autoreply_ok = false;
             report.rpc_autoreply_error = String(e);
+          }
+
+          // Quick LLM reachability test (no message sent).
+          try {
+            const key = process.env.LOVABLE_API_KEY;
+            if (key) {
+              const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash",
+                  max_tokens: 5,
+                  messages: [{ role: "user", content: "ping" }],
+                }),
+              });
+              report.llm_reachable = r.ok;
+              report.llm_status = r.status;
+              if (!r.ok) report.llm_error = await r.text();
+            } else {
+              report.llm_reachable = false;
+              report.llm_error = "LOVABLE_API_KEY not set";
+            }
+          } catch (e) {
+            report.llm_reachable = false;
+            report.llm_error = String(e);
           }
 
           return new Response(JSON.stringify(report, null, 2), {
