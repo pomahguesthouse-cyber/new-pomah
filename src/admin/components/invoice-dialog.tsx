@@ -129,7 +129,7 @@ Silakan simpan pesan ini sebagai referensi.`;
 
         <div className="flex-1 min-h-[500px] border border-border rounded-md overflow-hidden bg-muted/20">
           {isMounted ? (
-            <PDFViewer width="100%" height="100%" showToolbar={true}>
+            <PDFViewer className="w-full h-full min-h-[500px]" showToolbar={true}>
               <InvoiceDocument booking={booking} />
             </PDFViewer>
           ) : (
