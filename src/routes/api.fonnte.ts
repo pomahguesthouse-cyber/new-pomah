@@ -12,13 +12,42 @@ function getAdminClient() {
   });
 }
 
+function verifyToken(request: Request): boolean {
+  const expected = process.env.FONNTE_WEBHOOK_TOKEN;
+  if (!expected) return true; // no token configured = open
+
+  // Check Authorization header: Bearer <token>
+  const authHeader = request.headers.get("authorization") || "";
+  if (authHeader.startsWith("Bearer ") && authHeader.slice(7) === expected) {
+    return true;
+  }
+
+  // Check query param: ?token=<token>
+  const url = new URL(request.url);
+  if (url.searchParams.get("token") === expected) {
+    return true;
+  }
+
+  return false;
+}
+
 export const Route = createFileRoute("/api/fonnte")({
   server: {
     handlers: {
-      GET: async () => {
+      GET: async ({ request }) => {
+        // Support webhook verification ping with token
+        const url = new URL(request.url);
+        const challenge = url.searchParams.get("challenge");
+        if (challenge && verifyToken(request)) {
+          return new Response(challenge, { status: 200 });
+        }
         return new Response("Webhook is active", { status: 200 });
       },
       POST: async ({ request }) => {
+        if (!verifyToken(request)) {
+          return new Response("Unauthorized", { status: 401 });
+        }
+
         try {
           const body = await request.json().catch(() => null);
           if (!body) {
