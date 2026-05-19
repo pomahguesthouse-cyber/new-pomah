@@ -660,6 +660,37 @@ function RoomCarousel({
   }, [rc.cardsPerView]);
   const maxIndex = Math.max(0, rooms.length - cardsPerView);
   const [i, setI] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  const [touchEndY, setTouchEndY] = useState<number | null>(null);
+
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+    if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > minSwipeDistance) {
+      if (distanceX > 0) {
+        setI((v) => Math.min(maxIndex, v + 1));
+      } else {
+        setI((v) => Math.max(0, v - 1));
+      }
+    }
+  };
 
   useEffect(() => {
     if (!rc.autoplay || maxIndex < 1 || rc.slideMs <= 0) return;
@@ -675,7 +706,12 @@ function RoomCarousel({
 
   return (
     <div className="relative mt-12">
-      <div className="overflow-hidden">
+      <div
+        className="overflow-hidden"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
         <div
           className="flex transition-transform duration-500 ease-out"
           style={{ transform: `translateX(-${index * (100 / cardsPerView)}%)` }}
