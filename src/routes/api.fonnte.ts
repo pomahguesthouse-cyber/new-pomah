@@ -1,6 +1,62 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
 
+async function generateAiReply(
+  instructions: string,
+  messages: Array<{ direction: string; body: string }>,
+): Promise<string | null> {
+  const apiKey = process.env.LOVABLE_API_KEY;
+  if (!apiKey) return null;
+
+  const transcript = messages
+    .map((m) => `${m.direction === "in" ? "Tamu" : "Host"}: ${m.body}`)
+    .join("\n");
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.0-flash",
+        messages: [
+          { role: "system", content: instructions },
+          {
+            role: "user",
+            content: `Riwayat percakapan:\n${transcript}\n\nBuat balasan berikutnya dari host.`,
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("[AutoReply] AI gateway error", res.status, await res.text());
+      return null;
+    }
+    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    return j.choices?.[0]?.message?.content?.trim() ?? null;
+  } catch (e) {
+    console.error("[AutoReply] fetch error", e);
+    return null;
+  }
+}
+
+async function sendViaFonnte(token: string, phone: string, message: string): Promise<boolean> {
+  try {
+    const form = new URLSearchParams();
+    form.append("target", phone);
+    form.append("message", message);
+    const res = await fetch("https://api.fonnte.com/send", {
+      method: "POST",
+      headers: { Authorization: token },
+      body: form,
+    });
+    if (!res.ok) console.error("[AutoReply] Fonnte send error", await res.text());
+    return res.ok;
+  } catch (e) {
+    console.error("[AutoReply] Fonnte fetch error", e);
+    return false;
+  }
+}
+
 function verifyToken(request: Request): boolean {
   const expected = process.env.FONNTE_WEBHOOK_TOKEN;
   if (!expected) return true; // no token configured = open
@@ -125,8 +181,36 @@ export const Route = createFileRoute("/api/fonnte")({
             return new Response("Error", { status: 500 });
           }
 
-          // Note: Automatic AI Reply logic could go here if enabled.
-          // Currently, staff can draft AI replies manually in the UI, or it can be automated.
+          // Auto-reply: check if enabled for front-office agent
+          try {
+            const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
+              p_phone: sender,
+            });
+
+            if (ctx && (ctx as Record<string, unknown>).auto_reply_enabled) {
+              const c = ctx as {
+                thread_id: string;
+                fonnte_token: string;
+                instructions: string;
+                messages: Array<{ direction: string; body: string }>;
+              };
+
+              const reply = await generateAiReply(c.instructions, c.messages);
+              if (reply) {
+                const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
+                if (sent) {
+                  await supabasePublic.rpc("save_outbound_whatsapp", {
+                    p_thread_id: c.thread_id,
+                    p_body: reply,
+                  });
+                  console.log("[AutoReply] sent to", sender, ":", reply.slice(0, 60));
+                }
+              }
+            }
+          } catch (autoErr) {
+            // Auto-reply failure must not break the main webhook response
+            console.error("[AutoReply] error", autoErr);
+          }
 
           return new Response("OK", { status: 200 });
         } catch (e) {
