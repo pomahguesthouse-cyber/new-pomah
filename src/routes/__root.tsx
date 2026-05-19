@@ -143,7 +143,10 @@ function AuthSync() {
   const router = useRouter();
   const qc = useQueryClient();
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      // TOKEN_REFRESHED fires every hour on auto-refresh — skip it to prevent
+      // spurious page reloads. Only re-validate on meaningful session changes.
+      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
       router.invalidate();
       qc.invalidateQueries();
     });
