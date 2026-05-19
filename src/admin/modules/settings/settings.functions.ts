@@ -23,6 +23,80 @@ export const getDomainSettings = createServerFn({ method: "GET" })
     };
   });
 
+/* ------------------------------------------------------------------ */
+/* Property Core Settings                                             */
+/* ------------------------------------------------------------------ */
+
+const PROPERTY_CORE_FIELDS = [
+  "name",
+  "tagline",
+  "address",
+  "city",
+  "country",
+  "email",
+  "phone",
+  "whatsapp_number",
+  "currency",
+  "timezone",
+] as const;
+
+export const getPropertySettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("properties")
+      .select(`id, ${PROPERTY_CORE_FIELDS.join(", ")}`)
+      .limit(1)
+      .maybeSingle();
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id: (row.id as string | undefined) ?? null,
+      name: (row.name as string | null) ?? null,
+      tagline: (row.tagline as string | null) ?? null,
+      address: (row.address as string | null) ?? null,
+      city: (row.city as string | null) ?? null,
+      country: (row.country as string | null) ?? null,
+      email: (row.email as string | null) ?? null,
+      phone: (row.phone as string | null) ?? null,
+      whatsapp_number: (row.whatsapp_number as string | null) ?? null,
+      currency: (row.currency as string | null) ?? null,
+      timezone: (row.timezone as string | null) ?? null,
+    };
+  });
+
+export const updatePropertySettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        name: z.string().max(100).nullable().optional(),
+        tagline: z.string().max(250).nullable().optional(),
+        address: z.string().max(500).nullable().optional(),
+        city: z.string().max(100).nullable().optional(),
+        country: z.string().max(100).nullable().optional(),
+        email: z.string().email().max(100).nullable().optional().or(z.literal("")),
+        phone: z.string().max(50).nullable().optional(),
+        whatsapp_number: z.string().max(50).nullable().optional(),
+        currency: z.string().max(10).nullable().optional(),
+        timezone: z.string().max(100).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    for (const k of PROPERTY_CORE_FIELDS) {
+      if (data[k] !== undefined) {
+        // Handle literal empty string for email fallback to null
+        if (k === "email" && data[k] === "") patch[k] = null;
+        else patch[k] = data[k];
+      }
+    }
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 /** Persist domain settings for the first property row. */
 export const updateDomainSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

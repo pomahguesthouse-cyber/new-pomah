@@ -30,6 +30,8 @@ import {
   updateBrandingSettings,
   getIntegrationSettings,
   updateIntegrationSettings,
+  getPropertySettings,
+  updatePropertySettings,
 } from "@/admin/modules/settings/settings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,39 +92,142 @@ function SettingsPage() {
 /* ------------------------------------------------------------------ */
 
 function PropertyTab() {
-  const fn = useServerFn(getPublicSiteData);
-  const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
-  useRealtimeInvalidate("admin-settings-stream", ["properties"], [["public-site"]]);
-  const p = data?.property;
+  const getFn = useServerFn(getPropertySettings);
+  const updateFn = useServerFn(updatePropertySettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["property-settings"],
+    queryFn: () => getFn(),
+  });
+  useRealtimeInvalidate("admin-settings-stream", ["properties"], [["property-settings"], ["public-site"]]);
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      name?: string | null;
+      tagline?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      whatsapp_number?: string | null;
+      currency?: string | null;
+      timezone?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-settings"] });
+      qc.invalidateQueries({ queryKey: ["public-site"] });
+      toast.success("Tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+
+  const fields = [
+    { key: "name", label: "Name", type: "text" },
+    { key: "tagline", label: "Tagline", type: "text" },
+    { key: "address", label: "Address", type: "text" },
+    { key: "city", label: "City", type: "text" },
+    { key: "country", label: "Country", type: "text" },
+    { key: "email", label: "Email", type: "email" },
+    { key: "phone", label: "Phone", type: "text" },
+    { key: "whatsapp_number", label: "WhatsApp", type: "text" },
+    { key: "currency", label: "Currency", type: "text" },
+    { key: "timezone", label: "Timezone", type: "text" },
+  ] as const;
 
   return (
     <div className="space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground max-w-2xl">
+          Data properti belum ada.
+        </p>
+      )}
       <Card className="max-w-2xl divide-y divide-border p-0">
-        {(
-          [
-            ["Name", p?.name],
-            ["Tagline", p?.tagline],
-            ["Address", p?.address],
-            ["City", p?.city],
-            ["Country", p?.country],
-            ["Email", p?.email],
-            ["Phone", p?.phone],
-            ["WhatsApp", p?.whatsapp_number],
-            ["Currency", p?.currency],
-            ["Timezone", p?.timezone],
-          ] as [string, string | null | undefined][]
-        ).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-            <dt className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              {k}
-            </dt>
-            <dd className="col-span-2">{v || "—"}</dd>
-          </div>
+        {fields.map((f) => (
+          <InlinePropertyRow
+            key={f.key}
+            label={f.label}
+            value={(data as any)?.[f.key] ?? null}
+            disabled={!id || mutation.isPending}
+            onSave={(v) => id && mutation.mutate({ id, [f.key]: v })}
+          />
         ))}
       </Card>
-      <p className="max-w-2xl text-xs text-muted-foreground">
-        Editing property settings is coming soon — for now, update the database directly.
-      </p>
+    </div>
+  );
+}
+
+function InlinePropertyRow({
+  label,
+  value,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: string | null;
+  disabled: boolean;
+  onSave: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  const startEdit = () => {
+    setDraft(value ?? "");
+    setEditing(true);
+  };
+  const cancel = () => {
+    setEditing(false);
+  };
+  const save = () => {
+    onSave(draft.trim() || null);
+    setEditing(false);
+  };
+
+  return (
+    <div className="group flex min-h-[48px] items-center gap-4 px-5 py-2 text-sm transition hover:bg-muted/30">
+      <dt className="w-32 shrink-0 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="flex min-w-0 flex-1 items-center justify-between gap-4">
+        {editing ? (
+          <div className="flex w-full items-center gap-2">
+            <Input
+              autoFocus
+              className="h-8 flex-1 text-sm"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+                if (e.key === "Escape") cancel();
+              }}
+            />
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={save}>
+              <Check className="h-4 w-4 text-green-600" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancel}>
+              <X className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <span className="truncate">{value || "—"}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+              disabled={disabled}
+              onClick={startEdit}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </>
+        )}
+      </dd>
     </div>
   );
 }
