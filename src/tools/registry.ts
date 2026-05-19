@@ -58,6 +58,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 
 /** Human-readable label shown in the admin inbox for each tool call. */
 export const TOOL_LABELS: Record<string, string> = {
-  check_room_availability: "Room Availability",
-  create_booking:          "Booking Engine",
+  check_room_availability:      "Room Availability",
+  create_booking:               "Booking Engine",
+  request_housekeeping_service: "Housekeeping",
+  report_maintenance_issue:     "Maintenance",
+  get_payment_info:             "Finance",
 };
