@@ -528,22 +528,22 @@ async function generateAiReply(
 }
 
 // ---------------------------------------------------------------------------
-// Multi-layer duplicate-reply prevention
+// Duplicate-reply prevention (2 layers)
 //
 // Layer 1 — In-memory key map (same Worker instance, any timing).
 //   Keyed on fonnteId when available; falls back to "sender::message[:100]"
-//   so even webhook calls without an ID are deduplicated.
+//   so even webhook calls without an explicit ID are deduplicated.
 //
 // Layer 2 — In-progress Set (same Worker instance, concurrent requests).
 //   Locks a thread while the AI is generating its reply so that a second
-//   request that arrives before the first finishes cannot start a second
+//   request arriving before the first finishes cannot start a parallel
 //   generation cycle.
 //
-// Layer 3 — DB look-ahead (cross-instance guard).
-//   Before starting AI generation, query whatsapp_messages for any outbound
-//   message sent to this thread in the last 15 seconds.  Catches retries
-//   that land on a different Cloudflare Worker instance where the in-memory
-//   state is empty.
+// NOTE: A DB-level atomic claim (e.g. INSERT … ON CONFLICT on a dedup table)
+// would be needed to cover cross-instance races on Cloudflare Workers.  The
+// previous Layer 3 "recent outbound" DB check was removed because it
+// incorrectly blocked legitimate AI replies when a guest responded within
+// 15 seconds of the previous bot message.
 // ---------------------------------------------------------------------------
 
 const _processedKeys = new Map<string, number>();
@@ -858,23 +858,6 @@ export const Route = createFileRoute("/api/fonnte")({
             _inProgress.add(c.thread_id);
 
             try {
-              // Layer 3 dedup: DB check for a recent outbound on this thread.
-              // Catches cross-instance concurrent calls where in-memory state
-              // is empty.  15 s covers typical Fonnte retry windows.
-              const recentCutoff = new Date(Date.now() - 15_000).toISOString();
-              const { data: recentOut } = await supabaseAdmin
-                .from("whatsapp_messages")
-                .select("id")
-                .eq("thread_id", c.thread_id)
-                .eq("direction", "out")
-                .gte("sent_at", recentCutoff)
-                .limit(1)
-                .maybeSingle();
-              if (recentOut) {
-                console.log("[AutoReply] DB dedup: recent outbound exists for thread", c.thread_id, "— skipping");
-                return;
-              }
-
               console.log("[AutoReply] generating reply for", sender);
               const { reply, toolsUsed } = await generateAiReply(c.messages);
               console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
