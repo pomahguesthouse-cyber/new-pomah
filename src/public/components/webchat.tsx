@@ -13,6 +13,25 @@ import { chatWithAI } from "@/public/functions/public.functions";
 import { cn } from "@/lib/utils";
 
 type ChatMsg = { who: "bot" | "user"; text: string };
+
+/** Render text with any http(s) URLs turned into clickable links. */
+function linkify(text: string) {
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium text-teal-700 underline underline-offset-2 break-all"
+      >
+        {part}
+      </a>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
 type Room = { name: string; base_rate?: number | string | null };
 
 /** Rule-based reply engine driven by the property's live room data. */
@@ -124,7 +143,7 @@ export function Webchat({ rooms }: { rooms: Room[] }) {
                       : "border border-stone-200 bg-white text-stone-700",
                   )}
                 >
-                  {m.text}
+                  {m.who === "bot" ? linkify(m.text) : m.text}
                 </div>
               </div>
             ))}
