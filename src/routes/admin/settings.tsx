@@ -77,6 +77,7 @@ function SettingsPage() {
           <TabsTrigger value="properti">Properti</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="integrasi">Integrasi</TabsTrigger>
+          <TabsTrigger value="kredensial">Kredensial</TabsTrigger>
           <TabsTrigger value="domain">Domain</TabsTrigger>
           <TabsTrigger value="manager">Manager</TabsTrigger>
         </TabsList>
@@ -91,6 +92,10 @@ function SettingsPage() {
 
         <TabsContent value="integrasi">
           <IntegrationTab />
+        </TabsContent>
+
+        <TabsContent value="kredensial">
+          <CredentialTab />
         </TabsContent>
 
         <TabsContent value="domain">
@@ -584,7 +589,89 @@ function LogoUploadCard({
 }
 
 /* ------------------------------------------------------------------ */
-/* Integrasi tab — Fonnte WhatsApp + Google services                   */
+/* Kredensial tab — Fonnte WhatsApp & AI Chatbot Keys                  */
+/* ------------------------------------------------------------------ */
+
+function CredentialTab() {
+  const getFn = useServerFn(getIntegrationSettings);
+  const updateFn = useServerFn(updateIntegrationSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["integration-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      fonnte_token?: string | null;
+      ai_api_key?: string | null;
+      ai_base_url?: string | null;
+      ai_model?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integration-settings"] });
+      toast.success("Kredensial tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+  const disabled = !id || mutation.isPending;
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          Data properti belum ada — kredensial belum bisa disimpan.
+        </p>
+      )}
+      <TextSettingCard
+        icon={<MessageCircle className="h-4 w-4" />}
+        label="WhatsApp Token — Fonnte"
+        description="Token API dari fonnte.com untuk menghubungkan WhatsApp dengan aplikasi ini."
+        placeholder="Token Fonnte"
+        secret
+        value={data?.fonnte_token ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — API Key"
+        description="Kosongkan untuk memakai Lovable AI (default). Isi hanya bila ingin LLM lain (OpenAI-compatible)."
+        placeholder="Kosong = Lovable AI"
+        secret
+        value={data?.ai_api_key ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_api_key: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — Base URL"
+        description="Endpoint OpenAI-compatible. Hanya dipakai bila API Key di atas diisi."
+        placeholder="https://api.openai.com/v1"
+        value={data?.ai_base_url ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_base_url: v })}
+      />
+      <TextSettingCard
+        icon={<Sparkles className="h-4 w-4" />}
+        label="AI Chatbot — Model"
+        description="Kosongkan untuk default. Lewat Lovable AI gunakan format mis. google/gemini-2.5-flash."
+        placeholder="google/gemini-2.5-flash"
+        value={data?.ai_model ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, ai_model: v })}
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Integrasi tab — Google services & Payment                           */
 /* ------------------------------------------------------------------ */
 
 function IntegrationTab() {
@@ -633,16 +720,6 @@ function IntegrationTab() {
         </p>
       )}
       <TextSettingCard
-        icon={<MessageCircle className="h-4 w-4" />}
-        label="WhatsApp Token — Fonnte"
-        description="Token API dari fonnte.com untuk menghubungkan WhatsApp dengan aplikasi ini."
-        placeholder="Token Fonnte"
-        secret
-        value={data?.fonnte_token ?? null}
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
-      />
-      <TextSettingCard
         icon={<MapPin className="h-4 w-4" />}
         label="Google Place ID"
         description="ID lokasi Google Maps penginapan (untuk ulasan & peta)."
@@ -689,32 +766,13 @@ function IntegrationTab() {
         onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
       />
       <TextSettingCard
-        icon={<Sparkles className="h-4 w-4" />}
-        label="AI Chatbot — API Key"
-        description="Kosongkan untuk memakai Lovable AI (default). Isi hanya bila ingin LLM lain (OpenAI-compatible)."
-        placeholder="Kosong = Lovable AI"
-        secret
-        value={data?.ai_api_key ?? null}
+        icon={<Search className="h-4 w-4" />}
+        label="Google Search Console"
+        description="Kode verifikasi Search Console (isi meta tag verification)."
+        placeholder="kode verifikasi"
+        value={data?.google_search_console ?? null}
         disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, ai_api_key: v })}
-      />
-      <TextSettingCard
-        icon={<Sparkles className="h-4 w-4" />}
-        label="AI Chatbot — Base URL"
-        description="Endpoint OpenAI-compatible. Hanya dipakai bila API Key di atas diisi."
-        placeholder="https://api.openai.com/v1"
-        value={data?.ai_base_url ?? null}
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, ai_base_url: v })}
-      />
-      <TextSettingCard
-        icon={<Sparkles className="h-4 w-4" />}
-        label="AI Chatbot — Model"
-        description="Kosongkan untuk default. Lewat Lovable AI gunakan format mis. google/gemini-2.5-flash."
-        placeholder="google/gemini-2.5-flash"
-        value={data?.ai_model ?? null}
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, ai_model: v })}
+        onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
       />
       <TextSettingCard
         icon={<Landmark className="h-4 w-4" />}
