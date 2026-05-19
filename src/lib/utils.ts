@@ -58,18 +58,14 @@ export function formatDateID(input: string | number | Date | null | undefined): 
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
-/** "15 Mei 2026" */
+/** "15/05/2026" (format baru) */
 export function formatDateMediumID(input: string | number | Date | null | undefined): string {
-  const d = toDate(input);
-  if (!d) return "—";
-  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return formatDateID(input);
 }
 
-/** "Jumat, 15 Mei 2026" */
+/** "15/05/2026" (format baru) */
 export function formatDateLongID(input: string | number | Date | null | undefined): string {
-  const d = toDate(input);
-  if (!d) return "—";
-  return `${ID_DAYS[d.getDay()]}, ${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return formatDateID(input);
 }
 
 /** "14.30" — 24-hour, Indonesian dot separator */
@@ -88,16 +84,9 @@ export function formatDateTimeID(input: string | number | Date | null | undefine
   return `${formatDateID(d)} ${formatTimeID(d)}`;
 }
 
-/** "Hari ini" / "Kemarin" / "Jumat, 15 Mei 2026" */
+/** "15/05/2026" (format baru) */
 export function formatRelativeDateID(input: string | number | Date | null | undefined): string {
-  const d = toDate(input);
-  if (!d) return "—";
-  const today = new Date();
-  const yest = new Date();
-  yest.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Hari ini";
-  if (d.toDateString() === yest.toDateString()) return "Kemarin";
-  return formatDateLongID(d);
+  return formatDateID(input);
 }
 
 /* ------------------------------------------------------------------ *

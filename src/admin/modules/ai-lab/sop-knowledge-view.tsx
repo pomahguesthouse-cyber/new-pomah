@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDateID } from "@/lib/utils";
 
 const ACCEPT = ".pdf,.doc,.docx,.txt";
 const ALLOWED = ["pdf", "doc", "docx", "txt"];
@@ -178,11 +179,7 @@ function SopCard({
           <p className="truncate text-sm font-semibold">{doc.name}</p>
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
             {doc.file_type ?? "—"} ·{" "}
-            {new Date(doc.created_at).toLocaleDateString("id-ID", {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            })}
+            {formatDateID(doc.created_at)}
           </p>
         </div>
         <div className="flex shrink-0 gap-1">

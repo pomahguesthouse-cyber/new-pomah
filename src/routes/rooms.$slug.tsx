@@ -91,11 +91,12 @@ const MONTHS_ID = [
   "November",
   "Desember",
 ];
+/** "2026-05-18" -> "18/05/2026" */
 function fmtDateID(iso: string): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS_ID[m - 1]} ${y}`;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 const todayISO = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 function isoAddDays(iso: string, n: number): string {

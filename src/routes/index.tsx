@@ -90,15 +90,14 @@ function isoAddDays(iso: string, n: number): string {
     d.getDate(),
   ).padStart(2, "0")}`;
 }
-/** "2026-05-18" → "18 Mei 2026". */
+/** "2026-05-18" → "18/05/2026" */
 function fmtDateID(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
-  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
-/** "2026-05-18" → "Senin, 18 Mei 2026". */
+/** "2026-05-18" → "18/05/2026" (Full Date disamakan formatnya) */
 function fmtFullDateID(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  return `${ID_DAYS[d.getDay()]}, ${fmtDateID(iso)}`;
+  return fmtDateID(iso);
 }
 /** Whole nights between two `YYYY-MM-DD` strings. */
 function nightsBetween(a: string, b: string): number {
