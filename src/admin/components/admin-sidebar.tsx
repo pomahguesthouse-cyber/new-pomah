@@ -7,7 +7,6 @@ import {
   BedDouble,
   DollarSign,
   Sparkles,
-  GraduationCap,
   BarChart3,
   Search,
   Settings,
@@ -54,7 +53,6 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
-      { to: "/admin/training", label: "Training", icon: GraduationCap },
     ],
   },
   {

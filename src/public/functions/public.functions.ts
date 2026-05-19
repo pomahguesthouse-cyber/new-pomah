@@ -9,6 +9,27 @@ function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
 }
 
+const MONTHS_ID = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+/** Format an ISO date (YYYY-MM-DD) as Indonesian text, e.g. "19 Mei 2026". */
+function fmtDateID(iso: string): string {
+  const [y, m, d] = (iso || "").split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} ${MONTHS_ID[m - 1]} ${y}`;
+}
+
 /**
  * Auto room allotment — pick the first physical room of a room type that
  * has no active (pending/confirmed/checked-in) booking overlapping the
@@ -480,7 +501,10 @@ export const chatWithAI = createServerFn({ method: "POST" })
     const system = [
       `Anda adalah asisten AI untuk ${(p.name as string) ?? "Pomah Guesthouse"}, sebuah penginapan.`,
       "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
-      `Hari ini tanggal ${todayStr}.`,
+      `Hari ini tanggal ${fmtDateID(todayStr)}.`,
+      "FORMAT TANGGAL: selalu tampilkan tanggal ke tamu dalam format Indonesia, " +
+        "contoh '19 Mei 2026'. JANGAN tampilkan format YYYY-MM-DD. Hasil tool menyediakan " +
+        "field tanggal siap-pakai (mis. `tanggal`, `periode`, `check_in_tampil`) — gunakan itu.",
       agentLines.length ? `Panduan tiap agent:\n${agentLines.join("\n")}` : "",
       roomLines.length
         ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
@@ -544,7 +568,13 @@ export const chatWithAI = createServerFn({ method: "POST" })
           catatan: d ? undefined : "jumlah kamar belum diatur di sistem",
         };
       });
-      return JSON.stringify({ check_in: checkIn, check_out: checkOut, kamar });
+      return JSON.stringify({
+        check_in: checkIn,
+        check_out: checkOut,
+        tanggal: fmtDateID(checkIn),
+        periode: `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`,
+        kamar,
+      });
     };
 
     /** Execute the booking tool — creates a real booking, returns JSON. */
@@ -658,6 +688,8 @@ export const chatWithAI = createServerFn({ method: "POST" })
         room_type: rt.name,
         check_in: checkIn,
         check_out: checkOut,
+        check_in_tampil: fmtDateID(checkIn),
+        check_out_tampil: fmtDateID(checkOut),
         nights,
         nightly_rate: rate,
         total,
