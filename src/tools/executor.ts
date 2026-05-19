@@ -12,6 +12,9 @@ import { createBooking }                  from "./booking.tool";
 import { requestHousekeepingService }     from "./housekeeping/request-service.tool";
 import { reportMaintenanceIssue }         from "./maintenance/report-issue.tool";
 import { getPaymentInfo }                 from "./finance/get-payment-info.tool";
+import { getBookings }                    from "./manager/get-bookings.tool";
+import { updateBookingStatus }            from "./manager/update-booking-status.tool";
+import { changeBookingRoom }              from "./manager/change-booking-room.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
@@ -22,6 +25,9 @@ const HANDLERS: Record<string, ToolHandler> = {
   request_housekeeping_service:  requestHousekeepingService,
   report_maintenance_issue:      reportMaintenanceIssue,
   get_payment_info:              getPaymentInfo,
+  get_bookings:                  getBookings,
+  update_booking_status:         updateBookingStatus,
+  change_booking_room:           changeBookingRoom,
 };
 
 // ─── Executor ─────────────────────────────────────────────────────────────────

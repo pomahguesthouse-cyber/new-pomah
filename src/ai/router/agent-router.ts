@@ -25,7 +25,7 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   housekeeping:       "housekeeping",
   maintenance:        "maintenance",
   payment:            "finance",
-  complaint:          "manager",
+  complaint:          "front-office",
   general:            "front-office",
 };
 
@@ -48,22 +48,22 @@ const AGENT_NAMES: Record<AgentKey, string> = {
  *  2. Confidence below threshold → manager (graceful catch-all)
  */
 export function routeToAgent(intent: ClassifiedIntent): RoutingDecision {
-  // Complaints: always escalate
+  // Complaints: send to front office (they can apologize and inform human staff)
   if (intent.category === "complaint") {
     return {
-      agentKey:   "manager",
+      agentKey:   "front-office",
       confidence: intent.confidence,
-      reason:     "Complaint detected — routing to Manager Agent",
+      reason:     "Complaint detected — routing to Front Office",
       escalated:  true,
     };
   }
 
-  // Low confidence: escalate to manager
+  // Low confidence: fallback to front office
   if (intent.confidence < ESCALATION_THRESHOLD) {
     return {
-      agentKey:   "manager",
+      agentKey:   "front-office",
       confidence: intent.confidence,
-      reason:     `Low confidence (${intent.confidence.toFixed(2)}) — escalating to Manager`,
+      reason:     `Low confidence (${intent.confidence.toFixed(2)}) — fallback to Front Office`,
       escalated:  true,
     };
   }

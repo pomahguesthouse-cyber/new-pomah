@@ -237,6 +237,14 @@ export const Route = createFileRoute("/api/fonnte")({
             .from("properties").select("*").limit(1).maybeSingle();
           const p = (prop ?? {}) as Record<string, unknown>;
 
+          const { data: managerRow } = await (supabasePublic as any)
+            .from("property_managers")
+            .select("role")
+            .eq("property_id", p.id)
+            .eq("phone", sender)
+            .maybeSingle();
+          const isManager = !!managerRow;
+
           const { data: rooms } = await (supabasePublic as any)
             .from("room_types")
             .select("id, name, base_rate, capacity, bed_type, description")
@@ -294,6 +302,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           const result = await runMultiAgentOrchestration({
             phone:     sender,
+            isManager,
             messages:  freshMessages,
             agentCtx: {
               property:    p as any,

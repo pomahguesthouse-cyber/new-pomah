@@ -13,6 +13,7 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import type { ToolDefinition } from "@/ai/types";
+import { TOOL_DEFINITIONS } from "@/tools/registry";
 
 /** Delegation tool — intercepted by the multi-agent orchestrator */
 export const ASK_AGENT_TOOL_NAME = "ask_agent" as const;
@@ -24,8 +25,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
       name: ASK_AGENT_TOOL_NAME,
       description:
         "Delegasikan pertanyaan spesifik ke agent spesialis lain dan dapatkan responsnya. " +
-        "Gunakan ini saat masalah tamu membutuhkan keahlian agent tertentu " +
-        "(misal: tanya harga → pricing, kerusakan → maintenance).",
+        "Gunakan ini jika manajer menanyakan hal yang menjadi ranah agent lain (contoh: harga -> pricing).",
       parameters: {
         type: "object",
         properties: {
@@ -42,60 +42,48 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
           },
           question: {
             type: "string",
-            description:
-              "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut. " +
-              "Tulis dengan jelas dan lengkap karena agent tidak tahu konteks percakapan ini.",
+            description: "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut.",
           },
         },
         required: ["agent_key", "question"],
       },
     },
   },
+  ...TOOL_DEFINITIONS.filter((t) => 
+    ["get_bookings", "update_booking_status", "change_booking_room"].includes(t.function.name)
+  ),
 ];
 
 export const managerAgent: AgentDefinition = {
   key:         "manager",
   name:        "Manager Agent",
-  description: "Handles complaints, escalated issues, and coordinates between specialist agents.",
-  handles:     ["complaint"],
+  description: "Personal assistant for the property manager. Handles operational commands and data retrieval.",
+  handles:     ["general"],
   tools:       MANAGER_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, today } = ctx;
 
     const sections = [
-      `Anda adalah Manager Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Anda ditugaskan menangani situasi yang memerlukan perhatian khusus: " +
-        "keluhan tamu, masalah kompleks, permintaan eskalasi, atau pertanyaan " +
-        "yang tidak tertangani oleh agent lain.",
-
-      "Bersikap tenang, empatik, dan profesional dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'. " +
-        "Anda mewakili manajemen hotel — setiap kata Anda mencerminkan standar layanan tertinggi.",
+      `Anda adalah Manager Agent (Asisten Pribadi Manajer) untuk ${property.name ?? "Pomah Guesthouse"}.`,
+      "Anda HANYA melayani manajer properti (karena pesan ini telah lolos autentikasi nomor WhatsApp manajer).",
 
       `Hari ini tanggal ${fmtDateID(today)}.`,
 
-      "PRINSIP PENANGANAN KELUHAN:" +
-        "\n1. Dengarkan dengan empati — akui perasaan tamu tanpa langsung membela hotel." +
-        "\n2. Ucapkan permohonan maaf yang tulus atas ketidaknyamanan." +
-        "\n3. Gali akar masalah — tanyakan detail bila perlu." +
-        "\n4. Tawarkan solusi konkret atau eskalasi ke tim terkait." +
-        "\n5. Pastikan tamu merasa didengar dan dihargai.",
+      "TUGAS UTAMA:",
+      "1. Melaksanakan instruksi operasional dari manajer seperti mengecek daftar booking, mengubah status booking (konfirmasi, hapus/cancel, dll), dan memindahkan kamar.",
+      "2. Memberikan ringkasan informasi yang diminta dengan singkat, jelas, dan profesional.",
 
-      "DELEGASI KE AGENT SPESIALIS: Anda memiliki tool `ask_agent`. " +
-        "Gunakan ini saat tamu memiliki pertanyaan yang lebih baik dijawab oleh agent spesialis. " +
-        "Contoh:" +
-        "\n- Tamu komplain tapi juga tanya harga kamar lain → ask_agent('pricing', 'harga kamar ...')" +
-        "\n- Tamu minta kompensasi tapi juga perlu housekeeping → ask_agent('housekeeping', '...')" +
-        "\nSetelah mendapat jawaban dari sub-agent, gabungkan dengan respons Anda.",
+      "TOOLS YANG TERSEDIA:",
+      "- `get_bookings`: Untuk melihat daftar booking. Bisa difilter by status atau tanggal.",
+      "- `update_booking_status`: Untuk mengubah status booking. Bila manajer minta 'hapus booking' atau 'cancel', ubah statusnya menjadi 'cancelled'.",
+      "- `change_booking_room`: Untuk memindahkan booking ke kamar lain (pindah kamar).",
+      "- `ask_agent`: Jika manajer bertanya tentang SOP, harga, atau kebijakan, gunakan tool ini untuk bertanya ke agent terkait (misal 'pricing', 'front-office').",
 
-      "KOMPENSASI & SOLUSI: Bila tamu berhak mendapat kompensasi (misal: kamar bermasalah), " +
-        "sampaikan bahwa Anda akan memproses dan staf akan menghubungi mereka. " +
-        "Jangan berikan janji spesifik yang tidak bisa Anda pastikan.",
-
-      "DARURAT: Untuk situasi darurat (kebakaran, medis, keamanan), " +
-        "selalu instruksikan tamu untuk langsung menghubungi resepsi atau nomor darurat setempat.",
-
-      "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
+      "PENTING:",
+      "- Karena yang Anda hadapi adalah manajer/pemilik, gunakan bahasa yang ringkas, profesional, dan to-the-point.",
+      "- Jangan berbasa-basi terlalu panjang.",
+      "- Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #) berlebihan.",
     ];
 
     return sections.filter(Boolean).join("\n\n");

@@ -172,6 +172,8 @@ async function runAgent(
 export interface MultiAgentInput {
   /** User phone number for state tracking */
   phone: string;
+  /** Is the user an authenticated property manager? */
+  isManager?: boolean;
   /** Full conversation history (ascending) */
   messages:  Array<{ direction: string; body: string }>;
   /** Pre-fetched context for agents */
@@ -199,7 +201,54 @@ export async function runMultiAgentOrchestration(
     .find((m) => m.direction === "in")
     ?.body ?? "";
 
-  // 2. State Machine Interception
+  // 2. Manager Bypass
+  if (input.isManager) {
+    console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
+    const agent = getAgent("manager");
+    
+    // For manager agent, we still need the onAskAgent callback
+    const onAskAgent = async (subKey: AgentKey, question: string): Promise<string> => {
+      const subAgent = getAgent(subKey);
+      const syntheticMessages = [
+        ...input.messages,
+        { direction: "in", body: question },
+      ];
+      const result = await runAgent(
+        subAgent,
+        syntheticMessages,
+        input.agentCtx,
+        input.toolCtx,
+        input.llmConfig,
+        Math.max(2, maxTurns - 2),
+        undefined,
+      );
+      return result.reply
+        ? JSON.stringify({ ok: true,  response: result.reply })
+        : JSON.stringify({ ok: false, error:    result.error ?? "Sub-agent returned no reply" });
+    };
+
+    const agentResult = await runAgent(
+      agent,
+      input.messages,
+      input.agentCtx,
+      input.toolCtx,
+      input.llmConfig,
+      maxTurns,
+      onAskAgent,
+    );
+
+    return {
+      reply:             agentResult.reply,
+      toolsUsed:         agentResult.toolsUsed,
+      agentKey:          "manager",
+      intent:            "general", // irrelevant for manager
+      routingConfidence: 1.0,
+      escalated:         false,
+      error:             agentResult.error,
+    };
+  }
+
+  // 3. State Machine Interception
   const stateRecord = await getBookingState(input.toolCtx.supabasePublic, input.phone);
   
   if (stateRecord.state !== "IDLE") {
@@ -225,25 +274,25 @@ export async function runMultiAgentOrchestration(
     // For now, if the state machine didn't handle it with a direct reply, we let the normal flow run.
   }
 
-  // 3. Classify intent
+  // 4. Classify intent
   const classified = classifyIntent(lastUserMsg);
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
-  // 3. Route to agent
+  // 5. Route to agent
   const routing = routeToAgent(classified);
   console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
 
-  // 4. Load agent
+  // 6. Load agent
   const agent = getAgent(routing.agentKey);
 
-  // 5. Run agent
+  // 7. Run agent
   //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
-  const isManager = routing.agentKey === "manager";
+  const isManagerRoute = routing.agentKey === "manager";
 
-  const onAskAgent = isManager
+  const onAskAgent = isManagerRoute
     ? async (subKey: AgentKey, question: string): Promise<string> => {
         const subAgent = getAgent(subKey);
 
