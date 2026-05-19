@@ -17,7 +17,7 @@ async function generateAiReply(
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: instructions },
           {
@@ -88,25 +88,46 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response(challenge, { status: 200 });
         }
 
-        // Debug: ?debug=1 — tests Supabase connection + RPC, returns JSON report
+        // Debug: ?debug=1 — tests Supabase connection + RPC + auto-reply config
         if (url.searchParams.get("debug") === "1") {
           const report: Record<string, unknown> = {
             env_token_set: !!process.env.FONNTE_WEBHOOK_TOKEN,
             env_supabase_url_set: !!process.env.SUPABASE_URL,
             env_supabase_key_set: !!process.env.SUPABASE_PUBLISHABLE_KEY,
+            env_lovable_api_key_set: !!process.env.LOVABLE_API_KEY,
           };
 
+          // Test receive RPC
           try {
             const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
               p_phone: "debug_test_000",
               p_name: "Debug Test",
               p_body: "[DEBUG] Webhook test message — safe to delete",
             });
-            report.rpc_ok = !error;
-            report.rpc_error = error ? { code: error.code, message: error.message } : null;
+            report.rpc_receive_ok = !error;
+            report.rpc_receive_error = error ? { code: error.code, message: error.message } : null;
           } catch (e) {
-            report.rpc_ok = false;
-            report.rpc_error = String(e);
+            report.rpc_receive_ok = false;
+            report.rpc_receive_error = String(e);
+          }
+
+          // Test auto-reply context RPC
+          try {
+            const { data: ctx, error } = await supabasePublic.rpc("get_autoreply_context", {
+              p_phone: "debug_test_000",
+            });
+            report.rpc_autoreply_ok = !error;
+            report.rpc_autoreply_error = error ? { code: error.code, message: error.message } : null;
+            if (ctx) {
+              const c = ctx as Record<string, unknown>;
+              report.auto_reply_enabled = c.auto_reply_enabled;
+              report.fonnte_token_set = !!c.fonnte_token;
+              report.instructions_set = !!(c.instructions as string)?.length;
+              report.message_count = Array.isArray(c.messages) ? c.messages.length : 0;
+            }
+          } catch (e) {
+            report.rpc_autoreply_ok = false;
+            report.rpc_autoreply_error = String(e);
           }
 
           return new Response(JSON.stringify(report, null, 2), {
