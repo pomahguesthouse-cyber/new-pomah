@@ -49,23 +49,32 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         try {
-          const body = await request.json().catch(() => null);
-          if (!body) {
-            // Sometimes Fonnte sends form-urlencoded
-            const text = await request.clone().text();
-            console.log("[Fonnte Webhook] raw body:", text);
-            return new Response("OK", { status: 200 });
-          }
+          const contentType = request.headers.get("content-type") ?? "";
+          let sender: string | undefined;
+          let message: string | undefined;
+          let name: string | undefined;
 
-          // Fonnte typical payload: device, sender, message, name
-          const { sender, message, name, device } = body;
+          if (contentType.includes("application/json")) {
+            const body = await request.json().catch(() => ({}));
+            sender = body.sender;
+            message = body.message;
+            name = body.name;
+          } else {
+            // Fonnte sends form-urlencoded by default
+            const text = await request.text();
+            const params = new URLSearchParams(text);
+            sender = params.get("sender") ?? undefined;
+            message = params.get("message") ?? undefined;
+            name = params.get("name") ?? undefined;
+            console.log("[Fonnte Webhook] form body:", text);
+          }
           if (!sender || !message) {
+            console.log("[Fonnte Webhook] missing sender or message, ignoring");
             return new Response("OK", { status: 200 });
           }
 
           const supabase = getAdminClient();
 
-          // Best-effort: Find existing thread or create one
           let { data: thread } = await supabase
             .from("whatsapp_threads")
             .select("id")
@@ -73,7 +82,6 @@ export const Route = createFileRoute("/api/fonnte")({
             .maybeSingle();
 
           if (!thread) {
-            // Find guest by phone to link
             const { data: guest } = await supabase
               .from("guests")
               .select("id")
@@ -104,7 +112,7 @@ export const Route = createFileRoute("/api/fonnte")({
               .update({
                 last_message_preview: message.slice(0, 120),
                 last_message_at: new Date().toISOString(),
-                unread_count: 1, // Actually we might want to increment it, but for simplicity set to 1 or you'd need a raw SQL update
+                unread_count: 1,
               })
               .eq("id", thread.id);
           }
