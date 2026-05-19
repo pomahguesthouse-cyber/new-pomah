@@ -122,13 +122,17 @@ function FlowDiagram({ role, responded }: { role: "tamu" | "manager"; responded:
       />
       <FlowArrow active={a} />
 
-      {/* Orchestrator */}
-      <FlowStage label="AI Orchestrator" sub="Deteksi intent & routing" active={a} />
+      {/* Classifier */}
+      <FlowStage label="Classifier" sub="Deteksi intent pesan" active={a} />
       <FlowArrow active={a} />
 
-      {/* Agent fan-out */}
+      {/* Router */}
+      <FlowStage label="Router" sub="Tentukan agent tujuan" active={a} />
+      <FlowArrow active={a} />
+
+      {/* Specialized Prompt */}
       <p className="mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-stone-400">
-        Specialized Agents
+        Specialized Prompt
       </p>
       <div className="grid grid-cols-3 gap-1.5">
         {FLOW_AGENTS.map((ag) => {
@@ -150,7 +154,7 @@ function FlowDiagram({ role, responded }: { role: "tamu" | "manager"; responded:
       </div>
       <FlowArrow active={a} />
 
-      {/* Tools / knowledge */}
+      {/* Specialized Tools */}
       <div
         className={cn(
           "rounded-lg border px-3 py-2.5 transition",
@@ -163,7 +167,7 @@ function FlowDiagram({ role, responded }: { role: "tamu" | "manager"; responded:
             a ? "text-sky-800" : "text-stone-500",
           )}
         >
-          Knowledge &amp; Tools
+          Specialized Tools
         </p>
         <div className="flex flex-wrap justify-center gap-1">
           {FLOW_TOOLS.map((t) => (

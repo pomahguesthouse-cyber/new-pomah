@@ -32,6 +32,8 @@ import {
   Brain,
   Settings2,
   Timer,
+  Search,
+  Network,
 } from "lucide-react";
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
 import {
@@ -98,9 +100,10 @@ const TOOLS = [
 
 const PIPELINE = [
   { label: "Pesan Masuk", icon: MessageCircle },
-  { label: "AI Orchestrator", icon: Bot },
-  { label: "Specialized Agent", icon: Sparkles },
-  { label: "Knowledge / Tools", icon: Database },
+  { label: "Classifier", icon: Search },
+  { label: "Router", icon: Network },
+  { label: "Specialized Prompt", icon: Sparkles },
+  { label: "Specialized Tools", icon: Database },
   { label: "Response Composer", icon: Brain },
   { label: "Balasan ke Tamu", icon: Send },
 ];
