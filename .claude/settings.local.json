@@ -43,7 +43,29 @@
       "Bash(sed -n '10,30p' supabase/migrations/20260514130930_910da695-a448-4870-98ae-281fd4d2c729.sql)",
       "Bash(sed -n '103,120p' supabase/migrations/20260514130900_e36e071d-7267-42e8-9e53-90c6b879e118.sql)",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('mammoth:',p.dependencies?.mammoth||'NO'\\); console.log\\('pdfjs:',p.dependencies?.['pdfjs-dist']||'NO'\\);\")",
-      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")"
+      "Bash(node -e \"console.log\\(require\\('crypto'\\).randomBytes\\(32\\).toString\\('hex'\\)\\)\")",
+      "Bash(cd \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" *)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" log main..HEAD --oneline)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" log --oneline -8)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" remote -v)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" log --oneline -10)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\nifty-kowalevski-4876ee\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" log --oneline claude/nifty-kowalevski-4876ee -5)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" diff main...claude/nifty-kowalevski-4876ee --stat)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" push origin claude/nifty-kowalevski-4876ee)",
+      "Bash(gh -R pomahguesthouse-cyber/new-pomah pr create --head claude/nifty-kowalevski-4876ee --base main --title 'fix: stop admin page from reloading on token refresh' --body ' *)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" add src/routes/api.fonnte.ts)",
+      "Bash(git -C 'C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah' commit -m ' *)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" push origin HEAD)",
+      "Bash(gh -R pomahguesthouse-cyber/new-pomah pr create --title 'fix: add 3-layer dedup to prevent chatbot duplicate replies' --body ' *)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" pull --rebase origin main)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\" push origin main)",
+      "Bash(gh -R pomahguesthouse-cyber/new-pomah pr create --head main --base main --title \"fix: add 3-layer dedup to prevent chatbot duplicate replies\" --body \"placeholder\")",
+      "Bash(gh -R pomahguesthouse-cyber/new-pomah pr list --state open)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log --oneline origin/main..HEAD)",
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" add .claude/settings.local.json)",
+      "Bash(git -C 'C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e' commit -m ' *)"
     ]
   }
 }
