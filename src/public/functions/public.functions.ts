@@ -230,6 +230,113 @@ export const getBookingReference = createServerFn({ method: "GET" })
     return { reference_code: booking?.reference_code ?? null };
   });
 
+export type BookingInvoice = {
+  reference_code: string;
+  status: string;
+  check_in: string;
+  check_out: string;
+  nights: number;
+  adults: number;
+  children: number;
+  rooms: number;
+  room_type: string;
+  nightly_rate: number;
+  total_amount: number;
+  payment_method: string;
+  check_in_time: string;
+  check_out_time: string;
+  special_requests: string;
+  created_at: string;
+  guest: { full_name: string; email: string; phone: string };
+  property: {
+    name: string;
+    address: string;
+    bank: string;
+    account_number: string;
+    account_holder: string;
+  };
+};
+
+/** Full invoice detail for a booking — used by the public confirmation page. */
+export const getBookingInvoice = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    // Reads via the service-role client: a guest holding the (unguessable)
+    // booking id sees their own invoice; the anon role has no SELECT on bookings.
+    const sb = db(supabaseAdmin);
+    const { data: bRow } = await sb
+      .from("bookings")
+      .select(
+        "reference_code, check_in, check_out, nights, adults, children, total_amount, status, payment_method, check_in_time, check_out_time, special_requests, created_at, guest_id",
+      )
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!bRow) return { invoice: null as BookingInvoice | null };
+    const b = bRow as Record<string, unknown>;
+
+    const { data: gRow } = await sb
+      .from("guests")
+      .select("full_name, email, phone")
+      .eq("id", b.guest_id as string)
+      .maybeSingle();
+    const g = (gRow ?? {}) as Record<string, unknown>;
+
+    const { data: brRows } = await sb
+      .from("booking_rooms")
+      .select("room_type_id, nightly_rate")
+      .eq("booking_id", data.id);
+    const rows = (brRows ?? []) as Record<string, unknown>[];
+    let roomType = "Kamar";
+    const typeId = rows[0]?.room_type_id as string | undefined;
+    if (typeId) {
+      const { data: rt } = await sb
+        .from("room_types")
+        .select("name")
+        .eq("id", typeId)
+        .maybeSingle();
+      roomType = ((rt as Record<string, unknown> | null)?.name as string) ?? "Kamar";
+    }
+
+    const { data: pRow } = await sb
+      .from("properties")
+      .select("name, address, payment_bank_name, payment_account_number, payment_account_holder")
+      .limit(1)
+      .maybeSingle();
+    const p = (pRow ?? {}) as Record<string, unknown>;
+
+    const invoice: BookingInvoice = {
+      reference_code: String(b.reference_code ?? ""),
+      status: String(b.status ?? "pending"),
+      check_in: String(b.check_in ?? ""),
+      check_out: String(b.check_out ?? ""),
+      nights: Number(b.nights ?? 0),
+      adults: Number(b.adults ?? 0),
+      children: Number(b.children ?? 0),
+      rooms: rows.length || 1,
+      room_type: roomType,
+      nightly_rate: Number(rows[0]?.nightly_rate ?? 0),
+      total_amount: Number(b.total_amount ?? 0),
+      payment_method: String(b.payment_method ?? ""),
+      check_in_time: String(b.check_in_time ?? ""),
+      check_out_time: String(b.check_out_time ?? ""),
+      special_requests: String(b.special_requests ?? ""),
+      created_at: String(b.created_at ?? ""),
+      guest: {
+        full_name: String(g.full_name ?? ""),
+        email: String(g.email ?? ""),
+        phone: String(g.phone ?? ""),
+      },
+      property: {
+        name: String(p.name ?? "Pomah Guesthouse"),
+        address: String(p.address ?? ""),
+        bank: String(p.payment_bank_name ?? ""),
+        account_number: String(p.payment_account_number ?? ""),
+        account_holder: String(p.payment_account_holder ?? ""),
+      },
+    };
+    return { invoice };
+  });
+
 /**
  * One room type by slug, for its dedicated booking page: the room (with
  * gallery images), how many physical rooms it has, the property, and the
