@@ -527,6 +527,20 @@ async function generateAiReply(
   }
 }
 
+// In-memory dedup: track Fonnte message IDs processed in the last 5 minutes.
+// Prevents duplicate AI replies when Fonnte retries a slow webhook.
+const _processedIds = new Map<string, number>();
+function isDuplicate(id: string): boolean {
+  const now = Date.now();
+  // Clean entries older than 5 minutes
+  for (const [k, t] of _processedIds) {
+    if (now - t > 5 * 60 * 1000) _processedIds.delete(k);
+  }
+  if (_processedIds.has(id)) return true;
+  _processedIds.set(id, now);
+  return false;
+}
+
 async function sendViaFonnte(token: string, phone: string, message: string): Promise<boolean> {
   try {
     const form = new URLSearchParams();
@@ -704,128 +718,126 @@ export const Route = createFileRoute("/api/fonnte")({
         return new Response("Webhook is active", { status: 200 });
       },
       POST: async ({ request }) => {
-        const reqUrl = new URL(request.url);
-        const tokenInUrl = reqUrl.searchParams.get("token");
-        const envToken = process.env.FONNTE_WEBHOOK_TOKEN;
-        console.log("[Fonnte Webhook] POST received", {
-          token_in_url: tokenInUrl ? tokenInUrl.slice(0, 8) + "..." : null,
-          env_token_set: !!envToken,
-          token_match: !envToken || tokenInUrl === envToken,
-          content_type: request.headers.get("content-type"),
-        });
-
         if (!verifyToken(request)) {
           console.warn("[Fonnte Webhook] token mismatch — processing anyway");
         }
 
+        let rawText = "";
         try {
-          const rawText = await request.text();
-          console.log("[Fonnte Webhook] raw body:", rawText.slice(0, 300));
+          rawText = await request.text();
+        } catch {
+          return new Response("OK", { status: 200 });
+        }
 
-          let body: Record<string, unknown> = {};
-          try {
-            body = JSON.parse(rawText);
-          } catch {
-            const params = new URLSearchParams(rawText);
-            for (const [k, v] of params.entries()) {
-              body[k] = v;
-            }
-          }
+        let body: Record<string, unknown> = {};
+        try {
+          body = JSON.parse(rawText);
+        } catch {
+          const params = new URLSearchParams(rawText);
+          for (const [k, v] of params.entries()) body[k] = v;
+        }
 
-          const sender =
-            (body.sender as string) || (body.pengirim as string) || undefined;
-          const message =
-            (body.message as string) || (body.pesan as string) || undefined;
-          const name =
-            (body.name as string) || (body.pushname as string) || sender;
+        const sender = (body.sender as string) || (body.pengirim as string) || undefined;
+        const message = (body.message as string) || (body.pesan as string) || undefined;
+        const name = (body.name as string) || (body.pushname as string) || sender;
+        // Fonnte sends a unique message ID — use it to deduplicate retries.
+        const fonnteId = (body.id as string) || (body.message_id as string) || undefined;
 
-          console.log("[Fonnte Webhook] parsed fields", {
-            sender,
-            message: message?.slice(0, 50),
-            name,
-          });
+        console.log("[Fonnte Webhook] POST", { sender, fonnteId, msg: message?.slice(0, 50) });
 
-          if (!sender || !message) {
-            console.log("[Fonnte Webhook] missing sender or message, ignoring");
-            return new Response("OK", { status: 200 });
-          }
+        if (!sender || !message) {
+          return new Response("OK", { status: 200 });
+        }
 
-          const rpc = supabasePublic as unknown as {
-            rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-          };
+        // Dedup: if Fonnte already retried this exact message, skip silently.
+        if (fonnteId && isDuplicate(fonnteId)) {
+          console.log("[Fonnte Webhook] duplicate fonnteId", fonnteId, "— skipping");
+          return new Response("OK", { status: 200 });
+        }
 
-          const { data: inboundId, error } = await rpc.rpc("receive_whatsapp_message", {
+        const rpc = supabasePublic as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+        };
+
+        // Save inbound message to DB — must happen before we return 200.
+        let inboundId: unknown = null;
+        try {
+          const { data, error } = await rpc.rpc("receive_whatsapp_message", {
             p_phone: sender,
             p_name: name ?? sender,
             p_body: message,
           });
-
           if (error) {
             console.error("[Fonnte Webhook] RPC error:", error);
             return new Response("Error", { status: 500 });
           }
+          inboundId = data;
+        } catch (e) {
+          console.error("[Fonnte Webhook] RPC exception:", e);
+          return new Response("Error", { status: 500 });
+        }
 
-          // Save intent badge on the inbound message (rule-based, instant).
-          if (inboundId) {
-            rpc.rpc("save_message_metadata", {
-              p_message_id: inboundId as string,
-              p_metadata: { intent_label: classifyMessageIntent(message) },
-            }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
-          }
-
-          // Auto-reply using the full AI chat engine
+        // Fire-and-forget the rest — return 200 to Fonnte immediately so it doesn't retry.
+        void (async () => {
           try {
+            // Save intent badge on inbound message.
+            if (inboundId) {
+              rpc.rpc("save_message_metadata", {
+                p_message_id: inboundId as string,
+                p_metadata: { intent_label: classifyMessageIntent(message) },
+              }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
+            }
+
+            // Auto-reply using the full AI chat engine.
             const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
               p_phone: sender,
             });
 
-            if (ctx && (ctx as Record<string, unknown>).auto_reply_enabled) {
-              const c = ctx as {
-                thread_id: string;
-                fonnte_token: string;
-                messages: Array<{ direction: string; body: string }>;
-              };
+            if (!ctx || !(ctx as Record<string, unknown>).auto_reply_enabled) return;
 
-              console.log("[AutoReply] generating reply for", sender);
-              const { reply, toolsUsed } = await generateAiReply(c.messages);
-              console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
-              if (reply) {
-                const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
-                if (sent) {
-                  const agent = deriveAgent(toolsUsed);
-                  // Save outbound message — try new signature (with metadata), fall back to old.
-                  try {
-                    await rpc.rpc("save_outbound_whatsapp", {
-                      p_thread_id: c.thread_id,
-                      p_body: reply,
-                      p_metadata: { agent, tools_used: toolsUsed },
-                    });
-                  } catch {
-                    await supabasePublic.rpc("save_outbound_whatsapp", {
-                      p_thread_id: c.thread_id,
-                      p_body: reply,
-                    });
-                  }
-                  // Update thread-level tools for the sidebar panel (best-effort).
-                  rpc.rpc("update_thread_autoreply_meta", {
-                    p_thread_id: c.thread_id,
-                    p_tools_used: toolsUsed,
-                  }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
-                  console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
-                }
-              } else {
-                console.error("[AutoReply] no reply generated — check LOVABLE_API_KEY and auto_reply_enabled");
-              }
+            const c = ctx as {
+              thread_id: string;
+              fonnte_token: string;
+              messages: Array<{ direction: string; body: string }>;
+            };
+
+            console.log("[AutoReply] generating reply for", sender);
+            const { reply, toolsUsed } = await generateAiReply(c.messages);
+            console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
+
+            if (!reply) {
+              console.error("[AutoReply] no reply generated");
+              return;
             }
-          } catch (autoErr) {
-            console.error("[AutoReply] error", autoErr);
-          }
 
-          return new Response("OK", { status: 200 });
-        } catch (e) {
-          console.error("[Fonnte Webhook Error]", e);
-          return new Response("Error", { status: 500 });
-        }
+            const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
+            if (!sent) return;
+
+            const agent = deriveAgent(toolsUsed);
+            try {
+              await rpc.rpc("save_outbound_whatsapp", {
+                p_thread_id: c.thread_id,
+                p_body: reply,
+                p_metadata: { agent, tools_used: toolsUsed },
+              });
+            } catch {
+              await supabasePublic.rpc("save_outbound_whatsapp", {
+                p_thread_id: c.thread_id,
+                p_body: reply,
+              });
+            }
+            rpc.rpc("update_thread_autoreply_meta", {
+              p_thread_id: c.thread_id,
+              p_tools_used: toolsUsed,
+            }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
+            console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
+          } catch (e) {
+            console.error("[AutoReply] background error", e);
+          }
+        })();
+
+        // Return immediately — do NOT wait for the AI. This prevents Fonnte retries.
+        return new Response("OK", { status: 200 });
       },
     },
   },
