@@ -527,19 +527,39 @@ async function generateAiReply(
   }
 }
 
-// In-memory dedup: track Fonnte message IDs processed in the last 5 minutes.
-// Prevents duplicate AI replies when Fonnte retries a slow webhook.
-const _processedIds = new Map<string, number>();
-function isDuplicate(id: string): boolean {
+// ---------------------------------------------------------------------------
+// Multi-layer duplicate-reply prevention
+//
+// Layer 1 — In-memory key map (same Worker instance, any timing).
+//   Keyed on fonnteId when available; falls back to "sender::message[:100]"
+//   so even webhook calls without an ID are deduplicated.
+//
+// Layer 2 — In-progress Set (same Worker instance, concurrent requests).
+//   Locks a thread while the AI is generating its reply so that a second
+//   request that arrives before the first finishes cannot start a second
+//   generation cycle.
+//
+// Layer 3 — DB look-ahead (cross-instance guard).
+//   Before starting AI generation, query whatsapp_messages for any outbound
+//   message sent to this thread in the last 15 seconds.  Catches retries
+//   that land on a different Cloudflare Worker instance where the in-memory
+//   state is empty.
+// ---------------------------------------------------------------------------
+
+const _processedKeys = new Map<string, number>();
+/** Returns true (and records the key) if this key was seen in the last 5 min. */
+function isDuplicate(key: string): boolean {
   const now = Date.now();
-  // Clean entries older than 5 minutes
-  for (const [k, t] of _processedIds) {
-    if (now - t > 5 * 60 * 1000) _processedIds.delete(k);
+  for (const [k, t] of _processedKeys) {
+    if (now - t > 5 * 60 * 1000) _processedKeys.delete(k);
   }
-  if (_processedIds.has(id)) return true;
-  _processedIds.set(id, now);
+  if (_processedKeys.has(key)) return true;
+  _processedKeys.set(key, now);
   return false;
 }
+
+/** Thread IDs currently being processed on this instance (Layer 2). */
+const _inProgress = new Set<string>();
 
 async function sendViaFonnte(token: string, phone: string, message: string): Promise<boolean> {
   try {
@@ -749,9 +769,12 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // Dedup: if Fonnte already retried this exact message, skip silently.
-        if (fonnteId && isDuplicate(fonnteId)) {
-          console.log("[Fonnte Webhook] duplicate fonnteId", fonnteId, "— skipping");
+        // Layer 1 dedup: in-memory key check (same Worker instance).
+        // Use fonnteId when present; otherwise derive key from sender + body so
+        // that webhooks without an explicit ID are still deduplicated.
+        const dedupKey = fonnteId ?? `${sender}::${message.slice(0, 100)}`;
+        if (isDuplicate(dedupKey)) {
+          console.log("[Fonnte Webhook] duplicate key — skipping", dedupKey.slice(0, 40));
           return new Response("OK", { status: 200 });
         }
 
@@ -801,36 +824,64 @@ export const Route = createFileRoute("/api/fonnte")({
               messages: Array<{ direction: string; body: string }>;
             };
 
-            console.log("[AutoReply] generating reply for", sender);
-            const { reply, toolsUsed } = await generateAiReply(c.messages);
-            console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
-
-            if (!reply) {
-              console.error("[AutoReply] no reply generated");
+            // Layer 2 dedup: in-progress Set (same instance, concurrent requests).
+            if (_inProgress.has(c.thread_id)) {
+              console.log("[AutoReply] thread already in-progress:", c.thread_id, "— skipping");
               return;
             }
+            _inProgress.add(c.thread_id);
 
-            const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
-            if (!sent) return;
-
-            const agent = deriveAgent(toolsUsed);
             try {
-              await rpc.rpc("save_outbound_whatsapp", {
+              // Layer 3 dedup: DB check for a recent outbound on this thread.
+              // Catches cross-instance concurrent calls where in-memory state
+              // is empty.  15 s covers typical Fonnte retry windows.
+              const recentCutoff = new Date(Date.now() - 15_000).toISOString();
+              const { data: recentOut } = await supabaseAdmin
+                .from("whatsapp_messages")
+                .select("id")
+                .eq("thread_id", c.thread_id)
+                .eq("direction", "out")
+                .gte("sent_at", recentCutoff)
+                .limit(1)
+                .maybeSingle();
+              if (recentOut) {
+                console.log("[AutoReply] DB dedup: recent outbound exists for thread", c.thread_id, "— skipping");
+                return;
+              }
+
+              console.log("[AutoReply] generating reply for", sender);
+              const { reply, toolsUsed } = await generateAiReply(c.messages);
+              console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
+
+              if (!reply) {
+                console.error("[AutoReply] no reply generated");
+                return;
+              }
+
+              const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
+              if (!sent) return;
+
+              const agent = deriveAgent(toolsUsed);
+              try {
+                await rpc.rpc("save_outbound_whatsapp", {
+                  p_thread_id: c.thread_id,
+                  p_body: reply,
+                  p_metadata: { agent, tools_used: toolsUsed },
+                });
+              } catch {
+                await supabasePublic.rpc("save_outbound_whatsapp", {
+                  p_thread_id: c.thread_id,
+                  p_body: reply,
+                });
+              }
+              rpc.rpc("update_thread_autoreply_meta", {
                 p_thread_id: c.thread_id,
-                p_body: reply,
-                p_metadata: { agent, tools_used: toolsUsed },
-              });
-            } catch {
-              await supabasePublic.rpc("save_outbound_whatsapp", {
-                p_thread_id: c.thread_id,
-                p_body: reply,
-              });
+                p_tools_used: toolsUsed,
+              }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
+              console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
+            } finally {
+              _inProgress.delete(c.thread_id);
             }
-            rpc.rpc("update_thread_autoreply_meta", {
-              p_thread_id: c.thread_id,
-              p_tools_used: toolsUsed,
-            }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
-            console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
           } catch (e) {
             console.error("[AutoReply] background error", e);
           }
