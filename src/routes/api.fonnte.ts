@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 
-// Create an admin client to bypass RLS for webhooks
-function getAdminClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Use anon key — inserts are done via SECURITY DEFINER RPC, no service_role needed
+function getAnonClient() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) throw new Error("Missing Supabase env for webhook");
   return createClient<Database>(url, key, {
     auth: { persistSession: false },
@@ -73,48 +74,17 @@ export const Route = createFileRoute("/api/fonnte")({
             return new Response("OK", { status: 200 });
           }
 
-          const supabase = getAdminClient();
+          const supabase = getAnonClient();
 
-          let { data: thread } = await supabase
-            .from("whatsapp_threads")
-            .select("id")
-            .eq("phone", sender)
-            .maybeSingle();
+          const { error } = await supabase.rpc("receive_whatsapp_message", {
+            p_phone: sender,
+            p_name: name ?? sender,
+            p_body: message,
+          });
 
-          if (!thread) {
-            const { data: guest } = await supabase
-              .from("guests")
-              .select("id")
-              .eq("phone", sender)
-              .maybeSingle();
-
-            const { data: newThread } = await supabase
-              .from("whatsapp_threads")
-              .insert({
-                phone: sender,
-                display_name: name || sender,
-                guest_id: guest?.id || null,
-              })
-              .select("id")
-              .single();
-            thread = newThread;
-          }
-
-          if (thread) {
-            await supabase.from("whatsapp_messages").insert({
-              thread_id: thread.id,
-              direction: "in",
-              body: message,
-            });
-
-            await supabase
-              .from("whatsapp_threads")
-              .update({
-                last_message_preview: message.slice(0, 120),
-                last_message_at: new Date().toISOString(),
-                unread_count: 1,
-              })
-              .eq("id", thread.id);
+          if (error) {
+            console.error("[Fonnte Webhook] RPC error:", error);
+            return new Response("Error", { status: 500 });
           }
 
           // Note: Automatic AI Reply logic could go here if enabled.
