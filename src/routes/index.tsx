@@ -488,6 +488,7 @@ function HeroSlider({
           <img
             src={active.imageUrl}
             alt={active.heading}
+            loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
