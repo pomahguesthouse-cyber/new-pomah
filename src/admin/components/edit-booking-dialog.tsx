@@ -248,7 +248,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   }, [allotmentMode, selectedRooms, roomsByType, autoCounts]);
 
   const total = effectiveRooms.reduce((s, r) => s + r.nightly_rate * Math.max(nights, 1), 0);
-  const outstanding = Math.max(0, total - (paymentStatus === "paid" ? total : paidAmount));
+  const outstanding = Math.max(0, total - paidAmount);
 
   function toggleRoom(room: RoomRow) {
     setSelectedRooms((cur) => {
@@ -283,7 +283,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           status,
           source,
           payment_status: paymentStatus,
-          paid_amount: paymentStatus === "paid" ? total : paidAmount,
+          paid_amount: paidAmount,
           special_requests: specialRequests.trim() || null,
           internal_notes: internalNotes.trim() || null,
           rooms: effectiveRooms,
@@ -619,10 +619,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   <Input
                     type="number"
                     min={0}
-                    max={total}
                     step={10000}
-                    value={paymentStatus === "paid" ? total : paidAmount}
-                    disabled={paymentStatus !== "partial"}
+                    value={paidAmount}
                     onChange={(e) => setPaidAmount(Number(e.target.value) || 0)}
                   />
                 </Field>
@@ -631,7 +629,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                 <SummaryStat label="Total" value={formatIDR(total)} />
                 <SummaryStat
                   label="Dibayar"
-                  value={formatIDR(paymentStatus === "paid" ? total : paidAmount)}
+                  value={formatIDR(paidAmount)}
                 />
                 <SummaryStat
                   label="Sisa"

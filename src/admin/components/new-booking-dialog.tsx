@@ -220,10 +220,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
     (sum, r) => sum + r.nightly_rate * Math.max(nights, 1),
     0,
   );
-  const outstanding = Math.max(
-    0,
-    grandTotal - (paymentStatus === "paid" ? grandTotal : paidAmount),
-  );
+  const outstanding = Math.max(0, grandTotal - paidAmount);
 
   function toggleRoom(room: RoomRow) {
     setSelectedRooms((cur) => {
@@ -254,7 +251,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
           status,
           source,
           payment_status: paymentStatus,
-          paid_amount: paymentStatus === "paid" ? grandTotal : paidAmount,
+          paid_amount: paidAmount,
           special_requests: specialRequests.trim() || null,
           internal_notes: internalNotes.trim() || null,
           rooms: effectiveRooms,
@@ -600,10 +597,8 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                     <Input
                       type="number"
                       min={0}
-                      max={grandTotal}
                       step={10000}
-                      value={paymentStatus === "paid" ? grandTotal : paidAmount}
-                      disabled={paymentStatus !== "partial"}
+                      value={paidAmount}
                       onChange={(e) => setPaidAmount(Number(e.target.value) || 0)}
                     />
                   </Field>
@@ -703,7 +698,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                 <SummaryRow label="Subtotal" value={formatIDR(grandTotal)} mono bold />
                 <SummaryRow
                   label="Dibayar"
-                  value={formatIDR(paymentStatus === "paid" ? grandTotal : paidAmount)}
+                  value={formatIDR(paidAmount)}
                   mono
                 />
                 <div className="border-t border-border pt-2">
