@@ -481,14 +481,17 @@ export const chatWithAI = createServerFn({ method: "POST" })
     if (cfg.tools["sop-knowledge"]?.enabled) {
       const { data: sopDocs } = await db(supabaseAdmin)
         .from("sop_documents")
-        .select("name, content")
+        .select("name, content, source_url")
         .order("created_at", { ascending: true })
-        .limit(30);
+        .limit(40);
       const parts: string[] = [];
       for (const d of sopDocs ?? []) {
         const dd = d as Record<string, unknown>;
         const c = (dd.content as string | undefined)?.trim();
-        if (c) parts.push(`### ${dd.name as string}\n${c}`);
+        const url = (dd.source_url as string | undefined)?.trim();
+        if (!c && !url) continue;
+        const head = url ? `### ${dd.name as string} (Tautan: ${url})` : `### ${dd.name as string}`;
+        parts.push(c ? `${head}\n${c}` : head);
       }
       sopText = parts.join("\n\n").slice(0, 8000);
     }
@@ -510,7 +513,9 @@ export const chatWithAI = createServerFn({ method: "POST" })
         ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
         : "",
       sopText
-        ? `Basis Pengetahuan SOP (rujuk dokumen ini untuk menjawab kebijakan & prosedur):\n${sopText}`
+        ? "Basis Pengetahuan SOP (rujuk untuk menjawab kebijakan & prosedur). " +
+          "Bila sebuah entri menyertakan (Tautan: ...), Anda boleh membagikan tautan itu " +
+          `kepada tamu bila relevan:\n${sopText}`
         : "",
       "KETERSEDIAAN KAMAR: Anda memiliki tool `check_room_availability`. Setiap kali tamu " +
         "menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin " +

@@ -18,6 +18,7 @@ export type SopDocument = {
   name: string;
   file_path: string | null;
   file_type: string | null;
+  source_url: string | null;
   content: string | null;
   created_at: string;
 };
@@ -28,12 +29,15 @@ export const listSopDocuments = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data } = await db(context.supabase)
       .from("sop_documents")
-      .select("id, name, file_path, file_type, content, created_at")
+      .select("id, name, file_path, file_type, source_url, content, created_at")
       .order("created_at", { ascending: false });
     return { documents: (data ?? []) as unknown as SopDocument[] };
   });
 
-/** Register an uploaded SOP document (file already stored in the bucket). */
+/**
+ * Register a SOP knowledge entry — either an uploaded file (file already
+ * stored in the bucket) or an external link with a description.
+ */
 export const createSopDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -42,6 +46,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
         name: z.string().min(1).max(300),
         filePath: z.string().max(500).optional().or(z.literal("")),
         fileType: z.string().max(20).optional().or(z.literal("")),
+        sourceUrl: z.string().url().max(2000).optional().or(z.literal("")),
         content: z.string().max(200000).optional().or(z.literal("")),
       })
       .parse(d),
@@ -54,6 +59,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
       name: data.name,
       file_path: data.filePath || null,
       file_type: data.fileType || null,
+      source_url: data.sourceUrl || null,
       content: data.content || null,
     });
     if (error) throw error;
