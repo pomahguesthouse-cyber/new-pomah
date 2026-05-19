@@ -254,6 +254,18 @@ export const summarizeThread = createServerFn({ method: "POST" })
     return { summary: summary ?? "No summary available." };
   });
 
+export const deleteThread = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("whatsapp_threads")
+      .delete()
+      .eq("id", data.threadId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const classifyIntent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))

@@ -18,6 +18,7 @@ import {
   MessagesSquare,
   Inbox,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
   listThreads,
@@ -30,6 +31,7 @@ import {
   simulateInbound,
   summarizeThread,
   classifyIntent,
+  deleteThread,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
@@ -143,6 +145,7 @@ export function WhatsAppPage() {
   const simulateFn = useServerFn(simulateInbound);
   const summarizeFn = useServerFn(summarizeThread);
   const classifyFn = useServerFn(classifyIntent);
+  const deleteFn = useServerFn(deleteThread);
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
@@ -267,6 +270,16 @@ export function WhatsAppPage() {
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { threadId: id } }),
+    onSuccess: () => {
+      setActiveId(null);
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      toast.success("Percakapan dihapus");
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   const totalUnread = threads.reduce((s, t) => s + (t.unread_count ?? 0), 0);
@@ -473,6 +486,19 @@ export function WhatsAppPage() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={deleteMut.isPending}
+                  onClick={() => {
+                    if (!confirm("Hapus percakapan ini beserta semua pesannya?")) return;
+                    deleteMut.mutate(current!);
+                  }}
+                  title="Hapus percakapan"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </header>
 
