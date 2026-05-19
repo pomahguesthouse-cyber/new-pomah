@@ -192,7 +192,7 @@ export const createBooking: ToolHandler = async (
       atas_nama:  ctx.property.payment_account_holder  ?? null,
     },
     invoice_url: ctx.origin 
-      ? `${ctx.origin}/book/confirmation/${booking.reference_code}` 
-      : `https://pomahguesthouse.com/book/confirmation/${booking.reference_code}`,
+      ? `${ctx.origin}/book/confirmation/${booking.id}` 
+      : `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
   });
 };
