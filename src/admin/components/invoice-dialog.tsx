@@ -9,6 +9,9 @@ import {
 import { Download, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getBrandingSettings, getPropertySettings } from "@/admin/modules/settings/settings.functions";
 import { InvoiceDocument, type InvoiceBookingData } from "./invoice-pdf";
 
 type PDFDownloadLinkRenderProps = {
@@ -42,6 +45,22 @@ export function InvoiceDialog({
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const fetchBranding = useServerFn(getBrandingSettings);
+  const fetchProperty = useServerFn(getPropertySettings);
+  
+  const { data: branding } = useQuery({
+    queryKey: ["branding-settings"],
+    queryFn: () => fetchBranding(),
+  });
+  
+  const { data: property } = useQuery({
+    queryKey: ["property-settings"],
+    queryFn: () => fetchProperty(),
+  });
+
+  const logoUrl = branding?.invoice_logo_url || branding?.logo_url;
+  const propertyName = property?.name || "Pomah Guesthouse";
 
   if (!booking) return null;
 
@@ -87,7 +106,7 @@ Silakan simpan pesan ini sebagai referensi.`;
         <div className="flex flex-wrap gap-2 mb-4 shrink-0">
           {isMounted && (
             <PDFDownloadLink
-              document={<InvoiceDocument booking={booking} />}
+              document={<InvoiceDocument booking={booking} logoUrl={logoUrl} propertyName={propertyName} />}
               fileName={`Invoice-${booking.reference_code || booking.id.slice(0, 8)}.pdf`}
               className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
             >
@@ -130,7 +149,7 @@ Silakan simpan pesan ini sebagai referensi.`;
         <div className="flex-1 min-h-[500px] border border-border rounded-md overflow-hidden bg-muted/20">
           {isMounted ? (
             <PDFViewer className="w-full h-full min-h-[500px]" showToolbar={true}>
-              <InvoiceDocument booking={booking} />
+              <InvoiceDocument booking={booking} logoUrl={logoUrl} propertyName={propertyName} />
             </PDFViewer>
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">

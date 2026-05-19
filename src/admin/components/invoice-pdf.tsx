@@ -232,7 +232,7 @@ export type InvoiceBookingData = {
     | null;
 };
 
-export function InvoiceDocument({ booking }: { booking: InvoiceBookingData }) {
+export function InvoiceDocument({ booking, propertyName = "Pomah Guesthouse", logoUrl }: { booking: InvoiceBookingData, propertyName?: string, logoUrl?: string | null }) {
   const nights = Math.max(1, nightsBetween(booking.check_in, booking.check_out));
   const rooms = booking.booking_rooms ?? [];
   const total = Number(booking.total_amount);
@@ -280,13 +280,18 @@ export function InvoiceDocument({ booking }: { booking: InvoiceBookingData }) {
             </View>
           </View>
           <View style={styles.headerRight}>
-            {/* Fallback to text if we don't have a logo image yet */}
-            <View style={{ backgroundColor: "#0ea5e9", padding: 10, borderRadius: 4 }}>
-              <Text style={{ color: "white", fontFamily: "Helvetica-Bold", fontSize: 16 }}>
-                Pomah
-              </Text>
-              <Text style={{ color: "white", fontSize: 8 }}>Guesthouse</Text>
-            </View>
+            {logoUrl ? (
+              <Image src={logoUrl} style={{ width: 120, height: 40, objectFit: "contain" }} />
+            ) : (
+              <View style={{ backgroundColor: "#0ea5e9", padding: 10, borderRadius: 4 }}>
+                <Text style={{ color: "white", fontFamily: "Helvetica-Bold", fontSize: 16 }}>
+                  {propertyName.split(" ")[0]}
+                </Text>
+                <Text style={{ color: "white", fontSize: 8 }}>
+                  {propertyName.split(" ").slice(1).join(" ")}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -338,7 +343,7 @@ export function InvoiceDocument({ booking }: { booking: InvoiceBookingData }) {
 
         {/* DETAIL PENGINAPAN */}
         <Text style={styles.sectionTitle}>DETAIL PENGINAPAN</Text>
-        <Text style={{ fontFamily: "Helvetica-Bold", marginBottom: 4 }}>POMAH GUESTHOUSE</Text>
+        <Text style={{ fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{propertyName.toUpperCase()}</Text>
         <Text style={{ color: "#666", marginBottom: 8 }}>
           Alamat: Jl. Dewi Sartika IV no 71 Semarang, 50221
         </Text>
