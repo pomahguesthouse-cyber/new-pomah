@@ -852,14 +852,18 @@ export type Database = {
       generate_booking_reference: { Args: never; Returns: string }
       receive_whatsapp_message: {
         Args: { p_phone: string; p_name: string; p_body: string }
-        Returns: undefined
+        Returns: string
       }
       get_autoreply_context: {
         Args: { p_phone: string }
         Returns: Json
       }
       save_outbound_whatsapp: {
-        Args: { p_thread_id: string; p_body: string }
+        Args: { p_thread_id: string; p_body: string; p_metadata?: Json }
+        Returns: string
+      }
+      save_message_metadata: {
+        Args: { p_message_id: string; p_metadata: Json }
         Returns: undefined
       }
       has_role: {

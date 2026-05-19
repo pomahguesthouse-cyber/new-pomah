@@ -45,6 +45,28 @@ function db(client: unknown): any {
   return client;
 }
 
+/** Rule-based intent label for a single incoming message — no LLM call needed. */
+function classifyMessageIntent(text: string): string {
+  const t = text.toLowerCase();
+  if (/\b(halo|hai|hi|pagi|siang|sore|malam|assalam|selamat)\b/.test(t)) return "Sapaan";
+  if (/(harga|tarif|biaya|rate|price|berapa)/.test(t)) return "Tanya Harga";
+  if (/(tersedia|available|kosong|booking|pesan|reservasi|cek|check)/.test(t)) return "Cek Ketersediaan";
+  if (/(lokasi|alamat|dimana|jarak|jauh|dekat|map|peta|arah|rute|unnes|kampus|pusat|kota)/.test(t)) return "Tanya Lokasi";
+  if (/(fasilitas|wifi|sarapan|parkir|cafe|kolam|gym|ameniti|fitur)/.test(t)) return "Tanya Fasilitas";
+  if (/(check.?in|check.?out|waktu|jam|kapan|lama)/.test(t)) return "Kebijakan";
+  if (/(rusak|broken|mati|tidak (bisa|berfungsi)|macet|bocor|keluhan|komplain)/.test(t)) return "Keluhan";
+  if (/(bayar|transfer|payment|invoice|tagihan|bukti|rekening)/.test(t)) return "Pembayaran";
+  if (/(terima kasih|makasih|thanks|terimakasih)/.test(t)) return "Apresiasi";
+  return "Pertanyaan Umum";
+}
+
+/** Derive the active agent name from which tools were used. */
+function deriveAgent(toolsUsed: string[]): string {
+  if (toolsUsed.includes("Booking Engine")) return "Front Office Agent";
+  if (toolsUsed.includes("Room Availability")) return "Pricing Agent";
+  return "Front Office Agent";
+}
+
 const MONTHS_ID = [
   "Januari","Februari","Maret","April","Mei","Juni",
   "Juli","Agustus","September","Oktober","November","Desember",
@@ -641,7 +663,11 @@ export const Route = createFileRoute("/api/fonnte")({
             return new Response("OK", { status: 200 });
           }
 
-          const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
+          const rpc = supabasePublic as unknown as {
+            rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+          };
+
+          const { data: inboundId, error } = await rpc.rpc("receive_whatsapp_message", {
             p_phone: sender,
             p_name: name ?? sender,
             p_body: message,
@@ -650,6 +676,14 @@ export const Route = createFileRoute("/api/fonnte")({
           if (error) {
             console.error("[Fonnte Webhook] RPC error:", error);
             return new Response("Error", { status: 500 });
+          }
+
+          // Save intent badge on the inbound message (rule-based, instant).
+          if (inboundId) {
+            rpc.rpc("save_message_metadata", {
+              p_message_id: inboundId as string,
+              p_metadata: { intent_label: classifyMessageIntent(message) },
+            }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
           }
 
           // Auto-reply using the full AI chat engine
@@ -669,18 +703,19 @@ export const Route = createFileRoute("/api/fonnte")({
               if (reply) {
                 const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
                 if (sent) {
-                  await supabasePublic.rpc("save_outbound_whatsapp", {
+                  const agent = deriveAgent(toolsUsed);
+                  // Save outbound message with agent + tools metadata.
+                  await rpc.rpc("save_outbound_whatsapp", {
                     p_thread_id: c.thread_id,
                     p_body: reply,
+                    p_metadata: { agent, tools_used: toolsUsed },
                   });
-                  // Persist which tools were actually called so the sidebar can show them.
-                  await (supabasePublic as unknown as {
-                    rpc: (fn: string, args: Record<string, unknown>) => Promise<unknown>;
-                  }).rpc("update_thread_autoreply_meta", {
+                  // Also update thread-level tools for the sidebar panel.
+                  await rpc.rpc("update_thread_autoreply_meta", {
                     p_thread_id: c.thread_id,
                     p_tools_used: toolsUsed,
                   });
-                  console.log("[AutoReply] sent to", sender, "tools:", toolsUsed, "reply:", reply.slice(0, 60));
+                  console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
                 }
               }
             }
