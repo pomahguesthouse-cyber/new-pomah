@@ -319,6 +319,7 @@ export const Route = createFileRoute("/api/fonnte")({
               today,
             },
             llmConfig: { apiKey, baseUrl, model },
+            aiLabConfig: aiCfgRaw,
           });
 
           const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
@@ -537,6 +538,7 @@ export const Route = createFileRoute("/api/fonnte")({
                       today,
                     },
                     llmConfig: { apiKey, baseUrl, model },
+                    aiLabConfig: p.ai_lab_config as any,
                   });
 
                   result.elapsed_ms         = Date.now() - t0;

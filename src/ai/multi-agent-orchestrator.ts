@@ -182,6 +182,8 @@ export interface MultiAgentInput {
   toolCtx:   ToolContext;
   /** AI gateway credentials */
   llmConfig: AiClientConfig;
+  /** AI Lab Dashboard Configuration */
+  aiLabConfig?: Record<string, any>;
   /** Max LLM turns per agent run (default 5) */
   maxTurns?: number;
 }
@@ -230,7 +232,7 @@ export async function runMultiAgentOrchestration(
     const agentResult = await runAgent(
       agent,
       input.messages,
-      input.agentCtx,
+      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["manager"]?.instructions },
       input.toolCtx,
       input.llmConfig,
       maxTurns,
@@ -306,7 +308,7 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
-          input.agentCtx,
+          { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
           input.toolCtx,
           input.llmConfig,
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
@@ -322,7 +324,7 @@ export async function runMultiAgentOrchestration(
   const agentResult = await runAgent(
     agent,
     input.messages,
-    input.agentCtx,
+    { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions },
     input.toolCtx,
     input.llmConfig,
     maxTurns,
@@ -336,7 +338,7 @@ export async function runMultiAgentOrchestration(
     const foResult = await runAgent(
       foAgent,
       input.messages,
-      input.agentCtx,
+      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions },
       input.toolCtx,
       input.llmConfig,
       maxTurns,

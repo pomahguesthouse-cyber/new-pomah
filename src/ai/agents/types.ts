@@ -42,6 +42,8 @@ export interface AgentContext {
   today:    string;
   /** The raw last user message — agents may use it for tone awareness */
   lastMessage?: string;
+  /** The instructions configured in the AI Lab Dashboard for this agent */
+  customInstructions?: string;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

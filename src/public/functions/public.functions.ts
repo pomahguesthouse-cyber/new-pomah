@@ -574,7 +574,15 @@ export const chatWithAI = createServerFn({ method: "POST" })
 
     const agentLines = AGENT_KEYS.filter(
       (k) => cfg.agents[k]?.enabled && cfg.agents[k]?.instructions?.trim(),
-    ).map((k) => `• ${k}: ${cfg.agents[k].instructions.trim()}`);
+    ).map((k) => {
+      let instr = cfg.agents[k].instructions.trim();
+      instr = instr.replace(/\{\{PROPERTY_NAME\}\}/g, (p.name as string) ?? "Pomah Guesthouse");
+      instr = instr.replace(/\{\{TODAY\}\}/g, fmtDateID(new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)));
+      instr = instr.replace(/\{\{ROOM_DATA\}\}/g, ""); // Not needed for general webchat prompt since it's appended globally
+      instr = instr.replace(/\{\{BANK_INFO\}\}/g, "");
+      instr = instr.replace(/\{\{SOP_DATA\}\}/g, "");
+      return `• ${k}: ${instr}`;
+    });
 
     const roomLines = roomRows.map(
       (rr) =>

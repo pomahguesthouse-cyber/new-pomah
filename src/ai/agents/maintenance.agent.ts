@@ -70,38 +70,12 @@ export const maintenanceAgent: AgentDefinition = {
   tools:       MAINTENANCE_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today } = ctx;
+    const { property, today, customInstructions } = ctx;
 
-    const sections = [
-      `Anda adalah Maintenance Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Tugas Anda: menerima dan mencatat laporan kerusakan/masalah fasilitas dari tamu " +
-        "serta memastikan masalah tersebut akan ditangani segera.",
+    let prompt = customInstructions || "Anda adalah Maintenance Agent.";
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
 
-      "Jawab dengan empati, tenang, dan profesional dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
-
-      `Hari ini tanggal ${fmtDateID(today)}.`,
-
-      "ALUR PENANGANAN LAPORAN:" +
-        "\n1. Dengarkan keluhan dengan empati — tamu mungkin frustrasi." +
-        "\n2. Minta nomor kamar bila belum disebutkan." +
-        "\n3. Pahami jenis dan severity masalah (AC, air, listrik, dll.)." +
-        "\n4. Panggil tool `report_maintenance_issue` untuk mencatat laporan." +
-        "\n5. Sampaikan estimasi waktu respons berdasarkan prioritas:" +
-        "\n   - Critical (kebakaran/banjir): segera / langsung hubungi staf" +
-        "\n   - High (AC mati, listrik): 30–60 menit" +
-        "\n   - Medium (TV, remote): 1–2 jam" +
-        "\n   - Low (lampu putus): dalam hari ini",
-
-      "DARURAT: Jika tamu melaporkan masalah berbahaya (kebakaran, kebocoran gas, " +
-        "banjir, dsb.), selalu instruksikan tamu untuk SEGERA menghubungi staf di meja resepsi " +
-        "atau nomor darurat hotel, dan tetap tenang.",
-
-      "Setelah melaporkan, sampaikan nomor tiket atau konfirmasi bahwa laporan sudah tercatat " +
-        "dan minta maaf atas ketidaknyamanan yang ditimbulkan.",
-
-      "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
-    ];
-
-    return sections.filter(Boolean).join("\n\n");
+    return prompt;
   },
 };

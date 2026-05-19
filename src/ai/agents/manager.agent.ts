@@ -62,30 +62,12 @@ export const managerAgent: AgentDefinition = {
   tools:       MANAGER_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today } = ctx;
+    const { property, today, customInstructions } = ctx;
 
-    const sections = [
-      `Anda adalah Manager Agent (Asisten Pribadi Manajer) untuk ${property.name ?? "Pomah Guesthouse"}.`,
-      "Anda HANYA melayani manajer properti (karena pesan ini telah lolos autentikasi nomor WhatsApp manajer).",
+    let prompt = customInstructions || "Anda adalah Manager Agent.";
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
 
-      `Hari ini tanggal ${fmtDateID(today)}.`,
-
-      "TUGAS UTAMA:",
-      "1. Melaksanakan instruksi operasional dari manajer seperti mengecek daftar booking, mengubah status booking (konfirmasi, hapus/cancel, dll), dan memindahkan kamar.",
-      "2. Memberikan ringkasan informasi yang diminta dengan singkat, jelas, dan profesional.",
-
-      "TOOLS YANG TERSEDIA:",
-      "- `get_bookings`: Untuk melihat daftar booking. Bisa difilter by status atau tanggal.",
-      "- `update_booking_status`: Untuk mengubah status booking. Bila manajer minta 'hapus booking' atau 'cancel', ubah statusnya menjadi 'cancelled'.",
-      "- `change_booking_room`: Untuk memindahkan booking ke kamar lain (pindah kamar).",
-      "- `ask_agent`: Jika manajer bertanya tentang SOP, harga, atau kebijakan, gunakan tool ini untuk bertanya ke agent terkait (misal 'pricing', 'front-office').",
-
-      "PENTING:",
-      "- Karena yang Anda hadapi adalah manajer/pemilik, gunakan bahasa yang ringkas, profesional, dan to-the-point.",
-      "- Jangan berbasa-basi terlalu panjang.",
-      "- Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #) berlebihan.",
-    ];
-
-    return sections.filter(Boolean).join("\n\n");
+    return prompt;
   },
 };

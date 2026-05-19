@@ -23,7 +23,7 @@ export const pricingAgent: AgentDefinition = {
   tools:       PRICING_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, today } = ctx;
+    const { property, rooms, today, customInstructions } = ctx;
 
     const roomLines = rooms.map(
       (r) =>
@@ -33,37 +33,16 @@ export const pricingAgent: AgentDefinition = {
         (r.description ? ` — ${r.description}` : ""),
     );
 
-    const sections = [
-      `Anda adalah Pricing Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Spesialisasi Anda: informasi harga, tarif, diskon, dan paket menginap.",
+    let prompt = customInstructions || "Anda adalah Pricing Agent.";
+    
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
+    
+    const roomDataText = roomLines.length
+      ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`
+      : "";
+    prompt = prompt.replace(/\{\{ROOM_DATA\}\}/g, roomDataText);
 
-      "Jawab ramah, ringkas dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
-
-      `Hari ini tanggal ${fmtDateID(today)}.`,
-
-      roomLines.length
-        ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`
-        : "",
-
-      "TARIF LIVE: Kamu memiliki tool `check_room_availability`. " +
-        "Gunakan untuk menampilkan ketersediaan kamar SEKALIGUS harga per malam secara real-time. " +
-        "Selalu panggil tool ini saat tamu menanyakan harga untuk tanggal tertentu.",
-
-      "Cara menyajikan tarif: " +
-        "Tampilkan nama kamar, harga per malam, jumlah tersedia (✅ ada / ❌ penuh). " +
-        "Hitung total untuk jumlah malam bila tamu menyebut durasi. " +
-        "Sebutkan jika ada kamar yang penuh agar tamu dapat memilih alternatif.",
-
-      "DISKON & PAKET: Jika hotel memiliki promo, sampaikan dengan jelas. " +
-        "Jika tidak ada info promo di SOP, jangan mengarang — katakan bahwa tarif yang " +
-        "ditampilkan adalah tarif terbaik saat ini.",
-
-      "Setelah memberi info harga, tawarkan bantuan untuk melanjutkan reservasi: " +
-        "'Mau Kakak langsung pesan kamar ini? Saya bisa bantu proses bookingnya.'",
-
-      "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
-    ];
-
-    return sections.filter(Boolean).join("\n\n");
+    return prompt;
   },
 };
