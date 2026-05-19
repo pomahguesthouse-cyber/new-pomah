@@ -1,10 +1,48 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
-import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
-function db(client: unknown): SupabaseClient {
-  return client as SupabaseClient;
+// Inlined from ai-lab.functions to avoid importing createServerFn in a route file.
+const AGENT_KEYS = [
+  "front-office",
+  "pricing",
+  "housekeeping",
+  "maintenance",
+  "finance",
+  "manager",
+] as const;
+
+const AGENT_DEFAULTS: Record<string, string> = {
+  "front-office":
+    "Anda Front Office Agent Pomah Guesthouse. Tangani reservasi, check-in/check-out, dan pertanyaan umum tamu. Ramah, sapa tamu dengan 'Kak', jawab singkat dan jelas. Bantu cek ketersediaan kamar dan arahkan tamu untuk memesan.",
+};
+
+interface AgentConfig { enabled: boolean; autoReply: boolean; instructions: string; }
+interface ToolConfig { enabled: boolean; note: string; }
+interface AiLabConfig { agents: Record<string, AgentConfig>; tools: Record<string, ToolConfig>; }
+
+function mergeAiLabConfig(raw: unknown): AiLabConfig {
+  const c = (raw ?? {}) as Partial<AiLabConfig>;
+  const agents: Record<string, AgentConfig> = {};
+  for (const k of AGENT_KEYS) {
+    const a = c.agents?.[k];
+    agents[k] = {
+      enabled: a?.enabled ?? true,
+      autoReply: a?.autoReply ?? false,
+      instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
+    };
+  }
+  const TOOL_KEYS = ["pms-database", "room-availability", "sop-knowledge", "pricing-engine", "faq-memory"] as const;
+  const tools: Record<string, ToolConfig> = {};
+  for (const k of TOOL_KEYS) {
+    const t = c.tools?.[k];
+    tools[k] = { enabled: t?.enabled ?? true, note: t?.note ?? "" };
+  }
+  return { agents, tools };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function db(client: unknown): any {
+  return client;
 }
 
 const MONTHS_ID = [
