@@ -61,7 +61,7 @@ interface SmartDelayConfig {
 }
 
 const DEFAULT_DELAY: SmartDelayConfig = {
-  enabled:      true,
+  enabled:      false,
   shortMs:      6000,
   mediumMs:     3000,
   longMs:       1000,
@@ -173,7 +173,7 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         // 7. Smart Delay — sleep then winner check
-        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}) };
+        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}), enabled: false };
         const delayMs = calcDelayMs(message, delayCfg);
         let queueEntryId: string | null = null;
 
