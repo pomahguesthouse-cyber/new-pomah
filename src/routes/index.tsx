@@ -344,11 +344,11 @@ function PomahHome() {
             Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
           </p>
         </div>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {FACILITIES.map((f) => (
             <div
               key={f.title}
-              className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm"
+                className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
                 <f.icon className="h-6 w-6" />
