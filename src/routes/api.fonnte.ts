@@ -15,6 +15,9 @@ function getAdminClient() {
 export const Route = createFileRoute("/api/fonnte")({
   server: {
     handlers: {
+      GET: async () => {
+        return new Response("Webhook is active", { status: 200 });
+      },
       POST: async ({ request }) => {
         try {
           const body = await request.json().catch(() => null);
