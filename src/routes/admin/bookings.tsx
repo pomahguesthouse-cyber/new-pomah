@@ -107,6 +107,14 @@ function formatIDR(n: number) {
     .replace("IDR", "Rp.");
 }
 
+function getWhatsAppLink(phone: string) {
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("0")) {
+    cleaned = "62" + cleaned.slice(1);
+  }
+  return `https://wa.me/${cleaned}`;
+}
+
 function BookingsPage() {
   const fn = useServerFn(listBookings);
   const update = useServerFn(updateBookingStatus);
@@ -351,9 +359,19 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <p className="font-medium">{b.guests?.full_name}</p>
-                  <p className="font-mono text-xs text-muted-foreground tabular-nums">
-                    {b.guests?.phone ?? "—"}
-                  </p>
+                  {b.guests?.phone ? (
+                    <a
+                      href={getWhatsAppLink(b.guests.phone)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs text-primary hover:underline tabular-nums"
+                    >
+                      {b.guests.phone}
+                    </a>
+                  ) : (
+                    <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <RoomSummary rooms={b.booking_rooms} />
@@ -600,7 +618,14 @@ function InvoiceDialog({
             </p>
             <p className="font-medium">{booking.guests?.full_name ?? "—"}</p>
             {booking.guests?.phone && (
-              <p className="font-mono text-xs text-muted-foreground">{booking.guests.phone}</p>
+              <a
+                href={getWhatsAppLink(booking.guests.phone)}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-xs text-primary hover:underline"
+              >
+                {booking.guests.phone}
+              </a>
             )}
           </div>
 
