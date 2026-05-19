@@ -78,29 +78,35 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         try {
-          const contentType = request.headers.get("content-type") ?? "";
-          let sender: string | undefined;
-          let message: string | undefined;
-          let name: string | undefined;
+          const rawText = await request.text();
+          console.log("[Fonnte Webhook] raw body:", rawText.slice(0, 300));
 
-          if (contentType.includes("application/json")) {
-            const body = await request.json().catch(() => ({}));
-            sender = body.sender;
-            message = body.message;
-            name = body.name;
-            console.log("[Fonnte Webhook] JSON parsed", { sender, message: message?.slice(0, 30) });
-          } else {
-            const text = await request.text();
-            const params = new URLSearchParams(text);
-            sender = params.get("sender") ?? undefined;
-            message = params.get("message") ?? undefined;
-            name = params.get("name") ?? undefined;
-            console.log("[Fonnte Webhook] form-urlencoded parsed", {
-              raw: text.slice(0, 200),
-              sender,
-              message: message?.slice(0, 30),
-            });
+          // Try JSON first regardless of Content-Type header
+          // Fonnte sends JSON but may not set Content-Type: application/json
+          let body: Record<string, unknown> = {};
+          try {
+            body = JSON.parse(rawText);
+          } catch {
+            // Fall back to form-urlencoded
+            const params = new URLSearchParams(rawText);
+            for (const [k, v] of params.entries()) {
+              body[k] = v;
+            }
           }
+
+          // Fonnte field names: sender/pengirim, message/pesan, name/pushname
+          const sender =
+            (body.sender as string) || (body.pengirim as string) || undefined;
+          const message =
+            (body.message as string) || (body.pesan as string) || undefined;
+          const name =
+            (body.name as string) || (body.pushname as string) || sender;
+
+          console.log("[Fonnte Webhook] parsed fields", {
+            sender,
+            message: message?.slice(0, 50),
+            name,
+          });
 
           if (!sender || !message) {
             console.log("[Fonnte Webhook] missing sender or message, ignoring");
