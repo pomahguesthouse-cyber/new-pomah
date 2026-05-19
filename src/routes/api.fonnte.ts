@@ -161,21 +161,25 @@ async function generateAiReply(
 
   let sopText = "";
   if (cfg.tools["sop-knowledge"]?.enabled) {
-    const { data: sopDocs } = await db(supabaseAdmin)
-      .from("sop_documents")
-      .select("name, content, source_url")
-      .order("created_at", { ascending: true })
-      .limit(40);
-    const parts: string[] = [];
-    for (const d of sopDocs ?? []) {
-      const dd = d as Record<string, unknown>;
-      const c = (dd.content as string | undefined)?.trim();
-      const url = (dd.source_url as string | undefined)?.trim();
-      if (!c && !url) continue;
-      const head = url ? `### ${dd.name as string} (Tautan: ${url})` : `### ${dd.name as string}`;
-      parts.push(c ? `${head}\n${c}` : head);
+    try {
+      const { data: sopDocs } = await db(supabaseAdmin)
+        .from("sop_documents")
+        .select("name, content, source_url")
+        .order("created_at", { ascending: true })
+        .limit(40);
+      const parts: string[] = [];
+      for (const d of sopDocs ?? []) {
+        const dd = d as Record<string, unknown>;
+        const c = (dd.content as string | undefined)?.trim();
+        const url = (dd.source_url as string | undefined)?.trim();
+        if (!c && !url) continue;
+        const head = url ? `### ${dd.name as string} (Tautan: ${url})` : `### ${dd.name as string}`;
+        parts.push(c ? `${head}\n${c}` : head);
+      }
+      sopText = parts.join("\n\n").slice(0, 8000);
+    } catch (sopErr) {
+      console.error("[AutoReply] SOP query failed (continuing without SOP):", sopErr);
     }
-    sopText = parts.join("\n\n").slice(0, 8000);
   }
 
   const todayStr = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
@@ -699,24 +703,35 @@ export const Route = createFileRoute("/api/fonnte")({
                 messages: Array<{ direction: string; body: string }>;
               };
 
+              console.log("[AutoReply] generating reply for", sender);
               const { reply, toolsUsed } = await generateAiReply(c.messages);
+              console.log("[AutoReply] reply generated:", !!reply, "tools:", toolsUsed);
               if (reply) {
                 const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
                 if (sent) {
                   const agent = deriveAgent(toolsUsed);
-                  // Save outbound message with agent + tools metadata.
-                  await rpc.rpc("save_outbound_whatsapp", {
-                    p_thread_id: c.thread_id,
-                    p_body: reply,
-                    p_metadata: { agent, tools_used: toolsUsed },
-                  });
-                  // Also update thread-level tools for the sidebar panel.
-                  await rpc.rpc("update_thread_autoreply_meta", {
+                  // Save outbound message — try new signature (with metadata), fall back to old.
+                  try {
+                    await rpc.rpc("save_outbound_whatsapp", {
+                      p_thread_id: c.thread_id,
+                      p_body: reply,
+                      p_metadata: { agent, tools_used: toolsUsed },
+                    });
+                  } catch {
+                    await supabasePublic.rpc("save_outbound_whatsapp", {
+                      p_thread_id: c.thread_id,
+                      p_body: reply,
+                    });
+                  }
+                  // Update thread-level tools for the sidebar panel (best-effort).
+                  rpc.rpc("update_thread_autoreply_meta", {
                     p_thread_id: c.thread_id,
                     p_tools_used: toolsUsed,
-                  });
+                  }).catch((e: unknown) => console.error("[AutoReply] update meta error", e));
                   console.log("[AutoReply] sent to", sender, "agent:", agent, "tools:", toolsUsed);
                 }
+              } else {
+                console.error("[AutoReply] no reply generated — check LOVABLE_API_KEY and auto_reply_enabled");
               }
             }
           } catch (autoErr) {
