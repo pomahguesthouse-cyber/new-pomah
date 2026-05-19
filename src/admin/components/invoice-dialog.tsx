@@ -11,6 +11,10 @@ import { toast } from "sonner";
 import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
 import { InvoiceDocument, type InvoiceBookingData } from "./invoice-pdf";
 
+type PDFDownloadLinkRenderProps = {
+  loading: boolean;
+};
+
 function formatDateID(iso: string | null | undefined) {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
@@ -87,7 +91,7 @@ Silakan simpan pesan ini sebagai referensi.`;
               fileName={`Invoice-${booking.reference_code || booking.id.slice(0, 8)}.pdf`}
               className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
             >
-              {({ loading }) => (
+              {({ loading }: PDFDownloadLinkRenderProps) => (
                 <>
                   <Download className="h-4 w-4" />
                   {loading ? "Menyiapkan PDF..." : "Download PDF"}
