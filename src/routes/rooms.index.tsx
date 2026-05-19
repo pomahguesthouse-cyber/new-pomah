@@ -25,7 +25,7 @@ function PublicRooms() {
 
   return (
     <div className="min-h-screen bg-white text-stone-900">
-      <PublicNav />
+      <PublicNav property={data?.property} />
 
       {/* Header */}
       <header className="border-b border-stone-200 bg-stone-50">

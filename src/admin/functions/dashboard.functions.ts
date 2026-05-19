@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { formatDateID } from "@/lib/utils";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -116,7 +117,7 @@ function buildDayBuckets(days: number) {
     d.setDate(today.getDate() - i);
     out.push({
       day: dayKey(d),
-      label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      label: formatDateID(d),
     });
   }
   return out;

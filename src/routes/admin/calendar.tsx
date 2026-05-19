@@ -51,7 +51,7 @@ export const Route = createFileRoute("/admin/calendar")({
   component: CalendarPage,
 });
 
-const WINDOW_DAYS = 14;
+const WINDOW_DAYS = 30;
 /** Extra day(s) shown before the anchor, at the far left of the grid. */
 const LEAD_DAYS = 1;
 const MONTHS = [
@@ -405,6 +405,34 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
               )}
             </div>
           ))}
+
+          {/* Bookings with unknown or missing room type */}
+          {(unassignedByType.get(undefined) || unassignedByType.get(null) || []).length > 0 && (
+            <div className="mb-8">
+              <div className="sticky top-0 z-30 flex h-10 items-center border-y border-border bg-red-50 text-red-800 px-4 font-black text-sm tracking-tighter uppercase shadow-sm">
+                Tipe Kamar Tidak Diketahui
+              </div>
+              <div className="relative flex border-b border-border h-[60px] bg-red-50/50">
+                <div
+                  style={{ width: labelWidth }}
+                  className="flex shrink-0 items-center gap-1.5 px-4 border-r border-border text-[10px] font-black uppercase tracking-tight text-red-700 sticky left-0 z-20 bg-red-50 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]"
+                >
+                  Perlu Diperiksa
+                </div>
+                {days.map((d: Date) => (
+                  <div
+                    key={d.toISOString()}
+                    style={{ width: cellWidth }}
+                    className="shrink-0 border-l border-border/50"
+                  />
+                ))}
+                {renderBars([
+                  ...(unassignedByType.get(undefined) || []),
+                  ...(unassignedByType.get(null) || []),
+                ])}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -42,6 +42,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { DatePickerID } from "@/components/ui/date-picker";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -91,11 +92,12 @@ const MONTHS_ID = [
   "November",
   "Desember",
 ];
+/** "2026-05-18" -> "18/05/2026" */
 function fmtDateID(iso: string): string {
   if (!iso) return "";
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS_ID[m - 1]} ${y}`;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 const todayISO = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 function isoAddDays(iso: string, n: number): string {
@@ -688,7 +690,6 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/** Native date input with an Indonesian-formatted caption below it. */
 function DateField({
   value,
   min,
@@ -700,14 +701,12 @@ function DateField({
 }) {
   return (
     <div>
-      <input
-        type="date"
+      <DatePickerID
         value={value}
         min={min}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
+        onChange={onChange}
+        className="h-[42px] border-stone-200 bg-white shadow-none hover:bg-stone-50"
       />
-      {value && <p className="mt-1 text-xs font-medium text-teal-700">{fmtDateID(value)}</p>}
     </div>
   );
 }

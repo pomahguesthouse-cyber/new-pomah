@@ -21,6 +21,8 @@ import {
   Sparkles,
   Landmark,
   FileText,
+  Users,
+  Plus,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -30,6 +32,12 @@ import {
   updateBrandingSettings,
   getIntegrationSettings,
   updateIntegrationSettings,
+  getPropertySettings,
+  updatePropertySettings,
+  getPropertyManagers,
+  addPropertyManager,
+  updatePropertyManagerRole,
+  deletePropertyManager,
 } from "@/admin/modules/settings/settings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +46,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 /** Storage bucket reused for branding assets (logos / favicon). */
@@ -63,6 +78,7 @@ function SettingsPage() {
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="integrasi">Integrasi</TabsTrigger>
           <TabsTrigger value="domain">Domain</TabsTrigger>
+          <TabsTrigger value="manager">Manager</TabsTrigger>
         </TabsList>
 
         <TabsContent value="properti">
@@ -80,6 +96,10 @@ function SettingsPage() {
         <TabsContent value="domain">
           <DomainTab />
         </TabsContent>
+
+        <TabsContent value="manager">
+          <ManagerTab />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -90,39 +110,142 @@ function SettingsPage() {
 /* ------------------------------------------------------------------ */
 
 function PropertyTab() {
-  const fn = useServerFn(getPublicSiteData);
-  const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
-  useRealtimeInvalidate("admin-settings-stream", ["properties"], [["public-site"]]);
-  const p = data?.property;
+  const getFn = useServerFn(getPropertySettings);
+  const updateFn = useServerFn(updatePropertySettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["property-settings"],
+    queryFn: () => getFn(),
+  });
+  useRealtimeInvalidate("admin-settings-stream", ["properties"], [["property-settings"], ["public-site"]]);
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      name?: string | null;
+      tagline?: string | null;
+      address?: string | null;
+      city?: string | null;
+      country?: string | null;
+      email?: string | null;
+      phone?: string | null;
+      whatsapp_number?: string | null;
+      currency?: string | null;
+      timezone?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-settings"] });
+      qc.invalidateQueries({ queryKey: ["public-site"] });
+      toast.success("Tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+
+  const fields = [
+    { key: "name", label: "Name", type: "text" },
+    { key: "tagline", label: "Tagline", type: "text" },
+    { key: "address", label: "Address", type: "text" },
+    { key: "city", label: "City", type: "text" },
+    { key: "country", label: "Country", type: "text" },
+    { key: "email", label: "Email", type: "email" },
+    { key: "phone", label: "Phone", type: "text" },
+    { key: "whatsapp_number", label: "WhatsApp", type: "text" },
+    { key: "currency", label: "Currency", type: "text" },
+    { key: "timezone", label: "Timezone", type: "text" },
+  ] as const;
 
   return (
     <div className="space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground max-w-2xl">
+          Data properti belum ada.
+        </p>
+      )}
       <Card className="max-w-2xl divide-y divide-border p-0">
-        {(
-          [
-            ["Name", p?.name],
-            ["Tagline", p?.tagline],
-            ["Address", p?.address],
-            ["City", p?.city],
-            ["Country", p?.country],
-            ["Email", p?.email],
-            ["Phone", p?.phone],
-            ["WhatsApp", p?.whatsapp_number],
-            ["Currency", p?.currency],
-            ["Timezone", p?.timezone],
-          ] as [string, string | null | undefined][]
-        ).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-3 gap-4 px-5 py-3 text-sm">
-            <dt className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              {k}
-            </dt>
-            <dd className="col-span-2">{v || "—"}</dd>
-          </div>
+        {fields.map((f) => (
+          <InlinePropertyRow
+            key={f.key}
+            label={f.label}
+            value={(data as any)?.[f.key] ?? null}
+            disabled={!id || mutation.isPending}
+            onSave={(v) => id && mutation.mutate({ id, [f.key]: v })}
+          />
         ))}
       </Card>
-      <p className="max-w-2xl text-xs text-muted-foreground">
-        Editing property settings is coming soon — for now, update the database directly.
-      </p>
+    </div>
+  );
+}
+
+function InlinePropertyRow({
+  label,
+  value,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  value: string | null;
+  disabled: boolean;
+  onSave: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+
+  const startEdit = () => {
+    setDraft(value ?? "");
+    setEditing(true);
+  };
+  const cancel = () => {
+    setEditing(false);
+  };
+  const save = () => {
+    onSave(draft.trim() || null);
+    setEditing(false);
+  };
+
+  return (
+    <div className="group flex min-h-[48px] items-center gap-4 px-5 py-2 text-sm transition hover:bg-muted/30">
+      <dt className="w-32 shrink-0 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="flex min-w-0 flex-1 items-center justify-between gap-4">
+        {editing ? (
+          <div className="flex w-full items-center gap-2">
+            <Input
+              autoFocus
+              className="h-8 flex-1 text-sm"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+                if (e.key === "Escape") cancel();
+              }}
+            />
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={save}>
+              <Check className="h-4 w-4 text-green-600" />
+            </Button>
+            <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0" onClick={cancel}>
+              <X className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <span className="truncate">{value || "—"}</span>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+              disabled={disabled}
+              onClick={startEdit}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          </>
+        )}
+      </dd>
     </div>
   );
 }
@@ -761,5 +884,216 @@ function TextSettingCard({
         </div>
       </div>
     </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Manager Tab                                                        */
+/* ------------------------------------------------------------------ */
+
+function ManagerTab() {
+  const getFn = useServerFn(getPropertyManagers);
+  const addFn = useServerFn(addPropertyManager);
+  const updateFn = useServerFn(updatePropertyManagerRole);
+  const deleteFn = useServerFn(deletePropertyManager);
+  
+  const getPropFn = useServerFn(getPropertySettings);
+  const qc = useQueryClient();
+
+  const { data: property } = useQuery({
+    queryKey: ["property-settings"],
+    queryFn: () => getPropFn(),
+  });
+  
+  const { data: managers, isLoading } = useQuery({
+    queryKey: ["property-managers"],
+    queryFn: () => getFn(),
+  });
+
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<"super_admin" | "booking_manager" | "viewer">("super_admin");
+
+  const addMut = useMutation({
+    mutationFn: (v: any) => addFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
+      setPhone("");
+      setName("");
+      toast.success("Manager berhasil ditambahkan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: (v: any) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
+      toast.success("Peran berhasil diubah");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
+      toast.success("Manager berhasil dihapus");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const handleAdd = () => {
+    if (!property?.id) return toast.error("Data properti tidak ditemukan");
+    if (!phone || !name) return toast.error("Nomor dan Nama harus diisi");
+    addMut.mutate({ property_id: property.id, phone, name, role });
+  };
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <Users className="w-5 h-5" />
+          <h2 className="text-lg font-semibold">Daftar Manager</h2>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Nomor pengelola yang akan dilayani AI Admin dengan sapaan personal. Nomor yang tidak terdaftar di sini akan dianggap sebagai tamu.
+        </p>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+          <Input 
+            placeholder="Nomor (e.g. 628123456789)" 
+            value={phone} 
+            onChange={e => setPhone(e.target.value)}
+            className="flex-1"
+          />
+          <Input 
+            placeholder="Nama Manager (e.g. Bu Titik)" 
+            value={name} 
+            onChange={e => setName(e.target.value)}
+            className="flex-1"
+          />
+          <div className="w-48 shrink-0">
+            <Select value={role} onValueChange={(v: any) => setRole(v)}>
+              <SelectTrigger className="w-full bg-white">
+                <SelectValue placeholder="Pilih Peran" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="super_admin">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-red-500" />
+                    <span>Super Admin</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="booking_manager">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span>Booking Manager</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="viewer">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-gray-400" />
+                    <span>Viewer</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleAdd} disabled={addMut.isPending} className="bg-teal-600 hover:bg-teal-700 text-white shrink-0">
+            <Plus className="w-4 h-4 mr-2" />
+            Tambah
+          </Button>
+        </div>
+
+        {/* Legend */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-muted/50 p-3 rounded-md text-sm">
+            <div className="flex items-center gap-2 font-medium mb-1">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              Super Admin
+            </div>
+            <div className="text-muted-foreground text-xs pl-4">Akses penuh semua fitur</div>
+          </div>
+          <div className="bg-muted/50 p-3 rounded-md text-sm">
+            <div className="flex items-center gap-2 font-medium mb-1">
+              <div className="w-2 h-2 rounded-full bg-blue-500" />
+              Booking Manager
+            </div>
+            <div className="text-muted-foreground text-xs pl-4">Kelola booking (tanpa statistik pendapatan)</div>
+          </div>
+          <div className="bg-muted/50 p-3 rounded-md text-sm">
+            <div className="flex items-center gap-2 font-medium mb-1">
+              <div className="w-2 h-2 rounded-full bg-gray-400" />
+              Viewer
+            </div>
+            <div className="text-muted-foreground text-xs pl-4">Hanya lihat ketersediaan kamar</div>
+          </div>
+        </div>
+
+        {/* List */}
+        <div className="space-y-3">
+          {managers?.map(m => (
+            <div key={m.id} className="flex items-center justify-between p-4 rounded-lg border border-border bg-white shadow-sm">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold">{m.name}</span>
+                  {m.role === "super_admin" && <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Super Admin</span>}
+                  {m.role === "booking_manager" && <span className="bg-blue-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Booking Manager</span>}
+                  {m.role === "viewer" && <span className="bg-gray-400 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">Viewer</span>}
+                </div>
+                <div className="text-sm text-muted-foreground">{m.phone}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Select 
+                  value={m.role} 
+                  onValueChange={(v: any) => updateMut.mutate({ id: m.id, role: v })}
+                >
+                  <SelectTrigger className="w-40 h-8 text-xs bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="super_admin" className="text-xs">Super Admin</SelectItem>
+                    <SelectItem value="booking_manager" className="text-xs">Booking Manager</SelectItem>
+                    <SelectItem value="viewer" className="text-xs">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                  onClick={() => {
+                    if (confirm("Hapus manager ini?")) {
+                      deleteMut.mutate(m.id);
+                    }
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {managers?.length === 0 && (
+             <div className="text-center p-6 border border-dashed rounded-lg text-muted-foreground text-sm">
+               Belum ada manager yang didaftarkan.
+             </div>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h3 className="font-semibold mb-2 text-base">Cara Kerja Filter Nomor</h3>
+        <p className="text-sm text-muted-foreground mb-4">Bagaimana Orchestrator membedakan tamu dan pengelola</p>
+        <ul className="space-y-2 text-sm text-foreground">
+          <li className="flex items-center gap-2"><span className="text-blue-500 shrink-0">🔀</span> Pesan masuk diterima oleh <strong className="font-semibold">Orchestrator</strong></li>
+          <li className="flex items-center gap-2"><span className="text-gray-500 shrink-0">📱</span> Nomor dicek di daftar manager di atas</li>
+          <li className="flex items-center gap-2"><span className="text-green-500 shrink-0">✅</span> Jika terdaftar → dialihkan ke <strong className="font-semibold">Manager Bot</strong> (AI Admin)</li>
+          <li className="flex items-center gap-2"><span className="text-purple-500 shrink-0">👤</span> Jika tidak terdaftar → dialihkan ke <strong className="font-semibold">Intent Router</strong> → agent tamu</li>
+          <li className="flex items-center gap-2"><span className="text-pink-500 shrink-0">🤖</span> Manager Bot menyapa personal: <em className="italic">"Halo Bu Titik! Ada yang bisa saya bantu?"</em></li>
+        </ul>
+      </Card>
+    </div>
   );
 }

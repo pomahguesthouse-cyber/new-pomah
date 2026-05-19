@@ -31,6 +31,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { formatDateID } from "@/lib/utils";
 
 const ACCEPT = ".pdf,.doc,.docx,.txt";
 const ALLOWED = ["pdf", "doc", "docx", "txt"];
@@ -308,6 +309,8 @@ function SopCard({
               month: "short",
               year: "numeric",
             })}
+            {doc.file_type ?? "—"} ·{" "}
+            {formatDateID(doc.created_at)}
           </p>
           {isLink && (
             <a
