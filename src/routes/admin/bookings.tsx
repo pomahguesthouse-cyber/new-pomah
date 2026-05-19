@@ -30,6 +30,9 @@ import {
 } from "@/components/ui/dialog";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
+import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
+import { InvoiceDocument, type InvoiceBookingData } from "@/admin/components/invoice-pdf";
+import { Download, Mail, Phone } from "lucide-react";
 
 export const Route = createFileRoute("/admin/bookings")({
   component: BookingsPage,
@@ -585,7 +588,7 @@ function PaymentCell({
   );
 }
 
-/** Read-only invoice dialog for a booking. */
+/** Read-only invoice dialog for a booking displaying PDF. */
 function InvoiceDialog({
   booking,
   onClose,
@@ -594,124 +597,90 @@ function InvoiceDialog({
   onClose: () => void;
 }) {
   if (!booking) return null;
-  const nights = Math.max(1, nightsBetween(booking.check_in, booking.check_out));
-  const rooms = booking.booking_rooms ?? [];
-  const total = Number(booking.total_amount);
-  const paid = Number(booking.paid_amount ?? 0);
-  const sisa = Math.max(0, total - paid);
+  
+  const emailBody = `Halo ${booking.guests?.full_name || ""},
+  
+Terima kasih telah memesan kamar di Pomah Guesthouse.
+Berikut adalah detail pemesanan Anda:
+Booking ID: ${booking.reference_code || booking.id.slice(0,8)}
+Check-in: ${formatDateID(booking.check_in)}
+Check-out: ${formatDateID(booking.check_out)}
+
+Silakan periksa attachment untuk invoice lengkap Anda.
+
+Salam,
+Pomah Guesthouse`;
+
+  const waBody = `Halo ${booking.guests?.full_name || ""},
+Terima kasih telah memesan kamar di Pomah Guesthouse.
+
+Booking ID: ${booking.reference_code || booking.id.slice(0,8)}
+Check-in: ${formatDateID(booking.check_in)}
+Check-out: ${formatDateID(booking.check_out)}
+
+Silakan simpan pesan ini sebagai referensi.`;
+
+  const mailtoLink = `mailto:${booking.guests?.email || ""}?subject=Invoice Pemesanan Pomah Guesthouse - ${booking.reference_code || booking.id.slice(0,8)}&body=${encodeURIComponent(emailBody)}`;
+  const waLink = booking.guests?.phone 
+    ? `${getWhatsAppLink(booking.guests.phone)}?text=${encodeURIComponent(waBody)}`
+    : "#";
 
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Invoice Pemesanan</DialogTitle>
-          <DialogDescription className="font-mono">
-            {booking.reference_code ?? booking.id.slice(0, 8)}
+      <DialogContent className="sm:max-w-[850px] max-h-[95vh] flex flex-col p-6">
+        <DialogHeader className="shrink-0 mb-2">
+          <DialogTitle className="text-2xl">Invoice : {booking.reference_code ?? booking.id.slice(0, 8)}</DialogTitle>
+          <DialogDescription className="text-base text-foreground font-medium">
+            Tamu : {booking.guests?.full_name ?? "—"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 text-sm">
-          {/* Guest */}
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Tamu
-            </p>
-            <p className="font-medium">{booking.guests?.full_name ?? "—"}</p>
-            {booking.guests?.phone && (
-              <a
-                href={getWhatsAppLink(booking.guests.phone)}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-xs text-primary hover:underline"
-              >
-                {booking.guests.phone}
-              </a>
+        <div className="flex flex-wrap gap-2 mb-4 shrink-0">
+          <PDFDownloadLink
+            document={<InvoiceDocument booking={booking as InvoiceBookingData} />}
+            fileName={`Invoice-${booking.reference_code || booking.id.slice(0,8)}.pdf`}
+            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+          >
+            {({ loading }) => (
+              <>
+                <Download className="h-4 w-4" />
+                {loading ? "Menyiapkan PDF..." : "Download PDF"}
+              </>
             )}
-          </div>
+          </PDFDownloadLink>
 
-          {/* Stay */}
-          <div className="grid grid-cols-3 gap-2 rounded-md border border-border p-3 text-xs">
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Check-In
-              </p>
-              <p className="font-mono tabular-nums">{formatDateID(booking.check_in)}</p>
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Check-Out
-              </p>
-              <p className="font-mono tabular-nums">{formatDateID(booking.check_out)}</p>
-            </div>
-            <div>
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                Malam
-              </p>
-              <p className="font-mono tabular-nums">{nights}</p>
-            </div>
-          </div>
+          <a
+            href={mailtoLink}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+          >
+            <Mail className="h-4 w-4" />
+            Kirim Email
+          </a>
 
-          {/* Line items */}
-          <div>
-            <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              Rincian Kamar
-            </p>
-            <div className="divide-y divide-border rounded-md border border-border">
-              {rooms.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">Belum ada kamar.</p>
-              )}
-              {rooms.map((br) => {
-                const rate = Number(br.nightly_rate);
-                return (
-                  <div key={br.id} className="flex items-center justify-between px-3 py-2 text-xs">
-                    <div>
-                      <p className="font-medium">
-                        {br.room_types?.name ?? "—"}{" "}
-                        {br.rooms?.number && (
-                          <span className="text-muted-foreground">{br.rooms.number}</span>
-                        )}
-                      </p>
-                      <p className="font-mono text-[11px] text-muted-foreground">
-                        {formatIDR(rate)} × {nights} malam
-                      </p>
-                    </div>
-                    <p className="font-mono tabular-nums">{formatIDR(rate * nights)}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 font-mono text-xs tabular-nums">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total</span>
-              <span className="font-semibold">{formatIDR(total)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Dibayar</span>
-              <span>{formatIDR(paid)}</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-1">
-              <span className="text-muted-foreground">Sisa</span>
-              <span
-                className={
-                  sisa > 0
-                    ? "font-semibold text-amber-700 dark:text-amber-400"
-                    : "font-semibold text-emerald-600 dark:text-emerald-400"
-                }
-              >
-                {formatIDR(sisa)}
-              </span>
-            </div>
-          </div>
+          <a
+            href={waLink}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+            onClick={(e) => {
+              if (!booking.guests?.phone) {
+                e.preventDefault();
+                toast.error("Tamu belum memiliki nomor HP");
+              }
+            }}
+          >
+            <Phone className="h-4 w-4" />
+            Kirim Whatsapp
+          </a>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Tutup
-          </Button>
-        </DialogFooter>
+        <div className="flex-1 min-h-[500px] border border-border rounded-md overflow-hidden bg-muted/20">
+          <PDFViewer width="100%" height="100%" showToolbar={true}>
+            <InvoiceDocument booking={booking as InvoiceBookingData} />
+          </PDFViewer>
+        </div>
       </DialogContent>
     </Dialog>
   );
