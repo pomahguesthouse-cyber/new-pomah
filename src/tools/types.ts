@@ -24,6 +24,8 @@ export interface ToolContext {
   property:       PropertyRow & Record<string, unknown>;
   /** Today's date in YYYY-MM-DD (UTC+7) */
   today:          string;
+  /** App base URL (e.g. https://pomahguesthouse.com) */
+  origin?:        string;
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */

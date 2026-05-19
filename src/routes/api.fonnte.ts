@@ -108,7 +108,8 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         const { sender, message, name, fonnteId, isOutgoing } = event;
-        console.log("[Webhook]", { sender, isOutgoing, msg: message.slice(0, 60) });
+        const origin = new URL(request.url).origin;
+        console.log("[Webhook]", { sender, isOutgoing, msg: message.slice(0, 60), origin });
 
         // 3. Skip outgoing (Fonnte webhooks our own sends)
         if (isOutgoing) {
@@ -317,6 +318,7 @@ export const Route = createFileRoute("/api/fonnte")({
               rooms:          roomList,
               property:       p as any,
               today,
+              origin,
             },
             llmConfig: { apiKey, baseUrl, model },
             aiLabConfig: aiCfgRaw,
@@ -536,6 +538,7 @@ export const Route = createFileRoute("/api/fonnte")({
                       rooms:          roomList,
                       property:       p as any,
                       today,
+                      origin:         new URL(request.url).origin,
                     },
                     llmConfig: { apiKey, baseUrl, model },
                     aiLabConfig: p.ai_lab_config as any,
