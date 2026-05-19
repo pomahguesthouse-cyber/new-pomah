@@ -16,21 +16,26 @@ type ChatMsg = { who: "bot" | "user"; text: string };
 
 /** Render text with any http(s) URLs turned into clickable links. */
 function linkify(text: string) {
-  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-    /^https?:\/\//.test(part) ? (
-      <a
-        key={i}
-        href={part}
-        target="_blank"
-        rel="noreferrer"
-        className="font-medium text-teal-700 underline underline-offset-2 break-all"
-      >
-        {part}
-      </a>
-    ) : (
-      <span key={i}>{part}</span>
-    ),
-  );
+  return text.split(/(https?:\/\/[^\s]+)/g).map((part, i) => {
+    if (!/^https?:\/\//.test(part)) return <span key={i}>{part}</span>;
+    // Trailing sentence punctuation / brackets are not part of the URL —
+    // including them breaks short links (e.g. maps.app.goo.gl).
+    const url = part.replace(/[.,;:!?)\]}'"»]+$/, "");
+    const trail = part.slice(url.length);
+    return (
+      <span key={i}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="font-medium text-teal-700 underline underline-offset-2 break-all"
+        >
+          {url}
+        </a>
+        {trail}
+      </span>
+    );
+  });
 }
 type Room = { name: string; base_rate?: number | string | null };
 
