@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           id: string
           rating: string | null
+          source: string | null
           thread_id: string | null
           used: boolean
           user_message: string | null
@@ -31,6 +32,7 @@ export type Database = {
           created_at?: string
           id?: string
           rating?: string | null
+          source?: string | null
           thread_id?: string | null
           used?: boolean
           user_message?: string | null
@@ -41,6 +43,7 @@ export type Database = {
           created_at?: string
           id?: string
           rating?: string | null
+          source?: string | null
           thread_id?: string | null
           used?: boolean
           user_message?: string | null
@@ -165,7 +168,9 @@ export type Database = {
         Row: {
           adults: number
           check_in: string
+          check_in_time: string | null
           check_out: string
+          check_out_time: string | null
           children: number
           created_at: string
           guest_id: string
@@ -174,6 +179,7 @@ export type Database = {
           nightly_rate: number | null
           nights: number | null
           paid_amount: number
+          payment_method: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           property_id: string
           reference_code: string
@@ -188,7 +194,9 @@ export type Database = {
         Insert: {
           adults?: number
           check_in: string
+          check_in_time?: string | null
           check_out: string
+          check_out_time?: string | null
           children?: number
           created_at?: string
           guest_id: string
@@ -197,6 +205,7 @@ export type Database = {
           nightly_rate?: number | null
           nights?: number | null
           paid_amount?: number
+          payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id: string
           reference_code?: string
@@ -211,7 +220,9 @@ export type Database = {
         Update: {
           adults?: number
           check_in?: string
+          check_in_time?: string | null
           check_out?: string
+          check_out_time?: string | null
           children?: number
           created_at?: string
           guest_id?: string
@@ -220,6 +231,7 @@ export type Database = {
           nightly_rate?: number | null
           nights?: number | null
           paid_amount?: number
+          payment_method?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"]
           property_id?: string
           reference_code?: string
@@ -420,6 +432,10 @@ export type Database = {
       properties: {
         Row: {
           address: string | null
+          ai_api_key: string | null
+          ai_base_url: string | null
+          ai_lab_config: Json
+          ai_model: string | null
           city: string | null
           country: string | null
           created_at: string
@@ -430,13 +446,19 @@ export type Database = {
           fonnte_token: string | null
           google_analytics_id: string | null
           google_place_id: string | null
+          google_places_api_key: string | null
           google_search_console: string | null
           google_tag_manager_id: string | null
           hero_image_url: string | null
+          homepage_config: Json
+          hotel_policy: string | null
           id: string
           invoice_logo_url: string | null
           logo_url: string | null
           name: string
+          payment_account_holder: string | null
+          payment_account_number: string | null
+          payment_bank_name: string | null
           phone: string | null
           public_domain: string | null
           tagline: string | null
@@ -446,6 +468,10 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          ai_api_key?: string | null
+          ai_base_url?: string | null
+          ai_lab_config?: Json
+          ai_model?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
@@ -456,13 +482,19 @@ export type Database = {
           fonnte_token?: string | null
           google_analytics_id?: string | null
           google_place_id?: string | null
+          google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
           hero_image_url?: string | null
+          homepage_config?: Json
+          hotel_policy?: string | null
           id?: string
           invoice_logo_url?: string | null
           logo_url?: string | null
           name: string
+          payment_account_holder?: string | null
+          payment_account_number?: string | null
+          payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
           tagline?: string | null
@@ -472,6 +504,10 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          ai_api_key?: string | null
+          ai_base_url?: string | null
+          ai_lab_config?: Json
+          ai_model?: string | null
           city?: string | null
           country?: string | null
           created_at?: string
@@ -482,13 +518,19 @@ export type Database = {
           fonnte_token?: string | null
           google_analytics_id?: string | null
           google_place_id?: string | null
+          google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
           hero_image_url?: string | null
+          homepage_config?: Json
+          hotel_policy?: string | null
           id?: string
           invoice_logo_url?: string | null
           logo_url?: string | null
           name?: string
+          payment_account_holder?: string | null
+          payment_account_number?: string | null
+          payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
           tagline?: string | null
@@ -508,6 +550,7 @@ export type Database = {
           description: string | null
           hero_image_url: string | null
           id: string
+          images: string[]
           name: string
           property_id: string
           size_sqm: number | null
@@ -522,6 +565,7 @@ export type Database = {
           description?: string | null
           hero_image_url?: string | null
           id?: string
+          images?: string[]
           name: string
           property_id: string
           size_sqm?: number | null
@@ -536,6 +580,7 @@ export type Database = {
           description?: string | null
           hero_image_url?: string | null
           id?: string
+          images?: string[]
           name?: string
           property_id?: string
           size_sqm?: number | null
@@ -648,6 +693,44 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      sop_documents: {
+        Row: {
+          content: string | null
+          created_at: string
+          file_path: string | null
+          file_type: string | null
+          id: string
+          name: string
+          property_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          name: string
+          property_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          name?: string
+          property_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sop_documents_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -775,6 +858,30 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      log_webchat_message: {
+        Args: {
+          p_ai_response: string
+          p_thread_id: string
+          p_user_message: string
+        }
+        Returns: undefined
+      }
+      room_type_availability: {
+        Args: { p_check_in: string; p_check_out: string }
+        Returns: {
+          available: boolean
+          room_type_id: string
+        }[]
+      }
+      room_type_availability_detail: {
+        Args: { p_check_in: string; p_check_out: string }
+        Returns: {
+          available: number
+          room_type_id: string
+          taken: number
+          total: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "staff"
