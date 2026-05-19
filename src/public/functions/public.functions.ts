@@ -758,6 +758,54 @@ export const chatWithAI = createServerFn({ method: "POST" })
       },
     ];
 
+    // Friendly names for the tools, and a record of which ones actually ran.
+    const TOOL_LABEL: Record<string, string> = {
+      check_room_availability: "Room Availability",
+      create_booking: "Booking Engine",
+    };
+    const toolsUsed = new Set<string>();
+
+    /** Ask the LLM to classify the guest's intent (best-effort). */
+    const classifyIntent = async (
+      userMsg: string,
+      reply: string,
+    ): Promise<{ intent: string; confidence: number }> => {
+      try {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            max_tokens: 80,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "Anda pengklasifikasi intent percakapan tamu hotel. Balas HANYA JSON " +
+                  '{"intent":"<3-5 kata Bahasa Indonesia>","confidence":<0..1>} tanpa teks lain.',
+              },
+              { role: "user", content: `Pesan tamu: ${userMsg}\nBalasan asisten: ${reply}` },
+            ],
+          }),
+        });
+        const txt = await res.text();
+        const json = JSON.parse(txt) as { choices?: { message?: { content?: string } }[] };
+        const content = json.choices?.[0]?.message?.content ?? "";
+        const m = content.match(/\{[\s\S]*\}/);
+        if (m) {
+          const o = JSON.parse(m[0]) as { intent?: string; confidence?: number };
+          return {
+            intent: String(o.intent ?? "").slice(0, 80),
+            confidence: Math.max(0, Math.min(1, Number(o.confidence) || 0)),
+          };
+        }
+      } catch {
+        /* classification is optional */
+      }
+      return { intent: "", confidence: 0 };
+    };
+
     type LlmMsg = Record<string, unknown>;
     const messages: LlmMsg[] = [{ role: "system", content: system }, ...data.messages];
 
@@ -812,8 +860,10 @@ export const chatWithAI = createServerFn({ method: "POST" })
             }
             if (tc.function?.name === "check_room_availability") {
               out = await runAvailability(args);
+              toolsUsed.add(TOOL_LABEL.check_room_availability);
             } else if (tc.function?.name === "create_booking") {
               out = await runCreateBooking(args);
+              toolsUsed.add(TOOL_LABEL.create_booking);
             }
             messages.push({ role: "tool", tool_call_id: tc.id, content: out });
           }
@@ -822,15 +872,22 @@ export const chatWithAI = createServerFn({ method: "POST" })
         const reply = msg?.content;
         if (reply && reply.trim()) {
           const finalReply = reply.trim();
-          // Log the exchange as one webchat thread (best-effort).
+          // Log the exchange as one webchat thread with real metadata
+          // (best-effort — never block the reply).
           if (data.threadId) {
             const lastUser = [...data.messages].reverse().find((m) => m.role === "user");
             if (lastUser) {
               try {
+                const { intent, confidence } = await classifyIntent(lastUser.content, finalReply);
                 await rpcClient.rpc("log_webchat_message", {
                   p_thread_id: data.threadId,
                   p_user_message: lastUser.content,
                   p_ai_response: finalReply,
+                  p_metadata: {
+                    intent,
+                    confidence,
+                    tools: Array.from(toolsUsed),
+                  },
                 });
               } catch {
                 /* logging must never break the reply */

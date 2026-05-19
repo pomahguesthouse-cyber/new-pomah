@@ -24,12 +24,14 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
+type LogMeta = { intent?: string; confidence?: number; tools?: string[] };
 type LogRow = {
   id: string;
   thread_id: string | null;
   user_message: string | null;
   ai_response: string | null;
   used: boolean | null;
+  metadata: LogMeta | null;
   created_at: string;
 };
 
@@ -64,20 +66,59 @@ type Analysis = {
   tools: string[];
   confidence: number;
   escalation: string[];
+  /** Where the intent/confidence came from. */
+  source: "llm" | "heuristik";
 };
 
-const AGENT_BY_INTENT: Record<string, string> = {
-  "Pemesanan kamar": "Front Office Agent",
-  "Cek ketersediaan": "Front Office Agent",
-  "Tanya harga": "Pricing Agent",
-  "Tanya fasilitas": "Housekeeping Agent",
-  "Tanya lokasi": "Front Office Agent",
-  Pembayaran: "Finance Agent",
-  "Pertanyaan umum": "Front Office Agent",
-};
+/** Pick the responsible agent from intent text + tools. */
+function agentFor(intent: string, tools: string[]): string {
+  const t = intent.toLowerCase();
+  if (tools.includes("Booking Engine") || /pesan|booking|reservasi/.test(t))
+    return "Front Office Agent";
+  if (/harga|tarif|biaya|price/.test(t)) return "Pricing Agent";
+  if (/bayar|pembayaran|transfer|tagihan/.test(t)) return "Finance Agent";
+  if (/fasilitas|kebersihan|housekeeping|kamar siap/.test(t)) return "Housekeeping Agent";
+  if (/rusak|perbaikan|maintenance/.test(t)) return "Maintenance Agent";
+  return "Front Office Agent";
+}
 
-/** Derive intent / agent / tools / confidence from a conversation. */
+function buildEscalation(agent: string, tools: string[]): string[] {
+  return [
+    "AI Orchestrator",
+    agent,
+    ...(tools.length ? tools : ["Tanpa tool"]),
+    "Response Composer",
+  ];
+}
+
+/** Use real stored metadata when present, otherwise fall back to heuristics. */
 function analyzeThread(rows: LogRow[]): Analysis {
+  // Prefer the LLM-classified metadata recorded with the logs.
+  const tools = new Set<string>();
+  let intent = "";
+  let confidence = 0;
+  for (const r of rows) {
+    const m = r.metadata;
+    if (!m) continue;
+    (m.tools ?? []).forEach((t) => tools.add(t));
+    if (m.intent) {
+      intent = m.intent;
+      if (typeof m.confidence === "number") confidence = m.confidence;
+    }
+  }
+  if (intent) {
+    const agent = agentFor(intent, [...tools]);
+    return {
+      intent,
+      agent,
+      tools: [...tools],
+      confidence,
+      escalation: buildEscalation(agent, [...tools]),
+      source: "llm",
+    };
+  }
+
+  // Heuristic fallback for older logs without metadata.
   const userText = rows
     .map((r) => r.user_message ?? "")
     .join(" ")
@@ -87,35 +128,33 @@ function analyzeThread(rows: LogRow[]): Analysis {
     .join(" ")
     .toLowerCase();
 
-  let intent = "Pertanyaan umum";
-  if (/\b(pesan|booking|book|reservasi|memesan)\b/.test(userText)) intent = "Pemesanan kamar";
+  let hIntent = "Pertanyaan umum";
+  if (/\b(pesan|booking|book|reservasi|memesan)\b/.test(userText)) hIntent = "Pemesanan kamar";
   else if (/(tersedia|kosong|ready|ketersediaan|ada kamar)/.test(userText))
-    intent = "Cek ketersediaan";
-  else if (/(harga|tarif|biaya|price|berapa)/.test(userText)) intent = "Tanya harga";
-  else if (/(fasilitas|wifi|sarapan|parkir)/.test(userText)) intent = "Tanya fasilitas";
-  else if (/(lokasi|alamat|dimana|peta|arah)/.test(userText)) intent = "Tanya lokasi";
-  else if (/(bayar|pembayaran|transfer|rekening)/.test(userText)) intent = "Pembayaran";
+    hIntent = "Cek ketersediaan";
+  else if (/(harga|tarif|biaya|price|berapa)/.test(userText)) hIntent = "Tanya harga";
+  else if (/(fasilitas|wifi|sarapan|parkir)/.test(userText)) hIntent = "Tanya fasilitas";
+  else if (/(lokasi|alamat|dimana|peta|arah)/.test(userText)) hIntent = "Tanya lokasi";
+  else if (/(bayar|pembayaran|transfer|rekening)/.test(userText)) hIntent = "Pembayaran";
 
-  const tools: string[] = [];
-  if (/ketersediaan kamar untuk|kamar tersedia/.test(aiText)) tools.push("Room Availability");
-  if (/kode booking|pmh-|booking.*berhasil/.test(aiText)) tools.push("PMS Database");
-  if (/rp\s?\d/.test(aiText)) tools.push("Pricing Engine");
+  const hTools: string[] = [];
+  if (/ketersediaan kamar untuk|kamar tersedia/.test(aiText)) hTools.push("Room Availability");
+  if (/kode booking|pmh-|booking.*berhasil/.test(aiText)) hTools.push("Booking Engine");
 
-  const agent = AGENT_BY_INTENT[intent] ?? "Front Office Agent";
+  let hConf = 0.55;
+  if (hIntent !== "Pertanyaan umum") hConf += 0.2;
+  if (hTools.length) hConf += 0.15;
+  hConf = Math.min(0.95, hConf);
 
-  let confidence = 0.55;
-  if (intent !== "Pertanyaan umum") confidence += 0.2;
-  if (tools.length) confidence += 0.15;
-  if (rows.some((r) => (r.ai_response?.length ?? 0) > 40)) confidence += 0.05;
-  confidence = Math.min(0.97, confidence);
-
-  const escalation = [
-    "AI Orchestrator",
-    agent,
-    ...(tools.length ? tools : ["Tanpa tool"]),
-    "Response Composer",
-  ];
-  return { intent, agent, tools, confidence, escalation };
+  const hAgent = agentFor(hIntent, hTools);
+  return {
+    intent: hIntent,
+    agent: hAgent,
+    tools: hTools,
+    confidence: hConf,
+    escalation: buildEscalation(hAgent, hTools),
+    source: "heuristik",
+  };
 }
 
 const fmt = (iso: string) =>
@@ -243,9 +282,26 @@ export function WebchatLogView() {
       {/* Properties sidebar */}
       {current && analysis && (
         <aside className="w-80 shrink-0 space-y-5 overflow-y-auto border-l border-border bg-white p-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Properti Percakapan
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Properti Percakapan
+            </p>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[9px] font-bold uppercase",
+                analysis.source === "llm"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-stone-200 text-stone-500",
+              )}
+              title={
+                analysis.source === "llm"
+                  ? "Metadata nyata dari LLM"
+                  : "Perkiraan heuristik (log lama tanpa metadata)"
+              }
+            >
+              {analysis.source === "llm" ? "data LLM" : "heuristik"}
+            </span>
+          </div>
 
           <PropBlock icon={<Target className="h-4 w-4" />} label="Intent">
             <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-800">
