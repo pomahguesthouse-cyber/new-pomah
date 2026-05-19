@@ -811,16 +811,7 @@ export const Route = createFileRoute("/api/fonnte")({
               }).catch((e) => console.error("[Webhook] save inbound metadata error", e));
             }
 
-            // Debounce: wait 5 seconds before generating a reply.
-            // If the guest sends several messages in rapid succession ("selamat malam" /
-            // "mau tanya kamar" / "untuk besok"), each webhook starts a background task
-            // that sleeps here.  After the window, only the task tied to the LATEST
-            // inbound message proceeds; the earlier ones detect a newer message and skip.
-            // This gives the AI full context of all follow-up messages at once.
-            await new Promise<void>((r) => setTimeout(r, 5_000));
-
             // Auto-reply using the full AI chat engine.
-            // Called AFTER the debounce so the context includes any follow-up messages.
             const { data: ctx } = await supabasePublic.rpc("get_autoreply_context", {
               p_phone: sender,
             });
@@ -833,24 +824,10 @@ export const Route = createFileRoute("/api/fonnte")({
               messages: Array<{ direction: string; body: string }>;
             };
 
-            // Debounce gate: verify this is still the latest inbound message in the
-            // thread.  If a follow-up arrived during the 5-second window, its task
-            // will handle the reply with the complete context.
-            const { data: latestIn } = await supabaseAdmin
-              .from("whatsapp_messages")
-              .select("id")
-              .eq("thread_id", c.thread_id)
-              .eq("direction", "in")
-              .order("sent_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (latestIn && (latestIn as { id: string }).id !== (inboundId as string)) {
-              console.log("[AutoReply] debounce: follow-up detected, deferring to latest message task for", sender);
-              return;
-            }
-
-            // Layer 2 dedup: in-progress Set (same instance, concurrent requests that
-            // survived both the key-map check and the debounce window).
+            // Layer 2 dedup: in-progress Set — prevents a second concurrent task on
+            // the same instance from starting a parallel AI generation for the same
+            // thread.  The lock is held only during generation+send, so subsequent
+            // messages are processed normally once the current reply is sent.
             if (_inProgress.has(c.thread_id)) {
               console.log("[AutoReply] thread already in-progress:", c.thread_id, "— skipping");
               return;
@@ -865,6 +842,26 @@ export const Route = createFileRoute("/api/fonnte")({
               if (!reply) {
                 console.error("[AutoReply] no reply generated");
                 return;
+              }
+
+              // Post-generation debounce gate: if the guest sent a follow-up message
+              // while the AI was generating (typically 3–7 s), discard this reply and
+              // let that follow-up's background task handle the response with full
+              // context. This gives a natural debounce window without a sleep that
+              // would risk the Cloudflare Worker being recycled mid-task.
+              if (inboundId) {
+                const { data: latestIn } = await supabaseAdmin
+                  .from("whatsapp_messages")
+                  .select("id")
+                  .eq("thread_id", c.thread_id)
+                  .eq("direction", "in")
+                  .order("sent_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (latestIn && (latestIn as { id: string }).id !== String(inboundId)) {
+                  console.log("[AutoReply] follow-up detected after generation, deferring for", sender);
+                  return;
+                }
               }
 
               const sent = await sendViaFonnte(c.fonnte_token, sender, reply);
