@@ -516,8 +516,9 @@ export const chatWithAI = createServerFn({ method: "POST" })
         ? "Basis Pengetahuan SOP (rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
           "lainnya). Sebagian entri menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
           "lokasi, peta/Google Maps, alamat, atau panduan tertentu, KIRIMKAN URL lengkap dari " +
-          "entri SOP yang relevan — tulis URL-nya apa adanya agar bisa langsung diklik tamu. " +
-          `Jangan pernah mengarang URL.\n${sopText}`
+          "entri SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
+          "dipotong, jangan dibungkus tanda kurung/markdown, dan jangan beri tanda baca " +
+          `menempel di akhir URL. Jangan pernah mengarang URL.\n${sopText}`
         : "",
       "KETERSEDIAAN KAMAR: Anda memiliki tool `check_room_availability`. Setiap kali tamu " +
         "menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin " +
