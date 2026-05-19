@@ -42,6 +42,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { DatePickerID } from "@/components/ui/date-picker";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -689,7 +690,6 @@ function Labeled({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/** Native date input with an Indonesian-formatted caption below it. */
 function DateField({
   value,
   min,
@@ -701,14 +701,12 @@ function DateField({
 }) {
   return (
     <div>
-      <input
-        type="date"
+      <DatePickerID
         value={value}
         min={min}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
+        onChange={onChange}
+        className="h-[42px] border-stone-200 bg-white shadow-none hover:bg-stone-50"
       />
-      {value && <p className="mt-1 text-xs font-medium text-teal-700">{fmtDateID(value)}</p>}
     </div>
   );
 }
