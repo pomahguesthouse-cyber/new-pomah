@@ -4,7 +4,7 @@ ALTER TABLE public.whatsapp_messages
 
 -- receive_whatsapp_message now returns the new message's uuid so the
 -- webhook can immediately attach metadata to it.
-DROP FUNCTION IF EXISTS public.receive_whatsapp_message(text,text,text);
+DO $$ BEGIN DROP FUNCTION IF EXISTS public.receive_whatsapp_message(text,text,text); EXCEPTION WHEN undefined_function THEN NULL; END $$;
 CREATE OR REPLACE FUNCTION public.receive_whatsapp_message(
   p_phone text,
   p_name  text,
@@ -43,7 +43,7 @@ END;
 $$;
 
 -- save_outbound_whatsapp now accepts optional metadata and returns message id.
-DROP FUNCTION IF EXISTS public.save_outbound_whatsapp(uuid,text);
+DO $$ BEGIN DROP FUNCTION IF EXISTS public.save_outbound_whatsapp(uuid,text); EXCEPTION WHEN undefined_function THEN NULL; END $$;
 CREATE OR REPLACE FUNCTION public.save_outbound_whatsapp(
   p_thread_id uuid,
   p_body      text,
