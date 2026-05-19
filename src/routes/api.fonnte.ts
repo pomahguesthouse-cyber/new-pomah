@@ -1,17 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
-
-// Use anon key — inserts are done via SECURITY DEFINER RPC, no service_role needed
-function getAnonClient() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase env for webhook");
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false },
-  });
-}
+import { supabasePublic } from "@/integrations/supabase/client.server";
 
 function verifyToken(request: Request): boolean {
   const expected = process.env.FONNTE_WEBHOOK_TOKEN;
@@ -74,9 +62,7 @@ export const Route = createFileRoute("/api/fonnte")({
             return new Response("OK", { status: 200 });
           }
 
-          const supabase = getAnonClient();
-
-          const { error } = await supabase.rpc("receive_whatsapp_message", {
+          const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
             p_phone: sender,
             p_name: name ?? sender,
             p_body: message,
