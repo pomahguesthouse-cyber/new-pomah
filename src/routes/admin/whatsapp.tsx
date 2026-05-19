@@ -913,8 +913,47 @@ function Row({
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+function MessageBadges({ m }: { m: any }) {
+  const meta = m.metadata as Record<string, unknown> | null | undefined;
+  if (!meta) return null;
+  const isOut = m.direction === "out";
+
+  if (!isOut) {
+    const intent = meta.intent_label as string | undefined;
+    if (!intent) return null;
+    return (
+      <div className="mt-1 flex justify-start">
+        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+          {intent}
+        </span>
+      </div>
+    );
+  }
+
+  const agent = meta.agent as string | undefined;
+  const tools = Array.isArray(meta.tools_used) ? (meta.tools_used as string[]) : [];
+  if (!agent && tools.length === 0) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap justify-end gap-1">
+      {agent && (
+        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+          {agent}
+        </span>
+      )}
+      {tools.map((t) => (
+        <span
+          key={t}
+          className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
+        >
+          Tools: {t}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function MessageStream({ messages }: { messages: any[] }) {
-  // Group by date
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
   for (const m of messages) {
@@ -939,7 +978,7 @@ function MessageStream({ messages }: { messages: any[] }) {
             {g.items.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex", m.direction === "out" ? "justify-end" : "justify-start")}
+                className={cn("flex flex-col", m.direction === "out" ? "items-end" : "items-start")}
               >
                 <div
                   className={cn(
@@ -961,6 +1000,7 @@ function MessageStream({ messages }: { messages: any[] }) {
                     {formatTimeID(m.sent_at)}
                   </p>
                 </div>
+                <MessageBadges m={m} />
               </div>
             ))}
           </div>
