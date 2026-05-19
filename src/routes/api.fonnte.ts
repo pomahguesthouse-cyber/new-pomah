@@ -24,16 +24,56 @@ export const Route = createFileRoute("/api/fonnte")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        // Support webhook verification ping with token
         const url = new URL(request.url);
+
+        // Challenge ping
         const challenge = url.searchParams.get("challenge");
         if (challenge && verifyToken(request)) {
           return new Response(challenge, { status: 200 });
         }
+
+        // Debug: ?debug=1 — tests Supabase connection + RPC, returns JSON report
+        if (url.searchParams.get("debug") === "1") {
+          const report: Record<string, unknown> = {
+            env_token_set: !!process.env.FONNTE_WEBHOOK_TOKEN,
+            env_supabase_url_set: !!process.env.SUPABASE_URL,
+            env_supabase_key_set: !!process.env.SUPABASE_PUBLISHABLE_KEY,
+          };
+
+          try {
+            const { error } = await supabasePublic.rpc("receive_whatsapp_message", {
+              p_phone: "debug_test_000",
+              p_name: "Debug Test",
+              p_body: "[DEBUG] Webhook test message — safe to delete",
+            });
+            report.rpc_ok = !error;
+            report.rpc_error = error ? { code: error.code, message: error.message } : null;
+          } catch (e) {
+            report.rpc_ok = false;
+            report.rpc_error = String(e);
+          }
+
+          return new Response(JSON.stringify(report, null, 2), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
         return new Response("Webhook is active", { status: 200 });
       },
       POST: async ({ request }) => {
+        const reqUrl = new URL(request.url);
+        const tokenInUrl = reqUrl.searchParams.get("token");
+        const envToken = process.env.FONNTE_WEBHOOK_TOKEN;
+        console.log("[Fonnte Webhook] POST received", {
+          token_in_url: tokenInUrl ? tokenInUrl.slice(0, 8) + "..." : null,
+          env_token_set: !!envToken,
+          token_match: !envToken || tokenInUrl === envToken,
+          content_type: request.headers.get("content-type"),
+        });
+
         if (!verifyToken(request)) {
+          console.warn("[Fonnte Webhook] 401 — token mismatch");
           return new Response("Unauthorized", { status: 401 });
         }
 
@@ -48,15 +88,20 @@ export const Route = createFileRoute("/api/fonnte")({
             sender = body.sender;
             message = body.message;
             name = body.name;
+            console.log("[Fonnte Webhook] JSON parsed", { sender, message: message?.slice(0, 30) });
           } else {
-            // Fonnte sends form-urlencoded by default
             const text = await request.text();
             const params = new URLSearchParams(text);
             sender = params.get("sender") ?? undefined;
             message = params.get("message") ?? undefined;
             name = params.get("name") ?? undefined;
-            console.log("[Fonnte Webhook] form body:", text);
+            console.log("[Fonnte Webhook] form-urlencoded parsed", {
+              raw: text.slice(0, 200),
+              sender,
+              message: message?.slice(0, 30),
+            });
           }
+
           if (!sender || !message) {
             console.log("[Fonnte Webhook] missing sender or message, ignoring");
             return new Response("OK", { status: 200 });
