@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
 /** Untyped client view — `images` column isn't in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -582,25 +583,21 @@ export const chatWithAI = createServerFn({ method: "POST" })
         } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`,
     );
 
-    // SOP knowledge base — uploaded documents the agents draw on. Read
-    // with the service-role client (sop_documents is staff-RLS).
+    // SOP knowledge base — use semantic search to fetch relevant chunks
     let sopText = "";
     if (cfg.tools["sop-knowledge"]?.enabled) {
-      const { data: sopDocs } = await db(supabaseAdmin)
-        .from("sop_documents")
-        .select("name, content, source_url")
-        .order("created_at", { ascending: true })
-        .limit(40);
-      const parts: string[] = [];
-      for (const d of sopDocs ?? []) {
-        const dd = d as Record<string, unknown>;
-        const c = (dd.content as string | undefined)?.trim();
-        const url = (dd.source_url as string | undefined)?.trim();
-        if (!c && !url) continue;
-        const head = url ? `### ${dd.name as string} (Tautan: ${url})` : `### ${dd.name as string}`;
-        parts.push(c ? `${head}\n${c}` : head);
+      const userMessage = [...data.messages].reverse().find(m => m.role === "user")?.content || "";
+      try {
+        sopText = await retrieveRelevantSopContext(
+          db(supabaseAdmin),
+          userMessage,
+          { apiKey: key, baseUrl, model },
+          5, // match count
+          0.7 // threshold
+        );
+      } catch (e) {
+        console.warn("[Webchat] SOP vector search error:", e);
       }
-      sopText = parts.join("\n\n").slice(0, 8000);
     }
 
     // Today in WIB (UTC+7) so "hari ini" is correct for Indonesia.
@@ -620,10 +617,10 @@ export const chatWithAI = createServerFn({ method: "POST" })
         ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
         : "",
       sopText
-        ? "Basis Pengetahuan SOP (rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
-          "lainnya). Sebagian entri menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
+        ? "Cuplikan Pengetahuan SOP (hasil pencarian relevan, rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
+          "lainnya). Sebagian cuplikan menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
           "lokasi, peta/Google Maps, alamat, atau panduan tertentu, KIRIMKAN URL lengkap dari " +
-          "entri SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
+          "cuplikan SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
           "dipotong, jangan dibungkus tanda kurung/markdown, dan jangan beri tanda baca " +
           `menempel di akhir URL. Jangan pernah mengarang URL.\n${sopText}`
         : "",

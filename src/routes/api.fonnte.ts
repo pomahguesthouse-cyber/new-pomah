@@ -48,6 +48,7 @@ import {
   deriveAgentLabelFromKey,
 }                                      from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                    from "@/lib/date";
+import { retrieveRelevantSopContext }  from "@/ai/rag.service";
 
 // ─── Smart Delay (in-process, no external deps needed) ────────────────────────
 
@@ -241,32 +242,7 @@ export const Route = createFileRoute("/api/fonnte")({
             .select("id, name, base_rate, capacity, bed_type, description")
             .order("base_rate");
 
-          // SOP (only if enabled in ai_lab_config)
-          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
-          const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
-          let sopText = "";
-          if (sopEnabled) {
-            try {
-              const { data: sopDocs } = await (supabaseAdmin as any)
-                .from("sop_documents")
-                .select("name, content, source_url")
-                .order("created_at", { ascending: true })
-                .limit(40);
-              const parts: string[] = [];
-              for (const d of (sopDocs ?? []) as any[]) {
-                const content = d.content?.trim();
-                const url     = d.source_url?.trim();
-                if (!content && !url) continue;
-                const head = url ? `### ${d.name} (Tautan: ${url})` : `### ${d.name}`;
-                parts.push(content ? `${head}\n${content}` : head);
-              }
-              sopText = parts.join("\n\n").slice(0, 8000);
-            } catch (e) {
-              console.warn("[AutoReply] SOP load error:", e);
-            }
-          }
-
-          // Resolve AI credentials
+          // Resolve AI credentials early to use for embeddings
           const explicitKey = (p.ai_api_key as string | undefined)?.trim();
           const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
           const useLovable  = !explicitKey && !!lovableKey;
@@ -285,6 +261,27 @@ export const Route = createFileRoute("/api/fonnte")({
           const model = useLovable
             ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
             : cfgModel || "gpt-4o-mini";
+
+          const llmConfig = { apiKey, baseUrl, model };
+
+          // SOP (only if enabled in ai_lab_config) using RAG vector search
+          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
+          const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
+          let sopText = "";
+          if (sopEnabled) {
+            try {
+              // We use the user's latest message to find relevant SOP chunks
+              sopText = await retrieveRelevantSopContext(
+                supabaseAdmin as any,
+                message,
+                llmConfig,
+                5,   // match count
+                0.7 // match threshold
+              );
+            } catch (e) {
+              console.warn("[AutoReply] SOP vector search error:", e);
+            }
+          }
 
           const today    = todayWIB();
           const roomList = (rooms ?? []) as any[];

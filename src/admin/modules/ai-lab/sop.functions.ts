@@ -7,6 +7,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { processSopDocumentChunks } from "@/ai/rag.service";
+import type { AiClientConfig } from "@/ai/types";
 
 /** Untyped client view — `sop_documents` is not in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -22,6 +24,27 @@ export type SopDocument = {
   content: string | null;
   created_at: string;
 };
+
+async function getAiConfig(supabase: SupabaseClient): Promise<AiClientConfig | null> {
+  const { data: prop } = await supabase.from("properties").select("*").limit(1).maybeSingle();
+  const p = (prop ?? {}) as Record<string, unknown>;
+  const explicitKey = (p.ai_api_key as string | undefined)?.trim();
+  const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
+  const useLovable  = !explicitKey && !!lovableKey;
+  const apiKey      = explicitKey || lovableKey;
+
+  if (!apiKey) return null;
+
+  const baseUrl = useLovable
+    ? "https://ai.gateway.lovable.dev/v1"
+    : ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+  const cfgModel = (p.ai_model as string | undefined)?.trim();
+  const model = useLovable
+    ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
+    : cfgModel || "gpt-4o-mini";
+
+  return { apiKey, baseUrl, model };
+}
 
 /** List all SOP documents, newest first. */
 export const listSopDocuments = createServerFn({ method: "GET" })
@@ -54,15 +77,31 @@ export const createSopDocument = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const sb = db(context.supabase);
     const { data: prop } = await sb.from("properties").select("id").limit(1).maybeSingle();
-    const { error } = await sb.from("sop_documents").insert({
+    const { error, data: insertedSop } = await sb.from("sop_documents").insert({
       property_id: (prop as Record<string, unknown> | null)?.id ?? null,
       name: data.name,
       file_path: data.filePath || null,
       file_type: data.fileType || null,
       source_url: data.sourceUrl || null,
       content: data.content || null,
-    });
+    }).select("id").single();
     if (error) throw error;
+    
+    // Process chunks in background
+    if (insertedSop?.id && (data.content || data.sourceUrl)) {
+      getAiConfig(sb).then(config => {
+        if (config) {
+          processSopDocumentChunks(
+            sb,
+            insertedSop.id,
+            data.content || "",
+            data.sourceUrl || null,
+            config
+          ).catch(e => console.error("[SOP] Background chunk error:", e));
+        }
+      });
+    }
+
     return { ok: true };
   });
 
@@ -73,11 +112,33 @@ export const updateSopDocumentContent = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), content: z.string().max(200000) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase)
+    const sb = db(context.supabase);
+    const { error } = await sb
       .from("sop_documents")
       .update({ content: data.content })
       .eq("id", data.id);
     if (error) throw error;
+    
+    // Fetch the document to get its source_url
+    const { data: doc } = await sb
+      .from("sop_documents")
+      .select("source_url")
+      .eq("id", data.id)
+      .maybeSingle();
+
+    // Process chunks in background
+    getAiConfig(sb).then(config => {
+      if (config) {
+        processSopDocumentChunks(
+          sb,
+          data.id,
+          data.content,
+          (doc as Record<string, unknown> | null)?.source_url as string | null,
+          config
+        ).catch(e => console.error("[SOP] Background update chunk error:", e));
+      }
+    });
+
     return { ok: true };
   });
 
