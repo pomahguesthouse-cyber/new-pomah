@@ -253,3 +253,64 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+/* ------------------------------------------------------------------ */
+/* Property Managers                                                  */
+/* ------------------------------------------------------------------ */
+
+export const getPropertyManagers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await db(context.supabase)
+      .from("property_managers")
+      .select("id, property_id, name, phone, role, created_at")
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data ?? [];
+  });
+
+export const addPropertyManager = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        property_id: z.string().uuid(),
+        name: z.string().min(1).max(100),
+        phone: z.string().min(5).max(20),
+        role: z.enum(["super_admin", "booking_manager", "viewer"]),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase).from("property_managers").insert([data]);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const updatePropertyManagerRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        role: z.enum(["super_admin", "booking_manager", "viewer"]),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("property_managers")
+      .update({ role: data.role })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const deletePropertyManager = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.string().uuid().parse(d))
+  .handler(async ({ data: id, context }) => {
+    const { error } = await db(context.supabase).from("property_managers").delete().eq("id", id);
+    if (error) throw error;
+    return { ok: true };
+  });
