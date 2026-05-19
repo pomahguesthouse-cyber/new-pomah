@@ -80,6 +80,7 @@ export type WebchatLogRow = {
   thread_id: string | null;
   user_message: string | null;
   ai_response: string | null;
+  used: boolean | null;
   created_at: string;
 };
 
@@ -89,11 +90,25 @@ export const listWebchatLogs = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data } = await db(context.supabase)
       .from("ai_conversation_logs")
-      .select("id, thread_id, user_message, ai_response, created_at")
+      .select("id, thread_id, user_message, ai_response, used, created_at")
       .eq("source", "webchat")
       .order("created_at", { ascending: true })
       .limit(500);
     return { logs: (data ?? []) as unknown as WebchatLogRow[] };
+  });
+
+/** Mark (or unmark) a whole webchat thread as training material. */
+export const setWebchatTraining = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ threadId: z.string(), used: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("ai_conversation_logs")
+      .update({ used: data.used })
+      .eq("thread_id", data.threadId)
+      .eq("source", "webchat");
+    if (error) throw error;
+    return { ok: true };
   });
 
 export const exportTrainingData = createServerFn({ method: "GET" })
