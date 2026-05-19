@@ -854,6 +854,14 @@ export type Database = {
         Args: { p_phone: string; p_name: string; p_body: string }
         Returns: undefined
       }
+      get_autoreply_context: {
+        Args: { p_phone: string }
+        Returns: Json
+      }
+      save_outbound_whatsapp: {
+        Args: { p_thread_id: string; p_body: string }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
