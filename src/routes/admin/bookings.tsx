@@ -591,4 +591,5 @@ function PaymentCell({
       </button>
     </div>
   );
+}
 
