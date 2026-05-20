@@ -311,7 +311,6 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
-          input.agentCtx,
           { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
           input.toolCtx,
           input.llmConfig,
