@@ -47,10 +47,6 @@ export const financeAgent: AgentDefinition = {
 
     const prop = property as Record<string, unknown>;
     const bankInfo = [
-    const { property, today, customInstructions } = ctx;
-
-    const prop = property as Record<string, unknown>;
-    const bankInfoText = [
       prop.payment_bank_name       ? `Bank: ${prop.payment_bank_name}`              : null,
       prop.payment_account_number  ? `No. Rekening: ${prop.payment_account_number}` : null,
       prop.payment_account_holder  ? `Atas Nama: ${prop.payment_account_holder}`    : null,
