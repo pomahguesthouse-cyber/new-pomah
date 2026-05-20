@@ -750,9 +750,6 @@ export const Route = createFileRoute("/api/fonnte")({
                   const t0 = Date.now();
                   const orchResult = await runMultiAgentOrchestration({
                     messages:  c.messages,
-                    agentCtx: { property: p as any, rooms: roomList, sopText: "", today },
-                    phone:     testPhone,
-                    messages:  c.messages,
                     agentCtx: {
                       property: p as any,
                       rooms:    roomList,
@@ -767,11 +764,8 @@ export const Route = createFileRoute("/api/fonnte")({
                       today,
                     },
                     llmConfig: { apiKey, baseUrl, model },
-                      origin:         new URL(request.url).origin,
-                    },
-                    llmConfig: { apiKey, baseUrl, model },
-                    aiLabConfig: p.ai_lab_config as any,
                   });
+
 
                   result.elapsed_ms         = Date.now() - t0;
                   result.reply              = orchResult.reply;
