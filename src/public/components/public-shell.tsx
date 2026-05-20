@@ -8,11 +8,13 @@ import { Button } from "@/components/ui/button";
 /* ------------------------------------------------------------------ */
 export function PublicNav({
   property,
+  showBackHome = false,
 }: {
   property?: {
     name?: string | null;
     logo_url?: string | null;
   } | null;
+  showBackHome?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const fullName = property?.name || "Pomah Guesthouse";
@@ -41,7 +43,7 @@ export function PublicNav({
             </div>
           )}
         </Link>
-
+ 
         {/* Desktop menu */}
         <div className="hidden items-center gap-8 md:flex">
           <Link
@@ -64,13 +66,21 @@ export function PublicNav({
           >
             Lokasi
           </Link>
-          <Button asChild size="sm" className="bg-amber-700 hover:bg-amber-800">
-            <Link to="/book" search={{}}>
-              Pesan Sekarang
-            </Link>
-          </Button>
+          {showBackHome ? (
+            <Button asChild size="sm" variant="outline" className="border-stone-300 hover:bg-stone-100">
+              <Link to="/">
+                Kembali
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="sm" className="bg-amber-700 hover:bg-amber-800">
+              <Link to="/book" search={{}}>
+                Pesan Sekarang
+              </Link>
+            </Button>
+          )}
         </div>
-
+ 
         {/* Mobile menu toggle */}
         <button
           className="md:hidden text-stone-700"
@@ -80,7 +90,7 @@ export function PublicNav({
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
-
+ 
       {/* Mobile dropdown */}
       {open && (
         <div className="border-t border-stone-100 bg-white md:hidden">
@@ -99,11 +109,19 @@ export function PublicNav({
                 {item.label}
               </Link>
             ))}
-            <Button asChild size="sm" className="mt-2 bg-amber-700 hover:bg-amber-800">
-              <Link to="/book" search={{}} onClick={() => setOpen(false)}>
-                Pesan Sekarang
-              </Link>
-            </Button>
+            {showBackHome ? (
+              <Button asChild size="sm" variant="outline" className="mt-2 border-stone-300 hover:bg-stone-100">
+                <Link to="/" onClick={() => setOpen(false)}>
+                  Kembali
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild size="sm" className="mt-2 bg-amber-700 hover:bg-amber-800">
+                <Link to="/book" search={{}} onClick={() => setOpen(false)}>
+                  Pesan Sekarang
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       )}
