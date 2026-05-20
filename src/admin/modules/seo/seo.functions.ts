@@ -754,3 +754,102 @@ export const getSearchConsoleData = createServerFn({ method: "GET" })
       indexing,
     };
   });
+
+// 10. GENERATE AND SAVE LOCALBUSINESS SCHEMA
+export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const client = context.supabase as any;
+
+    // Fetch property details
+    const { data: prop } = await client
+      .from("properties")
+      .select("name, address, city, phone, public_domain, logo_url, tagline")
+      .limit(1)
+      .maybeSingle();
+
+    const name = prop?.name || "Pomah Guesthouse";
+    const address = prop?.address || "Gunungpati";
+    const city = prop?.city || "Semarang";
+    const phone = prop?.phone || "+6281312345678";
+    const domain = prop?.public_domain || "pomahguesthouse.com";
+    const logoUrl = prop?.logo_url || `https://${domain}/logo.png`;
+    const tagline = prop?.tagline || "Boutique Guesthouse Semarang Gunungpati dekat UNNES";
+
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "Hotel",
+      "@id": `https://${domain}/#guesthouse`,
+      "name": name,
+      "url": `https://${domain}`,
+      "logo": logoUrl,
+      "image": logoUrl,
+      "description": tagline,
+      "telephone": phone,
+      "priceRange": "Rp150.000 - Rp450.000",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": address,
+        "addressLocality": city,
+        "addressRegion": "Jawa Tengah",
+        "postalCode": "50229",
+        "addressCountry": "ID"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": -7.0494,
+        "longitude": 110.3927
+      },
+      "openingHoursSpecification": {
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday"
+        ],
+        "opens": "00:00",
+        "closes": "23:59"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "telephone": phone,
+        "contactType": "reservations",
+        "areaServed": "ID",
+        "availableLanguage": ["Indonesian", "English"]
+      }
+    };
+
+    // Check if schema already exists
+    const { data: existing } = await client
+      .from("seo_schema_registry")
+      .select("id")
+      .eq("schema_type", "LocalBusiness")
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) {
+      const { error } = await client
+        .from("seo_schema_registry")
+        .update({
+          name: "LocalBusiness Schema",
+          json_ld: jsonLd,
+          active: true,
+        })
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await client.from("seo_schema_registry").insert({
+        name: "LocalBusiness Schema",
+        schema_type: "LocalBusiness",
+        json_ld: jsonLd,
+        active: true,
+      });
+      if (error) throw error;
+    }
+
+    return { ok: true, name: "LocalBusiness Schema", schema: jsonLd };
+  });
