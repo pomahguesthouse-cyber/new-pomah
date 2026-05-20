@@ -171,6 +171,24 @@ export const Route = createFileRoute("/api/fonnte")({
               `[Webhook] saveInbound failed: ${saveErr.message}`
             );
 
+        // ── 7. Lightweight Smart Debounce (Last-One-Wins) ─────────────────
+        const DEBOUNCE_MS = 3000;
+        console.log(`[AutoReply] debouncing ${DEBOUNCE_MS}ms | thread=${c.thread_id} | ${logCtx}`);
+        await sleep(DEBOUNCE_MS);
+
+        // Fetch latest inbound message ID to check if a newer message superseded this handler
+        const { data: latestInbound, error: latestErr } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "in")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestErr) {
+          console.error(`[AutoReply] debounce query error: ${latestErr.message} | ${logCtx}`);
+        }
             return new Response("Error", { status: 500 });
           }
 
