@@ -18,7 +18,6 @@ export const frontOfficeAgent: AgentDefinition = {
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, rooms, sopText, today } = ctx;
-    const { property, rooms, sopText, today, customInstructions } = ctx;
 
     const roomLines = rooms.map(
       (r) =>
