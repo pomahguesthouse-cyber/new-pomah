@@ -377,68 +377,8 @@ export const Route = createFileRoute("/api/fonnte")({
               await queueHeartbeat(supabasePublic, entryId, workerId);
               await sleep(Math.min(1000 * attempt, 3000)); // brief pause between retries
             }
-          const llmConfig = { apiKey, baseUrl, model };
+            const llmConfig = { apiKey, baseUrl, model };
 
-          // SOP (only if enabled in ai_lab_config) using RAG vector search
-          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
-          const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
-          let sopText = "";
-          if (sopEnabled) {
-            try {
-              // We use the user's latest message to find relevant SOP chunks
-              sopText = await retrieveRelevantSopContext(
-                supabaseAdmin as any,
-                message,
-                llmConfig,
-                5,   // match count
-                0.7 // match threshold
-              );
-            } catch (e) {
-              console.warn("[AutoReply] SOP vector search error:", e);
-            }
-          }
-
-          const today    = todayWIB();
-          const roomList = (rooms ?? []) as any[];
-
-          // 8. Run Multi-Agent Orchestration
-          console.log(
-            "[AutoReply] multi-agent pipeline | messages:", freshMessages.length,
-            "| model:", model,
-          );
-
-          const result = await runMultiAgentOrchestration({
-            phone:     sender,
-            isManager,
-            messages:  freshMessages,
-            agentCtx: {
-              property:    p as any,
-              rooms:       roomList,
-              sopText,
-              today,
-              lastMessage: message,
-            },
-            toolCtx: {
-              supabasePublic: supabasePublic as any,
-              supabaseAdmin:  supabaseAdmin  as any,
-              rooms:          roomList,
-              property:       p as any,
-              today,
-              origin,
-            },
-            llmConfig: { apiKey, baseUrl, model },
-            aiLabConfig: aiCfgRaw,
-          });
-
-          const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
-
-          console.log(
-            "[AutoReply] routed →", agentKey,
-            "| intent:", intent,
-            "| confidence:", routingConfidence.toFixed(2),
-            "| escalated:", escalated,
-            "| tools:", toolsUsed,
-          );
 
             try {
               console.log(
