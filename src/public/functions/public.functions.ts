@@ -324,19 +324,25 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       .maybeSingle();
     const p = (pRow ?? {}) as Record<string, unknown>;
 
-    // Resolve PDF URL: check invoices table first, then verify the file
-    // actually exists in storage. If missing, generate it on-demand (no WA).
+    // Resolve PDF URL:
+    // 1. Check invoices table for a previously stored URL.
+    // 2. If missing, generate the PDF on-demand (no WhatsApp) and cache result.
     let pdfUrl: string | null = null;
-    const { data: invRow } = await sb
-      .from("invoices" as any)
-      .select("pdf_url")
-      .eq("booking_id", data.id)
-      .maybeSingle();
+    try {
+      const { data: invRow } = await sb
+        .from("invoices" as any)
+        .select("pdf_url")
+        .eq("booking_id", data.id)
+        .maybeSingle();
 
-    if (invRow && (invRow as any).pdf_url) {
-      pdfUrl = (invRow as any).pdf_url as string;
-    } else {
-      // No record in invoices table — generate the PDF now (silent, no WA).
+      if (invRow && (invRow as any).pdf_url) {
+        pdfUrl = (invRow as any).pdf_url as string;
+      }
+    } catch {
+      // invoices table may not exist yet — ignore and fall through to generation
+    }
+
+    if (!pdfUrl) {
       try {
         const { generateAndSendInvoiceNotification } = await import(
           "@/services/invoice-notification.service"
@@ -348,36 +354,11 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         });
         if (result.ok && result.pdf_url) {
           pdfUrl = result.pdf_url;
+        } else {
+          console.warn("[getBookingInvoice] PDF generation failed:", result.error);
         }
       } catch (genErr) {
-        console.warn("[getBookingInvoice] PDF on-demand generation failed:", genErr);
-      }
-    }
-
-    // Final safety check: verify the file actually exists in storage.
-    // getPublicUrl always returns a URL even for missing files, so we check
-    // by attempting a HEAD-equivalent (list with search).
-    if (pdfUrl) {
-      const storagePath = `invoices/${data.id}.pdf`;
-      const { data: listed } = await supabaseAdmin.storage
-        .from("room-images")
-        .list("invoices", { search: `${data.id}.pdf`, limit: 1 });
-      const exists = Array.isArray(listed) && listed.some((f) => f.name === `${data.id}.pdf`);
-      if (!exists) {
-        // File not in storage yet — try generating once more
-        try {
-          const { generateAndSendInvoiceNotification } = await import(
-            "@/services/invoice-notification.service"
-          );
-          const result = await generateAndSendInvoiceNotification({
-            supabase: supabaseAdmin as any,
-            bookingId: data.id,
-            skipWhatsApp: true,
-          });
-          pdfUrl = result.ok && result.pdf_url ? result.pdf_url : null;
-        } catch {
-          pdfUrl = null;
-        }
+        console.warn("[getBookingInvoice] PDF on-demand generation threw:", genErr);
       }
     }
 

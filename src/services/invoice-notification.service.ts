@@ -77,7 +77,8 @@ export async function generateAndSendInvoiceNotification({
     const guest = booking.guests as any;
     const property = booking.properties as any;
 
-    if (!guest?.phone) {
+    // Phone is only required for WhatsApp — don't block PDF generation if skipWhatsApp=true
+    if (!skipWhatsApp && !guest?.phone) {
       return { ok: false, error: "Guest has no phone number, cannot send notification", pdf_url: null, wa_sent: false };
     }
 
