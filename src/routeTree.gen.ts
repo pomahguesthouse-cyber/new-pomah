@@ -19,6 +19,7 @@ import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
 import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
+import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -81,6 +82,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const RoomsSlugRoute = RoomsSlugRouteImport.update({
   id: '/rooms/$slug',
   path: '/rooms/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFonnteRoute = ApiFonnteRouteImport.update({
+  id: '/api/fonnte',
+  path: '/api/fonnte',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/fonnte'
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/fonnte'
     | '/rooms/$slug'
     | '/admin'
     | '/book'
@@ -294,6 +305,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/fonnte'
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
@@ -308,6 +320,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiFonnteRoute: typeof ApiFonnteRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
@@ -384,6 +397,13 @@ declare module '@tanstack/react-router' {
       path: '/rooms/$slug'
       fullPath: '/rooms/$slug'
       preLoaderRoute: typeof RoomsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/fonnte': {
+      id: '/api/fonnte'
+      path: '/api/fonnte'
+      fullPath: '/api/fonnte'
+      preLoaderRoute: typeof ApiFonnteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/whatsapp': {
@@ -521,6 +541,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiFonnteRoute: ApiFonnteRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
