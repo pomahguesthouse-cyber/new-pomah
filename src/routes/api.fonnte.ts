@@ -158,7 +158,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           const { data: rooms } = await (supabasePublic as any)
             .from("room_types")
-            .select("id, name, base_rate, capacity, bed_type, description")
+            .select("id, name, base_rate, capacity, bed_type, description, amenities")
             .order("base_rate");
 
           // SOP text
@@ -411,6 +411,106 @@ export const Route = createFileRoute("/api/fonnte")({
           });
         }
 
+        // ── ?test_reply=1&phone=628xxx ────────────────────────────────────────
+        if (url.searchParams.get("test_reply") === "1") {
+          const testPhone = url.searchParams.get("phone");
+          if (!testPhone) {
+            return new Response(JSON.stringify({ error: "phone param required" }), {
+              status: 400, headers: { "Content-Type": "application/json" },
+            });
+          }
+
+          const result: Record<string, unknown> = { phone: testPhone };
+          try {
+            const { data: ctx, error: ctxErr } = await (supabasePublic as any).rpc(
+              "get_autoreply_context", { p_phone: testPhone },
+            );
+            if (ctxErr || !ctx) {
+              result.error  = "get_autoreply_context failed";
+              result.detail = (ctxErr as any)?.message ?? "null ctx";
+            } else {
+              const c = ctx as {
+                auto_reply_enabled: boolean;
+                fonnte_token:       string;
+                messages:           Array<{ direction: string; body: string }>;
+              };
+              result.auto_reply_enabled = c.auto_reply_enabled;
+              result.message_count      = c.messages?.length ?? 0;
+              result.last_messages      = (c.messages ?? []).slice(-3).map((m) => ({
+                direction: m.direction, body: m.body?.slice(0, 60),
+              }));
+
+              if (!c.auto_reply_enabled) {
+                result.skipped = "auto_reply_enabled is false";
+              } else {
+                const { data: prop } = await (supabasePublic as any)
+                  .from("properties").select("*").limit(1).maybeSingle();
+                const p    = (prop ?? {}) as Record<string, unknown>;
+                const { data: rooms } = await (supabasePublic as any)
+                  .from("room_types")
+                  .select("id, name, base_rate, capacity, bed_type, description, amenities")
+                  .order("base_rate");
+
+                const explicitKey = (p.ai_api_key as string | undefined)?.trim();
+                const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
+                const useLovable  = !explicitKey && !!lovableKey;
+                const apiKey      = explicitKey || lovableKey;
+
+                if (!apiKey) {
+                  result.error = "No AI key configured";
+                } else {
+                  const baseUrl = useLovable
+                    ? "https://ai.gateway.lovable.dev/v1"
+                    : ((p.ai_base_url as string) || "https://api.openai.com/v1").replace(/\/+$/, "");
+                  const cfgModel = (p.ai_model as string | undefined)?.trim();
+                  const model    = useLovable
+                    ? (cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash")
+                    : cfgModel || "gpt-4o-mini";
+                  const today    = todayWIB();
+                  const roomList = (rooms ?? []) as any[];
+
+                  const t0 = Date.now();
+                  const orchResult = await runMultiAgentOrchestration({
+                    phone:     testPhone,
+                    messages:  c.messages,
+                    agentCtx: {
+                      property: p as any,
+                      rooms:    roomList,
+                      sopText:  "",
+                      today,
+                    },
+                    toolCtx: {
+                      supabasePublic: supabasePublic as any,
+                      supabaseAdmin:  supabaseAdmin  as any,
+                      rooms:          roomList,
+                      property:       p as any,
+                      today,
+                      origin:         url.origin,
+                    },
+                    llmConfig: { apiKey, baseUrl, model },
+                  });
+
+
+                  result.elapsed_ms         = Date.now() - t0;
+                  result.reply              = orchResult.reply;
+                  result.tools_used         = orchResult.toolsUsed;
+                  result.agent_key          = orchResult.agentKey;
+                  result.intent             = orchResult.intent;
+                  result.routing_confidence = orchResult.routingConfidence;
+                  result.escalated          = orchResult.escalated;
+                  result.reply_ok           = !!orchResult.reply;
+                  if (orchResult.error) result.error = orchResult.error;
+                }
+              }
+            }
+          } catch (e) { result.error = String(e); }
+
+          return new Response(JSON.stringify(result, null, 2), {
+            status: 200, headers: { "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response("Webhook is active (queue v2)", { status: 200 });
         return new Response("Webhook is active (v4 — no-delay)", { status: 200 });
       },
     },

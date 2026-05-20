@@ -17,6 +17,7 @@ export interface RoomTypeRow {
   capacity:    number | null;
   bed_type:    string | null;
   description: string | null;
+  amenities?:  string[] | null;
 }
 
 export interface PropertyRow {
@@ -60,7 +61,9 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
   const roomLines = rooms.map(
     (r) =>
       `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
-      `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}`,
+      `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
+      `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
+      `${r.description ? `, Deskripsi: ${r.description}` : ""}`,
   );
 
   const sections: string[] = [

@@ -22,7 +22,9 @@ export const frontOfficeAgent: AgentDefinition = {
     const roomLines = rooms.map(
       (r) =>
         `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
-        `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}`,
+        `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
+        `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
+        `${r.description ? `, Deskripsi: ${r.description}` : ""}`,
     );
 
     const sections = [
@@ -36,8 +38,13 @@ export const frontOfficeAgent: AgentDefinition = {
       "FORMAT TANGGAL: tampilkan selalu dalam format Indonesia, contoh '19 Mei 2026'. " +
         "JANGAN tampilkan format YYYY-MM-DD kepada tamu.",
 
+      "FASILITAS & DETAIL KAMAR: JANGAN PERNAH mengarang fasilitas kamar yang tidak tertera di data kamar atau SOP. " +
+        "Jika tamu menanyakan fasilitas tertentu (seperti TV, kulkas, bathtub, air panas, dll.) untuk tipe kamar tertentu, " +
+        "nyatakan dengan jujur bahwa fasilitas tersebut tidak tersedia bila tidak tertulis di data kamar/SOP. " +
+        "Sebagai contoh nyata: tipe kamar Deluxe TIDAK memiliki TV karena tidak tercantum dalam fasilitasnya.",
+
       roomLines.length
-        ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
+        ? `Data kamar (tarif, kapasitas & fasilitas — jangan mengarang):\n${roomLines.join("\n")}`
         : "",
 
       "KETERSEDIAAN KAMAR: Kamu memiliki tool `check_room_availability`. Setiap kali tamu " +
