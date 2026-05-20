@@ -54,8 +54,8 @@ import {
   getInternalLinkMap,
   approveInternalLink,
   getReviewIntelligence,
-  triggerSeoAgentAction,
   getSearchConsoleData,
+  generateAndSaveLocalBusinessSchema,
 } from "@/admin/modules/seo/seo.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,7 +99,6 @@ export const Route = createFileRoute("/admin/seo")({
 });
 
 type TabKey =
-  | "overview"
   | "search_console"
   | "agents"
   | "conversational"
@@ -110,7 +109,7 @@ type TabKey =
   | "reviews";
 
 export function SeoPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [activeTab, setActiveTab] = useState<TabKey>("search_console");
   const qc = useQueryClient();
 
   // Queries
@@ -169,7 +168,6 @@ export function SeoPage() {
   }
 
   const tabs: { key: TabKey; label: string; icon: any }[] = [
-    { key: "overview", label: "Overview", icon: LayoutDashboard },
     { key: "search_console", label: "Search Console", icon: TrendingUp },
     { key: "agents", label: "AI Agents", icon: Bot },
     { key: "conversational", label: "WhatsApp Intent", icon: MessageCircle },
@@ -248,17 +246,6 @@ export function SeoPage() {
 
         {/* Console space */}
         <main className="flex-1 p-6 md:p-8 overflow-x-hidden">
-          {activeTab === "overview" && (
-            <OverviewSection
-              summary={dashboardData.summary}
-              visibility={dashboardData.visibility}
-              logs={dashboardData.logs}
-              trafficHistory={dashboardData.trafficHistory}
-              visibilityHistory={dashboardData.visibilityHistory}
-              keywordHistory={dashboardData.keywordHistory}
-              publishingHistory={dashboardData.publishingHistory}
-            />
-          )}
           {activeTab === "search_console" && (
             <SearchConsoleSection data={searchConsoleData} />
           )}
@@ -312,256 +299,7 @@ export function SeoPage() {
   );
 }
 
-/* ============================================================================
-   1. OVERVIEW SECTION
-   ============================================================================ */
-function OverviewSection({
-  summary,
-  visibility,
-  logs,
-  trafficHistory,
-  visibilityHistory,
-  keywordHistory,
-  publishingHistory,
-}: {
-  summary: any;
-  visibility: any[];
-  logs: any[];
-  trafficHistory: any[];
-  visibilityHistory: any[];
-  keywordHistory: any[];
-  publishingHistory: any[];
-}) {
-  const cards = [
-    {
-      title: "Organic Traffic",
-      value: summary.organicTraffic.toLocaleString("id-ID"),
-      change: `+${summary.organicTrafficChange}%`,
-      trend: "up",
-      desc: "Kunjungan organik 30 hari",
-    },
-    {
-      title: "Indexed Pages",
-      value: summary.indexedPages,
-      change: "Stable",
-      trend: "neutral",
-      desc: "Halaman terindeks Google",
-    },
-    {
-      title: "AI Search Visibility",
-      value: `${summary.aiVisibilityScore}%`,
-      change: `+${summary.aiVisibilityChange}%`,
-      trend: "up",
-      desc: "Persentase kutipan di LLM",
-    },
-    {
-      title: "Local SEO Score",
-      value: `${summary.localSeoScore}/100`,
-      change: "NAP Consistent",
-      trend: "up",
-      desc: "Peringkat maps & lokalitas",
-    },
-    {
-      title: "AI Overview Mentions",
-      value: summary.aiOverviewMentions,
-      change: "+28% mo-m",
-      trend: "up",
-      desc: "Kutipan Google AI Overviews",
-    },
-    {
-      title: "FAQ Coverage",
-      value: `${summary.faqCoverage}%`,
-      change: "+4.1%",
-      trend: "up",
-      desc: "Pertanyaan terjawab di FAQ",
-    },
-    {
-      title: "Technical Health",
-      value: `${summary.technicalHealth}%`,
-      change: "Clean Audit",
-      trend: "up",
-      desc: "Core Web Vitals & indexability",
-    },
-    {
-      title: "Target Keywords",
-      value: summary.keywordsCount,
-      change: "5 High Priority",
-      trend: "neutral",
-      desc: "Kata kunci terdaftar",
-    },
-  ];
 
-  return (
-    <div className="space-y-8">
-      {/* Cards Grid */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {cards.map((c, i) => (
-          <Card key={i} className="p-5 border border-stone-200/80 bg-white relative overflow-hidden group hover:shadow-md transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-stone-500 uppercase tracking-wider">
-                {c.title}
-              </span>
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                  c.trend === "up"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-stone-100 text-stone-600"
-                }`}
-              >
-                {c.change}
-              </span>
-            </div>
-            <p className="mt-3 text-2xl font-bold text-stone-900 tracking-tight">{c.value}</p>
-            <p className="mt-1 text-[11px] text-stone-400 font-medium">{c.desc}</p>
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-500 to-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </Card>
-        ))}
-      </div>
-
-      {/* Charts section */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Traffic Growth Area Chart */}
-        <Card className="p-6 border border-stone-200 bg-white">
-          <h3 className="font-semibold text-stone-800 flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-teal-600" /> Organic Traffic Trend
-          </h3>
-          <p className="text-xs text-stone-400 mt-0.5">Pertumbuhan kunjungan organik per bulan</p>
-          <div className="h-64 mt-4 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trafficHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorTraffic" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0d9488" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f4" />
-                <XAxis dataKey="month" stroke="#a8a29e" fontSize={11} tickLine={false} />
-                <YAxis stroke="#a8a29e" fontSize={11} tickLine={false} />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="traffic"
-                  stroke="#0d9488"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorTraffic)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* AI Visibility Line Chart */}
-        <Card className="p-6 border border-stone-200 bg-white">
-          <h3 className="font-semibold text-stone-800 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-500" /> AI Engine Visibility Score
-          </h3>
-          <p className="text-xs text-stone-400 mt-0.5">Persentase kemunculan di chat AI (ChatGPT, Gemini, etc)</p>
-          <div className="h-64 mt-4 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={visibilityHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f4" />
-                <XAxis dataKey="month" stroke="#a8a29e" fontSize={11} tickLine={false} />
-                <YAxis stroke="#a8a29e" fontSize={11} tickLine={false} domain={[50, 100]} />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#f59e0b"
-                  strokeWidth={2.5}
-                  dot={{ r: 4, strokeWidth: 1.5 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Keywords Rankings Stacked Bar Chart */}
-        <Card className="md:col-span-2 p-6 border border-stone-200 bg-white">
-          <h3 className="font-semibold text-stone-800 flex items-center gap-2">
-            <Search className="h-4 w-4 text-sky-600" /> Keyword Ranking Distribution
-          </h3>
-          <p className="text-xs text-stone-400 mt-0.5">Posisi peringkat kata kunci di Google SERP</p>
-          <div className="h-60 mt-4 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={keywordHistory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f4" />
-                <XAxis dataKey="month" stroke="#a8a29e" fontSize={11} tickLine={false} />
-                <YAxis stroke="#a8a29e" fontSize={11} tickLine={false} />
-                <Tooltip />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="top3" name="Top 3 (Pos 1-3)" stackId="a" fill="#0f766e" />
-                <Bar dataKey="top10" name="Top 10 (Pos 4-10)" stackId="a" fill="#0d9488" />
-                <Bar dataKey="top100" name="Top 100 (Pos 11-100)" stackId="a" fill="#94a3b8" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* AI LLM Visibility Score list */}
-        <Card className="p-6 border border-stone-200 bg-white">
-          <h3 className="font-semibold text-stone-800">Visibility details per Engine</h3>
-          <p className="text-xs text-stone-400 mt-0.5">Skor performa dan topik yang belum terliput</p>
-          <div className="mt-4 space-y-3.5">
-            {visibility.map((v, i) => (
-              <div key={i} className="flex flex-col gap-1 text-sm border-b border-stone-100 pb-2.5 last:border-0 last:pb-0">
-                <div className="flex justify-between font-medium">
-                  <span className="text-stone-700">{v.engine}</span>
-                  <span className="text-teal-700">{v.visibility_score}% visibility</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-1.5">
-                  <span className="text-[10px] text-stone-400 font-mono">Uncovered:</span>
-                  {v.uncovered_topics.map((t: string, j: number) => (
-                    <span
-                      key={j}
-                      className="bg-stone-100 text-stone-600 text-[10px] px-1.5 py-0.5 rounded font-mono"
-                    >
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* Technical SEO Audit overview */}
-      <Card className="p-6 border border-stone-200 bg-white">
-        <h3 className="font-semibold text-stone-800 flex items-center gap-2">
-          <AlertTriangle className="h-4.5 w-4.5 text-amber-500" /> Technical Health Monitor
-        </h3>
-        <p className="text-xs text-stone-400 mt-0.5">Hasil audit otomatis file perayap & internal links</p>
-        <div className="grid gap-4 sm:grid-cols-3 mt-4">
-          <div className="flex items-center gap-3 border border-stone-100 p-3 rounded-xl bg-stone-50/50">
-            <Check className="h-5 w-5 text-emerald-600 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-stone-800">sitemap.xml</p>
-              <p className="text-[11px] text-stone-400">Valid & Auto updated</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 border border-stone-100 p-3 rounded-xl bg-stone-50/50">
-            <Check className="h-5 w-5 text-emerald-600 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-stone-800">robots.txt</p>
-              <p className="text-[11px] text-stone-400">Active & Disallow set</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 border border-stone-100 p-3 rounded-xl bg-stone-50/50">
-            <Check className="h-5 w-5 text-emerald-600 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-stone-800">Broken Links</p>
-              <p className="text-[11px] text-stone-400">0 link rusak terdeteksi</p>
-            </div>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
 
 /* ============================================================================
    2. AI AGENTS CONTROL CENTER SECTION
@@ -1212,6 +950,15 @@ function ProgrammaticSection({
   const [isGenerating, setIsGenerating] = useState(false);
   const [previewPage, setPreviewPage] = useState<any>(null);
 
+  const generateSchemaM = useMutation({
+    mutationFn: () => generateAndSaveLocalBusinessSchema(),
+    onSuccess: () => {
+      toast.success("LocalBusiness Schema successfully generated and saved to database!");
+      onChanged();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const generateM = useMutation({
     mutationFn: (f: any) => generateProgrammaticPage({ data: f }),
     onSuccess: (res) => {
@@ -1353,7 +1100,29 @@ function ProgrammaticSection({
 
       {/* Schema Registry block list */}
       <Card className="p-5 border border-stone-200 bg-white space-y-4">
-        <h3 className="font-bold text-stone-800 text-sm">Registered Structured Schema markup (JSON-LD)</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3">
+          <div>
+            <h3 className="font-bold text-stone-800 text-sm">Registered Structured Schema markup (JSON-LD)</h3>
+            <p className="text-xs text-stone-400 mt-0.5">Skema data terstruktur untuk mendongkrak visibilitas rich snippets di Google</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 font-mono text-xs bg-white text-teal-700 border-teal-200 hover:bg-teal-50"
+            disabled={generateSchemaM.isPending}
+            onClick={() => generateSchemaM.mutate()}
+          >
+            {generateSchemaM.isPending ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" /> Syncing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-3 w-3" /> Sync LocalBusiness Schema
+              </>
+            )}
+          </Button>
+        </div>
         <div className="grid gap-4 md:grid-cols-2">
           {schemas.map((s) => (
             <div key={s.id} className="p-4 bg-stone-50 border border-stone-100 rounded-xl space-y-2">
