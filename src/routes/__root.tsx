@@ -73,7 +73,15 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  head: () => ({
+  loader: async () => {
+    try {
+      const { getBranding } = await import("@/lib/branding.functions");
+      return await getBranding();
+    } catch {
+      return { faviconUrl: null, logoUrl: null };
+    }
+  },
+  head: ({ loaderData }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -117,7 +125,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png",
       },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      ...(loaderData?.faviconUrl
+        ? [{ rel: "icon", href: loaderData.faviconUrl }]
+        : []),
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
