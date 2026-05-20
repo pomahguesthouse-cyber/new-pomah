@@ -29,8 +29,9 @@ export const Route = createFileRoute("/llms.txt")({
         lines.push(`- [Book](${origin}/book)`);
         lines.push("", "## Rooms");
         for (const r of roomTypes ?? []) {
+          const rateFormatted = `Rp ${Number(r.base_rate).toLocaleString("id-ID")}`;
           lines.push(
-            `- **${r.name}** ($${Number(r.base_rate).toFixed(0)}/night, sleeps ${r.capacity}${r.bed_type ? `, ${r.bed_type}` : ""}): ${r.description ?? ""}`,
+            `- [${r.name}](${origin}/rooms/${r.slug}) (${rateFormatted}/night, sleeps ${r.capacity}${r.bed_type ? `, ${r.bed_type}` : ""}): ${r.description ?? ""}`,
           );
         }
         return new Response(lines.join("\n"), {
