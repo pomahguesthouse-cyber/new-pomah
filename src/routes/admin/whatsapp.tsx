@@ -400,7 +400,7 @@ export function WhatsAppPage() {
                           >
                             {intent.label}
                           </Badge>
-                          {(t as any).override_auto_reply ? (
+                          {(t as any).ai_auto === false ? (
                             <Badge
                               variant="outline"
                               className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
@@ -418,21 +418,6 @@ export function WhatsAppPage() {
                           {t.status === "closed" && (
                             <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
                               closed
-                            </Badge>
-                          )}
-                          {(t as any).ai_auto !== false ? (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-sky-400 text-sky-600 dark:text-sky-400"
-                            >
-                              AI Auto
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-amber-400 text-amber-600 dark:text-amber-400"
-                            >
-                              Human
                             </Badge>
                           )}
                           {(t.unread_count ?? 0) > 0 && (
