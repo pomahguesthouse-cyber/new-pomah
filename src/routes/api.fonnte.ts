@@ -588,9 +588,6 @@ export const Route = createFileRoute("/api/fonnte")({
                   model:      "google/gemini-2.5-flash",
                   max_tokens: 5,
                   messages:   [{ role: "user", content: "ping" }],
-                  model: "google/gemini-2.5-flash",
-                  max_tokens: 5,
-                  messages: [{ role: "user", content: "ping" }],
                 }),
               });
               report.llm_reachable = r.ok;
