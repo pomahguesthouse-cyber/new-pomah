@@ -284,37 +284,38 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
     // Reads via the service-role client: a guest holding the (unguessable)
     // booking id sees their own invoice; the anon role has no SELECT on bookings.
     const sb = db(supabaseAdmin);
-
-    // Try full select first (includes columns added in later migrations).
-    // If any column is missing (Postgres error 42703), fall back to the
-    // base columns that have always existed.
     const bookingId = data.id;
-    let bRow: Record<string, unknown> | null = null;
-    {
-      const { data: bFull, error: bErr } = await sb
-        .from("bookings")
-        .select(
-          "reference_code, check_in, check_out, nights, adults, children, total_amount, status, payment_method, check_in_time, check_out_time, special_requests, created_at, guest_id",
-        )
-        .eq("id", bookingId)
-        .maybeSingle();
-      if (!bErr) {
-        bRow = bFull as Record<string, unknown> | null;
-      } else if ((bErr as any).code === "42703") {
-        // One or more columns not yet in DB — retry with base columns only
-        const { data: bBase } = await sb
-          .from("bookings")
-          .select("check_in, check_out, adults, children, total_amount, status, special_requests, created_at, guest_id")
-          .eq("id", bookingId)
-          .maybeSingle();
-        bRow = bBase as Record<string, unknown> | null;
-      } else {
-        console.error("[getBookingInvoice] booking query error:", bErr);
-      }
+
+    // ── Step 1: minimal query — only columns present since day-one ────────
+    // This MUST succeed for any booking that exists; never fails on missing columns.
+    const { data: bBase, error: bBaseErr } = await sb
+      .from("bookings")
+      .select("check_in, check_out, adults, children, total_amount, status, special_requests, created_at, guest_id")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (bBaseErr) {
+      console.error("[getBookingInvoice] base query error:", JSON.stringify(bBaseErr));
+      return { invoice: null as BookingInvoice | null };
+    }
+    if (!bBase) {
+      console.warn("[getBookingInvoice] booking not found:", bookingId);
+      return { invoice: null as BookingInvoice | null };
     }
 
-    if (!bRow) return { invoice: null as BookingInvoice | null };
-    const b = bRow;
+    // ── Step 2: try extended columns (added in later migrations) ─────────
+    // Failures here are non-fatal; we fall back to defaults.
+    let ext: Record<string, unknown> = {};
+    try {
+      const { data: extRow } = await sb
+        .from("bookings")
+        .select("reference_code, nights, payment_method, check_in_time, check_out_time")
+        .eq("id", bookingId)
+        .maybeSingle();
+      ext = (extRow ?? {}) as Record<string, unknown>;
+    } catch { /* migration not applied — use defaults */ }
+
+    const b: Record<string, unknown> = { ...bBase, ...ext };
 
     const { data: gRow } = await sb
       .from("guests")
@@ -326,7 +327,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
     const { data: brRows } = await sb
       .from("booking_rooms")
       .select("room_type_id, nightly_rate")
-      .eq("booking_id", data.id);
+      .eq("booking_id", bookingId);
     const rows = (brRows ?? []) as Record<string, unknown>[];
     let roomType = "Kamar";
     const typeId = rows[0]?.room_type_id as string | undefined;
