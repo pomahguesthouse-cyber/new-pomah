@@ -566,18 +566,6 @@ export const Route = createFileRoute("/api/fonnte")({
               is_fallback:        isFallback,
               burst_message_count: claimResult.messageCount,
               queue_entry_id:     entryId,
-          // 10. Save outbound + update thread analytics
-          const agentLabel = deriveAgentLabelFromKey(agentKey);
-          await saveOutboundMessage(supabasePublic, {
-            threadId: c.thread_id,
-            body:     reply,
-            metadata: {
-              agent:              agentLabel,
-              agent_key:          agentKey,
-              intent,
-              routing_confidence: routingConfidence,
-              escalated,
-              tools_used:         toolsUsed,
             },
           });
 
@@ -590,11 +578,8 @@ export const Route = createFileRoute("/api/fonnte")({
             `[AutoReply] ✓ replied | ` +
             `agent=${agentLabel} delay=${sleepMs}ms burst=${claimResult.messageCount}msgs ` +
             `fallback=${isFallback} | ${logCtx}`,
-            "[AutoReply] ✓ sent to", sender,
-            "| delay:", delayMs, "ms",
-            "| agent:", agentLabel,
-            "| tools:", toolsUsed,
           );
+
 
         } catch (unexpectedErr) {
           // ── Unexpected crash — mark queue entry failed ────────────────────
