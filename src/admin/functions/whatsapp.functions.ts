@@ -380,3 +380,16 @@ export const setTrainingExample = createServerFn({ method: "POST" })
       .eq("id", data.threadId);
     return { ok: true };
   });
+
+export const toggleOverrideAutoReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ threadId: z.string().uuid(), value: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await context.supabase
+      .from("whatsapp_threads")
+      .update({ override_auto_reply: data.value } as never)
+      .eq("id", data.threadId);
+    return { ok: true };
+  });

@@ -37,6 +37,7 @@ import {
   classifyIntent,
   deleteThread,
   setTrainingExample,
+  toggleOverrideAutoReply,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
@@ -150,6 +151,7 @@ export function WhatsAppPage() {
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
+  const overrideAutoReplyFn = useServerFn(toggleOverrideAutoReply);
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
@@ -239,6 +241,21 @@ export function WhatsAppPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const takeoverMut = useMutation({
+    mutationFn: (value: boolean) =>
+      overrideAutoReplyFn({ data: { threadId: current!, value } }),
+    onSuccess: (_, value) => {
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      toast.success(
+        value
+          ? "Percakapan diambil alih oleh Human (AI dinonaktifkan untuk chat ini)."
+          : "Kendali dikembalikan ke AI (AI aktif membalas chat ini).",
+      );
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -367,6 +384,21 @@ export function WhatsAppPage() {
                           >
                             {intent.label}
                           </Badge>
+                          {t.override_auto_reply ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
+                            >
+                              Human
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35"
+                            >
+                              AI Auto
+                            </Badge>
+                          )}
                           {t.status === "closed" && (
                             <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
                               closed
@@ -425,6 +457,39 @@ export function WhatsAppPage() {
                 )}
               </div>
               <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const t = thread.thread;
+                    if (!t) return;
+                    takeoverMut.mutate(!t.override_auto_reply);
+                  }}
+                  className={cn(
+                    "gap-1.5 font-medium transition-all shadow-sm border",
+                    thread.thread.override_auto_reply
+                      ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-950/40"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-950/40"
+                  )}
+                  title={
+                    thread.thread.override_auto_reply
+                      ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
+                      : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
+                  }
+                  disabled={takeoverMut.isPending}
+                >
+                  {thread.thread.override_auto_reply ? (
+                    <>
+                      <UserIcon className="h-4 w-4" />
+                      Takeover: HUMAN
+                    </>
+                  ) : (
+                    <>
+                      <Bot className="h-4 w-4" />
+                      Auto: AI
+                    </>
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
