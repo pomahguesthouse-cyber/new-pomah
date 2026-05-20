@@ -322,7 +322,7 @@ export const classifyIntent = createServerFn({ method: "POST" })
           '  "agent": "<pilih agent yang PALING DOMINAN dalam percakapan ini:\n' +
           '    - Pricing Agent: jika percakapan utamanya membahas harga/tarif/biaya kamar (meski ada booking juga)\n' +
           '    - Front Office Agent: reservasi/check-in/check-out/pertanyaan umum\n' +
-          '    - Housekeeping Agent: kebersihan/fasilitas/kesiapan kamar\n' +
+          '    - Customer Care Agent: kebersihan/fasilitas/kesiapan kamar\n' +
           '    - Maintenance Agent: kerusakan/perbaikan peralatan\n' +
           '    - Finance Agent: pembayaran/tagihan/konfirmasi transfer\n' +
           '    - Manager Agent: laporan/manajemen/eskalasi>",\n' +

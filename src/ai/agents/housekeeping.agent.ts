@@ -1,5 +1,5 @@
 /**
- * Housekeeping Agent
+ * Customer Care Agent
  *
  * Handles: room cleaning requests, towel/linen requests, extra amenities.
  * Tools: request_housekeeping_service
@@ -55,7 +55,7 @@ const HOUSEKEEPING_TOOLS: ToolDefinition[] = [
 
 export const housekeepingAgent: AgentDefinition = {
   key:         "housekeeping",
-  name:        "Housekeeping Agent",
+  name:        "Customer Care Agent",
   description: "Handles room service, cleaning requests, and amenity requests from in-house guests.",
   handles:     ["housekeeping"],
   tools:       HOUSEKEEPING_TOOLS,
@@ -64,7 +64,7 @@ export const housekeepingAgent: AgentDefinition = {
     const { property, today } = ctx;
 
     const sections = [
-      `Anda adalah Housekeeping Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
+      `Anda adalah Customer Care Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
         "Tugas Anda: menangani permintaan layanan kamar, kebersihan, dan perlengkapan " +
         "dari tamu yang sedang menginap.",
 

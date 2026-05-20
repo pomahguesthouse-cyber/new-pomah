@@ -77,7 +77,7 @@ function agentFor(intent: string, tools: string[]): string {
     return "Front Office Agent";
   if (/harga|tarif|biaya|price/.test(t)) return "Pricing Agent";
   if (/bayar|pembayaran|transfer|tagihan/.test(t)) return "Finance Agent";
-  if (/fasilitas|kebersihan|housekeeping|kamar siap/.test(t)) return "Housekeeping Agent";
+  if (/fasilitas|kebersihan|housekeeping|kamar siap/.test(t)) return "Customer Care Agent";
   if (/rusak|perbaikan|maintenance/.test(t)) return "Maintenance Agent";
   return "Front Office Agent";
 }

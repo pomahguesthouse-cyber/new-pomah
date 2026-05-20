@@ -77,7 +77,7 @@ const AGENTS = [
   { key: "pricing", name: "Pricing Agent", icon: DollarSign, desc: "Tarif dinamis & promo" },
   {
     key: "housekeeping",
-    name: "Housekeeping Agent",
+    name: "Customer Care Agent",
     icon: BedDouble,
     desc: "Status & kesiapan kamar",
   },

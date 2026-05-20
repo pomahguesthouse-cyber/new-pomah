@@ -32,7 +32,7 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
 const AGENT_NAMES: Record<AgentKey, string> = {
   "front-office": "Front Office Agent",
   pricing:        "Pricing Agent",
-  housekeeping:   "Housekeeping Agent",
+  housekeeping:   "Customer Care Agent",
   maintenance:    "Maintenance Agent",
   finance:        "Finance Agent",
   manager:        "Manager Agent",
