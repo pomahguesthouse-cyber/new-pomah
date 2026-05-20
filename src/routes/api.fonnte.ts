@@ -201,7 +201,7 @@ export const Route = createFileRoute("/api/fonnte")({
         await sleep(DEBOUNCE_MS);
 
         // Fetch latest inbound message ID to check if a newer message superseded this handler
-        const { data: latestInbound, error: latestErr } = await (supabasePublic as any)
+        const { data: latestInbound, error: latestErr } = await (supabaseAdmin as any)
           .from("whatsapp_messages")
           .select("id")
           .eq("thread_id", c.thread_id)
