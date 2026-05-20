@@ -307,7 +307,7 @@ export function WhatsAppPage() {
   return (
     <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[300px_1fr_320px] bg-background">
       {/* THREADS LIST */}
-      <aside className="flex min-h-0 flex-col border-r border-border bg-sidebar">
+      <aside className="flex min-h-0 flex-col border-r border-border bg-white">
         <div className="border-b border-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
