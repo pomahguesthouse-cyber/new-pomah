@@ -219,8 +219,6 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // ── 8. Queue upsert — register this message ───────────────────────
         const delayCfg: SmartDelayConfig = { ...DEFAULT_SMART_DELAY, ...(c.smart_delay_config ?? {}) };
-        // 7. Smart Delay — sleep then winner check
-        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}), enabled: false };
         const delayMs = calcDelayMs(message, delayCfg);
 
         let entryId: string | null = null;
