@@ -117,28 +117,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function newWorkerId(): string {
   return `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-const DEFAULT_DELAY: SmartDelayConfig = {
-  enabled:      false,
-  shortMs:      6000,
-  mediumMs:     3000,
-  longMs:       1000,
-  waitSignalMs: 8000,
-  maxDelayMs:   10000,
-};
 
-const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek)\b|\.\.\./i;
 
-function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
-  if (!cfg.enabled) return 0;
-  let base: number;
-  if (WAIT_SIGNALS.test(body))       base = cfg.waitSignalMs;
-  else if (body.trim().length < 15)  base = cfg.shortMs;
-  else if (body.trim().length <= 80) base = cfg.mediumMs;
-  else                               base = cfg.longMs;
-  return Math.min(base, cfg.maxDelayMs);
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ─── In-progress guard (same Worker instance) ─────────────────────────────────
 const _inProgress = new Set<string>();
