@@ -392,6 +392,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
               try {
                 orchResult = await runMultiAgentOrchestration({
+                  phone:     sender,
                   messages:  freshMessages,
                   agentCtx: {
                     property:    p as any,
