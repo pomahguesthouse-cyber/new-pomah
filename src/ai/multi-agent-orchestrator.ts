@@ -33,6 +33,7 @@ async function callLlm(
   config:   AiClientConfig,
   messages: AiMessage[],
   agent:    AgentDefinition,
+  signal?:  AbortSignal,
 ): Promise<LlmResponse | null> {
   try {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -41,6 +42,7 @@ async function callLlm(
         "Content-Type":  "application/json",
         Authorization:   `Bearer ${config.apiKey}`,
       },
+      signal,
       body: JSON.stringify({
         model:       config.model,
         temperature: 0.6,
@@ -91,6 +93,7 @@ async function runAgent(
   llmConfig:        AiClientConfig,
   maxTurns:         number,
   onAskAgent?:      (agentKey: AgentKey, question: string) => Promise<string>,
+  signal?:          AbortSignal,
 ): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
   const toolsUsed = new Set<string>();
 
@@ -104,7 +107,7 @@ async function runAgent(
   ];
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const json = await callLlm(llmConfig, messages, agent);
+    const json = await callLlm(llmConfig, messages, agent, signal);
 
     if (!json) {
       return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error" };
@@ -186,6 +189,8 @@ export interface MultiAgentInput {
   aiLabConfig?: Record<string, any>;
   /** Max LLM turns per agent run (default 5) */
   maxTurns?: number;
+  /** Optional abort signal to cancel LLM API requests */
+  signal?: AbortSignal;
 }
 
 /**
@@ -224,6 +229,7 @@ export async function runMultiAgentOrchestration(
         input.llmConfig,
         Math.max(2, maxTurns - 2),
         undefined,
+        input.signal,
       );
       return result.reply
         ? JSON.stringify({ ok: true,  response: result.reply })
@@ -238,6 +244,7 @@ export async function runMultiAgentOrchestration(
       input.llmConfig,
       maxTurns,
       onAskAgent,
+      input.signal,
     );
 
     return {
@@ -316,6 +323,7 @@ export async function runMultiAgentOrchestration(
           input.llmConfig,
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
           undefined, // no nested delegation
+          input.signal,
         );
 
         return result.reply
@@ -332,6 +340,7 @@ export async function runMultiAgentOrchestration(
     input.llmConfig,
     maxTurns,
     onAskAgent,
+    input.signal,
   );
 
   // 6. If primary agent failed, fall back to Front Office
@@ -346,6 +355,7 @@ export async function runMultiAgentOrchestration(
       input.llmConfig,
       maxTurns,
       undefined,
+      input.signal,
     );
 
     return {
