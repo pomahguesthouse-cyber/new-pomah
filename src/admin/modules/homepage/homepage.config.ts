@@ -70,10 +70,12 @@ export interface HomepageConfig {
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
   };
-  /** The "Your Perfect Stay" text section — an H1 plus text blocks. */
   story: {
     heading: string;
     paragraphs: string[];
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
   };
   roomCarousel: {
     heading: string;
@@ -85,6 +87,9 @@ export interface HomepageConfig {
     layer: number;
     bgColor?: string;
     bgImageUrl?: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
   };
 }
 
@@ -144,6 +149,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
       "Kata Pomah dalam bahasa Jawa berarti Rumah. Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, Pomah Guesthouse memiliki filosofi yang mencerminkan kehangatan, kenyamanan dan standar pelayanan terbaik yang kami sajikan kepada tamu.",
       "Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.",
     ],
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
   },
   roomCarousel: {
     heading: "Our Room",
@@ -154,6 +162,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     layer: 10,
     bgColor: "#f3ece0",
     bgImageUrl: "",
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
   },
 };
 

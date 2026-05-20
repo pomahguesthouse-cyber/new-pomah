@@ -269,7 +269,13 @@ function PomahHome() {
       {/* ── YOUR PERFECT STAY ── */}
       <PbZone id="story" label="Your Perfect Stay" pb={pb}>
         <section className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <SectionHeading>{cfg.story.heading}</SectionHeading>
+          <SectionHeading
+            fontFamily={cfg.story.fontFamily}
+            fontSize={cfg.story.fontSize}
+            fontStyle={cfg.story.fontStyle}
+          >
+            {cfg.story.heading}
+          </SectionHeading>
           <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
             {cfg.story.paragraphs.map((p, i) => (
               <p key={i}>{p}</p>
@@ -323,7 +329,15 @@ function PomahHome() {
         >
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
-              <SectionHeading normalCase noUnderline>{cfg.roomCarousel.heading}</SectionHeading>
+              <SectionHeading
+                normalCase
+                noUnderline
+                fontFamily={cfg.roomCarousel.fontFamily}
+                fontSize={cfg.roomCarousel.fontSize}
+                fontStyle={cfg.roomCarousel.fontStyle}
+              >
+                {cfg.roomCarousel.heading}
+              </SectionHeading>
               {cfg.roomCarousel.subheading && (
                 <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
                   {cfg.roomCarousel.subheading}
@@ -1221,17 +1235,39 @@ function SectionHeading({
   children,
   noUnderline,
   normalCase,
+  fontFamily,
+  fontSize,
+  fontStyle,
 }: {
   children: React.ReactNode;
   noUnderline?: boolean;
   normalCase?: boolean;
+  fontFamily?: "sans" | "serif" | "mono";
+  fontSize?: number;
+  fontStyle?: "normal" | "bold" | "italic";
 }) {
+  const fontClass =
+    fontFamily === "mono"
+      ? "font-mono"
+      : fontFamily === "sans"
+        ? "font-sans"
+        : "font-serif";
+
   return (
     <div className="flex flex-col items-center">
       <h2
-        className={`font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl ${
+        className={`tracking-tight text-stone-800 ${fontClass} ${
           normalCase ? "" : "uppercase"
-        }`}
+        } ${fontSize ? "" : "text-3xl font-bold md:text-4xl"}`}
+        style={{
+          ...(fontSize ? { fontSize: `${fontSize}px` } : {}),
+          ...(fontStyle
+            ? {
+                fontStyle: fontStyle === "italic" ? "italic" : "normal",
+                fontWeight: fontStyle === "bold" ? 700 : 400,
+              }
+            : {}),
+        }}
       >
         {children}
       </h2>

@@ -168,7 +168,7 @@ function HomepageBuilder() {
         </div>
 
         {/* ── Right: contextual editor ── */}
-        <aside className="flex w-80 shrink-0 flex-col border-l border-border bg-card">
+        <aside className="flex w-[400px] shrink-0 flex-col border-l border-border bg-card">
           <div className="border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Edit — {active.label}</p>
           </div>
@@ -280,6 +280,62 @@ function LayerArrange({ value, onChange }: { value: number; onChange: (v: number
         Atur bagian ini berada di depan atau di belakang bagian lain.
       </p>
     </FieldRow>
+  );
+}
+
+function FontStyleFields({
+  family,
+  style,
+  size,
+  minSize = 12,
+  maxSize = 96,
+  onFamilyChange,
+  onStyleChange,
+  onSizeChange,
+}: {
+  family: "sans" | "serif" | "mono";
+  style: "normal" | "bold" | "italic";
+  size: number;
+  minSize?: number;
+  maxSize?: number;
+  onFamilyChange: (f: "sans" | "serif" | "mono") => void;
+  onStyleChange: (s: "normal" | "bold" | "italic") => void;
+  onSizeChange: (s: number) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs font-medium">Font judul</Label>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={family}
+          onChange={(e) => onFamilyChange(e.target.value as any)}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="sans">Sans-serif</option>
+          <option value="serif">Serif</option>
+          <option value="mono">Monospace</option>
+        </select>
+        <select
+          value={style}
+          onChange={(e) => onStyleChange(e.target.value as any)}
+          className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="normal">Normal</option>
+          <option value="bold">Tebal</option>
+          <option value="italic">Miring</option>
+        </select>
+      </div>
+      <FieldRow label={`Ukuran font — ${size}px`}>
+        <input
+          type="range"
+          min={minSize}
+          max={maxSize}
+          value={size}
+          onChange={(e) => onSizeChange(Number(e.target.value))}
+          className="w-full accent-teal-700"
+        />
+      </FieldRow>
+    </div>
   );
 }
 
@@ -664,43 +720,16 @@ function HeroTab({ cfg, setCfg }: TabProps) {
         </Button>
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-medium">Font judul</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <select
-            value={hero.fontFamily}
-            onChange={(e) =>
-              set({ fontFamily: e.target.value as HomepageConfig["hero"]["fontFamily"] })
-            }
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="sans">Sans-serif</option>
-            <option value="serif">Serif</option>
-            <option value="mono">Monospace</option>
-          </select>
-          <select
-            value={hero.fontStyle}
-            onChange={(e) =>
-              set({ fontStyle: e.target.value as HomepageConfig["hero"]["fontStyle"] })
-            }
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="normal">Normal</option>
-            <option value="bold">Tebal</option>
-            <option value="italic">Miring</option>
-          </select>
-        </div>
-        <FieldRow label={`Ukuran font — ${hero.fontSize}px`}>
-          <input
-            type="range"
-            min={24}
-            max={96}
-            value={hero.fontSize}
-            onChange={(e) => set({ fontSize: Number(e.target.value) })}
-            className="w-full accent-teal-700"
-          />
-        </FieldRow>
-      </div>
+      <FontStyleFields
+        family={hero.fontFamily}
+        style={hero.fontStyle}
+        size={hero.fontSize}
+        minSize={24}
+        maxSize={96}
+        onFamilyChange={(v) => set({ fontFamily: v })}
+        onStyleChange={(v) => set({ fontStyle: v })}
+        onSizeChange={(v) => set({ fontSize: v })}
+      />
 
       <LayerArrange value={hero.layer} onChange={(v) => set({ layer: v })} />
     </Section>
@@ -735,43 +764,16 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
         <Input value={dp.buttonLabel} onChange={(e) => set({ buttonLabel: e.target.value })} />
       </FieldRow>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-medium">Font judul</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <select
-            value={dp.fontFamily}
-            onChange={(e) =>
-              set({ fontFamily: e.target.value as HomepageConfig["datePicker"]["fontFamily"] })
-            }
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="sans">Sans-serif</option>
-            <option value="serif">Serif</option>
-            <option value="mono">Monospace</option>
-          </select>
-          <select
-            value={dp.fontStyle}
-            onChange={(e) =>
-              set({ fontStyle: e.target.value as HomepageConfig["datePicker"]["fontStyle"] })
-            }
-            className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="normal">Normal</option>
-            <option value="bold">Tebal</option>
-            <option value="italic">Miring</option>
-          </select>
-        </div>
-        <FieldRow label={`Ukuran font — ${dp.fontSize}px`}>
-          <input
-            type="range"
-            min={12}
-            max={40}
-            value={dp.fontSize}
-            onChange={(e) => set({ fontSize: Number(e.target.value) })}
-            className="w-full accent-teal-700"
-          />
-        </FieldRow>
-      </div>
+      <FontStyleFields
+        family={dp.fontFamily}
+        style={dp.fontStyle}
+        size={dp.fontSize}
+        minSize={12}
+        maxSize={40}
+        onFamilyChange={(v) => set({ fontFamily: v })}
+        onStyleChange={(v) => set({ fontStyle: v })}
+        onSizeChange={(v) => set({ fontSize: v })}
+      />
 
       <LayerArrange value={dp.layer} onChange={(v) => set({ layer: v })} />
     </Section>
@@ -829,6 +831,18 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           Tambah teks
         </Button>
       </div>
+      <div className="border-t border-border my-4 pt-4">
+        <FontStyleFields
+          family={story.fontFamily ?? "serif"}
+          style={story.fontStyle ?? "bold"}
+          size={story.fontSize ?? 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+      </div>
     </Section>
   );
 }
@@ -880,6 +894,18 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Gambar latar belakang (opsional)">
         <ImageField value={rc.bgImageUrl ?? ""} onChange={(url) => set({ bgImageUrl: url })} />
       </FieldRow>
+      <div className="border-t border-border my-4 pt-4">
+        <FontStyleFields
+          family={rc.fontFamily ?? "serif"}
+          style={rc.fontStyle ?? "bold"}
+          size={rc.fontSize ?? 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+      </div>
       <LayerArrange value={rc.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
