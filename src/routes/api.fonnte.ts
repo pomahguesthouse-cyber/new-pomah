@@ -288,11 +288,16 @@ export const Route = createFileRoute("/api/fonnte")({
         try {
           // ── 12. Re-fetch fresh messages (accumulates the full burst) ────
           let freshMessages = c.messages;
-          const { data: freshCtx } = await (supabasePublic as any)
-            .rpc("get_autoreply_context", { p_phone: sender })
-            .catch(() => ({ data: null }));
-          if (freshCtx) {
-            freshMessages = (freshCtx as typeof c).messages ?? c.messages;
+          try {
+            const { data: freshCtx } = await (supabasePublic as any).rpc(
+              "get_autoreply_context",
+              { p_phone: sender },
+            );
+            if (freshCtx) {
+              freshMessages = (freshCtx as typeof c).messages ?? c.messages;
+            }
+          } catch (e) {
+            console.warn("[AutoReply] context refresh failed:", e);
           }
           console.log(`[AutoReply] context refreshed: ${freshMessages.length} messages | ${logCtx}`);
 
