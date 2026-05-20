@@ -317,7 +317,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           const { data: rooms } = await (supabasePublic as any)
             .from("room_types")
-            .select("id, name, base_rate, capacity, bed_type, description")
+            .select("id, name, base_rate, capacity, bed_type, description, amenities")
             .order("base_rate");
 
           // SOP text
@@ -650,7 +650,7 @@ export const Route = createFileRoute("/api/fonnte")({
                 const p    = (prop ?? {}) as Record<string, unknown>;
                 const { data: rooms } = await (supabasePublic as any)
                   .from("room_types")
-                  .select("id, name, base_rate, capacity, bed_type, description")
+                  .select("id, name, base_rate, capacity, bed_type, description, amenities")
                   .order("base_rate");
 
                 const explicitKey = (p.ai_api_key as string | undefined)?.trim();
