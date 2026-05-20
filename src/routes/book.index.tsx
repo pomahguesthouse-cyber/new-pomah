@@ -29,12 +29,21 @@ export const Route = createFileRoute("/book/")({
     if (s.adults != null && !Number.isNaN(Number(s.adults))) out.adults = Number(s.adults);
     return out;
   },
+  loader: async () => {
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    return getPublicSiteData();
+  },
   head: () => ({
     meta: [
-      { title: "Book a stay — Pomah Guesthouse" },
+      { title: "Reservasi Online Langsung — Pomah Guesthouse Semarang" },
       {
         name: "description",
-        content: "Reserve direct at Pomah Guesthouse. No commissions, faster confirmation.",
+        content: "Pesan kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.",
+      },
+      { property: "og:title", content: "Reservasi Online Langsung — Pomah Guesthouse Semarang" },
+      {
+        property: "og:description",
+        content: "Pesan kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah dan cepat.",
       },
     ],
   }),
@@ -42,11 +51,16 @@ export const Route = createFileRoute("/book/")({
 });
 
 function BookPage() {
+  const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
   const search = Route.useSearch();
   const fn = useServerFn(getPublicSiteData);
   const submit = useServerFn(submitPublicBooking);
-  const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
+  const { data } = useQuery({
+    queryKey: ["public-site"],
+    queryFn: () => fn(),
+    initialData: loaderData,
+  });
   const rooms = useMemo(() => data?.roomTypes ?? [], [data]);
 
   const today = new Date().toISOString().slice(0, 10);

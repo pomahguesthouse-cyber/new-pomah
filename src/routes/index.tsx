@@ -35,6 +35,10 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
+  loader: async () => {
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    return getPublicSiteData();
+  },
   head: () => ({
     meta: [
       { title: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang" },
@@ -122,8 +126,13 @@ function nightsBetween(a: string, b: string): number {
 /* ------------------------------------------------------------------ */
 
 function PomahHome() {
+  const loaderData = Route.useLoaderData();
   const fetchData = useServerFn(getPublicSiteData);
-  const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fetchData() });
+  const { data } = useQuery({
+    queryKey: ["public-site"],
+    queryFn: () => fetchData(),
+    initialData: loaderData,
+  });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
 
