@@ -8,7 +8,6 @@
 
 import { isDateString, fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "./types";
-import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,19 +171,6 @@ export const createBooking: ToolHandler = async (
       ok:    false,
       error: `Gagal menyimpan detail kamar: ${brErr.message}`,
     });
-  }
-
-  // Try to generate and send the invoice PDF via WhatsApp
-  try {
-    void generateAndSendInvoiceNotification({
-      supabase: ctx.supabaseAdmin as any,
-      bookingId: booking.id,
-      origin: ctx.origin,
-    }).catch((err) => {
-      console.error("[createBookingTool] Notification error:", err);
-    });
-  } catch (notificationErr) {
-    console.error("[createBookingTool] Notification trigger error:", notificationErr);
   }
 
   // ── Return success payload ─────────────────────────────────────────────────
