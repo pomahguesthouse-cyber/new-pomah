@@ -24,6 +24,8 @@ import {
   Wrench,
   GraduationCap,
   RefreshCw,
+  UserCheck,
+  RotateCcw,
 } from "lucide-react";
 import {
   listThreads,
@@ -33,6 +35,7 @@ import {
   markRead,
   togglePinned,
   setStatus,
+  setAiMode,
   simulateInbound,
   classifyIntent,
   deleteThread,
@@ -146,6 +149,7 @@ export function WhatsAppPage() {
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
   const statusFn = useServerFn(setStatus);
+  const aiModeFn = useServerFn(setAiMode);
   const simulateFn = useServerFn(simulateInbound);
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
@@ -252,6 +256,16 @@ export function WhatsAppPage() {
   const statusMut = useMutation({
     mutationFn: (s: "open" | "closed") => statusFn({ data: { threadId: current!, status: s } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-threads"] }),
+  });
+
+  const aiModeMut = useMutation({
+    mutationFn: (aiAuto: boolean) => aiModeFn({ data: { threadId: current!, aiAuto } }),
+    onSuccess: (_, aiAuto) => {
+      toast.success(aiAuto ? "AI kembali menangani percakapan" : "Mode Human aktif — AI dihentikan");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   const simulateMut = useMutation({
@@ -372,6 +386,21 @@ export function WhatsAppPage() {
                               closed
                             </Badge>
                           )}
+                          {(t as any).ai_auto !== false ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-sky-400 text-sky-600 dark:text-sky-400"
+                            >
+                              AI Auto
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-amber-400 text-amber-600 dark:text-amber-400"
+                            >
+                              Human
+                            </Badge>
+                          )}
                           {(t.unread_count ?? 0) > 0 && (
                             <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
                               {t.unread_count}
@@ -476,6 +505,31 @@ export function WhatsAppPage() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                {thread.thread.ai_auto ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-primary text-primary hover:bg-primary/10"
+                    disabled={aiModeMut.isPending}
+                    onClick={() => aiModeMut.mutate(false)}
+                    title="Ambil alih dari AI"
+                  >
+                    <UserCheck className="mr-1.5 h-4 w-4" />
+                    Ambil Alih
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                    disabled={aiModeMut.isPending}
+                    onClick={() => aiModeMut.mutate(true)}
+                    title="Kembalikan ke AI"
+                  >
+                    <RotateCcw className="mr-1.5 h-4 w-4" />
+                    Kembalikan ke AI
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"

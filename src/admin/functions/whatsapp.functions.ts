@@ -152,6 +152,20 @@ export const setStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const setAiMode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ threadId: z.string().uuid(), aiAuto: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("whatsapp_threads")
+      .update({ ai_auto: data.aiAuto })
+      .eq("id", data.threadId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const simulateInbound = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
