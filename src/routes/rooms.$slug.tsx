@@ -33,7 +33,7 @@ import {
   checkRoomTypeAvailability,
   submitPublicBooking,
 } from "@/public/functions/public.functions";
-import { PublicFooter } from "@/public/components/public-shell";
+import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -51,6 +51,24 @@ export const Route = createFileRoute("/rooms/$slug")({
     if (typeof s.checkIn === "string") out.checkIn = s.checkIn;
     if (typeof s.checkOut === "string") out.checkOut = s.checkOut;
     return out;
+  },
+  loader: async ({ params }) => {
+    const { getRoomTypeDetail } = await import("@/public/functions/public.functions");
+    return getRoomTypeDetail({ data: { slug: params.slug } });
+  },
+  head: ({ loaderData }) => {
+    const room = loaderData?.room;
+    const name = room?.name ?? "Kamar";
+    const desc = room?.description ?? "Kamar di Pomah Guesthouse Semarang";
+    return {
+      meta: [
+        { title: `${name} — Pomah Guesthouse Semarang` },
+        { name: "description", content: desc },
+        { property: "og:title", content: `${name} — Pomah Guesthouse Semarang` },
+        { property: "og:description", content: desc },
+        { property: "og:image", content: room?.hero_image_url || undefined },
+      ],
+    };
   },
   component: RoomBookingPage,
 });
@@ -123,6 +141,7 @@ function galleryOf(room: RoomRow): string[] {
 /* ================================================================== */
 
 function RoomBookingPage() {
+  const loaderData = Route.useLoaderData();
   const { slug } = Route.useParams();
   const search = Route.useSearch();
   const fn = useServerFn(getRoomTypeDetail);
@@ -131,6 +150,7 @@ function RoomBookingPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["room-detail", slug],
     queryFn: () => fn({ data: { slug } }),
+    initialData: loaderData,
   });
 
   const room = (data?.room ?? null) as RoomRow | null;
@@ -186,6 +206,7 @@ function RoomBookingPage() {
   if (!room) {
     return (
       <div className="min-h-screen bg-stone-50">
+        <PublicNav property={data?.property} />
         <div className="mx-auto max-w-6xl px-6 py-24 text-center">
           <h1 className="text-2xl font-semibold">Kamar tidak ditemukan</h1>
           <Link to="/rooms" className="mt-4 inline-block text-sm text-teal-700 underline">
@@ -199,6 +220,7 @@ function RoomBookingPage() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
+      <PublicNav property={data?.property} />
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">

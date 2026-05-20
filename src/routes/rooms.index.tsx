@@ -5,22 +5,35 @@ import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 
 export const Route = createFileRoute("/rooms/")({
+  loader: async () => {
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    return getPublicSiteData();
+  },
   head: () => ({
     meta: [
-      { title: "Rooms — Pomah Guesthouse" },
+      { title: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
       {
         name: "description",
-        content: "Browse the rooms at Pomah Guesthouse — small, calm, and considered.",
+        content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang. Pesan sekarang secara langsung dengan harga terbaik.",
       },
-      { property: "og:title", content: "Rooms — Pomah Guesthouse" },
+      { property: "og:title", content: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
+      {
+        property: "og:description",
+        content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang.",
+      },
     ],
   }),
   component: PublicRooms,
 });
 
 function PublicRooms() {
+  const loaderData = Route.useLoaderData();
   const fn = useServerFn(getPublicSiteData);
-  const { data } = useQuery({ queryKey: ["public-site"], queryFn: () => fn() });
+  const { data } = useQuery({
+    queryKey: ["public-site"],
+    queryFn: () => fn(),
+    initialData: loaderData,
+  });
   const rooms = data?.roomTypes ?? [];
 
   return (
