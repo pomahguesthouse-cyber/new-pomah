@@ -203,6 +203,7 @@ export async function runMultiAgentOrchestration(
     .find((m) => m.direction === "in")
     ?.body ?? "";
 
+  // 2. Classify intent
   // 2. Manager Bypass
   if (input.isManager) {
     console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
@@ -283,6 +284,18 @@ export async function runMultiAgentOrchestration(
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
+  // 3. Route to agent
+  const routing = routeToAgent(classified);
+  console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
+
+  // 4. Load agent
+  const agent = getAgent(routing.agentKey);
+
+  // 5. Run agent
+  //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
+  const isManager = routing.agentKey === "manager";
+
+  const onAskAgent = isManager
   // 5. Route to agent
   const routing = routeToAgent(classified);
   console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
@@ -308,6 +321,7 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
+          input.agentCtx,
           { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
           input.toolCtx,
           input.llmConfig,
@@ -324,6 +338,7 @@ export async function runMultiAgentOrchestration(
   const agentResult = await runAgent(
     agent,
     input.messages,
+    input.agentCtx,
     { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions },
     input.toolCtx,
     input.llmConfig,
@@ -338,6 +353,7 @@ export async function runMultiAgentOrchestration(
     const foResult = await runAgent(
       foAgent,
       input.messages,
+      input.agentCtx,
       { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions },
       input.toolCtx,
       input.llmConfig,
