@@ -299,6 +299,15 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     const { error: brErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
     if (brErr) throw brErr;
 
+    // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
+    void generateAndSendInvoiceNotification({
+      supabase: context.supabase,
+      bookingId: booking.id,
+      skipWhatsApp: false,
+    }).catch((err) =>
+      console.warn("[createMultiRoomBooking] Notifikasi invoice gagal (non-fatal):", err),
+    );
+
     return { guest_id: guestId, booking, nights, grand_total: grandTotal };
   });
 

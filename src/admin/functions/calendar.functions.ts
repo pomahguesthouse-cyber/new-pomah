@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -99,6 +100,18 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       room_type_id: r?.room_type_id,
       nightly_rate: data.nightlyRate,
     });
+
+    // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
+    if (booking?.id) {
+      void generateAndSendInvoiceNotification({
+        supabase,
+        bookingId: booking.id,
+        skipWhatsApp: false,
+      }).catch((err) =>
+        console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
+      );
+    }
+
     return { ok: true };
   });
 
