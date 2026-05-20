@@ -103,17 +103,5 @@ export const managerAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
-  description: "Personal assistant for the property manager. Handles operational commands and data retrieval.",
-  handles:     ["general"],
-  tools:       MANAGER_TOOLS,
-
-  buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today, customInstructions } = ctx;
-
-    let prompt = customInstructions || "Anda adalah Manager Agent.";
-    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
-    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
-
-    return prompt;
   },
 };
