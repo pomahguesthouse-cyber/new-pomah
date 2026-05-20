@@ -27,7 +27,6 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
         "Delegasikan pertanyaan spesifik ke agent spesialis lain dan dapatkan responsnya. " +
         "Gunakan ini saat masalah tamu membutuhkan keahlian agent tertentu " +
         "(misal: tanya harga → pricing, kerusakan → maintenance).",
-        "Gunakan ini jika manajer menanyakan hal yang menjadi ranah agent lain (contoh: harga -> pricing).",
       parameters: {
         type: "object",
         properties: {
