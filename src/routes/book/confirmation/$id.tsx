@@ -88,7 +88,17 @@ function ConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <PublicNav property={siteData?.property} />
+      <PublicNav
+        property={
+          siteData?.property
+            ? {
+                ...siteData.property,
+                logo_url: siteData.property.invoice_logo_url || siteData.property.logo_url,
+              }
+            : null
+        }
+        showBackHome
+      />
       <main className="mx-auto max-w-2xl px-6 py-12">
         {isLoading ? (
           <div className="flex items-center justify-center py-24 text-sm text-stone-400">
