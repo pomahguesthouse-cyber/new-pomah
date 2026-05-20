@@ -1,4 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -210,6 +212,21 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       })),
     );
     if (brErr) throw brErr;
+
+    // Try to generate and send the invoice PDF via WhatsApp
+    try {
+      const request = getRequest();
+      const origin = request ? new URL(request.url).origin : undefined;
+      void generateAndSendInvoiceNotification({
+        supabase: supabaseAdmin,
+        bookingId: booking.id,
+        origin,
+      }).catch((err) => {
+        console.error("[submitPublicBooking] Notification error:", err);
+      });
+    } catch (notificationErr) {
+      console.error("[submitPublicBooking] Notification trigger error:", notificationErr);
+    }
 
     return {
       id: booking.id,

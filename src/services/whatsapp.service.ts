@@ -21,11 +21,19 @@ export async function sendWhatsAppMessage(
   token:   string,
   phone:   string,
   message: string,
+  fileUrl?: string,
+  filename?: string,
 ): Promise<SendResult> {
   try {
     const form = new URLSearchParams();
     form.append("target",  phone);
     form.append("message", message);
+    if (fileUrl) {
+      form.append("url", fileUrl);
+    }
+    if (filename) {
+      form.append("filename", filename);
+    }
 
     const res = await fetch("https://api.fonnte.com/send", {
       method:  "POST",

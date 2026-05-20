@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getBrandingSettings, getPropertySettings } from "@/admin/modules/settings/settings.functions";
 import { InvoiceDocument, type InvoiceBookingData } from "./invoice-pdf";
+import { supabase } from "@/integrations/supabase/client";
 
 type PDFDownloadLinkRenderProps = {
   loading: boolean;
@@ -64,29 +65,41 @@ export function InvoiceDialog({
 
   if (!booking) return null;
 
+  const origin = typeof window !== 'undefined' ? window.location.origin : "";
+  const webInvoiceUrl = `${origin}/book/confirmation/${booking.id}`;
+  const pdfPublicUrl = supabase.storage
+    .from("room-images")
+    .getPublicUrl(`invoices/${booking.id}.pdf`).data.publicUrl;
+
   const emailBody = `Halo ${booking.guests?.full_name || ""},
   
-Terima kasih telah memesan kamar di Pomah Guesthouse.
+Terima kasih telah memesan kamar di ${propertyName}.
 Berikut adalah detail pemesanan Anda:
 Booking ID: ${booking.reference_code || booking.id.slice(0, 8)}
 Check-in: ${formatDateID(booking.check_in)}
 Check-out: ${formatDateID(booking.check_out)}
 
+Unduh Invoice PDF: ${pdfPublicUrl}
+Lihat Detail Reservasi: ${webInvoiceUrl}
+
 Silakan periksa attachment untuk invoice lengkap Anda.
 
 Salam,
-Pomah Guesthouse`;
+${propertyName}`;
 
   const waBody = `Halo ${booking.guests?.full_name || ""},
-Terima kasih telah memesan kamar di Pomah Guesthouse.
+Terima kasih telah memesan kamar di ${propertyName}.
 
 Booking ID: ${booking.reference_code || booking.id.slice(0, 8)}
 Check-in: ${formatDateID(booking.check_in)}
 Check-out: ${formatDateID(booking.check_out)}
 
+Unduh Invoice PDF: ${pdfPublicUrl}
+Lihat Detail Reservasi: ${webInvoiceUrl}
+
 Silakan simpan pesan ini sebagai referensi.`;
 
-  const mailtoLink = `mailto:${booking.guests?.email || ""}?subject=Invoice Pemesanan Pomah Guesthouse - ${booking.reference_code || booking.id.slice(0, 8)}&body=${encodeURIComponent(emailBody)}`;
+  const mailtoLink = `mailto:${booking.guests?.email || ""}?subject=Invoice Pemesanan ${propertyName} - ${booking.reference_code || booking.id.slice(0, 8)}&body=${encodeURIComponent(emailBody)}`;
   const waLink = booking.guests?.phone
     ? `${getWhatsAppLink(booking.guests.phone)}?text=${encodeURIComponent(waBody)}`
     : "#";
