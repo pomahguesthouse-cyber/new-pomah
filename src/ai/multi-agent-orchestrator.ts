@@ -268,7 +268,7 @@ export async function runMultiAgentOrchestration(
         reply:             stateResult.reply,
         toolsUsed:         ["booking_state_machine"],
         agentKey:          "front-office",
-        intent:            "booking_flow",
+        intent:            "general",
         routingConfidence: 1.0,
         escalated:         false,
       };
