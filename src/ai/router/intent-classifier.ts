@@ -47,9 +47,9 @@ const RULES: IntentRule[] = [
     ],
   },
 
-  // ── Housekeeping
+  // ── Customer Care
   {
-    category: "housekeeping",
+    category: "customer-care",
     weight:   8,
     patterns: [
       /\b(handuk|towel|selimut|bantal|pillow|sabun|shampoo|sampo|toiletries|perlengkapan mandi)\b/i,

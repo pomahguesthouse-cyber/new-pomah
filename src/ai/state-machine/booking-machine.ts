@@ -100,7 +100,7 @@ export async function processBookingState(
     // If we are strictly expecting a name, email, or phone, we might want to still accept it
     // if the intent is 'general' (since a name might be classified as general).
     // If it's a 'complaint' or 'housekeeping' in the middle of a booking, we interrupt.
-    if (["complaint", "maintenance", "housekeeping"].includes(intent.category)) {
+    if (["complaint", "maintenance", "customer-care"].includes(intent.category)) {
       await updateBookingState(supabase, phone, "IDLE", {});
       return { handled: false }; // Let the main router handle this escalation/interruption
     }

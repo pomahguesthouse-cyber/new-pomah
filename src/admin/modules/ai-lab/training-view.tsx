@@ -59,7 +59,7 @@ function composeResponse(rooms: RoomTypeRow[], role: "tamu" | "manager"): string
 const FLOW_AGENTS: { key: string; label: string; roles: ("tamu" | "manager")[] }[] = [
   { key: "front-office", label: "Front Office", roles: ["tamu"] },
   { key: "pricing", label: "Pricing", roles: ["tamu", "manager"] },
-  { key: "housekeeping", label: "Housekeeping", roles: ["tamu"] },
+  { key: "customer-care", label: "Customer Care", roles: ["tamu"] },
   { key: "maintenance", label: "Maintenance", roles: ["tamu"] },
   { key: "finance", label: "Finance", roles: ["tamu", "manager"] },
   { key: "manager", label: "Manager", roles: ["manager"] },

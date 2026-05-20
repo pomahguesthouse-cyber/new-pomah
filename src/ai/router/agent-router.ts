@@ -22,7 +22,7 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   booking_inquiry:    "front-office",
   availability_check: "front-office",
   pricing_inquiry:    "pricing",
-  housekeeping:       "housekeeping",
+  "customer-care":    "customer-care",
   maintenance:        "maintenance",
   payment:            "finance",
   complaint:          "front-office",
@@ -32,7 +32,7 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
 const AGENT_NAMES: Record<AgentKey, string> = {
   "front-office": "Front Office Agent",
   pricing:        "Pricing Agent",
-  housekeeping:   "Customer Care Agent",
+  "customer-care": "Customer Care Agent",
   maintenance:    "Maintenance Agent",
   finance:        "Finance Agent",
   manager:        "Manager Agent",

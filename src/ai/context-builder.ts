@@ -40,7 +40,7 @@ export interface SystemPromptParams {
 const AGENT_KEYS = [
   "front-office",
   "pricing",
-  "housekeeping",
+  "customer-care",
   "maintenance",
   "finance",
   "manager",

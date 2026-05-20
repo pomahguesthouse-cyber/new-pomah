@@ -19,7 +19,7 @@ import type { AgentDefinition, AgentKey } from "./types";
 export const AGENT_REGISTRY: Record<AgentKey, AgentDefinition> = {
   "front-office": frontOfficeAgent,
   pricing:        pricingAgent,
-  housekeeping:   housekeepingAgent,
+  "customer-care": housekeepingAgent,
   maintenance:    maintenanceAgent,
   finance:        financeAgent,
   manager:        managerAgent,

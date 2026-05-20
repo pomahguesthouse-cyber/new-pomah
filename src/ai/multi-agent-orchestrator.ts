@@ -387,7 +387,7 @@ export function deriveAgentLabelFromKey(agentKey: string): string {
   const labels: Record<string, string> = {
     "front-office": "Front Office Agent",
     pricing:        "Pricing Agent",
-    housekeeping:   "Customer Care Agent",
+    "customer-care": "Customer Care Agent",
     maintenance:    "Maintenance Agent",
     finance:        "Finance Agent",
     manager:        "Manager Agent",

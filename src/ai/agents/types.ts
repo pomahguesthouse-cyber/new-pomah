@@ -15,7 +15,7 @@ import type { PropertyRow, RoomTypeRow }        from "@/ai/context-builder";
 export type AgentKey =
   | "front-office"
   | "pricing"
-  | "housekeeping"
+  | "customer-care"
   | "maintenance"
   | "finance"
   | "manager";
@@ -27,7 +27,7 @@ export type IntentCategory =
   | "booking_inquiry"    // tanya kamar, cek ketersediaan, mau booking
   | "availability_check" // eksplisit: "ada kamar tidak", "kamar kosong?"
   | "pricing_inquiry"    // tanya harga, tarif, diskon, paket
-  | "housekeeping"       // minta handuk, bersih kamar, extra pillow
+  | "customer-care"       // minta handuk, bersih kamar, extra pillow
   | "maintenance"        // AC rusak, lampu mati, kran bocor
   | "payment"            // tanya cara bayar, transfer, invoice
   | "complaint"          // keluhan, kecewa, tidak puas

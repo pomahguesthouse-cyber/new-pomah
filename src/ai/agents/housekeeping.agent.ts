@@ -54,10 +54,10 @@ const HOUSEKEEPING_TOOLS: ToolDefinition[] = [
 ];
 
 export const housekeepingAgent: AgentDefinition = {
-  key:         "housekeeping",
+  key:         "customer-care",
   name:        "Customer Care Agent",
   description: "Handles room service, cleaning requests, and amenity requests from in-house guests.",
-  handles:     ["housekeeping"],
+  handles:     ["customer-care"],
   tools:       HOUSEKEEPING_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {

@@ -36,7 +36,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
             enum: [
               "front-office",
               "pricing",
-              "housekeeping",
+              "customer-care",
               "maintenance",
               "finance",
             ] satisfies AgentKey[],
@@ -89,7 +89,7 @@ export const managerAgent: AgentDefinition = {
         "Gunakan ini saat tamu memiliki pertanyaan yang lebih baik dijawab oleh agent spesialis. " +
         "Contoh:" +
         "\n- Tamu komplain tapi juga tanya harga kamar lain → ask_agent('pricing', 'harga kamar ...')" +
-        "\n- Tamu minta kompensasi tapi juga perlu housekeeping → ask_agent('housekeeping', '...')" +
+        "\n- Tamu minta kompensasi tapi juga perlu customer care → ask_agent('customer-care', '...')" +
         "\nSetelah mendapat jawaban dari sub-agent, gabungkan dengan respons Anda.",
 
       "KOMPENSASI & SOLUSI: Bila tamu berhak mendapat kompensasi (misal: kamar bermasalah), " +
