@@ -874,6 +874,12 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
           onChange={(e) => set({ slideMs: Number(e.target.value) })}
         />
       </FieldRow>
+      <FieldRow label="Warna latar belakang">
+        <ColorField value={rc.bgColor ?? "#f3ece0"} onChange={(v) => set({ bgColor: v })} />
+      </FieldRow>
+      <FieldRow label="Gambar latar belakang (opsional)">
+        <ImageField value={rc.bgImageUrl ?? ""} onChange={(url) => set({ bgImageUrl: url })} />
+      </FieldRow>
       <LayerArrange value={rc.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );

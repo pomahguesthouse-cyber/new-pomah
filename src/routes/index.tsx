@@ -314,12 +314,16 @@ function PomahHome() {
       <PbZone id="carousel" label="Our Room" pb={pb}>
         <section
           id="our-room"
-          className="relative scroll-mt-20 bg-[#f3ece0] py-20"
-          style={{ zIndex: cfg.roomCarousel.layer }}
+          className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
+          style={{
+            zIndex: cfg.roomCarousel.layer,
+            backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
+            backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
+          }}
         >
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
-              <SectionHeading>{cfg.roomCarousel.heading}</SectionHeading>
+              <SectionHeading normalCase noUnderline>{cfg.roomCarousel.heading}</SectionHeading>
               {cfg.roomCarousel.subheading && (
                 <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
                   {cfg.roomCarousel.subheading}
@@ -327,7 +331,7 @@ function PomahHome() {
               )}
               {(usingDateFilter || today) && (
                 <div className="mt-2 flex flex-col items-center gap-2">
-                  <p className="text-xs font-semibold text-teal-700">
+                  <p className="mt-3 text-sm md:text-base text-stone-600 font-medium">
                     {usingDateFilter
                       ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
                           checkOut,
@@ -352,7 +356,7 @@ function PomahHome() {
                     <DialogTrigger asChild>
                       <button
                         type="button"
-                        className="cursor-pointer rounded-full border border-teal-700/35 bg-teal-50/50 px-3 py-1 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100/70"
+                        className="cursor-pointer rounded-full bg-orange-500 px-6 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 mt-2"
                       >
                         Ganti
                       </button>
@@ -877,7 +881,7 @@ function RoomCarousel({
                     <div>
                       <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
                       <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-                        {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
+                        {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`]
                            .filter(Boolean)
                            .join(" · ")}
                       </p>
@@ -906,7 +910,7 @@ function RoomCarousel({
                         checkIn: checkIn || undefined,
                         checkOut: checkOut || undefined,
                       }}
-                      className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                      className="mt-5 block cursor-pointer rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                     >
                       Pesan Kamar
                     </Link>
@@ -1213,13 +1217,25 @@ function PomahFooter({ name }: { name: string }) {
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function SectionHeading({
+  children,
+  noUnderline,
+  normalCase,
+}: {
+  children: React.ReactNode;
+  noUnderline?: boolean;
+  normalCase?: boolean;
+}) {
   return (
     <div className="flex flex-col items-center">
-      <h2 className="font-serif text-3xl font-bold uppercase tracking-tight text-stone-800 md:text-4xl">
+      <h2
+        className={`font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl ${
+          normalCase ? "" : "uppercase"
+        }`}
+      >
         {children}
       </h2>
-      <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />}
     </div>
   );
 }

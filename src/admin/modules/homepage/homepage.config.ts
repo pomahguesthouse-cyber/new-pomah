@@ -83,6 +83,8 @@ export interface HomepageConfig {
     autoplay: boolean;
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
+    bgColor?: string;
+    bgImageUrl?: string;
   };
 }
 
@@ -150,6 +152,8 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     slideMs: 4000,
     autoplay: true,
     layer: 10,
+    bgColor: "#f3ece0",
+    bgImageUrl: "",
   },
 };
 
