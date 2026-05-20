@@ -171,6 +171,8 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [tempCheckIn, setTempCheckIn] = useState("");
+  const [tempCheckOut, setTempCheckOut] = useState("");
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -332,7 +334,21 @@ function PomahHome() {
                         )} (${nightsBetween(checkIn, checkOut)} Malam)`
                       : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
                   </p>
-                  <Dialog>
+                  <Dialog
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setTempCheckIn(checkIn || today);
+                        setTempCheckOut(
+                          checkOut ||
+                            (checkIn
+                              ? isoAddDays(checkIn, 1)
+                              : today
+                                ? isoAddDays(today, 1)
+                                : ""),
+                        );
+                      }
+                    }}
+                  >
                     <DialogTrigger asChild>
                       <button
                         type="button"
@@ -348,11 +364,11 @@ function PomahHome() {
                       <div className="mt-4 space-y-4">
                         <Field label="Check-In">
                           <DatePickerID
-                            value={checkIn || today}
+                            value={tempCheckIn}
                             onChange={(val) => {
-                              setCheckIn(val);
-                              if (checkOut && val >= checkOut) {
-                                setCheckOut(isoAddDays(val, 1));
+                              setTempCheckIn(val);
+                              if (tempCheckOut && val >= tempCheckOut) {
+                                setTempCheckOut(isoAddDays(val, 1));
                               }
                             }}
                             placeholder="Pilih tanggal"
@@ -361,9 +377,9 @@ function PomahHome() {
                         </Field>
                         <Field label="Check-Out">
                           <DatePickerID
-                            value={checkOut || (checkIn ? isoAddDays(checkIn, 1) : today ? isoAddDays(today, 1) : "")}
-                            onChange={setCheckOut}
-                            min={checkIn || today || undefined}
+                            value={tempCheckOut}
+                            onChange={setTempCheckOut}
+                            min={tempCheckIn || today || undefined}
                             placeholder="Pilih tanggal"
                             className="h-10 text-sm"
                           />
@@ -371,6 +387,10 @@ function PomahHome() {
                         <DialogClose asChild>
                           <button
                             type="button"
+                            onClick={() => {
+                              setCheckIn(tempCheckIn);
+                              setCheckOut(tempCheckOut);
+                            }}
                             className="cursor-pointer w-full rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                           >
                             Terapkan
