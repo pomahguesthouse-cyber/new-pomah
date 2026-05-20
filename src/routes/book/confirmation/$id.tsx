@@ -116,7 +116,15 @@ function ConfirmationPage() {
               {/* Invoice header */}
               <div className="flex items-start justify-between gap-4 border-b border-stone-200 bg-stone-50 px-6 py-5">
                 <div>
-                  <p className="text-lg font-bold">{inv.property.name}</p>
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={propertyName || "Logo"}
+                      className="h-10 object-contain mb-2 max-w-[200px]"
+                    />
+                  ) : (
+                    <p className="text-lg font-bold">{inv.property.name}</p>
+                  )}
                   {inv.property.address && (
                     <p className="text-xs text-stone-500">{inv.property.address}</p>
                   )}
