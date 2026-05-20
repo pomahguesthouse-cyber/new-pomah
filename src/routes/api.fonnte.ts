@@ -136,8 +136,51 @@ export const Route = createFileRoute("/api/fonnte")({
         const origin = new URL(request.url).origin;
         console.log("[Webhook]", { sender, isOutgoing, msg: message.slice(0, 60), origin });
 
-        // ── 3. Skip outgoing (Fonnte webhooks our own sends) ──────────────
+        // ── 3. Handle outgoing (Fonnte webhooks our own sends + native phone sends) ──
         if (isOutgoing) {
+          try {
+            const { data: thread } = await (supabaseAdmin as any)
+              .from("whatsapp_threads")
+              .select("id")
+              .eq("phone", sender)
+              .maybeSingle();
+
+            let threadId = thread?.id;
+
+            if (!threadId) {
+              const { data: newThread } = await (supabaseAdmin as any)
+                .from("whatsapp_threads")
+                .insert({ phone: sender, display_name: name || sender, status: "open", unread_count: 0 })
+                .select("id")
+                .single();
+              threadId = newThread?.id;
+            }
+
+            if (threadId) {
+              const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
+              const { data: existingMsg } = await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .select("id")
+                .eq("thread_id", threadId)
+                .eq("direction", "out")
+                .eq("body", message)
+                .gte("sent_at", twoMinsAgo)
+                .maybeSingle();
+
+              if (!existingMsg) {
+                console.log(`[Webhook] Saving native outbound human message | ${logCtx}`);
+                await (supabaseAdmin as any).rpc("save_outbound_whatsapp", {
+                  p_thread_id: threadId,
+                  p_body: message,
+                  p_metadata: { is_native_human: true },
+                });
+              } else {
+                console.log(`[Webhook] Ignored outgoing echo (already in DB) | ${logCtx}`);
+              }
+            }
+          } catch (err) {
+            console.error(`[Webhook] Error handling native outgoing message: ${err} | ${logCtx}`);
+          }
           return new Response("OK", { status: 200 });
         }
 
