@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ExternalLink, Save } from "lucide-react";
+import { ExternalLink, Save, Upload, Loader2, Trash2, Image as ImageIcon } from "lucide-react";
 import { listSeoPages, upsertSeoPage } from "@/admin/modules/seo/seo.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/admin/seo")({
   component: SeoPage,
@@ -87,6 +88,7 @@ function SeoPage() {
 
 function SeoRow({ page, onSave }: { page: Page; onSave: (v: Page) => void }) {
   const [v, setV] = useState(page);
+  const [uploading, setUploading] = useState(false);
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between">
@@ -114,11 +116,89 @@ function SeoRow({ page, onSave }: { page: Page; onSave: (v: Page) => void }) {
         </div>
         <div>
           <Label className="text-xs">OG image URL</Label>
-          <Input
-            value={v.og_image_url ?? ""}
-            onChange={(e) => setV({ ...v, og_image_url: e.target.value })}
-            placeholder="https://…"
-          />
+          <div className="mt-1 flex items-start gap-4">
+            <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md border border-input bg-muted">
+              {v.og_image_url ? (
+                <img src={v.og_image_url} alt="OG Preview" className="h-full w-full object-cover" />
+              ) : (
+                <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Input
+                  className="h-8 text-sm"
+                  value={v.og_image_url ?? ""}
+                  onChange={(e) => setV({ ...v, og_image_url: e.target.value })}
+                  placeholder="https://…"
+                />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id={`og-upload-${page.id}`}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (!file.type.startsWith("image/")) {
+                      toast.error("File harus berupa gambar");
+                      return;
+                    }
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast.error("Ukuran gambar maksimal 2 MB");
+                      return;
+                    }
+                    setUploading(true);
+                    try {
+                      const ext = file.name.split(".").pop() ?? "png";
+                      const path = `seo/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+                      const { error } = await supabase.storage
+                        .from("room-images")
+                        .upload(path, file, { cacheControl: "3600", upsert: false });
+                      if (error) throw error;
+                      const { data } = supabase.storage.from("room-images").getPublicUrl(path);
+                      setV({ ...v, og_image_url: data.publicUrl });
+                      toast.success("Gambar OG berhasil diupload");
+                    } catch (err) {
+                      toast.error(`Upload gagal: ${(err as Error).message}`);
+                    } finally {
+                      setUploading(false);
+                      e.target.value = "";
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1 shrink-0"
+                  disabled={uploading}
+                  onClick={() => document.getElementById(`og-upload-${page.id}`)?.click()}
+                >
+                  {uploading ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Upload className="h-3 w-3" />
+                  )}
+                  {uploading ? "Mengupload…" : "Upload"}
+                </Button>
+                {v.og_image_url && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1 text-destructive hover:text-destructive shrink-0"
+                    disabled={uploading}
+                    onClick={() => setV({ ...v, og_image_url: null })}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Hapus
+                  </Button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Ukuran disarankan: 1200 x 630 piksel. Maksimal 2 MB.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </Card>
