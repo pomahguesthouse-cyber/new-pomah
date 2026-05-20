@@ -156,7 +156,7 @@ export function WhatsAppPage() {
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
-  const overrideAutoReplyFn = useServerFn(toggleOverrideAutoReply);
+  
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
