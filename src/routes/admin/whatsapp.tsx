@@ -551,8 +551,12 @@ export function WhatsAppPage() {
               </div>
             </header>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto bg-muted/20 px-6 py-4">
-              <MessageStream messages={thread.messages} />
+            <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#efeae2] px-6 py-4 dark:bg-[#0b141a] relative">
+              {/* Optional WhatsApp doodle pattern background overlay can be placed here */}
+              <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
+              <div className="relative z-10">
+                <MessageStream messages={thread.messages} />
+              </div>
             </div>
 
             <footer className="border-t border-border bg-card p-3">
@@ -1028,36 +1032,45 @@ function MessageStream({ messages }: { messages: any[] }) {
     <div className="space-y-4">
       {groups.map((g) => (
         <div key={g.label}>
-          <div className="my-3 flex items-center justify-center">
-            <span className="rounded-full bg-card px-3 py-1 font-mono text-[10px] uppercase tracking-wider text-muted-foreground shadow-sm">
+          <div className="my-3 flex items-center justify-center relative z-10">
+            <span className="rounded-md bg-[#ffffff]/90 dark:bg-[#182229]/90 px-3 py-1 font-sans text-[11px] font-medium text-[#54656f] dark:text-[#8696a0] shadow-sm">
               {g.label}
             </span>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5 relative z-10">
             {g.items.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex flex-col", m.direction === "out" ? "items-end" : "items-start")}
+                className={cn("flex flex-col group", m.direction === "out" ? "items-end pl-12" : "items-start pr-12")}
               >
                 <div
                   className={cn(
-                    "max-w-md whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                    "relative whitespace-pre-wrap rounded-lg px-2.5 pb-1.5 pt-1.5 text-[14.2px] shadow-sm flex flex-col",
                     m.direction === "out"
-                      ? "rounded-br-sm bg-primary text-primary-foreground"
-                      : "rounded-bl-sm bg-card text-foreground",
+                      ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
+                      : "rounded-tl-none bg-[#ffffff] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]",
                   )}
+                  style={{ maxWidth: '85%' }}
                 >
-                  {m.body}
-                  <p
+                  {/* Tail for bubbles */}
+                  <div className={cn(
+                    "absolute top-0 w-2 h-3",
+                    m.direction === "out"
+                      ? "-right-2 bg-[#d9fdd3] dark:bg-[#005c4b] rounded-bl-full"
+                      : "-left-2 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full"
+                  )} style={{ clipPath: m.direction === "out" ? 'polygon(0 0, 100% 0, 0 100%)' : 'polygon(0 0, 100% 0, 100% 100%)' }} />
+
+                  <span className="leading-[19px]">{m.body}</span>
+                  <div
                     className={cn(
-                      "mt-1 text-right font-mono text-[10px]",
+                      "mt-[2px] self-end font-sans text-[10px] flex items-center gap-1",
                       m.direction === "out"
-                        ? "text-primary-foreground/60"
-                        : "text-muted-foreground",
+                        ? "text-[#667781] dark:text-[#8596a0]"
+                        : "text-[#667781] dark:text-[#8596a0]",
                     )}
                   >
                     {formatTimeID(m.sent_at)}
-                  </p>
+                  </div>
                 </div>
                 <MessageBadges m={m} />
               </div>
