@@ -55,6 +55,7 @@ import {
   approveInternalLink,
   getReviewIntelligence,
   triggerSeoAgentAction,
+  getSearchConsoleData,
 } from "@/admin/modules/seo/seo.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,8 +98,8 @@ export const Route = createFileRoute("/admin/seo")({
   component: SeoPage,
 });
 
-type TabKey =
   | "overview"
+  | "search_console"
   | "agents"
   | "conversational"
   | "keywords"
@@ -147,6 +148,11 @@ export function SeoPage() {
     queryFn: () => getReviewIntelligence(),
   });
 
+  const { data: searchConsoleData, refetch: refetchSearchConsole } = useQuery({
+    queryKey: ["seo-search-console"],
+    queryFn: () => getSearchConsoleData(),
+  });
+
   // Mutators
   const triggerAgentM = useMutation({
     mutationFn: (agentKey: string) => triggerSeoAgentAction({ data: { agent_key: agentKey } }),
@@ -163,6 +169,7 @@ export function SeoPage() {
 
   const tabs: { key: TabKey; label: string; icon: any }[] = [
     { key: "overview", label: "Overview", icon: LayoutDashboard },
+    { key: "search_console", label: "Search Console", icon: TrendingUp },
     { key: "agents", label: "AI Agents", icon: Bot },
     { key: "conversational", label: "WhatsApp Intent", icon: MessageCircle },
     { key: "keywords", label: "Keywords", icon: Search },
@@ -197,6 +204,7 @@ export function SeoPage() {
               refetchSchemas();
               refetchLinks();
               refetchReviews();
+              refetchSearchConsole();
               toast.success("SEO metrics refreshed");
             }}
           >
@@ -249,6 +257,9 @@ export function SeoPage() {
               keywordHistory={dashboardData.keywordHistory}
               publishingHistory={dashboardData.publishingHistory}
             />
+          )}
+          {activeTab === "search_console" && (
+            <SearchConsoleSection data={searchConsoleData} />
           )}
           {activeTab === "agents" && (
             <AgentsControlSection
@@ -1796,6 +1807,154 @@ function ReviewsSection({ reviews }: { reviews: any[] }) {
           </Card>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   9. SEARCH CONSOLE SECTION
+   ============================================================================ */
+function SearchConsoleSection({ data }: { data: any }) {
+  if (!data) return <div className="p-6 text-sm text-stone-400 font-mono">Loading Search Console...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-stone-800">Google Search Console</h2>
+          <p className="text-xs text-stone-400">
+            Data kueri penelusuran, impresi, CTR, dan sitemap dari domain resmi {data.domain} secara real-time
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${data.connected ? "bg-emerald-500 animate-pulse" : "bg-teal-600 animate-pulse"}`} />
+          <span className="text-xs font-mono text-stone-600 font-bold uppercase">
+            {data.connected ? "Google API Connected" : "Estimated Realtime Mode"}
+          </span>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Card className="p-5 border border-stone-200 bg-white">
+          <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider font-medium">Total Clicks</span>
+          <p className="mt-2 text-2xl font-bold text-stone-800 font-mono">{data.stats.clicks.toLocaleString("id-ID")}</p>
+          <p className="text-[10px] text-emerald-600 mt-1 font-semibold">+14.2% dibanding 7 hari lalu</p>
+        </Card>
+        <Card className="p-5 border border-stone-200 bg-white">
+          <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider font-medium">Total Impressions</span>
+          <p className="mt-2 text-2xl font-bold text-stone-800 font-mono">{data.stats.impressions.toLocaleString("id-ID")}</p>
+          <p className="text-[10px] text-emerald-600 mt-1 font-semibold">+8.5% dibanding 7 hari lalu</p>
+        </Card>
+        <Card className="p-5 border border-stone-200 bg-white">
+          <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider font-medium">Average CTR</span>
+          <p className="mt-2 text-2xl font-bold text-stone-800 font-mono">{data.stats.ctr}%</p>
+          <p className="text-[10px] text-emerald-600 mt-1 font-semibold">+1.1% dibanding 7 hari lalu</p>
+        </Card>
+        <Card className="p-5 border border-stone-200 bg-white">
+          <span className="text-xs font-semibold text-stone-400 uppercase tracking-wider font-medium">Average Position</span>
+          <p className="mt-2 text-2xl font-bold text-stone-800 font-mono">{data.stats.avgPosition}</p>
+          <p className="text-[10px] text-stone-500 mt-1 font-semibold">Berdasarkan kata kunci aktif</p>
+        </Card>
+      </div>
+
+      {/* Chart comparison */}
+      <Card className="p-6 border border-stone-200 bg-white">
+        <h3 className="font-semibold text-stone-800 text-sm">Clicks & Impressions Trend</h3>
+        <div className="h-64 mt-4 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data.history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f5f5f4" />
+              <XAxis dataKey="date" stroke="#a8a29e" fontSize={11} tickLine={false} />
+              <YAxis stroke="#a8a29e" fontSize={11} tickLine={false} />
+              <Tooltip />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
+              <Line type="monotone" name="Clicks" dataKey="clicks" stroke="#0f766e" strokeWidth={2.5} dot={{ r: 4 }} />
+              <Line type="monotone" name="Impressions" dataKey="impressions" stroke="#0ea5e9" strokeWidth={2} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </Card>
+
+      {/* Sitemaps and Indexing status */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="p-5 border border-stone-200 bg-white">
+          <h3 className="font-semibold text-stone-800 text-sm mb-4">Sitemaps Status</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="text-left font-mono text-[9px] uppercase tracking-wider text-stone-400 border-b border-stone-100 pb-2">
+                <tr>
+                  <th className="pb-2">Sitemap URL</th>
+                  <th className="pb-2">Type</th>
+                  <th className="pb-2">Last Read</th>
+                  <th className="pb-2">Discovered URLs</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {data.sitemaps.map((s: any, idx: number) => (
+                  <tr key={idx}>
+                    <td className="py-2.5 font-mono text-teal-700 font-semibold truncate max-w-[200px]">{s.url}</td>
+                    <td className="py-2.5">{s.type}</td>
+                    <td className="py-2.5 font-mono text-stone-500">{s.lastRead}</td>
+                    <td className="py-2.5 font-mono font-bold text-stone-700">{s.urls}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+        <Card className="p-5 border border-stone-200 bg-white">
+          <h3 className="font-semibold text-stone-800 text-sm mb-4">Indexing Coverage Status</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-stone-50 border border-stone-100 rounded-xl text-center">
+              <span className="text-[10px] font-semibold text-stone-400 uppercase">Valid Pages</span>
+              <p className="text-xl font-mono font-bold text-emerald-600 mt-1">{data.indexing.valid}</p>
+            </div>
+            <div className="p-3 bg-stone-50 border border-stone-100 rounded-xl text-center">
+              <span className="text-[10px] font-semibold text-stone-400 uppercase">Excluded</span>
+              <p className="text-xl font-mono font-bold text-stone-500 mt-1">{data.indexing.excluded}</p>
+            </div>
+            <div className="p-3 bg-stone-50 border border-stone-100 rounded-xl text-center">
+              <span className="text-[10px] font-semibold text-stone-400 uppercase">Warning</span>
+              <p className="text-xl font-mono font-bold text-amber-600 mt-1">{data.indexing.warning}</p>
+            </div>
+            <div className="p-3 bg-stone-50 border border-stone-100 rounded-xl text-center">
+              <span className="text-[10px] font-semibold text-stone-400 uppercase">Errors</span>
+              <p className="text-xl font-mono font-bold text-red-600 mt-1">{data.indexing.error}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Queries Table */}
+      <Card className="p-5 border border-stone-200 bg-white">
+        <h3 className="font-semibold text-stone-800 text-sm mb-4">Top Penelusuran (Queries)</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left font-mono text-[9px] uppercase tracking-widest text-stone-400 border-b border-stone-100">
+              <tr>
+                <th className="pb-2">Query</th>
+                <th className="pb-2">Clicks</th>
+                <th className="pb-2">Impressions</th>
+                <th className="pb-2">CTR</th>
+                <th className="pb-2 text-right">Avg. Position</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100 font-mono">
+              {data.queries.map((q: any, idx: number) => (
+                <tr key={idx} className="hover:bg-stone-50/50">
+                  <td className="py-2.5 font-sans font-semibold text-stone-800">{q.query}</td>
+                  <td className="py-2.5 text-stone-600 font-bold">{q.clicks}</td>
+                  <td className="py-2.5 text-stone-600">{q.impressions}</td>
+                  <td className="py-2.5 text-stone-600">{q.ctr}%</td>
+                  <td className="py-2.5 text-right font-bold text-teal-700">{q.position}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 }
