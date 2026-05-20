@@ -33,8 +33,14 @@ function createSupabaseAdminClient() {
       ...(!SUPABASE_SERVICE_ROLE_KEY ? ["SUPABASE_SERVICE_ROLE_KEY"] : []),
     ];
     const message = `Missing Supabase environment variable(s): ${missing.join(", ")}. Connect Supabase in Lovable Cloud.`;
-    console.error(`[Supabase] ${message}`);
-    throw new Error(message);
+    // Log but DO NOT THROW on startup, because not all environments have the service role key.
+    console.warn(`[Supabase] ${message}`);
+    // Return a dummy proxy that throws when actually used
+    return new Proxy({} as any, {
+      get(target, prop) {
+        throw new Error(`Cannot use supabaseAdmin: ${message}`);
+      }
+    });
   }
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
