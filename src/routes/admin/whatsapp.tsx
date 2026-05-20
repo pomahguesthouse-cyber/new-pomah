@@ -9,7 +9,7 @@ import {
   Search as SearchIcon,
   Pin,
   PinOff,
-  CheckCheck,
+
   Tag,
   User as UserIcon,
   UserCheck,
@@ -35,7 +35,7 @@ import {
   draftAiReply,
   markRead,
   togglePinned,
-  setStatus,
+
   setAiMode,
   simulateInbound,
   classifyIntent,
@@ -150,7 +150,7 @@ export function WhatsAppPage() {
   const draftFn = useServerFn(draftAiReply);
   const markReadFn = useServerFn(markRead);
   const pinFn = useServerFn(togglePinned);
-  const statusFn = useServerFn(setStatus);
+
   const aiModeFn = useServerFn(setAiMode);
   const simulateFn = useServerFn(simulateInbound);
   const classifyFn = useServerFn(classifyIntent);
@@ -272,10 +272,7 @@ export function WhatsAppPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-threads"] }),
   });
 
-  const statusMut = useMutation({
-    mutationFn: (s: "open" | "closed") => statusFn({ data: { threadId: current!, status: s } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-threads"] }),
-  });
+
 
   const aiModeMut = useMutation({
     mutationFn: (aiAuto: boolean) => aiModeFn({ data: { threadId: current!, aiAuto } }),
@@ -489,18 +486,7 @@ export function WhatsAppPage() {
                     <Pin className="h-4 w-4" />
                   )}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const t = thread.thread;
-                    if (!t) return;
-                    statusMut.mutate(t.status === "open" ? "closed" : "open");
-                  }}
-                >
-                  <CheckCheck className="mr-1.5 h-4 w-4" />
-                  {thread.thread.status === "open" ? "Close" : "Reopen"}
-                </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
