@@ -7,7 +7,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Printer, Loader2 } from "lucide-react";
+import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
 
@@ -176,7 +176,19 @@ function ConfirmationPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-center gap-3 print:hidden">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
+              {inv.pdf_url && (
+                <a
+                  href={inv.pdf_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  download={`Invoice-${inv.reference_code}.pdf`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                >
+                  <Download className="h-4 w-4" />
+                  Download Invoice PDF
+                </a>
+              )}
               <button
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
@@ -186,7 +198,7 @@ function ConfirmationPage() {
               </button>
               <Link
                 to="/"
-                className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
               >
                 Kembali ke Beranda
               </Link>
