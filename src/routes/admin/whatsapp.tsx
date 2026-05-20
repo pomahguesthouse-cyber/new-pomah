@@ -507,7 +507,9 @@ export function WhatsAppPage() {
                   onClick={() => {
                     const t = thread.thread;
                     if (!t) return;
-                    takeoverMut.mutate(!(t as any).override_auto_reply);
+                    // takeover=true when AI currently auto (ai_auto !== false)
+                    const currentlyAi = (t as any).ai_auto !== false;
+                    takeoverMut.mutate(currentlyAi);
                   }}
                   className={cn(
                     "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
@@ -515,13 +517,13 @@ export function WhatsAppPage() {
                     "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
                   title={
-                    (thread.thread as any).override_auto_reply
+                    (thread.thread as any).ai_auto === false
                       ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
                       : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
                   }
                   disabled={takeoverMut.isPending}
                 >
-                  {(thread.thread as any).override_auto_reply ? (
+                  {(thread.thread as any).ai_auto === false ? (
                     <>
                       <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
                       Kembalikan ke AI
