@@ -87,7 +87,7 @@ import {
   DEFAULT_SMART_DELAY,
 }                                             from "@/services/queue.service";
 import type { SmartDelayConfig }             from "@/services/queue.service";
-import { sendWhatsAppMessage }         from "@/services/whatsapp.service";
+
 
 // ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
 import {
