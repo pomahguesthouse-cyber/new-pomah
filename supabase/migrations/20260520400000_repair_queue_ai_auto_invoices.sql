@@ -373,7 +373,8 @@ AS $$
   LIMIT  1;
 $$;
 
-CREATE OR REPLACE VIEW wa_queue_stats AS
+DROP VIEW IF EXISTS wa_queue_stats;
+CREATE VIEW wa_queue_stats AS
 SELECT
   date_trunc('hour', created_at AT TIME ZONE 'Asia/Jakarta') AS hour_wib,
   COUNT(*)                                                    AS total_bursts,
