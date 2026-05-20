@@ -284,15 +284,37 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
     // Reads via the service-role client: a guest holding the (unguessable)
     // booking id sees their own invoice; the anon role has no SELECT on bookings.
     const sb = db(supabaseAdmin);
-    const { data: bRow } = await sb
-      .from("bookings")
-      .select(
-        "reference_code, check_in, check_out, nights, adults, children, total_amount, status, payment_method, check_in_time, check_out_time, special_requests, created_at, guest_id",
-      )
-      .eq("id", data.id)
-      .maybeSingle();
+
+    // Try full select first (includes columns added in later migrations).
+    // If any column is missing (Postgres error 42703), fall back to the
+    // base columns that have always existed.
+    const bookingId = data.id;
+    let bRow: Record<string, unknown> | null = null;
+    {
+      const { data: bFull, error: bErr } = await sb
+        .from("bookings")
+        .select(
+          "reference_code, check_in, check_out, nights, adults, children, total_amount, status, payment_method, check_in_time, check_out_time, special_requests, created_at, guest_id",
+        )
+        .eq("id", bookingId)
+        .maybeSingle();
+      if (!bErr) {
+        bRow = bFull as Record<string, unknown> | null;
+      } else if ((bErr as any).code === "42703") {
+        // One or more columns not yet in DB — retry with base columns only
+        const { data: bBase } = await sb
+          .from("bookings")
+          .select("check_in, check_out, adults, children, total_amount, status, special_requests, created_at, guest_id")
+          .eq("id", bookingId)
+          .maybeSingle();
+        bRow = bBase as Record<string, unknown> | null;
+      } else {
+        console.error("[getBookingInvoice] booking query error:", bErr);
+      }
+    }
+
     if (!bRow) return { invoice: null as BookingInvoice | null };
-    const b = bRow as Record<string, unknown>;
+    const b = bRow;
 
     const { data: gRow } = await sb
       .from("guests")
@@ -332,7 +354,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       const { data: invRow } = await sb
         .from("invoices" as any)
         .select("pdf_url")
-        .eq("booking_id", data.id)
+        .eq("booking_id", bookingId)
         .maybeSingle();
 
       if (invRow && (invRow as any).pdf_url) {
@@ -349,7 +371,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         );
         const result = await generateAndSendInvoiceNotification({
           supabase: supabaseAdmin as any,
-          bookingId: data.id,
+          bookingId,
           skipWhatsApp: true,
         });
         if (result.ok && result.pdf_url) {
@@ -367,7 +389,9 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       status: String(b.status ?? "pending"),
       check_in: String(b.check_in ?? ""),
       check_out: String(b.check_out ?? ""),
-      nights: Number(b.nights ?? 0),
+      nights: Number(b.nights) || Math.max(1, Math.round(
+        (Date.parse(`${String(b.check_out)}T00:00:00Z`) - Date.parse(`${String(b.check_in)}T00:00:00Z`)) / 86_400_000
+      )),
       adults: Number(b.adults ?? 0),
       children: Number(b.children ?? 0),
       rooms: rows.length || 1,
