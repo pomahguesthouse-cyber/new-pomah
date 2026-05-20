@@ -98,6 +98,7 @@ export const Route = createFileRoute("/admin/seo")({
   component: SeoPage,
 });
 
+type TabKey =
   | "overview"
   | "search_console"
   | "agents"
