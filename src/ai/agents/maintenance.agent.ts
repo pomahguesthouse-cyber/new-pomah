@@ -103,12 +103,5 @@ export const maintenanceAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
-    const { property, today, customInstructions } = ctx;
-
-    let prompt = customInstructions || "Anda adalah Maintenance Agent.";
-    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
-    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
-
-    return prompt;
   },
 };
