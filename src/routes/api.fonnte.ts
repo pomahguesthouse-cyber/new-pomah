@@ -131,10 +131,10 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        const { sender, message, name, fonnteId, isOutgoing } = event;
-        const logCtx = `phone=${sender.slice(-6)} worker=${workerId}`;
+        const { sender, message, name, fonnteId, isOutgoing, customerPhone, rawBody } = event;
+        const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
         const origin = new URL(request.url).origin;
-        console.log("[Webhook]", { sender, isOutgoing, msg: message.slice(0, 60), origin });
+        console.log("[Webhook]", { sender, customerPhone, isOutgoing, msg: message.slice(0, 60), rawBodyKeys: Object.keys(rawBody) });
 
         // ── 3. Handle outgoing (Fonnte webhooks our own sends + native phone sends) ──
         if (isOutgoing) {
@@ -142,7 +142,7 @@ export const Route = createFileRoute("/api/fonnte")({
             const { data: thread } = await (supabaseAdmin as any)
               .from("whatsapp_threads")
               .select("id")
-              .eq("phone", sender)
+              .eq("phone", customerPhone)
               .maybeSingle();
 
             let threadId = thread?.id;
@@ -150,7 +150,7 @@ export const Route = createFileRoute("/api/fonnte")({
             if (!threadId) {
               const { data: newThread } = await (supabaseAdmin as any)
                 .from("whatsapp_threads")
-                .insert({ phone: sender, display_name: name || sender, status: "open", unread_count: 0 })
+                .insert({ phone: customerPhone, display_name: name || customerPhone, status: "open", unread_count: 0 })
                 .select("id")
                 .single();
               threadId = newThread?.id;
@@ -194,7 +194,7 @@ export const Route = createFileRoute("/api/fonnte")({
         // ── 5. Save inbound message ───────────────────────────────────────
         const { messageId, error: saveErr } = await saveInboundMessage(
           supabasePublic,
-          { phone: sender, name, body: message },
+          { phone: customerPhone, name, body: message },
         );
         if (saveErr || !messageId) {
           console.error(`[Webhook] saveInbound failed: ${saveErr?.message ?? "no messageId"} | ${logCtx}`);
@@ -210,7 +210,7 @@ export const Route = createFileRoute("/api/fonnte")({
         // ── 6. Load autoreply context ─────────────────────────────────────
         const { data: ctx, error: ctxErr } = await (supabasePublic as any).rpc(
           "get_autoreply_context",
-          { p_phone: sender },
+          { p_phone: customerPhone },
         );
 
         if (ctxErr) {
@@ -218,7 +218,7 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
         if (!ctx) {
-          console.warn(`[AutoReply] no thread found for ${sender}`);
+          console.warn(`[AutoReply] no thread found for ${customerPhone}`);
           return new Response("OK", { status: 200 });
         }
 
@@ -270,7 +270,7 @@ export const Route = createFileRoute("/api/fonnte")({
             `[AutoReply] Circuit Breaker active (cooldown until ${new Date(aiCooldownUntil).toISOString()}) ` +
             `— bypassing AI and using fallback | ${logCtx}`,
           );
-          await sendFallbackAndSave(c.fonnte_token, sender, c.thread_id, logCtx);
+          await sendFallbackAndSave(c.fonnte_token, customerPhone, c.thread_id, logCtx);
           return new Response("OK", { status: 200 });
         }
 
@@ -331,7 +331,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           if (!apiKey) {
             console.error(`[AutoReply] no AI key configured | ${logCtx}`);
-            await sendFallbackAndSave(c.fonnte_token, sender, c.thread_id, logCtx);
+            await sendFallbackAndSave(c.fonnte_token, customerPhone, c.thread_id, logCtx);
             return new Response("OK", { status: 200 });
           }
 
@@ -374,7 +374,7 @@ export const Route = createFileRoute("/api/fonnte")({
               );
 
               orchResult = await runMultiAgentOrchestration({
-                phone:     sender,
+                phone:     customerPhone,
                 messages:  rollingMessages,
                 agentCtx: {
                   property:    p as any,
@@ -439,11 +439,11 @@ export const Route = createFileRoute("/api/fonnte")({
 
           // ── 14. Outbound Idempotency Check ──────────────────────────────
           const replyHash = hashString(finalReply);
-          const outboundKey = `out:${sender}:${replyHash}`;
+          const outboundKey = `out:${customerPhone}:${replyHash}`;
           const lastSentTime = outboundDedup.get(outboundKey);
 
           if (lastSentTime && (Date.now() - lastSentTime < OUTBOUND_DEDUP_TTL_MS)) {
-            console.warn(`[AutoReply] Outbound duplicate detected for ${sender} — skipping Fonnte send | ${logCtx}`);
+            console.warn(`[AutoReply] Outbound duplicate detected for ${customerPhone} — skipping Fonnte send | ${logCtx}`);
             return new Response("OK", { status: 200 });
           }
 
@@ -452,7 +452,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           // ── 15. Send reply via WhatsApp ─────────────────────────────────
           const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-            c.fonnte_token, sender, finalReply,
+            c.fonnte_token, customerPhone, finalReply,
           );
 
           if (!sent) {

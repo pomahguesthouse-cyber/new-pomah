@@ -41,4 +41,8 @@ export interface ParsedWebhookEvent {
   device:     string | undefined;
   /** True when this webhook fires for a message WE sent (should be skipped) */
   isOutgoing: boolean;
+  /** The customer's phone number (receiver if outgoing, sender if incoming) */
+  customerPhone: string;
+  /** The raw body payload */
+  rawBody: any;
 }
