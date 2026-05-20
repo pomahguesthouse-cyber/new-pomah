@@ -524,7 +524,7 @@ GRANT SELECT  ON         wa_queue_stats                                         
 GRANT EXECUTE ON FUNCTION wa_queue_upsert(text,uuid,uuid,text,integer,integer)        TO anon;
 GRANT EXECUTE ON FUNCTION wa_queue_claim(uuid,text)                                   TO anon;
 GRANT EXECUTE ON FUNCTION wa_queue_claim_retry(uuid,text)                             TO anon;
-GRANT EXECUTE ON FUNCTION wa_queue_heartbeat(uuid,text)                               TO boolean;
+GRANT EXECUTE ON FUNCTION wa_queue_heartbeat(uuid,text)                               TO service_role;
 GRANT EXECUTE ON FUNCTION wa_queue_heartbeat(uuid,text)                               TO anon;
 GRANT EXECUTE ON FUNCTION wa_queue_complete(uuid,text,text)                           TO anon;
 GRANT EXECUTE ON FUNCTION wa_queue_fail(uuid,text,text)                               TO anon;
