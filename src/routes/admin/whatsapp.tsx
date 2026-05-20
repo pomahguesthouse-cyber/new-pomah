@@ -12,6 +12,8 @@ import {
   CheckCheck,
   Tag,
   User as UserIcon,
+  UserCheck,
+  ArrowUpRight,
   CalendarDays,
   Phone,
   Wand2,
@@ -494,10 +496,9 @@ export function WhatsAppPage() {
                     takeoverMut.mutate(!t.override_auto_reply);
                   }}
                   className={cn(
-                    "gap-1.5 font-medium transition-all shadow-sm border",
-                    thread.thread.override_auto_reply
-                      ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-950/40"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-950/40"
+                    "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
+                    "border-[#0e7490] text-[#0e7490] hover:bg-[#0e7490]/5 hover:text-[#0e7490]",
+                    "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
                   title={
                     thread.thread.override_auto_reply
@@ -508,13 +509,13 @@ export function WhatsAppPage() {
                 >
                   {thread.thread.override_auto_reply ? (
                     <>
-                      <UserIcon className="h-4 w-4" />
-                      Human
+                      <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
+                      Kembalikan ke AI
                     </>
                   ) : (
                     <>
-                      <Bot className="h-4 w-4" />
-                      AI
+                      <UserCheck className="h-4 w-4 stroke-[2.2]" />
+                      Ambil Alih
                     </>
                   )}
                 </Button>
