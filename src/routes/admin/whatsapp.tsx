@@ -41,7 +41,7 @@ import {
   classifyIntent,
   deleteThread,
   setTrainingExample,
-  toggleOverrideAutoReply,
+  
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
