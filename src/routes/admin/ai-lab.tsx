@@ -47,6 +47,7 @@ import { TrainingView } from "@/admin/modules/ai-lab/training-view";
 import { WebchatLogView } from "@/admin/modules/ai-lab/webchat-log-view";
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings";
+import { SeoPage } from "@/routes/admin/seo";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -108,7 +109,7 @@ const PIPELINE = [
   { label: "Balasan ke Tamu", icon: Send },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "webchat" | "sop" | "training" | "smart-delay";
+type ViewKey = "dashboard" | "whatsapp" | "webchat" | "sop" | "training" | "smart-delay" | "seo";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
@@ -116,6 +117,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?
   { key: "sop",          label: "Knowledge SOP",   icon: BookOpen },
   { key: "training",     label: "Training",        icon: GraduationCap },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
+  { key: "seo",          label: "SEO",             icon: Search },
 ];
 
 type EditTarget = { type: "agent" | "tool"; key: string } | null;
@@ -185,6 +187,10 @@ function AiLab() {
           ) : view === "smart-delay" ? (
             <div className="flex-1 overflow-y-auto">
               <SmartDelaySettings />
+            </div>
+          ) : view === "seo" ? (
+            <div className="flex-1 overflow-y-auto">
+              <SeoPage />
             </div>
           ) : (
             <TrainingView />

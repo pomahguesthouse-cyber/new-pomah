@@ -25,7 +25,7 @@ type Page = {
   og_image_url: string | null;
 };
 
-function SeoPage() {
+export function SeoPage() {
   const fn = useServerFn(listSeoPages);
   const upsert = useServerFn(upsertSeoPage);
   const qc = useQueryClient();
