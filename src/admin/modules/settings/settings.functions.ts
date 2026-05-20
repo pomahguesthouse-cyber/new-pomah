@@ -38,6 +38,7 @@ const PROPERTY_CORE_FIELDS = [
   "whatsapp_number",
   "currency",
   "timezone",
+  "public_domain",
 ] as const;
 
 export const getPropertySettings = createServerFn({ method: "GET" })
@@ -61,6 +62,7 @@ export const getPropertySettings = createServerFn({ method: "GET" })
       whatsapp_number: (row.whatsapp_number as string | null) ?? null,
       currency: (row.currency as string | null) ?? null,
       timezone: (row.timezone as string | null) ?? null,
+      public_domain: (row.public_domain as string | null) ?? null,
     };
   });
 

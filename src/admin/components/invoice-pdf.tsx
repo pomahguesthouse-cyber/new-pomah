@@ -232,7 +232,24 @@ export type InvoiceBookingData = {
     | null;
 };
 
-export function InvoiceDocument({ booking, propertyName = "Pomah Guesthouse", logoUrl }: { booking: InvoiceBookingData, propertyName?: string, logoUrl?: string | null }) {
+export function InvoiceDocument({
+  booking,
+  propertyName = "Pomah Guesthouse",
+  logoUrl,
+  propertyAddress,
+  propertyPhone,
+  propertyWebsite,
+}: {
+  booking: InvoiceBookingData;
+  propertyName?: string;
+  logoUrl?: string | null;
+  /** Full address string, e.g. "Jl. Dewi Sartika IV no 71, Semarang, 50221" */
+  propertyAddress?: string | null;
+  /** Support WhatsApp / phone number shown in the footer */
+  propertyPhone?: string | null;
+  /** Website URL shown in the footer terms line */
+  propertyWebsite?: string | null;
+}) {
   const nights = Math.max(1, nightsBetween(booking.check_in, booking.check_out));
   const rooms = booking.booking_rooms ?? [];
   const total = Number(booking.total_amount);
@@ -344,9 +361,9 @@ export function InvoiceDocument({ booking, propertyName = "Pomah Guesthouse", lo
         {/* DETAIL PENGINAPAN */}
         <Text style={styles.sectionTitle}>DETAIL PENGINAPAN</Text>
         <Text style={{ fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{propertyName.toUpperCase()}</Text>
-        <Text style={{ color: "#666", marginBottom: 8 }}>
-          Alamat: Jl. Dewi Sartika IV no 71 Semarang, 50221
-        </Text>
+        {propertyAddress ? (
+          <Text style={{ color: "#666", marginBottom: 8 }}>Alamat: {propertyAddress}</Text>
+        ) : null}
         <View style={styles.textRow}>
           <Text style={{ width: 50, color: "#666" }}>Check-in</Text>
           <Text>: {formatDate(booking.check_in)}</Text>
@@ -422,10 +439,11 @@ export function InvoiceDocument({ booking, propertyName = "Pomah Guesthouse", lo
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Untuk pertanyaan apa pun, kunjungi Pomah Guesthouse Help Center: +6281227271799
+            Untuk pertanyaan apa pun, hubungi {propertyName}
+            {propertyPhone ? `: ${propertyPhone}` : "."}
           </Text>
           <Text style={styles.footerBlueBar}>
-            Syarat dan Ketentuan berlaku. Silakan lihat http://www.pomahguesthouse.com
+            Syarat dan Ketentuan berlaku.{propertyWebsite ? ` Silakan lihat ${propertyWebsite}` : ""}
           </Text>
         </View>
       </Page>
