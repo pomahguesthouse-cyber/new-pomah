@@ -12,6 +12,8 @@ import {
   CheckCheck,
   Tag,
   User as UserIcon,
+  UserCheck,
+  ArrowUpRight,
   CalendarDays,
   Phone,
   Wand2,
@@ -40,6 +42,7 @@ import {
   classifyIntent,
   deleteThread,
   setTrainingExample,
+  toggleOverrideAutoReply,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
@@ -154,6 +157,7 @@ export function WhatsAppPage() {
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
+  const overrideAutoReplyFn = useServerFn(toggleOverrideAutoReply);
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
@@ -243,6 +247,21 @@ export function WhatsAppPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const takeoverMut = useMutation({
+    mutationFn: (value: boolean) =>
+      overrideAutoReplyFn({ data: { threadId: current!, value } }),
+    onSuccess: (_, value) => {
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+      toast.success(
+        value
+          ? "Percakapan diambil alih oleh Human (AI dinonaktifkan untuk chat ini)."
+          : "Kendali dikembalikan ke AI (AI aktif membalas chat ini).",
+      );
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -381,6 +400,21 @@ export function WhatsAppPage() {
                           >
                             {intent.label}
                           </Badge>
+                          {t.override_auto_reply ? (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
+                            >
+                              Human
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/35"
+                            >
+                              AI Auto
+                            </Badge>
+                          )}
                           {t.status === "closed" && (
                             <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
                               closed
@@ -482,54 +516,38 @@ export function WhatsAppPage() {
                   <CheckCheck className="mr-1.5 h-4 w-4" />
                   {thread.thread.status === "open" ? "Close" : "Reopen"}
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Simulate
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">
-                      Simulate inbound message
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {[
-                      "Hi, do you have rooms tonight?",
-                      "What time is breakfast?",
-                      "The wifi is not working",
-                      "Can we extend our stay by one night?",
-                    ].map((s) => (
-                      <DropdownMenuItem key={s} onClick={() => simulateMut.mutate(s)}>
-                        <span className="truncate text-xs">{s}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                {thread.thread.ai_auto ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-primary text-primary hover:bg-primary/10"
-                    disabled={aiModeMut.isPending}
-                    onClick={() => aiModeMut.mutate(false)}
-                    title="Ambil alih dari AI"
-                  >
-                    <UserCheck className="mr-1.5 h-4 w-4" />
-                    Ambil Alih
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                    disabled={aiModeMut.isPending}
-                    onClick={() => aiModeMut.mutate(true)}
-                    title="Kembalikan ke AI"
-                  >
-                    <RotateCcw className="mr-1.5 h-4 w-4" />
-                    Kembalikan ke AI
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const t = thread.thread;
+                    if (!t) return;
+                    takeoverMut.mutate(!t.override_auto_reply);
+                  }}
+                  className={cn(
+                    "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
+                    "border-[#0e7490] text-[#0e7490] hover:bg-[#0e7490]/5 hover:text-[#0e7490]",
+                    "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
+                  )}
+                  title={
+                    thread.thread.override_auto_reply
+                      ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
+                      : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
+                  }
+                  disabled={takeoverMut.isPending}
+                >
+                  {thread.thread.override_auto_reply ? (
+                    <>
+                      <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
+                      Kembalikan ke AI
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="h-4 w-4 stroke-[2.2]" />
+                      Ambil Alih
+                    </>
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"

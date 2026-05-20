@@ -790,14 +790,17 @@ export type Database = {
       }
       whatsapp_threads: {
         Row: {
+          ai_analysis: Json | null
           assigned_to: string | null
           created_at: string
           display_name: string | null
           guest_id: string | null
           id: string
           intent: string | null
+          is_training_example: boolean
           last_message_at: string
           last_message_preview: string | null
+          override_auto_reply: boolean
           phone: string
           pinned: boolean
           status: Database["public"]["Enums"]["thread_status"]
@@ -805,14 +808,17 @@ export type Database = {
           unread_count: number
         }
         Insert: {
+          ai_analysis?: Json | null
           assigned_to?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
           id?: string
           intent?: string | null
+          is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
+          override_auto_reply?: boolean
           phone: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
@@ -820,14 +826,17 @@ export type Database = {
           unread_count?: number
         }
         Update: {
+          ai_analysis?: Json | null
           assigned_to?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
           id?: string
           intent?: string | null
+          is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
+          override_auto_reply?: boolean
           phone?: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]

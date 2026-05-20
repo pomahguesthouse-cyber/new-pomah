@@ -46,6 +46,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.105.4",
     "@tailwindcss/vite": "^4.2.1",
+    "@vercel/functions": "^1.6.0",
     "@tanstack/react-query": "^5.83.0",
     "@tanstack/react-router": "^1.168.25",
     "@tanstack/react-start": "^1.167.50",

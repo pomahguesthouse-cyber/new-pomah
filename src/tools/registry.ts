@@ -54,6 +54,51 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_bookings",
+      description: "Daftar booking. Bisa difilter berdasarkan status (pending, confirmed, checked_in, dll) atau tanggal check_in/check_out.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
+          date: { type: "string", description: "Tanggal (YYYY-MM-DD) untuk mencari booking yang menginap di tanggal tersebut." },
+          limit: { type: "number", description: "Maksimal data yang dikembalikan. Default 10." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_booking_status",
+      description: "Ubah status booking (misalnya untuk membatalkan/hapus booking, set menjadi 'cancelled').",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode referensi booking (contoh: REF-1234)" },
+          status: { type: "string", description: "Status baru: 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
+        },
+        required: ["reference_code", "status"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "change_booking_room",
+      description: "Pindahkan booking ke kamar lain (ubah nomor kamar yang di-assign).",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode referensi booking" },
+          new_room_number: { type: "string", description: "Nomor kamar tujuan (contoh: '101')" },
+        },
+        required: ["reference_code", "new_room_number"],
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -63,4 +108,7 @@ export const TOOL_LABELS: Record<string, string> = {
   request_housekeeping_service: "Housekeeping",
   report_maintenance_issue:     "Maintenance",
   get_payment_info:             "Finance",
+  get_bookings:                 "Manager - List Bookings",
+  update_booking_status:        "Manager - Update Booking Status",
+  change_booking_room:          "Manager - Change Booking Room",
 };

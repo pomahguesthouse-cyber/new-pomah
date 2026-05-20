@@ -83,10 +83,10 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
       : "",
 
     sopText
-      ? "Basis Pengetahuan SOP (rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
-        "lainnya). Sebagian entri menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
+      ? "Cuplikan Pengetahuan SOP (hasil pencarian relevan, rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
+        "lainnya). Sebagian cuplikan menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
         "lokasi, peta/Google Maps, alamat, atau panduan tertentu, KIRIMKAN URL lengkap dari " +
-        "entri SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
+        "cuplikan SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
         "dipotong, jangan dibungkus tanda kurung/markdown, dan jangan beri tanda baca " +
         `menempel di akhir URL. Jangan pernah mengarang URL.\n${sopText}`
       : "",

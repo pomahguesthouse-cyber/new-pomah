@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
 /** Untyped client view — `images` column isn't in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -573,7 +574,15 @@ export const chatWithAI = createServerFn({ method: "POST" })
 
     const agentLines = AGENT_KEYS.filter(
       (k) => cfg.agents[k]?.enabled && cfg.agents[k]?.instructions?.trim(),
-    ).map((k) => `• ${k}: ${cfg.agents[k].instructions.trim()}`);
+    ).map((k) => {
+      let instr = cfg.agents[k].instructions.trim();
+      instr = instr.replace(/\{\{PROPERTY_NAME\}\}/g, (p.name as string) ?? "Pomah Guesthouse");
+      instr = instr.replace(/\{\{TODAY\}\}/g, fmtDateID(new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)));
+      instr = instr.replace(/\{\{ROOM_DATA\}\}/g, ""); // Not needed for general webchat prompt since it's appended globally
+      instr = instr.replace(/\{\{BANK_INFO\}\}/g, "");
+      instr = instr.replace(/\{\{SOP_DATA\}\}/g, "");
+      return `• ${k}: ${instr}`;
+    });
 
     const roomLines = roomRows.map(
       (rr) =>
@@ -582,25 +591,21 @@ export const chatWithAI = createServerFn({ method: "POST" })
         } tamu${rr.bed_type ? `, ${rr.bed_type}` : ""}`,
     );
 
-    // SOP knowledge base — uploaded documents the agents draw on. Read
-    // with the service-role client (sop_documents is staff-RLS).
+    // SOP knowledge base — use semantic search to fetch relevant chunks
     let sopText = "";
     if (cfg.tools["sop-knowledge"]?.enabled) {
-      const { data: sopDocs } = await db(supabaseAdmin)
-        .from("sop_documents")
-        .select("name, content, source_url")
-        .order("created_at", { ascending: true })
-        .limit(40);
-      const parts: string[] = [];
-      for (const d of sopDocs ?? []) {
-        const dd = d as Record<string, unknown>;
-        const c = (dd.content as string | undefined)?.trim();
-        const url = (dd.source_url as string | undefined)?.trim();
-        if (!c && !url) continue;
-        const head = url ? `### ${dd.name as string} (Tautan: ${url})` : `### ${dd.name as string}`;
-        parts.push(c ? `${head}\n${c}` : head);
+      const userMessage = [...data.messages].reverse().find(m => m.role === "user")?.content || "";
+      try {
+        sopText = await retrieveRelevantSopContext(
+          db(supabaseAdmin),
+          userMessage,
+          { apiKey: key, baseUrl, model },
+          5, // match count
+          0.7 // threshold
+        );
+      } catch (e) {
+        console.warn("[Webchat] SOP vector search error:", e);
       }
-      sopText = parts.join("\n\n").slice(0, 8000);
     }
 
     // Today in WIB (UTC+7) so "hari ini" is correct for Indonesia.
@@ -620,10 +625,10 @@ export const chatWithAI = createServerFn({ method: "POST" })
         ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
         : "",
       sopText
-        ? "Basis Pengetahuan SOP (rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
-          "lainnya). Sebagian entri menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
+        ? "Cuplikan Pengetahuan SOP (hasil pencarian relevan, rujuk untuk menjawab kebijakan, prosedur, lokasi & info " +
+          "lainnya). Sebagian cuplikan menyertakan '(Tautan: <url>)'. Bila tamu meminta link, " +
           "lokasi, peta/Google Maps, alamat, atau panduan tertentu, KIRIMKAN URL lengkap dari " +
-          "entri SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
+          "cuplikan SOP yang relevan. Tulis URL-nya POLOS dan UTUH — salin persis, jangan " +
           "dipotong, jangan dibungkus tanda kurung/markdown, dan jangan beri tanda baca " +
           `menempel di akhir URL. Jangan pernah mengarang URL.\n${sopText}`
         : "",
@@ -814,6 +819,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
           no_rekening: (p.payment_account_number as string | undefined) || null,
           atas_nama: (p.payment_account_holder as string | undefined) || null,
         },
+        invoice_url: `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
       });
     };
 

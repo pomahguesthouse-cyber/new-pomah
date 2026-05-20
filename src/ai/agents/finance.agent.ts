@@ -47,6 +47,10 @@ export const financeAgent: AgentDefinition = {
 
     const prop = property as Record<string, unknown>;
     const bankInfo = [
+    const { property, today, customInstructions } = ctx;
+
+    const prop = property as Record<string, unknown>;
+    const bankInfoText = [
       prop.payment_bank_name       ? `Bank: ${prop.payment_bank_name}`              : null,
       prop.payment_account_number  ? `No. Rekening: ${prop.payment_account_number}` : null,
       prop.payment_account_holder  ? `Atas Nama: ${prop.payment_account_holder}`    : null,
@@ -85,5 +89,15 @@ export const financeAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
+    let prompt = customInstructions || "Anda adalah Finance Agent.";
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
+
+    const bankStr = bankInfoText
+      ? `Rekening pembayaran hotel:\n${bankInfoText}\n\nGunakan info ini saat tamu menanyakan cara transfer.`
+      : "";
+    prompt = prompt.replace(/\{\{BANK_INFO\}\}/g, bankStr);
+
+    return prompt;
   },
 };

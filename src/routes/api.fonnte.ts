@@ -36,6 +36,25 @@
  * │   14.  wa_queue_complete + save outbound                                │
  * │   15.  return HTTP 200                                                  │
  * └────────────────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  WEBHOOK HANDLER                                                     │
+ * │                                                                     │
+ * │  Flow (synchronous — safe in Cloudflare Workers up to 30s):         │
+ * │    1.  Verify Fonnte token                                           │
+ * │    2.  Parse raw body → ParsedWebhookEvent                          │
+ * │    3.  Skip outgoing messages (sender === device)                   │
+ * │    4.  Deduplicate (in-memory Map, 5-min TTL)                       │
+ * │    5.  Save inbound message to DB                                   │
+ * │    6.  Load autoreply context (auto_reply_enabled, config, messages)│
+ * │    7.  Smart Delay — sleep, then winner check                       │
+ * │    8.  Multi-Agent Orchestration:                                   │
+ * │          classify → route → agent(own prompt+tools) → reply        │
+ * │    9.  Send reply via Fonnte                                        │
+ * │   10.  Save outbound + return HTTP 200                              │
+ * │                                                                     │
+ * │  All AI logic is in typed modules (src/ai/, src/tools/, etc.)       │
+ * │  — this file is only the HTTP boundary layer.                       │
+ * └─────────────────────────────────────────────────────────────────────┘
  */
 
 import { createFileRoute }                   from "@tanstack/react-router";
@@ -68,6 +87,7 @@ import {
   DEFAULT_SMART_DELAY,
 }                                             from "@/services/queue.service";
 import type { SmartDelayConfig }             from "@/services/queue.service";
+import { sendWhatsAppMessage }         from "@/services/whatsapp.service";
 
 // ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
 import {
@@ -75,6 +95,9 @@ import {
   deriveAgentLabelFromKey,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
+}                                      from "@/ai/multi-agent-orchestrator";
+import { todayWIB }                    from "@/lib/date";
+import { retrieveRelevantSopContext }  from "@/ai/rag.service";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -96,6 +119,31 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function newWorkerId(): string {
   return `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+const DEFAULT_DELAY: SmartDelayConfig = {
+  enabled:      false,
+  shortMs:      6000,
+  mediumMs:     3000,
+  longMs:       1000,
+  waitSignalMs: 8000,
+  maxDelayMs:   10000,
+};
+
+const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek)\b|\.\.\./i;
+
+function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
+  if (!cfg.enabled) return 0;
+  let base: number;
+  if (WAIT_SIGNALS.test(body))       base = cfg.waitSignalMs;
+  else if (body.trim().length < 15)  base = cfg.shortMs;
+  else if (body.trim().length <= 80) base = cfg.mediumMs;
+  else                               base = cfg.longMs;
+  return Math.min(base, cfg.maxDelayMs);
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// ─── In-progress guard (same Worker instance) ─────────────────────────────────
+const _inProgress = new Set<string>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -121,6 +169,8 @@ export const Route = createFileRoute("/api/fonnte")({
 
         const { sender, message, name, fonnteId, isOutgoing } = event;
         const logCtx = `phone=${sender.slice(-6)} worker=${workerId}`;
+        const origin = new URL(request.url).origin;
+        console.log("[Webhook]", { sender, isOutgoing, msg: message.slice(0, 60), origin });
 
         // ── 3. Skip outgoing (Fonnte webhooks our own sends) ──────────────
         if (isOutgoing) {
@@ -191,6 +241,8 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // ── 8. Queue upsert — register this message ───────────────────────
         const delayCfg: SmartDelayConfig = { ...DEFAULT_SMART_DELAY, ...(c.smart_delay_config ?? {}) };
+        // 7. Smart Delay — sleep then winner check
+        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}), enabled: false };
         const delayMs = calcDelayMs(message, delayCfg);
 
         let entryId: string | null = null;
@@ -269,9 +321,18 @@ export const Route = createFileRoute("/api/fonnte")({
           console.log(`[AutoReply] context refreshed: ${freshMessages.length} messages | ${logCtx}`);
 
           // ── 13. Load property + rooms + SOP ────────────────────────────
+          // 8. Load property + rooms + SOP for agent contexts
           const { data: prop } = await (supabasePublic as any)
             .from("properties").select("*").limit(1).maybeSingle();
           const p = (prop ?? {}) as Record<string, unknown>;
+
+          const { data: managerRow } = await (supabasePublic as any)
+            .from("property_managers")
+            .select("role")
+            .eq("property_id", p.id)
+            .eq("phone", sender)
+            .maybeSingle();
+          const isManager = !!managerRow;
 
           const { data: rooms } = await (supabasePublic as any)
             .from("room_types")
@@ -304,6 +365,7 @@ export const Route = createFileRoute("/api/fonnte")({
           }
 
           // ── 14. Resolve AI credentials ──────────────────────────────────
+          // Resolve AI credentials early to use for embeddings
           const explicitKey = (p.ai_api_key as string | undefined)?.trim();
           const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
           const useLovable  = !explicitKey && !!lovableKey;
@@ -339,6 +401,68 @@ export const Route = createFileRoute("/api/fonnte")({
               await queueHeartbeat(supabasePublic, entryId, workerId);
               await sleep(Math.min(1000 * attempt, 3000)); // brief pause between retries
             }
+          const llmConfig = { apiKey, baseUrl, model };
+
+          // SOP (only if enabled in ai_lab_config) using RAG vector search
+          const aiCfgRaw  = p.ai_lab_config as Record<string, unknown> | undefined;
+          const sopEnabled = (aiCfgRaw?.tools as any)?.["sop-knowledge"]?.enabled ?? true;
+          let sopText = "";
+          if (sopEnabled) {
+            try {
+              // We use the user's latest message to find relevant SOP chunks
+              sopText = await retrieveRelevantSopContext(
+                supabaseAdmin as any,
+                message,
+                llmConfig,
+                5,   // match count
+                0.7 // match threshold
+              );
+            } catch (e) {
+              console.warn("[AutoReply] SOP vector search error:", e);
+            }
+          }
+
+          const today    = todayWIB();
+          const roomList = (rooms ?? []) as any[];
+
+          // 8. Run Multi-Agent Orchestration
+          console.log(
+            "[AutoReply] multi-agent pipeline | messages:", freshMessages.length,
+            "| model:", model,
+          );
+
+          const result = await runMultiAgentOrchestration({
+            phone:     sender,
+            isManager,
+            messages:  freshMessages,
+            agentCtx: {
+              property:    p as any,
+              rooms:       roomList,
+              sopText,
+              today,
+              lastMessage: message,
+            },
+            toolCtx: {
+              supabasePublic: supabasePublic as any,
+              supabaseAdmin:  supabaseAdmin  as any,
+              rooms:          roomList,
+              property:       p as any,
+              today,
+              origin,
+            },
+            llmConfig: { apiKey, baseUrl, model },
+            aiLabConfig: aiCfgRaw,
+          });
+
+          const { reply, toolsUsed, agentKey, intent, routingConfidence, escalated } = result;
+
+          console.log(
+            "[AutoReply] routed →", agentKey,
+            "| intent:", intent,
+            "| confidence:", routingConfidence.toFixed(2),
+            "| escalated:", escalated,
+            "| tools:", toolsUsed,
+          );
 
             try {
               console.log(
@@ -444,6 +568,18 @@ export const Route = createFileRoute("/api/fonnte")({
               is_fallback:        isFallback,
               burst_message_count: claimResult.messageCount,
               queue_entry_id:     entryId,
+          // 10. Save outbound + update thread analytics
+          const agentLabel = deriveAgentLabelFromKey(agentKey);
+          await saveOutboundMessage(supabasePublic, {
+            threadId: c.thread_id,
+            body:     reply,
+            metadata: {
+              agent:              agentLabel,
+              agent_key:          agentKey,
+              intent,
+              routing_confidence: routingConfidence,
+              escalated,
+              tools_used:         toolsUsed,
             },
           });
 
@@ -456,6 +592,10 @@ export const Route = createFileRoute("/api/fonnte")({
             `[AutoReply] ✓ replied | ` +
             `agent=${agentLabel} delay=${sleepMs}ms burst=${claimResult.messageCount}msgs ` +
             `fallback=${isFallback} | ${logCtx}`,
+            "[AutoReply] ✓ sent to", sender,
+            "| delay:", delayMs, "ms",
+            "| agent:", agentLabel,
+            "| tools:", toolsUsed,
           );
 
         } catch (unexpectedErr) {
@@ -544,6 +684,9 @@ export const Route = createFileRoute("/api/fonnte")({
                   model:      "google/gemini-2.5-flash",
                   max_tokens: 5,
                   messages:   [{ role: "user", content: "ping" }],
+                  model: "google/gemini-2.5-flash",
+                  max_tokens: 5,
+                  messages: [{ role: "user", content: "ping" }],
                 }),
               });
               report.llm_reachable = r.ok;
@@ -625,6 +768,14 @@ export const Route = createFileRoute("/api/fonnte")({
                   const orchResult = await runMultiAgentOrchestration({
                     messages:  c.messages,
                     agentCtx: { property: p as any, rooms: roomList, sopText: "", today },
+                    phone:     testPhone,
+                    messages:  c.messages,
+                    agentCtx: {
+                      property: p as any,
+                      rooms:    roomList,
+                      sopText:  "",
+                      today,
+                    },
                     toolCtx: {
                       supabasePublic: supabasePublic as any,
                       supabaseAdmin:  supabaseAdmin  as any,
@@ -633,6 +784,10 @@ export const Route = createFileRoute("/api/fonnte")({
                       today,
                     },
                     llmConfig: { apiKey, baseUrl, model },
+                      origin:         new URL(request.url).origin,
+                    },
+                    llmConfig: { apiKey, baseUrl, model },
+                    aiLabConfig: p.ai_lab_config as any,
                   });
 
                   result.elapsed_ms         = Date.now() - t0;

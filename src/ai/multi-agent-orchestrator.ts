@@ -23,6 +23,7 @@ import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
+import { getBookingState, processBookingState } from "./state-machine/booking-machine";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -169,6 +170,10 @@ async function runAgent(
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export interface MultiAgentInput {
+  /** User phone number for state tracking */
+  phone: string;
+  /** Is the user an authenticated property manager? */
+  isManager?: boolean;
   /** Full conversation history (ascending) */
   messages:  Array<{ direction: string; body: string }>;
   /** Pre-fetched context for agents */
@@ -177,6 +182,8 @@ export interface MultiAgentInput {
   toolCtx:   ToolContext;
   /** AI gateway credentials */
   llmConfig: AiClientConfig;
+  /** AI Lab Dashboard Configuration */
+  aiLabConfig?: Record<string, any>;
   /** Max LLM turns per agent run (default 5) */
   maxTurns?: number;
 }
@@ -197,6 +204,80 @@ export async function runMultiAgentOrchestration(
     ?.body ?? "";
 
   // 2. Classify intent
+  // 2. Manager Bypass
+  if (input.isManager) {
+    console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
+    const agent = getAgent("manager");
+    
+    // For manager agent, we still need the onAskAgent callback
+    const onAskAgent = async (subKey: AgentKey, question: string): Promise<string> => {
+      const subAgent = getAgent(subKey);
+      const syntheticMessages = [
+        ...input.messages,
+        { direction: "in", body: question },
+      ];
+      const result = await runAgent(
+        subAgent,
+        syntheticMessages,
+        input.agentCtx,
+        input.toolCtx,
+        input.llmConfig,
+        Math.max(2, maxTurns - 2),
+        undefined,
+      );
+      return result.reply
+        ? JSON.stringify({ ok: true,  response: result.reply })
+        : JSON.stringify({ ok: false, error:    result.error ?? "Sub-agent returned no reply" });
+    };
+
+    const agentResult = await runAgent(
+      agent,
+      input.messages,
+      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["manager"]?.instructions },
+      input.toolCtx,
+      input.llmConfig,
+      maxTurns,
+      onAskAgent,
+    );
+
+    return {
+      reply:             agentResult.reply,
+      toolsUsed:         agentResult.toolsUsed,
+      agentKey:          "manager",
+      intent:            "general", // irrelevant for manager
+      routingConfidence: 1.0,
+      escalated:         false,
+      error:             agentResult.error,
+    };
+  }
+
+  // 3. State Machine Interception
+  const stateRecord = await getBookingState(input.toolCtx.supabasePublic, input.phone);
+  
+  if (stateRecord.state !== "IDLE") {
+    console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
+    const stateResult = await processBookingState(
+      input.toolCtx.supabasePublic,
+      input.phone,
+      lastUserMsg,
+      stateRecord
+    );
+
+    if (stateResult.handled && stateResult.reply) {
+      return {
+        reply:             stateResult.reply,
+        toolsUsed:         ["booking_state_machine"],
+        agentKey:          "front-office",
+        intent:            "booking_flow",
+        routingConfidence: 1.0,
+        escalated:         false,
+      };
+    }
+    // If not handled or needs LLM processing, we can either fall through or force front-office
+    // For now, if the state machine didn't handle it with a direct reply, we let the normal flow run.
+  }
+
+  // 4. Classify intent
   const classified = classifyIntent(lastUserMsg);
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
@@ -215,6 +296,18 @@ export async function runMultiAgentOrchestration(
   const isManager = routing.agentKey === "manager";
 
   const onAskAgent = isManager
+  // 5. Route to agent
+  const routing = routeToAgent(classified);
+  console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
+
+  // 6. Load agent
+  const agent = getAgent(routing.agentKey);
+
+  // 7. Run agent
+  //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
+  const isManagerRoute = routing.agentKey === "manager";
+
+  const onAskAgent = isManagerRoute
     ? async (subKey: AgentKey, question: string): Promise<string> => {
         const subAgent = getAgent(subKey);
 
@@ -229,6 +322,7 @@ export async function runMultiAgentOrchestration(
           subAgent,
           syntheticMessages,
           input.agentCtx,
+          { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
           input.toolCtx,
           input.llmConfig,
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
@@ -245,6 +339,7 @@ export async function runMultiAgentOrchestration(
     agent,
     input.messages,
     input.agentCtx,
+    { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions },
     input.toolCtx,
     input.llmConfig,
     maxTurns,
@@ -259,6 +354,7 @@ export async function runMultiAgentOrchestration(
       foAgent,
       input.messages,
       input.agentCtx,
+      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions },
       input.toolCtx,
       input.llmConfig,
       maxTurns,

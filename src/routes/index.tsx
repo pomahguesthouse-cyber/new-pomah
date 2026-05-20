@@ -25,6 +25,14 @@ import {
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { Webchat } from "@/public/components/webchat";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -163,6 +171,8 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [tempCheckIn, setTempCheckIn] = useState("");
+  const [tempCheckOut, setTempCheckOut] = useState("");
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -259,7 +269,13 @@ function PomahHome() {
       {/* ── YOUR PERFECT STAY ── */}
       <PbZone id="story" label="Your Perfect Stay" pb={pb}>
         <section className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <SectionHeading>{cfg.story.heading}</SectionHeading>
+          <SectionHeading
+            fontFamily={cfg.story.fontFamily}
+            fontSize={cfg.story.fontSize}
+            fontStyle={cfg.story.fontStyle}
+          >
+            {cfg.story.heading}
+          </SectionHeading>
           <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
             {cfg.story.paragraphs.map((p, i) => (
               <p key={i}>{p}</p>
@@ -304,25 +320,104 @@ function PomahHome() {
       <PbZone id="carousel" label="Our Room" pb={pb}>
         <section
           id="our-room"
-          className="relative scroll-mt-20 bg-[#f3ece0] py-20"
-          style={{ zIndex: cfg.roomCarousel.layer }}
+          className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
+          style={{
+            zIndex: cfg.roomCarousel.layer,
+            backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
+            backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
+          }}
         >
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
-              <SectionHeading>{cfg.roomCarousel.heading}</SectionHeading>
+              <SectionHeading
+                normalCase
+                noUnderline
+                fontFamily={cfg.roomCarousel.fontFamily}
+                fontSize={cfg.roomCarousel.fontSize}
+                fontStyle={cfg.roomCarousel.fontStyle}
+              >
+                {cfg.roomCarousel.heading}
+              </SectionHeading>
               {cfg.roomCarousel.subheading && (
                 <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
                   {cfg.roomCarousel.subheading}
                 </p>
               )}
               {(usingDateFilter || today) && (
-                <p className="mt-2 text-xs font-semibold text-teal-700">
-                  {usingDateFilter
-                    ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
-                        checkOut,
-                      )} (${nightsBetween(checkIn, checkOut)} Malam)`
-                    : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
-                </p>
+                <div className="mt-2 flex flex-col items-center gap-2">
+                  <p className="mt-3 text-sm md:text-base text-stone-600 font-medium">
+                    {usingDateFilter
+                      ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
+                          checkOut,
+                        )} (${nightsBetween(checkIn, checkOut)} Malam)`
+                      : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
+                  </p>
+                  <Dialog
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setTempCheckIn(checkIn || today);
+                        setTempCheckOut(
+                          checkOut ||
+                            (checkIn
+                              ? isoAddDays(checkIn, 1)
+                              : today
+                                ? isoAddDays(today, 1)
+                                : ""),
+                        );
+                      }
+                    }}
+                  >
+                    <DialogTrigger asChild>
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded-full bg-orange-500 px-6 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 mt-2"
+                      >
+                        Ganti
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[340px] rounded-2xl bg-white p-6 shadow-xl border border-stone-200">
+                      <DialogHeader className="text-left">
+                        <DialogTitle className="font-serif text-lg text-stone-900">Ganti Tanggal</DialogTitle>
+                      </DialogHeader>
+                      <div className="mt-4 space-y-4">
+                        <Field label="Check-In">
+                          <DatePickerID
+                            value={tempCheckIn}
+                            onChange={(val) => {
+                              setTempCheckIn(val);
+                              if (tempCheckOut && val >= tempCheckOut) {
+                                setTempCheckOut(isoAddDays(val, 1));
+                              }
+                            }}
+                            placeholder="Pilih tanggal"
+                            className="h-10 text-sm"
+                          />
+                        </Field>
+                        <Field label="Check-Out">
+                          <DatePickerID
+                            value={tempCheckOut}
+                            onChange={setTempCheckOut}
+                            min={tempCheckIn || today || undefined}
+                            placeholder="Pilih tanggal"
+                            className="h-10 text-sm"
+                          />
+                        </Field>
+                        <DialogClose asChild>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCheckIn(tempCheckIn);
+                              setCheckOut(tempCheckOut);
+                            }}
+                            className="cursor-pointer w-full rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                          >
+                            Terapkan
+                          </button>
+                        </DialogClose>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               )}
             </div>
             <RoomCarousel
@@ -344,11 +439,11 @@ function PomahHome() {
             Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
           </p>
         </div>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {FACILITIES.map((f) => (
             <div
               key={f.title}
-              className="rounded-2xl border border-stone-200 bg-white p-6 text-center shadow-sm"
+                className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
             >
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
                 <f.icon className="h-6 w-6" />
@@ -488,6 +583,7 @@ function HeroSlider({
           <img
             src={active.imageUrl}
             alt={active.heading}
+            loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -642,31 +738,144 @@ function RoomCarousel({
   checkIn?: string;
   checkOut?: string;
 }) {
-  const per = Math.max(1, Math.min(rc.cardsPerView, 4));
-  const maxIndex = Math.max(0, rooms.length - per);
-  const [i, setI] = useState(0);
+  const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
+  // Adjust cards per view for mobile screens (show 1 card on small widths)
+  useEffect(() => {
+    const update = () => {
+      const width = window.innerWidth;
+      if (width < 640) { // Tailwind 'sm' breakpoint approx 640px
+        setCardsPerView(1);
+      } else {
+        setCardsPerView(Math.max(1, Math.min(rc.cardsPerView, 4)));
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [rc.cardsPerView]);
+
+  const maxIndex = Math.max(0, rooms.length - cardsPerView);
+  const isLoopable = rooms.length > cardsPerView;
+
+  // Clone slides for infinite loop
+  const extendedRooms = isLoopable
+    ? [
+        ...rooms.slice(-cardsPerView),
+        ...rooms,
+        ...rooms.slice(0, cardsPerView),
+      ]
+    : rooms;
+
+  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+
+  // Sync index when cardsPerView changes on window resize
+  useEffect(() => {
+    if (isLoopable) {
+      setI(cardsPerView);
+    } else {
+      setI(0);
+    }
+  }, [cardsPerView, isLoopable]);
+
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  const [touchEndY, setTouchEndY] = useState<number | null>(null);
+
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEndX(null);
+    setTouchEndY(null);
+    setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
+  };
+
+  const handlePrev = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v - 1);
+    } else {
+      setI((v) => Math.max(0, v - 1));
+    }
+  };
+
+  const handleNext = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    } else {
+      setI((v) => Math.min(rooms.length - cardsPerView, v + 1));
+    }
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+    if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > minSwipeDistance) {
+      if (distanceX > 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    }
+  };
+
+  const handleTransitionEnd = () => {
+    if (!isLoopable) return;
+    if (i <= 0) {
+      setIsTransitioning(false);
+      setI(rooms.length);
+    } else if (i >= rooms.length + cardsPerView) {
+      setIsTransitioning(false);
+      setI(cardsPerView);
+    }
+  };
 
   useEffect(() => {
-    if (!rc.autoplay || maxIndex < 1 || rc.slideMs <= 0) return;
-    const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), rc.slideMs);
+    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0) return;
+    const t = setInterval(() => {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    }, rc.slideMs);
     return () => clearInterval(t);
-  }, [rc.autoplay, rc.slideMs, maxIndex]);
+  }, [rc.autoplay, rc.slideMs, isLoopable]);
 
   if (rooms.length === 0) {
     return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
   }
 
-  const index = Math.min(i, maxIndex);
+  const activeDot = isLoopable
+    ? ((i - cardsPerView) % rooms.length + rooms.length) % rooms.length
+    : i;
+
+  const totalDots = isLoopable ? rooms.length : maxIndex + 1;
 
   return (
     <div className="relative mt-12">
-      <div className="overflow-hidden">
+      <div
+        className="overflow-hidden"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
         <div
-          className="flex transition-transform duration-500 ease-out"
-          style={{ transform: `translateX(-${index * (100 / per)}%)` }}
+          className="flex"
+          style={{
+            transform: `translateX(-${i * (100 / cardsPerView)}%)`,
+            transition: isTransitioning ? 'transform 500ms ease-out' : 'none'
+          }}
+          onTransitionEnd={handleTransitionEnd}
         >
-          {rooms.map((rt) => (
-            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / per}%` }}>
+          {extendedRooms.map((rt, idx) => (
+            <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                   {rt.hero_image_url ? (
@@ -686,9 +895,9 @@ function RoomCarousel({
                     <div>
                       <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
                       <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
-                        {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`]
+                           .filter(Boolean)
+                           .join(" · ")}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -715,7 +924,7 @@ function RoomCarousel({
                         checkIn: checkIn || undefined,
                         checkOut: checkOut || undefined,
                       }}
-                      className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                      className="mt-5 block cursor-pointer rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
                     >
                       Pesan Kamar
                     </Link>
@@ -727,29 +936,36 @@ function RoomCarousel({
         </div>
       </div>
 
-      {maxIndex > 0 && (
+      {totalDots > 1 && (
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
-            onClick={() => setI((v) => Math.max(0, v - 1))}
+            onClick={handlePrev}
             aria-label="Sebelumnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div className="flex gap-1.5">
-            {Array.from({ length: maxIndex + 1 }).map((_, d) => (
+            {Array.from({ length: totalDots }).map((_, d) => (
               <button
                 key={d}
-                onClick={() => setI(d)}
+                onClick={() => {
+                  setIsTransitioning(true);
+                  if (isLoopable) {
+                    setI(d + cardsPerView);
+                  } else {
+                    setI(d);
+                  }
+                }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === index ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
           </div>
           <button
-            onClick={() => setI((v) => Math.min(maxIndex, v + 1))}
+            onClick={handleNext}
             aria-label="Berikutnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
@@ -1015,13 +1231,47 @@ function PomahFooter({ name }: { name: string }) {
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function SectionHeading({
+  children,
+  noUnderline,
+  normalCase,
+  fontFamily,
+  fontSize,
+  fontStyle,
+}: {
+  children: React.ReactNode;
+  noUnderline?: boolean;
+  normalCase?: boolean;
+  fontFamily?: "sans" | "serif" | "mono";
+  fontSize?: number;
+  fontStyle?: "normal" | "bold" | "italic";
+}) {
+  const fontClass =
+    fontFamily === "mono"
+      ? "font-mono"
+      : fontFamily === "sans"
+        ? "font-sans"
+        : "font-serif";
+
   return (
     <div className="flex flex-col items-center">
-      <h2 className="font-serif text-3xl font-bold uppercase tracking-tight text-stone-800 md:text-4xl">
+      <h2
+        className={`tracking-tight text-stone-800 ${fontClass} ${
+          normalCase ? "" : "uppercase"
+        } ${fontSize ? "" : "text-3xl font-bold md:text-4xl"}`}
+        style={{
+          ...(fontSize ? { fontSize: `${fontSize}px` } : {}),
+          ...(fontStyle
+            ? {
+                fontStyle: fontStyle === "italic" ? "italic" : "normal",
+                fontWeight: fontStyle === "bold" ? 700 : 400,
+              }
+            : {}),
+        }}
+      >
         {children}
       </h2>
-      <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />}
     </div>
   );
 }

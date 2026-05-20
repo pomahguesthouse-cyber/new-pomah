@@ -18,6 +18,7 @@ export const frontOfficeAgent: AgentDefinition = {
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, rooms, sopText, today } = ctx;
+    const { property, rooms, sopText, today, customInstructions } = ctx;
 
     const roomLines = rooms.map(
       (r) =>
@@ -71,5 +72,24 @@ export const frontOfficeAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
+    let prompt = customInstructions || "Anda adalah Front Office Agent.";
+    
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
+    
+    const roomDataText = roomLines.length
+      ? `Data kamar (tarif & kapasitas — jangan mengarang):\n${roomLines.join("\n")}`
+      : "";
+    prompt = prompt.replace(/\{\{ROOM_DATA\}\}/g, roomDataText);
+    
+    const sopDataText = sopText
+      ? "Basis Pengetahuan SOP:\n" +
+        "Gunakan untuk menjawab kebijakan, prosedur, lokasi & info lainnya. " +
+        "Bila ada URL di entri SOP, kirimkan URL POLOS dan UTUH — jangan potong atau bungkus markdown. " +
+        `Jangan mengarang URL.\n${sopText}`
+      : "";
+    prompt = prompt.replace(/\{\{SOP_DATA\}\}/g, sopDataText);
+
+    return prompt;
   },
 };

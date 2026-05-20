@@ -13,6 +13,7 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import type { ToolDefinition } from "@/ai/types";
+import { TOOL_DEFINITIONS } from "@/tools/registry";
 
 /** Delegation tool — intercepted by the multi-agent orchestrator */
 export const ASK_AGENT_TOOL_NAME = "ask_agent" as const;
@@ -26,6 +27,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
         "Delegasikan pertanyaan spesifik ke agent spesialis lain dan dapatkan responsnya. " +
         "Gunakan ini saat masalah tamu membutuhkan keahlian agent tertentu " +
         "(misal: tanya harga → pricing, kerusakan → maintenance).",
+        "Gunakan ini jika manajer menanyakan hal yang menjadi ranah agent lain (contoh: harga -> pricing).",
       parameters: {
         type: "object",
         properties: {
@@ -45,12 +47,16 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
             description:
               "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut. " +
               "Tulis dengan jelas dan lengkap karena agent tidak tahu konteks percakapan ini.",
+            description: "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut.",
           },
         },
         required: ["agent_key", "question"],
       },
     },
   },
+  ...TOOL_DEFINITIONS.filter((t) => 
+    ["get_bookings", "update_booking_status", "change_booking_room"].includes(t.function.name)
+  ),
 ];
 
 export const managerAgent: AgentDefinition = {
@@ -99,5 +105,17 @@ export const managerAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
+  description: "Personal assistant for the property manager. Handles operational commands and data retrieval.",
+  handles:     ["general"],
+  tools:       MANAGER_TOOLS,
+
+  buildSystemPrompt(ctx: AgentContext): string {
+    const { property, today, customInstructions } = ctx;
+
+    let prompt = customInstructions || "Anda adalah Manager Agent.";
+    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
+    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
+
+    return prompt;
   },
 };
