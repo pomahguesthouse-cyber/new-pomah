@@ -975,14 +975,12 @@ function Row({
   );
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 function MessageBadges({ m }: { m: any }) {
   const meta = m.metadata as Record<string, unknown> | null | undefined;
-  if (!meta) return null;
   const isOut = m.direction === "out";
 
   if (!isOut) {
-    const intent = meta.intent_label as string | undefined;
+    const intent = meta?.intent_label as string | undefined;
     if (!intent) return null;
     return (
       <div className="mt-1 flex justify-start">
@@ -993,21 +991,36 @@ function MessageBadges({ m }: { m: any }) {
     );
   }
 
-  const agent = meta.agent as string | undefined;
-  const tools = Array.isArray(meta.tools_used) ? (meta.tools_used as string[]) : [];
+  const agent = meta?.agent as string | undefined;
+  const isFallback = meta?.is_fallback as boolean | undefined;
+  const tools = Array.isArray(meta?.tools_used) ? (meta.tools_used as string[]) : [];
+  
+  // If it's an outgoing message with no AI agent and it's not a fallback, it's sent manually
+  const isHuman = !agent && !isFallback;
+
+  if (isHuman) {
+    return (
+      <div className="mt-[3px] flex flex-wrap justify-end gap-1 relative z-10">
+        <span className="flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[8.5px] font-semibold text-amber-700 shadow-sm dark:bg-amber-950/50 dark:border-amber-900/40 dark:text-amber-400">
+          👤 Human
+        </span>
+      </div>
+    );
+  }
+
   if (!agent && tools.length === 0) return null;
 
   return (
-    <div className="mt-1 flex flex-wrap justify-end gap-1">
+    <div className="mt-[3px] flex flex-wrap justify-end gap-1 relative z-10">
       {agent && (
-        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+        <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[8.5px] font-medium text-amber-700 dark:text-amber-300">
           {agent}
         </span>
       )}
       {tools.map((t) => (
         <span
           key={t}
-          className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
+          className="rounded-full bg-sky-500/15 px-1.5 py-0.5 text-[8.5px] font-medium text-sky-700 dark:text-sky-300"
         >
           Tools: {t}
         </span>
