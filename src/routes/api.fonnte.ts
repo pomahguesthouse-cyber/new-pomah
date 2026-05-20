@@ -412,6 +412,7 @@ export const Route = createFileRoute("/api/fonnte")({
                     rooms:          roomList,
                     property:       p as any,
                     today,
+                    origin,
                   },
                   llmConfig: { apiKey, baseUrl, model },
                 });
@@ -686,6 +687,7 @@ export const Route = createFileRoute("/api/fonnte")({
                       rooms:          roomList,
                       property:       p as any,
                       today,
+                      origin:         url.origin,
                     },
                     llmConfig: { apiKey, baseUrl, model },
                   });
