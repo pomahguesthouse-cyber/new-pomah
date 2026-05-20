@@ -177,7 +177,7 @@ function ConfirmationPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
-              {inv.pdf_url && (
+              {inv.pdf_url ? (
                 <a
                   href={inv.pdf_url}
                   target="_blank"
@@ -188,6 +188,11 @@ function ConfirmationPage() {
                   <Download className="h-4 w-4" />
                   Download Invoice PDF
                 </a>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  PDF sedang disiapkan…
+                </span>
               )}
               <button
                 onClick={() => window.print()}
