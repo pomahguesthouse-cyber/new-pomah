@@ -41,7 +41,7 @@ import {
   classifyIntent,
   deleteThread,
   setTrainingExample,
-  toggleOverrideAutoReply,
+  
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
@@ -156,7 +156,7 @@ export function WhatsAppPage() {
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
-  const overrideAutoReplyFn = useServerFn(toggleOverrideAutoReply);
+  
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
@@ -250,14 +250,15 @@ export function WhatsAppPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  // Takeover = set ai_auto=false (human takes over), Return = ai_auto=true (AI resumes)
   const takeoverMut = useMutation({
-    mutationFn: (value: boolean) =>
-      overrideAutoReplyFn({ data: { threadId: current!, value } }),
-    onSuccess: (_, value) => {
+    mutationFn: (takeover: boolean) =>
+      aiModeFn({ data: { threadId: current!, aiAuto: !takeover } }),
+    onSuccess: (_, takeover) => {
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
       toast.success(
-        value
+        takeover
           ? "Percakapan diambil alih oleh Human (AI dinonaktifkan untuk chat ini)."
           : "Kendali dikembalikan ke AI (AI aktif membalas chat ini).",
       );
@@ -399,7 +400,7 @@ export function WhatsAppPage() {
                           >
                             {intent.label}
                           </Badge>
-                          {(t as any).override_auto_reply ? (
+                          {(t as any).ai_auto === false ? (
                             <Badge
                               variant="outline"
                               className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
@@ -417,21 +418,6 @@ export function WhatsAppPage() {
                           {t.status === "closed" && (
                             <Badge variant="outline" className="h-4 px-1.5 text-[9px]">
                               closed
-                            </Badge>
-                          )}
-                          {(t as any).ai_auto !== false ? (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-sky-400 text-sky-600 dark:text-sky-400"
-                            >
-                              AI Auto
-                            </Badge>
-                          ) : (
-                            <Badge
-                              variant="outline"
-                              className="h-4 px-1.5 text-[9px] border-amber-400 text-amber-600 dark:text-amber-400"
-                            >
-                              Human
                             </Badge>
                           )}
                           {(t.unread_count ?? 0) > 0 && (
@@ -521,7 +507,9 @@ export function WhatsAppPage() {
                   onClick={() => {
                     const t = thread.thread;
                     if (!t) return;
-                    takeoverMut.mutate(!(t as any).override_auto_reply);
+                    // takeover=true when AI currently auto (ai_auto !== false)
+                    const currentlyAi = (t as any).ai_auto !== false;
+                    takeoverMut.mutate(currentlyAi);
                   }}
                   className={cn(
                     "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
@@ -529,13 +517,13 @@ export function WhatsAppPage() {
                     "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
                   title={
-                    (thread.thread as any).override_auto_reply
+                    (thread.thread as any).ai_auto === false
                       ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
                       : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
                   }
                   disabled={takeoverMut.isPending}
                 >
-                  {(thread.thread as any).override_auto_reply ? (
+                  {(thread.thread as any).ai_auto === false ? (
                     <>
                       <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
                       Kembalikan ke AI
