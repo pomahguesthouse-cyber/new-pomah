@@ -27,7 +27,6 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
         "Delegasikan pertanyaan spesifik ke agent spesialis lain dan dapatkan responsnya. " +
         "Gunakan ini saat masalah tamu membutuhkan keahlian agent tertentu " +
         "(misal: tanya harga → pricing, kerusakan → maintenance).",
-        "Gunakan ini jika manajer menanyakan hal yang menjadi ranah agent lain (contoh: harga -> pricing).",
       parameters: {
         type: "object",
         properties: {
@@ -47,7 +46,6 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
             description:
               "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut. " +
               "Tulis dengan jelas dan lengkap karena agent tidak tahu konteks percakapan ini.",
-            description: "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut.",
           },
         },
         required: ["agent_key", "question"],
@@ -105,17 +103,5 @@ export const managerAgent: AgentDefinition = {
     ];
 
     return sections.filter(Boolean).join("\n\n");
-  description: "Personal assistant for the property manager. Handles operational commands and data retrieval.",
-  handles:     ["general"],
-  tools:       MANAGER_TOOLS,
-
-  buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today, customInstructions } = ctx;
-
-    let prompt = customInstructions || "Anda adalah Manager Agent.";
-    prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
-    prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
-
-    return prompt;
   },
 };

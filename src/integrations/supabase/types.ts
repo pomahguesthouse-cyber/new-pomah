@@ -20,6 +20,7 @@ export type Database = {
           correction: string | null
           created_at: string
           id: string
+          metadata: Json | null
           rating: string | null
           source: string | null
           thread_id: string | null
@@ -31,6 +32,7 @@ export type Database = {
           correction?: string | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           rating?: string | null
           source?: string | null
           thread_id?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           correction?: string | null
           created_at?: string
           id?: string
+          metadata?: Json | null
           rating?: string | null
           source?: string | null
           thread_id?: string | null
@@ -461,6 +464,7 @@ export type Database = {
           payment_bank_name: string | null
           phone: string | null
           public_domain: string | null
+          smart_delay_config: Json | null
           tagline: string | null
           timezone: string
           updated_at: string
@@ -497,6 +501,7 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
           updated_at?: string
@@ -533,12 +538,48 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
         }
         Relationships: []
+      }
+      property_managers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          phone: string
+          property_id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          phone: string
+          property_id: string
+          role: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          phone?: string
+          property_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_managers_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       room_types: {
         Row: {
@@ -548,6 +589,7 @@ export type Database = {
           capacity: number
           created_at: string
           description: string | null
+          extrabed_capacity: number
           hero_image_url: string | null
           id: string
           images: string[]
@@ -563,6 +605,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          extrabed_capacity?: number
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -578,6 +621,7 @@ export type Database = {
           capacity?: number
           created_at?: string
           description?: string | null
+          extrabed_capacity?: number
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -694,6 +738,41 @@ export type Database = {
         }
         Relationships: []
       }
+      sop_chunks: {
+        Row: {
+          content: string
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          source_url: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          source_url?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          source_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sop_chunks_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "sop_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sop_documents: {
         Row: {
           content: string | null
@@ -703,6 +782,7 @@ export type Database = {
           id: string
           name: string
           property_id: string | null
+          source_url: string | null
         }
         Insert: {
           content?: string | null
@@ -712,6 +792,7 @@ export type Database = {
           id?: string
           name: string
           property_id?: string | null
+          source_url?: string | null
         }
         Update: {
           content?: string | null
@@ -721,6 +802,7 @@ export type Database = {
           id?: string
           name?: string
           property_id?: string | null
+          source_url?: string | null
         }
         Relationships: [
           {
@@ -753,12 +835,132 @@ export type Database = {
         }
         Relationships: []
       }
+      wa_booking_states: {
+        Row: {
+          context: Json
+          phone: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          context?: Json
+          phone: string
+          state?: string
+          updated_at?: string
+        }
+        Update: {
+          context?: Json
+          phone?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      wa_message_queue: {
+        Row: {
+          body: string
+          created_at: string
+          delay_ms: number
+          id: string
+          message_id: string | null
+          phone: string
+          status: string
+          thread_id: string | null
+          updated_at: string
+          winner_seq: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          delay_ms?: number
+          id?: string
+          message_id?: string | null
+          phone: string
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+          winner_seq: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          delay_ms?: number
+          id?: string
+          message_id?: string | null
+          phone?: string
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+          winner_seq?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_message_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_message_queue_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_processing_queue: {
+        Row: {
+          attempts: number
+          body: string
+          created_at: string
+          id: string
+          last_error: string | null
+          message_id: string | null
+          phone: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          body: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          message_id?: string | null
+          phone: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          body?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          message_id?: string | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           ai_draft: boolean
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
           id: string
+          metadata: Json | null
           sent_at: string
           thread_id: string
         }
@@ -767,6 +969,7 @@ export type Database = {
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
           id?: string
+          metadata?: Json | null
           sent_at?: string
           thread_id: string
         }
@@ -775,6 +978,7 @@ export type Database = {
           body?: string
           direction?: Database["public"]["Enums"]["message_direction"]
           id?: string
+          metadata?: Json | null
           sent_at?: string
           thread_id?: string
         }
@@ -791,6 +995,7 @@ export type Database = {
       whatsapp_threads: {
         Row: {
           ai_analysis: Json | null
+          ai_auto: boolean
           assigned_to: string | null
           created_at: string
           display_name: string | null
@@ -800,7 +1005,6 @@ export type Database = {
           is_training_example: boolean
           last_message_at: string
           last_message_preview: string | null
-          override_auto_reply: boolean
           phone: string
           pinned: boolean
           status: Database["public"]["Enums"]["thread_status"]
@@ -809,6 +1013,7 @@ export type Database = {
         }
         Insert: {
           ai_analysis?: Json | null
+          ai_auto?: boolean
           assigned_to?: string | null
           created_at?: string
           display_name?: string | null
@@ -818,7 +1023,6 @@ export type Database = {
           is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
-          override_auto_reply?: boolean
           phone: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
@@ -827,6 +1031,7 @@ export type Database = {
         }
         Update: {
           ai_analysis?: Json | null
+          ai_auto?: boolean
           assigned_to?: string | null
           created_at?: string
           display_name?: string | null
@@ -836,7 +1041,6 @@ export type Database = {
           is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
-          override_auto_reply?: boolean
           phone?: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
@@ -855,26 +1059,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      wa_queue_stats: {
+        Row: {
+          done: number | null
+          failed: number | null
+          hour_wib: string | null
+          pending: number | null
+          processing: number | null
+          skipped: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
+      wa_queue_stats_today: {
+        Row: {
+          avg_delay_ms: number | null
+          hour_wib: string | null
+          replied: number | null
+          still_pending: number | null
+          superseded: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      claim_queue_winner: {
+        Args: {
+          p_body: string
+          p_delay_ms: number
+          p_message_id: string
+          p_phone: string
+          p_thread_id: string
+        }
+        Returns: string
+      }
+      enqueue_processing_job: {
+        Args: { p_body: string; p_message_id: string; p_phone: string }
+        Returns: string
+      }
       generate_booking_reference: { Args: never; Returns: string }
-      receive_whatsapp_message: {
-        Args: { p_phone: string; p_name: string; p_body: string }
-        Returns: string
-      }
-      get_autoreply_context: {
-        Args: { p_phone: string }
-        Returns: Json
-      }
-      save_outbound_whatsapp: {
-        Args: { p_thread_id: string; p_body: string; p_metadata?: Json }
-        Returns: string
-      }
-      save_message_metadata: {
-        Args: { p_message_id: string; p_metadata: Json }
-        Returns: undefined
-      }
+      get_active_booking_state: { Args: { p_phone: string }; Returns: Json }
+      get_autoreply_context: { Args: { p_phone: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -882,14 +1108,39 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_newest_pending_for_phone: {
+        Args: { p_phone: string; p_queue_id: string }
+        Returns: boolean
+      }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      is_still_winner: { Args: { p_entry_id: string }; Returns: boolean }
       log_webchat_message: {
         Args: {
           p_ai_response: string
+          p_metadata?: Json
           p_thread_id: string
           p_user_message: string
         }
         Returns: undefined
+      }
+      mark_queue_done: { Args: { p_entry_id: string }; Returns: undefined }
+      match_sop_chunks: {
+        Args: {
+          match_count: number
+          match_threshold: number
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          document_id: string
+          id: string
+          similarity: number
+          source_url: string
+        }[]
+      }
+      receive_whatsapp_message: {
+        Args: { p_body: string; p_name: string; p_phone: string }
+        Returns: string
       }
       room_type_availability: {
         Args: { p_check_in: string; p_check_out: string }
@@ -906,6 +1157,22 @@ export type Database = {
           taken: number
           total: number
         }[]
+      }
+      save_message_metadata: {
+        Args: { p_message_id: string; p_metadata: Json }
+        Returns: undefined
+      }
+      save_outbound_whatsapp: {
+        Args: { p_body: string; p_metadata?: Json; p_thread_id: string }
+        Returns: string
+      }
+      update_booking_state: {
+        Args: { p_context: Json; p_phone: string; p_state: string }
+        Returns: undefined
+      }
+      update_thread_autoreply_meta: {
+        Args: { p_thread_id: string; p_tools_used: string[] }
+        Returns: undefined
       }
     }
     Enums: {

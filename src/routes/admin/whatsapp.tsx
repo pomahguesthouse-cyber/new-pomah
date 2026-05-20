@@ -26,7 +26,6 @@ import {
   Wrench,
   GraduationCap,
   RefreshCw,
-  UserCheck,
   RotateCcw,
 } from "lucide-react";
 import {

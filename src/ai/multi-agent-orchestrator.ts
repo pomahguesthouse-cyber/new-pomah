@@ -284,18 +284,8 @@ export async function runMultiAgentOrchestration(
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
-  // 3. Route to agent
-  const routing = routeToAgent(classified);
-  console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
+  // 5. Route to agent
 
-  // 4. Load agent
-  const agent = getAgent(routing.agentKey);
-
-  // 5. Run agent
-  //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
-  const isManager = routing.agentKey === "manager";
-
-  const onAskAgent = isManager
   // 5. Route to agent
   const routing = routeToAgent(classified);
   console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);

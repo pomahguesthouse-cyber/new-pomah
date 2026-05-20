@@ -87,7 +87,7 @@ import {
   DEFAULT_SMART_DELAY,
 }                                             from "@/services/queue.service";
 import type { SmartDelayConfig }             from "@/services/queue.service";
-import { sendWhatsAppMessage }         from "@/services/whatsapp.service";
+
 
 // ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
 import {
@@ -95,9 +95,7 @@ import {
   deriveAgentLabelFromKey,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
-}                                      from "@/ai/multi-agent-orchestrator";
-import { todayWIB }                    from "@/lib/date";
-import { retrieveRelevantSopContext }  from "@/ai/rag.service";
+import { retrieveRelevantSopContext }         from "@/ai/rag.service";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -119,28 +117,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 function newWorkerId(): string {
   return `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-const DEFAULT_DELAY: SmartDelayConfig = {
-  enabled:      false,
-  shortMs:      6000,
-  mediumMs:     3000,
-  longMs:       1000,
-  waitSignalMs: 8000,
-  maxDelayMs:   10000,
-};
 
-const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek)\b|\.\.\./i;
 
-function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
-  if (!cfg.enabled) return 0;
-  let base: number;
-  if (WAIT_SIGNALS.test(body))       base = cfg.waitSignalMs;
-  else if (body.trim().length < 15)  base = cfg.shortMs;
-  else if (body.trim().length <= 80) base = cfg.mediumMs;
-  else                               base = cfg.longMs;
-  return Math.min(base, cfg.maxDelayMs);
-}
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ─── In-progress guard (same Worker instance) ─────────────────────────────────
 const _inProgress = new Set<string>();
@@ -241,8 +219,6 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // ── 8. Queue upsert — register this message ───────────────────────
         const delayCfg: SmartDelayConfig = { ...DEFAULT_SMART_DELAY, ...(c.smart_delay_config ?? {}) };
-        // 7. Smart Delay — sleep then winner check
-        const delayCfg: SmartDelayConfig = { ...DEFAULT_DELAY, ...(c.smart_delay_config ?? {}), enabled: false };
         const delayMs = calcDelayMs(message, delayCfg);
 
         let entryId: string | null = null;
@@ -568,18 +544,6 @@ export const Route = createFileRoute("/api/fonnte")({
               is_fallback:        isFallback,
               burst_message_count: claimResult.messageCount,
               queue_entry_id:     entryId,
-          // 10. Save outbound + update thread analytics
-          const agentLabel = deriveAgentLabelFromKey(agentKey);
-          await saveOutboundMessage(supabasePublic, {
-            threadId: c.thread_id,
-            body:     reply,
-            metadata: {
-              agent:              agentLabel,
-              agent_key:          agentKey,
-              intent,
-              routing_confidence: routingConfidence,
-              escalated,
-              tools_used:         toolsUsed,
             },
           });
 
@@ -592,11 +556,8 @@ export const Route = createFileRoute("/api/fonnte")({
             `[AutoReply] ✓ replied | ` +
             `agent=${agentLabel} delay=${sleepMs}ms burst=${claimResult.messageCount}msgs ` +
             `fallback=${isFallback} | ${logCtx}`,
-            "[AutoReply] ✓ sent to", sender,
-            "| delay:", delayMs, "ms",
-            "| agent:", agentLabel,
-            "| tools:", toolsUsed,
           );
+
 
         } catch (unexpectedErr) {
           // ── Unexpected crash — mark queue entry failed ────────────────────
@@ -767,9 +728,6 @@ export const Route = createFileRoute("/api/fonnte")({
                   const t0 = Date.now();
                   const orchResult = await runMultiAgentOrchestration({
                     messages:  c.messages,
-                    agentCtx: { property: p as any, rooms: roomList, sopText: "", today },
-                    phone:     testPhone,
-                    messages:  c.messages,
                     agentCtx: {
                       property: p as any,
                       rooms:    roomList,
@@ -784,11 +742,8 @@ export const Route = createFileRoute("/api/fonnte")({
                       today,
                     },
                     llmConfig: { apiKey, baseUrl, model },
-                      origin:         new URL(request.url).origin,
-                    },
-                    llmConfig: { apiKey, baseUrl, model },
-                    aiLabConfig: p.ai_lab_config as any,
                   });
+
 
                   result.elapsed_ms         = Date.now() - t0;
                   result.reply              = orchResult.reply;
