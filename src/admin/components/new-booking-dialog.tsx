@@ -265,6 +265,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
       toast.success(
         ref ? `Booking dibuat: ${ref} (${count} kamar)` : `Booking dibuat (${count} kamar)`,
       );
+      if (guest.phone.trim()) {
+        toast.info("Link invoice & konfirmasi sedang dikirim ke WhatsApp tamu…", { duration: 4000 });
+      }
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["admin-calendar"] });
