@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 
 /** Untyped client view — for columns absent from the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -413,7 +414,35 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     const { error: insErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
     if (insErr) throw insErr;
 
+    // Fix 2: Silently regenerate the stored PDF so the invoice record stays
+    // in sync with the latest payment status. We do NOT re-send WhatsApp here
+    // to avoid flooding the guest — admin can do that explicitly via resendInvoice.
+    void generateAndSendInvoiceNotification({
+      supabase: context.supabase,
+      bookingId: data.id,
+      skipWhatsApp: true,
+    }).catch((err) =>
+      console.warn("[bookings] PDF regen failed (non-fatal):", err),
+    );
+
     return { ok: true, total_amount, nights };
+  });
+
+/**
+ * Regenerate the invoice PDF and send it via WhatsApp.
+ * Called explicitly by admin (e.g. "Kirim Ulang Invoice" button).
+ */
+export const resendInvoice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ bookingId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await generateAndSendInvoiceNotification({
+      supabase: context.supabase,
+      bookingId: data.bookingId,
+      skipWhatsApp: false,
+    });
+    if (!result.ok) throw new Error(result.error ?? "Gagal generate invoice");
+    return { ok: true, pdf_url: result.pdf_url, wa_sent: result.wa_sent };
   });
 
 export const listRoomTypes = createServerFn({ method: "GET" })
