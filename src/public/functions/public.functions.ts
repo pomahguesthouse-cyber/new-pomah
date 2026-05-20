@@ -265,6 +265,8 @@ export type BookingInvoice = {
   check_out_time: string;
   special_requests: string;
   created_at: string;
+  /** Public URL of the generated PDF invoice in Supabase Storage */
+  pdf_url: string | null;
   guest: { full_name: string; email: string; phone: string };
   property: {
     name: string;
@@ -322,6 +324,24 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       .maybeSingle();
     const p = (pRow ?? {}) as Record<string, unknown>;
 
+    // Fetch stored PDF URL from invoices table (populated by invoice-notification.service).
+    // Falls back to the deterministic storage path if the record doesn't exist yet.
+    let pdfUrl: string | null = null;
+    const { data: invRow } = await sb
+      .from("invoices" as any)
+      .select("pdf_url")
+      .eq("booking_id", data.id)
+      .maybeSingle();
+    if (invRow && (invRow as any).pdf_url) {
+      pdfUrl = (invRow as any).pdf_url as string;
+    } else {
+      // Fallback: construct URL from known storage path
+      const { data: urlData } = supabaseAdmin.storage
+        .from("room-images")
+        .getPublicUrl(`invoices/${data.id}.pdf`);
+      pdfUrl = urlData?.publicUrl ?? null;
+    }
+
     const invoice: BookingInvoice = {
       reference_code: String(b.reference_code ?? ""),
       status: String(b.status ?? "pending"),
@@ -339,6 +359,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       check_out_time: String(b.check_out_time ?? ""),
       special_requests: String(b.special_requests ?? ""),
       created_at: String(b.created_at ?? ""),
+      pdf_url: pdfUrl,
       guest: {
         full_name: String(g.full_name ?? ""),
         email: String(g.email ?? ""),
