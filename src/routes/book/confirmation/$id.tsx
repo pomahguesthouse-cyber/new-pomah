@@ -4,12 +4,15 @@
  * Shown right after a successful web booking: a printable invoice with
  * the reservation details, price breakdown and payment instructions.
  */
+import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
+import { CheckCircle2, Printer, Loader2 } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
+
+const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
 
 export const Route = createFileRoute("/book/confirmation/$id")({
   head: () => ({
@@ -61,6 +64,27 @@ function ConfirmationPage() {
   });
   const { data: siteData } = useQuery({ queryKey: ["public-site"], queryFn: () => siteFn() });
   const inv = data?.invoice ?? null;
+
+  const [isMounted, setIsMounted] = React.useState(false);
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const logoUrl = siteData?.property?.invoice_logo_url || siteData?.property?.logo_url;
+  const propertyName = siteData?.property?.name || inv?.property.name;
+  const propertyAddress = [
+    siteData?.property?.address,
+    siteData?.property?.city,
+    siteData?.property?.country,
+  ]
+    .filter(Boolean)
+    .join(", ") || inv?.property.address;
+  const propertyPhone = siteData?.property?.whatsapp_number || siteData?.property?.phone;
+  const propertyWebsite = siteData?.property?.public_domain
+    ? siteData.property.public_domain.startsWith("http")
+      ? siteData.property.public_domain
+      : `https://${siteData.property.public_domain}`
+    : undefined;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -177,17 +201,56 @@ function ConfirmationPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
-              {inv.pdf_url ? (
-                <a
-                  href={inv.pdf_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download={`Invoice-${inv.reference_code}.pdf`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+              {isMounted && inv ? (
+                <React.Suspense
+                  fallback={
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Menyiapkan PDF…
+                    </span>
+                  }
                 >
-                  <Download className="h-4 w-4" />
-                  Download Invoice PDF
-                </a>
+                  <GuestPDFDownloadLink
+                    booking={{
+                      id: id,
+                      reference_code: inv.reference_code,
+                      check_in: inv.check_in,
+                      check_out: inv.check_out,
+                      total_amount: inv.total_amount,
+                      payment_status:
+                        inv.status === "confirmed" ||
+                        inv.status === "checked_in" ||
+                        inv.status === "checked_out"
+                          ? "paid"
+                          : "unpaid",
+                      paid_amount:
+                        inv.status === "confirmed" ||
+                        inv.status === "checked_in" ||
+                        inv.status === "checked_out"
+                          ? inv.total_amount
+                          : 0,
+                      source: "direct",
+                      guests: {
+                        full_name: inv.guest.full_name,
+                        email: inv.guest.email,
+                        phone: inv.guest.phone,
+                      },
+                      booking_rooms: Array.from({ length: inv.rooms }, (_, i) => ({
+                        id: `${id}-room-${i}`,
+                        room_id: null,
+                        nightly_rate: inv.nightly_rate,
+                        room_types: { name: inv.room_type },
+                        rooms: null,
+                      })),
+                    }}
+                    logoUrl={logoUrl}
+                    propertyName={propertyName}
+                    propertyAddress={propertyAddress}
+                    propertyPhone={propertyPhone}
+                    propertyWebsite={propertyWebsite}
+                    fileName={`Invoice-${inv.reference_code || id.slice(0, 8)}.pdf`}
+                  />
+                </React.Suspense>
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed">
                   <Loader2 className="h-4 w-4 animate-spin" />
