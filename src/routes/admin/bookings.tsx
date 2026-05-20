@@ -312,21 +312,22 @@ function BookingsPage() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead className="border-b border-border bg-muted/40">
-            <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-              <th className="px-4 py-3">Kode Booking</th>
-              <th className="px-4 py-3">Nama Tamu</th>
-              <th className="px-4 py-3">Kamar</th>
-              <th className="px-4 py-3">Jumlah Kamar</th>
-              <th className="px-4 py-3">Tanggal</th>
-              <th className="px-4 py-3">Pembayaran</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Sumber</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
+      <div className="rounded-lg border border-border bg-card">
+        <div className="overflow-x-auto md:overflow-visible">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border bg-muted/40">
+              <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border rounded-tl-lg">Kode Booking</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Nama Tamu</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Kamar</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border w-24 text-center">Jumlah Kamar</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border w-48">Tanggal</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Pembayaran</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Status</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Sumber</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border rounded-tr-lg" />
+              </tr>
+            </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
@@ -379,7 +380,7 @@ function BookingsPage() {
                 <td className="px-4 py-3">
                   <RoomSummary rooms={b.booking_rooms} />
                 </td>
-                <td className="px-4 py-3 font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</td>
+                <td className="px-4 py-3 font-mono tabular-nums text-center">{b.booking_rooms?.length ?? 0}</td>
                 <td className="px-4 py-3 text-xs">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                     Check-In
@@ -389,7 +390,7 @@ function BookingsPage() {
                     Check-Out
                   </p>
                   <p className="font-mono tabular-nums">{formatDateID(b.check_out)}</p>
-                  <p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                     {nightsBetween(b.check_in, b.check_out)} malam
                   </p>
                 </td>
@@ -437,7 +438,8 @@ function BookingsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
 
         {/* ---- pagination footer ---- */}
         {!error && total > 0 && (
