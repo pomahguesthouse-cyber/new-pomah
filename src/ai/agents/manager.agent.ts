@@ -46,7 +46,6 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
             description:
               "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut. " +
               "Tulis dengan jelas dan lengkap karena agent tidak tahu konteks percakapan ini.",
-            description: "Pertanyaan atau instruksi yang dikirimkan ke agent tersebut.",
           },
         },
         required: ["agent_key", "question"],
