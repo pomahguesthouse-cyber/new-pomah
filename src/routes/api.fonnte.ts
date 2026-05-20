@@ -477,14 +477,16 @@ export const Route = createFileRoute("/api/fonnte")({
             body:     finalReply,
             metadata: {
               agent:              agentLabel,
-              agent_key:          agentKey,
-              intent:             orchResult?.intent,
-              routing_confidence: orchResult?.routingConfidence,
-              escalated:          orchResult?.escalated,
               tools_used:         orchResult?.toolsUsed ?? [],
-              is_fallback:        isFallback,
-              burst_message_count: claimResult.messageCount,
-              queue_entry_id:     entryId,
+              ...({
+                agent_key:          agentKey,
+                intent:             orchResult?.intent,
+                routing_confidence: orchResult?.routingConfidence,
+                escalated:          orchResult?.escalated,
+                is_fallback:        isFallback,
+                burst_message_count: claimResult.messageCount,
+                queue_entry_id:     entryId,
+              } as any),
             },
           });
 
