@@ -658,8 +658,31 @@ function RoomCarousel({
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, [rc.cardsPerView]);
+
   const maxIndex = Math.max(0, rooms.length - cardsPerView);
-  const [i, setI] = useState(0);
+  const isLoopable = rooms.length > cardsPerView;
+
+  // Clone slides for infinite loop
+  const extendedRooms = isLoopable
+    ? [
+        ...rooms.slice(-cardsPerView),
+        ...rooms,
+        ...rooms.slice(0, cardsPerView),
+      ]
+    : rooms;
+
+  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+
+  // Sync index when cardsPerView changes on window resize
+  useEffect(() => {
+    if (isLoopable) {
+      setI(cardsPerView);
+    } else {
+      setI(0);
+    }
+  }, [cardsPerView, isLoopable]);
+
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
@@ -679,30 +702,66 @@ function RoomCarousel({
     setTouchEndY(e.targetTouches[0].clientY);
   };
 
+  const handlePrev = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v - 1);
+    } else {
+      setI((v) => Math.max(0, v - 1));
+    }
+  };
+
+  const handleNext = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    } else {
+      setI((v) => Math.min(rooms.length - cardsPerView, v + 1));
+    }
+  };
+
   const onTouchEnd = () => {
     if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
     const distanceX = touchStartX - touchEndX;
     const distanceY = touchStartY - touchEndY;
     if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > minSwipeDistance) {
       if (distanceX > 0) {
-        setI((v) => Math.min(maxIndex, v + 1));
+        handleNext();
       } else {
-        setI((v) => Math.max(0, v - 1));
+        handlePrev();
       }
     }
   };
 
+  const handleTransitionEnd = () => {
+    if (!isLoopable) return;
+    if (i <= 0) {
+      setIsTransitioning(false);
+      setI(rooms.length);
+    } else if (i >= rooms.length + cardsPerView) {
+      setIsTransitioning(false);
+      setI(cardsPerView);
+    }
+  };
+
   useEffect(() => {
-    if (!rc.autoplay || maxIndex < 1 || rc.slideMs <= 0) return;
-    const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), rc.slideMs);
+    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0) return;
+    const t = setInterval(() => {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    }, rc.slideMs);
     return () => clearInterval(t);
-  }, [rc.autoplay, rc.slideMs, maxIndex]);
+  }, [rc.autoplay, rc.slideMs, isLoopable]);
 
   if (rooms.length === 0) {
     return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
   }
 
-  const index = Math.min(i, maxIndex);
+  const activeDot = isLoopable
+    ? ((i - cardsPerView) % rooms.length + rooms.length) % rooms.length
+    : i;
+
+  const totalDots = isLoopable ? rooms.length : maxIndex + 1;
 
   return (
     <div className="relative mt-12">
@@ -713,11 +772,15 @@ function RoomCarousel({
         onTouchEnd={onTouchEnd}
       >
         <div
-          className="flex transition-transform duration-500 ease-out"
-          style={{ transform: `translateX(-${index * (100 / cardsPerView)}%)` }}
+          className="flex"
+          style={{
+            transform: `translateX(-${i * (100 / cardsPerView)}%)`,
+            transition: isTransitioning ? 'transform 500ms ease-out' : 'none'
+          }}
+          onTransitionEnd={handleTransitionEnd}
         >
-          {rooms.map((rt) => (
-            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
+          {extendedRooms.map((rt, idx) => (
+            <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                   {rt.hero_image_url ? (
@@ -738,8 +801,8 @@ function RoomCarousel({
                       <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
                       <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
                         {[rt.capacity && `${rt.capacity} Tamu`, rt.size_sqm && `${rt.size_sqm} m²`]
-                          .filter(Boolean)
-                          .join(" · ")}
+                           .filter(Boolean)
+                           .join(" · ")}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -778,29 +841,36 @@ function RoomCarousel({
         </div>
       </div>
 
-      {maxIndex > 0 && (
+      {totalDots > 1 && (
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
-            onClick={() => setI((v) => Math.max(0, v - 1))}
+            onClick={handlePrev}
             aria-label="Sebelumnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div className="flex gap-1.5">
-            {Array.from({ length: maxIndex + 1 }).map((_, d) => (
+            {Array.from({ length: totalDots }).map((_, d) => (
               <button
                 key={d}
-                onClick={() => setI(d)}
+                onClick={() => {
+                  setIsTransitioning(true);
+                  if (isLoopable) {
+                    setI(d + cardsPerView);
+                  } else {
+                    setI(d);
+                  }
+                }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === index ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
           </div>
           <button
-            onClick={() => setI((v) => Math.min(maxIndex, v + 1))}
+            onClick={handleNext}
             aria-label="Berikutnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
