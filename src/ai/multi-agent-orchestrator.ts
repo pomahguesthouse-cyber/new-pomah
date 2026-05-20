@@ -268,7 +268,7 @@ export async function runMultiAgentOrchestration(
         reply:             stateResult.reply,
         toolsUsed:         ["booking_state_machine"],
         agentKey:          "front-office",
-        intent:            "booking_flow",
+        intent:            "general",
         routingConfidence: 1.0,
         escalated:         false,
       };
@@ -311,7 +311,6 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
-          input.agentCtx,
           { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
           input.toolCtx,
           input.llmConfig,
@@ -328,7 +327,6 @@ export async function runMultiAgentOrchestration(
   const agentResult = await runAgent(
     agent,
     input.messages,
-    input.agentCtx,
     { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions },
     input.toolCtx,
     input.llmConfig,
@@ -343,7 +341,6 @@ export async function runMultiAgentOrchestration(
     const foResult = await runAgent(
       foAgent,
       input.messages,
-      input.agentCtx,
       { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions },
       input.toolCtx,
       input.llmConfig,

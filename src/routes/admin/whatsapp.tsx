@@ -399,7 +399,7 @@ export function WhatsAppPage() {
                           >
                             {intent.label}
                           </Badge>
-                          {t.override_auto_reply ? (
+                          {(t as any).override_auto_reply ? (
                             <Badge
                               variant="outline"
                               className="h-4 px-1.5 text-[9px] border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/35"
@@ -521,7 +521,7 @@ export function WhatsAppPage() {
                   onClick={() => {
                     const t = thread.thread;
                     if (!t) return;
-                    takeoverMut.mutate(!t.override_auto_reply);
+                    takeoverMut.mutate(!(t as any).override_auto_reply);
                   }}
                   className={cn(
                     "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
@@ -529,13 +529,13 @@ export function WhatsAppPage() {
                     "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
                   title={
-                    thread.thread.override_auto_reply
+                    (thread.thread as any).override_auto_reply
                       ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
                       : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
                   }
                   disabled={takeoverMut.isPending}
                 >
-                  {thread.thread.override_auto_reply ? (
+                  {(thread.thread as any).override_auto_reply ? (
                     <>
                       <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
                       Kembalikan ke AI
