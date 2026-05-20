@@ -25,6 +25,14 @@ import {
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { Webchat } from "@/public/components/webchat";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -316,13 +324,62 @@ function PomahHome() {
                 </p>
               )}
               {(usingDateFilter || today) && (
-                <p className="mt-2 text-xs font-semibold text-teal-700">
-                  {usingDateFilter
-                    ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
-                        checkOut,
-                      )} (${nightsBetween(checkIn, checkOut)} Malam)`
-                    : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
-                </p>
+                <div className="mt-2 flex flex-col items-center gap-2">
+                  <p className="text-xs font-semibold text-teal-700">
+                    {usingDateFilter
+                      ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
+                          checkOut,
+                        )} (${nightsBetween(checkIn, checkOut)} Malam)`
+                      : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
+                  </p>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded-full border border-teal-700/35 bg-teal-50/50 px-3 py-1 text-[10px] font-semibold text-teal-700 transition hover:bg-teal-100/70"
+                      >
+                        Ganti
+                      </button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[340px] rounded-2xl bg-white p-6 shadow-xl border border-stone-200">
+                      <DialogHeader className="text-left">
+                        <DialogTitle className="font-serif text-lg text-stone-900">Ganti Tanggal</DialogTitle>
+                      </DialogHeader>
+                      <div className="mt-4 space-y-4">
+                        <Field label="Check-In">
+                          <DatePickerID
+                            value={checkIn || today}
+                            onChange={(val) => {
+                              setCheckIn(val);
+                              if (checkOut && val >= checkOut) {
+                                setCheckOut(isoAddDays(val, 1));
+                              }
+                            }}
+                            placeholder="Pilih tanggal"
+                            className="h-10 text-sm"
+                          />
+                        </Field>
+                        <Field label="Check-Out">
+                          <DatePickerID
+                            value={checkOut || (checkIn ? isoAddDays(checkIn, 1) : today ? isoAddDays(today, 1) : "")}
+                            onChange={setCheckOut}
+                            min={checkIn || today || undefined}
+                            placeholder="Pilih tanggal"
+                            className="h-10 text-sm"
+                          />
+                        </Field>
+                        <DialogClose asChild>
+                          <button
+                            type="button"
+                            className="cursor-pointer w-full rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                          >
+                            Terapkan
+                          </button>
+                        </DialogClose>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               )}
             </div>
             <RoomCarousel
