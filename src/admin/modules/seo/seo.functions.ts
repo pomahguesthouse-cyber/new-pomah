@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { getGoogleReviews } from "@/public/functions/public.functions";
 
 // Existing simple SEO page routes
 export const listSeoPages = createServerFn({ method: "GET" })
@@ -505,7 +506,57 @@ export const getReviewIntelligence = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const client = context.supabase as any;
-    const { data } = await client.from("seo_review_analysis").select("*").order("created_at", { ascending: false });
+    const { data: dbReviews } = await client.from("seo_review_analysis").select("*").order("created_at", { ascending: false });
+
+    // Fetch live Google reviews
+    let googleReviewsMapped: any[] = [];
+    try {
+      const gRes = await getGoogleReviews();
+      if (gRes && gRes.status === "OK" && Array.isArray(gRes.reviews)) {
+        googleReviewsMapped = gRes.reviews.map((rv, index) => {
+          const content = rv.text || "";
+          const sentiment = rv.rating >= 4 ? "positive" : rv.rating >= 3 ? "neutral" : "negative";
+          
+          // Heuristic keyword extraction
+          const extracted_keywords: string[] = [];
+          if (content.toLowerCase().includes("parkir")) extracted_keywords.push("parkiran luas");
+          if (content.toLowerCase().includes("unnes")) extracted_keywords.push("wisuda UNNES");
+          if (content.toLowerCase().includes("bersih")) extracted_keywords.push("bersih & rapi");
+          if (content.toLowerCase().includes("dapur")) extracted_keywords.push("dapur bersama");
+          if (content.toLowerCase().includes("luas")) extracted_keywords.push("kamar luas");
+          if (extracted_keywords.length === 0) extracted_keywords.push("rating tinggi", "rekomendasi");
+
+          // Heuristic suggestions
+          const seo_suggestions: string[] = [];
+          if (content.toLowerCase().includes("parkir")) {
+            seo_suggestions.push("Optimasi meta description rombongan dengan highlight: 'Fasilitas Parkir Luas'.");
+          }
+          if (content.toLowerCase().includes("unnes")) {
+            seo_suggestions.push("Target kata kunci lokal: 'penginapan dekat wisuda UNNES'.");
+          }
+          if (content.toLowerCase().includes("bersih")) {
+            seo_suggestions.push("Gunakan testimoni kebersihan ini pada microcopy halaman booking.");
+          }
+          if (seo_suggestions.length === 0) {
+            seo_suggestions.push("Sematkan ulasan positif ini di landing page promosi kamar.");
+          }
+
+          return {
+            id: `google-real-${index}`,
+            review_source: "Google Maps",
+            guest_name: rv.author,
+            rating: rv.rating,
+            content: rv.text,
+            sentiment,
+            extracted_keywords,
+            seo_suggestions,
+            created_at: new Date(Date.now() - index * 3600 * 1000).toISOString(),
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Error loading live Google Reviews for SEO analysis:", err);
+    }
 
     const fallback = [
       {
@@ -537,7 +588,8 @@ export const getReviewIntelligence = createServerFn({ method: "GET" })
       }
     ];
 
-    return { reviews: data && data.length > 0 ? data : fallback };
+    const combinedReviews = [...googleReviewsMapped, ...(dbReviews || [])];
+    return { reviews: combinedReviews.length > 0 ? combinedReviews : fallback };
   });
 
 // 8. TRIGGER SEO AGENT SIMULATION ACTION
