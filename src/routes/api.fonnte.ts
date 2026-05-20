@@ -213,8 +213,7 @@ export const Route = createFileRoute("/api/fonnte")({
         if (latestErr) {
           console.error(`[AutoReply] debounce query error: ${latestErr.message} | ${logCtx}`);
         }
-            return new Response("Error", { status: 500 });
-          }
+
 
         if (latestInbound && latestInbound.id !== messageId) {
           console.log(`[AutoReply] superseded by newer message (${latestInbound.id}) — aborting execution | ${logCtx}`);
