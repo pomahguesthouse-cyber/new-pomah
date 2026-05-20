@@ -458,39 +458,6 @@ export function WhatsAppPage() {
               </div>
               <div className="flex items-center gap-1">
                 <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const t = thread.thread;
-                    if (!t) return;
-                    takeoverMut.mutate(!t.override_auto_reply);
-                  }}
-                  className={cn(
-                    "gap-1.5 font-medium transition-all shadow-sm border",
-                    thread.thread.override_auto_reply
-                      ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-950/40"
-                      : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-950/40"
-                  )}
-                  title={
-                    thread.thread.override_auto_reply
-                      ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
-                      : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
-                  }
-                  disabled={takeoverMut.isPending}
-                >
-                  {thread.thread.override_auto_reply ? (
-                    <>
-                      <UserIcon className="h-4 w-4" />
-                      Takeover: HUMAN
-                    </>
-                  ) : (
-                    <>
-                      <Bot className="h-4 w-4" />
-                      Auto: AI
-                    </>
-                  )}
-                </Button>
-                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => {
@@ -518,29 +485,39 @@ export function WhatsAppPage() {
                   <CheckCheck className="mr-1.5 h-4 w-4" />
                   {thread.thread.status === "open" ? "Close" : "Reopen"}
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Plus className="mr-1.5 h-3.5 w-3.5" /> Simulate
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-64">
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">
-                      Simulate inbound message
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {[
-                      "Hi, do you have rooms tonight?",
-                      "What time is breakfast?",
-                      "The wifi is not working",
-                      "Can we extend our stay by one night?",
-                    ].map((s) => (
-                      <DropdownMenuItem key={s} onClick={() => simulateMut.mutate(s)}>
-                        <span className="truncate text-xs">{s}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const t = thread.thread;
+                    if (!t) return;
+                    takeoverMut.mutate(!t.override_auto_reply);
+                  }}
+                  className={cn(
+                    "gap-1.5 font-medium transition-all shadow-sm border",
+                    thread.thread.override_auto_reply
+                      ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 hover:text-amber-800 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 dark:hover:bg-amber-950/40"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 dark:hover:bg-emerald-950/40"
+                  )}
+                  title={
+                    thread.thread.override_auto_reply
+                      ? "Human mengambil alih. Klik untuk menyerahkan kembali ke AI."
+                      : "AI aktif membalas. Klik untuk mengambil alih ke Human (Matikan AI)."
+                  }
+                  disabled={takeoverMut.isPending}
+                >
+                  {thread.thread.override_auto_reply ? (
+                    <>
+                      <UserIcon className="h-4 w-4" />
+                      Human
+                    </>
+                  ) : (
+                    <>
+                      <Bot className="h-4 w-4" />
+                      AI
+                    </>
+                  )}
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
