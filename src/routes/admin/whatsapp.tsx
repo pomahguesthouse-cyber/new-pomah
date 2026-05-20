@@ -250,14 +250,15 @@ export function WhatsAppPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  // Takeover = set ai_auto=false (human takes over), Return = ai_auto=true (AI resumes)
   const takeoverMut = useMutation({
-    mutationFn: (value: boolean) =>
-      overrideAutoReplyFn({ data: { threadId: current!, value } }),
-    onSuccess: (_, value) => {
+    mutationFn: (takeover: boolean) =>
+      aiModeFn({ data: { threadId: current!, aiAuto: !takeover } }),
+    onSuccess: (_, takeover) => {
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
       toast.success(
-        value
+        takeover
           ? "Percakapan diambil alih oleh Human (AI dinonaktifkan untuk chat ini)."
           : "Kendali dikembalikan ke AI (AI aktif membalas chat ini).",
       );
