@@ -281,144 +281,169 @@ export type BookingInvoice = {
 export const getBookingInvoice = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
-    // Reads via the service-role client: a guest holding the (unguessable)
-    // booking id sees their own invoice; the anon role has no SELECT on bookings.
-    const sb = db(supabaseAdmin);
-    const bookingId = data.id;
-
-    // ── Step 1: minimal query — only columns present since day-one ────────
-    // This MUST succeed for any booking that exists; never fails on missing columns.
-    const { data: bBase, error: bBaseErr } = await sb
-      .from("bookings")
-      .select("check_in, check_out, adults, children, total_amount, status, special_requests, created_at, guest_id")
-      .eq("id", bookingId)
-      .maybeSingle();
-
-    if (bBaseErr) {
-      console.error("[getBookingInvoice] base query error:", JSON.stringify(bBaseErr));
-      return { invoice: null as BookingInvoice | null };
-    }
-    if (!bBase) {
-      console.warn("[getBookingInvoice] booking not found:", bookingId);
-      return { invoice: null as BookingInvoice | null };
-    }
-
-    // ── Step 2: try extended columns (added in later migrations) ─────────
-    // Failures here are non-fatal; we fall back to defaults.
-    let ext: Record<string, unknown> = {};
     try {
-      const { data: extRow } = await sb
+      // Reads via the service-role client: a guest holding the (unguessable)
+      // booking id sees their own invoice; the anon role has no SELECT on bookings.
+      const sb = db(supabaseAdmin);
+      const bookingId = data.id;
+
+      // ── Step 1: minimal query — only columns present since day-one ────────
+      // This MUST succeed for any booking that exists; never fails on missing columns.
+      const { data: bBase, error: bBaseErr } = await sb
         .from("bookings")
-        .select("reference_code, nights, payment_method, check_in_time, check_out_time")
+        .select("check_in, check_out, adults, children, total_amount, status, special_requests, created_at, guest_id")
         .eq("id", bookingId)
         .maybeSingle();
-      ext = (extRow ?? {}) as Record<string, unknown>;
-    } catch { /* migration not applied — use defaults */ }
 
-    const b: Record<string, unknown> = { ...bBase, ...ext };
-
-    const { data: gRow } = await sb
-      .from("guests")
-      .select("full_name, email, phone")
-      .eq("id", b.guest_id as string)
-      .maybeSingle();
-    const g = (gRow ?? {}) as Record<string, unknown>;
-
-    const { data: brRows } = await sb
-      .from("booking_rooms")
-      .select("room_type_id, nightly_rate")
-      .eq("booking_id", bookingId);
-    const rows = (brRows ?? []) as Record<string, unknown>[];
-    let roomType = "Kamar";
-    const typeId = rows[0]?.room_type_id as string | undefined;
-    if (typeId) {
-      const { data: rt } = await sb
-        .from("room_types")
-        .select("name")
-        .eq("id", typeId)
-        .maybeSingle();
-      roomType = ((rt as Record<string, unknown> | null)?.name as string) ?? "Kamar";
-    }
-
-    const { data: pRow } = await sb
-      .from("properties")
-      .select("name, address, payment_bank_name, payment_account_number, payment_account_holder")
-      .limit(1)
-      .maybeSingle();
-    const p = (pRow ?? {}) as Record<string, unknown>;
-
-    // Resolve PDF URL:
-    // 1. Check invoices table for a previously stored URL.
-    // 2. If missing, generate the PDF on-demand (no WhatsApp) and cache result.
-    let pdfUrl: string | null = null;
-    try {
-      const { data: invRow } = await sb
-        .from("invoices" as any)
-        .select("pdf_url")
-        .eq("booking_id", bookingId)
-        .maybeSingle();
-
-      if (invRow && (invRow as any).pdf_url) {
-        pdfUrl = (invRow as any).pdf_url as string;
+      if (bBaseErr) {
+        console.error("[getBookingInvoice] base query error:", JSON.stringify(bBaseErr));
+        return { invoice: null as BookingInvoice | null };
       }
-    } catch {
-      // invoices table may not exist yet — ignore and fall through to generation
-    }
+      if (!bBase) {
+        console.warn("[getBookingInvoice] booking not found:", bookingId);
+        return { invoice: null as BookingInvoice | null };
+      }
 
-    if (!pdfUrl) {
+      // ── Step 2: try extended columns (added in later migrations) ─────────
+      // Failures here are non-fatal; we fall back to defaults.
+      let ext: Record<string, unknown> = {};
       try {
-        const { generateAndSendInvoiceNotification } = await import(
-          "@/services/invoice-notification.service"
-        );
-        const result = await generateAndSendInvoiceNotification({
-          supabase: supabaseAdmin as any,
-          bookingId,
-          skipWhatsApp: true,
-        });
-        if (result.ok && result.pdf_url) {
-          pdfUrl = result.pdf_url;
-        } else {
-          console.warn("[getBookingInvoice] PDF generation failed:", result.error);
-        }
-      } catch (genErr) {
-        console.warn("[getBookingInvoice] PDF on-demand generation threw:", genErr);
+        const { data: extRow } = await sb
+          .from("bookings")
+          .select("reference_code, nights, payment_method, check_in_time, check_out_time")
+          .eq("id", bookingId)
+          .maybeSingle();
+        ext = (extRow ?? {}) as Record<string, unknown>;
+      } catch (err) {
+        console.warn("[getBookingInvoice] Failed to fetch extended columns:", err);
       }
-    }
 
-    const invoice: BookingInvoice = {
-      reference_code: String(b.reference_code ?? ""),
-      status: String(b.status ?? "pending"),
-      check_in: String(b.check_in ?? ""),
-      check_out: String(b.check_out ?? ""),
-      nights: Number(b.nights) || Math.max(1, Math.round(
-        (Date.parse(`${String(b.check_out)}T00:00:00Z`) - Date.parse(`${String(b.check_in)}T00:00:00Z`)) / 86_400_000
-      )),
-      adults: Number(b.adults ?? 0),
-      children: Number(b.children ?? 0),
-      rooms: rows.length || 1,
-      room_type: roomType,
-      nightly_rate: Number(rows[0]?.nightly_rate ?? 0),
-      total_amount: Number(b.total_amount ?? 0),
-      payment_method: String(b.payment_method ?? ""),
-      check_in_time: String(b.check_in_time ?? ""),
-      check_out_time: String(b.check_out_time ?? ""),
-      special_requests: String(b.special_requests ?? ""),
-      created_at: String(b.created_at ?? ""),
-      pdf_url: pdfUrl,
-      guest: {
-        full_name: String(g.full_name ?? ""),
-        email: String(g.email ?? ""),
-        phone: String(g.phone ?? ""),
-      },
-      property: {
-        name: String(p.name ?? "Pomah Guesthouse"),
-        address: String(p.address ?? ""),
-        bank: String(p.payment_bank_name ?? ""),
-        account_number: String(p.payment_account_number ?? ""),
-        account_holder: String(p.payment_account_holder ?? ""),
-      },
-    };
-    return { invoice };
+      const b: Record<string, unknown> = { ...bBase, ...ext };
+
+      // Try fetching guest info
+      let g: Record<string, unknown> = {};
+      try {
+        const { data: gRow } = await sb
+          .from("guests")
+          .select("full_name, email, phone")
+          .eq("id", b.guest_id as string)
+          .maybeSingle();
+        g = (gRow ?? {}) as Record<string, unknown>;
+      } catch (err) {
+        console.warn("[getBookingInvoice] Failed to fetch guest info:", err);
+      }
+
+      // Try fetching booking rooms and type
+      let rows: Record<string, unknown>[] = [];
+      let roomType = "Kamar";
+      try {
+        const { data: brRows } = await sb
+          .from("booking_rooms")
+          .select("room_type_id, nightly_rate")
+          .eq("booking_id", bookingId);
+        rows = (brRows ?? []) as Record<string, unknown>[];
+        const typeId = rows[0]?.room_type_id as string | undefined;
+        if (typeId) {
+          const { data: rt } = await sb
+            .from("room_types")
+            .select("name")
+            .eq("id", typeId)
+            .maybeSingle();
+          roomType = ((rt as Record<string, unknown> | null)?.name as string) ?? "Kamar";
+        }
+      } catch (err) {
+        console.warn("[getBookingInvoice] Failed to fetch booking rooms or room type:", err);
+      }
+
+      // Try fetching property info
+      let p: Record<string, unknown> = {};
+      try {
+        const { data: pRow } = await sb
+          .from("properties")
+          .select("name, address, payment_bank_name, payment_account_number, payment_account_holder")
+          .limit(1)
+          .maybeSingle();
+        p = (pRow ?? {}) as Record<string, unknown>;
+      } catch (err) {
+        console.warn("[getBookingInvoice] Failed to fetch property info:", err);
+      }
+
+      // Resolve PDF URL:
+      // 1. Check invoices table for a previously stored URL.
+      // 2. If missing, generate the PDF on-demand (no WhatsApp) and cache result.
+      let pdfUrl: string | null = null;
+      try {
+        const { data: invRow } = await sb
+          .from("invoices" as any)
+          .select("pdf_url")
+          .eq("booking_id", bookingId)
+          .maybeSingle();
+
+        if (invRow && (invRow as any).pdf_url) {
+          pdfUrl = (invRow as any).pdf_url as string;
+        }
+      } catch {
+        // invoices table may not exist yet — ignore and fall through to generation
+      }
+
+      if (!pdfUrl) {
+        try {
+          const { generateAndSendInvoiceNotification } = await import(
+            "@/services/invoice-notification.service"
+          );
+          const result = await generateAndSendInvoiceNotification({
+            supabase: supabaseAdmin as any,
+            bookingId,
+            skipWhatsApp: true,
+          });
+          if (result.ok && result.pdf_url) {
+            pdfUrl = result.pdf_url;
+          } else {
+            console.warn("[getBookingInvoice] PDF generation failed:", result.error);
+          }
+        } catch (genErr) {
+          console.warn("[getBookingInvoice] PDF on-demand generation threw:", genErr);
+        }
+      }
+
+      const invoice: BookingInvoice = {
+        reference_code: String(b.reference_code ?? ""),
+        status: String(b.status ?? "pending"),
+        check_in: String(b.check_in ?? ""),
+        check_out: String(b.check_out ?? ""),
+        nights: Number(b.nights) || Math.max(1, Math.round(
+          (Date.parse(`${String(b.check_out)}T00:00:00Z`) - Date.parse(`${String(b.check_in)}T00:00:00Z`)) / 86_400_000
+        )),
+        adults: Number(b.adults ?? 0),
+        children: Number(b.children ?? 0),
+        rooms: rows.length || 1,
+        room_type: roomType,
+        nightly_rate: Number(rows[0]?.nightly_rate ?? 0),
+        total_amount: Number(b.total_amount ?? 0),
+        payment_method: String(b.payment_method ?? ""),
+        check_in_time: String(b.check_in_time ?? ""),
+        check_out_time: String(b.check_out_time ?? ""),
+        special_requests: String(b.special_requests ?? ""),
+        created_at: String(b.created_at ?? ""),
+        pdf_url: pdfUrl,
+        guest: {
+          full_name: String(g.full_name ?? ""),
+          email: String(g.email ?? ""),
+          phone: String(g.phone ?? ""),
+        },
+        property: {
+          name: String(p.name ?? "Pomah Guesthouse"),
+          address: String(p.address ?? ""),
+          bank: String(p.payment_bank_name ?? ""),
+          account_number: String(p.payment_account_number ?? ""),
+          account_holder: String(p.payment_account_holder ?? ""),
+        },
+      };
+      return { invoice };
+    } catch (err) {
+      console.error("[getBookingInvoice] Unexpected handler error:", err);
+      return { invoice: null };
+    }
   });
 
 /**
