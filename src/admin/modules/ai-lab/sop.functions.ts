@@ -22,6 +22,7 @@ export type SopDocument = {
   file_type: string | null;
   source_url: string | null;
   content: string | null;
+  doc_category: "knowledge" | "sop";
   created_at: string;
 };
 
@@ -46,15 +47,20 @@ async function getAiConfig(supabase: SupabaseClient): Promise<AiClientConfig | n
   return { apiKey, baseUrl, model };
 }
 
-/** List all SOP documents, newest first. */
+/** List SOP documents, optionally filtered by doc_category. */
 export const listSopDocuments = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data } = await db(context.supabase)
+  .inputValidator((d) =>
+    z.object({ category: z.enum(["knowledge", "sop"]).optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    let q = db(context.supabase)
       .from("sop_documents")
-      .select("id, name, file_path, file_type, source_url, content, created_at")
+      .select("id, name, file_path, file_type, source_url, content, doc_category, created_at")
       .order("created_at", { ascending: false });
-    return { documents: (data ?? []) as unknown as SopDocument[] };
+    if (data?.category) q = q.eq("doc_category", data.category);
+    const { data: rows } = await q;
+    return { documents: (rows ?? []) as unknown as SopDocument[] };
   });
 
 /**
@@ -71,6 +77,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
         fileType: z.string().max(20).optional().or(z.literal("")),
         sourceUrl: z.string().url().max(2000).optional().or(z.literal("")),
         content: z.string().max(200000).optional().or(z.literal("")),
+        docCategory: z.enum(["knowledge", "sop"]).default("sop"),
       })
       .parse(d),
   )
@@ -84,6 +91,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
       file_type: data.fileType || null,
       source_url: data.sourceUrl || null,
       content: data.content || null,
+      doc_category: data.docCategory,
     }).select("id").single();
     if (error) throw error;
     
