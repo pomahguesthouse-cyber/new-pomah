@@ -34,6 +34,10 @@ import {
   Timer,
   Search,
   Network,
+  ShieldAlert,
+  FileText,
+  MessageSquare,
+  Cpu,
 } from "lucide-react";
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
 import {
@@ -109,12 +113,40 @@ const PIPELINE = [
   { label: "Balasan ke Tamu", icon: Send },
 ];
 
+const DECISION_HIERARCHY = [
+  {
+    label: "Hard Rule",
+    desc: "Aturan mutlak yang tidak boleh dilanggar — prioritas tertinggi.",
+    icon: ShieldAlert,
+  },
+  {
+    label: "SOP",
+    desc: "Prosedur operasional standar yang wajib diikuti agent.",
+    icon: FileText,
+  },
+  {
+    label: "Knowledge Base",
+    desc: "Basis pengetahuan properti: fasilitas, kebijakan, FAQ.",
+    icon: BookOpen,
+  },
+  {
+    label: "Training Percakapan",
+    desc: "Contoh percakapan terlatih sebagai panduan gaya & respons.",
+    icon: MessageSquare,
+  },
+  {
+    label: "AI Reasoning",
+    desc: "Penalaran mandiri AI jika tidak ada panduan di atas.",
+    icon: Cpu,
+  },
+];
+
 type ViewKey = "dashboard" | "whatsapp" | "webchat" | "sop" | "training" | "smart-delay" | "seo";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
   { key: "webchat",      label: "Percakapan",      icon: MessagesSquare },
-  { key: "sop",          label: "Knowledge SOP",   icon: BookOpen },
+  { key: "sop",          label: "Knowledge & SOP", icon: BookOpen },
   { key: "training",     label: "Training",        icon: GraduationCap },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
   { key: "seo",          label: "SEO",             icon: Search },
@@ -286,6 +318,27 @@ function DashboardView() {
             </Card>
           ))}
         </div>
+
+        {/* Decision hierarchy */}
+        <section>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Hirarki Keputusan Chatbot
+          </h2>
+          <Card className="divide-y divide-border overflow-hidden p-0">
+            {DECISION_HIERARCHY.map((item, i) => (
+              <div key={item.label} className="flex items-center gap-4 px-5 py-3.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <item.icon className="h-4 w-4 shrink-0 text-teal-600" />
+              </div>
+            ))}
+          </Card>
+        </section>
 
         {/* Conversation pipeline */}
         <section>
