@@ -57,7 +57,7 @@ async function pickAvailableRoom(
     .in("status", ["pending", "confirmed", "checked_in"])
     .lt("check_in", checkOut)
     .gt("check_out", checkIn);
-  const activeIds = (activeBookings ?? []).map((b) => (b as Record<string, unknown>).id as string);
+  const activeIds = (activeBookings ?? []).map((b: any) => (b as Record<string, unknown>).id as string);
   if (activeIds.length === 0) return roomRows[0].id as string;
 
   const { data: occ } = await supabaseAdmin
@@ -65,7 +65,7 @@ async function pickAvailableRoom(
     .select("room_id")
     .not("room_id", "is", null)
     .in("booking_id", activeIds);
-  const taken = new Set((occ ?? []).map((r) => (r as Record<string, unknown>).room_id));
+  const taken = new Set((occ ?? []).map((r: any) => (r as Record<string, unknown>).room_id));
   const free = roomRows.find((r) => !taken.has(r.id));
   return free ? (free.id as string) : null;
 }
