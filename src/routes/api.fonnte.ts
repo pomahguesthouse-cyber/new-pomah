@@ -297,7 +297,7 @@ export const Route = createFileRoute("/api/fonnte")({
               try {
                 const { data: fetchedDocs, error: fetchErr } = await (supabaseAdmin as any)
                   .from("sop_documents")
-                  .select("name, content, source_url")
+                  .select("name, content, source_url, file_path, doc_category")
                   .order("created_at", { ascending: true })
                   .limit(40);
                 if (fetchErr) throw fetchErr;
@@ -314,6 +314,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
             const parts: string[] = [];
             for (const d of sopDocs) {
+              if ((d.doc_category as string) === "brosur") continue;
               const content = (d.content as string | undefined)?.trim();
               const url     = (d.source_url as string | undefined)?.trim();
               if (!content && !url) continue;
@@ -321,6 +322,21 @@ export const Route = createFileRoute("/api/fonnte")({
               parts.push(content ? `${head}\n${content}` : head);
             }
             sopText = parts.join("\n\n").slice(0, 8000);
+          }
+
+          // ── 9b. Build brochure file list with public URLs ────────────────
+          const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+          const brosurFiles: { name: string; url: string }[] = [];
+          if (globalSopCache) {
+            for (const d of globalSopCache.docs) {
+              if ((d.doc_category as string) !== "brosur") continue;
+              const fp = (d.file_path as string | undefined)?.trim();
+              if (!fp) continue;
+              brosurFiles.push({
+                name: d.name as string,
+                url: `${supabaseUrl}/storage/v1/object/public/sop-documents/${fp}`,
+              });
+            }
           }
 
           // ── 10. AI Gateway Credentials ──────────────────────────────────
@@ -380,6 +396,7 @@ export const Route = createFileRoute("/api/fonnte")({
                   property:    p as any,
                   rooms:       roomList,
                   sopText,
+                  brosurFiles,
                   today,
                   lastMessage: message,
                 },

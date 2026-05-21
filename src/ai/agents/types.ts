@@ -39,6 +39,8 @@ export interface AgentContext {
   property: PropertyRow & Record<string, unknown>;
   rooms:    RoomTypeRow[];
   sopText:  string;
+  /** Brochure/image files stored in the Brosur tab — name + public URL */
+  brosurFiles?: { name: string; url: string }[];
   today:    string;
   /** The raw last user message — agents may use it for tone awareness */
   lastMessage?: string;
