@@ -448,6 +448,7 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
     checkOut: "",
     nightlyRate: 0,
   });
+  const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     if (ctx)
       setForm({
@@ -458,7 +459,7 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
       });
   }, [ctx]);
   return (
-    <Dialog open={!!ctx} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!ctx} onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="font-black text-xl tracking-tighter uppercase">
@@ -502,17 +503,27 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
           </Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" className="font-bold" onClick={onClose}>
+          <Button variant="outline" className="font-bold" onClick={onClose} disabled={saving}>
             BATAL
           </Button>
           <Button
             className="font-bold"
+            disabled={saving}
             onClick={async () => {
-              await createFn({
-                data: { ...form, roomId: ctx.roomId, adults: 2, children: 0, status: "confirmed" },
-              });
-              toast.success("BOOKING BERHASIL!");
-              onSaved();
+              if (saving) return;
+              setSaving(true);
+              onClose();
+              try {
+                await createFn({
+                  data: { ...form, roomId: ctx.roomId, adults: 2, children: 0, status: "confirmed" },
+                });
+                toast.success("BOOKING BERHASIL!");
+                onSaved();
+              } catch (e) {
+                toast.error("Gagal menyimpan booking.");
+              } finally {
+                setSaving(false);
+              }
             }}
           >
             SIMPAN
