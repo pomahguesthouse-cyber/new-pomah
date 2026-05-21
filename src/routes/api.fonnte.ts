@@ -523,7 +523,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           await saveOutboundMessage(supabasePublic, {
             threadId: c.thread_id,
-            body:     finalReply,
+            body:     replyWithLinks,
             metadata: {
               agent:              agentLabel,
               tools_used:         orchResult?.toolsUsed ?? [],
