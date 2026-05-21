@@ -94,7 +94,7 @@ async function pickAvailableRooms(
     .in("status", ["pending", "confirmed", "checked_in"])
     .lt("check_in", checkOut)
     .gt("check_out", checkIn);
-  const activeIds = (activeBookings ?? []).map((b) => (b as Record<string, unknown>).id as string);
+  const activeIds = (activeBookings ?? []).map((b: any) => (b as Record<string, unknown>).id as string);
 
   let taken = new Set<unknown>();
   if (activeIds.length) {
@@ -103,7 +103,7 @@ async function pickAvailableRooms(
       .select("room_id")
       .not("room_id", "is", null)
       .in("booking_id", activeIds);
-    taken = new Set((occ ?? []).map((r) => (r as Record<string, unknown>).room_id));
+    taken = new Set((occ ?? []).map((r: any) => (r as Record<string, unknown>).room_id));
   }
   const free = roomRows.filter((r) => !taken.has(r.id)).map((r) => r.id as string);
   return Array.from({ length: n }, (_, i) => free[i] ?? null);
