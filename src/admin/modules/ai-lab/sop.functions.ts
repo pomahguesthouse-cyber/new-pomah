@@ -22,7 +22,7 @@ export type SopDocument = {
   file_type: string | null;
   source_url: string | null;
   content: string | null;
-  doc_category: "knowledge" | "sop";
+  doc_category: "knowledge" | "sop" | "brosur";
   agent_key: string | null;
   created_at: string;
 };
@@ -54,7 +54,7 @@ export const listSopDocuments = createServerFn({ method: "GET" })
   .inputValidator((d) =>
     z
       .object({
-        category: z.enum(["knowledge", "sop"]).optional(),
+        category: z.enum(["knowledge", "sop", "brosur"]).optional(),
         agentKey: z.string().optional(),
       })
       .parse(d ?? {}),
@@ -86,7 +86,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
         fileType: z.string().max(20).optional().or(z.literal("")),
         sourceUrl: z.string().url().max(2000).optional().or(z.literal("")),
         content: z.string().max(200000).optional().or(z.literal("")),
-        docCategory: z.enum(["knowledge", "sop"]).default("sop"),
+        docCategory: z.enum(["knowledge", "sop", "brosur"]).default("sop"),
         agentKey: z.string().max(50).optional().or(z.literal("")),
       })
       .parse(d),
