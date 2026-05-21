@@ -1401,6 +1401,7 @@ export type Database = {
           ai_draft: boolean
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
+          fonnte_id: string | null
           id: string
           metadata: Json | null
           sent_at: string
@@ -1410,6 +1411,7 @@ export type Database = {
           ai_draft?: boolean
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
+          fonnte_id?: string | null
           id?: string
           metadata?: Json | null
           sent_at?: string
@@ -1419,6 +1421,7 @@ export type Database = {
           ai_draft?: boolean
           body?: string
           direction?: Database["public"]["Enums"]["message_direction"]
+          fonnte_id?: string | null
           id?: string
           metadata?: Json | null
           sent_at?: string
@@ -1608,7 +1611,12 @@ export type Database = {
         Returns: undefined
       }
       save_outbound_whatsapp: {
-        Args: { p_body: string; p_metadata?: Json; p_thread_id: string }
+        Args: {
+          p_body: string
+          p_fonnte_id?: string
+          p_metadata?: Json
+          p_thread_id: string
+        }
         Returns: string
       }
       update_booking_state: {
