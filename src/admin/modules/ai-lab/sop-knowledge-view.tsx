@@ -436,8 +436,8 @@ function SopCard({
           ) : (
             <p className="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-700">
               {isLink
-                ? "Belum ada keterangan. Klik "Edit keterangan" agar chatbot tahu cara memakai tautan ini."
-                : "Belum ada teks. Klik "Edit teks" untuk menempelkan isi dokumen agar bisa dipakai agent AI."}
+                ? "Belum ada keterangan. Klik Edit keterangan agar chatbot tahu cara memakai tautan ini."
+                : "Belum ada teks. Klik Edit teks untuk menempelkan isi dokumen agar bisa dipakai agent AI."}
             </p>
           )}
         </div>
