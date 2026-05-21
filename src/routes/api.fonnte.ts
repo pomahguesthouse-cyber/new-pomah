@@ -293,7 +293,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           const { data: rooms } = await (supabasePublic as any)
             .from("room_types")
-            .select("id, name, base_rate, capacity, bed_type, description, amenities")
+            .select("id, name, base_rate, capacity, extrabed_capacity, extrabed_rate, bed_type, description, amenities")
             .order("base_rate");
 
           // ── 9. Load SOP Documents (TTL Cached) ──────────────────────────
