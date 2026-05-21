@@ -17,7 +17,7 @@ export const frontOfficeAgent: AgentDefinition = {
   tools:       TOOL_DEFINITIONS, // check_room_availability + create_booking
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, sopText, today } = ctx;
+    const { property, rooms, sopText, brosurFiles, today } = ctx;
 
     const roomLines = rooms.map(
       (r) =>
@@ -72,6 +72,13 @@ export const frontOfficeAgent: AgentDefinition = {
           "Gunakan untuk menjawab kebijakan, prosedur, lokasi & info lainnya. " +
           "Bila ada URL di entri SOP, kirimkan URL POLOS dan UTUH — jangan potong atau bungkus markdown. " +
           `Jangan mengarang URL.\n${sopText}`
+        : "",
+
+      brosurFiles && brosurFiles.length > 0
+        ? "BROSUR & MATERI PROMOSI:\n" +
+          "Saat tamu meminta brosur, katalog, gambar kamar, atau materi promosi, " +
+          "kirimkan link berikut secara langsung. Tulis URL POLOS dan UTUH — jangan potong atau bungkus tanda kurung/markdown.\n" +
+          brosurFiles.map((f) => `• ${f.name}: ${f.url}`).join("\n")
         : "",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
