@@ -465,8 +465,33 @@ export const Route = createFileRoute("/api/fonnte")({
             aiFailureCount = 0;
           }
 
+          // ── 13b. Brochure attachment detection ──────────────────────────
+          // If the reply references a brochure file, ensure URL is in the
+          // message text AND attach it as a Fonnte file so WhatsApp shows
+          // it as a clickable PDF document.
+          let attachUrl: string | undefined;
+          let attachName: string | undefined;
+          let replyWithLinks = finalReply;
+          if (!isFallback && brosurFiles.length > 0) {
+            for (const f of brosurFiles) {
+              const baseName = f.name.replace(/\.[a-z0-9]+$/i, "");
+              const lowered = replyWithLinks.toLowerCase();
+              const mentioned =
+                lowered.includes(f.name.toLowerCase()) ||
+                lowered.includes(baseName.toLowerCase());
+              if (!mentioned) continue;
+              if (!replyWithLinks.includes(f.url)) {
+                replyWithLinks += `\n${f.url}`;
+              }
+              if (!attachUrl) {
+                attachUrl = f.url;
+                attachName = f.name;
+              }
+            }
+          }
+
           // ── 14. Outbound Idempotency Check ──────────────────────────────
-          const replyHash = hashString(finalReply);
+          const replyHash = hashString(replyWithLinks);
           const outboundKey = `out:${customerPhone}:${replyHash}`;
           const lastSentTime = outboundDedup.get(outboundKey);
 
@@ -480,8 +505,11 @@ export const Route = createFileRoute("/api/fonnte")({
 
           // ── 15. Send reply via WhatsApp ─────────────────────────────────
           const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-            c.fonnte_token, customerPhone, finalReply,
+            c.fonnte_token, customerPhone, replyWithLinks, attachUrl, attachName,
           );
+          if (attachUrl) {
+            console.log(`[AutoReply] attached brochure ${attachName} | ${logCtx}`);
+          }
 
           if (!sent) {
             console.error(`[AutoReply] send failed: ${sendErr} | ${logCtx}`);
@@ -495,7 +523,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
           await saveOutboundMessage(supabasePublic, {
             threadId: c.thread_id,
-            body:     finalReply,
+            body:     replyWithLinks,
             metadata: {
               agent:              agentLabel,
               tools_used:         orchResult?.toolsUsed ?? [],
