@@ -2,7 +2,7 @@ import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Pencil, Trash2, Plus, BedDouble } from "lucide-react";
+import { Pencil, Trash2, Plus, BedDouble, PackagePlus } from "lucide-react";
 
 import { listRoomTypes, deleteRoomType } from "@/admin/functions/bookings.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -124,6 +124,77 @@ export function RoomsManageView() {
             </div>
           ))}
         </Card>
+      )}
+
+      {/* ── Add-ons section ─────────────────────────────────────────── */}
+      {roomTypes.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <PackagePlus className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h2 className="text-base font-semibold">Room Add-ons</h2>
+              <p className="text-sm text-muted-foreground">
+                Layanan tambahan yang bisa dipesan tamu. Extra bed otomatis ditawarkan chatbot
+                jika jumlah tamu melebihi kapasitas default kamar.
+              </p>
+            </div>
+          </div>
+          <Card className="overflow-hidden p-0">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-muted/40">
+                <tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                  <th className="px-4 py-2.5">Tipe Kamar</th>
+                  <th className="px-4 py-2.5">Kapasitas Default</th>
+                  <th className="px-4 py-2.5">Extra Bed (Maks)</th>
+                  <th className="px-4 py-2.5">Harga Extra Bed / Malam</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {roomTypes.map((rt) => {
+                  const extrabedRate = Number((rt as any).extrabed_rate ?? 0);
+                  const extrabedCap = Number(rt.extrabed_capacity ?? 0);
+                  return (
+                    <tr key={rt.id} className="hover:bg-muted/20">
+                      <td className="px-4 py-3 font-medium">{rt.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {rt.capacity ?? 0} tamu
+                      </td>
+                      <td className="px-4 py-3">
+                        {extrabedCap > 0 ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">
+                            {extrabedCap} extra bed
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Tidak tersedia</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {extrabedCap > 0
+                          ? extrabedRate > 0
+                            ? formatIDR(extrabedRate) + "/malam"
+                            : <span className="text-emerald-700">Gratis</span>
+                          : <span className="text-muted-foreground">—</span>
+                        }
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => setTypeEditCtx(rt)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Edit
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+        </section>
       )}
 
       <RoomTypeDialog
