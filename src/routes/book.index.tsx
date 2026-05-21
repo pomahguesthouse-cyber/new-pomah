@@ -133,7 +133,7 @@ function BookPage() {
                   <SelectValue placeholder="Pilih tipe kamar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {rooms.map((r) => (
+                  {rooms.map((r: any) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.name} — Rp {Number(r.base_rate).toLocaleString("id-ID")}/malam
                     </SelectItem>
