@@ -19,13 +19,23 @@ export const frontOfficeAgent: AgentDefinition = {
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, rooms, sopText, brosurFiles, today } = ctx;
 
-    const roomLines = rooms.map(
-      (r) =>
+    const roomLines = rooms.map((r) => {
+      const extrabedCap  = Number((r as any).extrabed_capacity ?? 0);
+      const extrabedRate = Number((r as any).extrabed_rate ?? 0);
+      let extrabedInfo = "";
+      if (extrabedCap > 0) {
+        extrabedInfo = extrabedRate > 0
+          ? `, extra bed tersedia maks ${extrabedCap} (Rp ${extrabedRate.toLocaleString("id-ID")}/bed/malam)`
+          : `, extra bed tersedia maks ${extrabedCap} (gratis)`;
+      }
+      return (
         `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
         `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
         `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
-        `${r.description ? `, Deskripsi: ${r.description}` : ""}`,
-    );
+        `${r.description ? `, Deskripsi: ${r.description}` : ""}` +
+        extrabedInfo
+      );
+    });
 
     const sections = [
       `Anda adalah Front Office Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
@@ -56,6 +66,15 @@ export const frontOfficeAgent: AgentDefinition = {
         "Tiap tipe kamar satu baris — gunakan ✅ bila tersedia atau ❌ bila penuh, " +
         "diikuti nama kamar, jumlah tersedia, dan harga per malam. " +
         "Tutup dengan ajakan memilih kamar untuk lanjut booking.",
+
+      "EXTRA BED & ADD-ONS: " +
+        "Jika jumlah tamu yang disebutkan MELEBIHI kapasitas default kamar yang dipilih, " +
+        "dan kamar itu punya extra bed tersedia, WAJIB tawarkan extra bed. " +
+        "Hitung ulang total harga: (tarif kamar + harga extra bed x jumlah extra bed) x jumlah malam. " +
+        "Contoh: Deluxe Rp 300.000/malam kapasitas 2, tamu 3 orang, extra bed Rp 100.000/malam, 2 malam " +
+        "= (300.000 + 100.000) x 2 = Rp 800.000. " +
+        "Jika extra bed tidak tersedia atau sudah penuh, beritahu tamu dengan jelas. " +
+        "Jangan tawarkan extra bed jika tamu masih dalam kapasitas default.",
 
       "BOOKING VIA CHAT: Alurnya: " +
         "(1) cek ketersediaan dengan tool, " +

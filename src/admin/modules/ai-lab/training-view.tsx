@@ -1,259 +1,154 @@
 /**
- * AI LAB → Training.
+ * AI LAB → Training Percakapan
  *
- * A conversation simulator: type a guest (or manager) message, the AI
- * orchestration flow lights up, and a draft response is generated from
- * live room data. Promoting a result stores it as a training example
- * the chatbot uses as a basis for future answers.
+ * CRUD interface for managing conversation training examples.
+ * Admins write Q&A pairs (user message + ideal AI response) that the
+ * chatbot uses as a basis for future answers.
  */
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import * as React from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Send, Trash2 } from "lucide-react";
-import { listRoomTypes } from "@/admin/functions/bookings.functions";
-import { chatWithAI } from "@/public/functions/public.functions";
-import { saveTrainingExample } from "@/admin/modules/training/training.functions";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  Loader2,
+} from "lucide-react";
+
+import {
+  listConversationLogs,
+  saveTrainingExample,
+  deleteConversationLog,
+  updateConversationLog,
+} from "@/admin/modules/training/training.functions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-type RoomTypeRow = { id: string; name: string; base_rate?: number | string | null };
+/* ------------------------------------------------------------------ */
+/* Types                                                                */
+/* ------------------------------------------------------------------ */
 
-/** Build a draft chatbot reply — guest- or manager-oriented by role. */
-function composeResponse(rooms: RoomTypeRow[], role: "tamu" | "manager"): string {
-  if (rooms.length === 0) {
-    return role === "manager"
-      ? "Halo, Pak/Bu Manager. Belum ada data kamar terdaftar untuk ditinjau."
-      : "Halo, Kak 😊 Mohon maaf, untuk saat ini belum ada data kamar yang bisa kami tampilkan.";
-  }
-  if (role === "manager") {
-    const lines = rooms.map(
-      (r, i) =>
-        `${i + 1}. ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam`,
+type Rating = "good" | "bad" | null;
+
+type LogRow = {
+  id: string;
+  user_message: string | null;
+  ai_response: string | null;
+  rating: Rating;
+  used: boolean | null;
+  created_at: string;
+};
+
+type FilterTab = "all" | "good" | "bad" | "unrated";
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                              */
+/* ------------------------------------------------------------------ */
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function RatingBadge({ rating }: { rating: Rating }) {
+  if (rating === "good")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+        <ThumbsUp className="h-3 w-3" />
+        Baik
+      </span>
     );
-    return [
-      "Baik, Pak/Bu Manager. Berikut ringkasan inventori kamar:",
-      ...lines,
-      "",
-      `Total ${rooms.length} tipe kamar aktif. Beri tahu bila ingin menyesuaikan tarif atau promo.`,
-    ].join("\n");
-  }
-  const lines = rooms.map(
-    (r, i) =>
-      `${i + 1}. Kamar ${r.name} di Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")},-/malam`,
+  if (rating === "bad")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+        <ThumbsDown className="h-3 w-3" />
+        Buruk
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-500">
+      Belum dinilai
+    </span>
   );
-  return [
-    "Halo, Kak 😊 Kamar yang tersedia hari ini:",
-    ...lines,
-    "",
-    "Oh ya, hari ini ada PROMO DISKON 20% untuk pemesanan kamar. Tertarik pesan kamar yang mana, Kak?",
-  ].join("\n");
 }
 
 /* ------------------------------------------------------------------ */
-/* Orchestration flow diagram                                          */
+/* Training example dialog (create / edit)                             */
 /* ------------------------------------------------------------------ */
 
-/** The 6 specialized agents, in routing order. */
-const FLOW_AGENTS: { key: string; label: string; roles: ("tamu" | "manager")[] }[] = [
-  { key: "front-office", label: "Front Office", roles: ["tamu"] },
-  { key: "pricing", label: "Pricing", roles: ["tamu", "manager"] },
-  { key: "customer-care", label: "Customer Care", roles: ["tamu"] },
-  { key: "maintenance", label: "Maintenance", roles: ["tamu"] },
-  { key: "finance", label: "Finance", roles: ["tamu", "manager"] },
-  { key: "manager", label: "Manager", roles: ["manager"] },
-];
+type ExampleDialogProps = {
+  open: boolean;
+  initial?: LogRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+};
 
-/** The knowledge/tool sources agents can call. */
-const FLOW_TOOLS = ["PMS Database", "Room Availability", "SOP", "Pricing Engine", "FAQ Memory"];
+function ExampleDialog({ open, initial, onClose, onSaved }: ExampleDialogProps) {
+  const isEdit = !!initial;
 
-/** A labelled stage box in the vertical flow. */
-function FlowStage({
-  label,
-  sub,
-  active,
-  tone = "dark",
-}: {
-  label: string;
-  sub?: string;
-  active: boolean;
-  tone?: "dark" | "accent";
-}) {
-  return (
-    <div
-      className={cn(
-        "rounded-md border px-3 py-1.5 text-center transition",
-        tone === "dark"
-          ? "bg-teal-800 text-white border-teal-800"
-          : "bg-blue-600 text-white border-blue-600",
-        active ? "ring-2 ring-emerald-400 ring-offset-1" : "opacity-90",
-      )}
-    >
-      <p className="text-xs font-semibold">{label}</p>
-      {sub ? <p className="text-[9px] font-medium text-white/70">{sub}</p> : null}
-    </div>
-  );
-}
+  const fnCreate = useServerFn(saveTrainingExample);
+  const fnUpdate = useServerFn(updateConversationLog);
 
-/** Vertical connector between stages — glows emerald once a reply exists. */
-function FlowArrow({ active }: { active: boolean }) {
-  return (
-    <div className="flex justify-center">
-      <div className={cn("h-2.5 w-0.5", active ? "bg-emerald-500" : "bg-stone-300")} />
-    </div>
-  );
-}
+  const [userMsg, setUserMsg] = React.useState("");
+  const [aiResp, setAiResp] = React.useState("");
+  const [rating, setRating] = React.useState<Rating>(null);
+  const [saving, setSaving] = React.useState(false);
 
-/**
- * Full orchestration map: an inbound message is classified by the
- * orchestrator, routed to one or more specialized agents, those agents
- * pull from shared knowledge/tools, and a composer returns the reply.
- */
-function FlowDiagram({ role, responded }: { role: "tamu" | "manager"; responded: boolean }) {
-  const a = responded;
-  return (
-    <div className="mx-auto max-w-[240px]">
-      {/* Inbound */}
-      <FlowStage
-        label="Pesan Masuk"
-        sub={role === "manager" ? "Saluran: Manager" : "Saluran: Tamu / Webchat"}
-        active={a}
-      />
-      <FlowArrow active={a} />
-
-      {/* Classifier */}
-      <FlowStage label="Classifier" sub="Deteksi intent pesan" active={a} />
-      <FlowArrow active={a} />
-
-      {/* Router */}
-      <FlowStage label="Router" sub="Tentukan agent tujuan" active={a} />
-      <FlowArrow active={a} />
-
-      {/* Specialized Prompt */}
-      <p className="mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-stone-400">
-        Specialized Prompt
-      </p>
-      <div className="grid grid-cols-3 gap-1.5">
-        {FLOW_AGENTS.map((ag) => {
-          const routed = a && ag.roles.includes(role);
-          return (
-            <div
-              key={ag.key}
-              className={cn(
-                "rounded-md border px-1.5 py-1.5 text-center text-[10px] font-semibold transition",
-                routed
-                  ? "border-emerald-400 bg-emerald-50 text-emerald-800 ring-1 ring-emerald-300"
-                  : "border-stone-200 bg-stone-50 text-stone-400",
-              )}
-            >
-              {ag.label}
-            </div>
-          );
-        })}
-      </div>
-      <FlowArrow active={a} />
-
-      {/* Specialized Tools */}
-      <div
-        className={cn(
-          "rounded-lg border px-3 py-2.5 transition",
-          a ? "border-sky-300 bg-sky-50" : "border-stone-200 bg-stone-50 opacity-90",
-        )}
-      >
-        <p
-          className={cn(
-            "mb-1.5 text-center text-[11px] font-semibold",
-            a ? "text-sky-800" : "text-stone-500",
-          )}
-        >
-          Specialized Tools
-        </p>
-        <div className="flex flex-wrap justify-center gap-1">
-          {FLOW_TOOLS.map((t) => (
-            <span
-              key={t}
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[9px] font-medium",
-                a ? "bg-white text-sky-700" : "bg-white text-stone-400",
-              )}
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-      <FlowArrow active={a} />
-
-      {/* Composer */}
-      <FlowStage
-        label="Response Composer"
-        sub="Gabung jawaban & nada bicara"
-        tone="accent"
-        active={a}
-      />
-      <FlowArrow active={a} />
-
-      {/* Outbound */}
-      <FlowStage label={role === "manager" ? "Balasan ke Manager" : "Balasan ke Tamu"} active={a} />
-    </div>
-  );
-}
-
-/* ================================================================== */
-/* Training view                                                       */
-/* ================================================================== */
-
-export function TrainingView() {
-  const fnRooms = useServerFn(listRoomTypes);
-  const { data: roomData } = useQuery({ queryKey: ["room-types"], queryFn: () => fnRooms() });
-  const rooms = (roomData?.roomTypes ?? []) as RoomTypeRow[];
-
-  const fnSave = useServerFn(saveTrainingExample);
-  const fnChat = useServerFn(chatWithAI);
-
-  const [role, setRole] = useState<"tamu" | "manager">("tamu");
-  const [input, setInput] = useState("");
-  const [response, setResponse] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [sending, setSending] = useState(false);
-
-  // Live: run the real LLM, falling back to the templated reply.
-  const send = async () => {
-    const text = input.trim();
-    if (!text) {
-      toast.error("Tulis pesan dulu");
-      return;
+  // Sync form when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      setUserMsg(initial?.user_message ?? "");
+      setAiResp(initial?.ai_response ?? "");
+      setRating(initial?.rating ?? null);
     }
-    if (sending) return;
-    setSending(true);
-    setResponse("");
-    try {
-      const content = role === "manager" ? `[Pesan dari Manager] ${text}` : text;
-      const res = await fnChat({ data: { messages: [{ role: "user", content }] } });
-      if (res.error) console.warn("[Training AI] LLM error:", res.error);
-      setResponse(res.reply || composeResponse(rooms, role));
-    } catch (e) {
-      console.warn("[Training AI] gagal:", (e as Error).message);
-      setResponse(composeResponse(rooms, role));
-    } finally {
-      setSending(false);
-    }
-  };
+  }, [open, initial]);
 
-  const persist = async (accepted: boolean) => {
-    if (!input.trim() || !response) {
-      toast.error("Belum ada percakapan untuk disimpan");
+  const handleSave = async () => {
+    if (!userMsg.trim() || !aiResp.trim()) {
+      toast.error("Pesan tamu dan respons AI wajib diisi");
       return;
     }
     setSaving(true);
     try {
-      await fnSave({ data: { userMessage: input.trim(), aiResponse: response, accepted } });
-      toast.success(
-        accepted ? "Disimpan sebagai dasar jawaban AI" : "Ditandai sebagai contoh ditolak",
-      );
-      setInput("");
-      setResponse("");
+      if (isEdit && initial) {
+        await fnUpdate({
+          data: {
+            id: initial.id,
+            userMessage: userMsg.trim(),
+            aiResponse: aiResp.trim(),
+            rating,
+          },
+        });
+        toast.success("Contoh percakapan diperbarui");
+      } else {
+        await fnCreate({
+          data: {
+            userMessage: userMsg.trim(),
+            aiResponse: aiResp.trim(),
+            accepted: rating === "good",
+          },
+        });
+        toast.success("Contoh percakapan disimpan");
+      }
+      onSaved();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -262,134 +157,307 @@ export function TrainingView() {
   };
 
   return (
-    <div className="flex flex-1 overflow-hidden">
-      {/* Main area — orchestration diagram */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-8">
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold tracking-tight">Training — Simulasi Percakapan</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Uji percakapan dan promosikan hasil terbaik. Yang dipromosikan dipakai AI chatbot
-              sebagai dasar jawaban.
-            </p>
-          </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? "Edit Contoh Percakapan" : "Tambah Contoh Percakapan"}
+          </DialogTitle>
+          <DialogDescription>
+            Tulis pasangan pesan tamu dan respons ideal AI. Tandai sebagai{" "}
+            <strong>Baik</strong> agar AI menggunakannya sebagai dasar jawaban.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="rounded-xl border border-border bg-white p-6">
-            <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Alur Orkestrasi AI
-            </p>
-            <FlowDiagram role={role} responded={!!response} />
-          </div>
-        </div>
-      </div>
-
-      {/* Right sidebar — simulation panel */}
-      <aside className="flex w-[340px] shrink-0 flex-col gap-4 overflow-y-auto border-l border-border bg-white p-5">
-        <div>
-          <p className="mb-2 text-sm font-semibold">Simulasi Chat</p>
-          <div className="flex gap-4">
-            {(["tamu", "manager"] as const).map((r) => (
-              <label key={r} className="flex cursor-pointer items-center gap-1.5 text-sm">
-                <input
-                  type="radio"
-                  checked={role === r}
-                  onChange={() => setRole(r)}
-                  className="accent-teal-700"
-                />
-                <span className="capitalize">{r}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Input */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold text-stone-600">Input</p>
-          <div className="rounded-lg border border-border p-2">
+        <div className="grid gap-4 py-2">
+          {/* User message */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Pesan Tamu</label>
             <Textarea
               rows={3}
-              value={input}
-              placeholder={
-                role === "tamu"
-                  ? "Halo, mau tanya hari ini kamar ready apa ya?"
-                  : "Pesan dari manager…"
-              }
-              className="border-0 p-1 shadow-none focus-visible:ring-0"
-              onChange={(e) => setInput(e.target.value)}
+              placeholder="Contoh: Halo kak, kamar deluxe ada yang kosong besok?"
+              value={userMsg}
+              onChange={(e) => setUserMsg(e.target.value)}
             />
-            <div className="mt-2 flex justify-end gap-2">
-              <Button
-                size="sm"
-                className="h-8 bg-orange-500 text-white hover:bg-orange-600"
-                onClick={() => {
-                  setInput("");
-                  setResponse("");
-                }}
-              >
-                <Trash2 className="mr-1 h-3.5 w-3.5" />
-                Hapus
-              </Button>
-              <Button
-                size="sm"
-                disabled={sending}
-                className="h-8 bg-teal-700 text-white hover:bg-teal-800"
-                onClick={send}
-              >
-                {sending ? (
-                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Send className="mr-1 h-3.5 w-3.5" />
-                )}
-                {sending ? "Mengirim…" : "Kirim"}
-              </Button>
+          </div>
+
+          {/* AI response */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Respons AI (ideal)</label>
+            <Textarea
+              rows={5}
+              placeholder="Contoh: Halo Kak! Untuk kamar Deluxe, kami cek dulu ketersediaannya ya..."
+              value={aiResp}
+              onChange={(e) => setAiResp(e.target.value)}
+            />
+          </div>
+
+          {/* Rating */}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Penilaian</label>
+            <div className="flex gap-3">
+              {(
+                [
+                  { value: "good", label: "Baik", icon: ThumbsUp, cls: "text-emerald-700 border-emerald-300 bg-emerald-50" },
+                  { value: "bad", label: "Buruk", icon: ThumbsDown, cls: "text-red-700 border-red-300 bg-red-50" },
+                ] as const
+              ).map(({ value, label, icon: Icon, cls }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRating(rating === value ? null : value)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium transition",
+                    rating === value ? cls : "border-border text-muted-foreground hover:bg-muted/40",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+              {rating && (
+                <button
+                  type="button"
+                  onClick={() => setRating(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Reset
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Response */}
-        <div>
-          <p className="mb-1.5 text-xs font-semibold text-stone-600">Response</p>
-          <div className="min-h-[160px] whitespace-pre-line rounded-lg border border-border bg-stone-50 p-3 text-sm text-stone-700">
-            {sending ? (
-              <span className="flex items-center gap-2 text-stone-400">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Menghubungi AI…
-              </span>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Batal
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Menyimpan...
+              </>
+            ) : isEdit ? (
+              "Simpan Perubahan"
             ) : (
-              response || (
-                <span className="text-stone-400">
-                  Tekan “Kirim” untuk menjalankan AI secara live.
-                </span>
-              )
+              "Tambah"
             )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Training view                                                        */
+/* ------------------------------------------------------------------ */
+
+const FILTER_TABS: { key: FilterTab; label: string }[] = [
+  { key: "all", label: "Semua" },
+  { key: "good", label: "Baik" },
+  { key: "bad", label: "Buruk" },
+  { key: "unrated", label: "Belum Dinilai" },
+];
+
+export function TrainingView() {
+  const fnList = useServerFn(listConversationLogs);
+  const fnDelete = useServerFn(deleteConversationLog);
+  const qc = useQueryClient();
+
+  const [filter, setFilter] = React.useState<FilterTab>("all");
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [editCtx, setEditCtx] = React.useState<LogRow | null>(null);
+  const [deleteCtx, setDeleteCtx] = React.useState<LogRow | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["training-logs", filter],
+    queryFn: () => fnList({ data: { rating: filter } }),
+  });
+  const logs = (data?.logs ?? []) as LogRow[];
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => fnDelete({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Contoh percakapan dihapus");
+      qc.invalidateQueries({ queryKey: ["training-logs"] });
+      setDeleteCtx(null);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["training-logs"] });
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-6 py-8">
+        {/* Header */}
+        <header className="mb-6 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Training Percakapan</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Kelola contoh pasangan pesan tamu dan respons ideal AI. Contoh yang dinilai{" "}
+              <strong>Baik</strong> digunakan sebagai dasar jawaban chatbot.
+            </p>
           </div>
+          <Button size="sm" className="gap-2 shrink-0" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Tambah Contoh
+          </Button>
+        </header>
+
+        {/* Filter tabs */}
+        <div className="mb-5 flex gap-1 rounded-lg border border-border bg-muted/30 p-1 w-fit">
+          {FILTER_TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setFilter(tab.key)}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm font-medium transition",
+                filter === tab.key
+                  ? "bg-white text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Promote / reject */}
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            size="sm"
-            disabled={saving || !response}
-            className="h-8 bg-orange-500 text-white hover:bg-orange-600"
-            onClick={() => persist(false)}
-          >
-            Tolak
-          </Button>
-          <Button
-            size="sm"
-            disabled={saving || !response}
-            className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700"
-            onClick={() => persist(true)}
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ArrowRight className="h-3.5 w-3.5" />
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            Memuat data...
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-20 text-center">
+            <MessageSquare className="h-10 w-10 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">
+              {filter === "all"
+                ? "Belum ada contoh percakapan."
+                : "Tidak ada contoh dengan filter ini."}
+            </p>
+            {filter === "all" && (
+              <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Tambah Contoh Pertama
+              </Button>
             )}
-            Promote
-          </Button>
-        </div>
-      </aside>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {logs.map((log) => (
+              <div
+                key={log.id}
+                className="rounded-xl border border-border bg-white p-4 transition hover:border-stone-300"
+              >
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <RatingBadge rating={log.rating} />
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {formatDate(log.created_at)}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {/* User message */}
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-stone-400">
+                      Pesan Tamu
+                    </p>
+                    <p className="line-clamp-4 text-sm text-stone-700">
+                      {log.user_message ?? "-"}
+                    </p>
+                  </div>
+
+                  {/* AI response */}
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-stone-400">
+                      Respons AI
+                    </p>
+                    <p className="line-clamp-4 text-sm text-stone-700">
+                      {log.ai_response ?? "-"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2.5 text-xs"
+                    onClick={() => setEditCtx(log)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2.5 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setDeleteCtx(log)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Hapus
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create dialog */}
+      <ExampleDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => {
+          invalidate();
+          setCreateOpen(false);
+        }}
+      />
+
+      {/* Edit dialog */}
+      <ExampleDialog
+        open={!!editCtx}
+        initial={editCtx}
+        onClose={() => setEditCtx(null)}
+        onSaved={() => {
+          invalidate();
+          setEditCtx(null);
+        }}
+      />
+
+      {/* Delete confirmation */}
+      <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Hapus contoh percakapan?</DialogTitle>
+            <DialogDescription>
+              Tindakan ini permanen dan tidak bisa dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteCtx && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <p className="line-clamp-2">{deleteCtx.user_message}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteCtx(null)}>
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMut.isPending}
+              onClick={() => deleteCtx && deleteMut.mutate(deleteCtx.id)}
+            >
+              {deleteMut.isPending ? "Menghapus..." : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

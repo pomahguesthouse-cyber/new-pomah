@@ -59,6 +59,7 @@ export type ManagedRoomType = {
   size_sqm?: number | null;
   capacity?: number | null;
   extrabed_capacity?: number | null;
+  extrabed_rate?: number | null;
   base_rate?: number | null;
   amenities?: string[] | null;
   hero_image_url?: string | null;
@@ -95,6 +96,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [bedType, setBedType] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
   const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
+  const [extrabedRate, setExtrabedRate] = React.useState(0);
   const [baseRate, setBaseRate] = React.useState(0);
   const [sizeSqm, setSizeSqm] = React.useState<number | "">("");
   const [description, setDescription] = React.useState("");
@@ -163,6 +165,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setBedType(roomType.bed_type ?? "");
       setCapacity(roomType.capacity ?? 2);
       setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
+      setExtrabedRate(Number(roomType.extrabed_rate ?? 0));
       setBaseRate(Number(roomType.base_rate ?? 0));
       setSizeSqm(roomType.size_sqm ?? "");
       setDescription(roomType.description ?? "");
@@ -183,6 +186,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setBedType("");
       setCapacity(2);
       setExtrabedCapacity(0);
+      setExtrabedRate(0);
       setBaseRate(0);
       setSizeSqm("");
       setDescription("");
@@ -203,6 +207,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
         capacity: Number(capacity) || 1,
         extrabed_capacity: Number(extrabedCapacity) || 0,
+        extrabed_rate: Number(extrabedRate) || 0,
         base_rate: Number(baseRate) || 0,
         amenities: amenities
           .split(",")
@@ -396,6 +401,39 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 <p className="text-[10px] text-muted-foreground">
                   Harga acuan per malam untuk tipe kamar ini.
                 </p>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <p className="mb-3 text-sm font-medium">Add-ons</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Harga Extra Bed (per malam, Rp)</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={extrabedRate}
+                      onChange={(e) => setExtrabedRate(Number(e.target.value))}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Biaya tambahan per malam jika tamu menambah extra bed.
+                      Isi 0 jika gratis atau tidak tersedia.
+                    </p>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Maks Extra Bed</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={extrabedCapacity}
+                      onChange={(e) => setExtrabedCapacity(Number(e.target.value))}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Jumlah maksimal extra bed yang bisa ditambahkan ke kamar ini.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

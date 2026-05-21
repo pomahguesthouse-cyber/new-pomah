@@ -118,6 +118,44 @@ export const setWebchatTraining = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deleteConversationLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("ai_conversation_logs")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const updateConversationLog = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        userMessage: z.string().min(1).max(4000),
+        aiResponse: z.string().min(1).max(8000),
+        rating: z.enum(["good", "bad"]).nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("ai_conversation_logs")
+      .update({
+        user_message: data.userMessage,
+        ai_response: data.aiResponse,
+        rating: data.rating,
+        used: data.rating === "good",
+      })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const exportTrainingData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
