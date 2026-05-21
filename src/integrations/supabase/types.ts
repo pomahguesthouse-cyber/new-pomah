@@ -313,6 +313,50 @@ export type Database = {
         }
         Relationships: []
       }
+      invoices: {
+        Row: {
+          booking_id: string
+          created_at: string
+          id: string
+          invoice_number: string
+          issued_at: string
+          payment_status_snapshot: string | null
+          pdf_url: string | null
+          regenerated_at: string | null
+          wa_sent_at: string | null
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string
+          id?: string
+          invoice_number: string
+          issued_at?: string
+          payment_status_snapshot?: string | null
+          pdf_url?: string | null
+          regenerated_at?: string | null
+          wa_sent_at?: string | null
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string
+          id?: string
+          invoice_number?: string
+          issued_at?: string
+          payment_status_snapshot?: string | null
+          pdf_url?: string | null
+          regenerated_at?: string | null
+          wa_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: true
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       landing_page_versions: {
         Row: {
           content: Json
@@ -711,6 +755,246 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_agent_logs: {
+        Row: {
+          agent_key: string
+          created_at: string
+          details: string | null
+          id: string
+          status: string
+          task_description: string
+        }
+        Insert: {
+          agent_key: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          status: string
+          task_description: string
+        }
+        Update: {
+          agent_key?: string
+          created_at?: string
+          details?: string | null
+          id?: string
+          status?: string
+          task_description?: string
+        }
+        Relationships: []
+      }
+      seo_ai_visibility: {
+        Row: {
+          engine: string
+          id: string
+          last_checked: string
+          mention_count: number | null
+          uncovered_topics: Json
+          visibility_score: number | null
+        }
+        Insert: {
+          engine: string
+          id?: string
+          last_checked?: string
+          mention_count?: number | null
+          uncovered_topics?: Json
+          visibility_score?: number | null
+        }
+        Update: {
+          engine?: string
+          id?: string
+          last_checked?: string
+          mention_count?: number | null
+          uncovered_topics?: Json
+          visibility_score?: number | null
+        }
+        Relationships: []
+      }
+      seo_content_tasks: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          keyword_focus: string | null
+          meta_description: string | null
+          meta_title: string | null
+          readability_score: number | null
+          seo_score: number | null
+          status: string | null
+          title: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          keyword_focus?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          readability_score?: number | null
+          seo_score?: number | null
+          status?: string | null
+          title: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          keyword_focus?: string | null
+          meta_description?: string | null
+          meta_title?: string | null
+          readability_score?: number | null
+          seo_score?: number | null
+          status?: string | null
+          title?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_faq_insights: {
+        Row: {
+          created_at: string
+          id: string
+          question: string
+          recurring_count: number | null
+          source_conversations: Json
+          status: string | null
+          suggested_answer: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question: string
+          recurring_count?: number | null
+          source_conversations?: Json
+          status?: string | null
+          suggested_answer?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question?: string
+          recurring_count?: number | null
+          source_conversations?: Json
+          status?: string | null
+          suggested_answer?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_generated_pages: {
+        Row: {
+          content: string | null
+          created_at: string
+          id: string
+          meta_description: string | null
+          meta_title: string | null
+          published: boolean | null
+          schema_markup: Json
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          published?: boolean | null
+          schema_markup?: Json
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          id?: string
+          meta_description?: string | null
+          meta_title?: string | null
+          published?: boolean | null
+          schema_markup?: Json
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_internal_links: {
+        Row: {
+          anchor_text: string
+          created_at: string
+          id: string
+          source_url: string
+          status: string | null
+          suggested_by_ai: boolean | null
+          target_url: string
+        }
+        Insert: {
+          anchor_text: string
+          created_at?: string
+          id?: string
+          source_url: string
+          status?: string | null
+          suggested_by_ai?: boolean | null
+          target_url: string
+        }
+        Update: {
+          anchor_text?: string
+          created_at?: string
+          id?: string
+          source_url?: string
+          status?: string | null
+          suggested_by_ai?: boolean | null
+          target_url?: string
+        }
+        Relationships: []
+      }
+      seo_keywords: {
+        Row: {
+          created_at: string
+          difficulty: number | null
+          id: string
+          intent: string | null
+          keyword: string
+          priority: string | null
+          ranking_position: number | null
+          search_volume: number | null
+          traffic_opportunity: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          difficulty?: number | null
+          id?: string
+          intent?: string | null
+          keyword: string
+          priority?: string | null
+          ranking_position?: number | null
+          search_volume?: number | null
+          traffic_opportunity?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          difficulty?: number | null
+          id?: string
+          intent?: string | null
+          keyword?: string
+          priority?: string | null
+          ranking_position?: number | null
+          search_volume?: number | null
+          traffic_opportunity?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       seo_pages: {
         Row: {
           description: string | null
@@ -734,6 +1018,72 @@ export type Database = {
           og_image_url?: string | null
           slug?: string
           title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      seo_review_analysis: {
+        Row: {
+          content: string | null
+          created_at: string
+          extracted_keywords: Json
+          guest_name: string | null
+          id: string
+          rating: number | null
+          review_source: string
+          sentiment: string | null
+          seo_suggestions: Json
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          extracted_keywords?: Json
+          guest_name?: string | null
+          id?: string
+          rating?: number | null
+          review_source: string
+          sentiment?: string | null
+          seo_suggestions?: Json
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          extracted_keywords?: Json
+          guest_name?: string | null
+          id?: string
+          rating?: number | null
+          review_source?: string
+          sentiment?: string | null
+          seo_suggestions?: Json
+        }
+        Relationships: []
+      }
+      seo_schema_registry: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          id: string
+          json_ld: Json
+          name: string
+          schema_type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          json_ld: Json
+          name: string
+          schema_type: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          id?: string
+          json_ld?: Json
+          name?: string
+          schema_type?: string
           updated_at?: string
         }
         Relationships: []
@@ -775,8 +1125,10 @@ export type Database = {
       }
       sop_documents: {
         Row: {
+          agent_key: string | null
           content: string | null
           created_at: string
+          doc_category: string
           file_path: string | null
           file_type: string | null
           id: string
@@ -785,8 +1137,10 @@ export type Database = {
           source_url: string | null
         }
         Insert: {
+          agent_key?: string | null
           content?: string | null
           created_at?: string
+          doc_category?: string
           file_path?: string | null
           file_type?: string | null
           id?: string
@@ -795,8 +1149,10 @@ export type Database = {
           source_url?: string | null
         }
         Update: {
+          agent_key?: string | null
           content?: string | null
           created_at?: string
+          doc_category?: string
           file_path?: string | null
           file_type?: string | null
           id?: string
@@ -855,6 +1211,92 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      wa_conversation_queue: {
+        Row: {
+          attempt: number
+          completed_at: string | null
+          created_at: string
+          first_message_at: string
+          heartbeat_at: string | null
+          id: string
+          last_error: string | null
+          last_message_body: string
+          last_message_id: string | null
+          lock_expires_at: string | null
+          locked_at: string | null
+          max_attempts: number
+          max_wait_until: string
+          message_count: number
+          next_retry_at: string | null
+          phone: string
+          process_after: string
+          reply_text: string | null
+          started_at: string | null
+          status: string
+          thread_id: string
+          updated_at: string
+          worker_id: string | null
+        }
+        Insert: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          first_message_at?: string
+          heartbeat_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_message_body?: string
+          last_message_id?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          max_wait_until?: string
+          message_count?: number
+          next_retry_at?: string | null
+          phone: string
+          process_after?: string
+          reply_text?: string | null
+          started_at?: string | null
+          status?: string
+          thread_id: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Update: {
+          attempt?: number
+          completed_at?: string | null
+          created_at?: string
+          first_message_at?: string
+          heartbeat_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_message_body?: string
+          last_message_id?: string | null
+          lock_expires_at?: string | null
+          locked_at?: string | null
+          max_attempts?: number
+          max_wait_until?: string
+          message_count?: number
+          next_retry_at?: string | null
+          phone?: string
+          process_after?: string
+          reply_text?: string | null
+          started_at?: string | null
+          status?: string
+          thread_id?: string
+          updated_at?: string
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_conversation_queue_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       wa_message_queue: {
         Row: {
@@ -1061,13 +1503,16 @@ export type Database = {
     Views: {
       wa_queue_stats: {
         Row: {
-          done: number | null
+          avg_delay_ms: number | null
+          avg_msgs_per_burst: number | null
+          avg_total_response_ms: number | null
           failed: number | null
           hour_wib: string | null
-          pending: number | null
           processing: number | null
-          skipped: number | null
-          total: number | null
+          queued: number | null
+          retrying: number | null
+          sent: number | null
+          total_bursts: number | null
         }
         Relationships: []
       }
@@ -1173,6 +1618,59 @@ export type Database = {
       update_thread_autoreply_meta: {
         Args: { p_thread_id: string; p_tools_used: string[] }
         Returns: undefined
+      }
+      wa_queue_claim: {
+        Args: { p_entry_id: string; p_worker_id: string }
+        Returns: {
+          attempt: number
+          claimed: boolean
+          last_message_body: string
+          message_count: number
+        }[]
+      }
+      wa_queue_claim_retry: {
+        Args: { p_entry_id: string; p_worker_id: string }
+        Returns: {
+          attempt: number
+          claimed: boolean
+          last_message_body: string
+          message_count: number
+        }[]
+      }
+      wa_queue_cleanup_zombies: { Args: never; Returns: number }
+      wa_queue_complete: {
+        Args: { p_entry_id: string; p_reply: string; p_worker_id: string }
+        Returns: undefined
+      }
+      wa_queue_fail: {
+        Args: { p_entry_id: string; p_error: string; p_worker_id: string }
+        Returns: string
+      }
+      wa_queue_get_retrying: {
+        Args: { p_phone: string }
+        Returns: {
+          attempt: number
+          entry_id: string
+        }[]
+      }
+      wa_queue_heartbeat: {
+        Args: { p_entry_id: string; p_worker_id: string }
+        Returns: boolean
+      }
+      wa_queue_upsert: {
+        Args: {
+          p_body: string
+          p_delay_ms: number
+          p_max_wait_ms: number
+          p_message_id: string
+          p_phone: string
+          p_thread_id: string
+        }
+        Returns: {
+          entry_id: string
+          is_new_burst: boolean
+          sleep_ms: number
+        }[]
       }
     }
     Enums: {
