@@ -56,6 +56,7 @@ import {
   getReviewIntelligence,
   getSearchConsoleData,
   generateAndSaveLocalBusinessSchema,
+  triggerSeoAgentAction,
 } from "@/admin/modules/seo/seo.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

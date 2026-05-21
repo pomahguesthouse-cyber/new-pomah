@@ -59,7 +59,7 @@ function PublicRooms() {
       {/* Rooms grid */}
       <section className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-8 md:grid-cols-2">
-          {rooms.map((rt) => (
+          {rooms.map((rt: any) => (
             <article
               key={rt.id}
               className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:shadow-xl"
@@ -108,7 +108,7 @@ function PublicRooms() {
 
                 {rt.amenities && rt.amenities.length > 0 && (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {rt.amenities.map((a) => (
+                    {rt.amenities.map((a: any) => (
                       <span
                         key={a}
                         className="rounded-full border border-stone-200 px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-500"

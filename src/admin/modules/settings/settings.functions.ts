@@ -87,11 +87,11 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const patch: Record<string, unknown> = {};
+    const d = data as Record<string, unknown>;
     for (const k of PROPERTY_CORE_FIELDS) {
-      if (data[k] !== undefined) {
-        // Handle literal empty string for email fallback to null
-        if (k === "email" && data[k] === "") patch[k] = null;
-        else patch[k] = data[k];
+      if (d[k] !== undefined) {
+        if (k === "email" && d[k] === "") patch[k] = null;
+        else patch[k] = d[k];
       }
     }
     const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);

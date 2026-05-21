@@ -81,7 +81,7 @@ function BookPage() {
   const prefillRoom = search.room;
   useEffect(() => {
     if (!prefillRoom || rooms.length === 0) return;
-    const match = rooms.find((r) => r.slug === prefillRoom || r.id === prefillRoom);
+    const match = rooms.find((r: any) => r.slug === prefillRoom || r.id === prefillRoom);
     if (match) setForm((f) => (f.roomTypeId ? f : { ...f, roomTypeId: match.id }));
   }, [prefillRoom, rooms]);
 
@@ -133,7 +133,7 @@ function BookPage() {
                   <SelectValue placeholder="Pilih tipe kamar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {rooms.map((r) => (
+                  {rooms.map((r: any) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.name} — Rp {Number(r.base_rate).toLocaleString("id-ID")}/malam
                     </SelectItem>

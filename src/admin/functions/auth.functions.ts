@@ -44,7 +44,7 @@ export const getAccessBootstrapStatus = createServerFn({ method: "GET" }).handle
 
     if (adminRowsError) throw adminRowsError;
 
-    const adminIds = [...new Set((adminRows ?? []).map((row) => row.user_id))];
+    const adminIds = [...new Set((adminRows ?? []).map((row: any) => row.user_id))];
 
     if (adminIds.length > 0) {
       const { data: profiles, error: profilesError } = await supabaseAdmin
@@ -55,8 +55,8 @@ export const getAccessBootstrapStatus = createServerFn({ method: "GET" }).handle
       if (profilesError) throw profilesError;
 
       adminNames = (profiles ?? [])
-        .map((profile) => profile.full_name)
-        .filter((name): name is string => Boolean(name));
+        .map((profile: any) => profile.full_name)
+        .filter((name: any): name is string => Boolean(name));
     }
   }
 
