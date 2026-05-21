@@ -57,6 +57,17 @@ interface SopCache {
 let globalSopCache: SopCache | null = null;
 const SOP_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache TTL
 
+/**
+ * Identify a brochure doc by doc_category OR by its storage path prefix.
+ * The path-based check handles files uploaded before the doc_category column
+ * was migrated (those have doc_category = null or 'sop').
+ */
+function isBrosurDoc(d: Record<string, unknown>): boolean {
+  if ((d.doc_category as string) === "brosur") return true;
+  const fp = (d.file_path as string | null) ?? "";
+  return fp.startsWith("brosur/");
+}
+
 /** Circuit breaker status */
 let aiFailureCount = 0;
 let aiCooldownUntil = 0;
@@ -314,7 +325,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
             const parts: string[] = [];
             for (const d of sopDocs) {
-              if ((d.doc_category as string) === "brosur") continue;
+              if (isBrosurDoc(d)) continue;
               const content = (d.content as string | undefined)?.trim();
               const url     = (d.source_url as string | undefined)?.trim();
               if (!content && !url) continue;
@@ -329,7 +340,7 @@ export const Route = createFileRoute("/api/fonnte")({
           const brosurFiles: { name: string; url: string }[] = [];
           if (globalSopCache) {
             for (const d of globalSopCache.docs) {
-              if ((d.doc_category as string) !== "brosur") continue;
+              if (!isBrosurDoc(d)) continue;
               const fp = (d.file_path as string | undefined)?.trim();
               if (!fp) continue;
               brosurFiles.push({
