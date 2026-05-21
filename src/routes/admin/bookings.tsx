@@ -66,6 +66,7 @@ type BookingListRow = {
   reference_code?: string | null;
   check_in: string;
   check_out: string;
+  created_at?: string | null;
   status: BookingStatus;
   source: string;
   total_amount: number;
@@ -89,6 +90,16 @@ function formatDateID(iso: string | null | undefined) {
   const [y, m, d] = iso.split("-");
   if (!y || !m || !d) return iso;
   return `${d}/${m}/${y}`;
+}
+
+function formatDateTimeID(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta",
+  });
 }
 
 function nightsBetween(checkIn: string | null | undefined, checkOut: string | null | undefined) {
@@ -325,20 +336,21 @@ function BookingsPage() {
                 <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Pembayaran</th>
                 <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Status</th>
                 <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Sumber</th>
+                <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border">Tgl Pemesanan</th>
                 <th className="sticky top-0 z-10 bg-muted px-4 py-3 border-b border-border rounded-tr-lg" />
               </tr>
             </thead>
           <tbody className="divide-y divide-border">
             {isLoading && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             )}
             {!isLoading && !error && bookings.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   {filtersActive ? (
                     <>Tidak ada booking yang cocok dengan filter ini.</>
                   ) : (
@@ -421,6 +433,9 @@ function BookingsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline">{b.source}</Badge>
+                </td>
+                <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
+                  {formatDateTimeID(b.created_at)}
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <Button
