@@ -34,6 +34,9 @@ import {
   ExternalLink,
   Settings2,
   Home,
+  ChevronDown,
+  ChevronRight,
+  FileText,
 } from "lucide-react";
 // useQuery already imported above; useMutation available if needed
 import {
@@ -131,8 +134,11 @@ function HomepageBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLp?.id]);
 
-  // SEO settings popup target (a landing page) — null = closed.
-  const [seoTarget, setSeoTarget] = useState<SeoLandingPage | null>(null);
+  // "Site Pages and Menu" modal (Wix-style) + which page's settings panel is open.
+  const [pagesOpen, setPagesOpen] = useState(false);
+  const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
+  const openPageSettings = (id: string) => { setSettingsPageId(id); setPagesOpen(true); };
+  const activeName = activePageId === "home" ? "Home" : (activeLp?.title ?? "Home");
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
@@ -237,19 +243,17 @@ function HomepageBuilder() {
             </p>
             <h1 className="text-lg font-semibold tracking-tight">Page Builder</h1>
           </div>
-          {/* Page selector — mirrors the Site Menu */}
+          {/* Page selector — opens the "Site Pages and Menu" modal */}
           <div className="ml-4 flex items-center gap-1.5">
             <span className="text-xs text-muted-foreground">Page:</span>
-            <select
-              value={activePageId}
-              onChange={(e) => setActivePageId(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            <button
+              type="button"
+              onClick={() => { setSettingsPageId(null); setPagesOpen(true); }}
+              className="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
             >
-              <option value="home">Home</option>
-              {pages.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </select>
+              {activeName}
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
           </div>
         </div>
         <Button
@@ -270,7 +274,7 @@ function HomepageBuilder() {
           onSelect={setActivePageId}
           onAdd={handleAddPage}
           onDelete={handleDeletePage}
-          onSeo={(p) => setSeoTarget(p)}
+          onSeo={(p) => openPageSettings(p.id)}
         />
 
         {/* ── Centre: live preview ── */}
@@ -293,7 +297,7 @@ function HomepageBuilder() {
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="truncate text-sm font-semibold">Edit — {activeLp.title}</p>
                 <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
-                  onClick={() => setSeoTarget(activeLp)}>
+                  onClick={() => openPageSettings(activeLp.id)}>
                   <Settings2 className="h-3.5 w-3.5" /> SEO
                 </Button>
               </div>
@@ -344,10 +348,17 @@ function HomepageBuilder() {
         </aside>
       </div>
 
-      {/* SEO settings popup (landing pages) */}
-      <SeoPopup
-        page={seoTarget}
-        onClose={() => setSeoTarget(null)}
+      {/* "Site Pages and Menu" modal (Wix-style) */}
+      <SitePagesModal
+        open={pagesOpen}
+        onClose={() => setPagesOpen(false)}
+        pages={pages}
+        activePageId={activePageId}
+        settingsPageId={settingsPageId}
+        onSettingsPage={setSettingsPageId}
+        onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
+        onAdd={handleAddPage}
+        onDelete={handleDeletePage}
         onSaved={() => lpQuery.refetch()}
       />
     </div>
@@ -1162,22 +1173,22 @@ function SiteMenu({
 }
 
 /**
- * SEO settings popup — Wix-style modal with three tabs:
- * SEO Basics · Advanced SEO · Social Share. Operates on a single
- * landing page; saves only the SEO/meta fields.
+ * Page Settings panel — Wix-style "Page Settings (name)" with four tabs:
+ * Access · SEO basics · Advanced SEO · Social share. Operates on one
+ * landing page and saves its SEO/meta fields. Rendered inside SitePagesModal.
  */
-type SeoPopupTab = "basics" | "advanced" | "social";
+type PageSettingsTab = "access" | "basics" | "advanced" | "social";
 
-function SeoPopup({
+function PageSettingsPanel({
   page,
-  onClose,
   onSaved,
+  onClose,
 }: {
-  page: SeoLandingPage | null;
-  onClose: () => void;
+  page: SeoLandingPage;
   onSaved: () => void;
+  onClose: () => void;
 }) {
-  const [tab, setTab] = useState<SeoPopupTab>("basics");
+  const [tab, setTab] = useState<PageSettingsTab>("access");
   const [saving, setSaving] = useState(false);
 
   const [metaTitle, setMetaTitle] = useState("");
@@ -1185,15 +1196,12 @@ function SeoPopup({
   const [targetKw, setTargetKw]   = useState("");
   const [ogImage, setOgImage]     = useState("");
   const [indexable, setIndexable] = useState(true);
-  // Advanced SEO
   const [customHead, setCustomHead]   = useState("");
   const [customRobots, setCustomRobots] = useState("");
   const [jsonLdOn, setJsonLdOn]       = useState(true);
   const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
-    if (!page) return;
-    setTab("basics");
     setMetaTitle(page.meta_title ?? "");
     setMetaDesc(page.meta_description ?? "");
     setTargetKw(page.target_keyword ?? "");
@@ -1203,9 +1211,7 @@ function SeoPopup({
     setCustomRobots(page.custom_robots ?? "");
     setJsonLdOn(page.json_ld_enabled ?? true);
     setCustomJsonLd(page.custom_json_ld ?? "");
-  }, [page?.id]);
-
-  if (!page) return null;
+  }, [page.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1224,9 +1230,8 @@ function SeoPopup({
           custom_json_ld:   customJsonLd || null,
         },
       });
-      toast.success("Pengaturan SEO tersimpan");
+      toast.success("Pengaturan halaman tersimpan");
       onSaved();
-      onClose();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -1234,165 +1239,292 @@ function SeoPopup({
     }
   };
 
-  const tabs: { key: SeoPopupTab; label: string }[] = [
-    { key: "basics",   label: "SEO Basics"   },
+  const tabs: { key: PageSettingsTab; label: string }[] = [
+    { key: "access",   label: "Access"       },
+    { key: "basics",   label: "SEO basics"   },
     { key: "advanced", label: "Advanced SEO" },
-    { key: "social",   label: "Social Share" },
+    { key: "social",   label: "Social share" },
   ];
 
   return (
-    <Dialog open={!!page} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Settings2 className="h-4 w-4 text-teal-600" />
-            Pengaturan SEO — {page.title}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            Kelola bagaimana halaman ini tampil di mesin pencari dan media sosial.
-          </DialogDescription>
+    <div className="flex h-full min-w-0 flex-1 flex-col">
+      <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
+        <p className="truncate text-sm font-semibold">Page Settings ({page.title})</p>
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-stone-200 px-3">
+        {tabs.map((t) => (
+          <button key={t.key} type="button" onClick={() => setTab(t.key)}
+            className={cn(
+              "px-3 py-2.5 text-xs font-medium transition",
+              tab === t.key ? "border-b-2 border-teal-600 text-teal-700" : "text-muted-foreground hover:text-foreground",
+            )}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* ── Access ── */}
+        {tab === "access" && (
+          <div className="space-y-4">
+            <FieldRow label="URL halaman">
+              <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                <span className="text-muted-foreground">pomahguesthouse.com/lp/</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-stone-700">{page.slug}</span>
+              </div>
+            </FieldRow>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+              <div>
+                <p className="text-xs font-medium">Halaman dipublikasikan</p>
+                <p className="text-[10px] text-muted-foreground">Terlihat publik & dapat diindeks Google.</p>
+              </div>
+              <Switch checked={indexable} onCheckedChange={setIndexable} />
+            </div>
+            <a href={`/lp/${page.slug}`} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
+              <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
+            </a>
+          </div>
+        )}
+
+        {/* ── SEO basics ── */}
+        {tab === "basics" && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+              <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Preview on Google</p>
+              <p className="text-[12px] text-stone-500">pomahguesthouse.com › lp › {page.slug}</p>
+              <p className="text-[15px] font-medium text-blue-700 leading-snug">{metaTitle || page.title || "Title tag belum diisi"}</p>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
+              </p>
+            </div>
+            <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
+              <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="Judul di hasil pencarian" />
+              <p className={cn("mt-0.5 text-[10px]", metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground")}>Idealnya 50–60 karakter</p>
+            </FieldRow>
+            <FieldRow label={`Meta description (${metaDesc.length}/160)`}>
+              <Textarea value={metaDesc} onChange={(e) => setMetaDesc(e.target.value)} rows={3} placeholder="Deskripsi singkat di hasil pencarian." />
+              <p className={cn("mt-0.5 text-[10px]", metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground")}>Idealnya 120–160 karakter</p>
+            </FieldRow>
+          </div>
+        )}
+
+        {/* ── Advanced SEO ── */}
+        {tab === "advanced" && (
+          <div className="space-y-4">
+            <FieldRow label="Kata kunci target">
+              <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)} placeholder="mis. penginapan wisuda unnes semarang" />
+            </FieldRow>
+            <FieldRow label="Custom Head Scripts">
+              <Textarea value={customHead} onChange={(e) => setCustomHead(e.target.value)} rows={5} className="font-mono text-xs"
+                placeholder={'<meta name="..."> · <script>...</script> · tag verifikasi, analytics, dll.'} />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Disisipkan ke dalam &lt;head&gt; halaman ini.</p>
+            </FieldRow>
+            <FieldRow label="Custom robots.txt">
+              <Textarea value={customRobots} onChange={(e) => setCustomRobots(e.target.value)} rows={4} className="font-mono text-xs"
+                placeholder={"User-agent: *\nAllow: /"} />
+            </FieldRow>
+            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+              <div>
+                <p className="text-xs font-medium">Enable Structured Data (JSON-LD)</p>
+                <p className="text-[10px] text-muted-foreground">Sisipkan data terstruktur ke halaman.</p>
+              </div>
+              <Switch checked={jsonLdOn} onCheckedChange={setJsonLdOn} />
+            </div>
+            {jsonLdOn && (
+              <FieldRow label="Custom JSON-LD Schema">
+                <Textarea value={customJsonLd} onChange={(e) => setCustomJsonLd(e.target.value)} rows={8} className="font-mono text-xs"
+                  placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "Hotel",\n  "name": "Pomah Guesthouse"\n}'} />
+                <p className="mt-0.5 text-[10px] text-muted-foreground">Harus JSON yang valid.</p>
+              </FieldRow>
+            )}
+          </div>
+        )}
+
+        {/* ── Social share ── */}
+        {tab === "social" && (
+          <div className="space-y-4">
+            <FieldRow label="Gambar share (OG Image)">
+              <ImageField value={ogImage} onChange={setOgImage} kind="image" />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Muncul saat halaman dibagikan di media sosial.</p>
+            </FieldRow>
+            <div className="overflow-hidden rounded-lg border border-stone-200">
+              <div className="flex h-36 items-center justify-center bg-stone-100">
+                {ogImage ? <img src={ogImage} alt="" className="h-full w-full object-cover" /> : <Images className="h-6 w-6 text-stone-300" />}
+              </div>
+              <div className="bg-white px-3 py-2">
+                <p className="text-[10px] uppercase text-stone-400">pomahguesthouse.com</p>
+                <p className="truncate text-sm font-semibold text-stone-800">{metaTitle || page.title}</p>
+                <p className="line-clamp-2 text-xs text-stone-500">{metaDesc || "Meta description belum diisi…"}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
+        <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
+          {saving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyimpan…</> : <><Save className="mr-1.5 h-3.5 w-3.5" />Simpan</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Site Pages and Menu — Wix-style modal. Left rail switches between
+ * "Site Menu" and "Dynamic Pages"; the middle column lists pages with
+ * "+ Add Page" and a per-row ⋯ that opens the Page Settings panel.
+ */
+type SitePagesRail = "menu" | "dynamic";
+
+function SitePagesModal({
+  open,
+  onClose,
+  pages,
+  activePageId,
+  settingsPageId,
+  onSettingsPage,
+  onSelect,
+  onAdd,
+  onDelete,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  pages: SeoLandingPage[];
+  activePageId: string;
+  settingsPageId: string | null;
+  onSettingsPage: (id: string | null) => void;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+  onDelete: (p: SeoLandingPage) => void;
+  onSaved: () => void;
+}) {
+  const [rail, setRail] = useState<SitePagesRail>("menu");
+  const settingsLp = settingsPageId && settingsPageId !== "home"
+    ? pages.find((p) => p.id === settingsPageId) ?? null
+    : null;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="flex h-[80vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-stone-200 px-5 py-4">
+          <DialogTitle className="text-base">Site Pages and Menu</DialogTitle>
+          <DialogDescription className="sr-only">Kelola halaman situs, menu, dan pengaturan SEO.</DialogDescription>
         </DialogHeader>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 border-b border-stone-200">
-          {tabs.map((t) => (
-            <button key={t.key} type="button" onClick={() => setTab(t.key)}
-              className={cn(
-                "px-3 py-2 text-xs font-medium transition",
-                tab === t.key
-                  ? "border-b-2 border-teal-600 text-teal-700"
-                  : "text-muted-foreground hover:text-foreground",
-              )}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <div className="flex min-h-0 flex-1">
+          {/* Left rail */}
+          <div className="w-40 shrink-0 space-y-1 border-r border-stone-200 bg-stone-50/60 p-3">
+            {([["menu", "Site Menu"], ["dynamic", "Dynamic Pages"]] as const).map(([key, label]) => (
+              <button key={key} type="button" onClick={() => setRail(key)}
+                className={cn(
+                  "w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition",
+                  rail === key ? "bg-teal-50 text-teal-800" : "text-stone-600 hover:bg-stone-100",
+                )}>
+                {label}
+              </button>
+            ))}
+          </div>
 
-        <div className="max-h-[55vh] overflow-y-auto py-1">
-          {/* ── SEO Basics ── */}
-          {tab === "basics" && (
-            <div className="space-y-4">
-              {/* Google search preview */}
-              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-                <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">
-                  Pratinjau Hasil Pencarian
-                </p>
-                <p className="text-[12px] text-stone-500">pomahguesthouse.com › lp › {page.slug}</p>
-                <p className="text-[15px] font-medium text-blue-700 hover:underline cursor-pointer leading-snug">
-                  {metaTitle || page.title || "Title tag belum diisi"}
-                </p>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
-                </p>
-              </div>
-
-              <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
-                <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)}
-                  placeholder="Judul yang tampil di hasil pencarian" />
-                <p className={cn("mt-0.5 text-[10px]", metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground")}>
-                  Idealnya 50–60 karakter
-                </p>
-              </FieldRow>
-
-              <FieldRow label={`Meta description (${metaDesc.length}/160)`}>
-                <Textarea value={metaDesc} onChange={(e) => setMetaDesc(e.target.value)} rows={3}
-                  placeholder="Deskripsi singkat yang muncul di hasil pencarian." />
-                <p className={cn("mt-0.5 text-[10px]", metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground")}>
-                  Idealnya 120–160 karakter
-                </p>
-              </FieldRow>
-
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium">Izinkan mesin pencari mengindeks halaman ini</p>
-                  <p className="text-[10px] text-muted-foreground">Halaman dipublikasikan & terlihat di Google.</p>
+          {/* Page list */}
+          <div className="flex w-72 shrink-0 flex-col border-r border-stone-200">
+            {rail === "menu" ? (
+              <>
+                <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+                  <p className="text-sm font-semibold">Site Menu</p>
+                  <button type="button" onClick={onAdd}
+                    className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900">
+                    <Plus className="h-3.5 w-3.5" /> Add Page
+                  </button>
                 </div>
-                <Switch checked={indexable} onCheckedChange={setIndexable} />
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {/* Home */}
+                  <PageRow
+                    icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
+                    label="Home" active={activePageId === "home"} settingsActive={settingsPageId === "home"}
+                    onClick={() => onSelect("home")} onSettings={() => onSettingsPage("home")}
+                  />
+                  {pages.map((p) => (
+                    <PageRow key={p.id}
+                      icon={<FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />}
+                      label={p.title} active={activePageId === p.id} settingsActive={settingsPageId === p.id}
+                      published={p.published}
+                      onClick={() => onSelect(p.id)} onSettings={() => onSettingsPage(p.id)}
+                      onDelete={() => onDelete(p)}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                <FileText className="h-8 w-8 text-stone-200" />
+                <p className="text-xs text-muted-foreground">Belum ada Dynamic Pages.</p>
+                <p className="text-[10px] text-stone-400">Halaman dinamis dari koleksi data akan tampil di sini.</p>
               </div>
+            )}
+          </div>
+
+          {/* Page Settings */}
+          {settingsLp ? (
+            <PageSettingsPanel page={settingsLp} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
+          ) : settingsPageId === "home" ? (
+            <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+              <Home className="h-8 w-8 text-stone-200" />
+              <p className="text-sm font-medium text-stone-500">Page Settings (Home)</p>
+              <p className="max-w-xs text-xs text-muted-foreground">
+                Halaman depan diatur lewat panel editor di sebelah kanan builder. SEO situs dikelola di menu AI SEO.
+              </p>
             </div>
-          )}
-
-          {/* ── Advanced SEO ── */}
-          {tab === "advanced" && (
-            <div className="space-y-4">
-              <FieldRow label="Kata kunci target">
-                <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)}
-                  placeholder="mis. penginapan wisuda unnes semarang" />
-              </FieldRow>
-
-              <FieldRow label="Custom Head Scripts">
-                <Textarea value={customHead} onChange={(e) => setCustomHead(e.target.value)} rows={5}
-                  className="font-mono text-xs"
-                  placeholder={'<meta name="..."> · <script>...</script> · tag verifikasi, analytics, dll.'} />
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Disisipkan ke dalam &lt;head&gt; halaman ini. Untuk verifikasi situs, pixel, atau analytics.
-                </p>
-              </FieldRow>
-
-              <FieldRow label="Custom robots.txt">
-                <Textarea value={customRobots} onChange={(e) => setCustomRobots(e.target.value)} rows={5}
-                  className="font-mono text-xs"
-                  placeholder={"User-agent: *\nAllow: /"} />
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Aturan crawler khusus untuk halaman ini.
-                </p>
-              </FieldRow>
-
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium">Enable Structured Data (JSON-LD)</p>
-                  <p className="text-[10px] text-muted-foreground">Sisipkan data terstruktur ke halaman.</p>
-                </div>
-                <Switch checked={jsonLdOn} onCheckedChange={setJsonLdOn} />
-              </div>
-
-              {jsonLdOn && (
-                <FieldRow label="Custom JSON-LD Schema">
-                  <Textarea value={customJsonLd} onChange={(e) => setCustomJsonLd(e.target.value)} rows={8}
-                    className="font-mono text-xs"
-                    placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "Hotel",\n  "name": "Pomah Guesthouse"\n}'} />
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    Tambahkan structured data dalam format JSON-LD. Harus JSON yang valid.
-                  </p>
-                </FieldRow>
-              )}
-            </div>
-          )}
-
-          {/* ── Social Share ── */}
-          {tab === "social" && (
-            <div className="space-y-4">
-              <FieldRow label="Gambar share (OG Image)">
-                <ImageField value={ogImage} onChange={setOgImage} kind="image" />
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Gambar yang muncul saat halaman dibagikan di media sosial. Pilih dari Media Library.
-                </p>
-              </FieldRow>
-
-              {/* Social card preview */}
-              <div className="overflow-hidden rounded-lg border border-stone-200">
-                <div className="flex h-36 items-center justify-center bg-stone-100">
-                  {ogImage
-                    ? <img src={ogImage} alt="" className="h-full w-full object-cover" />
-                    : <Images className="h-6 w-6 text-stone-300" />}
-                </div>
-                <div className="bg-white px-3 py-2">
-                  <p className="text-[10px] uppercase text-stone-400">pomahguesthouse.com</p>
-                  <p className="truncate text-sm font-semibold text-stone-800">{metaTitle || page.title}</p>
-                  <p className="line-clamp-2 text-xs text-stone-500">{metaDesc || "Meta description belum diisi…"}</p>
-                </div>
-              </div>
+          ) : (
+            <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+              <Settings2 className="h-8 w-8 text-stone-200" />
+              <p className="text-xs text-muted-foreground">Pilih ikon ⚙ pada halaman untuk membuka Page Settings.</p>
             </div>
           )}
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Batal</Button>
-          <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
-            {saving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyimpan…</> : <><Save className="mr-1.5 h-3.5 w-3.5" />Simpan</>}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A single row in the Site Menu list (page name + settings/delete actions). */
+function PageRow({
+  icon, label, active, settingsActive, published, onClick, onSettings, onDelete,
+}: {
+  icon: React.ReactNode; label: string; active: boolean; settingsActive: boolean;
+  published?: boolean; onClick: () => void; onSettings: () => void; onDelete?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+        active || settingsActive ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+      )}
+      onClick={onClick}>
+      {icon}
+      <span className="flex-1 truncate text-xs font-medium text-stone-700">{label}</span>
+      {published === false && <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>}
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+        <button type="button" title="Page Settings"
+          onClick={(e) => { e.stopPropagation(); onSettings(); }}
+          className="rounded p-0.5 text-stone-400 hover:text-teal-600">
+          <Settings2 className="h-3.5 w-3.5" />
+        </button>
+        {onDelete && (
+          <button type="button" title="Hapus halaman"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="rounded p-0.5 text-stone-400 hover:text-red-500">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
