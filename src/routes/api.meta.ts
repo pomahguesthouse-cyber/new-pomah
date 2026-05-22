@@ -34,7 +34,7 @@ import { todayWIB } from "@/lib/date";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
-const AI_TIMEOUT_MS = 22_000;
+const AI_TIMEOUT_MS = 7_000; // Dikurangi menjadi 7 detik agar tidak dibunuh oleh Vercel 10s limit
 
 // ─── Global Cache & Fault Tolerance State ─────────────────────────────────────
 
@@ -235,7 +235,7 @@ export const Route = createFileRoute("/api/meta")({
               }
 
               // ── 3. Debounce ───────────────────────────────────────────────────
-              const DEBOUNCE_MS = 2500;
+              const DEBOUNCE_MS = 250; // Dikurangi dari 2500ms agar Vercel Hobby tidak timeout (10s limit)
               await sleep(DEBOUNCE_MS);
 
               const { data: latestInbound } = await (supabaseAdmin as any)
