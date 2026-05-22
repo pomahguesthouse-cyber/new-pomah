@@ -14,7 +14,6 @@ import {
   ArrowRight,
   LayoutDashboard,
   MessageCircle,
-  MessagesSquare,
   GraduationCap,
   Sparkles,
   Bot,
@@ -48,7 +47,6 @@ import {
 } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { WhatsAppPage } from "@/routes/admin/whatsapp";
 import { TrainingView } from "@/admin/modules/ai-lab/training-view";
-import { WebchatLogView } from "@/admin/modules/ai-lab/webchat-log-view";
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings";
 import { SeoPage } from "@/routes/admin/seo";
@@ -141,11 +139,10 @@ const DECISION_HIERARCHY = [
   },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "webchat" | "sop" | "training" | "smart-delay" | "seo";
+type ViewKey = "dashboard" | "whatsapp" | "sop" | "training" | "smart-delay" | "seo";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
-  { key: "webchat",      label: "Percakapan",      icon: MessagesSquare },
   { key: "sop",          label: "Knowledge & SOP", icon: BookOpen },
   { key: "training",     label: "Training",        icon: GraduationCap },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
@@ -212,8 +209,6 @@ function AiLab() {
             <DashboardView />
           ) : view === "whatsapp" ? (
             <WhatsAppPage />
-          ) : view === "webchat" ? (
-            <WebchatLogView />
           ) : view === "sop" ? (
             <SopKnowledgeView />
           ) : view === "smart-delay" ? (

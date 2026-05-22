@@ -24,7 +24,6 @@ import {
 } from "@/public/functions/public.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { DatePickerID } from "@/components/ui/date-picker";
-import { Webchat } from "@/public/components/webchat";
 import {
   Dialog,
   DialogContent,
@@ -39,18 +38,24 @@ export const Route = createFileRoute("/")({
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
     return getPublicSiteData();
   },
-  head: () => ({
-    meta: [
-      { title: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang" },
-      {
-        name: "description",
-        content:
-          "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.",
-      },
-      { property: "og:title", content: "Pomah Guesthouse Semarang" },
-      { property: "og:description", content: "Penginapan murah & nyaman di Kota Semarang." },
-    ],
-  }),
+  head: ({ loaderData }: any) => {
+    const seo = mergeHomepageConfig(
+      (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
+    ).seo;
+    const title = seo.metaTitle || "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang";
+    const desc =
+      seo.metaDescription ||
+      "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: desc },
+        { property: "og:title", content: title },
+        { property: "og:description", content: desc },
+        ...(seo.ogImageUrl ? [{ property: "og:image", content: seo.ogImageUrl }] : []),
+      ],
+    };
+  },
   component: PomahHome,
 });
 
@@ -156,6 +161,35 @@ function PomahHome() {
   const cfg = mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
+
+  // Advanced SEO — inject custom head markup + JSON-LD for the home page.
+  useEffect(() => {
+    const seo = cfg.seo;
+    const added: Node[] = [];
+    if (seo.customHead) {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = seo.customHead;
+      tpl.content.childNodes.forEach((node) => {
+        if (node.nodeName === "SCRIPT") {
+          const orig = node as HTMLScriptElement;
+          const sc = document.createElement("script");
+          Array.from(orig.attributes).forEach((a) => sc.setAttribute(a.name, a.value));
+          sc.textContent = orig.textContent;
+          document.head.appendChild(sc); added.push(sc);
+        } else {
+          const clone = node.cloneNode(true);
+          document.head.appendChild(clone); added.push(clone);
+        }
+      });
+    }
+    if (seo.jsonLdEnabled && seo.customJsonLd?.trim()) {
+      const sc = document.createElement("script");
+      sc.type = "application/ld+json";
+      sc.textContent = seo.customJsonLd;
+      document.head.appendChild(sc); added.push(sc);
+    }
+    return () => added.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
+  }, [cfg.seo.customHead, cfg.seo.customJsonLd, cfg.seo.jsonLdEnabled]);
 
   // Page Builder integration: when loaded inside the builder iframe
   // (`?builder=1`), sections become click-to-select and report back.
@@ -529,13 +563,11 @@ function PomahHome() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Hubungi via WhatsApp"
-          className="fixed bottom-5 right-24 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
         >
           <MessageCircle className="h-7 w-7" />
         </a>
       )}
-
-      <Webchat rooms={rooms} />
     </div>
   );
 }

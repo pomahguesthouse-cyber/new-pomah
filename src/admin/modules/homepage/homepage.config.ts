@@ -91,6 +91,17 @@ export interface HomepageConfig {
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
   };
+  /** SEO settings for the home page (edited in Page Builder → Page Settings). */
+  seo: {
+    metaTitle: string;
+    metaDescription: string;
+    targetKeyword: string;
+    ogImageUrl: string;
+    customHead: string;
+    customRobots: string;
+    jsonLdEnabled: boolean;
+    customJsonLd: string;
+  };
 }
 
 /** Lowest / highest z-index a section layer can take. */
@@ -166,6 +177,17 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 32,
     fontStyle: "bold",
   },
+  seo: {
+    metaTitle: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang",
+    metaDescription:
+      "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.",
+    targetKeyword: "",
+    ogImageUrl: "",
+    customHead: "",
+    customRobots: "",
+    jsonLdEnabled: true,
+    customJsonLd: "",
+  },
 };
 
 /** Merge a stored (possibly partial) config onto the defaults. */
@@ -178,5 +200,6 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     datePicker: { ...d.datePicker, ...c.datePicker },
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
+    seo: { ...d.seo, ...c.seo },
   };
 }
