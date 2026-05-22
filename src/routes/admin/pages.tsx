@@ -1191,6 +1191,7 @@ function PageSettingsPanel({
   const [tab, setTab] = useState<PageSettingsTab>("access");
   const [saving, setSaving] = useState(false);
 
+  const [slug, setSlug]           = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc]   = useState("");
   const [targetKw, setTargetKw]   = useState("");
@@ -1202,6 +1203,7 @@ function PageSettingsPanel({
   const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
+    setSlug(page.slug ?? "");
     setMetaTitle(page.meta_title ?? "");
     setMetaDesc(page.meta_description ?? "");
     setTargetKw(page.target_keyword ?? "");
@@ -1214,11 +1216,14 @@ function PageSettingsPanel({
   }, [page.id]);
 
   const handleSave = async () => {
+    const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!cleanSlug) { toast.error("URL halaman (slug) tidak boleh kosong"); return; }
     setSaving(true);
     try {
       await updateSeoLandingPage({
         data: {
           id: page.id,
+          slug:             cleanSlug,
           meta_title:       metaTitle || null,
           meta_description: metaDesc  || null,
           target_keyword:   targetKw  || null,
@@ -1273,10 +1278,18 @@ function PageSettingsPanel({
         {tab === "access" && (
           <div className="space-y-4">
             <FieldRow label="URL halaman">
-              <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
-                <span className="text-muted-foreground">pomahguesthouse.com/lp/</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-stone-700">{page.slug}</span>
+              <div className="flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-ring">
+                <span className="shrink-0 text-muted-foreground">pomahguesthouse.com/lp/</span>
+                <input
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="slug-halaman"
+                  className="min-w-0 flex-1 bg-transparent py-1 font-mono text-stone-800 focus:outline-none"
+                />
               </div>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Hanya huruf kecil, angka, dan tanda hubung. Mengubah URL dapat memengaruhi tautan lama.
+              </p>
             </FieldRow>
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
               <div>
