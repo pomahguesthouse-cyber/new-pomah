@@ -10,6 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { convertToWebP } from "@/lib/image-webp";
+import { MediaPicker } from "@/admin/components/media-picker";
 import {
   Loader2,
   Upload,
@@ -123,7 +124,8 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
     if (!roomNumbers.includes(n)) setRoomNumbers([...roomNumbers, n]);
     setRoomNumberInput("");
   };
-  const [uploading, setUploading] = React.useState(false);
+  const [uploading,        setUploading]        = React.useState(false);
+  const [mediaPickerOpen,  setMediaPickerOpen]  = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   async function uploadPhotos(files: FileList) {
@@ -502,6 +504,26 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 </p>
                 <p className="text-[10px] text-muted-foreground">JPG/PNG otomatis dikonversi ke WebP · bisa banyak</p>
               </div>
+
+              {/* Pick from Media Library */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMediaPickerOpen(true); }}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-muted/20 py-2.5 text-sm font-medium text-muted-foreground transition hover:bg-muted/40 hover:text-foreground"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="m21 15-5-5L5 21" />
+                </svg>
+                Pilih dari Media Library
+              </button>
+              <MediaPicker
+                open={mediaPickerOpen}
+                kind="image"
+                onPick={(url) => { setImages((prev) => [...prev, url]); setMediaPickerOpen(false); }}
+                onClose={() => setMediaPickerOpen(false)}
+              />
 
               {images.length > 0 && (
                 <>
