@@ -3,12 +3,17 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote } from "lucide-react";
-import { getGoogleReviews } from "@/public/functions/public.functions";
+import {
+  getGoogleReviews,
+  getPublicSiteData,
+  checkRoomTypeAvailability,
+} from "@/public/functions/public.functions";
+import { DatePickerID } from "@/components/ui/date-picker";
 import {
   getSeoLandingPageBySlug,
   type SeoLandingPage,
@@ -23,7 +28,20 @@ import {
   type LPHeaderSection,
   type LPSliderSection,
   type LPButtonSection,
+  type LPRoomSliderSection,
+  type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
+
+/* ─── Shared booking-date state (date picker → room slider) ───────── */
+type BookingDates = {
+  checkIn: string; checkOut: string; today: string;
+  setCheckIn: (v: string) => void; setCheckOut: (v: string) => void;
+};
+const BookingCtx = createContext<BookingDates | null>(null);
+const isoAddDays = (iso: string, n: number) => {
+  const d = new Date(iso); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = (createFileRoute as any)("/lp/$slug")({
@@ -55,10 +73,51 @@ function LandingPage() {
   const { page } = Route.useLoaderData() as { page: SeoLandingPage };
   const sections = (page.sections ?? []) as LPSection[];
   const hasSections = sections.length > 0;
+  // A page-supplied header section replaces the default LP nav.
+  const hasHeaderSection = sections.some((s) => s.type === "header");
+
+  // Shared booking dates (date picker → room slider).
+  const [today, setToday] = useState("");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  useEffect(() => {
+    const d = new Date();
+    setToday(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+  }, []);
+
+  // Advanced SEO — inject custom head markup + JSON-LD client-side.
+  useEffect(() => {
+    const added: Node[] = [];
+    const appendHtml = (html: string) => {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      tpl.content.childNodes.forEach((node) => {
+        if (node.nodeName === "SCRIPT") {
+          const orig = node as HTMLScriptElement;
+          const sc = document.createElement("script");
+          Array.from(orig.attributes).forEach((a) => sc.setAttribute(a.name, a.value));
+          sc.textContent = orig.textContent;
+          document.head.appendChild(sc); added.push(sc);
+        } else {
+          const clone = node.cloneNode(true);
+          document.head.appendChild(clone); added.push(clone);
+        }
+      });
+    };
+    if (page.custom_head) appendHtml(page.custom_head);
+    if (page.json_ld_enabled && page.custom_json_ld?.trim()) {
+      const sc = document.createElement("script");
+      sc.type = "application/ld+json";
+      sc.textContent = page.custom_json_ld;
+      document.head.appendChild(sc); added.push(sc);
+    }
+    return () => added.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
+  }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled]);
 
   return (
+    <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut }}>
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />
+      {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
 
       {hasSections ? (
         sections.map((s) => <LPSectionRenderer key={s.id} section={s} />)
@@ -112,6 +171,7 @@ function LandingPage() {
         <MessageCircle className="h-7 w-7" />
       </a>
     </div>
+    </BookingCtx.Provider>
   );
 }
 
@@ -121,6 +181,8 @@ export function LPSectionRenderer({ section }: { section: LPSection }) {
     case "header":       return <HeaderSection       s={section} />;
     case "hero":         return <HeroSection         s={section} />;
     case "slider":       return <SliderSection       s={section} />;
+    case "room_slider":  return <RoomSliderSection    s={section} />;
+    case "datepicker":   return <DatePickerSection    s={section} />;
     case "text":         return <TextSection          s={section} />;
     case "features":     return <FeaturesSection      s={section} />;
     case "gallery":      return <GallerySection       s={section} />;
@@ -139,8 +201,12 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
   return (
     <nav className={`${s.sticky ?? true ? "sticky top-0" : ""} z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <a href="/" className="flex items-baseline gap-1">
-          <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">{s.brand || "Pomah"}</span>
+        <a href="/" className="flex items-center gap-2">
+          {s.logo_url ? (
+            <img src={s.logo_url} alt={s.brand || "Logo"} className="h-9 w-auto object-contain" />
+          ) : (
+            <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">{s.brand || "Pomah"}</span>
+          )}
         </a>
         <div className="hidden items-center gap-6 md:flex">
           {links.map((l, i) => (
@@ -477,6 +543,180 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
               <button key={d} onClick={() => setI(d)} aria-label={`Testimoni ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${d === i % items.length ? "w-6 bg-teal-700" : "w-2 bg-stone-300"}`} />
             ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Date Picker — availability widget (same flow as homepage) ───── */
+function DatePickerSection({ s }: { s: LPDatePickerSection }) {
+  const ctx = useContext(BookingCtx);
+  const [localIn, setLocalIn] = useState("");
+  const [localOut, setLocalOut] = useState("");
+  const checkIn = ctx?.checkIn ?? localIn;
+  const checkOut = ctx?.checkOut ?? localOut;
+  const setCheckIn = ctx?.setCheckIn ?? setLocalIn;
+  const setCheckOut = ctx?.setCheckOut ?? setLocalOut;
+
+  const onSubmit = () => {
+    const el = document.getElementById("lp-room-slider");
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    // No room slider on this page → go straight to booking.
+    const qs = checkIn && checkOut ? `?checkIn=${checkIn}&checkOut=${checkOut}` : "";
+    window.location.href = `/book${qs}`;
+  };
+
+  return (
+    <section className="mx-auto max-w-4xl px-6 py-10">
+      <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
+        {s.heading && <p className="mb-3 text-center font-serif text-lg font-bold text-teal-700">{s.heading}</p>}
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-stone-500">Check-In</label>
+            <DatePickerID value={checkIn} onChange={setCheckIn} placeholder="Pilih tanggal" className="h-10" />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-stone-500">Check-Out</label>
+            <DatePickerID value={checkOut} onChange={setCheckOut} min={checkIn || undefined} placeholder="Pilih tanggal" className="h-10" />
+          </div>
+          <button type="button" onClick={onSubmit}
+            className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800">
+            {s.buttonLabel || "Cek Ketersediaan"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Slider Kamar — room carousel from the booking system ─────────── */
+type LPRoomType = {
+  id: string; name: string; slug: string;
+  description?: string | null; base_rate: number | string;
+  capacity?: number | null; size_sqm?: number | null; hero_image_url?: string | null;
+};
+
+function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
+  const ctx = useContext(BookingCtx);
+  const today = ctx?.today ?? "";
+  const checkIn = ctx?.checkIn ?? "";
+  const checkOut = ctx?.checkOut ?? "";
+
+  const siteFn = useServerFn(getPublicSiteData);
+  const { data: site } = useQuery({ queryKey: ["lp-site-data"], queryFn: () => siteFn() });
+  const rooms = (site?.roomTypes ?? []) as LPRoomType[];
+
+  // Default to today → tomorrow so cards always reflect availability.
+  const usingFilter = !!checkIn && !!checkOut && checkIn < checkOut;
+  const effIn = usingFilter ? checkIn : today;
+  const effOut = usingFilter ? checkOut : today ? isoAddDays(today, 1) : "";
+
+  const availFn = useServerFn(checkRoomTypeAvailability);
+  const { data: availData } = useQuery({
+    queryKey: ["lp-availability", effIn, effOut],
+    queryFn: () => availFn({ data: { checkIn: effIn, checkOut: effOut } }),
+    enabled: !!effIn && !!effOut && effIn < effOut,
+  });
+  const availability = availData?.availability ?? null;
+
+  const per = Math.max(1, Math.min(s.cardsPerView ?? 3, 4));
+  const [cardsPerView, setCardsPerView] = useState(per);
+  useEffect(() => {
+    const update = () => setCardsPerView(window.innerWidth < 640 ? 1 : per);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [per]);
+
+  const maxIndex = Math.max(0, rooms.length - cardsPerView);
+  const [i, setI] = useState(0);
+  useEffect(() => { setI((v) => Math.min(v, maxIndex)); }, [maxIndex]);
+
+  useEffect(() => {
+    if (!(s.autoplay ?? true) || rooms.length <= cardsPerView || (s.slideMs ?? 4000) <= 0) return;
+    const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), s.slideMs ?? 4000);
+    return () => clearInterval(t);
+  }, [s.autoplay, s.slideMs, rooms.length, cardsPerView, maxIndex]);
+
+  return (
+    <section id="lp-room-slider" className="scroll-mt-4 bg-[#f3ece0] py-16">
+      <div className="mx-auto max-w-6xl px-6">
+        {(s.title || s.subheading) && (
+          <div className="mb-2 text-center">
+            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>}
+            {s.subheading && <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">{s.subheading}</p>}
+          </div>
+        )}
+        {(usingFilter || today) && (
+          <p className="mb-2 text-center text-sm font-medium text-stone-600">
+            {usingFilter ? `Ketersediaan: ${checkIn} – ${checkOut}` : "Ketersediaan kamar hari ini"}
+          </p>
+        )}
+
+        {rooms.length === 0 ? (
+          <p className="mt-10 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>
+        ) : (
+          <div className="relative mt-8">
+            <div className="overflow-hidden">
+              <div className="flex transition-transform duration-500 ease-out"
+                style={{ transform: `translateX(-${i * (100 / cardsPerView)}%)` }}>
+                {rooms.map((rt) => (
+                  <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
+                    <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                        {rt.hero_image_url
+                          ? <img src={rt.hero_image_url} alt={rt.name} className="absolute inset-0 h-full w-full object-cover" />
+                          : <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">Foto Kamar</div>}
+                      </div>
+                      <div className="p-6">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
+                            <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+                              {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[10px] text-stone-400">Harga</p>
+                            <p className="text-lg font-bold text-teal-700">Rp {Number(rt.base_rate).toLocaleString("id-ID")}</p>
+                          </div>
+                        </div>
+                        {rt.description && <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">{rt.description}</p>}
+                        {availability && availability[rt.id] === false ? (
+                          <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">Tidak Tersedia</span>
+                        ) : (
+                          <Link to="/rooms/$slug" params={{ slug: rt.slug }}
+                            search={{ checkIn: checkIn || undefined, checkOut: checkOut || undefined }}
+                            className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800">
+                            Pesan Kamar
+                          </Link>
+                        )}
+                      </div>
+                    </article>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {maxIndex > 0 && (
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <button onClick={() => setI((v) => Math.max(0, v - 1))} aria-label="Sebelumnya"
+                  className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="flex gap-1.5">
+                  {Array.from({ length: maxIndex + 1 }).map((_, d) => (
+                    <button key={d} onClick={() => setI(d)} aria-label={`Halaman ${d + 1}`}
+                      className={`h-2 rounded-full transition-all ${d === i ? "w-6 bg-teal-700" : "w-2 bg-stone-300"}`} />
+                  ))}
+                </div>
+                <button onClick={() => setI((v) => Math.min(maxIndex, v + 1))} aria-label="Berikutnya"
+                  className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

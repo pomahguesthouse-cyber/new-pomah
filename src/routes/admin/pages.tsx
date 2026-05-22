@@ -1185,6 +1185,11 @@ function SeoPopup({
   const [targetKw, setTargetKw]   = useState("");
   const [ogImage, setOgImage]     = useState("");
   const [indexable, setIndexable] = useState(true);
+  // Advanced SEO
+  const [customHead, setCustomHead]   = useState("");
+  const [customRobots, setCustomRobots] = useState("");
+  const [jsonLdOn, setJsonLdOn]       = useState(true);
+  const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
     if (!page) return;
@@ -1194,6 +1199,10 @@ function SeoPopup({
     setTargetKw(page.target_keyword ?? "");
     setOgImage(page.og_image_url ?? "");
     setIndexable(page.published);
+    setCustomHead(page.custom_head ?? "");
+    setCustomRobots(page.custom_robots ?? "");
+    setJsonLdOn(page.json_ld_enabled ?? true);
+    setCustomJsonLd(page.custom_json_ld ?? "");
   }, [page?.id]);
 
   if (!page) return null;
@@ -1209,6 +1218,10 @@ function SeoPopup({
           target_keyword:   targetKw  || null,
           og_image_url:     ogImage   || null,
           published:        indexable,
+          custom_head:      customHead   || null,
+          custom_robots:    customRobots || null,
+          json_ld_enabled:  jsonLdOn,
+          custom_json_ld:   customJsonLd || null,
         },
       });
       toast.success("Pengaturan SEO tersimpan");
@@ -1305,39 +1318,44 @@ function SeoPopup({
               <FieldRow label="Kata kunci target">
                 <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)}
                   placeholder="mis. penginapan wisuda unnes semarang" />
+              </FieldRow>
+
+              <FieldRow label="Custom Head Scripts">
+                <Textarea value={customHead} onChange={(e) => setCustomHead(e.target.value)} rows={5}
+                  className="font-mono text-xs"
+                  placeholder={'<meta name="..."> · <script>...</script> · tag verifikasi, analytics, dll.'} />
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Kata kunci utama yang ingin dirangking di Google.
+                  Disisipkan ke dalam &lt;head&gt; halaman ini. Untuk verifikasi situs, pixel, atau analytics.
                 </p>
               </FieldRow>
 
-              <FieldRow label="URL kanonik">
-                <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
-                  <span className="text-muted-foreground">pomahguesthouse.com/lp/</span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-stone-700">{page.slug}</span>
+              <FieldRow label="Custom robots.txt">
+                <Textarea value={customRobots} onChange={(e) => setCustomRobots(e.target.value)} rows={5}
+                  className="font-mono text-xs"
+                  placeholder={"User-agent: *\nAllow: /"} />
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Aturan crawler khusus untuk halaman ini.
+                </p>
+              </FieldRow>
+
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                <div>
+                  <p className="text-xs font-medium">Enable Structured Data (JSON-LD)</p>
+                  <p className="text-[10px] text-muted-foreground">Sisipkan data terstruktur ke halaman.</p>
                 </div>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  URL publik halaman ini (otomatis dari slug).
-                </p>
-              </FieldRow>
-
-              {/* SEO checklist */}
-              <div className="space-y-1 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-stone-400">Checklist SEO</p>
-                {[
-                  { label: "Kata kunci di title tag",   ok: !!targetKw && metaTitle.toLowerCase().includes(targetKw.toLowerCase()) },
-                  { label: "Kata kunci di meta desc",   ok: !!targetKw && metaDesc.toLowerCase().includes(targetKw.toLowerCase()) },
-                  { label: "Title 50–60 karakter",      ok: metaTitle.length >= 50 && metaTitle.length <= 60 },
-                  { label: "Meta desc 120–160 karakter",ok: metaDesc.length >= 120 && metaDesc.length <= 160 },
-                  { label: "OG Image ada",              ok: !!ogImage },
-                ].map((c, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-[11px]">
-                    {c.ok
-                      ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
-                      : <X className="h-3 w-3 text-stone-300 shrink-0" />}
-                    <span className={c.ok ? "text-stone-700" : "text-stone-400"}>{c.label}</span>
-                  </div>
-                ))}
+                <Switch checked={jsonLdOn} onCheckedChange={setJsonLdOn} />
               </div>
+
+              {jsonLdOn && (
+                <FieldRow label="Custom JSON-LD Schema">
+                  <Textarea value={customJsonLd} onChange={(e) => setCustomJsonLd(e.target.value)} rows={8}
+                    className="font-mono text-xs"
+                    placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "Hotel",\n  "name": "Pomah Guesthouse"\n}'} />
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    Tambahkan structured data dalam format JSON-LD. Harus JSON yang valid.
+                  </p>
+                </FieldRow>
+              )}
             </div>
           )}
 

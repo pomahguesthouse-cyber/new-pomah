@@ -57,10 +57,26 @@ export type LPTestimonialsSection = {
 };
 export type LPHeaderSection = {
   id: string; type: "header";
-  brand?: string;                                 // brand / logo text
+  logo_url?: string;                              // logo image (media library)
+  brand?: string;                                 // brand / logo text fallback
   links?: { label: string; url: string }[];
   cta_text?: string; cta_url?: string;
   sticky?: boolean;
+};
+/** Room carousel — same data & behaviour as the homepage "Our Room". */
+export type LPRoomSliderSection = {
+  id: string; type: "room_slider";
+  title?: string;
+  subheading?: string;
+  cardsPerView?: 1 | 2 | 3 | 4;
+  autoplay?: boolean;
+  slideMs?: number;
+};
+/** Availability date picker — same flow as the homepage widget. */
+export type LPDatePickerSection = {
+  id: string; type: "datepicker";
+  heading?: string;
+  buttonLabel?: string;
 };
 /** Mirrors the homepage hero slider exactly (HomepageConfig["hero"]). */
 export type LPSliderSection = {
@@ -95,7 +111,9 @@ export type LPSection =
   | LPTestimonialsSection
   | LPHeaderSection
   | LPSliderSection
-  | LPButtonSection;
+  | LPButtonSection
+  | LPRoomSliderSection
+  | LPDatePickerSection;
 
 export type SeoLandingPage = {
   id: string;
@@ -113,6 +131,11 @@ export type SeoLandingPage = {
   og_image_url: string | null;
   published: boolean;
   sections: LPSection[] | null;
+  /* ── Advanced SEO ── */
+  custom_head: string | null;
+  custom_robots: string | null;
+  json_ld_enabled: boolean;
+  custom_json_ld: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -131,6 +154,10 @@ const pageShape = z.object({
   og_image_url:     z.string().url().max(500).optional().nullable(),
   published:        z.boolean().default(false),
   sections:         z.array(z.record(z.string(), z.unknown())).optional().nullable(),
+  custom_head:      z.string().max(20000).optional().nullable(),
+  custom_robots:    z.string().max(10000).optional().nullable(),
+  json_ld_enabled:  z.boolean().optional(),
+  custom_json_ld:   z.string().max(20000).optional().nullable(),
 });
 
 /** List all landing pages ordered by creation (newest first). */

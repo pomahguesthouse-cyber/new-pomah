@@ -20,6 +20,8 @@ import {
   MousePointerClick,
   FolderOpen,
   Film,
+  BedDouble,
+  CalendarCheck,
 } from "lucide-react";
 import { MediaPicker, type MediaKind } from "@/admin/components/media-picker";
 import { Button } from "@/components/ui/button";
@@ -52,6 +54,8 @@ import type {
   LPHeaderSection,
   LPSliderSection,
   LPButtonSection,
+  LPRoomSliderSection,
+  LPDatePickerSection,
 } from "./landing-page.functions";
 
 /* ─── helpers ──────────────────────────────────────────────────────── */
@@ -75,7 +79,11 @@ function makeDefault(type: LPSection["type"]): LPSection {
     case "testimonials":
       return { id, type: "testimonials", title: "Kata Tamu Kami", items: [{ name: "Tamu", text: "Penginapan yang nyaman dan bersih, pelayanan ramah." }] };
     case "header":
-      return { id, type: "header", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/rooms" }] };
+      return { id, type: "header", logo_url: "", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/rooms" }] };
+    case "room_slider":
+      return { id, type: "room_slider", title: "Our Room", subheading: "Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar", cardsPerView: 3, autoplay: true, slideMs: 4000 };
+    case "datepicker":
+      return { id, type: "datepicker", heading: "Cek Ketersediaan", buttonLabel: "Cek Ketersediaan" };
     case "slider":
       return { id, type: "slider", autoplayMs: 5000, height: 480, transition: "fade", fontFamily: "serif", fontSize: 48, fontStyle: "bold", slides: [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang Di Pomah Guesthouse", subheading: "Penginapan Murah di Kota Semarang" }] };
     case "button":
@@ -85,9 +93,11 @@ function makeDefault(type: LPSection["type"]): LPSection {
 
 /* ─── section meta for the picker ─────────────────────────────────── */
 const SECTION_META: { type: LPSection["type"]; label: string; desc: string; Icon: React.ElementType; color: string }[] = [
-  { type: "header",       label: "Header / Navbar",    desc: "Bar navigasi atas dengan menu & CTA",  Icon: PanelTop,         color: "bg-slate-50 text-slate-700 border-slate-200" },
+  { type: "header",       label: "Header / Navbar",    desc: "Bar navigasi atas: logo, menu & CTA",  Icon: PanelTop,         color: "bg-slate-50 text-slate-700 border-slate-200" },
   { type: "hero",         label: "Hero Banner",        desc: "Header besar dengan gambar & CTA",     Icon: ImageIcon,        color: "bg-teal-50 text-teal-700 border-teal-200" },
   { type: "slider",       label: "Hero Slider",        desc: "Banner geser beberapa gambar",         Icon: GalleryHorizontal,color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  { type: "datepicker",   label: "Date Picker",        desc: "Widget cek ketersediaan tanggal",      Icon: CalendarCheck,    color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+  { type: "room_slider",  label: "Slider Kamar",       desc: "Carousel kamar dari sistem booking",   Icon: BedDouble,        color: "bg-lime-50 text-lime-700 border-lime-200" },
   { type: "text",         label: "Teks & Paragraf",    desc: "Judul dan paragraf teks bebas",        Icon: FileText,         color: "bg-blue-50 text-blue-700 border-blue-200" },
   { type: "features",     label: "Fitur / Keunggulan", desc: "Grid kartu dengan ikon & deskripsi",   Icon: Layers,           color: "bg-violet-50 text-violet-700 border-violet-200" },
   { type: "gallery",      label: "Galeri Foto",        desc: "Grid foto kamar atau properti",        Icon: ImageIcon,        color: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -247,6 +257,8 @@ function SectionEditor({ section, onUpdate }: { section: LPSection; onUpdate: (p
     case "header":       return <HeaderEditor        s={section} onUpdate={onUpdate} />;
     case "hero":         return <HeroEditor         s={section} onUpdate={onUpdate} />;
     case "slider":       return <SliderEditor        s={section} onUpdate={onUpdate} />;
+    case "room_slider":  return <RoomSliderEditor    s={section} onUpdate={onUpdate} />;
+    case "datepicker":   return <DatePickerEditor    s={section} onUpdate={onUpdate} />;
     case "text":         return <TextEditor          s={section} onUpdate={onUpdate} />;
     case "features":     return <FeaturesEditor      s={section} onUpdate={onUpdate} />;
     case "gallery":      return <GalleryEditor       s={section} onUpdate={onUpdate} />;
@@ -320,7 +332,13 @@ function HeaderEditor({ s, onUpdate }: { s: LPHeaderSection; onUpdate: UpFn }) {
   const setLinks = (next: typeof links) => onUpdate({ links: next } as any);
   return (
     <div className="space-y-3">
-      <Fld label="Nama Brand / Logo">
+      <Fld label="Logo (opsional)" hint="Jika kosong, nama brand di bawah yang ditampilkan.">
+        <div className="mt-1">
+          <MediaField kind="image" value={s.logo_url ?? ""}
+            onChange={(url) => onUpdate({ logo_url: url || undefined } as any)} />
+        </div>
+      </Fld>
+      <Fld label="Nama Brand">
         <Input value={s.brand ?? ""} onChange={(e) => onUpdate({ brand: e.target.value } as any)} className="mt-1" placeholder="Pomah Guesthouse" />
       </Fld>
       <div className="grid grid-cols-2 gap-3">
@@ -353,6 +371,62 @@ function HeaderEditor({ s, onUpdate }: { s: LPHeaderSection; onUpdate: UpFn }) {
           <Plus className="h-3.5 w-3.5" /> Tambah Menu
         </Button>
       </div>
+    </div>
+  );
+}
+
+/* Slider Kamar — pulls room types from the booking system */
+function RoomSliderEditor({ s, onUpdate }: { s: LPRoomSliderSection; onUpdate: UpFn }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-lime-200 bg-lime-50 px-3 py-2.5 text-[11px] leading-relaxed text-lime-700">
+        Kamar diambil otomatis dari sistem booking (Room Types). Jika ada Date Picker
+        di halaman ini, ketersediaan kamar mengikuti tanggal yang dipilih.
+      </div>
+      <Fld label="Judul Section">
+        <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value || undefined } as any)} className="mt-1" placeholder="Our Room" />
+      </Fld>
+      <Fld label="Teks di bawah judul">
+        <Textarea value={s.subheading ?? ""} rows={2} className="mt-1 text-xs"
+          onChange={(e) => onUpdate({ subheading: e.target.value || undefined } as any)} />
+      </Fld>
+      <div className="grid grid-cols-2 gap-3">
+        <Fld label="Jumlah kartu">
+          <Select value={String(s.cardsPerView ?? 3)} onValueChange={(v) => onUpdate({ cardsPerView: +v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n} Kartu</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Fld>
+        <Fld label="Kecepatan (ms)">
+          <Input type="number" value={s.slideMs ?? 4000} className="mt-1 text-xs"
+            onChange={(e) => onUpdate({ slideMs: +e.target.value } as any)} />
+        </Fld>
+      </div>
+      <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+        <input type="checkbox" checked={s.autoplay ?? true}
+          onChange={(e) => onUpdate({ autoplay: e.target.checked } as any)} className="accent-teal-700" />
+        Geser otomatis
+      </label>
+    </div>
+  );
+}
+
+/* Date Picker — availability widget, same flow as the homepage */
+function DatePickerEditor({ s, onUpdate }: { s: LPDatePickerSection; onUpdate: UpFn }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5 text-[11px] leading-relaxed text-indigo-700">
+        Tamu memilih tanggal check-in & check-out. Tombol akan menuju ke Slider Kamar
+        di halaman ini (jika ada) untuk menampilkan ketersediaan, atau ke halaman booking.
+      </div>
+      <Fld label="Judul Widget">
+        <Input value={s.heading ?? ""} onChange={(e) => onUpdate({ heading: e.target.value || undefined } as any)} className="mt-1" placeholder="Cek Ketersediaan" />
+      </Fld>
+      <Fld label="Teks Tombol">
+        <Input value={s.buttonLabel ?? ""} onChange={(e) => onUpdate({ buttonLabel: e.target.value || undefined } as any)} className="mt-1" placeholder="Cek Ketersediaan" />
+      </Fld>
     </div>
   );
 }
