@@ -248,7 +248,7 @@ function HomepageBuilder() {
             <span className="text-xs text-muted-foreground">Page:</span>
             <button
               type="button"
-              onClick={() => { setSettingsPageId(null); setPagesOpen(true); }}
+              onClick={() => { setSettingsPageId(activePageId); setPagesOpen(true); }}
               className="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
             >
               {activeName}
@@ -1462,14 +1462,16 @@ function SitePagesModal({
                   <PageRow
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Home" active={activePageId === "home"} settingsActive={settingsPageId === "home"}
-                    onClick={() => onSelect("home")} onSettings={() => onSettingsPage("home")}
+                    onClick={() => { onSelect("home"); onSettingsPage("home"); }}
+                    onSettings={() => onSettingsPage("home")}
                   />
                   {pages.map((p) => (
                     <PageRow key={p.id}
                       icon={<FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />}
                       label={p.title} active={activePageId === p.id} settingsActive={settingsPageId === p.id}
                       published={p.published}
-                      onClick={() => onSelect(p.id)} onSettings={() => onSettingsPage(p.id)}
+                      onClick={() => { onSelect(p.id); onSettingsPage(p.id); }}
+                      onSettings={() => onSettingsPage(p.id)}
                       onDelete={() => onDelete(p)}
                     />
                   ))}
@@ -1498,7 +1500,7 @@ function SitePagesModal({
           ) : (
             <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <Settings2 className="h-8 w-8 text-stone-200" />
-              <p className="text-xs text-muted-foreground">Pilih ikon ⚙ pada halaman untuk membuka Page Settings.</p>
+              <p className="text-xs text-muted-foreground">Pilih halaman untuk membuka Page Settings.</p>
             </div>
           )}
         </div>
