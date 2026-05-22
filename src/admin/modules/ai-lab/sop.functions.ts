@@ -123,6 +123,21 @@ export const createSopDocument = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Update the document name (used as alt text for brosur images). */
+export const renameSopDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), name: z.string().min(1).max(300) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("sop_documents")
+      .update({ name: data.name })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 /** Update the extracted text content the agents read. */
 export const updateSopDocumentContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
