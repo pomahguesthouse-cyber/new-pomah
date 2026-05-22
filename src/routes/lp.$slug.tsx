@@ -170,67 +170,83 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
   );
 }
 
-/* ─── Hero Slider ───────────────────────────────────────────────── */
+/* ─── Hero Slider — identical to the homepage hero slider ──────────── */
+const HERO_ANIM: Record<string, string> = {
+  fade: "animate-in fade-in duration-700",
+  slide: "animate-in slide-in-from-right-full duration-500 ease-out",
+  zoom: "animate-in zoom-in-95 duration-700",
+  none: "",
+};
+
 function SliderSection({ s }: { s: LPSliderSection }) {
-  const slides = (s.slides ?? []).filter((sl) => sl.image_url || sl.headline);
+  const slides = s.slides.length
+    ? s.slides
+    : [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang", subheading: "" }];
   const [i, setI] = useState(0);
-  const count = slides.length;
-  const overlay = Math.min(80, Math.max(0, s.overlay ?? 40));
 
   useEffect(() => {
-    if (!(s.autoplay ?? true) || count <= 1) return;
-    const id = setInterval(() => setI((p) => (p + 1) % count), s.interval_ms ?? 5000);
-    return () => clearInterval(id);
-  }, [s.autoplay, s.interval_ms, count]);
+    if (slides.length < 2 || s.autoplayMs <= 0) return;
+    const t = setInterval(() => setI((v) => (v + 1) % slides.length), s.autoplayMs);
+    return () => clearInterval(t);
+  }, [slides.length, s.autoplayMs]);
 
-  if (count === 0) return null;
-  const go = (d: number) => setI((p) => (p + d + count) % count);
+  const active = slides[i % slides.length];
+  const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
 
   return (
-    <section className="relative overflow-hidden text-center text-white" style={{ height: s.height ?? 480 }}>
-      {slides.map((sl, idx) => (
-        <div key={idx}
-          className={`absolute inset-0 transition-opacity duration-700 ${idx === i ? "opacity-100" : "opacity-0"}`}>
-          {sl.image_url
-            ? <img src={sl.image_url} alt={sl.headline ?? `Slide ${idx + 1}`} className="absolute inset-0 h-full w-full object-cover" />
-            : <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-stone-800" />}
-          <div className="absolute inset-0" style={{ background: `rgba(0,0,0,${overlay / 100})` }} />
-          <div className="relative flex h-full flex-col items-center justify-center px-6">
-            {sl.headline && (
-              <h2 className="max-w-3xl font-serif text-4xl font-bold leading-tight tracking-tight drop-shadow sm:text-5xl">
-                {sl.headline}
-              </h2>
-            )}
-            {sl.subheadline && <p className="mt-5 max-w-xl text-lg text-white/90">{sl.subheadline}</p>}
-            {sl.cta_text && (
-              <a href={sl.cta_url ?? "/book"}
-                className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
-                {sl.cta_text}
-              </a>
-            )}
-          </div>
+    <header className="relative w-full overflow-hidden" style={{ height: s.height }}>
+      <div key={i} className={`absolute inset-0 ${HERO_ANIM[s.transition] ?? ""}`}>
+        {active.videoUrl ? (
+          <video src={active.videoUrl} autoPlay muted loop playsInline
+            className="absolute inset-0 h-full w-full object-cover" />
+        ) : active.imageUrl ? (
+          <img src={active.imageUrl} alt={active.heading} loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+        )}
+        <div className="absolute inset-0 bg-black/35" />
+        <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+          <h1
+            className={`max-w-3xl tracking-tight text-white drop-shadow ${
+              s.fontFamily === "mono" ? "font-mono" : s.fontFamily === "sans" ? "font-sans" : "font-serif"
+            }`}
+            style={{
+              fontSize: s.fontSize,
+              lineHeight: 1.1,
+              fontStyle: s.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: s.fontStyle === "bold" ? 700 : 400,
+            }}
+          >
+            {active.heading}
+          </h1>
+          {active.subheading && (
+            <>
+              <span className="my-4 h-px w-40 bg-white/70" />
+              <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
+            </>
+          )}
         </div>
-      ))}
-
-      {count > 1 && (
+      </div>
+      {slides.length > 1 && (
         <>
-          <button type="button" aria-label="Sebelumnya" onClick={() => go(-1)}
-            className="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/30 text-white backdrop-blur transition hover:bg-white/50">
+          <button onClick={() => go(-1)} aria-label="Sebelumnya"
+            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <button type="button" aria-label="Berikutnya" onClick={() => go(1)}
-            className="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/30 text-white backdrop-blur transition hover:bg-white/50">
+          <button onClick={() => go(1)} aria-label="Berikutnya"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40">
             <ChevronRight className="h-5 w-5" />
           </button>
-          <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
             {slides.map((_, d) => (
               <button key={d} onClick={() => setI(d)} aria-label={`Slide ${d + 1}`}
-                className={`h-2 rounded-full transition-all ${d === i ? "w-6 bg-white" : "w-2 bg-white/50"}`} />
+                className={`h-2 rounded-full transition-all ${d === i % slides.length ? "w-6 bg-white" : "w-2 bg-white/50"}`} />
             ))}
           </div>
         </>
       )}
-    </section>
+    </header>
   );
 }
 

@@ -74,7 +74,7 @@ function makeDefault(type: LPSection["type"]): LPSection {
     case "header":
       return { id, type: "header", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/rooms" }] };
     case "slider":
-      return { id, type: "slider", height: 480, overlay: 40, autoplay: true, interval_ms: 5000, slides: [{ image_url: "", headline: "Selamat Datang", subheadline: "Penginapan nyaman di Semarang", cta_text: "Pesan Sekarang", cta_url: "/book" }] };
+      return { id, type: "slider", autoplayMs: 5000, height: 480, transition: "fade", fontFamily: "serif", fontSize: 48, fontStyle: "bold", slides: [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang Di Pomah Guesthouse", subheading: "Penginapan Murah di Kota Semarang" }] };
     case "button":
       return { id, type: "button", text: "Pesan Sekarang", url: "/book", align: "center", variant: "solid", color: "teal" };
   }
@@ -310,7 +310,7 @@ function HeaderEditor({ s, onUpdate }: { s: LPHeaderSection; onUpdate: UpFn }) {
   );
 }
 
-/* Hero Slider */
+/* Hero Slider — identical properties to the homepage hero slider */
 function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
   const slides = s.slides ?? [];
   const setSlides = (next: typeof slides) => onUpdate({ slides: next } as any);
@@ -319,29 +319,30 @@ function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Fld label={`Tinggi: ${s.height ?? 480}px`}>
-          <input type="range" min={240} max={720} step={20} value={s.height ?? 480}
-            onChange={(e) => onUpdate({ height: +e.target.value } as any)}
-            className="mt-2 w-full accent-teal-700" />
+        <Fld label="Kecepatan slide (ms)">
+          <Input type="number" value={s.autoplayMs} className="mt-1 text-xs"
+            onChange={(e) => onUpdate({ autoplayMs: +e.target.value } as any)} />
         </Fld>
-        <Fld label={`Overlay: ${s.overlay ?? 40}%`}>
-          <input type="range" min={0} max={80} value={s.overlay ?? 40}
-            onChange={(e) => onUpdate({ overlay: +e.target.value } as any)}
-            className="mt-2 w-full accent-teal-700" />
+        <Fld label="Tinggi banner (px)">
+          <Input type="number" value={s.height} className="mt-1 text-xs"
+            onChange={(e) => onUpdate({ height: +e.target.value } as any)} />
         </Fld>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
-          <input type="checkbox" checked={s.autoplay ?? true}
-            onChange={(e) => onUpdate({ autoplay: e.target.checked } as any)} className="accent-teal-700" />
-          Geser otomatis
-        </label>
-        <Fld label="Interval (ms)">
-          <Input type="number" value={s.interval_ms ?? 5000} className="mt-1 text-xs"
-            onChange={(e) => onUpdate({ interval_ms: +e.target.value } as any)} />
-        </Fld>
-      </div>
+
+      <Fld label="Animasi transisi antar slide">
+        <Select value={s.transition} onValueChange={(v) => onUpdate({ transition: v as any } as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="fade">Fade — memudar</SelectItem>
+            <SelectItem value="slide">Slide — menggeser</SelectItem>
+            <SelectItem value="zoom">Zoom — membesar</SelectItem>
+            <SelectItem value="none">Tanpa animasi</SelectItem>
+          </SelectContent>
+        </Select>
+      </Fld>
+
       <div className="space-y-2">
+        <Label className="text-xs font-semibold">Slide ({slides.length})</Label>
         {slides.map((slide, i) => (
           <div key={i} className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -349,25 +350,52 @@ function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
               <button type="button" onClick={() => setSlides(slides.filter((_, j) => j !== i))}
                 className="text-stone-300 hover:text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
-            <Input value={slide.image_url} placeholder="URL gambar https://..." className="text-xs font-mono"
-              onChange={(e) => patchSlide(i, { image_url: e.target.value })} />
-            <Input value={slide.headline ?? ""} placeholder="Headline" className="text-xs"
-              onChange={(e) => patchSlide(i, { headline: e.target.value })} />
-            <Input value={slide.subheadline ?? ""} placeholder="Sub headline" className="text-xs"
-              onChange={(e) => patchSlide(i, { subheadline: e.target.value })} />
-            <div className="grid grid-cols-2 gap-2">
-              <Input value={slide.cta_text ?? ""} placeholder="Teks CTA" className="text-xs"
-                onChange={(e) => patchSlide(i, { cta_text: e.target.value })} />
-              <Input value={slide.cta_url ?? ""} placeholder="/book" className="text-xs font-mono"
-                onChange={(e) => patchSlide(i, { cta_url: e.target.value })} />
-            </div>
+            <Label className="text-[10px] text-muted-foreground">URL Gambar</Label>
+            <Input value={slide.imageUrl} placeholder="https://..." className="text-xs font-mono"
+              onChange={(e) => patchSlide(i, { imageUrl: e.target.value })} />
+            <Label className="text-[10px] text-muted-foreground">URL Video (opsional — diutamakan di atas gambar)</Label>
+            <Input value={slide.videoUrl} placeholder="https://..." className="text-xs font-mono"
+              onChange={(e) => patchSlide(i, { videoUrl: e.target.value })} />
+            <Input value={slide.heading} placeholder="Judul" className="text-xs"
+              onChange={(e) => patchSlide(i, { heading: e.target.value })} />
+            <Input value={slide.subheading} placeholder="Subjudul" className="text-xs"
+              onChange={(e) => patchSlide(i, { subheading: e.target.value })} />
           </div>
         ))}
         <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1"
-          onClick={() => setSlides([...slides, { image_url: "", headline: "", subheadline: "", cta_text: "Pesan Sekarang", cta_url: "/book" }])}>
+          onClick={() => setSlides([...slides, { imageUrl: "", videoUrl: "", heading: "", subheading: "" }])}>
           <Plus className="h-3.5 w-3.5" /> Tambah Slide
         </Button>
       </div>
+
+      {/* Font controls — same as the homepage hero */}
+      <div className="grid grid-cols-2 gap-3">
+        <Fld label="Font judul">
+          <Select value={s.fontFamily} onValueChange={(v) => onUpdate({ fontFamily: v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sans">Sans-serif</SelectItem>
+              <SelectItem value="serif">Serif</SelectItem>
+              <SelectItem value="mono">Monospace</SelectItem>
+            </SelectContent>
+          </Select>
+        </Fld>
+        <Fld label="Gaya font">
+          <Select value={s.fontStyle} onValueChange={(v) => onUpdate({ fontStyle: v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="bold">Tebal</SelectItem>
+              <SelectItem value="italic">Miring</SelectItem>
+            </SelectContent>
+          </Select>
+        </Fld>
+      </div>
+      <Fld label={`Ukuran font — ${s.fontSize}px`}>
+        <input type="range" min={24} max={96} value={s.fontSize}
+          onChange={(e) => onUpdate({ fontSize: +e.target.value } as any)}
+          className="mt-2 w-full accent-teal-700" />
+      </Fld>
     </div>
   );
 }
