@@ -123,7 +123,10 @@ export const createSopDocument = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Update the document name (used as alt text for brosur images). */
+/**
+ * Update only the display name of a document.
+ * For media files (brosur) this is the "rename" action shown in the UI.
+ */
 export const renameSopDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -133,6 +136,24 @@ export const renameSopDocument = createServerFn({ method: "POST" })
     const { error } = await db(context.supabase)
       .from("sop_documents")
       .update({ name: data.name })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/**
+ * Update alt text for a media document (image/video).
+ * Stored in the `content` column; does NOT trigger RAG processing.
+ */
+export const updateMediaAltText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), altText: z.string().max(500) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("sop_documents")
+      .update({ content: data.altText })
       .eq("id", data.id);
     if (error) throw error;
     return { ok: true };
