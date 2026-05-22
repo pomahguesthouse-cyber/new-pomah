@@ -134,10 +134,9 @@ function HomepageBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLp?.id]);
 
-  // "Site Pages and Menu" modal (Wix-style) + which page's settings panel is open.
+  // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
-  const [settingsPageId, setSettingsPageId] = useState<string | null>(null);
-  const openPageSettings = (id: string) => { setSettingsPageId(id); setPagesOpen(true); };
+  const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
   const activeName = activePageId === "home" ? "Home" : (activeLp?.title ?? "Home");
 
   // If the active LP vanished (deleted), fall back to home.
@@ -248,7 +247,7 @@ function HomepageBuilder() {
             <span className="text-xs text-muted-foreground">Page:</span>
             <button
               type="button"
-              onClick={() => { setSettingsPageId(activePageId); setPagesOpen(true); }}
+              onClick={() => { setPagesOpen(true); }}
               className="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
             >
               {activeName}
@@ -274,7 +273,7 @@ function HomepageBuilder() {
           onSelect={setActivePageId}
           onAdd={handleAddPage}
           onDelete={handleDeletePage}
-          onSeo={(p) => openPageSettings(p.id)}
+          onSeo={(id) => openPageSettings(id)}
         />
 
         {/* ── Centre: live preview ── */}
@@ -307,8 +306,12 @@ function HomepageBuilder() {
             </>
           ) : (
             <>
-              <div className="border-b border-border px-4 py-3">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="text-sm font-semibold">Edit — {active.label}</p>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+                  onClick={() => openPageSettings("home")}>
+                  <Settings2 className="h-3.5 w-3.5" /> SEO
+                </Button>
               </div>
               <div className="flex gap-1 border-b border-border p-2">
                 {SECTIONS.map((s) => (
@@ -354,8 +357,6 @@ function HomepageBuilder() {
         onClose={() => setPagesOpen(false)}
         pages={pages}
         activePageId={activePageId}
-        settingsPageId={settingsPageId}
-        onSettingsPage={setSettingsPageId}
         onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
@@ -1101,7 +1102,7 @@ function SiteMenu({
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
-  onSeo: (p: SeoLandingPage) => void;
+  onSeo: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const filtered = pages.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()));
@@ -1126,14 +1127,22 @@ function SiteMenu({
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {/* Home — always present */}
-        <button type="button" onClick={() => onSelect("home")}
+        <div
           className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition",
+            "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
             activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-          )}>
+          )}
+          onClick={() => onSelect("home")}>
           <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
           <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
-        </button>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+            <button type="button" title="Pengaturan SEO"
+              onClick={(e) => { e.stopPropagation(); onSeo("home"); }}
+              className="rounded p-0.5 text-stone-400 hover:text-teal-600">
+              <Settings2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
 
         {filtered.map((p) => (
           <div key={p.id}
@@ -1146,7 +1155,7 @@ function SiteMenu({
             <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
             <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
               <button type="button" title="Pengaturan SEO"
-                onClick={(e) => { e.stopPropagation(); onSeo(p); }}
+                onClick={(e) => { e.stopPropagation(); onSeo(p.id); }}
                 className="rounded p-0.5 text-stone-400 hover:text-teal-600">
                 <Settings2 className="h-3.5 w-3.5" />
               </button>
@@ -1480,8 +1489,6 @@ function SitePagesModal({
   onClose: () => void;
   pages: SeoLandingPage[];
   activePageId: string;
-  settingsPageId: string | null;
-  onSettingsPage: (id: string | null) => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
@@ -1490,8 +1497,8 @@ function SitePagesModal({
   propertyId: string | null;
 }) {
   const [rail, setRail] = useState<SitePagesRail>("menu");
-  const settingsLp = settingsPageId && settingsPageId !== "home"
-    ? pages.find((p) => p.id === settingsPageId) ?? null
+  const activeLp = activePageId !== "home"
+    ? pages.find((p) => p.id === activePageId) ?? null
     : null;
 
   return (
@@ -1531,17 +1538,15 @@ function SitePagesModal({
                   {/* Home */}
                   <PageRow
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
-                    label="Home" active={activePageId === "home"} settingsActive={settingsPageId === "home"}
-                    onClick={() => { onSelect("home"); onSettingsPage("home"); }}
-                    onSettings={() => onSettingsPage("home")}
+                    label="Home" active={activePageId === "home"}
+                    onClick={() => onSelect("home")}
                   />
                   {pages.map((p) => (
                     <PageRow key={p.id}
                       icon={<FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />}
-                      label={p.title} active={activePageId === p.id} settingsActive={settingsPageId === p.id}
+                      label={p.title} active={activePageId === p.id}
                       published={p.published}
-                      onClick={() => { onSelect(p.id); onSettingsPage(p.id); }}
-                      onSettings={() => onSettingsPage(p.id)}
+                      onClick={() => onSelect(p.id)}
                       onDelete={() => onDelete(p)}
                     />
                   ))}
@@ -1557,45 +1562,35 @@ function SitePagesModal({
           </div>
 
           {/* Page Settings */}
-          {settingsLp ? (
-            <PageSettingsPanel target={{ kind: "lp", page: settingsLp }} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
-          ) : settingsPageId === "home" ? (
-            <PageSettingsPanel target={{ kind: "home", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
-          ) : (
-            <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-              <Settings2 className="h-8 w-8 text-stone-200" />
-              <p className="text-xs text-muted-foreground">Pilih halaman untuk membuka Page Settings.</p>
-            </div>
-          )}
+          {activeLp ? (
+            <PageSettingsPanel target={{ kind: "lp", page: activeLp }} onSaved={onSaved} onClose={onClose} />
+          ) : activePageId === "home" ? (
+            <PageSettingsPanel target={{ kind: "home", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={onClose} />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-/** A single row in the Site Menu list (page name + settings/delete actions). */
+/** A single row in the Site Menu list (page name + delete action). */
 function PageRow({
-  icon, label, active, settingsActive, published, onClick, onSettings, onDelete,
+  icon, label, active, published, onClick, onDelete,
 }: {
-  icon: React.ReactNode; label: string; active: boolean; settingsActive: boolean;
-  published?: boolean; onClick: () => void; onSettings: () => void; onDelete?: () => void;
+  icon: React.ReactNode; label: string; active: boolean;
+  published?: boolean; onClick: () => void; onDelete?: () => void;
 }) {
   return (
     <div
       className={cn(
         "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-        active || settingsActive ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+        active ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
       )}
       onClick={onClick}>
       {icon}
       <span className="flex-1 truncate text-xs font-medium text-stone-700">{label}</span>
       {published === false && <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>}
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-        <button type="button" title="Page Settings"
-          onClick={(e) => { e.stopPropagation(); onSettings(); }}
-          className="rounded p-0.5 text-stone-400 hover:text-teal-600">
-          <Settings2 className="h-3.5 w-3.5" />
-        </button>
         {onDelete && (
           <button type="button" title="Hapus halaman"
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
