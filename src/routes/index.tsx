@@ -353,8 +353,8 @@ function PomahHome() {
         <ReviewSlider
           items={
             gReviews.length > 0
-              ? gReviews.map((rv) => ({ text: rv.text, author: rv.author }))
-              : REVIEWS.map((r) => ({ text: r, author: null }))
+              ? gReviews.map((rv) => ({ text: rv.text, author: rv.author, isGoogle: true }))
+              : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
           }
         />
       </section>
@@ -699,7 +699,7 @@ function HeroSlider({
 /* Review slider                                                        */
 /* ------------------------------------------------------------------ */
 
-function ReviewSlider({ items }: { items: { text: string; author: string | null }[] }) {
+function ReviewSlider({ items }: { items: { text: string; author: string | null; isGoogle?: boolean }[] }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (items.length < 2) return;
@@ -720,6 +720,17 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null 
         <Quote className="mx-auto h-6 w-6 text-teal-600/40" />
         <p className="mt-3 text-sm leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
         {cur.author && <p className="mt-4 text-xs font-semibold text-stone-700">— {cur.author}</p>}
+        {cur.isGoogle && (
+          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-stone-500">
+            <span className="font-bold text-stone-700">G</span>
+            <span>Google</span>
+            <div className="flex gap-0.5">
+              {[0, 1, 2, 3, 4].map((star) => (
+                <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       {items.length > 1 && (
         <div className="mt-4 flex items-center justify-center gap-3">

@@ -7,7 +7,7 @@ import { useState, useEffect, createContext, useContext } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
-import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote } from "lucide-react";
+import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote, Star } from "lucide-react";
 import {
   getGoogleReviews,
   getPublicSiteData,
@@ -516,10 +516,10 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   });
 
   // Source: live Google reviews, with a graceful fallback to manual items.
-  const googleItems = (gr?.reviews ?? []).map((rv) => ({ name: rv.author, text: rv.text }));
+  const googleItems = (gr?.reviews ?? []).map((rv) => ({ name: rv.author, text: rv.text, isGoogle: true }));
   const items = useGoogle
-    ? (googleItems.length > 0 ? googleItems : (s.items ?? []))
-    : (s.items ?? []);
+    ? (googleItems.length > 0 ? googleItems : (s.items ?? []).map((i) => ({ ...i, isGoogle: false })))
+    : (s.items ?? []).map((i) => ({ ...i, isGoogle: false }));
 
   if (items.length === 0) return null;
   const cur = items[i % items.length];
@@ -536,6 +536,17 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
           <Quote className="mx-auto h-7 w-7 text-teal-600/40" />
           <p className="mt-4 text-base leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
           {cur.name && <p className="mt-5 text-sm font-semibold text-stone-700">— {cur.name}</p>}
+          {cur.isGoogle && (
+            <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-stone-500">
+              <span className="font-bold text-stone-700">G</span>
+              <span>Google</span>
+              <div className="flex gap-0.5">
+                {[0, 1, 2, 3, 4].map((star) => (
+                  <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {items.length > 1 && (
           <div className="mt-5 flex justify-center gap-2">
