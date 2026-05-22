@@ -24,6 +24,8 @@ export type SopDocument = {
   content: string | null;
   doc_category: "knowledge" | "sop" | "brosur";
   agent_key: string | null;
+  /** Which Supabase Storage bucket holds this file. NULL → "sop-documents". */
+  storage_bucket: string | null;
   created_at: string;
 };
 
@@ -62,7 +64,7 @@ export const listSopDocuments = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     let q = db(context.supabase)
       .from("sop_documents")
-      .select("id, name, file_path, file_type, source_url, content, doc_category, agent_key, created_at")
+      .select("id, name, file_path, file_type, source_url, content, doc_category, agent_key, storage_bucket, created_at")
       .order("created_at", { ascending: false });
     if (data?.category) q = q.eq("doc_category", data.category);
     if (data?.agentKey !== undefined) {
@@ -88,6 +90,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
         content: z.string().max(200000).optional().or(z.literal("")),
         docCategory: z.enum(["knowledge", "sop", "brosur"]).default("sop"),
         agentKey: z.string().max(50).optional().or(z.literal("")),
+        storageBucket: z.string().max(100).optional().or(z.literal("")),
       })
       .parse(d),
   )
@@ -103,6 +106,7 @@ export const createSopDocument = createServerFn({ method: "POST" })
       content: data.content || null,
       doc_category: data.docCategory,
       agent_key: data.agentKey || null,
+      storage_bucket: data.storageBucket || null,
     }).select("id").single();
     if (error) throw error;
 
