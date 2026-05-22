@@ -359,7 +359,9 @@ function HomepageBuilder() {
         onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
-        onSaved={() => lpQuery.refetch()}
+        onSaved={() => { lpQuery.refetch(); setPreviewKey((k) => k + 1); }}
+        homeCfg={cfg}
+        propertyId={data?.id ?? null}
       />
     </div>
   );
@@ -1179,15 +1181,25 @@ function SiteMenu({
  */
 type PageSettingsTab = "access" | "basics" | "advanced" | "social";
 
+/** Settings target: a landing page, or the Home page (homepage_config). */
+type SettingsTarget =
+  | { kind: "lp"; page: SeoLandingPage }
+  | { kind: "home"; cfg: HomepageConfig; propertyId: string | null };
+
 function PageSettingsPanel({
-  page,
+  target,
   onSaved,
   onClose,
 }: {
-  page: SeoLandingPage;
+  target: SettingsTarget;
   onSaved: () => void;
   onClose: () => void;
 }) {
+  const isHome = target.kind === "home";
+  const pageTitle = isHome ? "Home" : target.page.title;
+  const pageSlug = isHome ? "" : target.page.slug;
+  const targetKey = isHome ? "home" : target.page.id;
+
   const [tab, setTab] = useState<PageSettingsTab>("access");
   const [saving, setSaving] = useState(false);
 
@@ -1203,38 +1215,71 @@ function PageSettingsPanel({
   const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
-    setSlug(page.slug ?? "");
-    setMetaTitle(page.meta_title ?? "");
-    setMetaDesc(page.meta_description ?? "");
-    setTargetKw(page.target_keyword ?? "");
-    setOgImage(page.og_image_url ?? "");
-    setIndexable(page.published);
-    setCustomHead(page.custom_head ?? "");
-    setCustomRobots(page.custom_robots ?? "");
-    setJsonLdOn(page.json_ld_enabled ?? true);
-    setCustomJsonLd(page.custom_json_ld ?? "");
-  }, [page.id]);
+    if (target.kind === "home") {
+      const s = target.cfg.seo;
+      setSlug("");
+      setMetaTitle(s.metaTitle ?? "");
+      setMetaDesc(s.metaDescription ?? "");
+      setTargetKw(s.targetKeyword ?? "");
+      setOgImage(s.ogImageUrl ?? "");
+      setIndexable(true);
+      setCustomHead(s.customHead ?? "");
+      setCustomRobots(s.customRobots ?? "");
+      setJsonLdOn(s.jsonLdEnabled ?? true);
+      setCustomJsonLd(s.customJsonLd ?? "");
+    } else {
+      const page = target.page;
+      setSlug(page.slug ?? "");
+      setMetaTitle(page.meta_title ?? "");
+      setMetaDesc(page.meta_description ?? "");
+      setTargetKw(page.target_keyword ?? "");
+      setOgImage(page.og_image_url ?? "");
+      setIndexable(page.published);
+      setCustomHead(page.custom_head ?? "");
+      setCustomRobots(page.custom_robots ?? "");
+      setJsonLdOn(page.json_ld_enabled ?? true);
+      setCustomJsonLd(page.custom_json_ld ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetKey]);
 
   const handleSave = async () => {
-    const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-    if (!cleanSlug) { toast.error("URL halaman (slug) tidak boleh kosong"); return; }
     setSaving(true);
     try {
-      await updateSeoLandingPage({
-        data: {
-          id: page.id,
-          slug:             cleanSlug,
-          meta_title:       metaTitle || null,
-          meta_description: metaDesc  || null,
-          target_keyword:   targetKw  || null,
-          og_image_url:     ogImage   || null,
-          published:        indexable,
-          custom_head:      customHead   || null,
-          custom_robots:    customRobots || null,
-          json_ld_enabled:  jsonLdOn,
-          custom_json_ld:   customJsonLd || null,
-        },
-      });
+      if (target.kind === "home") {
+        if (!target.propertyId) { toast.error("Properti belum tersedia."); setSaving(false); return; }
+        await updateHomepageConfig({
+          data: {
+            id: target.propertyId,
+            config: {
+              ...target.cfg,
+              seo: {
+                metaTitle: metaTitle, metaDescription: metaDesc, targetKeyword: targetKw,
+                ogImageUrl: ogImage, customHead, customRobots,
+                jsonLdEnabled: jsonLdOn, customJsonLd,
+              },
+            } as unknown as Record<string, unknown>,
+          },
+        });
+      } else {
+        const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+        if (!cleanSlug) { toast.error("URL halaman (slug) tidak boleh kosong"); setSaving(false); return; }
+        await updateSeoLandingPage({
+          data: {
+            id: target.page.id,
+            slug:             cleanSlug,
+            meta_title:       metaTitle || null,
+            meta_description: metaDesc  || null,
+            target_keyword:   targetKw  || null,
+            og_image_url:     ogImage   || null,
+            published:        indexable,
+            custom_head:      customHead   || null,
+            custom_robots:    customRobots || null,
+            json_ld_enabled:  jsonLdOn,
+            custom_json_ld:   customJsonLd || null,
+          },
+        });
+      }
       toast.success("Pengaturan halaman tersimpan");
       onSaved();
     } catch (e) {
@@ -1254,7 +1299,7 @@ function PageSettingsPanel({
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
-        <p className="truncate text-sm font-semibold">Page Settings ({page.title})</p>
+        <p className="truncate text-sm font-semibold">Page Settings ({pageTitle})</p>
         <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -1277,31 +1322,52 @@ function PageSettingsPanel({
         {/* ── Access ── */}
         {tab === "access" && (
           <div className="space-y-4">
-            <FieldRow label="URL halaman">
-              <div className="flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-ring">
-                <span className="shrink-0 text-muted-foreground">pomahguesthouse.com/lp/</span>
-                <input
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                  placeholder="slug-halaman"
-                  className="min-w-0 flex-1 bg-transparent py-1 font-mono text-stone-800 focus:outline-none"
-                />
-              </div>
-              <p className="mt-0.5 text-[10px] text-muted-foreground">
-                Hanya huruf kecil, angka, dan tanda hubung. Mengubah URL dapat memengaruhi tautan lama.
-              </p>
-            </FieldRow>
-            <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
-              <div>
-                <p className="text-xs font-medium">Halaman dipublikasikan</p>
-                <p className="text-[10px] text-muted-foreground">Terlihat publik & dapat diindeks Google.</p>
-              </div>
-              <Switch checked={indexable} onCheckedChange={setIndexable} />
-            </div>
-            <a href={`/lp/${page.slug}`} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
-              <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
-            </a>
+            {isHome ? (
+              <>
+                <FieldRow label="URL halaman">
+                  <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                    <span className="font-mono text-stone-700">pomahguesthouse.com/</span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">URL halaman depan tidak dapat diubah.</p>
+                </FieldRow>
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+                  <p className="text-xs font-medium">Halaman selalu publik</p>
+                  <p className="text-[10px] text-muted-foreground">Halaman depan selalu dapat diakses & diindeks.</p>
+                </div>
+                <a href="/" target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
+                  <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
+                </a>
+              </>
+            ) : (
+              <>
+                <FieldRow label="URL halaman">
+                  <div className="flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1 text-sm focus-within:ring-2 focus-within:ring-ring">
+                    <span className="shrink-0 text-muted-foreground">pomahguesthouse.com/lp/</span>
+                    <input
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                      placeholder="slug-halaman"
+                      className="min-w-0 flex-1 bg-transparent py-1 font-mono text-stone-800 focus:outline-none"
+                    />
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    Hanya huruf kecil, angka, dan tanda hubung. Mengubah URL dapat memengaruhi tautan lama.
+                  </p>
+                </FieldRow>
+                <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                  <div>
+                    <p className="text-xs font-medium">Halaman dipublikasikan</p>
+                    <p className="text-[10px] text-muted-foreground">Terlihat publik & dapat diindeks Google.</p>
+                  </div>
+                  <Switch checked={indexable} onCheckedChange={setIndexable} />
+                </div>
+                <a href={`/lp/${pageSlug}`} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
+                  <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
+                </a>
+              </>
+            )}
           </div>
         )}
 
@@ -1310,8 +1376,8 @@ function PageSettingsPanel({
           <div className="space-y-4">
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
               <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Preview on Google</p>
-              <p className="text-[12px] text-stone-500">pomahguesthouse.com › lp › {page.slug}</p>
-              <p className="text-[15px] font-medium text-blue-700 leading-snug">{metaTitle || page.title || "Title tag belum diisi"}</p>
+              <p className="text-[12px] text-stone-500">pomahguesthouse.com{isHome ? "" : ` › lp › ${pageSlug}`}</p>
+              <p className="text-[15px] font-medium text-blue-700 leading-snug">{metaTitle || pageTitle || "Title tag belum diisi"}</p>
               <p className="text-xs text-stone-600 leading-relaxed">
                 {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
               </p>
@@ -1372,7 +1438,7 @@ function PageSettingsPanel({
               </div>
               <div className="bg-white px-3 py-2">
                 <p className="text-[10px] uppercase text-stone-400">pomahguesthouse.com</p>
-                <p className="truncate text-sm font-semibold text-stone-800">{metaTitle || page.title}</p>
+                <p className="truncate text-sm font-semibold text-stone-800">{metaTitle || pageTitle}</p>
                 <p className="line-clamp-2 text-xs text-stone-500">{metaDesc || "Meta description belum diisi…"}</p>
               </div>
             </div>
@@ -1407,6 +1473,8 @@ function SitePagesModal({
   onAdd,
   onDelete,
   onSaved,
+  homeCfg,
+  propertyId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1418,6 +1486,8 @@ function SitePagesModal({
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
   onSaved: () => void;
+  homeCfg: HomepageConfig;
+  propertyId: string | null;
 }) {
   const [rail, setRail] = useState<SitePagesRail>("menu");
   const settingsLp = settingsPageId && settingsPageId !== "home"
@@ -1488,15 +1558,9 @@ function SitePagesModal({
 
           {/* Page Settings */}
           {settingsLp ? (
-            <PageSettingsPanel page={settingsLp} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
+            <PageSettingsPanel target={{ kind: "lp", page: settingsLp }} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
           ) : settingsPageId === "home" ? (
-            <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-              <Home className="h-8 w-8 text-stone-200" />
-              <p className="text-sm font-medium text-stone-500">Page Settings (Home)</p>
-              <p className="max-w-xs text-xs text-muted-foreground">
-                Halaman depan diatur lewat panel editor di sebelah kanan builder. SEO situs dikelola di menu AI SEO.
-              </p>
-            </div>
+            <PageSettingsPanel target={{ kind: "home", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={() => onSettingsPage(null)} />
           ) : (
             <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
               <Settings2 className="h-8 w-8 text-stone-200" />
