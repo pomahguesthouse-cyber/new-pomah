@@ -63,6 +63,7 @@ import {
   updateSeoLandingPage,
   publishSeoLandingPage,
   deleteSeoLandingPage,
+  generateLandingPageContent,
   type SeoLandingPage,
 } from "@/admin/modules/seo/landing-page.functions";
 import { Card } from "@/components/ui/card";
@@ -370,10 +371,12 @@ type LPEditorTab = "konten" | "seo" | "pratinjau";
 
 function LandingPageEditor({
   page,
+  draft,
   onSave,
   onClose,
 }: {
-  page: SeoLandingPage | null;   // null = create new
+  page: SeoLandingPage | null;          // null = create new
+  draft?: Partial<SeoLandingPage>;      // AI-generated prefill (new pages only)
   onSave: () => void;
   onClose: () => void;
 }) {
@@ -382,19 +385,52 @@ function LandingPageEditor({
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
 
-  // Form state mirrors the DB columns
-  const [title,            setTitle]            = useState(page?.title            ?? "");
-  const [slug,             setSlug]             = useState(page?.slug             ?? "");
-  const [targetKeyword,    setTargetKeyword]    = useState(page?.target_keyword   ?? "");
-  const [heroHeadline,     setHeroHeadline]     = useState(page?.hero_headline    ?? "");
-  const [heroSubheadline,  setHeroSubheadline]  = useState(page?.hero_subheadline ?? "");
-  const [heroCta,          setHeroCta]          = useState(page?.hero_cta_text    ?? "Pesan Sekarang");
-  const [heroCtaUrl,       setHeroCtaUrl]       = useState(page?.hero_cta_url     ?? "/book");
-  const [bodyContent,      setBodyContent]      = useState(page?.body_content     ?? "");
-  const [metaTitle,        setMetaTitle]        = useState(page?.meta_title       ?? "");
-  const [metaDescription,  setMetaDescription]  = useState(page?.meta_description ?? "");
-  const [ogImageUrl,       setOgImageUrl]       = useState(page?.og_image_url     ?? "");
-  const [published,        setPublished]        = useState(page?.published        ?? false);
+  // Generate-with-AI dialog state (used inside the editor)
+  const [genDialog,   setGenDialog]   = useState(false);
+  const [genKeyword,  setGenKeyword]  = useState("");
+  const [generating,  setGenerating]  = useState(false);
+
+  // Form state — seeded from AI draft (if any), then page, then defaults
+  const [title,            setTitle]            = useState(draft?.title            ?? page?.title            ?? "");
+  const [slug,             setSlug]             = useState(draft?.slug             ?? page?.slug             ?? "");
+  const [targetKeyword,    setTargetKeyword]    = useState(draft?.target_keyword   ?? page?.target_keyword   ?? "");
+  const [heroHeadline,     setHeroHeadline]     = useState(draft?.hero_headline    ?? page?.hero_headline    ?? "");
+  const [heroSubheadline,  setHeroSubheadline]  = useState(draft?.hero_subheadline ?? page?.hero_subheadline ?? "");
+  const [heroCta,          setHeroCta]          = useState(draft?.hero_cta_text    ?? page?.hero_cta_text    ?? "Pesan Sekarang");
+  const [heroCtaUrl,       setHeroCtaUrl]       = useState(draft?.hero_cta_url     ?? page?.hero_cta_url     ?? "/book");
+  const [bodyContent,      setBodyContent]      = useState(draft?.body_content     ?? page?.body_content     ?? "");
+  const [metaTitle,        setMetaTitle]        = useState(draft?.meta_title       ?? page?.meta_title       ?? "");
+  const [metaDescription,  setMetaDescription]  = useState(draft?.meta_description ?? page?.meta_description ?? "");
+  const [ogImageUrl,       setOgImageUrl]       = useState(draft?.og_image_url     ?? page?.og_image_url     ?? "");
+  const [published,        setPublished]        = useState(draft?.published        ?? page?.published        ?? false);
+
+  /** Apply AI-generated content into the form fields. */
+  const applyGenerated = (g: Partial<SeoLandingPage>) => {
+    if (g.title            !== undefined) setTitle(g.title ?? "");
+    if (g.slug             !== undefined) setSlug(g.slug ?? "");
+    if (g.target_keyword   !== undefined) setTargetKeyword(g.target_keyword ?? "");
+    if (g.hero_headline    !== undefined) setHeroHeadline(g.hero_headline ?? "");
+    if (g.hero_subheadline !== undefined) setHeroSubheadline(g.hero_subheadline ?? "");
+    if (g.hero_cta_text    !== undefined) setHeroCta(g.hero_cta_text ?? "Pesan Sekarang");
+    if (g.hero_cta_url     !== undefined) setHeroCtaUrl(g.hero_cta_url ?? "/book");
+    if (g.body_content     !== undefined) setBodyContent(g.body_content ?? "");
+    if (g.meta_title       !== undefined) setMetaTitle(g.meta_title ?? "");
+    if (g.meta_description !== undefined) setMetaDescription(g.meta_description ?? "");
+  };
+
+  const handleGenerate = async () => {
+    if (!genKeyword.trim()) { toast.error("Masukkan kata kunci target"); return; }
+    setGenerating(true);
+    try {
+      const result = await generateLandingPageContent({ data: { keyword: genKeyword.trim() } });
+      applyGenerated(result.page);
+      setGenDialog(false);
+      setGenKeyword("");
+      toast.success("✨ Konten berhasil di-generate oleh AI!");
+      setTab("konten");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setGenerating(false); }
+  };
 
   // Auto-generate slug from title (new pages only)
   const autoSlug = (t: string) =>
@@ -464,6 +500,14 @@ function LandingPageEditor({
         <div className="flex items-center gap-3">
           <span className="font-semibold text-stone-800 text-sm">{isNew ? "Landing Page Baru" : title}</span>
           {!isNew && <ScorePill score={score} />}
+          {isNew && (
+            <Button size="sm" variant="outline"
+              className="h-7 gap-1.5 border-teal-200 text-teal-700 hover:bg-teal-50 text-xs"
+              onClick={() => setGenDialog(true)}>
+              <Sparkles className="h-3 w-3" />
+              Generate dengan AI
+            </Button>
+          )}
         </div>
         <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
@@ -669,6 +713,54 @@ function LandingPageEditor({
           </Button>
         </div>
       </div>
+
+      {/* ── Generate with AI Dialog ── */}
+      <Dialog open={genDialog} onOpenChange={setGenDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-teal-600" />
+              Generate Landing Page dengan AI
+            </DialogTitle>
+            <DialogDescription>
+              Masukkan kata kunci target dan AI akan membuat konten landing page yang teroptimasi untuk Google.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-semibold">Kata Kunci Target</Label>
+              <Input
+                value={genKeyword}
+                onChange={(e) => setGenKeyword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !generating) handleGenerate(); }}
+                placeholder="mis. penginapan wisuda unnes semarang"
+                className="mt-1"
+                disabled={generating}
+                autoFocus
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                AI akan membuat judul, headline hero, konten body (HTML), meta title, dan meta description yang mengandung kata kunci ini secara alami.
+              </p>
+            </div>
+            {generating && (
+              <div className="flex items-center gap-2 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-700">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span>AI sedang menulis konten… biasanya 10–20 detik</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setGenDialog(false); setGenKeyword(""); }} disabled={generating}>
+              Batal
+            </Button>
+            <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" onClick={handleGenerate} disabled={generating || !genKeyword.trim()}>
+              {generating
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Generating…</>
+                : <><Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate Konten</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -677,6 +769,28 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
   const [selected,    setSelected]    = useState<SeoLandingPage | "new" | null>(null);
   const [search,      setSearch]      = useState("");
   const [togglingId,  setTogglingId]  = useState<string | null>(null);
+  const [aiDraft,     setAiDraft]     = useState<Partial<SeoLandingPage> | undefined>(undefined);
+  const [editorKey,   setEditorKey]   = useState(0);
+
+  // Section-level generate dialog
+  const [secGenDialog,   setSecGenDialog]   = useState(false);
+  const [secGenKeyword,  setSecGenKeyword]  = useState("");
+  const [secGenerating,  setSecGenerating]  = useState(false);
+
+  const handleSectionGenerate = async () => {
+    if (!secGenKeyword.trim()) { toast.error("Masukkan kata kunci target"); return; }
+    setSecGenerating(true);
+    try {
+      const result = await generateLandingPageContent({ data: { keyword: secGenKeyword.trim() } });
+      setAiDraft(result.page);
+      setSelected("new");
+      setEditorKey((k) => k + 1);   // remount editor so draft is applied
+      setSecGenDialog(false);
+      setSecGenKeyword("");
+      toast.success("✨ Konten di-generate! Periksa lalu simpan halaman.");
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSecGenerating(false); }
+  };
 
   const filtered = pages.filter((p) =>
     p.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -700,11 +814,67 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
           <h2 className="text-xl font-bold text-stone-800">Landing Pages</h2>
           <p className="text-xs text-stone-400">Halaman SEO buatan tangan, ditargetkan untuk kata kunci spesifik</p>
         </div>
-        <Button className="bg-teal-700 text-white hover:bg-teal-800" size="sm"
-          onClick={() => setSelected("new")}>
-          <Plus className="mr-1.5 h-4 w-4" /> Buat Landing Page
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5 border-teal-200 text-teal-700 hover:bg-teal-50"
+            onClick={() => setSecGenDialog(true)}>
+            <Sparkles className="h-4 w-4" /> Generate dengan AI
+          </Button>
+          <Button className="bg-teal-700 text-white hover:bg-teal-800" size="sm"
+            onClick={() => { setAiDraft(undefined); setSelected("new"); }}>
+            <Plus className="mr-1.5 h-4 w-4" /> Buat Manual
+          </Button>
+        </div>
       </div>
+
+      {/* Section-level generate dialog */}
+      <Dialog open={secGenDialog} onOpenChange={setSecGenDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-teal-600" />
+              Generate Landing Page dengan AI
+            </DialogTitle>
+            <DialogDescription>
+              Masukkan kata kunci dan AI akan otomatis membuat judul, hero section, konten body, dan meta SEO yang teroptimasi.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-semibold">Kata Kunci Target</Label>
+              <Input
+                value={secGenKeyword}
+                onChange={(e) => setSecGenKeyword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !secGenerating) handleSectionGenerate(); }}
+                placeholder="mis. penginapan wisuda unnes semarang"
+                className="mt-1"
+                disabled={secGenerating}
+                autoFocus
+              />
+              <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+                AI akan menulis konten SEO lengkap dalam Bahasa Indonesia, disesuaikan untuk Pomah Guesthouse Semarang.
+              </p>
+            </div>
+            {secGenerating && (
+              <div className="flex items-center gap-2 rounded-lg bg-teal-50 px-4 py-3 text-sm text-teal-700">
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <span>AI sedang menulis konten… biasanya 10–20 detik</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setSecGenDialog(false); setSecGenKeyword(""); }} disabled={secGenerating}>
+              Batal
+            </Button>
+            <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800"
+              onClick={handleSectionGenerate}
+              disabled={secGenerating || !secGenKeyword.trim()}>
+              {secGenerating
+                ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Generating…</>
+                : <><Sparkles className="mr-1.5 h-3.5 w-3.5" />Generate & Buka Editor</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Page list */}
@@ -719,8 +889,14 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
             <div className="rounded-xl border border-dashed border-stone-200 py-12 text-center">
               <FileText className="mx-auto h-8 w-8 text-stone-200" />
               <p className="mt-2 text-xs text-stone-400 italic">
-                {pages.length === 0 ? "Belum ada landing page. Buat halaman pertama Anda!" : "Tidak ada hasil."}
+                {pages.length === 0 ? "Belum ada landing page. Buat atau generate pertama Anda!" : "Tidak ada hasil."}
               </p>
+              {pages.length === 0 && (
+                <Button variant="outline" size="sm" className="mt-3 gap-1.5 border-teal-200 text-teal-700 hover:bg-teal-50"
+                  onClick={() => setSecGenDialog(true)}>
+                  <Sparkles className="h-3.5 w-3.5" /> Generate dengan AI
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
@@ -763,18 +939,27 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
         <div className="lg:col-span-3">
           {selected === null ? (
             <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 text-center">
-              <FileText className="h-12 w-12 text-stone-200" />
+              <Sparkles className="h-12 w-12 text-stone-200" />
               <p className="mt-3 text-sm font-medium text-stone-400">Pilih halaman di kiri untuk mengedit,</p>
-              <p className="text-sm text-stone-400">atau buat halaman baru.</p>
-              <Button variant="outline" className="mt-4 gap-1.5 text-sm" onClick={() => setSelected("new")}>
-                <Plus className="h-4 w-4" /> Buat Landing Page
-              </Button>
+              <p className="text-sm text-stone-400">atau buat / generate halaman baru.</p>
+              <div className="mt-4 flex items-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5 border-teal-200 text-teal-700 hover:bg-teal-50"
+                  onClick={() => setSecGenDialog(true)}>
+                  <Sparkles className="h-4 w-4" /> Generate dengan AI
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5"
+                  onClick={() => { setAiDraft(undefined); setSelected("new"); }}>
+                  <Plus className="h-4 w-4" /> Buat Manual
+                </Button>
+              </div>
             </div>
           ) : (
             <LandingPageEditor
+              key={selected === "new" ? editorKey : (selected as SeoLandingPage).id}
               page={selected === "new" ? null : selected}
+              draft={selected === "new" ? aiDraft : undefined}
               onSave={onChanged}
-              onClose={() => setSelected(null)}
+              onClose={() => { setSelected(null); setAiDraft(undefined); }}
             />
           )}
         </div>
