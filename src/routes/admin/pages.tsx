@@ -27,20 +27,19 @@ import {
   ArrowLeft,
   Type,
   FolderOpen,
-  FileText,
   Search,
   Globe,
   Check,
   X,
   ExternalLink,
-  Sparkles,
+  Settings2,
+  Home,
 } from "lucide-react";
 // useQuery already imported above; useMutation available if needed
 import {
   listSeoLandingPages,
   createSeoLandingPage,
   updateSeoLandingPage,
-  publishSeoLandingPage,
   deleteSeoLandingPage,
   type SeoLandingPage,
   type LPSection,
@@ -48,6 +47,14 @@ import {
 import { LpPageBuilder } from "@/admin/modules/seo/lp-page-builder";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { MediaPicker } from "@/admin/components/media-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -71,7 +78,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel" | "landing_pages";
+type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel";
 
 const SECTIONS: {
   key: SectionKey;
@@ -83,7 +90,6 @@ const SECTIONS: {
   { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
-  { key: "landing_pages", label: "Landing Pages", icon: FileText           },
 ];
 
 /**
@@ -101,23 +107,46 @@ function HomepageBuilder() {
     refetchOnWindowFocus: false,
   });
 
+  // Landing pages — drive the "Site Menu" page list.
+  const lpQuery = useQuery({
+    queryKey: ["lp-list-builder"],
+    queryFn: () => listSeoLandingPages(),
+  });
+  const pages = lpQuery.data?.pages ?? [];
+
   const [section, setSection] = useState<SectionKey>("header");
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Landing pages mode — track the selected LP for the iframe preview
-  const [activeLpSlug, setActiveLpSlug] = useState<string | null>(null);
-  const previewSrc = section === "landing_pages" && activeLpSlug
-    ? `/lp/${activeLpSlug}`
-    : "/?builder=1";
+  // Active page in the Site Menu: "home" or a landing-page id.
+  const [activePageId, setActivePageId] = useState<string>("home");
+  const activeLp = activePageId === "home" ? null : pages.find((p) => p.id === activePageId) ?? null;
+
+  // Sections of the active landing page (edited in the right panel).
+  const [lpSections, setLpSections] = useState<LPSection[]>([]);
+  useEffect(() => {
+    if (activeLp) setLpSections((activeLp.sections ?? []) as LPSection[]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLp?.id]);
+
+  // SEO settings popup target (a landing page) — null = closed.
+  const [seoTarget, setSeoTarget] = useState<SeoLandingPage | null>(null);
+
+  // If the active LP vanished (deleted), fall back to home.
+  useEffect(() => {
+    if (activePageId !== "home" && !lpQuery.isLoading && !activeLp) setActivePageId("home");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lpQuery.isLoading, activeLp, activePageId]);
+
+  const previewSrc = activeLp ? `/lp/${activeLp.slug}` : "/?builder=1";
 
   useEffect(() => {
     if (data?.config) setCfg(data.config);
   }, [data]);
 
-  // Selecting an element inside the preview iframe.
+  // Selecting an element inside the preview iframe (home only).
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.data?.source === "pb" && typeof e.data.section === "string") {
@@ -130,23 +159,62 @@ function HomepageBuilder() {
 
   // Mirror the active section into the preview so it highlights there.
   useEffect(() => {
-    iframeRef.current?.contentWindow?.postMessage({ source: "pb-host", section }, "*");
-  }, [section, previewKey]);
+    if (!activeLp) {
+      iframeRef.current?.contentWindow?.postMessage({ source: "pb-host", section }, "*");
+    }
+  }, [section, previewKey, activeLp]);
 
   const save = async () => {
-    if (!data?.id) {
-      toast.error("Properti belum tersedia. Lengkapi data properti dulu.");
-      return;
-    }
     setSaving(true);
     try {
-      await updateFn({ data: { id: data.id, config: cfg as unknown as Record<string, unknown> } });
-      toast.success("Halaman depan tersimpan");
-      setPreviewKey((k) => k + 1);
+      if (activeLp) {
+        await updateSeoLandingPage({
+          data: { id: activeLp.id, sections: lpSections.length > 0 ? lpSections : null },
+        });
+        toast.success("Landing page tersimpan");
+        await lpQuery.refetch();
+        setPreviewKey((k) => k + 1);
+      } else {
+        if (!data?.id) {
+          toast.error("Properti belum tersedia. Lengkapi data properti dulu.");
+          return;
+        }
+        await updateFn({ data: { id: data.id, config: cfg as unknown as Record<string, unknown> } });
+        toast.success("Halaman depan tersimpan");
+        setPreviewKey((k) => k + 1);
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddPage = async () => {
+    const title = window.prompt("Judul halaman baru:", "Halaman Baru");
+    if (!title || !title.trim()) return;
+    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+    try {
+      const res = await createSeoLandingPage({
+        data: { title: title.trim(), slug, hero_cta_text: "Pesan Sekarang", hero_cta_url: "/book", published: false },
+      });
+      await lpQuery.refetch();
+      setActivePageId(res.id);
+      toast.success("Halaman dibuat");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  const handleDeletePage = async (p: SeoLandingPage) => {
+    if (!confirm(`Hapus halaman "${p.title}"?`)) return;
+    try {
+      await deleteSeoLandingPage({ data: { id: p.id } });
+      if (activePageId === p.id) setActivePageId("home");
+      await lpQuery.refetch();
+      toast.success("Halaman dihapus");
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -169,6 +237,20 @@ function HomepageBuilder() {
             </p>
             <h1 className="text-lg font-semibold tracking-tight">Page Builder</h1>
           </div>
+          {/* Page selector — mirrors the Site Menu */}
+          <div className="ml-4 flex items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Page:</span>
+            <select
+              value={activePageId}
+              onChange={(e) => setActivePageId(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="home">Home</option>
+              {pages.map((p) => (
+                <option key={p.id} value={p.id}>{p.title}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <Button
           className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
@@ -181,6 +263,16 @@ function HomepageBuilder() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
+        {/* ── Left: Site Menu ── */}
+        <SiteMenu
+          pages={pages}
+          activePageId={activePageId}
+          onSelect={setActivePageId}
+          onAdd={handleAddPage}
+          onDelete={handleDeletePage}
+          onSeo={(p) => setSeoTarget(p)}
+        />
+
         {/* ── Centre: live preview ── */}
         <div className="flex flex-1 items-start justify-center overflow-auto p-6">
           <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-white shadow-lg">
@@ -196,49 +288,68 @@ function HomepageBuilder() {
 
         {/* ── Right: contextual editor ── */}
         <aside className="flex w-[400px] shrink-0 flex-col border-l border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-sm font-semibold">Edit — {active.label}</p>
-          </div>
-          <div className="flex gap-1 border-b border-border p-2">
-            {SECTIONS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setSection(s.key)}
-                title={s.label}
-                className={cn(
-                  "flex flex-1 flex-col items-center gap-1 rounded-md py-2 transition",
-                  section === s.key
-                    ? "bg-teal-50 text-teal-900"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          {activeLp ? (
+            <>
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <p className="truncate text-sm font-semibold">Edit — {activeLp.title}</p>
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
+                  onClick={() => setSeoTarget(activeLp)}>
+                  <Settings2 className="h-3.5 w-3.5" /> SEO
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3">
+                <LpPageBuilder sections={lpSections} onChange={setLpSections} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="border-b border-border px-4 py-3">
+                <p className="text-sm font-semibold">Edit — {active.label}</p>
+              </div>
+              <div className="flex gap-1 border-b border-border p-2">
+                {SECTIONS.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSection(s.key)}
+                    title={s.label}
+                    className={cn(
+                      "flex flex-1 flex-col items-center gap-1 rounded-md py-2 transition",
+                      section === s.key
+                        ? "bg-teal-50 text-teal-900"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    <s.icon className="h-4 w-4" />
+                    <span className="text-[8px] font-medium uppercase tracking-wide">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {isLoading ? (
+                  <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
+                ) : section === "header" ? (
+                  <HeaderTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "hero" ? (
+                  <HeroTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "datepicker" ? (
+                  <DatePickerTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "story" ? (
+                  <StoryTab cfg={cfg} setCfg={setCfg} />
+                ) : (
+                  <CarouselTab cfg={cfg} setCfg={setCfg} />
                 )}
-              >
-                <s.icon className="h-4 w-4" />
-                <span className="text-[8px] font-medium uppercase tracking-wide">{s.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
-            ) : section === "landing_pages" ? (
-              <LandingPagesTab
-                activeLpSlug={activeLpSlug}
-                onSelectSlug={(slug) => { setActiveLpSlug(slug); setPreviewKey((k) => k + 1); }}
-              />
-            ) : section === "header" ? (
-              <HeaderTab cfg={cfg} setCfg={setCfg} />
-            ) : section === "hero" ? (
-              <HeroTab cfg={cfg} setCfg={setCfg} />
-            ) : section === "datepicker" ? (
-              <DatePickerTab cfg={cfg} setCfg={setCfg} />
-            ) : section === "story" ? (
-              <StoryTab cfg={cfg} setCfg={setCfg} />
-            ) : (
-              <CarouselTab cfg={cfg} setCfg={setCfg} />
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </aside>
       </div>
+
+      {/* SEO settings popup (landing pages) */}
+      <SeoPopup
+        page={seoTarget}
+        onClose={() => setSeoTarget(null)}
+        onSaved={() => lpQuery.refetch()}
+      />
     </div>
   );
 }
@@ -959,287 +1070,312 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
 /* 6. Landing Pages Tab                                                */
 /* ================================================================== */
 
-type LPSubTab = "builder" | "seo";
-
-function LandingPagesTab({
-  activeLpSlug,
-  onSelectSlug,
+/**
+ * Site Menu — Wix-style left sidebar listing all editable pages
+ * (Home + landing pages). Each landing page row has a SEO gear and a
+ * delete control on hover; "+ Add Page" creates a new landing page.
+ */
+function SiteMenu({
+  pages,
+  activePageId,
+  onSelect,
+  onAdd,
+  onDelete,
+  onSeo,
 }: {
-  activeLpSlug: string | null;
-  onSelectSlug: (slug: string) => void;
+  pages: SeoLandingPage[];
+  activePageId: string;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+  onDelete: (p: SeoLandingPage) => void;
+  onSeo: (p: SeoLandingPage) => void;
 }) {
-  const { data, refetch } = useQuery({
-    queryKey: ["lp-list-builder"],
-    queryFn: () => listSeoLandingPages(),
-  });
-  const pages = data?.pages ?? [];
-
-  const [search, setSearch]           = useState("");
-  const [subTab, setSubTab]           = useState<LPSubTab>("builder");
-  const [creating, setCreating]       = useState(false);
-  const [newTitle, setNewTitle]       = useState("");
-  const [saving, setSaving]           = useState(false);
-
-  const selected = pages.find((p) => p.slug === activeLpSlug) ?? null;
-
-  // Local editable copies of the selected LP
-  const [sections,        setSections]        = useState<LPSection[]>([]);
-  const [targetKw,        setTargetKw]        = useState("");
-  const [metaTitle,       setMetaTitle]       = useState("");
-  const [metaDesc,        setMetaDesc]        = useState("");
-  const [ogImage,         setOgImage]         = useState("");
-  const [published,       setPublished]       = useState(false);
-  const [heroCta,         setHeroCta]         = useState("Pesan Sekarang");
-  const [heroCtaUrl,      setHeroCtaUrl]      = useState("/book");
-
-  // Sync local state when selected LP changes
-  useEffect(() => {
-    if (!selected) return;
-    setSections((selected.sections ?? []) as LPSection[]);
-    setTargetKw(selected.target_keyword ?? "");
-    setMetaTitle(selected.meta_title ?? "");
-    setMetaDesc(selected.meta_description ?? "");
-    setOgImage(selected.og_image_url ?? "");
-    setPublished(selected.published);
-    setHeroCta(selected.hero_cta_text ?? "Pesan Sekarang");
-    setHeroCtaUrl(selected.hero_cta_url ?? "/book");
-  }, [selected?.id]);
-
-  const handleCreate = async () => {
-    if (!newTitle.trim()) return;
-    const slug = newTitle.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").slice(0, 80);
-    setCreating(true);
-    try {
-      await createSeoLandingPage({ data: {
-        title: newTitle.trim(), slug,
-        hero_cta_text: "Pesan Sekarang", hero_cta_url: "/book", published: false,
-      }});
-      setNewTitle("");
-      setCreating(false);
-      await refetch();
-      onSelectSlug(slug);
-    } catch (e) { toast.error((e as Error).message); setCreating(false); }
-  };
-
-  const handleSave = async () => {
-    if (!selected) return;
-    setSaving(true);
-    try {
-      await updateSeoLandingPage({ data: {
-        id: selected.id,
-        sections: sections.length > 0 ? sections : null,
-        target_keyword:   targetKw   || null,
-        meta_title:       metaTitle  || null,
-        meta_description: metaDesc   || null,
-        og_image_url:     ogImage    || null,
-        published,
-        hero_cta_text:    heroCta    || "Pesan Sekarang",
-        hero_cta_url:     heroCtaUrl || "/book",
-      }});
-      toast.success("Landing page disimpan");
-      refetch();
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setSaving(false); }
-  };
-
-  const handleTogglePublish = async (p: SeoLandingPage) => {
-    try {
-      await publishSeoLandingPage({ data: { id: p.id, published: !p.published } });
-      refetch();
-    } catch (e) { toast.error((e as Error).message); }
-  };
-
-  const handleDelete = async (p: SeoLandingPage) => {
-    if (!confirm(`Hapus "${p.title}"?`)) return;
-    try {
-      await deleteSeoLandingPage({ data: { id: p.id } });
-      if (activeLpSlug === p.slug) onSelectSlug("");
-      refetch();
-    } catch (e) { toast.error((e as Error).message); }
-  };
-
-  const filtered = pages.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase()) ||
-    (p.target_keyword ?? "").toLowerCase().includes(search.toLowerCase()),
-  );
-
-  // SEO score (simplified)
-  const seoScore = (() => {
-    let s = 0;
-    const kw = targetKw.toLowerCase();
-    if (kw && metaTitle.toLowerCase().includes(kw)) s += 25;
-    if (kw && metaDesc.toLowerCase().includes(kw)) s += 25;
-    if (metaTitle.length >= 30 && metaTitle.length <= 60) s += 25;
-    if (metaDesc.length >= 120 && metaDesc.length <= 160) s += 25;
-    return Math.min(s, 100);
-  })();
+  const [search, setSearch] = useState("");
+  const filtered = pages.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="flex h-full flex-col">
-      {/* LP list */}
-      <div className="border-b border-border p-3 space-y-2">
+    <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <p className="text-sm font-semibold">Site Menu</p>
+        <button type="button" onClick={onAdd}
+          className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900">
+          <Plus className="h-3.5 w-3.5" /> Add Page
+        </button>
+      </div>
+
+      <div className="border-b border-border p-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Cari halaman…" className="h-7 pl-7 text-xs" />
         </div>
-        <div className="max-h-40 overflow-y-auto space-y-1">
-          {filtered.length === 0 && (
-            <p className="py-3 text-center text-xs text-muted-foreground italic">
-              {pages.length === 0 ? "Belum ada landing page." : "Tidak ada hasil."}
-            </p>
-          )}
-          {filtered.map((p) => (
-            <div key={p.id}
-              className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition ${
-                activeLpSlug === p.slug ? "bg-teal-50 border border-teal-200" : "hover:bg-muted"
-              }`}
-              onClick={() => onSelectSlug(p.slug)}>
-              <Globe className={`h-3 w-3 shrink-0 ${p.published ? "text-emerald-500" : "text-stone-300"}`} />
-              <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                <a href={`/lp/${p.slug}`} target="_blank" rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded p-0.5 text-stone-400 hover:text-teal-600">
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleDelete(p); }}
-                  className="rounded p-0.5 text-stone-400 hover:text-red-500">
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Create new */}
-        <div className="flex gap-1.5">
-          <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
-            placeholder="Judul halaman baru…" className="h-7 flex-1 text-xs" disabled={creating} />
-          <Button size="sm" className="h-7 bg-teal-700 text-white hover:bg-teal-800 px-2" disabled={creating || !newTitle.trim()}
-            onClick={handleCreate}>
-            {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-          </Button>
-        </div>
       </div>
 
-      {/* Editor area */}
-      {!selected ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-          <FileText className="h-8 w-8 text-stone-200" />
-          <p className="text-xs text-muted-foreground">Pilih atau buat landing page di atas.</p>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* LP sub-tabs */}
-          <div className="flex border-b border-border">
-            {(["builder", "seo"] as LPSubTab[]).map((t) => (
-              <button key={t} type="button" onClick={() => setSubTab(t)}
-                className={`flex-1 py-2 text-xs font-medium transition ${
-                  subTab === t ? "border-b-2 border-teal-600 text-teal-700" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {t === "builder" ? "🧱 Sections" : "🔍 SEO Settings"}
-              </button>
-            ))}
-          </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {/* Home — always present */}
+        <button type="button" onClick={() => onSelect("home")}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition",
+            activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+          )}>
+          <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+          <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
+        </button>
 
-          <div className="flex-1 overflow-y-auto">
-            {subTab === "builder" ? (
-              <div className="p-3 space-y-3">
-                <LpPageBuilder sections={sections} onChange={setSections} />
-              </div>
-            ) : (
-              /* SEO Settings */
-              <div className="p-3 space-y-3">
-                {/* SEO score bar */}
-                <div className="rounded-lg bg-stone-50 border border-stone-200 px-3 py-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-semibold text-stone-600">Skor SEO</span>
-                    <span className={`font-mono text-xs font-bold ${seoScore >= 70 ? "text-emerald-600" : seoScore >= 40 ? "text-amber-600" : "text-red-500"}`}>
-                      {seoScore}/100
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-200">
-                    <div className={`h-full rounded-full transition-all ${seoScore >= 70 ? "bg-emerald-500" : seoScore >= 40 ? "bg-amber-500" : "bg-red-500"}`}
-                      style={{ width: `${seoScore}%` }} />
-                  </div>
-                </div>
-
-                <FieldRow label="Kata Kunci Target">
-                  <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)} className="h-8 text-xs"
-                    placeholder="mis. penginapan wisuda unnes semarang" />
-                </FieldRow>
-
-                <FieldRow label={`Meta Title (${metaTitle.length}/60)`}>
-                  <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} className="h-8 text-xs"
-                    placeholder="Penginapan Wisuda UNNES | Pomah Guesthouse" />
-                  <p className={`mt-0.5 text-[10px] ${metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground"}`}>
-                    Idealnya 50–60 karakter
-                  </p>
-                </FieldRow>
-
-                <FieldRow label={`Meta Description (${metaDesc.length}/160)`}>
-                  <Textarea value={metaDesc} onChange={(e) => setMetaDesc(e.target.value)} rows={3}
-                    className="text-xs" placeholder="Deskripsi singkat 120–160 karakter…" />
-                  <p className={`mt-0.5 text-[10px] ${metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground"}`}>
-                    Idealnya 120–160 karakter
-                  </p>
-                </FieldRow>
-
-                <FieldRow label="OG Image URL">
-                  <Input value={ogImage} onChange={(e) => setOgImage(e.target.value)} className="h-8 text-xs"
-                    placeholder="https://..." />
-                </FieldRow>
-
-                {/* SEO checklist */}
-                <div className="space-y-1 rounded-lg bg-stone-50 border border-stone-200 p-3">
-                  {[
-                    { label: "Kata kunci di meta title",  ok: !!targetKw && metaTitle.toLowerCase().includes(targetKw.toLowerCase()) },
-                    { label: "Kata kunci di meta desc",   ok: !!targetKw && metaDesc.toLowerCase().includes(targetKw.toLowerCase()) },
-                    { label: "Meta title 50–60 karakter", ok: metaTitle.length >= 50 && metaTitle.length <= 60 },
-                    { label: "Meta desc 120–160 karakter",ok: metaDesc.length >= 120 && metaDesc.length <= 160 },
-                    { label: "OG Image ada",              ok: !!ogImage },
-                  ].map((c, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-[11px]">
-                      {c.ok
-                        ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
-                        : <X className="h-3 w-3 text-stone-300 shrink-0" />}
-                      <span className={c.ok ? "text-stone-700" : "text-stone-400"}>{c.label}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="border-t border-border pt-3 space-y-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">CTA & Status</p>
-                  <FieldRow label="Teks Tombol CTA">
-                    <Input value={heroCta} onChange={(e) => setHeroCta(e.target.value)} className="h-8 text-xs" />
-                  </FieldRow>
-                  <FieldRow label="URL Tombol CTA">
-                    <Input value={heroCtaUrl} onChange={(e) => setHeroCtaUrl(e.target.value)} className="h-8 text-xs" />
-                  </FieldRow>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium">Dipublikasikan</span>
-                    <Switch checked={published} onCheckedChange={setPublished} />
-                  </div>
-                </div>
-              </div>
+        {filtered.map((p) => (
+          <div key={p.id}
+            className={cn(
+              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+              activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
             )}
+            onClick={() => onSelect(p.id)}>
+            <Globe className={cn("h-3.5 w-3.5 shrink-0", p.published ? "text-emerald-500" : "text-stone-300")} />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+              <button type="button" title="Pengaturan SEO"
+                onClick={(e) => { e.stopPropagation(); onSeo(p); }}
+                className="rounded p-0.5 text-stone-400 hover:text-teal-600">
+                <Settings2 className="h-3.5 w-3.5" />
+              </button>
+              <a href={`/lp/${p.slug}`} target="_blank" rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="rounded p-0.5 text-stone-400 hover:text-teal-600">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <button type="button" title="Hapus halaman"
+                onClick={(e) => { e.stopPropagation(); onDelete(p); }}
+                className="rounded p-0.5 text-stone-400 hover:text-red-500">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
+        ))}
 
-          {/* Save button */}
-          <div className="border-t border-border p-3">
-            <Button className="w-full gap-1.5 bg-teal-700 text-xs text-white hover:bg-teal-800"
-              size="sm" disabled={saving} onClick={handleSave}>
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              {saving ? "Menyimpan…" : `Simpan — ${selected.title.slice(0, 20)}`}
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
+        {pages.length === 0 && (
+          <p className="px-2 py-3 text-center text-[11px] text-muted-foreground italic">
+            Belum ada halaman tambahan.
+          </p>
+        )}
+      </div>
+    </aside>
   );
 }
 
-/* ================================================================== */
-/* 8. Media library                                                    */
+/**
+ * SEO settings popup — Wix-style modal with three tabs:
+ * SEO Basics · Advanced SEO · Social Share. Operates on a single
+ * landing page; saves only the SEO/meta fields.
+ */
+type SeoPopupTab = "basics" | "advanced" | "social";
+
+function SeoPopup({
+  page,
+  onClose,
+  onSaved,
+}: {
+  page: SeoLandingPage | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [tab, setTab] = useState<SeoPopupTab>("basics");
+  const [saving, setSaving] = useState(false);
+
+  const [metaTitle, setMetaTitle] = useState("");
+  const [metaDesc, setMetaDesc]   = useState("");
+  const [targetKw, setTargetKw]   = useState("");
+  const [ogImage, setOgImage]     = useState("");
+  const [indexable, setIndexable] = useState(true);
+
+  useEffect(() => {
+    if (!page) return;
+    setTab("basics");
+    setMetaTitle(page.meta_title ?? "");
+    setMetaDesc(page.meta_description ?? "");
+    setTargetKw(page.target_keyword ?? "");
+    setOgImage(page.og_image_url ?? "");
+    setIndexable(page.published);
+  }, [page?.id]);
+
+  if (!page) return null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateSeoLandingPage({
+        data: {
+          id: page.id,
+          meta_title:       metaTitle || null,
+          meta_description: metaDesc  || null,
+          target_keyword:   targetKw  || null,
+          og_image_url:     ogImage   || null,
+          published:        indexable,
+        },
+      });
+      toast.success("Pengaturan SEO tersimpan");
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const tabs: { key: SeoPopupTab; label: string }[] = [
+    { key: "basics",   label: "SEO Basics"   },
+    { key: "advanced", label: "Advanced SEO" },
+    { key: "social",   label: "Social Share" },
+  ];
+
+  return (
+    <Dialog open={!!page} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Settings2 className="h-4 w-4 text-teal-600" />
+            Pengaturan SEO — {page.title}
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Kelola bagaimana halaman ini tampil di mesin pencari dan media sosial.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Tab bar */}
+        <div className="flex gap-1 border-b border-stone-200">
+          {tabs.map((t) => (
+            <button key={t.key} type="button" onClick={() => setTab(t.key)}
+              className={cn(
+                "px-3 py-2 text-xs font-medium transition",
+                tab === t.key
+                  ? "border-b-2 border-teal-600 text-teal-700"
+                  : "text-muted-foreground hover:text-foreground",
+              )}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="max-h-[55vh] overflow-y-auto py-1">
+          {/* ── SEO Basics ── */}
+          {tab === "basics" && (
+            <div className="space-y-4">
+              {/* Google search preview */}
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">
+                  Pratinjau Hasil Pencarian
+                </p>
+                <p className="text-[12px] text-stone-500">pomahguesthouse.com › lp › {page.slug}</p>
+                <p className="text-[15px] font-medium text-blue-700 hover:underline cursor-pointer leading-snug">
+                  {metaTitle || page.title || "Title tag belum diisi"}
+                </p>
+                <p className="text-xs text-stone-600 leading-relaxed">
+                  {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
+                </p>
+              </div>
+
+              <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
+                <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)}
+                  placeholder="Judul yang tampil di hasil pencarian" />
+                <p className={cn("mt-0.5 text-[10px]", metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground")}>
+                  Idealnya 50–60 karakter
+                </p>
+              </FieldRow>
+
+              <FieldRow label={`Meta description (${metaDesc.length}/160)`}>
+                <Textarea value={metaDesc} onChange={(e) => setMetaDesc(e.target.value)} rows={3}
+                  placeholder="Deskripsi singkat yang muncul di hasil pencarian." />
+                <p className={cn("mt-0.5 text-[10px]", metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground")}>
+                  Idealnya 120–160 karakter
+                </p>
+              </FieldRow>
+
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                <div>
+                  <p className="text-xs font-medium">Izinkan mesin pencari mengindeks halaman ini</p>
+                  <p className="text-[10px] text-muted-foreground">Halaman dipublikasikan & terlihat di Google.</p>
+                </div>
+                <Switch checked={indexable} onCheckedChange={setIndexable} />
+              </div>
+            </div>
+          )}
+
+          {/* ── Advanced SEO ── */}
+          {tab === "advanced" && (
+            <div className="space-y-4">
+              <FieldRow label="Kata kunci target">
+                <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)}
+                  placeholder="mis. penginapan wisuda unnes semarang" />
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Kata kunci utama yang ingin dirangking di Google.
+                </p>
+              </FieldRow>
+
+              <FieldRow label="URL kanonik">
+                <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">pomahguesthouse.com/lp/</span>
+                  <span className="min-w-0 flex-1 truncate font-mono text-stone-700">{page.slug}</span>
+                </div>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  URL publik halaman ini (otomatis dari slug).
+                </p>
+              </FieldRow>
+
+              {/* SEO checklist */}
+              <div className="space-y-1 rounded-lg border border-stone-200 bg-stone-50 p-3">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-stone-400">Checklist SEO</p>
+                {[
+                  { label: "Kata kunci di title tag",   ok: !!targetKw && metaTitle.toLowerCase().includes(targetKw.toLowerCase()) },
+                  { label: "Kata kunci di meta desc",   ok: !!targetKw && metaDesc.toLowerCase().includes(targetKw.toLowerCase()) },
+                  { label: "Title 50–60 karakter",      ok: metaTitle.length >= 50 && metaTitle.length <= 60 },
+                  { label: "Meta desc 120–160 karakter",ok: metaDesc.length >= 120 && metaDesc.length <= 160 },
+                  { label: "OG Image ada",              ok: !!ogImage },
+                ].map((c, i) => (
+                  <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                    {c.ok
+                      ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+                      : <X className="h-3 w-3 text-stone-300 shrink-0" />}
+                    <span className={c.ok ? "text-stone-700" : "text-stone-400"}>{c.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Social Share ── */}
+          {tab === "social" && (
+            <div className="space-y-4">
+              <FieldRow label="Gambar share (OG Image URL)">
+                <Input value={ogImage} onChange={(e) => setOgImage(e.target.value)}
+                  placeholder="https://..." />
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  Gambar yang muncul saat halaman dibagikan di media sosial.
+                </p>
+              </FieldRow>
+
+              {/* Social card preview */}
+              <div className="overflow-hidden rounded-lg border border-stone-200">
+                <div className="flex h-36 items-center justify-center bg-stone-100">
+                  {ogImage
+                    ? <img src={ogImage} alt="" className="h-full w-full object-cover" />
+                    : <Images className="h-6 w-6 text-stone-300" />}
+                </div>
+                <div className="bg-white px-3 py-2">
+                  <p className="text-[10px] uppercase text-stone-400">pomahguesthouse.com</p>
+                  <p className="truncate text-sm font-semibold text-stone-800">{metaTitle || page.title}</p>
+                  <p className="line-clamp-2 text-xs text-stone-500">{metaDesc || "Meta description belum diisi…"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>Batal</Button>
+          <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
+            {saving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyimpan…</> : <><Save className="mr-1.5 h-3.5 w-3.5" />Simpan</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
