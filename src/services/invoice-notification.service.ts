@@ -2,7 +2,7 @@ import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { InvoiceDocument } from "@/admin/components/invoice-pdf";
-import { sendWhatsAppMessage } from "./whatsapp.service";
+import { sendWhatsAppMetaMessage } from "./meta.service";
 import { fmtDateID } from "@/lib/date";
 
 export interface InvoiceResult {
@@ -61,7 +61,8 @@ export async function generateAndSendInvoiceNotification({
           phone,
           whatsapp_number,
           public_domain,
-          fonnte_token,
+          meta_access_token,
+          meta_phone_number_id,
           payment_bank_name,
           payment_account_number,
           payment_account_holder
@@ -184,9 +185,10 @@ export async function generateAndSendInvoiceNotification({
 
     // ── 8. WhatsApp send (Fix 4 — optional, skipped gracefully) ─────────
     let waSent = false;
-    const fonnte_token = property?.fonnte_token;
+    const meta_access_token = property?.meta_access_token;
+    const meta_phone_number_id = property?.meta_phone_number_id;
 
-    if (!skipWhatsApp && fonnte_token) {
+    if (!skipWhatsApp && meta_access_token && meta_phone_number_id) {
       let cleanedPhone = guest.phone.replace(/\D/g, "");
       if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
 
@@ -218,9 +220,10 @@ ${webInvoiceUrl}
 Terima kasih.`;
 
       const filename = `Invoice-${booking.reference_code ?? booking.id.slice(0, 8)}.pdf`;
-      console.log(`[InvoiceNotification] Sending WhatsApp to ${cleanedPhone}…`);
-      const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-        fonnte_token,
+      console.log(`[InvoiceNotification] Sending WhatsApp via Meta to ${cleanedPhone}…`);
+      const { ok: sent, error: sendErr } = await sendWhatsAppMetaMessage(
+        meta_access_token,
+        meta_phone_number_id,
         cleanedPhone,
         messageBody,
         pdfPublicUrl,
@@ -271,8 +274,8 @@ Terima kasih.`;
       } else {
         console.warn(`[InvoiceNotification] WhatsApp send failed: ${sendErr}`);
       }
-    } else if (!skipWhatsApp && !fonnte_token) {
-      console.warn("[InvoiceNotification] Fonnte token not configured — PDF generated but WhatsApp skipped");
+    } else if (!skipWhatsApp && (!meta_access_token || !meta_phone_number_id)) {
+      console.warn("[InvoiceNotification] Meta token not configured — PDF generated but WhatsApp skipped");
     }
 
     return { ok: true, error: null, pdf_url: pdfPublicUrl, wa_sent: waSent };

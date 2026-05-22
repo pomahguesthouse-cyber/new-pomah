@@ -490,7 +490,7 @@ export type Database = {
           description: string | null
           email: string | null
           favicon_url: string | null
-          fonnte_token: string | null
+          meta_access_token: string | null
           google_analytics_id: string | null
           google_place_id: string | null
           google_places_api_key: string | null
@@ -511,6 +511,8 @@ export type Database = {
           smart_delay_config: Json | null
           tagline: string | null
           timezone: string
+          meta_phone_number_id: string | null
+          meta_verify_token: string | null
           updated_at: string
           whatsapp_number: string | null
         }
@@ -548,6 +550,8 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
+          meta_phone_number_id?: string | null
+          meta_verify_token?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
@@ -564,7 +568,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           favicon_url?: string | null
-          fonnte_token?: string | null
+          meta_access_token?: string | null
           google_analytics_id?: string | null
           google_place_id?: string | null
           google_places_api_key?: string | null
@@ -585,6 +589,8 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
+          meta_phone_number_id?: string | null
+          meta_verify_token?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
