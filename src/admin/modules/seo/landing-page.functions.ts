@@ -220,9 +220,15 @@ export const generateLandingPageContent = createServerFn({ method: "POST" })
 export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ slug: z.string() }).parse(d))
   .handler(async ({ data }) => {
-    // Public function — create an anon Supabase client
+    // Public function — create an anon Supabase client.
+    // Key may be named ANON_KEY (local) or PUBLISHABLE_KEY (production/Lovable).
     const supabaseUrl  = process.env.SUPABASE_URL  ?? process.env.VITE_SUPABASE_URL  ?? "";
-    const supabaseAnon = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY ?? "";
+    const supabaseAnon =
+      process.env.SUPABASE_ANON_KEY ??
+      process.env.VITE_SUPABASE_ANON_KEY ??
+      process.env.SUPABASE_PUBLISHABLE_KEY ??
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+      "";
     const client = createClient(supabaseUrl, supabaseAnon) as unknown as SupabaseClient;
     const { data: row } = await client
       .from("seo_landing_pages")
