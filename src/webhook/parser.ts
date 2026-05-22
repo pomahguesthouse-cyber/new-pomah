@@ -37,11 +37,14 @@ export async function parseFonnteBody(
 
   if (!sender || !message) return null;
 
-  const isOutgoing = !!device && sender === device;
-  
   // For outgoing messages from Fonnte, the recipient is usually in 'target', 'receiver', 'penerima', or 'to'
-  // For incoming messages, the sender is the customer
   const target = (body as any).target ?? (body as any).receiver ?? (body as any).penerima ?? (body as any).to;
+
+  // Fonnte might not send `device` for native outgoing messages.
+  // If `target` is present and different from sender, it strongly indicates an outgoing message payload.
+  const isOutgoing = (!!device && sender === device) || (!!target && target !== sender);
+  
+  // For incoming messages, the sender is the customer
   const customerPhone = isOutgoing ? (target ?? sender) : sender;
 
   return {
