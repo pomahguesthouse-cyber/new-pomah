@@ -53,6 +53,34 @@ export type LPTestimonialsSection = {
   title?: string;
   items: { name: string; text: string }[];
 };
+export type LPHeaderSection = {
+  id: string; type: "header";
+  brand?: string;                                 // brand / logo text
+  links?: { label: string; url: string }[];
+  cta_text?: string; cta_url?: string;
+  sticky?: boolean;
+};
+export type LPSliderSection = {
+  id: string; type: "slider";
+  slides: {
+    image_url: string;
+    headline?: string;
+    subheadline?: string;
+    cta_text?: string;
+    cta_url?: string;
+  }[];
+  height?: number;                                // px (default 480)
+  overlay?: number;                               // 0-80
+  autoplay?: boolean;
+  interval_ms?: number;                           // default 5000
+};
+export type LPButtonSection = {
+  id: string; type: "button";
+  text: string; url: string;
+  align?: "left" | "center" | "right";
+  variant?: "solid" | "outline";
+  color?: "teal" | "dark" | "light";
+};
 export type LPSection =
   | LPHeroSection
   | LPTextSection
@@ -60,7 +88,10 @@ export type LPSection =
   | LPGallerySection
   | LPFaqSection
   | LPCtaBannerSection
-  | LPTestimonialsSection;
+  | LPTestimonialsSection
+  | LPHeaderSection
+  | LPSliderSection
+  | LPButtonSection;
 
 export type SeoLandingPage = {
   id: string;

@@ -3,9 +3,9 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
-import { MessageCircle, ChevronDown, Menu, X, Quote } from "lucide-react";
+import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote } from "lucide-react";
 import {
   getSeoLandingPageBySlug,
   type SeoLandingPage,
@@ -17,6 +17,9 @@ import {
   type LPFaqSection,
   type LPCtaBannerSection,
   type LPTestimonialsSection,
+  type LPHeaderSection,
+  type LPSliderSection,
+  type LPButtonSection,
 } from "@/admin/modules/seo/landing-page.functions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,15 +115,148 @@ function LandingPage() {
 /* ─── Section dispatcher ────────────────────────────────────────── */
 export function LPSectionRenderer({ section }: { section: LPSection }) {
   switch (section.type) {
+    case "header":       return <HeaderSection       s={section} />;
     case "hero":         return <HeroSection         s={section} />;
+    case "slider":       return <SliderSection       s={section} />;
     case "text":         return <TextSection          s={section} />;
     case "features":     return <FeaturesSection      s={section} />;
     case "gallery":      return <GallerySection       s={section} />;
     case "faq":          return <FaqSection           s={section} />;
     case "cta_banner":   return <CtaBannerSection     s={section} />;
+    case "button":       return <ButtonSection        s={section} />;
     case "testimonials": return <TestimonialsSection  s={section} />;
     default:             return null;
   }
+}
+
+/* ─── Header / Navbar ───────────────────────────────────────────── */
+function HeaderSection({ s }: { s: LPHeaderSection }) {
+  const [open, setOpen] = useState(false);
+  const links = s.links ?? [];
+  return (
+    <nav className={`${s.sticky ?? true ? "sticky top-0" : ""} z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm`}>
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <a href="/" className="flex items-baseline gap-1">
+          <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">{s.brand || "Pomah"}</span>
+        </a>
+        <div className="hidden items-center gap-6 md:flex">
+          {links.map((l, i) => (
+            <a key={i} href={l.url} className="text-sm text-stone-500 transition hover:text-stone-900">{l.label}</a>
+          ))}
+          {s.cta_text && (
+            <a href={s.cta_url ?? "/book"}
+              className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
+              {s.cta_text}
+            </a>
+          )}
+        </div>
+        <button className="md:hidden text-stone-700" onClick={() => setOpen(!open)} aria-label="Menu">
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </div>
+      {open && (
+        <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
+          {links.map((l, i) => (
+            <a key={i} href={l.url} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
+          ))}
+          {s.cta_text && (
+            <a href={s.cta_url ?? "/book"} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+              {s.cta_text}
+            </a>
+          )}
+        </div>
+      )}
+    </nav>
+  );
+}
+
+/* ─── Hero Slider ───────────────────────────────────────────────── */
+function SliderSection({ s }: { s: LPSliderSection }) {
+  const slides = (s.slides ?? []).filter((sl) => sl.image_url || sl.headline);
+  const [i, setI] = useState(0);
+  const count = slides.length;
+  const overlay = Math.min(80, Math.max(0, s.overlay ?? 40));
+
+  useEffect(() => {
+    if (!(s.autoplay ?? true) || count <= 1) return;
+    const id = setInterval(() => setI((p) => (p + 1) % count), s.interval_ms ?? 5000);
+    return () => clearInterval(id);
+  }, [s.autoplay, s.interval_ms, count]);
+
+  if (count === 0) return null;
+  const go = (d: number) => setI((p) => (p + d + count) % count);
+
+  return (
+    <section className="relative overflow-hidden text-center text-white" style={{ height: s.height ?? 480 }}>
+      {slides.map((sl, idx) => (
+        <div key={idx}
+          className={`absolute inset-0 transition-opacity duration-700 ${idx === i ? "opacity-100" : "opacity-0"}`}>
+          {sl.image_url
+            ? <img src={sl.image_url} alt={sl.headline ?? `Slide ${idx + 1}`} className="absolute inset-0 h-full w-full object-cover" />
+            : <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-stone-800" />}
+          <div className="absolute inset-0" style={{ background: `rgba(0,0,0,${overlay / 100})` }} />
+          <div className="relative flex h-full flex-col items-center justify-center px-6">
+            {sl.headline && (
+              <h2 className="max-w-3xl font-serif text-4xl font-bold leading-tight tracking-tight drop-shadow sm:text-5xl">
+                {sl.headline}
+              </h2>
+            )}
+            {sl.subheadline && <p className="mt-5 max-w-xl text-lg text-white/90">{sl.subheadline}</p>}
+            {sl.cta_text && (
+              <a href={sl.cta_url ?? "/book"}
+                className="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
+                {sl.cta_text}
+              </a>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {count > 1 && (
+        <>
+          <button type="button" aria-label="Sebelumnya" onClick={() => go(-1)}
+            className="absolute left-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/30 text-white backdrop-blur transition hover:bg-white/50">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button type="button" aria-label="Berikutnya" onClick={() => go(1)}
+            className="absolute right-4 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/30 text-white backdrop-blur transition hover:bg-white/50">
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <div className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 gap-2">
+            {slides.map((_, d) => (
+              <button key={d} onClick={() => setI(d)} aria-label={`Slide ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${d === i ? "w-6 bg-white" : "w-2 bg-white/50"}`} />
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/* ─── Button ────────────────────────────────────────────────────── */
+function ButtonSection({ s }: { s: LPButtonSection }) {
+  const justify = s.align === "left" ? "justify-start" : s.align === "right" ? "justify-end" : "justify-center";
+  const color = s.color ?? "teal";
+  const outline = s.variant === "outline";
+  const solidCls =
+    color === "dark"  ? "bg-stone-800 text-white hover:bg-stone-900" :
+    color === "light" ? "bg-white text-stone-800 hover:bg-stone-100 border border-stone-200" :
+                        "bg-teal-700 text-white hover:bg-teal-800";
+  const outlineCls =
+    color === "dark"  ? "border border-stone-800 text-stone-800 hover:bg-stone-800 hover:text-white" :
+    color === "light" ? "border border-white text-white hover:bg-white hover:text-stone-800" :
+                        "border border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white";
+  return (
+    <section className="px-6 py-10">
+      <div className={`mx-auto flex max-w-6xl ${justify}`}>
+        <a href={s.url}
+          className={`inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold shadow-sm transition ${outline ? outlineCls : solidCls}`}>
+          {s.text}
+        </a>
+      </div>
+    </section>
+  );
 }
 
 /* ─── Hero ──────────────────────────────────────────────────────── */
