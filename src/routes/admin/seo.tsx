@@ -772,6 +772,23 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
   const [aiDraft,     setAiDraft]     = useState<Partial<SeoLandingPage> | undefined>(undefined);
   const [editorKey,   setEditorKey]   = useState(0);
 
+  // Delete confirmation dialog
+  const [deleteTarget,  setDeleteTarget]  = useState<SeoLandingPage | null>(null);
+  const [deleting,      setDeleting]      = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteSeoLandingPage({ data: { id: deleteTarget.id } });
+      toast.success(`"${deleteTarget.title}" dihapus`);
+      if ((selected as SeoLandingPage)?.id === deleteTarget.id) setSelected(null);
+      setDeleteTarget(null);
+      onChanged();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setDeleting(false); }
+  };
+
   // Section-level generate dialog
   const [secGenDialog,   setSecGenDialog]   = useState(false);
   const [secGenKeyword,  setSecGenKeyword]  = useState("");
@@ -899,17 +916,19 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
               )}
             </div>
           ) : (
+            <>
             <div className="space-y-2">
               {filtered.map((p) => {
                 const score = calcSeoScore(p);
                 const isActive = selected !== "new" && (selected as SeoLandingPage)?.id === p.id;
                 return (
-                  <button key={p.id} type="button" onClick={() => setSelected(p)}
-                    className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                  <div key={p.id}
+                    className={`group relative w-full rounded-xl border px-4 py-3 text-left transition cursor-pointer ${
                       isActive
                         ? "border-teal-300 bg-teal-50 shadow-sm"
                         : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm"
-                    }`}>
+                    }`}
+                    onClick={() => setSelected(p)}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-stone-800">{p.title}</p>
@@ -919,19 +938,60 @@ function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onC
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <ScorePill score={score} />
+                        <div className="flex items-center gap-1">
+                          <ScorePill score={score} />
+                          {/* Delete button — visible on hover */}
+                          <button
+                            type="button"
+                            title="Hapus halaman ini"
+                            onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
+                            className="hidden rounded p-1 text-stone-300 transition hover:bg-red-50 hover:text-red-500 group-hover:inline-flex"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                         <div className="flex items-center gap-1.5">
                           {togglingId === p.id
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />
-                            : <Switch checked={p.published} onCheckedChange={() => handleTogglePublish(p)} />}
+                            : <Switch checked={p.published}
+                                onCheckedChange={() => handleTogglePublish(p)}
+                                onClick={(e) => e.stopPropagation()} />}
                           <span className="text-[10px] text-stone-400">{p.published ? "Live" : "Draft"}</span>
                         </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
+
+            {/* Delete confirmation dialog */}
+            <Dialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600">
+                    <Trash2 className="h-4 w-4" />
+                    Hapus Landing Page
+                  </DialogTitle>
+                  <DialogDescription>
+                    Tindakan ini tidak dapat dibatalkan. Halaman{" "}
+                    <span className="font-semibold text-stone-700">"{deleteTarget?.title}"</span>{" "}
+                    akan dihapus permanen beserta URL publiknya.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="mt-2">
+                  <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+                    Batal
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={handleDelete} disabled={deleting}>
+                    {deleting
+                      ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menghapus…</>
+                      : <><Trash2 className="mr-1.5 h-3.5 w-3.5" />Hapus Permanen</>}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            </>
           )}
         </div>
 
