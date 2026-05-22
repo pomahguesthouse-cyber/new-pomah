@@ -47,6 +47,14 @@ export async function sendWhatsAppMessage(
       return { ok: false, error: `HTTP ${res.status}: ${body}` };
     }
 
+    // Fonnte always returns HTTP 200, even for logical errors. We must check the JSON body.
+    const data = await res.json().catch(() => null);
+    if (data && data.status === false) {
+      const reason = data.reason || data.detail || JSON.stringify(data);
+      console.error("[WhatsApp] Fonnte API logic error:", reason);
+      return { ok: false, error: `Fonnte API Error: ${reason}` };
+    }
+
     return { ok: true, error: null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
