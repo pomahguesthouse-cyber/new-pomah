@@ -14,6 +14,54 @@ function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
 }
 
+/* ─── Page-builder section types ──────────────────────────────────── */
+
+export type LPHeroSection = {
+  id: string; type: "hero";
+  headline: string; subheadline?: string;
+  image_url?: string; overlay?: number;          // overlay 0-100
+  cta_text?: string; cta_url?: string;
+};
+export type LPTextSection = {
+  id: string; type: "text";
+  title?: string; content: string;               // supports HTML
+  align?: "left" | "center";
+};
+export type LPFeaturesSection = {
+  id: string; type: "features";
+  title?: string; columns?: 2 | 3 | 4;
+  items: { title: string; description: string }[];
+};
+export type LPGallerySection = {
+  id: string; type: "gallery";
+  title?: string; columns?: 2 | 3 | 4;
+  images: string[];
+};
+export type LPFaqSection = {
+  id: string; type: "faq";
+  title?: string;
+  items: { question: string; answer: string }[];
+};
+export type LPCtaBannerSection = {
+  id: string; type: "cta_banner";
+  headline: string; subheadline?: string;
+  cta_text: string; cta_url: string;
+  style?: "teal" | "dark" | "light";
+};
+export type LPTestimonialsSection = {
+  id: string; type: "testimonials";
+  title?: string;
+  items: { name: string; text: string }[];
+};
+export type LPSection =
+  | LPHeroSection
+  | LPTextSection
+  | LPFeaturesSection
+  | LPGallerySection
+  | LPFaqSection
+  | LPCtaBannerSection
+  | LPTestimonialsSection;
+
 export type SeoLandingPage = {
   id: string;
   property_id: string | null;
@@ -29,6 +77,7 @@ export type SeoLandingPage = {
   meta_description: string | null;
   og_image_url: string | null;
   published: boolean;
+  sections: LPSection[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -46,6 +95,7 @@ const pageShape = z.object({
   meta_description: z.string().max(160).optional().nullable(),
   og_image_url:     z.string().url().max(500).optional().nullable(),
   published:        z.boolean().default(false),
+  sections:         z.array(z.record(z.string(), z.unknown())).optional().nullable(),
 });
 
 /** List all landing pages ordered by creation (newest first). */
