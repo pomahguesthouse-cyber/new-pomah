@@ -60,19 +60,21 @@ export type LPHeaderSection = {
   cta_text?: string; cta_url?: string;
   sticky?: boolean;
 };
+/** Mirrors the homepage hero slider exactly (HomepageConfig["hero"]). */
 export type LPSliderSection = {
   id: string; type: "slider";
   slides: {
-    image_url: string;
-    headline?: string;
-    subheadline?: string;
-    cta_text?: string;
-    cta_url?: string;
+    imageUrl: string;
+    videoUrl: string;                             // takes precedence over image
+    heading: string;
+    subheading: string;
   }[];
-  height?: number;                                // px (default 480)
-  overlay?: number;                               // 0-80
-  autoplay?: boolean;
-  interval_ms?: number;                           // default 5000
+  autoplayMs: number;                             // 0 = disable autoplay
+  height: number;                                 // px
+  transition: "fade" | "slide" | "zoom" | "none";
+  fontFamily: "sans" | "serif" | "mono";
+  fontSize: number;
+  fontStyle: "normal" | "bold" | "italic";
 };
 export type LPButtonSection = {
   id: string; type: "button";
