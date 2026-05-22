@@ -521,6 +521,12 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
     ? (googleItems.length > 0 ? googleItems : (s.items ?? []).map((i) => ({ ...i, isGoogle: false })))
     : (s.items ?? []).map((i) => ({ ...i, isGoogle: false }));
 
+  useEffect(() => {
+    if (items.length < 2) return;
+    const t = setInterval(() => setI((v) => (v + 1) % items.length), 5000);
+    return () => clearInterval(t);
+  }, [items.length]);
+
   if (items.length === 0) return null;
   const cur = items[i % items.length];
   return (
