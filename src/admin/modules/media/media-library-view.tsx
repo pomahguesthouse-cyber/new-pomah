@@ -1,27 +1,27 @@
 /**
  * Media Library — unified view for ALL media in the system.
  *
- * Layout: folder sidebar (left) + file grid (right).
+ * Layout: nested folder sidebar (left) + file grid (right).
+ *
+ * Folder system:
+ *   • media_folders table stores folders with optional parent_id for nesting.
+ *   • sop_documents.folder_id (uuid FK) references media_folders.
+ *   • Clicking a parent folder shows files in that folder AND all sub-folders.
+ *   • Storage-only assets (room-images bucket) show in the folder matching
+ *     their path prefix. They cannot be moved to a sub-folder until registered.
  *
  * Two data sources:
- *  1. sop_documents (doc_category='brosur') — DB-tracked, full features:
- *     rename, alt text, move to folder, copy URL, delete.
- *     storage_bucket tells which bucket holds the actual file:
- *       NULL / "sop-documents" → sop-documents bucket
- *       "room-images"          → room-images bucket
- *
- *  2. room-images bucket (prefixes media/, room-types/, branding/) that
- *     have NOT yet been registered in sop_documents. These show
- *     "Tambah nama & alt text"; clicking opens RegisterDialog which
- *     creates a sop_documents row and unlocks full editing.
+ *   1. sop_documents (doc_category='brosur') — DB-tracked, full editing.
+ *   2. room-images bucket paths not yet tracked → "Tambah nama & alt text"
+ *      button registers them and assigns them to a folder.
  */
 import * as React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   Upload, Trash2, Loader2, Copy, Check, ExternalLink,
-  Tag, Pencil, FileText, Images, Film, Search, X, Plus,
+  Tag, Pencil, FileText, Images, Search, X, Plus,
   FolderOpen, Folder, FolderPlus, ChevronRight,
 } from "lucide-react";
 
@@ -49,7 +49,7 @@ import {
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ */
-/* Constants                                                            */
+/* Constants & types                                                    */
 /* ------------------------------------------------------------------ */
 
 const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif"];
@@ -60,9 +60,9 @@ const ACCEPT      = ALL_ALLOWED.map((e) => `.${e}`).join(",");
 
 type FilterType = "all" | "image" | "video" | "doc";
 
-/** Folder name sentinel meaning "show all files regardless of folder". */
+/** Sentinel: show all files regardless of folder. */
 const ALL_FILES = "__all__";
-/** Folder name sentinel meaning "show files with no folder assigned". */
+/** Sentinel: show files with no folder_id assigned. */
 const NO_FOLDER = "__none__";
 
 const FILTER_TABS: { key: FilterType; label: string }[] = [
@@ -86,19 +86,35 @@ function formatDate(iso: string) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Folder tree helpers                                                  */
+/* ------------------------------------------------------------------ */
+
+/** Returns the set of IDs containing folderId and all its descendants. */
+function getDescendantIds(folderId: string, folders: MediaFolder[]): Set<string> {
+  const result = new Set<string>([folderId]);
+  const queue  = [folderId];
+  while (queue.length > 0) {
+    const parentId = queue.pop()!;
+    for (const f of folders) {
+      if (f.parent_id === parentId && !result.has(f.id)) {
+        result.add(f.id);
+        queue.push(f.id);
+      }
+    }
+  }
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
 /* Storage listing helpers                                             */
 /* ------------------------------------------------------------------ */
 
+/** Maps storage path prefixes to their auto-folder names. */
 const ROOM_IMAGE_PREFIXES = [
-  { prefix: "media",      label: "Hero Slider" },
-  { prefix: "room-types", label: "Foto Kamar"  },
-  { prefix: "branding",   label: "Branding"    },
+  { prefix: "media",      folderName: "Hero Slider" },
+  { prefix: "room-types", folderName: "Foto Kamar"  },
+  { prefix: "branding",   folderName: "Branding"    },
 ];
-
-function getAutoFolder(pathOrPrefix: string): string {
-  const prefix = pathOrPrefix.split("/")[0];
-  return ROOM_IMAGE_PREFIXES.find((p) => p.prefix === prefix)?.label ?? "Lainnya";
-}
 
 type StorageAsset = {
   id: string;
@@ -108,11 +124,10 @@ type StorageAsset = {
   displayName: string;
   ext: string;
   url: string;
-  autoFolder: string;
+  autoFolderName: string;   // matched media_folder name (e.g. "Foto Kamar")
   createdAt: string;
 };
 
-/** Resolve public URL from a SopDocument, respecting storage_bucket. */
 function docPublicUrl(doc: SopDocument): string {
   if (!doc.file_path) return "";
   const bucket = doc.storage_bucket || "sop-documents";
@@ -121,7 +136,7 @@ function docPublicUrl(doc: SopDocument): string {
 
 async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageAsset[]> {
   const all: StorageAsset[] = [];
-  for (const { prefix, label } of ROOM_IMAGE_PREFIXES) {
+  for (const { prefix, folderName } of ROOM_IMAGE_PREFIXES) {
     const { data, error } = await supabase.storage
       .from("room-images")
       .list(prefix, { limit: 500, sortBy: { column: "created_at", order: "desc" } });
@@ -140,7 +155,7 @@ async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageA
         displayName: f.name.replace(/\.[^.]+$/, ""),
         ext,
         url,
-        autoFolder: label,
+        autoFolderName: folderName,
         createdAt: (f as { created_at?: string }).created_at ?? "",
       });
     }
@@ -149,7 +164,7 @@ async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageA
 }
 
 /* ------------------------------------------------------------------ */
-/* Preview                                                              */
+/* Shared UI: Preview                                                   */
 /* ------------------------------------------------------------------ */
 
 function Preview({ url, ext, altText, name }: {
@@ -175,7 +190,7 @@ function Preview({ url, ext, altText, name }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Inline editable field                                               */
+/* Shared UI: InlineEdit                                               */
 /* ------------------------------------------------------------------ */
 
 function InlineEdit({ value, placeholder, icon: Icon, onSave }: {
@@ -225,8 +240,7 @@ function InlineEdit({ value, placeholder, icon: Icon, onSave }: {
 
   return (
     <button type="button" onClick={() => { setDraft(value); setEditing(true); }}
-      className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-muted/30"
-      title="Edit">
+      className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-muted/30">
       <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
       <span className={cn("min-w-0 flex-1 truncate text-[11px]",
         value ? "text-foreground" : "italic text-muted-foreground")}>
@@ -238,25 +252,39 @@ function InlineEdit({ value, placeholder, icon: Icon, onSave }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Folder move row (inside DbCard)                                     */
+/* FolderMoveRow — folder <select> inside a DbCard                    */
 /* ------------------------------------------------------------------ */
 
-function FolderMoveRow({ docId, currentFolder, folders, onMoved }: {
+/** Build a flat, visually-indented options list from a nested folder tree. */
+function buildFolderOptions(folders: MediaFolder[]): { id: string; label: string }[] {
+  const roots    = folders.filter((f) => !f.parent_id);
+  const result: { id: string; label: string }[] = [];
+  const append = (f: MediaFolder, depth: number) => {
+    result.push({ id: f.id, label: "    ".repeat(depth) + f.name });
+    folders.filter((c) => c.parent_id === f.id).forEach((c) => append(c, depth + 1));
+  };
+  roots.forEach((r) => append(r, 0));
+  return result;
+}
+
+function FolderMoveRow({ docId, currentFolderId, folders, onMoved }: {
   docId: string;
-  currentFolder: string | null;
+  currentFolderId: string | null;
   folders: MediaFolder[];
   onMoved: () => void;
 }) {
   const moveFn  = useServerFn(moveDocToFolder);
   const [moving, setMoving] = React.useState(false);
+  const options = React.useMemo(() => buildFolderOptions(folders), [folders]);
 
   const handleChange = async (val: string) => {
     const next = val === "" ? null : val;
-    if (next === currentFolder) return;
+    if (next === currentFolderId) return;
     setMoving(true);
     try {
-      await moveFn({ data: { id: docId, folder: next } });
-      toast.success(next ? `Dipindah ke "${next}"` : "Dihapus dari folder");
+      await moveFn({ data: { id: docId, folderId: next } });
+      const name = folders.find((f) => f.id === next)?.name;
+      toast.success(name ? `Dipindah ke "${name}"` : "Dihapus dari folder");
       onMoved();
     } catch (e) { toast.error((e as Error).message); }
     finally { setMoving(false); }
@@ -269,13 +297,13 @@ function FolderMoveRow({ docId, currentFolder, folders, onMoved }: {
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
       ) : (
         <select
-          value={currentFolder ?? ""}
+          value={currentFolderId ?? ""}
           onChange={(e) => void handleChange(e.target.value)}
           className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-muted-foreground focus:outline-none"
         >
           <option value="">— Tanpa folder —</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.name}>{f.name}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>{o.label}</option>
           ))}
         </select>
       )}
@@ -284,7 +312,7 @@ function FolderMoveRow({ docId, currentFolder, folders, onMoved }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* DB-backed card (full features)                                      */
+/* DbCard — fully editable media card                                  */
 /* ------------------------------------------------------------------ */
 
 function DbCard({ doc, folders, onDelete, onChanged }: {
@@ -300,7 +328,7 @@ function DbCard({ doc, folders, onDelete, onChanged }: {
   const bucket  = doc.storage_bucket || "sop-documents";
 
   const badgeLabel = bucket === "room-images"
-    ? (doc.file_path?.startsWith("media/")      ? "Hero Slider"
+    ? (doc.file_path?.startsWith("media/")       ? "Hero Slider"
        : doc.file_path?.startsWith("room-types/") ? "Foto Kamar"
        : doc.file_path?.startsWith("branding/")   ? "Branding"
        : "Media")
@@ -330,15 +358,10 @@ function DbCard({ doc, folders, onDelete, onChanged }: {
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-border bg-white transition hover:border-stone-300 hover:shadow-sm">
-      {/* Preview */}
       <div className="relative h-36 overflow-hidden bg-stone-100">
         <Preview url={url} ext={ext} altText={doc.content} name={doc.name} />
-        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
-          {ext}
-        </span>
-        <span className={cn("absolute right-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white", badgeCls)}>
-          {badgeLabel}
-        </span>
+        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{ext}</span>
+        <span className={cn("absolute right-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white", badgeCls)}>{badgeLabel}</span>
         <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
           {url && (
             <a href={url} target="_blank" rel="noreferrer">
@@ -353,25 +376,16 @@ function DbCard({ doc, folders, onDelete, onChanged }: {
         </div>
       </div>
 
-      {/* Rename */}
       <InlineEdit value={doc.name} placeholder="Nama file…" icon={Pencil}
         onSave={async (v) => { await renameFn({ data: { id: doc.id, name: v } }); toast.success("Nama diperbarui"); onChanged(); }} />
 
-      {/* Alt text */}
       {(isImage || isVideo) && (
         <InlineEdit value={doc.content ?? ""} placeholder="Alt text untuk SEO…" icon={Tag}
           onSave={async (v) => { await altFn({ data: { id: doc.id, altText: v } }); toast.success("Alt text diperbarui"); onChanged(); }} />
       )}
 
-      {/* Folder selector */}
-      <FolderMoveRow
-        docId={doc.id}
-        currentFolder={doc.folder}
-        folders={folders}
-        onMoved={onChanged}
-      />
+      <FolderMoveRow docId={doc.id} currentFolderId={doc.folder_id} folders={folders} onMoved={onChanged} />
 
-      {/* Footer */}
       <div className="mt-auto flex items-center justify-between border-t border-border px-3 py-2">
         <span className="text-[11px] text-muted-foreground">{formatDate(doc.created_at)}</span>
         <Button size="sm" variant="outline" disabled={!url} className="h-7 gap-1 px-2 text-xs" onClick={() => void copyUrl()}>
@@ -384,31 +398,33 @@ function DbCard({ doc, folders, onDelete, onChanged }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Register dialog — converts a StorageAsset into a DB row             */
+/* Register dialog                                                      */
 /* ------------------------------------------------------------------ */
 
-function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
+function RegisterDialog({ asset, open, folders, defaultFolderId, onClose, onRegistered }: {
   asset: StorageAsset | null;
   open: boolean;
   folders: MediaFolder[];
+  defaultFolderId: string;   // pre-selected folder id
   onClose: () => void;
   onRegistered: () => void;
 }) {
   const createFn = useServerFn(createSopDocument);
-  const [name,    setName]    = React.useState("");
-  const [altText, setAltText] = React.useState("");
-  const [folder,  setFolder]  = React.useState("");
-  const [saving,  setSaving]  = React.useState(false);
+  const [name,     setName]     = React.useState("");
+  const [altText,  setAltText]  = React.useState("");
+  const [folderId, setFolderId] = React.useState(defaultFolderId);
+  const [saving,   setSaving]   = React.useState(false);
+  const options = React.useMemo(() => buildFolderOptions(folders), [folders]);
 
   React.useEffect(() => {
     if (open && asset) {
       setName(asset.displayName);
       setAltText("");
-      setFolder(asset.autoFolder); // pre-select the auto-detected folder
+      setFolderId(defaultFolderId);
     }
-  }, [open, asset]);
+  }, [open, asset, defaultFolderId]);
 
-  const isImg = asset
+  const isMedia = asset
     ? IMAGE_EXTS.includes(asset.ext) || VIDEO_EXTS.includes(asset.ext)
     : false;
 
@@ -424,17 +440,14 @@ function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
           content: altText.trim(),
           docCategory: "brosur",
           storageBucket: asset.bucket,
-          folder: folder || asset.autoFolder,
+          folderId: folderId || null,
         },
       });
       toast.success("Info media disimpan");
       onRegistered();
       onClose();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -443,13 +456,12 @@ function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
         <DialogHeader>
           <DialogTitle>Tambah Info Media</DialogTitle>
           <DialogDescription>
-            Atur nama, folder{isImg ? ", dan alt text" : ""} untuk file ini.
-            Setelah disimpan, semua atribut bisa diedit langsung dari kartu.
+            Atur nama, folder{isMedia ? ", dan alt text" : ""} untuk file ini.
           </DialogDescription>
         </DialogHeader>
 
         {asset && (
-          <div className="mt-1 overflow-hidden rounded-lg border border-border bg-muted/30">
+          <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
             <div className="flex h-32 items-center justify-center bg-stone-100">
               <Preview url={asset.url} ext={asset.ext} name={asset.displayName} />
             </div>
@@ -462,37 +474,28 @@ function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
             <label className="mb-1.5 block text-sm font-medium">
               Nama Tampilan <span className="text-destructive">*</span>
             </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+            <input value={name} onChange={(e) => setName(e.target.value)}
               placeholder="Nama yang mudah dibaca"
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
           </div>
 
           <div>
             <label className="mb-1.5 block text-sm font-medium">Folder</label>
-            <select
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
+            <select value={folderId} onChange={(e) => setFolderId(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
               <option value="">— Tanpa folder —</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.name}>{f.name}</option>
+              {options.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
               ))}
             </select>
           </div>
 
-          {isImg && (
+          {isMedia && (
             <div>
               <label className="mb-1.5 block text-sm font-medium">Alt Text (SEO)</label>
-              <input
-                value={altText}
-                onChange={(e) => setAltText(e.target.value)}
+              <input value={altText} onChange={(e) => setAltText(e.target.value)}
                 placeholder="Deskripsi gambar untuk mesin pencari…"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Contoh: "Kamar Deluxe dengan pemandangan taman"
               </p>
@@ -503,9 +506,7 @@ function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
           <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
-            {saving
-              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Menyimpan…</>
-              : "Simpan Info"}
+            {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Menyimpan…</> : "Simpan Info"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -514,7 +515,7 @@ function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Storage-only card                                                    */
+/* StorageCard — unregistered storage file                             */
 /* ------------------------------------------------------------------ */
 
 function StorageCard({ asset, onDeleted, onRegister }: {
@@ -523,7 +524,7 @@ function StorageCard({ asset, onDeleted, onRegister }: {
   onRegister: () => void;
 }) {
   const isMedia = IMAGE_EXTS.includes(asset.ext) || VIDEO_EXTS.includes(asset.ext);
-  const [copied,   setCopied]   = React.useState(false);
+  const [copied, setCopied]     = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
   const copyUrl = async () => {
@@ -547,20 +548,13 @@ function StorageCard({ asset, onDeleted, onRegister }: {
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-border bg-white transition hover:border-stone-300 hover:shadow-sm">
-      {/* Preview */}
       <div className="relative h-36 overflow-hidden bg-stone-100">
         <Preview url={asset.url} ext={asset.ext} name={asset.displayName} />
-        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
-          {asset.ext}
-        </span>
-        <span className="absolute right-2 top-2 rounded bg-indigo-600/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
-          {asset.autoFolder}
-        </span>
+        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{asset.ext}</span>
+        <span className="absolute right-2 top-2 rounded bg-indigo-600/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{asset.autoFolderName}</span>
         <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
           <a href={asset.url} target="_blank" rel="noreferrer">
-            <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs">
-              <ExternalLink className="h-3.5 w-3.5" />Buka
-            </Button>
+            <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs"><ExternalLink className="h-3.5 w-3.5" />Buka</Button>
           </a>
           <Button size="sm" variant="destructive" disabled={deleting} className="h-8 gap-1 text-xs" onClick={() => void handleDelete()}>
             {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Hapus
@@ -568,34 +562,26 @@ function StorageCard({ asset, onDeleted, onRegister }: {
         </div>
       </div>
 
-      {/* Filename */}
       <div className="flex items-center gap-1.5 border-t border-border px-3 py-1.5">
         <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/40" />
-        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={asset.displayName}>
-          {asset.displayName}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{asset.displayName}</span>
       </div>
 
-      {/* Add info button */}
       {isMedia && (
         <button type="button" onClick={onRegister}
-          className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-teal-50 hover:text-teal-800">
+          className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-teal-50">
           <Plus className="h-3 w-3 shrink-0 text-teal-600" />
           <span className="text-[11px] font-medium text-teal-700">Tambah nama &amp; alt text</span>
         </button>
       )}
 
-      {/* Folder indicator (read-only for storage cards) */}
       <div className="flex items-center gap-1.5 border-t border-border px-3 py-1.5">
         <Folder className="h-3 w-3 shrink-0 text-muted-foreground/50" />
-        <span className="text-[11px] italic text-muted-foreground">{asset.autoFolder}</span>
+        <span className="text-[11px] italic text-muted-foreground">{asset.autoFolderName}</span>
       </div>
 
-      {/* Footer */}
       <div className="mt-auto flex items-center justify-between border-t border-border px-3 py-2">
-        <span className="text-[11px] text-muted-foreground">
-          {asset.createdAt ? formatDate(asset.createdAt) : "—"}
-        </span>
+        <span className="text-[11px] text-muted-foreground">{asset.createdAt ? formatDate(asset.createdAt) : "—"}</span>
         <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => void copyUrl()}>
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Disalin" : "Salin URL"}
@@ -606,13 +592,15 @@ function StorageCard({ asset, onDeleted, onRegister }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Create folder dialog                                                 */
+/* Create / rename folder dialogs                                       */
 /* ------------------------------------------------------------------ */
 
-function CreateFolderDialog({ open, onClose, onCreated }: {
+function CreateFolderDialog({ open, parentId, parentName, onClose, onCreated }: {
   open: boolean;
+  parentId: string | null;       // null = root folder
+  parentName: string | null;     // for display
   onClose: () => void;
-  onCreated: (name: string) => void;
+  onCreated: (id: string, name: string) => void;
 }) {
   const createFn = useServerFn(createMediaFolder);
   const [name,   setName]   = React.useState("");
@@ -625,9 +613,9 @@ function CreateFolderDialog({ open, onClose, onCreated }: {
     if (!t) return;
     setSaving(true);
     try {
-      await createFn({ data: { name: t } });
+      const res = await createFn({ data: { name: t, parentId } });
       toast.success(`Folder "${t}" dibuat`);
-      onCreated(t);
+      onCreated((res as { id: string }).id, t);
       onClose();
     } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
@@ -637,17 +625,17 @@ function CreateFolderDialog({ open, onClose, onCreated }: {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[360px]">
         <DialogHeader>
-          <DialogTitle>Buat Folder Baru</DialogTitle>
-          <DialogDescription>Beri nama folder untuk mengelompokkan file media.</DialogDescription>
+          <DialogTitle>{parentId ? `Buat Sub Folder` : "Buat Folder Baru"}</DialogTitle>
+          <DialogDescription>
+            {parentId
+              ? `Sub folder di dalam "${parentName}".`
+              : "Folder utama untuk mengelompokkan file media."}
+          </DialogDescription>
         </DialogHeader>
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
-          placeholder="Nama folder, mis. Kamar Deluxe"
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+          placeholder={parentId ? "Nama kamar, mis. Deluxe" : "Nama folder, mis. Foto Kamar"}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
           <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
@@ -660,54 +648,37 @@ function CreateFolderDialog({ open, onClose, onCreated }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Folder sidebar                                                       */
+/* Folder sidebar with nested tree                                      */
 /* ------------------------------------------------------------------ */
 
 type FolderCounts = Map<string, number>;
 
-function FolderSidebar({ folders, counts, activeFolder, onSelect, onFolderCreated, onFolderRenamed, onFolderDeleted }: {
+function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
   folders: MediaFolder[];
   counts: FolderCounts;
   activeFolder: string;
   onSelect: (key: string) => void;
-  onFolderCreated: (name: string) => void;
-  onFolderRenamed: () => void;
-  onFolderDeleted: (id: string) => void;
+  onRefresh: () => void;
 }) {
   const renameFn = useServerFn(renameMediaFolder);
   const deleteFn = useServerFn(deleteMediaFolder);
 
-  const [createOpen,  setCreateOpen]  = React.useState(false);
-  const [renamingId,  setRenamingId]  = React.useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = React.useState("");
+  const [createParentId,   setCreateParentId]   = React.useState<string | null>(null);
+  const [createParentName, setCreateParentName] = React.useState<string | null>(null);
+  const [createOpen,       setCreateOpen]       = React.useState(false);
+  const [renamingId,       setRenamingId]       = React.useState<string | null>(null);
+  const [renameDraft,      setRenameDraft]      = React.useState("");
 
-  const totalCount = Array.from(counts.values()).reduce((a, b) => a + b, 0);
+  const totalCount = counts.get(ALL_FILES) ?? 0;
   const noneCount  = counts.get(NO_FOLDER) ?? 0;
 
-  const SidebarItem = ({ folderKey, label, icon: Icon, count, className }: {
-    folderKey: string; label: string;
-    icon: React.ComponentType<{ className?: string }>;
-    count?: number; className?: string;
-  }) => (
-    <button type="button"
-      onClick={() => onSelect(folderKey)}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
-        activeFolder === folderKey
-          ? "bg-teal-50 font-medium text-teal-800"
-          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-        className,
-      )}>
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-          activeFolder === folderKey ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
-          {count}
-        </span>
-      )}
-    </button>
-  );
+  const rootFolders = folders.filter((f) => !f.parent_id);
+
+  const openCreate = (parentId: string | null, parentName: string | null) => {
+    setCreateParentId(parentId);
+    setCreateParentName(parentName);
+    setCreateOpen(true);
+  };
 
   const handleRenameCommit = async (folder: MediaFolder) => {
     const t = renameDraft.trim();
@@ -715,101 +686,149 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onFolderCreate
     try {
       await renameFn({ data: { id: folder.id, name: t } });
       toast.success("Folder diubah namanya");
-      onFolderRenamed();
+      onRefresh();
     } catch (e) { toast.error((e as Error).message); }
     setRenamingId(null);
   };
 
   const handleDelete = async (folder: MediaFolder) => {
-    const count = counts.get(folder.name) ?? 0;
-    const msg = count > 0
-      ? `Hapus folder "${folder.name}"? ${count} file akan dikeluarkan dari folder ini (tidak dihapus).`
-      : `Hapus folder "${folder.name}"?`;
-    if (!confirm(msg)) return;
+    const count    = counts.get(folder.id) ?? 0;
+    const children = folders.filter((f) => f.parent_id === folder.id);
+    const parts: string[] = [];
+    if (children.length > 0) parts.push(`${children.length} sub folder`);
+    if (count > 0) parts.push(`${count} file akan dikeluarkan dari folder ini`);
+    const detail = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+    if (!confirm(`Hapus folder "${folder.name}"?${detail}`)) return;
     try {
       await deleteFn({ data: { id: folder.id } });
       toast.success(`Folder "${folder.name}" dihapus`);
-      onFolderDeleted(folder.id);
-      if (activeFolder === folder.name) onSelect(ALL_FILES);
+      if (activeFolder === folder.id || folders.some((f) => f.id === activeFolder && f.parent_id === folder.id)) {
+        onSelect(ALL_FILES);
+      }
+      onRefresh();
     } catch (e) { toast.error((e as Error).message); }
   };
 
-  return (
-    <aside className="flex w-52 shrink-0 flex-col gap-1 pr-2">
-      <SidebarItem folderKey={ALL_FILES} label="Semua File" icon={Images} count={totalCount} />
-      {noneCount > 0 && (
-        <SidebarItem folderKey={NO_FOLDER} label="Tanpa Folder" icon={FolderOpen} count={noneCount} />
-      )}
+  /** Renders a single folder row (with rename / delete / add-sub-folder buttons). */
+  const FolderRow = ({ folder, indent }: { folder: MediaFolder; indent: number }) => {
+    const count = counts.get(folder.id) ?? 0;
+    const isActive = activeFolder === folder.id;
+    const childFolders = folders.filter((f) => f.parent_id === folder.id);
 
-      {folders.length > 0 && (
-        <div className="my-1 border-t border-border" />
-      )}
+    if (renamingId === folder.id) {
+      return (
+        <div style={{ paddingLeft: `${indent * 16}px` }}
+          className="flex items-center gap-1 rounded-lg border border-input bg-background px-2 py-1">
+          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input autoFocus value={renameDraft}
+            onChange={(e) => setRenameDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleRenameCommit(folder);
+              if (e.key === "Escape") setRenamingId(null);
+            }}
+            className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none" />
+          <button type="button" onClick={() => void handleRenameCommit(folder)}
+            className="text-emerald-600 hover:text-emerald-700"><Check className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={() => setRenamingId(null)}
+            className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
+        </div>
+      );
+    }
 
-      {folders.map((f) => {
-        if (renamingId === f.id) {
-          return (
-            <div key={f.id} className="flex items-center gap-1 rounded-lg border border-input bg-background px-2 py-1">
-              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <input autoFocus value={renameDraft}
-                onChange={(e) => setRenameDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleRenameCommit(f);
-                  if (e.key === "Escape") setRenamingId(null);
-                }}
-                className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
-              />
-              <button type="button" onClick={() => void handleRenameCommit(f)}
-                className="text-emerald-600 hover:text-emerald-700">
-                <Check className="h-3.5 w-3.5" />
-              </button>
-              <button type="button" onClick={() => setRenamingId(null)}
-                className="text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        }
-
-        const count = counts.get(f.name) ?? 0;
-        return (
-          <div key={f.id} className="group/folder flex items-center">
-            <button type="button"
-              onClick={() => onSelect(f.name)}
-              className={cn(
-                "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
-                activeFolder === f.name
-                  ? "bg-teal-50 font-medium text-teal-800"
-                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-              )}>
-              <Folder className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{f.name}</span>
-              {count > 0 && (
-                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                  activeFolder === f.name ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
-                  {count}
-                </span>
-              )}
+    return (
+      <>
+        <div className="group/row flex items-center" style={{ paddingLeft: `${indent * 12}px` }}>
+          <button type="button" onClick={() => onSelect(folder.id)}
+            className={cn(
+              "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+              isActive
+                ? "bg-teal-50 font-medium text-teal-800"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}>
+            {indent > 0
+              ? <Folder className="h-3.5 w-3.5 shrink-0" />
+              : <FolderOpen className="h-4 w-4 shrink-0" />}
+            <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+            {count > 0 && (
+              <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                isActive ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
+                {count}
+              </span>
+            )}
+          </button>
+          {/* Hover actions */}
+          <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100">
+            <button type="button" title="Buat sub folder" onClick={() => openCreate(folder.id, folder.name)}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-teal-700">
+              <FolderPlus className="h-3 w-3" />
             </button>
-            {/* Rename + delete — visible on hover */}
-            <div className="flex shrink-0 gap-0.5 opacity-0 transition group-hover/folder:opacity-100">
-              <button type="button" title="Ubah nama"
-                onClick={() => { setRenameDraft(f.name); setRenamingId(f.id); }}
-                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
-                <Pencil className="h-3 w-3" />
-              </button>
-              <button type="button" title="Hapus folder"
-                onClick={() => void handleDelete(f)}
-                className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </div>
+            <button type="button" title="Ubah nama" onClick={() => { setRenameDraft(folder.name); setRenamingId(folder.id); }}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+              <Pencil className="h-3 w-3" />
+            </button>
+            <button type="button" title="Hapus folder" onClick={() => void handleDelete(folder)}
+              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+              <Trash2 className="h-3 w-3" />
+            </button>
           </div>
-        );
-      })}
+        </div>
+        {/* Sub-folders rendered recursively */}
+        {childFolders.map((child) => (
+          <FolderRow key={child.id} folder={child} indent={indent + 1} />
+        ))}
+      </>
+    );
+  };
+
+  return (
+    <aside className="flex w-52 shrink-0 flex-col gap-0.5">
+      {/* Static entries */}
+      <button type="button" onClick={() => onSelect(ALL_FILES)}
+        className={cn(
+          "flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+          activeFolder === ALL_FILES
+            ? "bg-teal-50 font-medium text-teal-800"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        )}>
+        <Images className="h-4 w-4 shrink-0" />
+        <span className="flex-1">Semua File</span>
+        {totalCount > 0 && (
+          <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+            activeFolder === ALL_FILES ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
+            {totalCount}
+          </span>
+        )}
+      </button>
+
+      {folders.length > 0 && <div className="my-1 border-t border-border" />}
+
+      {/* Nested folder tree */}
+      {rootFolders.map((f) => (
+        <FolderRow key={f.id} folder={f} indent={0} />
+      ))}
+
+      {/* Tanpa Folder (only shown when there are unassigned files) */}
+      {noneCount > 0 && (
+        <>
+          <div className="my-1 border-t border-border" />
+          <button type="button" onClick={() => onSelect(NO_FOLDER)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+              activeFolder === NO_FOLDER
+                ? "bg-teal-50 font-medium text-teal-800"
+                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+            )}>
+            <Folder className="h-4 w-4 shrink-0 opacity-40" />
+            <span className="flex-1">Tanpa Folder</span>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{noneCount}</span>
+          </button>
+        </>
+      )}
 
       <div className="my-1 border-t border-border" />
 
-      <button type="button" onClick={() => setCreateOpen(true)}
+      {/* Create root folder */}
+      <button type="button" onClick={() => openCreate(null, null)}
         className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted/50 hover:text-foreground">
         <FolderPlus className="h-4 w-4 shrink-0" />
         Buat Folder
@@ -817,15 +836,17 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onFolderCreate
 
       <CreateFolderDialog
         open={createOpen}
+        parentId={createParentId}
+        parentName={createParentName}
         onClose={() => setCreateOpen(false)}
-        onCreated={(name) => { onFolderCreated(name); onSelect(name); }}
+        onCreated={(id, _name) => { onRefresh(); onSelect(id); }}
       />
     </aside>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/* Upload progress bar                                                  */
+/* Upload progress                                                      */
 /* ------------------------------------------------------------------ */
 
 function UploadBar({ progress, total }: { progress: number; total: number }) {
@@ -845,11 +866,10 @@ function UploadBar({ progress, total }: { progress: number; total: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Media Library view                                                   */
+/* MediaLibraryView                                                     */
 /* ------------------------------------------------------------------ */
 
 export function MediaLibraryView() {
-  const qc      = useQueryClient();
   const listFn  = useServerFn(listSopDocuments);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
@@ -860,7 +880,7 @@ export function MediaLibraryView() {
   const [total,         setTotal]         = React.useState(0);
   const [storageAssets, setStorageAssets] = React.useState<StorageAsset[]>([]);
   const [storageLoading, setStorageLoading] = React.useState(true);
-  const [registerAsset, setRegisterAsset] = React.useState<StorageAsset | null>(null);
+  const [registerAsset,  setRegisterAsset]  = React.useState<StorageAsset | null>(null);
 
   /* DB brosur docs */
   const { data, isLoading: dbLoading, refetch } = useQuery({
@@ -877,7 +897,7 @@ export function MediaLibraryView() {
   });
   const folders = (folderData?.folders ?? []) as MediaFolder[];
 
-  /* Registered paths (to exclude from raw storage listing) */
+  /* Registered paths (exclude from raw storage listing) */
   const registeredPaths = React.useMemo(() => {
     const s = new Set<string>();
     for (const doc of brosurDocs) {
@@ -898,51 +918,112 @@ export function MediaLibraryView() {
 
   const refresh = () => { void refetch(); void refetchFolders(); };
 
-  /* ---- Folder counts ---- */
+  /* ---- Folder counts (inclusive of sub-folders) ---- */
   const folderCounts = React.useMemo<FolderCounts>(() => {
     const m = new Map<string, number>();
-    const inc = (key: string) => m.set(key, (m.get(key) ?? 0) + 1);
+    let allCount = 0;
+    let noneCount = 0;
+
+    // Bubble a count up to folderId and all its ancestors
+    const bubbleUp = (folderId: string) => {
+      let id: string | null = folderId;
+      while (id) {
+        m.set(id, (m.get(id) ?? 0) + 1);
+        const parent = folders.find((f) => f.id === id);
+        id = parent?.parent_id ?? null;
+      }
+    };
 
     for (const doc of brosurDocs) {
-      const key = doc.folder ?? NO_FOLDER;
-      inc(key);
+      allCount++;
+      if (!doc.folder_id) { noneCount++; }
+      else { bubbleUp(doc.folder_id); }
     }
-    for (const asset of storageAssets) {
-      inc(asset.autoFolder);
-    }
-    return m;
-  }, [brosurDocs, storageAssets]);
 
-  /* ---- Filtered lists ---- */
-  const applyFilter = (ext: string, name: string): boolean => {
-    if (filter !== "all" && extToFilter(ext) !== filter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      if (!name.toLowerCase().includes(q)) return false;
+    for (const asset of storageAssets) {
+      allCount++;
+      const matched = folders.find((f) => f.name === asset.autoFolderName && !f.parent_id);
+      if (matched) bubbleUp(matched.id);
     }
+
+    m.set(ALL_FILES, allCount);
+    m.set(NO_FOLDER, noneCount);
+    return m;
+  }, [folders, brosurDocs, storageAssets]);
+
+  /* ---- Active folder descendant IDs (for filtering) ---- */
+  const activeFolderDescendants = React.useMemo<Set<string> | null>(() => {
+    if (activeFolder === ALL_FILES || activeFolder === NO_FOLDER) return null;
+    return getDescendantIds(activeFolder, folders);
+  }, [activeFolder, folders]);
+
+  /* ---- Filtering helpers ---- */
+  const passesTypeAndSearch = (ext: string, name: string) => {
+    if (filter !== "all" && extToFilter(ext) !== filter) return false;
+    if (search.trim() && !name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   };
 
-  const visibleDb = React.useMemo<SopDocument[]>(() => {
-    return brosurDocs.filter((doc) => {
-      if (!applyFilter((doc.file_type ?? "").toLowerCase(), doc.name)) return false;
-      if (activeFolder === ALL_FILES) return true;
-      if (activeFolder === NO_FOLDER) return !doc.folder;
-      return doc.folder === activeFolder;
-    });
-  }, [brosurDocs, activeFolder, filter, search]);
+  const dbMatchesFolder = (doc: SopDocument) => {
+    if (activeFolder === ALL_FILES) return true;
+    if (activeFolder === NO_FOLDER) return !doc.folder_id;
+    if (!doc.folder_id) return false;
+    return activeFolderDescendants?.has(doc.folder_id) ?? false;
+  };
 
-  const visibleStorage = React.useMemo<StorageAsset[]>(() => {
-    return storageAssets.filter((asset) => {
-      if (!applyFilter(asset.ext, asset.displayName)) return false;
-      if (activeFolder === ALL_FILES) return true;
-      if (activeFolder === NO_FOLDER) return false; // storage cards always have autoFolder
-      return asset.autoFolder === activeFolder;
-    });
-  }, [storageAssets, activeFolder, filter, search]);
+  const storageMatchesFolder = (asset: StorageAsset) => {
+    if (activeFolder === ALL_FILES) return true;
+    if (activeFolder === NO_FOLDER) return false;
+    // Storage assets live at the root-level auto-folder (e.g. "Foto Kamar").
+    // They appear when that folder or a parent of it is active.
+    const matchedFolder = folders.find((f) => f.name === asset.autoFolderName && !f.parent_id);
+    if (!matchedFolder) return false;
+    return activeFolder === matchedFolder.id;
+  };
+
+  const visibleDb = React.useMemo<SopDocument[]>(() =>
+    brosurDocs.filter((doc) =>
+      dbMatchesFolder(doc) &&
+      passesTypeAndSearch((doc.file_type ?? "").toLowerCase(), doc.name),
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [brosurDocs, activeFolder, activeFolderDescendants, filter, search],
+  );
+
+  const visibleStorage = React.useMemo<StorageAsset[]>(() =>
+    storageAssets.filter((asset) =>
+      storageMatchesFolder(asset) &&
+      passesTypeAndSearch(asset.ext, asset.displayName),
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storageAssets, activeFolder, folders, filter, search],
+  );
 
   const totalVisible = visibleDb.length + visibleStorage.length;
   const isLoading    = dbLoading || storageLoading;
+
+  /* ---- Active folder info for breadcrumb and defaults ---- */
+  const activeFolderObj = React.useMemo(
+    () => folders.find((f) => f.id === activeFolder) ?? null,
+    [folders, activeFolder],
+  );
+
+  /* ---- Default folder id for new uploads / register ---- */
+  const defaultUploadFolderId = React.useMemo(() => {
+    if (activeFolder === ALL_FILES || activeFolder === NO_FOLDER) {
+      // Use "Brosur" folder if it exists
+      return folders.find((f) => f.name === "Brosur" && !f.parent_id)?.id ?? "";
+    }
+    return activeFolder;
+  }, [activeFolder, folders]);
+
+  /* ---- Default folder id for RegisterDialog ---- */
+  const registerDefaultFolderId = React.useMemo(() => {
+    if (!registerAsset) return defaultUploadFolderId;
+    // Pre-select the folder matching the asset's autoFolderName
+    const matched = folders.find((f) => f.name === registerAsset.autoFolderName && !f.parent_id);
+    return matched?.id ?? defaultUploadFolderId;
+  }, [registerAsset, folders, defaultUploadFolderId]);
 
   /* ---- Upload ---- */
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -958,25 +1039,20 @@ export function MediaLibraryView() {
     if (!valid.length) return;
     setTotal(valid.length); setUploaded(0);
     let ok = 0;
-    // Determine target folder for uploads
-    const uploadFolder = activeFolder === ALL_FILES || activeFolder === NO_FOLDER
-      ? "Brosur"
-      : activeFolder;
     for (const rawFile of valid) {
       try {
         const file = rawFile.type.startsWith("image/") ? await convertToWebP(rawFile) : rawFile;
         const ext  = (file.name.split(".").pop() ?? "bin").toLowerCase();
         const base = rawFile.name.replace(/\.[^.]+$/, "");
         const path = `brosur/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage
-          .from("sop-documents")
-          .upload(path, file, { upsert: false });
+        const { error: upErr } = await supabase.storage.from("sop-documents").upload(path, file, { upsert: false });
         if (upErr) throw upErr;
         const createFn = (await import("@/admin/modules/ai-lab/sop.functions")).createSopDocument;
         await createFn({
           data: {
             name: base, filePath: path, fileType: ext, content: "",
-            docCategory: "brosur", folder: uploadFolder,
+            docCategory: "brosur",
+            folderId: defaultUploadFolderId || null,
           },
         });
         ok++;
@@ -988,6 +1064,18 @@ export function MediaLibraryView() {
     setTotal(0); setUploaded(0);
     if (ok > 0) { toast.success(`${ok} file diunggah`); refresh(); }
   };
+
+  /* ---- Breadcrumb label ---- */
+  const breadcrumbLabel = (() => {
+    if (activeFolder === ALL_FILES) return "Semua File";
+    if (activeFolder === NO_FOLDER) return "Tanpa Folder";
+    if (!activeFolderObj) return "—";
+    // Build path: parent / child
+    const parent = activeFolderObj.parent_id
+      ? folders.find((f) => f.id === activeFolderObj.parent_id)
+      : null;
+    return parent ? `${parent.name} / ${activeFolderObj.name}` : activeFolderObj.name;
+  })();
 
   /* ---- Render ---- */
   return (
@@ -1004,11 +1092,10 @@ export function MediaLibraryView() {
             </p>
           </div>
           <div className="shrink-0">
-            <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => void onPick(e)} />
-            <Button
-              className="gap-2 bg-teal-700 text-white hover:bg-teal-800"
-              onClick={() => fileRef.current?.click()}
-              disabled={total > 0}>
+            <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden"
+              onChange={(e) => void onPick(e)} />
+            <Button className="gap-2 bg-teal-700 text-white hover:bg-teal-800"
+              onClick={() => fileRef.current?.click()} disabled={total > 0}>
               {total > 0
                 ? <><Loader2 className="h-4 w-4 animate-spin" />{`Mengunggah ${uploaded}/${total}…`}</>
                 : <><Upload className="h-4 w-4" />Upload Media</>}
@@ -1018,37 +1105,25 @@ export function MediaLibraryView() {
 
         <UploadBar progress={uploaded} total={total} />
 
-        {/* Body: sidebar + main */}
         <div className="flex gap-6">
-
           {/* Folder sidebar */}
           <FolderSidebar
             folders={folders}
             counts={folderCounts}
             activeFolder={activeFolder}
             onSelect={setActiveFolder}
-            onFolderCreated={(name) => {
-              void refetchFolders();
-              setActiveFolder(name);
-            }}
-            onFolderRenamed={() => { void refetch(); void refetchFolders(); }}
-            onFolderDeleted={() => { void refetch(); void refetchFolders(); }}
+            onRefresh={refresh}
           />
 
           {/* Main content */}
           <div className="min-w-0 flex-1">
-
             {/* Toolbar */}
             <div className="mb-4 flex flex-wrap items-center gap-3">
-              {/* Active folder breadcrumb */}
+              {/* Breadcrumb */}
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Images className="h-4 w-4" />
+                <Images className="h-4 w-4 shrink-0" />
                 <ChevronRight className="h-3.5 w-3.5" />
-                <span className="font-medium text-foreground">
-                  {activeFolder === ALL_FILES ? "Semua File"
-                   : activeFolder === NO_FOLDER ? "Tanpa Folder"
-                   : activeFolder}
-                </span>
+                <span className="font-medium text-foreground">{breadcrumbLabel}</span>
               </div>
 
               <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -1093,7 +1168,7 @@ export function MediaLibraryView() {
                   {search || filter !== "all"
                     ? "Tidak ada file yang cocok."
                     : activeFolder !== ALL_FILES
-                    ? `Folder ini masih kosong. Upload atau pindahkan file ke sini.`
+                    ? "Folder ini kosong. Upload atau pindahkan file ke sini."
                     : "Belum ada media. Klik Upload Media untuk memulai."}
                 </p>
                 {!search && filter === "all" && (
@@ -1113,10 +1188,8 @@ export function MediaLibraryView() {
                   <DbCard key={`db:${doc.id}`} doc={doc} folders={folders} onDelete={refresh} onChanged={refresh} />
                 ))}
                 {visibleStorage.map((asset) => (
-                  <StorageCard
-                    key={asset.id}
-                    asset={asset}
-                    onDeleted={() => setStorageAssets((prev) => prev.filter((a) => a.id !== asset.id))}
+                  <StorageCard key={asset.id} asset={asset}
+                    onDeleted={() => setStorageAssets((p) => p.filter((a) => a.id !== asset.id))}
                     onRegister={() => setRegisterAsset(asset)}
                   />
                 ))}
@@ -1137,6 +1210,7 @@ export function MediaLibraryView() {
         asset={registerAsset}
         open={!!registerAsset}
         folders={folders}
+        defaultFolderId={registerDefaultFolderId}
         onClose={() => setRegisterAsset(null)}
         onRegistered={refresh}
       />
