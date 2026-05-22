@@ -65,7 +65,9 @@ import {
   deleteSeoLandingPage,
   generateLandingPageContent,
   type SeoLandingPage,
+  type LPSection,
 } from "@/admin/modules/seo/landing-page.functions";
+import { LpPageBuilder } from "@/admin/modules/seo/lp-page-builder";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -367,7 +369,7 @@ function ScorePill({ score }: { score: number }) {
   );
 }
 
-type LPEditorTab = "konten" | "seo" | "pratinjau";
+type LPEditorTab = "builder" | "konten" | "seo" | "pratinjau";
 
 function LandingPageEditor({
   page,
@@ -381,9 +383,14 @@ function LandingPageEditor({
   onClose: () => void;
 }) {
   const isNew = page === null;
-  const [tab, setTab]             = useState<LPEditorTab>("konten");
+  const [tab, setTab]             = useState<LPEditorTab>("builder");
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState(false);
+
+  // Page-builder sections state
+  const [sections, setSections] = useState<LPSection[]>(
+    (draft?.sections ?? page?.sections ?? []) as LPSection[],
+  );
 
   // Generate-with-AI dialog state (used inside the editor)
   const [genDialog,   setGenDialog]   = useState(false);
@@ -453,6 +460,7 @@ function LandingPageEditor({
     meta_title:       metaTitle       || null,
     meta_description: metaDescription || null,
     og_image_url:     ogImageUrl      || null,
+    sections:         sections.length > 0 ? sections : null,
     published,
   });
 
@@ -488,9 +496,10 @@ function LandingPageEditor({
   const score = calcSeoScore({ title, target_keyword: targetKeyword, meta_title: metaTitle, meta_description: metaDescription, og_image_url: ogImageUrl || null, hero_headline: heroHeadline, body_content: bodyContent });
 
   const editorTabs: { key: LPEditorTab; label: string }[] = [
-    { key: "konten", label: "Konten" },
-    { key: "seo",    label: "SEO"    },
-    { key: "pratinjau", label: "Pratinjau" },
+    { key: "builder",   label: "🧱 Builder"  },
+    { key: "konten",    label: "Konten (HTML)" },
+    { key: "seo",       label: "SEO"          },
+    { key: "pratinjau", label: "Pratinjau"    },
   ];
 
   return (
@@ -530,7 +539,17 @@ function LandingPageEditor({
 
       {/* Tab content */}
       <div className="max-h-[60vh] flex-1 overflow-y-auto px-5 py-5">
-        {/* ---- Konten ---- */}
+        {/* ---- Builder ---- */}
+        {tab === "builder" && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700 leading-relaxed">
+              <strong>Page Builder</strong> — susun section-section di bawah. Konten Builder akan ditampilkan di halaman publik. Tab "Konten (HTML)" hanya digunakan sebagai fallback jika tidak ada section.
+            </div>
+            <LpPageBuilder sections={sections} onChange={setSections} />
+          </div>
+        )}
+
+        {/* ---- Konten (legacy HTML) ---- */}
         {tab === "konten" && (
           <div className="space-y-5">
             <div>
