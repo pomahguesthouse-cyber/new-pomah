@@ -124,6 +124,98 @@ export const deleteSeoLandingPage = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** AI-powered landing page content generation. */
+export const generateLandingPageContent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ keyword: z.string().min(1).max(200) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("LOVABLE_API_KEY tidak dikonfigurasi. Tambahkan di Settings.");
+
+    const slug = data.keyword
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 80);
+
+    const systemMsg =
+      "You are an expert SEO content writer for Pomah Guesthouse, a budget-friendly guesthouse in Gunungpati, Semarang, Indonesia, near UNNES (Universitas Negeri Semarang). " +
+      "You write compelling, keyword-optimised landing pages in Bahasa Indonesia. " +
+      "Always respond with valid JSON only — no markdown fences, no extra text.";
+
+    const userMsg =
+      `Generate a complete SEO landing page targeting the keyword: "${data.keyword}"\n\n` +
+      `Return ONLY a JSON object with these exact fields:\n` +
+      `{\n` +
+      `  "title": "page title in Bahasa Indonesia, max 80 chars",\n` +
+      `  "slug": "${slug}",\n` +
+      `  "target_keyword": "${data.keyword}",\n` +
+      `  "hero_headline": "compelling headline, max 80 chars, include keyword naturally",\n` +
+      `  "hero_subheadline": "supporting subtitle 1–2 sentences, max 150 chars",\n` +
+      `  "hero_cta_text": "CTA button text, max 30 chars, e.g. Pesan Sekarang",\n` +
+      `  "body_content": "4–6 HTML sections using h2, h3, p, ul, li, strong tags. 500–800 words. Cover: why choose Pomah, facilities, location benefits, FAQs. Include the keyword naturally at least 3 times.",\n` +
+      `  "meta_title": "50–60 chars, keyword first, ends with | Pomah Guesthouse",\n` +
+      `  "meta_description": "120–160 chars, include keyword, mention location, compelling call to action"\n` +
+      `}`;
+
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.0-flash",
+        messages: [
+          { role: "system", content: systemMsg },
+          { role: "user",   content: userMsg   },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`AI gateway error ${res.status}: ${txt}`);
+    }
+
+    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = j.choices?.[0]?.message?.content?.trim() ?? "";
+
+    // Strip possible markdown fences that some models add
+    const cleaned = raw
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/```\s*$/i, "")
+      .trim();
+
+    let parsed: Record<string, string>;
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch {
+      throw new Error("AI mengembalikan format yang tidak valid. Coba lagi.");
+    }
+
+    return {
+      page: {
+        title:            (parsed.title            ?? "").slice(0, 200),
+        slug:             (parsed.slug             ?? slug).toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+        target_keyword:   parsed.target_keyword    ?? data.keyword,
+        hero_headline:    (parsed.hero_headline    ?? "").slice(0, 300),
+        hero_subheadline: (parsed.hero_subheadline ?? "").slice(0, 500),
+        hero_cta_text:    (parsed.hero_cta_text    ?? "Pesan Sekarang").slice(0, 100),
+        hero_cta_url:     "/book",
+        body_content:     parsed.body_content      ?? "",
+        meta_title:       (parsed.meta_title       ?? "").slice(0, 60),
+        meta_description: (parsed.meta_description ?? "").slice(0, 160),
+        og_image_url:     null as string | null,
+        published:        false,
+      },
+    };
+  });
+
 /** Fetch a single landing page by slug (public — no auth required). */
 export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ slug: z.string() }).parse(d))
