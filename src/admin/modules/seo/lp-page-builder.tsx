@@ -11,11 +11,13 @@ import {
   Image as ImageIcon,
   FileText,
   Layers,
-  MessageSquare,
   HelpCircle,
   Megaphone,
   Quote,
   GripVertical,
+  PanelTop,
+  GalleryHorizontal,
+  MousePointerClick,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,9 @@ import type {
   LPFaqSection,
   LPCtaBannerSection,
   LPTestimonialsSection,
+  LPHeaderSection,
+  LPSliderSection,
+  LPButtonSection,
 } from "./landing-page.functions";
 
 /* ─── helpers ──────────────────────────────────────────────────────── */
@@ -66,18 +71,27 @@ function makeDefault(type: LPSection["type"]): LPSection {
       return { id, type: "cta_banner", headline: "Siap Menginap?", subheadline: "Kamar tersedia, harga terjangkau.", cta_text: "Pesan Sekarang", cta_url: "/book", style: "teal" };
     case "testimonials":
       return { id, type: "testimonials", title: "Kata Tamu Kami", items: [{ name: "Tamu", text: "Penginapan yang nyaman dan bersih, pelayanan ramah." }] };
+    case "header":
+      return { id, type: "header", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/rooms" }] };
+    case "slider":
+      return { id, type: "slider", height: 480, overlay: 40, autoplay: true, interval_ms: 5000, slides: [{ image_url: "", headline: "Selamat Datang", subheadline: "Penginapan nyaman di Semarang", cta_text: "Pesan Sekarang", cta_url: "/book" }] };
+    case "button":
+      return { id, type: "button", text: "Pesan Sekarang", url: "/book", align: "center", variant: "solid", color: "teal" };
   }
 }
 
 /* ─── section meta for the picker ─────────────────────────────────── */
 const SECTION_META: { type: LPSection["type"]; label: string; desc: string; Icon: React.ElementType; color: string }[] = [
-  { type: "hero",         label: "Hero Banner",        desc: "Header besar dengan gambar & CTA",     Icon: ImageIcon,     color: "bg-teal-50 text-teal-700 border-teal-200" },
-  { type: "text",         label: "Teks & Paragraf",    desc: "Judul dan paragraf teks bebas",        Icon: FileText,      color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { type: "features",     label: "Fitur / Keunggulan", desc: "Grid kartu dengan ikon & deskripsi",   Icon: Layers,        color: "bg-violet-50 text-violet-700 border-violet-200" },
-  { type: "gallery",      label: "Galeri Foto",        desc: "Grid foto kamar atau properti",        Icon: ImageIcon,     color: "bg-amber-50 text-amber-700 border-amber-200" },
-  { type: "faq",          label: "FAQ",                desc: "Pertanyaan & jawaban accordion",       Icon: HelpCircle,    color: "bg-orange-50 text-orange-700 border-orange-200" },
-  { type: "cta_banner",   label: "CTA Banner",         desc: "Strip ajakan bertindak di halaman",    Icon: Megaphone,     color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { type: "testimonials", label: "Testimoni",          desc: "Kutipan ulasan dari tamu",             Icon: Quote,         color: "bg-rose-50 text-rose-700 border-rose-200" },
+  { type: "header",       label: "Header / Navbar",    desc: "Bar navigasi atas dengan menu & CTA",  Icon: PanelTop,         color: "bg-slate-50 text-slate-700 border-slate-200" },
+  { type: "hero",         label: "Hero Banner",        desc: "Header besar dengan gambar & CTA",     Icon: ImageIcon,        color: "bg-teal-50 text-teal-700 border-teal-200" },
+  { type: "slider",       label: "Hero Slider",        desc: "Banner geser beberapa gambar",         Icon: GalleryHorizontal,color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  { type: "text",         label: "Teks & Paragraf",    desc: "Judul dan paragraf teks bebas",        Icon: FileText,         color: "bg-blue-50 text-blue-700 border-blue-200" },
+  { type: "features",     label: "Fitur / Keunggulan", desc: "Grid kartu dengan ikon & deskripsi",   Icon: Layers,           color: "bg-violet-50 text-violet-700 border-violet-200" },
+  { type: "gallery",      label: "Galeri Foto",        desc: "Grid foto kamar atau properti",        Icon: ImageIcon,        color: "bg-amber-50 text-amber-700 border-amber-200" },
+  { type: "faq",          label: "FAQ",                desc: "Pertanyaan & jawaban accordion",       Icon: HelpCircle,       color: "bg-orange-50 text-orange-700 border-orange-200" },
+  { type: "cta_banner",   label: "CTA Banner",         desc: "Strip ajakan bertindak di halaman",    Icon: Megaphone,        color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { type: "button",       label: "Tombol",             desc: "Tombol tautan tunggal",                Icon: MousePointerClick,color: "bg-pink-50 text-pink-700 border-pink-200" },
+  { type: "testimonials", label: "Testimoni",          desc: "Kutipan ulasan dari tamu",             Icon: Quote,            color: "bg-rose-50 text-rose-700 border-rose-200" },
 ];
 
 function typeMeta(type: LPSection["type"]) {
@@ -151,7 +165,11 @@ export function LpPageBuilder({
                   {meta.label}
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-stone-600">
-                  {"headline" in s ? s.headline : "title" in s && s.title ? s.title : meta.label}
+                  {"headline" in s ? s.headline
+                    : "title" in s && s.title ? s.title
+                    : s.type === "header" ? (s.brand || meta.label)
+                    : s.type === "button" ? (s.text || meta.label)
+                    : meta.label}
                 </span>
                 <span className="shrink-0 font-mono text-[10px] text-stone-300">{idx + 1}</span>
                 <div className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -223,12 +241,15 @@ export function LpPageBuilder({
    ═══════════════════════════════════════════════════════════════════ */
 function SectionEditor({ section, onUpdate }: { section: LPSection; onUpdate: (patch: Partial<LPSection>) => void }) {
   switch (section.type) {
+    case "header":       return <HeaderEditor        s={section} onUpdate={onUpdate} />;
     case "hero":         return <HeroEditor         s={section} onUpdate={onUpdate} />;
+    case "slider":       return <SliderEditor        s={section} onUpdate={onUpdate} />;
     case "text":         return <TextEditor          s={section} onUpdate={onUpdate} />;
     case "features":     return <FeaturesEditor      s={section} onUpdate={onUpdate} />;
     case "gallery":      return <GalleryEditor       s={section} onUpdate={onUpdate} />;
     case "faq":          return <FaqEditor           s={section} onUpdate={onUpdate} />;
     case "cta_banner":   return <CtaBannerEditor     s={section} onUpdate={onUpdate} />;
+    case "button":       return <ButtonEditor        s={section} onUpdate={onUpdate} />;
     case "testimonials": return <TestimonialsEditor  s={section} onUpdate={onUpdate} />;
     default:             return null;
   }
@@ -242,6 +263,158 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
       <Label className="text-xs font-semibold">{label}</Label>
       {children}
       {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/* Header / Navbar */
+function HeaderEditor({ s, onUpdate }: { s: LPHeaderSection; onUpdate: UpFn }) {
+  const links = s.links ?? [];
+  const setLinks = (next: typeof links) => onUpdate({ links: next } as any);
+  return (
+    <div className="space-y-3">
+      <Fld label="Nama Brand / Logo">
+        <Input value={s.brand ?? ""} onChange={(e) => onUpdate({ brand: e.target.value } as any)} className="mt-1" placeholder="Pomah Guesthouse" />
+      </Fld>
+      <div className="grid grid-cols-2 gap-3">
+        <Fld label="Teks Tombol CTA">
+          <Input value={s.cta_text ?? ""} onChange={(e) => onUpdate({ cta_text: e.target.value } as any)} className="mt-1" placeholder="Pesan Sekarang" />
+        </Fld>
+        <Fld label="URL Tombol CTA">
+          <Input value={s.cta_url ?? ""} onChange={(e) => onUpdate({ cta_url: e.target.value } as any)} className="mt-1" placeholder="/book" />
+        </Fld>
+      </div>
+      <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+        <input type="checkbox" checked={s.sticky ?? true}
+          onChange={(e) => onUpdate({ sticky: e.target.checked } as any)} className="accent-teal-700" />
+        Tempelkan header di atas saat scroll (sticky)
+      </label>
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold">Menu Navigasi</Label>
+        {links.map((link, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input value={link.label} placeholder="Label" className="text-xs"
+              onChange={(e) => setLinks(links.map((l, j) => j === i ? { ...l, label: e.target.value } : l))} />
+            <Input value={link.url} placeholder="/path" className="flex-1 text-xs font-mono"
+              onChange={(e) => setLinks(links.map((l, j) => j === i ? { ...l, url: e.target.value } : l))} />
+            <button type="button" onClick={() => setLinks(links.filter((_, j) => j !== i))}
+              className="shrink-0 text-stone-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1"
+          onClick={() => setLinks([...links, { label: "Menu", url: "/" }])}>
+          <Plus className="h-3.5 w-3.5" /> Tambah Menu
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* Hero Slider */
+function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
+  const slides = s.slides ?? [];
+  const setSlides = (next: typeof slides) => onUpdate({ slides: next } as any);
+  const patchSlide = (i: number, patch: Partial<(typeof slides)[number]>) =>
+    setSlides(slides.map((sl, j) => (j === i ? { ...sl, ...patch } : sl)));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Fld label={`Tinggi: ${s.height ?? 480}px`}>
+          <input type="range" min={240} max={720} step={20} value={s.height ?? 480}
+            onChange={(e) => onUpdate({ height: +e.target.value } as any)}
+            className="mt-2 w-full accent-teal-700" />
+        </Fld>
+        <Fld label={`Overlay: ${s.overlay ?? 40}%`}>
+          <input type="range" min={0} max={80} value={s.overlay ?? 40}
+            onChange={(e) => onUpdate({ overlay: +e.target.value } as any)}
+            className="mt-2 w-full accent-teal-700" />
+        </Fld>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
+          <input type="checkbox" checked={s.autoplay ?? true}
+            onChange={(e) => onUpdate({ autoplay: e.target.checked } as any)} className="accent-teal-700" />
+          Geser otomatis
+        </label>
+        <Fld label="Interval (ms)">
+          <Input type="number" value={s.interval_ms ?? 5000} className="mt-1 text-xs"
+            onChange={(e) => onUpdate({ interval_ms: +e.target.value } as any)} />
+        </Fld>
+      </div>
+      <div className="space-y-2">
+        {slides.map((slide, i) => (
+          <div key={i} className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-stone-500">Slide {i + 1}</span>
+              <button type="button" onClick={() => setSlides(slides.filter((_, j) => j !== i))}
+                className="text-stone-300 hover:text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+            <Input value={slide.image_url} placeholder="URL gambar https://..." className="text-xs font-mono"
+              onChange={(e) => patchSlide(i, { image_url: e.target.value })} />
+            <Input value={slide.headline ?? ""} placeholder="Headline" className="text-xs"
+              onChange={(e) => patchSlide(i, { headline: e.target.value })} />
+            <Input value={slide.subheadline ?? ""} placeholder="Sub headline" className="text-xs"
+              onChange={(e) => patchSlide(i, { subheadline: e.target.value })} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={slide.cta_text ?? ""} placeholder="Teks CTA" className="text-xs"
+                onChange={(e) => patchSlide(i, { cta_text: e.target.value })} />
+              <Input value={slide.cta_url ?? ""} placeholder="/book" className="text-xs font-mono"
+                onChange={(e) => patchSlide(i, { cta_url: e.target.value })} />
+            </div>
+          </div>
+        ))}
+        <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1"
+          onClick={() => setSlides([...slides, { image_url: "", headline: "", subheadline: "", cta_text: "Pesan Sekarang", cta_url: "/book" }])}>
+          <Plus className="h-3.5 w-3.5" /> Tambah Slide
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* Button */
+function ButtonEditor({ s, onUpdate }: { s: LPButtonSection; onUpdate: UpFn }) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <Fld label="Teks Tombol *">
+          <Input value={s.text} onChange={(e) => onUpdate({ text: e.target.value } as any)} className="mt-1" />
+        </Fld>
+        <Fld label="URL Tujuan *">
+          <Input value={s.url} onChange={(e) => onUpdate({ url: e.target.value } as any)} className="mt-1" placeholder="/book" />
+        </Fld>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <Fld label="Posisi">
+          <Select value={s.align ?? "center"} onValueChange={(v) => onUpdate({ align: v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="left">Kiri</SelectItem>
+              <SelectItem value="center">Tengah</SelectItem>
+              <SelectItem value="right">Kanan</SelectItem>
+            </SelectContent>
+          </Select>
+        </Fld>
+        <Fld label="Gaya">
+          <Select value={s.variant ?? "solid"} onValueChange={(v) => onUpdate({ variant: v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid">Penuh</SelectItem>
+              <SelectItem value="outline">Garis</SelectItem>
+            </SelectContent>
+          </Select>
+        </Fld>
+        <Fld label="Warna">
+          <Select value={s.color ?? "teal"} onValueChange={(v) => onUpdate({ color: v as any } as any)}>
+            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="teal">Teal</SelectItem>
+              <SelectItem value="dark">Gelap</SelectItem>
+              <SelectItem value="light">Terang</SelectItem>
+            </SelectContent>
+          </Select>
+        </Fld>
+      </div>
     </div>
   );
 }
