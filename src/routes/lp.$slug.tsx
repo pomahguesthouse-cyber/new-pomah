@@ -536,18 +536,18 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
           <Quote className="mx-auto h-7 w-7 text-teal-600/40" />
           <p className="mt-4 text-base leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
           {cur.name && <p className="mt-5 text-sm font-semibold text-stone-700">— {cur.name}</p>}
-          {cur.isGoogle && (
-            <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-stone-500">
-              <span className="font-bold text-stone-700">G</span>
-              <span>Google</span>
-              <div className="flex gap-0.5">
-                {[0, 1, 2, 3, 4].map((star) => (
-                  <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-            </div>
-          )}
         </div>
+        {cur.isGoogle && (
+          <div className="mt-2 flex items-center justify-end gap-1.5 text-xs text-stone-500 pr-2">
+            <span className="font-bold text-stone-700">G</span>
+            <span>Google</span>
+            <div className="flex gap-0.5">
+              {[0, 1, 2, 3, 4].map((star) => (
+                <Star key={star} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              ))}
+            </div>
+          </div>
+        )}
         {items.length > 1 && (
           <div className="mt-5 flex justify-center gap-2">
             {items.map((_, d) => (
