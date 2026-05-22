@@ -9,6 +9,7 @@ import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { convertToWebP } from "@/lib/image-webp";
 import {
   Loader2,
   Upload,
@@ -129,9 +130,11 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
     setUploading(true);
     try {
       const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
-        const ext = file.name.split(".").pop() ?? "jpg";
+      for (const rawFile of Array.from(files)) {
+        if (!rawFile.type.startsWith("image/")) continue;
+        // Convert to WebP for smaller size and better SEO performance
+        const file = await convertToWebP(rawFile);
+        const ext = (file.name.split(".").pop() ?? "webp").toLowerCase();
         const path = `room-types/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const { error } = await supabase.storage
           .from("room-images")
@@ -497,7 +500,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 <p className="text-sm font-medium">
                   {uploading ? "Mengupload…" : "Tarik foto ke sini atau klik untuk pilih"}
                 </p>
-                <p className="text-[10px] text-muted-foreground">JPG, PNG, WEBP — bisa banyak</p>
+                <p className="text-[10px] text-muted-foreground">JPG/PNG otomatis dikonversi ke WebP · bisa banyak</p>
               </div>
 
               {images.length > 0 && (
@@ -511,7 +514,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                         key={url}
                         className="group relative overflow-hidden rounded-md border border-input"
                       >
-                        <img src={url} alt="" className="aspect-video w-full object-cover" />
+                        <img src={url} alt={name || "Foto kamar"} className="aspect-video w-full object-cover" />
                         {i === 0 && (
                           <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[9px] font-medium text-primary-foreground">
                             Cover

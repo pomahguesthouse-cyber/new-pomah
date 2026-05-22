@@ -13,16 +13,18 @@ import {
   FileText, Upload, Trash2, Loader2, Save, Pencil, Link2, Plus,
   BookOpen, GraduationCap, ChevronDown, ChevronRight, Sparkles,
   Building2, DollarSign, BedDouble, Wrench, Calculator, UserCog,
-  Image, Copy, Check, ExternalLink,
+  Image, Copy, Check, ExternalLink, Tag,
 } from "lucide-react";
 import {
   listSopDocuments,
   createSopDocument,
   updateSopDocumentContent,
   deleteSopDocument,
+  renameSopDocument,
   seedDefaultSopDocuments,
   type SopDocument,
 } from "@/admin/modules/ai-lab/sop.functions";
+import { convertToWebP } from "@/lib/image-webp";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -396,16 +398,21 @@ function BrosurPanel() {
     if (!files.length) return;
     setUploading(true);
     let uploaded = 0;
-    for (const file of files) {
-      const ext = (file.name.split(".").pop() ?? "").toLowerCase();
-      if (!BROSUR_ALLOWED.includes(ext)) { toast.error(`Format tidak didukung: ${file.name}`); continue; }
-      if (file.size > 20 * 1024 * 1024) { toast.error(`File terlalu besar (maks 20 MB): ${file.name}`); continue; }
+    for (const rawFile of files) {
+      const origExt = (rawFile.name.split(".").pop() ?? "").toLowerCase();
+      if (!BROSUR_ALLOWED.includes(origExt)) { toast.error(`Format tidak didukung: ${rawFile.name}`); continue; }
+      if (rawFile.size > 20 * 1024 * 1024) { toast.error(`File terlalu besar (maks 20 MB): ${rawFile.name}`); continue; }
       try {
+        // Convert raster images to WebP for smaller size and better SEO
+        const file = rawFile.type.startsWith("image/") ? await convertToWebP(rawFile) : rawFile;
+        const ext = (file.name.split(".").pop() ?? origExt).toLowerCase();
+        const baseName = rawFile.name.replace(/\.[^.]+$/, ""); // original name (no ext) for display
         const path = `brosur/${crypto.randomUUID()}.${ext}`;
         const { error: upErr } = await supabase.storage.from("sop-documents").upload(path, file, { upsert: false });
         if (upErr) throw upErr;
         const createFn = (await import("@/admin/modules/ai-lab/sop.functions")).createSopDocument;
-        await createFn({ data: { name: file.name, filePath: path, fileType: ext, content: "", docCategory: "brosur" } });
+        // Store clean name (no UUID) so it doubles as the img alt text
+        await createFn({ data: { name: baseName, filePath: path, fileType: ext, content: "", docCategory: "brosur" } });
         uploaded++;
       } catch (err) { toast.error(`Gagal: ${(err as Error).message}`); }
     }
@@ -444,7 +451,7 @@ function BrosurPanel() {
         <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-border py-16 text-muted-foreground">
           <Image className="h-10 w-10" />
           <p className="text-sm font-medium">Belum ada brosur.</p>
-          <p className="text-xs">Upload gambar atau PDF yang akan dikirim ke tamu.</p>
+          <p className="text-xs">Upload gambar (JPG/PNG → otomatis dikonversi ke WebP) atau PDF.</p>
           <Button
             variant="outline"
             className="mt-2 gap-1.5"
@@ -456,7 +463,7 @@ function BrosurPanel() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {documents.map((doc) => (
-            <BrosurCard key={doc.id} doc={doc} onDelete={() => remove(doc)} />
+            <BrosurCard key={doc.id} doc={doc} onDelete={() => remove(doc)} onRenamed={refresh} />
           ))}
         </div>
       )}
@@ -464,10 +471,22 @@ function BrosurPanel() {
   );
 }
 
-function BrosurCard({ doc, onDelete }: { doc: SopDocument; onDelete: () => void }) {
+function BrosurCard({
+  doc,
+  onDelete,
+  onRenamed,
+}: {
+  doc: SopDocument;
+  onDelete: () => void;
+  onRenamed: () => void;
+}) {
   const ext = (doc.file_type ?? "").toLowerCase();
   const isImage = IMAGE_EXTS.includes(ext);
   const [copied, setCopied] = useState(false);
+  const [editingAlt, setEditingAlt] = useState(false);
+  const [altValue, setAltValue] = useState(doc.name);
+  const [savingAlt, setSavingAlt] = useState(false);
+  const renameFn = useServerFn(renameSopDocument);
 
   const publicUrl = doc.file_path
     ? supabase.storage.from("sop-documents").getPublicUrl(doc.file_path).data.publicUrl
@@ -481,6 +500,22 @@ function BrosurCard({ doc, onDelete }: { doc: SopDocument; onDelete: () => void 
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const saveAlt = async () => {
+    const trimmed = altValue.trim();
+    if (!trimmed) return;
+    setSavingAlt(true);
+    try {
+      await renameFn({ data: { id: doc.id, name: trimmed } });
+      toast.success("Alt text diperbarui");
+      setEditingAlt(false);
+      onRenamed();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSavingAlt(false);
+    }
+  };
+
   return (
     <div className="group rounded-xl border border-border bg-white overflow-hidden flex flex-col">
       {/* Preview */}
@@ -492,6 +527,12 @@ function BrosurCard({ doc, onDelete }: { doc: SopDocument; onDelete: () => void 
             <FileText className="h-10 w-10" />
             <span className="text-xs uppercase font-medium">{ext}</span>
           </div>
+        )}
+        {/* WebP badge */}
+        {ext === "webp" && (
+          <span className="absolute left-2 top-2 rounded bg-teal-700/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+            WebP
+          </span>
         )}
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
@@ -513,10 +554,48 @@ function BrosurCard({ doc, onDelete }: { doc: SopDocument; onDelete: () => void 
         </div>
       </div>
 
-      {/* Info + actions */}
-      <div className="flex items-center gap-2 px-3 py-2">
+      {/* Alt text edit row */}
+      {editingAlt ? (
+        <div className="flex items-center gap-1.5 border-t border-border px-3 py-2">
+          <Tag className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            autoFocus
+            value={altValue}
+            onChange={(e) => setAltValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveAlt();
+              if (e.key === "Escape") { setEditingAlt(false); setAltValue(doc.name); }
+            }}
+            className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            placeholder="Deskripsi gambar (alt text)"
+          />
+          <Button
+            size="sm"
+            className="h-6 px-2 text-[11px]"
+            disabled={savingAlt}
+            onClick={saveAlt}
+          >
+            {savingAlt ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => { setAltValue(doc.name); setEditingAlt(true); }}
+          className="flex items-center gap-1.5 border-t border-border px-3 py-1.5 text-left hover:bg-muted/30 transition"
+          title="Edit alt text (SEO)"
+        >
+          <Tag className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground italic">
+            {doc.name}
+          </span>
+          <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/60" />
+        </button>
+      )}
+
+      {/* Info + copy action */}
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium">{doc.name}</p>
           <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
             {ext} · {formatDateID(doc.created_at)}
           </p>
