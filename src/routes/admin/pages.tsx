@@ -1344,11 +1344,10 @@ function SeoPopup({
           {/* ── Social Share ── */}
           {tab === "social" && (
             <div className="space-y-4">
-              <FieldRow label="Gambar share (OG Image URL)">
-                <Input value={ogImage} onChange={(e) => setOgImage(e.target.value)}
-                  placeholder="https://..." />
+              <FieldRow label="Gambar share (OG Image)">
+                <ImageField value={ogImage} onChange={setOgImage} kind="image" />
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Gambar yang muncul saat halaman dibagikan di media sosial.
+                  Gambar yang muncul saat halaman dibagikan di media sosial. Pilih dari Media Library.
                 </p>
               </FieldRow>
 
