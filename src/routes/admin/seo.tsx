@@ -58,6 +58,14 @@ import {
   generateAndSaveLocalBusinessSchema,
   triggerSeoAgentAction,
 } from "@/admin/modules/seo/seo.functions";
+import {
+  listSeoLandingPages,
+  createSeoLandingPage,
+  updateSeoLandingPage,
+  publishSeoLandingPage,
+  deleteSeoLandingPage,
+  type SeoLandingPage,
+} from "@/admin/modules/seo/landing-page.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,6 +112,7 @@ type TabKey =
   | "agents"
   | "conversational"
   | "keywords"
+  | "landing_page"
   | "programmatic"
   | "studio"
   | "links"
@@ -112,6 +121,12 @@ type TabKey =
 export function SeoPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("search_console");
   const qc = useQueryClient();
+
+  // Landing pages query
+  const { data: landingPagesData, refetch: refetchLandingPages } = useQuery({
+    queryKey: ["seo-landing-pages"],
+    queryFn: () => listSeoLandingPages(),
+  });
 
   // Queries
   const { data: dashboardData, isLoading: loadingDash, refetch: refetchDash } = useQuery({
@@ -173,6 +188,7 @@ export function SeoPage() {
     { key: "agents", label: "AI Agents", icon: Bot },
     { key: "conversational", label: "WhatsApp Intent", icon: MessageCircle },
     { key: "keywords", label: "Keywords", icon: Search },
+    { key: "landing_page", label: "Landing Pages", icon: LayoutDashboard },
     { key: "programmatic", label: "Programmatic SEO", icon: Globe },
     { key: "studio", label: "Content Studio", icon: Sparkles },
     { key: "links", label: "Linking Map", icon: LinkIcon },
@@ -205,6 +221,7 @@ export function SeoPage() {
               refetchLinks();
               refetchReviews();
               refetchSearchConsole();
+              refetchLandingPages();
               toast.success("SEO metrics refreshed");
             }}
           >
@@ -272,6 +289,12 @@ export function SeoPage() {
               onChanged={refetchKeywords}
             />
           )}
+          {activeTab === "landing_page" && (
+            <LandingPageSection
+              pages={landingPagesData?.pages ?? []}
+              onChanged={refetchLandingPages}
+            />
+          )}
           {activeTab === "programmatic" && (
             <ProgrammaticSection
               pages={programmaticData?.pages ?? []}
@@ -301,6 +324,485 @@ export function SeoPage() {
 }
 
 
+
+/* ============================================================================
+   LANDING PAGE SECTION
+   ============================================================================ */
+
+// SEO score: 0-100 based on keyword coverage and metadata quality
+function calcSeoScore(page: Partial<SeoLandingPage>): number {
+  let score = 0;
+  const kw = (page.target_keyword ?? "").toLowerCase();
+  const bodyText = (
+    (page.title ?? "") + " " +
+    (page.hero_headline ?? "") + " " +
+    (page.body_content ?? "")
+  ).toLowerCase();
+
+  if (kw && (page.meta_title ?? "").toLowerCase().includes(kw)) score += 20;
+  if (kw && (page.meta_description ?? "").toLowerCase().includes(kw)) score += 15;
+  if (kw && bodyText.includes(kw)) score += 15;
+
+  const mtLen = (page.meta_title ?? "").length;
+  if (mtLen >= 30 && mtLen <= 60) score += 20;
+  else if (mtLen > 0) score += 10;
+
+  const mdLen = (page.meta_description ?? "").length;
+  if (mdLen >= 120 && mdLen <= 160) score += 20;
+  else if (mdLen > 0) score += 10;
+
+  if (page.og_image_url) score += 10;
+  return Math.min(score, 100);
+}
+
+function ScorePill({ score }: { score: number }) {
+  const cls =
+    score >= 70 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+    score >= 40 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                  "bg-red-50 text-red-700 border-red-200";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${cls}`}>
+      SEO {score}/100
+    </span>
+  );
+}
+
+type LPEditorTab = "konten" | "seo" | "pratinjau";
+
+function LandingPageEditor({
+  page,
+  onSave,
+  onClose,
+}: {
+  page: SeoLandingPage | null;   // null = create new
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const isNew = page === null;
+  const [tab, setTab]             = useState<LPEditorTab>("konten");
+  const [saving, setSaving]       = useState(false);
+  const [deleting, setDeleting]   = useState(false);
+
+  // Form state mirrors the DB columns
+  const [title,            setTitle]            = useState(page?.title            ?? "");
+  const [slug,             setSlug]             = useState(page?.slug             ?? "");
+  const [targetKeyword,    setTargetKeyword]    = useState(page?.target_keyword   ?? "");
+  const [heroHeadline,     setHeroHeadline]     = useState(page?.hero_headline    ?? "");
+  const [heroSubheadline,  setHeroSubheadline]  = useState(page?.hero_subheadline ?? "");
+  const [heroCta,          setHeroCta]          = useState(page?.hero_cta_text    ?? "Pesan Sekarang");
+  const [heroCtaUrl,       setHeroCtaUrl]       = useState(page?.hero_cta_url     ?? "/book");
+  const [bodyContent,      setBodyContent]      = useState(page?.body_content     ?? "");
+  const [metaTitle,        setMetaTitle]        = useState(page?.meta_title       ?? "");
+  const [metaDescription,  setMetaDescription]  = useState(page?.meta_description ?? "");
+  const [ogImageUrl,       setOgImageUrl]       = useState(page?.og_image_url     ?? "");
+  const [published,        setPublished]        = useState(page?.published        ?? false);
+
+  // Auto-generate slug from title (new pages only)
+  const autoSlug = (t: string) =>
+    t.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+
+  const handleTitleChange = (v: string) => {
+    setTitle(v);
+    if (isNew) setSlug(autoSlug(v));
+  };
+
+  const buildPayload = () => ({
+    title,
+    slug,
+    target_keyword:   targetKeyword   || null,
+    hero_headline:    heroHeadline    || null,
+    hero_subheadline: heroSubheadline || null,
+    hero_cta_text:    heroCta         || "Pesan Sekarang",
+    hero_cta_url:     heroCtaUrl      || "/book",
+    body_content:     bodyContent     || null,
+    meta_title:       metaTitle       || null,
+    meta_description: metaDescription || null,
+    og_image_url:     ogImageUrl      || null,
+    published,
+  });
+
+  const handleSave = async () => {
+    if (!title.trim() || !slug.trim()) { toast.error("Judul dan slug wajib diisi"); return; }
+    setSaving(true);
+    try {
+      if (isNew) {
+        await createSeoLandingPage({ data: buildPayload() });
+        toast.success("Landing page dibuat");
+      } else {
+        await updateSeoLandingPage({ data: { id: page!.id, ...buildPayload() } });
+        toast.success("Perubahan disimpan");
+      }
+      onSave();
+      onClose();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!page || !confirm(`Hapus landing page "${page.title}"?`)) return;
+    setDeleting(true);
+    try {
+      await deleteSeoLandingPage({ data: { id: page.id } });
+      toast.success("Landing page dihapus");
+      onSave();
+      onClose();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setDeleting(false); }
+  };
+
+  const score = calcSeoScore({ title, target_keyword: targetKeyword, meta_title: metaTitle, meta_description: metaDescription, og_image_url: ogImageUrl || null, hero_headline: heroHeadline, body_content: bodyContent });
+
+  const editorTabs: { key: LPEditorTab; label: string }[] = [
+    { key: "konten", label: "Konten" },
+    { key: "seo",    label: "SEO"    },
+    { key: "pratinjau", label: "Pratinjau" },
+  ];
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+      {/* Editor header */}
+      <div className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
+        <div className="flex items-center gap-3">
+          <span className="font-semibold text-stone-800 text-sm">{isNew ? "Landing Page Baru" : title}</span>
+          {!isNew && <ScorePill score={score} />}
+        </div>
+        <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-stone-100 bg-stone-50/60 px-5 pt-3">
+        {editorTabs.map((t) => (
+          <button key={t.key} type="button" onClick={() => setTab(t.key)}
+            className={`rounded-t-lg px-4 py-2 text-sm font-medium transition ${
+              tab === t.key
+                ? "border border-b-white border-stone-200 bg-white text-teal-700"
+                : "text-stone-500 hover:text-stone-800"
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="max-h-[60vh] flex-1 overflow-y-auto px-5 py-5">
+        {/* ---- Konten ---- */}
+        {tab === "konten" && (
+          <div className="space-y-5">
+            <div>
+              <Label className="text-xs font-semibold">Judul Halaman <span className="text-destructive">*</span></Label>
+              <Input value={title} onChange={(e) => handleTitleChange(e.target.value)} placeholder="mis. Penginapan Wisuda UNNES Semarang" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">URL Slug <span className="text-destructive">*</span></Label>
+              <div className="mt-1 flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
+                <span className="text-muted-foreground">/lp/</span>
+                <input value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  className="min-w-0 flex-1 bg-transparent focus:outline-none" placeholder="slug-halaman" />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">URL publik: <code className="font-mono">/lp/{slug || "…"}</code></p>
+            </div>
+            <div className="border-t border-stone-100 pt-4">
+              <p className="mb-3 text-xs font-bold uppercase tracking-wider text-stone-400">Hero Section</p>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs font-semibold">Headline Utama</Label>
+                  <Input value={heroHeadline} onChange={(e) => setHeroHeadline(e.target.value)} placeholder="Judul besar yang dilihat tamu pertama kali" className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold">Sub Headline</Label>
+                  <Input value={heroSubheadline} onChange={(e) => setHeroSubheadline(e.target.value)} placeholder="Kalimat pendukung di bawah headline" className="mt-1" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-semibold">Teks Tombol CTA</Label>
+                    <Input value={heroCta} onChange={(e) => setHeroCta(e.target.value)} className="mt-1" placeholder="Pesan Sekarang" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">URL Tombol CTA</Label>
+                    <Input value={heroCtaUrl} onChange={(e) => setHeroCtaUrl(e.target.value)} className="mt-1" placeholder="/book" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-stone-100 pt-4">
+              <Label className="text-xs font-semibold">Body Content (HTML)</Label>
+              <Textarea value={bodyContent} onChange={(e) => setBodyContent(e.target.value)} rows={10}
+                placeholder="<h2>Kenapa Pomah Guesthouse?</h2><p>Kami menyediakan…</p>"
+                className="mt-1 font-mono text-xs" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Diterima HTML. Gunakan tag h2, h3, p, ul, strong untuk struktur yang baik.</p>
+            </div>
+          </div>
+        )}
+
+        {/* ---- SEO ---- */}
+        {tab === "seo" && (
+          <div className="space-y-5">
+            {/* Live score */}
+            <div className="flex items-center justify-between rounded-xl border border-stone-100 bg-stone-50 px-4 py-3">
+              <span className="text-sm font-semibold text-stone-700">Skor SEO Halaman Ini</span>
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-32 overflow-hidden rounded-full bg-stone-200">
+                  <div className={`h-full rounded-full transition-all ${score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500"}`}
+                    style={{ width: `${score}%` }} />
+                </div>
+                <span className="font-mono text-sm font-bold text-stone-700">{score}/100</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">Kata Kunci Target</Label>
+              <Input value={targetKeyword} onChange={(e) => setTargetKeyword(e.target.value)}
+                placeholder="mis. penginapan wisuda unnes semarang" className="mt-1" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Kata kunci utama yang ingin dirangking di Google.</p>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Meta Title</Label>
+                <span className={`text-[10px] font-mono ${metaTitle.length > 60 ? "text-red-600" : metaTitle.length >= 50 ? "text-emerald-600" : "text-stone-400"}`}>
+                  {metaTitle.length}/60
+                </span>
+              </div>
+              <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)}
+                placeholder="Penginapan Wisuda UNNES Semarang | Pomah Guesthouse" className="mt-1" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Idealnya 50–60 karakter. Sertakan kata kunci target.</p>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Meta Description</Label>
+                <span className={`text-[10px] font-mono ${metaDescription.length > 160 ? "text-red-600" : metaDescription.length >= 120 ? "text-emerald-600" : "text-stone-400"}`}>
+                  {metaDescription.length}/160
+                </span>
+              </div>
+              <Textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} rows={3}
+                placeholder="Pomah Guesthouse — penginapan nyaman dekat UNNES Semarang, cocok untuk rombongan wisuda. Pesan sekarang dan dapatkan harga spesial." className="mt-1 text-sm" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Idealnya 120–160 karakter. Ini teks yang tampil di hasil pencarian Google.</p>
+            </div>
+
+            <div>
+              <Label className="text-xs font-semibold">OG Image URL</Label>
+              <Input value={ogImageUrl} onChange={(e) => setOgImageUrl(e.target.value)}
+                placeholder="https://..." className="mt-1" />
+              <p className="mt-1 text-[11px] text-muted-foreground">Gambar yang muncul saat halaman dibagikan di media sosial.</p>
+            </div>
+
+            {/* Checklist */}
+            <div className="rounded-xl border border-stone-100 bg-stone-50 p-4 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-stone-400 mb-3">Checklist SEO</p>
+              {[
+                { label: "Kata kunci di meta title",      ok: !!targetKeyword && metaTitle.toLowerCase().includes(targetKeyword.toLowerCase()) },
+                { label: "Kata kunci di meta description",ok: !!targetKeyword && metaDescription.toLowerCase().includes(targetKeyword.toLowerCase()) },
+                { label: "Meta title 50–60 karakter",     ok: metaTitle.length >= 50 && metaTitle.length <= 60 },
+                { label: "Meta description 120–160 karakter", ok: metaDescription.length >= 120 && metaDescription.length <= 160 },
+                { label: "OG Image ditetapkan",           ok: !!ogImageUrl },
+                { label: "Kata kunci di konten body",     ok: !!targetKeyword && bodyContent.toLowerCase().includes(targetKeyword.toLowerCase()) },
+              ].map((c, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  {c.ok
+                    ? <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                    : <X className="h-3.5 w-3.5 shrink-0 text-stone-300" />}
+                  <span className={c.ok ? "text-stone-700" : "text-stone-400"}>{c.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ---- Pratinjau ---- */}
+        {tab === "pratinjau" && (
+          <div className="space-y-4">
+            {/* SERP preview */}
+            <div className="rounded-xl border border-stone-100 bg-stone-50 p-4">
+              <p className="mb-3 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">SERP Preview</p>
+              <div className="space-y-0.5">
+                <p className="text-[13px] font-mono text-stone-400">pomahguesthouse.com › lp › {slug || "…"}</p>
+                <p className="text-base font-semibold text-blue-700 hover:underline cursor-pointer">{metaTitle || title || "Meta title belum diisi"}</p>
+                <p className="text-xs text-stone-600 leading-relaxed">{metaDescription || <span className="italic text-stone-400">Meta description belum diisi…</span>}</p>
+              </div>
+            </div>
+
+            {/* Page preview */}
+            <div className="overflow-hidden rounded-xl border border-stone-200">
+              {/* Hero */}
+              <div className="bg-gradient-to-br from-teal-800 to-stone-800 px-8 py-10 text-center text-white">
+                {targetKeyword && <p className="mb-2 text-[10px] font-mono uppercase tracking-widest text-teal-200">{targetKeyword}</p>}
+                <h1 className="text-2xl font-bold">{heroHeadline || title || "Headline…"}</h1>
+                {heroSubheadline && <p className="mt-3 text-sm text-teal-100">{heroSubheadline}</p>}
+                <div className="mt-6 inline-block rounded-full bg-white px-6 py-2 text-xs font-bold text-teal-800">{heroCta}</div>
+              </div>
+              {/* Body preview */}
+              {bodyContent ? (
+                <div className="bg-white px-8 py-6">
+                  <div className="prose prose-sm prose-stone max-w-none" dangerouslySetInnerHTML={{ __html: bodyContent }} />
+                </div>
+              ) : (
+                <div className="bg-white px-8 py-6 text-center text-xs italic text-stone-400">Body content belum diisi…</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer actions */}
+      <div className="flex items-center justify-between border-t border-stone-100 px-5 py-3">
+        <div className="flex items-center gap-3">
+          {!isNew && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive hover:bg-red-50"
+              disabled={deleting} onClick={handleDelete}>
+              {deleting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+              Hapus
+            </Button>
+          )}
+          {!isNew && (
+            <div className="flex items-center gap-2 text-xs text-stone-500">
+              <Switch checked={published} onCheckedChange={setPublished} />
+              {published ? "Dipublikasikan" : "Draft"}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onClose}>Batal</Button>
+          <Button size="sm" className="h-8 bg-teal-700 text-xs text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
+            {saving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyimpan…</> : <><Save className="mr-1.5 h-3.5 w-3.5" />{isNew ? "Buat Halaman" : "Simpan"}</>}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingPageSection({ pages, onChanged }: { pages: SeoLandingPage[]; onChanged: () => void }) {
+  const [selected,    setSelected]    = useState<SeoLandingPage | "new" | null>(null);
+  const [search,      setSearch]      = useState("");
+  const [togglingId,  setTogglingId]  = useState<string | null>(null);
+
+  const filtered = pages.filter((p) =>
+    p.title.toLowerCase().includes(search.toLowerCase()) ||
+    (p.target_keyword ?? "").toLowerCase().includes(search.toLowerCase()),
+  );
+
+  const handleTogglePublish = async (p: SeoLandingPage) => {
+    setTogglingId(p.id);
+    try {
+      await publishSeoLandingPage({ data: { id: p.id, published: !p.published } });
+      toast.success(p.published ? "Halaman diarsipkan" : "Halaman dipublikasikan");
+      onChanged();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setTogglingId(null); }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-stone-800">Landing Pages</h2>
+          <p className="text-xs text-stone-400">Halaman SEO buatan tangan, ditargetkan untuk kata kunci spesifik</p>
+        </div>
+        <Button className="bg-teal-700 text-white hover:bg-teal-800" size="sm"
+          onClick={() => setSelected("new")}>
+          <Plus className="mr-1.5 h-4 w-4" /> Buat Landing Page
+        </Button>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Page list */}
+        <div className="lg:col-span-2 space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-stone-400" />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari halaman…" className="pl-9 text-sm" />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-stone-200 py-12 text-center">
+              <FileText className="mx-auto h-8 w-8 text-stone-200" />
+              <p className="mt-2 text-xs text-stone-400 italic">
+                {pages.length === 0 ? "Belum ada landing page. Buat halaman pertama Anda!" : "Tidak ada hasil."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map((p) => {
+                const score = calcSeoScore(p);
+                const isActive = selected !== "new" && (selected as SeoLandingPage)?.id === p.id;
+                return (
+                  <button key={p.id} type="button" onClick={() => setSelected(p)}
+                    className={`w-full rounded-xl border px-4 py-3 text-left transition ${
+                      isActive
+                        ? "border-teal-300 bg-teal-50 shadow-sm"
+                        : "border-stone-200 bg-white hover:border-stone-300 hover:shadow-sm"
+                    }`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-stone-800">{p.title}</p>
+                        <p className="mt-0.5 font-mono text-[10px] text-teal-600">/lp/{p.slug}</p>
+                        {p.target_keyword && (
+                          <p className="mt-1 truncate text-[10px] text-stone-400">{p.target_keyword}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <ScorePill score={score} />
+                        <div className="flex items-center gap-1.5">
+                          {togglingId === p.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin text-stone-400" />
+                            : <Switch checked={p.published} onCheckedChange={() => handleTogglePublish(p)} />}
+                          <span className="text-[10px] text-stone-400">{p.published ? "Live" : "Draft"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Editor panel */}
+        <div className="lg:col-span-3">
+          {selected === null ? (
+            <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-stone-200 text-center">
+              <FileText className="h-12 w-12 text-stone-200" />
+              <p className="mt-3 text-sm font-medium text-stone-400">Pilih halaman di kiri untuk mengedit,</p>
+              <p className="text-sm text-stone-400">atau buat halaman baru.</p>
+              <Button variant="outline" className="mt-4 gap-1.5 text-sm" onClick={() => setSelected("new")}>
+                <Plus className="h-4 w-4" /> Buat Landing Page
+              </Button>
+            </div>
+          ) : (
+            <LandingPageEditor
+              page={selected === "new" ? null : selected}
+              onSave={onChanged}
+              onClose={() => setSelected(null)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Quick stats */}
+      {pages.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <Card className="p-4 border border-stone-200 bg-white text-center">
+            <p className="text-2xl font-bold font-mono text-stone-800">{pages.length}</p>
+            <p className="text-xs text-stone-400 mt-1">Total Halaman</p>
+          </Card>
+          <Card className="p-4 border border-stone-200 bg-white text-center">
+            <p className="text-2xl font-bold font-mono text-emerald-600">{pages.filter((p) => p.published).length}</p>
+            <p className="text-xs text-stone-400 mt-1">Dipublikasikan</p>
+          </Card>
+          <Card className="p-4 border border-stone-200 bg-white text-center">
+            <p className="text-2xl font-bold font-mono text-stone-500">
+              {pages.length > 0 ? Math.round(pages.reduce((s, p) => s + calcSeoScore(p), 0) / pages.length) : 0}
+            </p>
+            <p className="text-xs text-stone-400 mt-1">Rata-rata Skor SEO</p>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ============================================================================
    2. AI AGENTS CONTROL CENTER SECTION
