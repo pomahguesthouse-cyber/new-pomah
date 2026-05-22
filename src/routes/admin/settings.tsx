@@ -605,7 +605,9 @@ function CredentialTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      fonnte_token?: string | null;
+      meta_access_token?: string | null;
+      meta_phone_number_id?: string | null;
+      meta_verify_token?: string | null;
       ai_api_key?: string | null;
       ai_base_url?: string | null;
       ai_model?: string | null;
@@ -630,13 +632,32 @@ function CredentialTab() {
       )}
       <TextSettingCard
         icon={<MessageCircle className="h-4 w-4" />}
-        label="WhatsApp Token — Fonnte"
-        description="Token API dari fonnte.com untuk menghubungkan WhatsApp dengan aplikasi ini."
-        placeholder="Token Fonnte"
+        label="Meta WhatsApp — Access Token"
+        description="Permanent Access Token dari Dasbor Meta (System User)."
+        placeholder="EAA..."
         secret
-        value={data?.fonnte_token ?? null}
+        value={(data as any)?.meta_access_token ?? null}
         disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
+        onSave={(v) => id && mutation.mutate({ id, meta_access_token: v })}
+      />
+      <TextSettingCard
+        icon={<MessageCircle className="h-4 w-4" />}
+        label="Meta WhatsApp — Phone Number ID"
+        description="ID Nomor Telepon dari halaman WhatsApp API Setup."
+        placeholder="1234567890"
+        value={(data as any)?.meta_phone_number_id ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, meta_phone_number_id: v })}
+      />
+      <TextSettingCard
+        icon={<MessageCircle className="h-4 w-4" />}
+        label="Meta WhatsApp — Verify Token"
+        description="Kata sandi rahasia untuk memverifikasi Webhook di Dasbor Meta."
+        placeholder="pomah_rahasia_..."
+        secret
+        value={(data as any)?.meta_verify_token ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, meta_verify_token: v })}
       />
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
