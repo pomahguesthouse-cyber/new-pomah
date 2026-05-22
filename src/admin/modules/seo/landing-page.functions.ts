@@ -51,6 +51,8 @@ export type LPCtaBannerSection = {
 export type LPTestimonialsSection = {
   id: string; type: "testimonials";
   title?: string;
+  /** "manual" = use items below; "google" = pull live Google reviews. */
+  source?: "manual" | "google";
   items: { name: string; text: string }[];
 };
 export type LPHeaderSection = {

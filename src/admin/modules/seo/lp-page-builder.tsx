@@ -18,7 +18,10 @@ import {
   PanelTop,
   GalleryHorizontal,
   MousePointerClick,
+  FolderOpen,
+  Film,
 } from "lucide-react";
+import { MediaPicker, type MediaKind } from "@/admin/components/media-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -267,6 +270,50 @@ function Fld({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
+/** Pick an image/video from the Media Library (no manual URL entry). */
+function MediaField({
+  value,
+  onChange,
+  kind = "image",
+}: {
+  value: string;
+  onChange: (url: string) => void;
+  kind?: MediaKind;
+}) {
+  const [open, setOpen] = useState(false);
+  const isVideo = kind === "video";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded border border-stone-200 bg-stone-50">
+        {value ? (
+          isVideo
+            ? <video src={value} muted className="h-full w-full object-cover" />
+            : <img src={value} alt="" className="h-full w-full object-cover" />
+        ) : isVideo ? (
+          <Film className="h-4 w-4 text-stone-300" />
+        ) : (
+          <ImageIcon className="h-4 w-4 text-stone-300" />
+        )}
+      </div>
+      <div className="flex flex-1 items-center gap-1.5">
+        <Button type="button" variant="outline" size="sm" className="h-8 flex-1 gap-1.5 text-xs"
+          onClick={() => setOpen(true)}>
+          <FolderOpen className="h-3.5 w-3.5" /> {value ? "Ganti" : "Pilih dari Library"}
+        </Button>
+        {value && (
+          <button type="button" onClick={() => onChange("")}
+            className="shrink-0 rounded p-1 text-stone-300 hover:bg-red-50 hover:text-red-500">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+      <MediaPicker open={open} kind={kind}
+        onPick={(url) => { onChange(url); setOpen(false); }}
+        onClose={() => setOpen(false)} />
+    </div>
+  );
+}
+
 /* Header / Navbar */
 function HeaderEditor({ s, onUpdate }: { s: LPHeaderSection; onUpdate: UpFn }) {
   const links = s.links ?? [];
@@ -350,12 +397,12 @@ function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
               <button type="button" onClick={() => setSlides(slides.filter((_, j) => j !== i))}
                 className="text-stone-300 hover:text-red-500"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
-            <Label className="text-[10px] text-muted-foreground">URL Gambar</Label>
-            <Input value={slide.imageUrl} placeholder="https://..." className="text-xs font-mono"
-              onChange={(e) => patchSlide(i, { imageUrl: e.target.value })} />
-            <Label className="text-[10px] text-muted-foreground">URL Video (opsional — diutamakan di atas gambar)</Label>
-            <Input value={slide.videoUrl} placeholder="https://..." className="text-xs font-mono"
-              onChange={(e) => patchSlide(i, { videoUrl: e.target.value })} />
+            <Label className="text-[10px] text-muted-foreground">Gambar</Label>
+            <MediaField kind="image" value={slide.imageUrl}
+              onChange={(url) => patchSlide(i, { imageUrl: url })} />
+            <Label className="text-[10px] text-muted-foreground">Video (opsional — diutamakan di atas gambar)</Label>
+            <MediaField kind="video" value={slide.videoUrl}
+              onChange={(url) => patchSlide(i, { videoUrl: url })} />
             <Input value={slide.heading} placeholder="Judul" className="text-xs"
               onChange={(e) => patchSlide(i, { heading: e.target.value })} />
             <Input value={slide.subheading} placeholder="Subjudul" className="text-xs"
@@ -457,8 +504,11 @@ function HeroEditor({ s, onUpdate }: { s: LPHeroSection; onUpdate: UpFn }) {
       <Fld label="Sub Headline">
         <Input value={s.subheadline ?? ""} onChange={(e) => onUpdate({ subheadline: e.target.value } as any)} className="mt-1" placeholder="Kalimat pendukung singkat" />
       </Fld>
-      <Fld label="URL Gambar Latar (opsional)" hint="Kosongkan untuk menggunakan gradient teal">
-        <Input value={s.image_url ?? ""} onChange={(e) => onUpdate({ image_url: e.target.value || undefined } as any)} className="mt-1" placeholder="https://..." />
+      <Fld label="Gambar Latar (opsional)" hint="Kosongkan untuk menggunakan gradient teal">
+        <div className="mt-1">
+          <MediaField kind="image" value={s.image_url ?? ""}
+            onChange={(url) => onUpdate({ image_url: url || undefined } as any)} />
+        </div>
       </Fld>
       <Fld label={`Transparansi Overlay: ${s.overlay ?? 40}%`} hint="Semakin tinggi = latar lebih gelap">
         <input type="range" min={0} max={80} value={s.overlay ?? 40}
@@ -565,15 +615,17 @@ function GalleryEditor({ s, onUpdate }: { s: LPGallerySection; onUpdate: UpFn })
       <div className="space-y-2">
         {images.map((url, i) => (
           <div key={i} className="flex items-center gap-2">
-            <Input value={url} className="flex-1 text-xs" placeholder="https://..."
-              onChange={(e) => setImages(images.map((u, j) => j === i ? e.target.value : u))} />
+            <div className="flex-1">
+              <MediaField kind="image" value={url}
+                onChange={(next) => setImages(images.map((u, j) => j === i ? next : u))} />
+            </div>
             <button type="button" onClick={() => setImages(images.filter((_, j) => j !== i))}
               className="shrink-0 text-stone-300 hover:text-red-500"><Trash2 className="h-4 w-4" /></button>
           </div>
         ))}
         <Button type="button" variant="outline" size="sm" className="w-full text-xs gap-1"
           onClick={() => setImages([...images, ""])}>
-          <Plus className="h-3.5 w-3.5" /> Tambah URL Foto
+          <Plus className="h-3.5 w-3.5" /> Tambah Foto
         </Button>
       </div>
     </div>
@@ -648,11 +700,29 @@ function CtaBannerEditor({ s, onUpdate }: { s: LPCtaBannerSection; onUpdate: UpF
 function TestimonialsEditor({ s, onUpdate }: { s: LPTestimonialsSection; onUpdate: UpFn }) {
   const items = s.items ?? [];
   const setItems = (next: typeof items) => onUpdate({ items: next } as any);
+  const source = s.source ?? "manual";
   return (
     <div className="space-y-3">
       <Fld label="Judul Section">
         <Input value={s.title ?? ""} onChange={(e) => onUpdate({ title: e.target.value || undefined } as any)} className="mt-1" />
       </Fld>
+
+      <Fld label="Sumber Testimoni">
+        <Select value={source} onValueChange={(v) => onUpdate({ source: v as any } as any)}>
+          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="manual">Tulis Manual</SelectItem>
+            <SelectItem value="google">Google Review (otomatis)</SelectItem>
+          </SelectContent>
+        </Select>
+      </Fld>
+
+      {source === "google" ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-700">
+          Ulasan diambil otomatis dari Google Review properti (Settings → Integrasi).
+          Daftar manual di bawah diabaikan saat sumber ini aktif.
+        </div>
+      ) : (
       <div className="space-y-2">
         {items.map((item, i) => (
           <div key={i} className="rounded-lg border border-stone-200 bg-white p-3 space-y-2">
@@ -672,6 +742,7 @@ function TestimonialsEditor({ s, onUpdate }: { s: LPTestimonialsSection; onUpdat
           <Plus className="h-3.5 w-3.5" /> Tambah Testimoni
         </Button>
       </div>
+      )}
     </div>
   );
 }

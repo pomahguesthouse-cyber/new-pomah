@@ -5,7 +5,10 @@
  */
 import { useState, useEffect } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote } from "lucide-react";
+import { getGoogleReviews } from "@/public/functions/public.functions";
 import {
   getSeoLandingPageBySlug,
   type SeoLandingPage,
@@ -437,7 +440,21 @@ function CtaBannerSection({ s }: { s: LPCtaBannerSection }) {
 /* ─── Testimonials ──────────────────────────────────────────────── */
 function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   const [i, setI] = useState(0);
-  const items = s.items ?? [];
+  const useGoogle = (s.source ?? "manual") === "google";
+
+  const reviewsFn = useServerFn(getGoogleReviews);
+  const { data: gr } = useQuery({
+    queryKey: ["lp-google-reviews"],
+    queryFn: () => reviewsFn(),
+    enabled: useGoogle,
+  });
+
+  // Source: live Google reviews, with a graceful fallback to manual items.
+  const googleItems = (gr?.reviews ?? []).map((rv) => ({ name: rv.author, text: rv.text }));
+  const items = useGoogle
+    ? (googleItems.length > 0 ? googleItems : (s.items ?? []))
+    : (s.items ?? []);
+
   if (items.length === 0) return null;
   const cur = items[i % items.length];
   return (
