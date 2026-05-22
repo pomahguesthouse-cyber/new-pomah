@@ -25,7 +25,9 @@ import {
   Film,
   ArrowLeft,
   Type,
+  FolderOpen,
 } from "lucide-react";
+import { MediaPicker } from "@/admin/components/media-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,19 +52,18 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel" | "media";
+type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel";
 
 const SECTIONS: {
   key: SectionKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { key: "header", label: "Header", icon: LayoutPanelTop },
-  { key: "hero", label: "Hero Slider", icon: GalleryHorizontal },
-  { key: "datepicker", label: "Date Picker", icon: CalendarCheck },
-  { key: "story", label: "Teks", icon: Type },
-  { key: "carousel", label: "Our Room", icon: RectangleHorizontal },
-  { key: "media", label: "Media Library", icon: Images },
+  { key: "header",     label: "Header",      icon: LayoutPanelTop     },
+  { key: "hero",       label: "Hero Slider",  icon: GalleryHorizontal  },
+  { key: "datepicker", label: "Date Picker",  icon: CalendarCheck      },
+  { key: "story",      label: "Teks",         icon: Type               },
+  { key: "carousel",   label: "Our Room",     icon: RectangleHorizontal},
 ];
 
 /**
@@ -201,10 +202,8 @@ function HomepageBuilder() {
               <DatePickerTab cfg={cfg} setCfg={setCfg} />
             ) : section === "story" ? (
               <StoryTab cfg={cfg} setCfg={setCfg} />
-            ) : section === "carousel" ? (
-              <CarouselTab cfg={cfg} setCfg={setCfg} />
             ) : (
-              <MediaTab />
+              <CarouselTab cfg={cfg} setCfg={setCfg} />
             )}
           </div>
         </aside>
@@ -378,10 +377,13 @@ function ImageField({
   kind?: "image" | "video";
 }) {
   const ref = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy,        setBusy]        = useState(false);
+  const [pickerOpen,  setPickerOpen]  = useState(false);
   const isVideo = kind === "video";
+
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-start gap-3">
+      {/* Thumbnail */}
       <div className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded border border-border bg-muted">
         {value ? (
           isVideo ? (
@@ -395,6 +397,7 @@ function ImageField({
           <Images className="h-4 w-4 text-muted-foreground/50" />
         )}
       </div>
+
       <div className="flex-1 space-y-1.5">
         <Input
           value={value}
@@ -402,37 +405,47 @@ function ImageField({
           className="font-mono text-xs"
           onChange={(e) => onChange(e.target.value)}
         />
-        <input
-          ref={ref}
-          type="file"
-          accept={isVideo ? "video/*" : "image/*"}
-          className="hidden"
-          onChange={async (e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            setBusy(true);
-            try {
-              onChange(await uploadToBucket(f));
-              toast.success(isVideo ? "Video terupload" : "Gambar terupload");
-            } catch (err) {
-              toast.error(`Upload gagal: ${(err as Error).message}`);
-            } finally {
-              setBusy(false);
-              if (ref.current) ref.current.value = "";
-            }
-          }}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1.5"
-          disabled={busy}
-          onClick={() => ref.current?.click()}
-        >
-          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-          {busy ? "Mengupload…" : "Upload"}
-        </Button>
+        {/* Upload + Pick buttons */}
+        <div className="flex gap-1.5">
+          <input
+            ref={ref}
+            type="file"
+            accept={isVideo ? "video/*" : "image/*"}
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setBusy(true);
+              try {
+                onChange(await uploadToBucket(f));
+                toast.success(isVideo ? "Video terupload" : "Gambar terupload");
+              } catch (err) {
+                toast.error(`Upload gagal: ${(err as Error).message}`);
+              } finally {
+                setBusy(false);
+                if (ref.current) ref.current.value = "";
+              }
+            }}
+          />
+          <Button size="sm" variant="outline" className="h-7 gap-1.5" disabled={busy}
+            onClick={() => ref.current?.click()}>
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+            {busy ? "Mengupload…" : "Upload"}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 gap-1.5" onClick={() => setPickerOpen(true)}>
+            <FolderOpen className="h-3 w-3" />
+            Pilih
+          </Button>
+        </div>
       </div>
+
+      {/* Media picker dialog */}
+      <MediaPicker
+        open={pickerOpen}
+        kind={isVideo ? "video" : "image"}
+        onPick={(url) => { onChange(url); setPickerOpen(false); }}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 }
@@ -913,132 +926,3 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
 
 /* ================================================================== */
 /* 6. Media library                                                    */
-/* ================================================================== */
-
-interface MediaItem {
-  name: string;
-  url: string;
-  isVideo: boolean;
-}
-
-function MediaTab() {
-  const [items, setItems] = useState<MediaItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.storage
-        .from(MEDIA_BUCKET)
-        .list(MEDIA_PREFIX, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
-      if (error) throw error;
-      setItems(
-        (data ?? [])
-          .filter((f) => f.name && !f.name.startsWith("."))
-          .map((f) => {
-            const url = supabase.storage
-              .from(MEDIA_BUCKET)
-              .getPublicUrl(`${MEDIA_PREFIX}/${f.name}`).data.publicUrl;
-            return { name: f.name, url, isVideo: /\.(mp4|webm|mov|ogg)$/i.test(f.name) };
-          }),
-      );
-    } catch (e) {
-      toast.error(`Gagal memuat media: ${(e as Error).message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const upload = async (files: FileList) => {
-    setBusy(true);
-    try {
-      for (const file of Array.from(files)) await uploadToBucket(file);
-      toast.success(`${files.length} file terupload`);
-      await load();
-    } catch (e) {
-      toast.error(`Upload gagal: ${(e as Error).message}`);
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  };
-
-  const remove = async (name: string) => {
-    if (!confirm(`Hapus "${name}"?`)) return;
-    const { error } = await supabase.storage.from(MEDIA_BUCKET).remove([`${MEDIA_PREFIX}/${name}`]);
-    if (error) return toast.error(error.message);
-    toast.success("File dihapus");
-    void load();
-  };
-
-  return (
-    <div className="space-y-4 p-6 md:p-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Media Library</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Gambar dan video untuk halaman depan.
-          </p>
-        </div>
-        <input
-          ref={ref}
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          className="hidden"
-          onChange={(e) => e.target.files && upload(e.target.files)}
-        />
-        <Button
-          className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
-          disabled={busy}
-          onClick={() => ref.current?.click()}
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          {busy ? "Mengupload…" : "Upload"}
-        </Button>
-      </div>
-
-      {loading ? (
-        <p className="text-sm text-muted-foreground">Memuat media…</p>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
-          Belum ada media. Upload gambar atau video untuk memulai.
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {items.map((m) => (
-            <div
-              key={m.name}
-              className="group relative overflow-hidden rounded-lg border border-border"
-            >
-              <div className="flex aspect-video items-center justify-center bg-muted">
-                {m.isVideo ? (
-                  <video src={m.url} className="h-full w-full object-cover" muted />
-                ) : (
-                  <img src={m.url} alt={m.name} className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="flex items-center gap-1 px-2 py-1.5">
-                {m.isVideo && <Film className="h-3 w-3 shrink-0 text-muted-foreground" />}
-                <span className="flex-1 truncate text-[10px] text-muted-foreground">{m.name}</span>
-                <button
-                  onClick={() => remove(m.name)}
-                  className="text-muted-foreground hover:text-destructive"
-                  title="Hapus"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
