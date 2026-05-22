@@ -24,6 +24,18 @@ export type SopDocument = {
   content: string | null;
   doc_category: "knowledge" | "sop" | "brosur";
   agent_key: string | null;
+  /** Which Supabase Storage bucket holds this file. NULL → "sop-documents". */
+  storage_bucket: string | null;
+  /** UUID of the assigned media_folder. NULL = no folder. */
+  folder_id: string | null;
+  created_at: string;
+};
+
+export type MediaFolder = {
+  id: string;
+  name: string;
+  /** UUID of the parent folder, or null for root-level folders. */
+  parent_id: string | null;
   created_at: string;
 };
 
@@ -62,7 +74,7 @@ export const listSopDocuments = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     let q = db(context.supabase)
       .from("sop_documents")
-      .select("id, name, file_path, file_type, source_url, content, doc_category, agent_key, created_at")
+      .select("id, name, file_path, file_type, source_url, content, doc_category, agent_key, storage_bucket, folder_id, created_at")
       .order("created_at", { ascending: false });
     if (data?.category) q = q.eq("doc_category", data.category);
     if (data?.agentKey !== undefined) {
@@ -88,6 +100,8 @@ export const createSopDocument = createServerFn({ method: "POST" })
         content: z.string().max(200000).optional().or(z.literal("")),
         docCategory: z.enum(["knowledge", "sop", "brosur"]).default("sop"),
         agentKey: z.string().max(50).optional().or(z.literal("")),
+        storageBucket: z.string().max(100).optional().or(z.literal("")),
+        folderId: z.string().uuid().optional().nullable(),
       })
       .parse(d),
   )
@@ -103,6 +117,8 @@ export const createSopDocument = createServerFn({ method: "POST" })
       content: data.content || null,
       doc_category: data.docCategory,
       agent_key: data.agentKey || null,
+      storage_bucket: data.storageBucket || null,
+      folder_id: data.folderId ?? null,
     }).select("id").single();
     if (error) throw error;
 
@@ -120,6 +136,42 @@ export const createSopDocument = createServerFn({ method: "POST" })
       });
     }
 
+    return { ok: true };
+  });
+
+/**
+ * Update only the display name of a document.
+ * For media files (brosur) this is the "rename" action shown in the UI.
+ */
+export const renameSopDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), name: z.string().min(1).max(300) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("sop_documents")
+      .update({ name: data.name })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/**
+ * Update alt text for a media document (image/video).
+ * Stored in the `content` column; does NOT trigger RAG processing.
+ */
+export const updateMediaAltText = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), altText: z.string().max(500) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("sop_documents")
+      .update({ content: data.altText })
+      .eq("id", data.id);
+    if (error) throw error;
     return { ok: true };
   });
 
@@ -172,6 +224,94 @@ export const deleteSopDocument = createServerFn({ method: "POST" })
     const filePath = (row as Record<string, unknown> | null)?.file_path as string | undefined;
     if (filePath) await sb.storage.from("sop-documents").remove([filePath]);
     const { error } = await sb.from("sop_documents").delete().eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Media folder CRUD                                                    */
+/* ------------------------------------------------------------------ */
+
+/** List all folders from the media_folders table (ordered by creation). */
+export const listMediaFolders = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("media_folders")
+      .select("id, name, parent_id, created_at")
+      .order("created_at", { ascending: true });
+    return { folders: (data ?? []) as unknown as MediaFolder[] };
+  });
+
+/**
+ * Create a new media folder.
+ * Pass parentId to create a sub-folder of an existing folder.
+ * Returns the created folder id so the UI can switch to it.
+ */
+export const createMediaFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      name: z.string().min(1).max(100),
+      parentId: z.string().uuid().optional().nullable(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error, data: row } = await db(context.supabase)
+      .from("media_folders")
+      .insert({ name: data.name, parent_id: data.parentId ?? null })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: (row as { id: string }).id };
+  });
+
+/**
+ * Rename a folder.
+ * No cascade needed — sop_documents references by id, not name.
+ */
+export const renameMediaFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), name: z.string().min(1).max(100) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("media_folders")
+      .update({ name: data.name })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/**
+ * Delete a media folder.
+ * The FK on media_folders.parent_id (ON DELETE CASCADE) removes sub-folders.
+ * The FK on sop_documents.folder_id (ON DELETE SET NULL) unassigns files.
+ */
+export const deleteMediaFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("media_folders")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/** Move a sop_document to a folder by UUID (null = unassign). */
+export const moveDocToFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), folderId: z.string().uuid().nullable() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("sop_documents")
+      .update({ folder_id: data.folderId })
+      .eq("id", data.id);
     if (error) throw error;
     return { ok: true };
   });
