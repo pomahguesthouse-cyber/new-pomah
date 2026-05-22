@@ -1,18 +1,19 @@
 /**
  * Media Library — unified view for ALL media in the system.
  *
- * Two data sources merged into one grid:
+ * Layout: folder sidebar (left) + file grid (right).
  *
- * 1. sop_documents (doc_category='brosur') — DB-tracked → full features:
- *    rename, alt text, copy URL, delete.
- *    storage_bucket column tells which bucket holds the actual file:
- *      NULL or "sop-documents" → sop-documents bucket
- *      "room-images"           → room-images bucket
+ * Two data sources:
+ *  1. sop_documents (doc_category='brosur') — DB-tracked, full features:
+ *     rename, alt text, move to folder, copy URL, delete.
+ *     storage_bucket tells which bucket holds the actual file:
+ *       NULL / "sop-documents" → sop-documents bucket
+ *       "room-images"          → room-images bucket
  *
- * 2. room-images bucket (prefixes: media/, room-types/, branding/) that
- *    are NOT yet tracked in sop_documents. These show an "Add Info" button;
- *    clicking it opens a dialog to set name + alt text, which registers the
- *    file in sop_documents and unlocks full editing from then on.
+ *  2. room-images bucket (prefixes media/, room-types/, branding/) that
+ *     have NOT yet been registered in sop_documents. These show
+ *     "Tambah nama & alt text"; clicking opens RegisterDialog which
+ *     creates a sop_documents row and unlocks full editing.
  */
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 import {
   Upload, Trash2, Loader2, Copy, Check, ExternalLink,
   Tag, Pencil, FileText, Images, Film, Search, X, Plus,
+  FolderOpen, Folder, FolderPlus, ChevronRight,
 } from "lucide-react";
 
 import {
@@ -29,13 +31,20 @@ import {
   deleteSopDocument,
   renameSopDocument,
   updateMediaAltText,
+  moveDocToFolder,
+  listMediaFolders,
+  createMediaFolder,
+  renameMediaFolder,
+  deleteMediaFolder,
   type SopDocument,
+  type MediaFolder,
 } from "@/admin/modules/ai-lab/sop.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { convertToWebP } from "@/lib/image-webp";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +60,18 @@ const ACCEPT      = ALL_ALLOWED.map((e) => `.${e}`).join(",");
 
 type FilterType = "all" | "image" | "video" | "doc";
 
+/** Folder name sentinel meaning "show all files regardless of folder". */
+const ALL_FILES = "__all__";
+/** Folder name sentinel meaning "show files with no folder assigned". */
+const NO_FOLDER = "__none__";
+
+const FILTER_TABS: { key: FilterType; label: string }[] = [
+  { key: "all",   label: "Semua"   },
+  { key: "image", label: "Gambar"  },
+  { key: "video", label: "Video"   },
+  { key: "doc",   label: "Dokumen" },
+];
+
 function extToFilter(ext: string): FilterType {
   if (IMAGE_EXTS.includes(ext)) return "image";
   if (VIDEO_EXTS.includes(ext)) return "video";
@@ -59,14 +80,9 @@ function extToFilter(ext: string): FilterType {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
-}
-
-/** Resolve public URL from a SopDocument, respecting its storage_bucket. */
-function docPublicUrl(doc: SopDocument): string {
-  if (!doc.file_path) return "";
-  const bucket = doc.storage_bucket || "sop-documents";
-  return supabase.storage.from(bucket).getPublicUrl(doc.file_path).data.publicUrl;
+  return new Date(iso).toLocaleDateString("id-ID", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -79,17 +95,29 @@ const ROOM_IMAGE_PREFIXES = [
   { prefix: "branding",   label: "Branding"    },
 ];
 
+function getAutoFolder(pathOrPrefix: string): string {
+  const prefix = pathOrPrefix.split("/")[0];
+  return ROOM_IMAGE_PREFIXES.find((p) => p.prefix === prefix)?.label ?? "Lainnya";
+}
+
 type StorageAsset = {
-  id: string;            // "room-images:prefix/name"
+  id: string;
   bucket: string;
-  path: string;          // "prefix/name"
-  name: string;          // raw filename
-  displayName: string;   // without extension
+  path: string;
+  name: string;
+  displayName: string;
   ext: string;
   url: string;
-  label: string;         // human-readable category
+  autoFolder: string;
   createdAt: string;
 };
+
+/** Resolve public URL from a SopDocument, respecting storage_bucket. */
+function docPublicUrl(doc: SopDocument): string {
+  if (!doc.file_path) return "";
+  const bucket = doc.storage_bucket || "sop-documents";
+  return supabase.storage.from(bucket).getPublicUrl(doc.file_path).data.publicUrl;
+}
 
 async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageAsset[]> {
   const all: StorageAsset[] = [];
@@ -101,7 +129,7 @@ async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageA
     for (const f of data ?? []) {
       if (!f.name || f.name.startsWith(".")) continue;
       const path = `${prefix}/${f.name}`;
-      if (registeredPaths.has(path)) continue; // already tracked in sop_documents
+      if (registeredPaths.has(path)) continue;
       const url = supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl;
       const ext = (f.name.split(".").pop() ?? "").toLowerCase();
       all.push({
@@ -112,7 +140,7 @@ async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageA
         displayName: f.name.replace(/\.[^.]+$/, ""),
         ext,
         url,
-        label,
+        autoFolder: label,
         createdAt: (f as { created_at?: string }).created_at ?? "",
       });
     }
@@ -121,12 +149,36 @@ async function loadStorageAssets(registeredPaths: Set<string>): Promise<StorageA
 }
 
 /* ------------------------------------------------------------------ */
+/* Preview                                                              */
+/* ------------------------------------------------------------------ */
+
+function Preview({ url, ext, altText, name }: {
+  url: string; ext: string; altText?: string | null; name: string;
+}) {
+  const isImage = IMAGE_EXTS.includes(ext);
+  const isVideo = VIDEO_EXTS.includes(ext);
+  return (
+    <>
+      {isImage ? (
+        <img src={url} alt={altText || name}
+          className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
+      ) : isVideo ? (
+        <video src={url} muted preload="metadata" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-1 text-stone-300">
+          <FileText className="h-10 w-10" />
+          <span className="text-xs font-medium uppercase">{ext}</span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Inline editable field                                               */
 /* ------------------------------------------------------------------ */
 
-function InlineEdit({
-  value, placeholder, icon: Icon, onSave,
-}: {
+function InlineEdit({ value, placeholder, icon: Icon, onSave }: {
   value: string;
   placeholder: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -153,13 +205,13 @@ function InlineEdit({
         <input autoFocus value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
+            if (e.key === "Enter") void commit();
             if (e.key === "Escape") { setEditing(false); setDraft(value); }
           }}
           placeholder={placeholder}
           className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
         />
-        <button type="button" disabled={saving} onClick={commit}
+        <button type="button" disabled={saving} onClick={() => void commit()}
           className="shrink-0 text-emerald-600 hover:text-emerald-700 disabled:opacity-50">
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
         </button>
@@ -186,25 +238,48 @@ function InlineEdit({
 }
 
 /* ------------------------------------------------------------------ */
-/* Preview helper                                                       */
+/* Folder move row (inside DbCard)                                     */
 /* ------------------------------------------------------------------ */
 
-function Preview({ url, ext, altText, name }: { url: string; ext: string; altText?: string | null; name: string }) {
-  const isImage = IMAGE_EXTS.includes(ext);
-  const isVideo = VIDEO_EXTS.includes(ext);
+function FolderMoveRow({ docId, currentFolder, folders, onMoved }: {
+  docId: string;
+  currentFolder: string | null;
+  folders: MediaFolder[];
+  onMoved: () => void;
+}) {
+  const moveFn  = useServerFn(moveDocToFolder);
+  const [moving, setMoving] = React.useState(false);
+
+  const handleChange = async (val: string) => {
+    const next = val === "" ? null : val;
+    if (next === currentFolder) return;
+    setMoving(true);
+    try {
+      await moveFn({ data: { id: docId, folder: next } });
+      toast.success(next ? `Dipindah ke "${next}"` : "Dihapus dari folder");
+      onMoved();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setMoving(false); }
+  };
+
   return (
-    <>
-      {isImage ? (
-        <img src={url} alt={altText || name} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
-      ) : isVideo ? (
-        <video src={url} muted preload="metadata" className="h-full w-full object-cover" />
+    <div className="flex items-center gap-1.5 border-t border-border px-3 py-1.5">
+      <Folder className="h-3 w-3 shrink-0 text-muted-foreground" />
+      {moving ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-1 text-stone-300">
-          <FileText className="h-10 w-10" />
-          <span className="text-xs font-medium uppercase">{ext}</span>
-        </div>
+        <select
+          value={currentFolder ?? ""}
+          onChange={(e) => void handleChange(e.target.value)}
+          className="min-w-0 flex-1 cursor-pointer bg-transparent text-[11px] text-muted-foreground focus:outline-none"
+        >
+          <option value="">— Tanpa folder —</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.name}>{f.name}</option>
+          ))}
+        </select>
       )}
-    </>
+    </div>
   );
 }
 
@@ -212,25 +287,25 @@ function Preview({ url, ext, altText, name }: { url: string; ext: string; altTex
 /* DB-backed card (full features)                                      */
 /* ------------------------------------------------------------------ */
 
-function DbCard({ doc, onDelete, onChanged }: {
+function DbCard({ doc, folders, onDelete, onChanged }: {
   doc: SopDocument;
+  folders: MediaFolder[];
   onDelete: () => void;
   onChanged: () => void;
 }) {
-  const ext      = (doc.file_type ?? "").toLowerCase();
-  const isImage  = IMAGE_EXTS.includes(ext);
-  const isVideo  = VIDEO_EXTS.includes(ext);
-  const url      = docPublicUrl(doc);
-  const bucket   = doc.storage_bucket || "sop-documents";
+  const ext     = (doc.file_type ?? "").toLowerCase();
+  const isImage = IMAGE_EXTS.includes(ext);
+  const isVideo = VIDEO_EXTS.includes(ext);
+  const url     = docPublicUrl(doc);
+  const bucket  = doc.storage_bucket || "sop-documents";
+
   const badgeLabel = bucket === "room-images"
-    ? (doc.file_path?.startsWith("media/") ? "Hero Slider"
+    ? (doc.file_path?.startsWith("media/")      ? "Hero Slider"
        : doc.file_path?.startsWith("room-types/") ? "Foto Kamar"
-       : doc.file_path?.startsWith("branding/") ? "Branding"
+       : doc.file_path?.startsWith("branding/")   ? "Branding"
        : "Media")
     : "Brosur";
-  const badgeCls = bucket === "room-images"
-    ? "bg-indigo-600/80"
-    : "bg-teal-700/80";
+  const badgeCls = bucket === "room-images" ? "bg-indigo-600/80" : "bg-teal-700/80";
 
   const [copied,   setCopied]   = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
@@ -258,11 +333,21 @@ function DbCard({ doc, onDelete, onChanged }: {
       {/* Preview */}
       <div className="relative h-36 overflow-hidden bg-stone-100">
         <Preview url={url} ext={ext} altText={doc.content} name={doc.name} />
-        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{ext}</span>
-        <span className={cn("absolute right-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white", badgeCls)}>{badgeLabel}</span>
+        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+          {ext}
+        </span>
+        <span className={cn("absolute right-2 top-2 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white", badgeCls)}>
+          {badgeLabel}
+        </span>
         <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
-          {url && <a href={url} target="_blank" rel="noreferrer"><Button size="sm" variant="secondary" className="h-8 gap-1 text-xs"><ExternalLink className="h-3.5 w-3.5" />Buka</Button></a>}
-          <Button size="sm" variant="destructive" disabled={deleting} className="h-8 gap-1 text-xs" onClick={handleDelete}>
+          {url && (
+            <a href={url} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs">
+                <ExternalLink className="h-3.5 w-3.5" />Buka
+              </Button>
+            </a>
+          )}
+          <Button size="sm" variant="destructive" disabled={deleting} className="h-8 gap-1 text-xs" onClick={() => void handleDelete()}>
             {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Hapus
           </Button>
         </div>
@@ -272,16 +357,24 @@ function DbCard({ doc, onDelete, onChanged }: {
       <InlineEdit value={doc.name} placeholder="Nama file…" icon={Pencil}
         onSave={async (v) => { await renameFn({ data: { id: doc.id, name: v } }); toast.success("Nama diperbarui"); onChanged(); }} />
 
-      {/* Alt text (images & videos only) */}
+      {/* Alt text */}
       {(isImage || isVideo) && (
-        <InlineEdit value={doc.content ?? ""} placeholder="Tulis alt text untuk SEO…" icon={Tag}
+        <InlineEdit value={doc.content ?? ""} placeholder="Alt text untuk SEO…" icon={Tag}
           onSave={async (v) => { await altFn({ data: { id: doc.id, altText: v } }); toast.success("Alt text diperbarui"); onChanged(); }} />
       )}
+
+      {/* Folder selector */}
+      <FolderMoveRow
+        docId={doc.id}
+        currentFolder={doc.folder}
+        folders={folders}
+        onMoved={onChanged}
+      />
 
       {/* Footer */}
       <div className="mt-auto flex items-center justify-between border-t border-border px-3 py-2">
         <span className="text-[11px] text-muted-foreground">{formatDate(doc.created_at)}</span>
-        <Button size="sm" variant="outline" disabled={!url} className="h-7 gap-1 px-2 text-xs" onClick={copyUrl}>
+        <Button size="sm" variant="outline" disabled={!url} className="h-7 gap-1 px-2 text-xs" onClick={() => void copyUrl()}>
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Disalin" : "Salin URL"}
         </Button>
@@ -294,22 +387,30 @@ function DbCard({ doc, onDelete, onChanged }: {
 /* Register dialog — converts a StorageAsset into a DB row             */
 /* ------------------------------------------------------------------ */
 
-function RegisterDialog({ asset, open, onClose, onRegistered }: {
+function RegisterDialog({ asset, open, folders, onClose, onRegistered }: {
   asset: StorageAsset | null;
   open: boolean;
+  folders: MediaFolder[];
   onClose: () => void;
   onRegistered: () => void;
 }) {
   const createFn = useServerFn(createSopDocument);
   const [name,    setName]    = React.useState("");
   const [altText, setAltText] = React.useState("");
+  const [folder,  setFolder]  = React.useState("");
   const [saving,  setSaving]  = React.useState(false);
 
   React.useEffect(() => {
-    if (open && asset) { setName(asset.displayName); setAltText(""); }
+    if (open && asset) {
+      setName(asset.displayName);
+      setAltText("");
+      setFolder(asset.autoFolder); // pre-select the auto-detected folder
+    }
   }, [open, asset]);
 
-  const isImg = asset ? IMAGE_EXTS.includes(asset.ext) || VIDEO_EXTS.includes(asset.ext) : false;
+  const isImg = asset
+    ? IMAGE_EXTS.includes(asset.ext) || VIDEO_EXTS.includes(asset.ext)
+    : false;
 
   const handleSave = async () => {
     if (!asset || !name.trim()) return;
@@ -323,6 +424,7 @@ function RegisterDialog({ asset, open, onClose, onRegistered }: {
           content: altText.trim(),
           docCategory: "brosur",
           storageBucket: asset.bucket,
+          folder: folder || asset.autoFolder,
         },
       });
       toast.success("Info media disimpan");
@@ -341,10 +443,11 @@ function RegisterDialog({ asset, open, onClose, onRegistered }: {
         <DialogHeader>
           <DialogTitle>Tambah Info Media</DialogTitle>
           <DialogDescription>
-            Atur nama tampilan{isImg ? " dan alt text" : ""} untuk file ini.
-            Setelah disimpan, nama{isImg ? " dan alt text" : ""} bisa diedit langsung dari kartu.
+            Atur nama, folder{isImg ? ", dan alt text" : ""} untuk file ini.
+            Setelah disimpan, semua atribut bisa diedit langsung dari kartu.
           </DialogDescription>
         </DialogHeader>
+
         {asset && (
           <div className="mt-1 overflow-hidden rounded-lg border border-border bg-muted/30">
             <div className="flex h-32 items-center justify-center bg-stone-100">
@@ -353,16 +456,34 @@ function RegisterDialog({ asset, open, onClose, onRegistered }: {
             <p className="truncate px-3 py-1.5 text-[11px] text-muted-foreground">{asset.name}</p>
           </div>
         )}
+
         <div className="grid gap-3">
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Nama Tampilan <span className="text-destructive">*</span></label>
+            <label className="mb-1.5 block text-sm font-medium">
+              Nama Tampilan <span className="text-destructive">*</span>
+            </label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nama file yang mudah dibaca"
+              placeholder="Nama yang mudah dibaca"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Folder</label>
+            <select
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">— Tanpa folder —</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.name}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+
           {isImg && (
             <div>
               <label className="mb-1.5 block text-sm font-medium">Alt Text (SEO)</label>
@@ -373,15 +494,18 @@ function RegisterDialog({ asset, open, onClose, onRegistered }: {
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Gunakan deskripsi yang jelas, mis. "Kamar Deluxe dengan view taman"
+                Contoh: "Kamar Deluxe dengan pemandangan taman"
               </p>
             </div>
           )}
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
-          <Button onClick={handleSave} disabled={saving || !name.trim()}>
-            {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Menyimpan…</> : "Simpan Info"}
+          <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
+            {saving
+              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Menyimpan…</>
+              : "Simpan Info"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -390,7 +514,7 @@ function RegisterDialog({ asset, open, onClose, onRegistered }: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Storage-only card (unregistered — shows "Add Info" button)         */
+/* Storage-only card                                                    */
 /* ------------------------------------------------------------------ */
 
 function StorageCard({ asset, onDeleted, onRegister }: {
@@ -398,8 +522,7 @@ function StorageCard({ asset, onDeleted, onRegister }: {
   onDeleted: () => void;
   onRegister: () => void;
 }) {
-  const isImage = IMAGE_EXTS.includes(asset.ext);
-  const isVideo = VIDEO_EXTS.includes(asset.ext);
+  const isMedia = IMAGE_EXTS.includes(asset.ext) || VIDEO_EXTS.includes(asset.ext);
   const [copied,   setCopied]   = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -418,11 +541,8 @@ function StorageCard({ asset, onDeleted, onRegister }: {
       if (error) throw error;
       toast.success("File dihapus");
       onDeleted();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setDeleting(false);
-    }
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setDeleting(false); }
   };
 
   return (
@@ -430,19 +550,25 @@ function StorageCard({ asset, onDeleted, onRegister }: {
       {/* Preview */}
       <div className="relative h-36 overflow-hidden bg-stone-100">
         <Preview url={asset.url} ext={asset.ext} name={asset.displayName} />
-        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{asset.ext}</span>
-        <span className="absolute right-2 top-2 rounded bg-indigo-600/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">{asset.label}</span>
+        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+          {asset.ext}
+        </span>
+        <span className="absolute right-2 top-2 rounded bg-indigo-600/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+          {asset.autoFolder}
+        </span>
         <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition group-hover:opacity-100">
           <a href={asset.url} target="_blank" rel="noreferrer">
-            <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs"><ExternalLink className="h-3.5 w-3.5" />Buka</Button>
+            <Button size="sm" variant="secondary" className="h-8 gap-1 text-xs">
+              <ExternalLink className="h-3.5 w-3.5" />Buka
+            </Button>
           </a>
-          <Button size="sm" variant="destructive" disabled={deleting} className="h-8 gap-1 text-xs" onClick={handleDelete}>
+          <Button size="sm" variant="destructive" disabled={deleting} className="h-8 gap-1 text-xs" onClick={() => void handleDelete()}>
             {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}Hapus
           </Button>
         </div>
       </div>
 
-      {/* Filename row */}
+      {/* Filename */}
       <div className="flex items-center gap-1.5 border-t border-border px-3 py-1.5">
         <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/40" />
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={asset.displayName}>
@@ -450,27 +576,251 @@ function StorageCard({ asset, onDeleted, onRegister }: {
         </span>
       </div>
 
-      {/* Add Info button — registers the file in sop_documents */}
-      {(isImage || isVideo) && (
+      {/* Add info button */}
+      {isMedia && (
         <button type="button" onClick={onRegister}
-          className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-teal-50 hover:text-teal-800"
-          title="Tambah nama tampilan dan alt text">
+          className="flex w-full items-center gap-1.5 border-t border-border px-3 py-1.5 text-left transition hover:bg-teal-50 hover:text-teal-800">
           <Plus className="h-3 w-3 shrink-0 text-teal-600" />
           <span className="text-[11px] font-medium text-teal-700">Tambah nama &amp; alt text</span>
         </button>
       )}
 
+      {/* Folder indicator (read-only for storage cards) */}
+      <div className="flex items-center gap-1.5 border-t border-border px-3 py-1.5">
+        <Folder className="h-3 w-3 shrink-0 text-muted-foreground/50" />
+        <span className="text-[11px] italic text-muted-foreground">{asset.autoFolder}</span>
+      </div>
+
       {/* Footer */}
       <div className="mt-auto flex items-center justify-between border-t border-border px-3 py-2">
         <span className="text-[11px] text-muted-foreground">
-          {asset.createdAt ? formatDate(asset.createdAt) : asset.label}
+          {asset.createdAt ? formatDate(asset.createdAt) : "—"}
         </span>
-        <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={copyUrl}>
+        <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-xs" onClick={() => void copyUrl()}>
           {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? "Disalin" : "Salin URL"}
         </Button>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Create folder dialog                                                 */
+/* ------------------------------------------------------------------ */
+
+function CreateFolderDialog({ open, onClose, onCreated }: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (name: string) => void;
+}) {
+  const createFn = useServerFn(createMediaFolder);
+  const [name,   setName]   = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => { if (open) setName(""); }, [open]);
+
+  const handleSave = async () => {
+    const t = name.trim();
+    if (!t) return;
+    setSaving(true);
+    try {
+      await createFn({ data: { name: t } });
+      toast.success(`Folder "${t}" dibuat`);
+      onCreated(t);
+      onClose();
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-[360px]">
+        <DialogHeader>
+          <DialogTitle>Buat Folder Baru</DialogTitle>
+          <DialogDescription>Beri nama folder untuk mengelompokkan file media.</DialogDescription>
+        </DialogHeader>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void handleSave(); }}
+          placeholder="Nama folder, mis. Kamar Deluxe"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
+          <Button onClick={() => void handleSave()} disabled={saving || !name.trim()}>
+            {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Membuat…</> : "Buat Folder"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Folder sidebar                                                       */
+/* ------------------------------------------------------------------ */
+
+type FolderCounts = Map<string, number>;
+
+function FolderSidebar({ folders, counts, activeFolder, onSelect, onFolderCreated, onFolderRenamed, onFolderDeleted }: {
+  folders: MediaFolder[];
+  counts: FolderCounts;
+  activeFolder: string;
+  onSelect: (key: string) => void;
+  onFolderCreated: (name: string) => void;
+  onFolderRenamed: () => void;
+  onFolderDeleted: (id: string) => void;
+}) {
+  const renameFn = useServerFn(renameMediaFolder);
+  const deleteFn = useServerFn(deleteMediaFolder);
+
+  const [createOpen,  setCreateOpen]  = React.useState(false);
+  const [renamingId,  setRenamingId]  = React.useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = React.useState("");
+
+  const totalCount = Array.from(counts.values()).reduce((a, b) => a + b, 0);
+  const noneCount  = counts.get(NO_FOLDER) ?? 0;
+
+  const SidebarItem = ({ folderKey, label, icon: Icon, count, className }: {
+    folderKey: string; label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    count?: number; className?: string;
+  }) => (
+    <button type="button"
+      onClick={() => onSelect(folderKey)}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+        activeFolder === folderKey
+          ? "bg-teal-50 font-medium text-teal-800"
+          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        className,
+      )}>
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count !== undefined && count > 0 && (
+        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+          activeFolder === folderKey ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
+
+  const handleRenameCommit = async (folder: MediaFolder) => {
+    const t = renameDraft.trim();
+    if (!t || t === folder.name) { setRenamingId(null); return; }
+    try {
+      await renameFn({ data: { id: folder.id, name: t } });
+      toast.success("Folder diubah namanya");
+      onFolderRenamed();
+    } catch (e) { toast.error((e as Error).message); }
+    setRenamingId(null);
+  };
+
+  const handleDelete = async (folder: MediaFolder) => {
+    const count = counts.get(folder.name) ?? 0;
+    const msg = count > 0
+      ? `Hapus folder "${folder.name}"? ${count} file akan dikeluarkan dari folder ini (tidak dihapus).`
+      : `Hapus folder "${folder.name}"?`;
+    if (!confirm(msg)) return;
+    try {
+      await deleteFn({ data: { id: folder.id } });
+      toast.success(`Folder "${folder.name}" dihapus`);
+      onFolderDeleted(folder.id);
+      if (activeFolder === folder.name) onSelect(ALL_FILES);
+    } catch (e) { toast.error((e as Error).message); }
+  };
+
+  return (
+    <aside className="flex w-52 shrink-0 flex-col gap-1 pr-2">
+      <SidebarItem folderKey={ALL_FILES} label="Semua File" icon={Images} count={totalCount} />
+      {noneCount > 0 && (
+        <SidebarItem folderKey={NO_FOLDER} label="Tanpa Folder" icon={FolderOpen} count={noneCount} />
+      )}
+
+      {folders.length > 0 && (
+        <div className="my-1 border-t border-border" />
+      )}
+
+      {folders.map((f) => {
+        if (renamingId === f.id) {
+          return (
+            <div key={f.id} className="flex items-center gap-1 rounded-lg border border-input bg-background px-2 py-1">
+              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input autoFocus value={renameDraft}
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleRenameCommit(f);
+                  if (e.key === "Escape") setRenamingId(null);
+                }}
+                className="min-w-0 flex-1 bg-transparent text-sm focus:outline-none"
+              />
+              <button type="button" onClick={() => void handleRenameCommit(f)}
+                className="text-emerald-600 hover:text-emerald-700">
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button type="button" onClick={() => setRenamingId(null)}
+                className="text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        }
+
+        const count = counts.get(f.name) ?? 0;
+        return (
+          <div key={f.id} className="group/folder flex items-center">
+            <button type="button"
+              onClick={() => onSelect(f.name)}
+              className={cn(
+                "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+                activeFolder === f.name
+                  ? "bg-teal-50 font-medium text-teal-800"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+              )}>
+              <Folder className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              {count > 0 && (
+                <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                  activeFolder === f.name ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
+                  {count}
+                </span>
+              )}
+            </button>
+            {/* Rename + delete — visible on hover */}
+            <div className="flex shrink-0 gap-0.5 opacity-0 transition group-hover/folder:opacity-100">
+              <button type="button" title="Ubah nama"
+                onClick={() => { setRenameDraft(f.name); setRenamingId(f.id); }}
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground">
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button type="button" title="Hapus folder"
+                onClick={() => void handleDelete(f)}
+                className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      <div className="my-1 border-t border-border" />
+
+      <button type="button" onClick={() => setCreateOpen(true)}
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted/50 hover:text-foreground">
+        <FolderPlus className="h-4 w-4 shrink-0" />
+        Buat Folder
+      </button>
+
+      <CreateFolderDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(name) => { onFolderCreated(name); onSelect(name); }}
+      />
+    </aside>
   );
 }
 
@@ -498,47 +848,36 @@ function UploadBar({ progress, total }: { progress: number; total: number }) {
 /* Media Library view                                                   */
 /* ------------------------------------------------------------------ */
 
-type SourceFilter = "all" | "brosur" | "room-images";
-
-const FILTER_TABS: { key: FilterType; label: string }[] = [
-  { key: "all",   label: "Semua"   },
-  { key: "image", label: "Gambar"  },
-  { key: "video", label: "Video"   },
-  { key: "doc",   label: "Dokumen" },
-];
-
-const SOURCE_TABS: { key: SourceFilter; label: string }[] = [
-  { key: "all",         label: "Semua sumber"    },
-  { key: "brosur",      label: "Brosur / Upload" },
-  { key: "room-images", label: "Hero & Kamar"    },
-];
-
 export function MediaLibraryView() {
-  const qc     = useQueryClient();
-  const listFn = useServerFn(listSopDocuments);
+  const qc      = useQueryClient();
+  const listFn  = useServerFn(listSopDocuments);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
-  const [filter,  setFilter]  = React.useState<FilterType>("all");
-  const [source,  setSource]  = React.useState<SourceFilter>("all");
-  const [search,  setSearch]  = React.useState("");
-  const [uploaded, setUploaded] = React.useState(0);
-  const [total,    setTotal]   = React.useState(0);
-
-  // Storage assets from room-images (not yet in sop_documents)
-  const [storageAssets,  setStorageAssets]  = React.useState<StorageAsset[]>([]);
+  const [filter,        setFilter]        = React.useState<FilterType>("all");
+  const [activeFolder,  setActiveFolder]  = React.useState<string>(ALL_FILES);
+  const [search,        setSearch]        = React.useState("");
+  const [uploaded,      setUploaded]      = React.useState(0);
+  const [total,         setTotal]         = React.useState(0);
+  const [storageAssets, setStorageAssets] = React.useState<StorageAsset[]>([]);
   const [storageLoading, setStorageLoading] = React.useState(true);
-
-  // Register dialog state
   const [registerAsset, setRegisterAsset] = React.useState<StorageAsset | null>(null);
 
-  // DB brosur docs
+  /* DB brosur docs */
   const { data, isLoading: dbLoading, refetch } = useQuery({
     queryKey: ["media-library"],
-    queryFn: () => listFn({ data: { category: "brosur" } }),
+    queryFn:  () => listFn({ data: { category: "brosur" } }),
   });
   const brosurDocs = (data?.documents ?? []) as SopDocument[];
 
-  // Paths already tracked in sop_documents (to exclude from storage listing)
+  /* Folders */
+  const folderListFn = useServerFn(listMediaFolders);
+  const { data: folderData, refetch: refetchFolders } = useQuery({
+    queryKey: ["media-folders"],
+    queryFn:  () => folderListFn({ data: undefined }),
+  });
+  const folders = (folderData?.folders ?? []) as MediaFolder[];
+
+  /* Registered paths (to exclude from raw storage listing) */
   const registeredPaths = React.useMemo(() => {
     const s = new Set<string>();
     for (const doc of brosurDocs) {
@@ -549,47 +888,63 @@ export function MediaLibraryView() {
 
   const loadStorage = React.useCallback(async (regPaths: Set<string>) => {
     setStorageLoading(true);
-    const assets = await loadStorageAssets(regPaths);
-    setStorageAssets(assets);
+    setStorageAssets(await loadStorageAssets(regPaths));
     setStorageLoading(false);
   }, []);
 
-  // Load storage assets whenever registered paths change
   React.useEffect(() => {
     if (!dbLoading) void loadStorage(registeredPaths);
   }, [dbLoading, registeredPaths, loadStorage]);
 
-  const refresh = () => { void refetch(); };
+  const refresh = () => { void refetch(); void refetchFolders(); };
 
-  // Visible DB cards
+  /* ---- Folder counts ---- */
+  const folderCounts = React.useMemo<FolderCounts>(() => {
+    const m = new Map<string, number>();
+    const inc = (key: string) => m.set(key, (m.get(key) ?? 0) + 1);
+
+    for (const doc of brosurDocs) {
+      const key = doc.folder ?? NO_FOLDER;
+      inc(key);
+    }
+    for (const asset of storageAssets) {
+      inc(asset.autoFolder);
+    }
+    return m;
+  }, [brosurDocs, storageAssets]);
+
+  /* ---- Filtered lists ---- */
+  const applyFilter = (ext: string, name: string): boolean => {
+    if (filter !== "all" && extToFilter(ext) !== filter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!name.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  };
+
   const visibleDb = React.useMemo<SopDocument[]>(() => {
-    let list = brosurDocs;
-    if (source === "room-images") list = list.filter((d) => d.storage_bucket === "room-images");
-    if (source === "brosur")      list = list.filter((d) => !d.storage_bucket || d.storage_bucket === "sop-documents");
-    if (filter !== "all")         list = list.filter((d) => extToFilter((d.file_type ?? "").toLowerCase()) === filter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((d) => d.name.toLowerCase().includes(q));
-    }
-    return list;
-  }, [brosurDocs, source, filter, search]);
+    return brosurDocs.filter((doc) => {
+      if (!applyFilter((doc.file_type ?? "").toLowerCase(), doc.name)) return false;
+      if (activeFolder === ALL_FILES) return true;
+      if (activeFolder === NO_FOLDER) return !doc.folder;
+      return doc.folder === activeFolder;
+    });
+  }, [brosurDocs, activeFolder, filter, search]);
 
-  // Visible storage cards
   const visibleStorage = React.useMemo<StorageAsset[]>(() => {
-    if (source === "brosur") return [];
-    let list = storageAssets;
-    if (filter !== "all") list = list.filter((a) => extToFilter(a.ext) === filter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter((a) => a.displayName.toLowerCase().includes(q));
-    }
-    return list;
-  }, [storageAssets, source, filter, search]);
+    return storageAssets.filter((asset) => {
+      if (!applyFilter(asset.ext, asset.displayName)) return false;
+      if (activeFolder === ALL_FILES) return true;
+      if (activeFolder === NO_FOLDER) return false; // storage cards always have autoFolder
+      return asset.autoFolder === activeFolder;
+    });
+  }, [storageAssets, activeFolder, filter, search]);
 
   const totalVisible = visibleDb.length + visibleStorage.length;
   const isLoading    = dbLoading || storageLoading;
 
-  // Upload new files → sop-documents bucket (full DB backing)
+  /* ---- Upload ---- */
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -603,16 +958,27 @@ export function MediaLibraryView() {
     if (!valid.length) return;
     setTotal(valid.length); setUploaded(0);
     let ok = 0;
+    // Determine target folder for uploads
+    const uploadFolder = activeFolder === ALL_FILES || activeFolder === NO_FOLDER
+      ? "Brosur"
+      : activeFolder;
     for (const rawFile of valid) {
       try {
         const file = rawFile.type.startsWith("image/") ? await convertToWebP(rawFile) : rawFile;
         const ext  = (file.name.split(".").pop() ?? "bin").toLowerCase();
         const base = rawFile.name.replace(/\.[^.]+$/, "");
         const path = `brosur/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("sop-documents").upload(path, file, { upsert: false });
+        const { error: upErr } = await supabase.storage
+          .from("sop-documents")
+          .upload(path, file, { upsert: false });
         if (upErr) throw upErr;
         const createFn = (await import("@/admin/modules/ai-lab/sop.functions")).createSopDocument;
-        await createFn({ data: { name: base, filePath: path, fileType: ext, content: "", docCategory: "brosur" } });
+        await createFn({
+          data: {
+            name: base, filePath: path, fileType: ext, content: "",
+            docCategory: "brosur", folder: uploadFolder,
+          },
+        });
         ok++;
         setUploaded((n) => n + 1);
       } catch (err) {
@@ -623,9 +989,11 @@ export function MediaLibraryView() {
     if (ok > 0) { toast.success(`${ok} file diunggah`); refresh(); }
   };
 
+  /* ---- Render ---- */
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-[1400px] px-6 py-8">
+
         {/* Header */}
         <header className="mb-6 flex items-end justify-between gap-4">
           <div>
@@ -636,121 +1004,139 @@ export function MediaLibraryView() {
             </p>
           </div>
           <div className="shrink-0">
-            <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={onPick} />
-            <Button className="gap-2 bg-teal-700 text-white hover:bg-teal-800"
-              onClick={() => fileRef.current?.click()} disabled={total > 0}>
-              {total > 0 ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {total > 0 ? `Mengunggah ${uploaded}/${total}…` : "Upload Media"}
+            <input ref={fileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => void onPick(e)} />
+            <Button
+              className="gap-2 bg-teal-700 text-white hover:bg-teal-800"
+              onClick={() => fileRef.current?.click()}
+              disabled={total > 0}>
+              {total > 0
+                ? <><Loader2 className="h-4 w-4 animate-spin" />{`Mengunggah ${uploaded}/${total}…`}</>
+                : <><Upload className="h-4 w-4" />Upload Media</>}
             </Button>
           </div>
         </header>
 
         <UploadBar progress={uploaded} total={total} />
 
-        {/* Toolbar */}
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {/* Type filter */}
-          <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
-            {FILTER_TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => setFilter(key)}
-                className={cn("rounded-md px-3 py-1.5 text-sm font-medium transition",
-                  filter === key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-                {label}
-              </button>
-            ))}
-          </div>
+        {/* Body: sidebar + main */}
+        <div className="flex gap-6">
 
-          {/* Source filter */}
-          <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
-            {SOURCE_TABS.map(({ key, label }) => (
-              <button key={key} onClick={() => setSource(key)}
-                className={cn("rounded-md px-3 py-1.5 text-sm font-medium transition",
-                  source === key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Folder sidebar */}
+          <FolderSidebar
+            folders={folders}
+            counts={folderCounts}
+            activeFolder={activeFolder}
+            onSelect={setActiveFolder}
+            onFolderCreated={(name) => {
+              void refetchFolders();
+              setActiveFolder(name);
+            }}
+            onFolderRenamed={() => { void refetch(); void refetchFolders(); }}
+            onFolderDeleted={() => { void refetch(); void refetchFolders(); }}
+          />
 
-          {/* Search */}
-          <div className="relative min-w-[180px] flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama file…"
-              className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-            {search && (
-              <button type="button" onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
+          {/* Main content */}
+          <div className="min-w-0 flex-1">
+
+            {/* Toolbar */}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              {/* Active folder breadcrumb */}
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                <Images className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="font-medium text-foreground">
+                  {activeFolder === ALL_FILES ? "Semua File"
+                   : activeFolder === NO_FOLDER ? "Tanpa Folder"
+                   : activeFolder}
+                </span>
+              </div>
+
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                {/* Type filter */}
+                <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                  {FILTER_TABS.map(({ key, label }) => (
+                    <button key={key} onClick={() => setFilter(key)}
+                      className={cn("rounded-md px-3 py-1.5 text-sm font-medium transition",
+                        filter === key ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <div className="relative min-w-[160px]">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input value={search} onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari nama file…"
+                    className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                  {search && (
+                    <button type="button" onClick={() => setSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <span className="text-xs text-muted-foreground">{totalVisible} file</span>
+            </div>
+
+            {/* Grid */}
+            {isLoading ? (
+              <div className="flex items-center justify-center py-24 text-muted-foreground">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />Memuat media…
+              </div>
+            ) : totalVisible === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border py-24 text-center">
+                <Images className="h-14 w-14 text-muted-foreground/30" />
+                <p className="text-sm font-medium text-muted-foreground">
+                  {search || filter !== "all"
+                    ? "Tidak ada file yang cocok."
+                    : activeFolder !== ALL_FILES
+                    ? `Folder ini masih kosong. Upload atau pindahkan file ke sini.`
+                    : "Belum ada media. Klik Upload Media untuk memulai."}
+                </p>
+                {!search && filter === "all" && (
+                  <Button variant="outline" className="gap-1.5" onClick={() => fileRef.current?.click()}>
+                    <Upload className="h-4 w-4" />Pilih File
+                  </Button>
+                )}
+                {(search || filter !== "all") && (
+                  <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilter("all"); }}>
+                    Reset filter
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {visibleDb.map((doc) => (
+                  <DbCard key={`db:${doc.id}`} doc={doc} folders={folders} onDelete={refresh} onChanged={refresh} />
+                ))}
+                {visibleStorage.map((asset) => (
+                  <StorageCard
+                    key={asset.id}
+                    asset={asset}
+                    onDeleted={() => setStorageAssets((prev) => prev.filter((a) => a.id !== asset.id))}
+                    onRegister={() => setRegisterAsset(asset)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {totalVisible > 0 && (
+              <p className="mt-6 text-center text-xs text-muted-foreground">
+                JPG/PNG dikonversi ke WebP saat upload · Klik nama atau ikon tag untuk mengedit · Maks 50 MB per file
+              </p>
             )}
           </div>
-          <span className="ml-auto text-xs text-muted-foreground">{totalVisible} file</span>
         </div>
-
-        {/* Legend */}
-        <div className="mb-5 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="rounded bg-teal-700/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white">Brosur</span>
-            Upload via Media Library — nama &amp; alt text bisa diedit langsung
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="rounded bg-indigo-600/80 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-white">Hero / Kamar</span>
-            Klik <strong>Tambah nama &amp; alt text</strong> untuk mengaktifkan pengeditan
-          </span>
-        </div>
-
-        {/* Grid */}
-        {isLoading ? (
-          <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />Memuat media…
-          </div>
-        ) : totalVisible === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border py-24 text-center">
-            <Images className="h-14 w-14 text-muted-foreground/30" />
-            <p className="text-sm font-medium text-muted-foreground">
-              {search || filter !== "all" || source !== "all"
-                ? "Tidak ada file yang cocok dengan filter."
-                : "Belum ada media. Klik Upload Media untuk memulai."}
-            </p>
-            {!search && filter === "all" && source === "all" && (
-              <Button variant="outline" className="gap-1.5" onClick={() => fileRef.current?.click()}>
-                <Upload className="h-4 w-4" />Pilih File
-              </Button>
-            )}
-            {(search || filter !== "all" || source !== "all") && (
-              <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilter("all"); setSource("all"); }}>
-                Reset filter
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {/* DB-backed cards first */}
-            {visibleDb.map((doc) => (
-              <DbCard key={`db:${doc.id}`} doc={doc} onDelete={refresh} onChanged={refresh} />
-            ))}
-            {/* Unregistered storage-only cards */}
-            {visibleStorage.map((asset) => (
-              <StorageCard
-                key={asset.id}
-                asset={asset}
-                onDeleted={() => setStorageAssets((prev) => prev.filter((a) => a.id !== asset.id))}
-                onRegister={() => setRegisterAsset(asset)}
-              />
-            ))}
-          </div>
-        )}
-
-        {totalVisible > 0 && (
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            JPG/PNG dikonversi ke WebP saat upload via tombol Upload · Klik nama atau ikon tag untuk mengedit · Maks 50 MB per file
-          </p>
-        )}
       </div>
 
       {/* Register dialog */}
       <RegisterDialog
         asset={registerAsset}
         open={!!registerAsset}
+        folders={folders}
         onClose={() => setRegisterAsset(null)}
         onRegistered={refresh}
       />
