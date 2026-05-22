@@ -27,6 +27,8 @@ import {
   GraduationCap,
   RefreshCw,
   RotateCcw,
+  FileText,
+  Download,
 } from "lucide-react";
 import {
   listThreads,
@@ -1015,6 +1017,72 @@ function MessageBadges({ m }: { m: any }) {
   );
 }
 
+type AttachmentInfo = { url: string; kind: "image" | "video" | "audio" | "file"; name: string; mime: string };
+
+/**
+ * Extract an attachment (image/video/audio/file) from a message's
+ * metadata. Supports several common webhook field shapes so incoming
+ * WhatsApp media is rendered regardless of the exact key used.
+ */
+function getAttachment(m: any): AttachmentInfo | null {
+  const meta = (m.metadata ?? {}) as Record<string, any>;
+  const media = (meta.media ?? meta.attachment ?? null) as Record<string, any> | null;
+  const url =
+    meta.media_url ?? meta.mediaUrl ?? meta.attachment_url ?? meta.file_url ??
+    meta.fileUrl ?? meta.url ?? media?.url ?? media?.link ?? null;
+  if (!url || typeof url !== "string") return null;
+
+  const mime = String(
+    meta.mime_type ?? meta.mimetype ?? meta.media_type ?? meta.content_type ??
+    media?.mime_type ?? media?.type ?? "",
+  ).toLowerCase();
+  const name =
+    String(meta.file_name ?? meta.filename ?? meta.media_name ?? media?.file_name ?? media?.filename ?? "") ||
+    (url.split("?")[0].split("/").pop() ?? "file");
+  const ext = (url.split("?")[0].split(".").pop() ?? "").toLowerCase();
+
+  const isImg = mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg"].includes(ext);
+  const isVid = mime.startsWith("video/") || ["mp4", "webm", "mov", "avi", "mkv"].includes(ext);
+  const isAud = mime.startsWith("audio/") || ["mp3", "ogg", "opus", "wav", "m4a", "aac"].includes(ext);
+  const kind: AttachmentInfo["kind"] = isImg ? "image" : isVid ? "video" : isAud ? "audio" : "file";
+  return { url, kind, name, mime };
+}
+
+/** Render an attachment inside a message bubble (image/video/audio/file card). */
+function MessageAttachment({ m }: { m: any }) {
+  const a = getAttachment(m);
+  if (!a) return null;
+
+  if (a.kind === "image") {
+    return (
+      <a href={a.url} target="_blank" rel="noopener noreferrer" className="mb-1 block">
+        <img src={a.url} alt={a.name} className="max-h-64 w-full max-w-[280px] rounded-md object-cover" />
+      </a>
+    );
+  }
+  if (a.kind === "video") {
+    return <video src={a.url} controls className="mb-1 max-h-64 w-full max-w-[280px] rounded-md" />;
+  }
+  if (a.kind === "audio") {
+    return <audio src={a.url} controls className="mb-1 w-[240px]" />;
+  }
+  // Generic file (PDF, doc, etc.) — card with icon + name + download.
+  const label = a.mime.includes("pdf") || a.name.toLowerCase().endsWith(".pdf") ? "PDF" : (a.mime || "Berkas");
+  return (
+    <a href={a.url} target="_blank" rel="noopener noreferrer"
+      className="mb-1 flex items-center gap-2.5 rounded-md bg-black/[0.06] px-2.5 py-2 transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-500 text-white">
+        <FileText className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium">{a.name}</span>
+        <span className="block text-[11px] uppercase opacity-60">{label}</span>
+      </span>
+      <Download className="h-4 w-4 shrink-0 opacity-60" />
+    </a>
+  );
+}
+
 function MessageStream({ messages }: { messages: any[] }) {
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
@@ -1059,7 +1127,8 @@ function MessageStream({ messages }: { messages: any[] }) {
                       : "-left-2 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full"
                   )} style={{ clipPath: m.direction === "out" ? 'polygon(0 0, 100% 0, 0 100%)' : 'polygon(0 0, 100% 0, 100% 100%)' }} />
 
-                  <span className="leading-[19px]">{m.body}</span>
+                  <MessageAttachment m={m} />
+                  {m.body && <span className="leading-[19px]">{m.body}</span>}
                   <div
                     className={cn(
                       "mt-[2px] self-end font-sans text-[10px] flex items-center gap-1",
