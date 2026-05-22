@@ -452,6 +452,35 @@ export type Database = {
         }
         Relationships: []
       }
+      media_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "media_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -490,7 +519,7 @@ export type Database = {
           description: string | null
           email: string | null
           favicon_url: string | null
-          meta_access_token: string | null
+          fonnte_token: string | null
           google_analytics_id: string | null
           google_place_id: string | null
           google_places_api_key: string | null
@@ -511,8 +540,6 @@ export type Database = {
           smart_delay_config: Json | null
           tagline: string | null
           timezone: string
-          meta_phone_number_id: string | null
-          meta_verify_token: string | null
           updated_at: string
           whatsapp_number: string | null
         }
@@ -550,8 +577,6 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
-          meta_phone_number_id?: string | null
-          meta_verify_token?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
@@ -568,7 +593,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           favicon_url?: string | null
-          meta_access_token?: string | null
+          fonnte_token?: string | null
           google_analytics_id?: string | null
           google_place_id?: string | null
           google_places_api_key?: string | null
@@ -589,8 +614,6 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           timezone?: string
-          meta_phone_number_id?: string | null
-          meta_verify_token?: string | null
           updated_at?: string
           whatsapp_number?: string | null
         }
@@ -640,6 +663,7 @@ export type Database = {
           created_at: string
           description: string | null
           extrabed_capacity: number
+          extrabed_rate: number
           hero_image_url: string | null
           id: string
           images: string[]
@@ -656,6 +680,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           extrabed_capacity?: number
+          extrabed_rate?: number
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -672,6 +697,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           extrabed_capacity?: number
+          extrabed_rate?: number
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -1001,6 +1027,86 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_landing_pages: {
+        Row: {
+          body_content: string | null
+          created_at: string
+          custom_head: string | null
+          custom_json_ld: string | null
+          custom_robots: string | null
+          hero_cta_text: string
+          hero_cta_url: string
+          hero_headline: string | null
+          hero_subheadline: string | null
+          id: string
+          json_ld_enabled: boolean
+          meta_description: string | null
+          meta_title: string | null
+          og_image_url: string | null
+          property_id: string | null
+          published: boolean
+          sections: Json | null
+          slug: string
+          target_keyword: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_content?: string | null
+          created_at?: string
+          custom_head?: string | null
+          custom_json_ld?: string | null
+          custom_robots?: string | null
+          hero_cta_text?: string
+          hero_cta_url?: string
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          id?: string
+          json_ld_enabled?: boolean
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
+          property_id?: string | null
+          published?: boolean
+          sections?: Json | null
+          slug: string
+          target_keyword?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_content?: string | null
+          created_at?: string
+          custom_head?: string | null
+          custom_json_ld?: string | null
+          custom_robots?: string | null
+          hero_cta_text?: string
+          hero_cta_url?: string
+          hero_headline?: string | null
+          hero_subheadline?: string | null
+          id?: string
+          json_ld_enabled?: boolean
+          meta_description?: string | null
+          meta_title?: string | null
+          og_image_url?: string | null
+          property_id?: string | null
+          published?: boolean
+          sections?: Json | null
+          slug?: string
+          target_keyword?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seo_landing_pages_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seo_pages: {
         Row: {
           description: string | null
@@ -1137,10 +1243,13 @@ export type Database = {
           doc_category: string
           file_path: string | null
           file_type: string | null
+          folder: string | null
+          folder_id: string | null
           id: string
           name: string
           property_id: string | null
           source_url: string | null
+          storage_bucket: string | null
         }
         Insert: {
           agent_key?: string | null
@@ -1149,10 +1258,13 @@ export type Database = {
           doc_category?: string
           file_path?: string | null
           file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
           id?: string
           name: string
           property_id?: string | null
           source_url?: string | null
+          storage_bucket?: string | null
         }
         Update: {
           agent_key?: string | null
@@ -1161,12 +1273,22 @@ export type Database = {
           doc_category?: string
           file_path?: string | null
           file_type?: string | null
+          folder?: string | null
+          folder_id?: string | null
           id?: string
           name?: string
           property_id?: string | null
           source_url?: string | null
+          storage_bucket?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "sop_documents_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "media_folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sop_documents_property_id_fkey"
             columns: ["property_id"]
