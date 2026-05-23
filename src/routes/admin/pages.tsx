@@ -46,6 +46,7 @@ import {
   deleteSeoLandingPage,
   type SeoLandingPage,
   type LPSection,
+  type LPSectionsData,
 } from "@/admin/modules/seo/landing-page.functions";
 import { LpPageBuilder } from "@/admin/modules/seo/lp-page-builder";
 import { Switch } from "@/components/ui/switch";
@@ -128,9 +129,9 @@ function HomepageBuilder() {
   const activeLp = activePageId === "home" ? null : pages.find((p) => p.id === activePageId) ?? null;
 
   // Sections of the active landing page (edited in the right panel).
-  const [lpSections, setLpSections] = useState<LPSection[]>([]);
+  const [lpSections, setLpSections] = useState<LPSectionsData>([]);
   useEffect(() => {
-    if (activeLp) setLpSections((activeLp.sections ?? []) as LPSection[]);
+    if (activeLp) setLpSections((activeLp.sections ?? []) as LPSectionsData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLp?.id]);
 
@@ -174,7 +175,12 @@ function HomepageBuilder() {
     try {
       if (activeLp) {
         await updateSeoLandingPage({
-          data: { id: activeLp.id, sections: lpSections.length > 0 ? lpSections : null },
+          data: {
+            id: activeLp.id,
+            sections: lpSections ? (
+              Array.isArray(lpSections) ? (lpSections.length > 0 ? lpSections : null) : lpSections
+            ) : null
+          },
         });
         toast.success("Landing page tersimpan");
         await lpQuery.refetch();
