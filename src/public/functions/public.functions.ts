@@ -1134,3 +1134,31 @@ export const chatWithAI = createServerFn({ method: "POST" })
       return { reply: null as string | null, error: (e as Error).message };
     }
   });
+
+/* ------------------------------------------------------------------ */
+/* Explore (public) — published items grouped by category             */
+/* ------------------------------------------------------------------ */
+
+export type PublicExploreItem = {
+  id: string;
+  category: "destination" | "culinary" | "event" | "news";
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  rating: number | null;
+  badge: string | null;
+  date_text: string | null;
+  location_text: string | null;
+  sort_order: number;
+};
+
+export const getPublicExploreItems = createServerFn({ method: "GET" }).handler(async () => {
+  const { data, error } = await db(supabasePublic)
+    .from("explore_items")
+    .select("id, category, title, description, image_url, rating, badge, date_text, location_text, sort_order")
+    .eq("is_published", true)
+    .order("category", { ascending: true })
+    .order("sort_order", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PublicExploreItem[];
+});
