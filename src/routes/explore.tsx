@@ -23,8 +23,6 @@ export const Route = createFileRoute("/explore")({
   component: ExploreSemarang,
 });
 
-
-
 function ExploreSemarang() {
   const loaderData = Route.useLoaderData();
   const fn = useServerFn(getPublicSiteData);
@@ -45,8 +43,8 @@ function ExploreSemarang() {
         <div 
           className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay"
           style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
-        ></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/20 to-transparent"></div>
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/20 to-transparent" />
         <div className="relative mx-auto max-w-6xl px-6 text-center">
           <span className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-teal-300">
             <span className="h-px w-6 bg-teal-300" />
