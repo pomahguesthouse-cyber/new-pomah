@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { MediaPicker } from "@/admin/components/media-picker";
-import { getPropertySettings, updatePropertySettings } from "@/admin/modules/settings/settings.functions";
+import { getPropertySettings } from "@/admin/modules/settings/settings.functions";
+import { updateExploreConfig } from "@/admin/modules/explore/explore.functions";
 import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/admin/explore")({
 
 function AdminExplorePage() {
   const getFn = useServerFn(getPropertySettings);
-  const updateFn = useServerFn(updatePropertySettings);
+  const updateFn = useServerFn(updateExploreConfig);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
