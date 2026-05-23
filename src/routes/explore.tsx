@@ -97,10 +97,11 @@ const getLabelStyle = (label: string) => {
 
 /* ── Horizontal scroll hook ─────────────────────────────────────────── */
 
-function useHorizontalScroll() {
+function useHorizontalScroll(autoScroll: boolean = true) {
   const ref = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
 
   const checkScroll = () => {
     if (ref.current) {
@@ -114,15 +115,40 @@ function useHorizontalScroll() {
     const el = ref.current;
     if (el) {
       el.addEventListener("scroll", checkScroll);
-      // Run initially
       setTimeout(checkScroll, 100);
+
+      const handleMouseEnter = () => setIsHovered(true);
+      const handleMouseLeave = () => setIsHovered(false);
+      el.addEventListener("mouseenter", handleMouseEnter);
+      el.addEventListener("mouseleave", handleMouseLeave);
+
+      return () => {
+        el.removeEventListener("scroll", checkScroll);
+        el.removeEventListener("mouseenter", handleMouseEnter);
+        el.removeEventListener("mouseleave", handleMouseLeave);
+      };
     }
-    return () => el?.removeEventListener("scroll", checkScroll);
   }, []);
 
   const scroll = (dir: "left" | "right") => {
-    ref.current?.scrollBy({ left: dir === "left" ? -320 : 320, behavior: "smooth" });
+    // 220px card + 16px gap = 236px
+    ref.current?.scrollBy({ left: dir === "left" ? -236 : 236, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    if (!autoScroll || isHovered) return;
+    const interval = setInterval(() => {
+      if (ref.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = ref.current;
+        if (scrollLeft >= scrollWidth - clientWidth - 10) {
+          ref.current.scrollTo({ left: 0, behavior: "smooth" });
+        } else {
+          scroll("right");
+        }
+      }
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [autoScroll, isHovered]);
 
   return { ref, scroll, showLeft, showRight };
 }
@@ -407,12 +433,12 @@ function ExploreSemarang() {
                     <div className="relative group/scroll">
                       <div
                         ref={destScroll.ref}
-                        className="flex gap-4 overflow-x-auto pb-4 scroll-smooth scrollbar-hide snap-x"
+                        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"
                       >
                         {filteredDestinations.map((dest, i) => (
                           <div
                             key={`dest-${dest.name}-${i}`}
-                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
                           >
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
@@ -500,12 +526,12 @@ function ExploreSemarang() {
                     <div className="relative group/scroll">
                       <div
                         ref={culScroll.ref}
-                        className="flex gap-4 overflow-x-auto pb-4 scroll-smooth scrollbar-hide snap-x"
+                        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"
                       >
                         {filteredCulinary.map((cul, i) => (
                           <div
                             key={`cul-${cul.name}-${i}`}
-                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
                           >
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
