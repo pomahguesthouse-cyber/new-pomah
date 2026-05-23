@@ -5,7 +5,7 @@ dotenv.config();
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 async function main() {
-  const { data: props, error: e1 } = await supabase.from("properties").select("ai_lab_config, meta_access_token, meta_phone_number_id").limit(1);
+  const { data: props, error: e1 } = await supabase.from("properties").select("ai_lab_config").limit(1);
   console.log("Properties:", JSON.stringify(props, null, 2), e1?.message);
 
   const { data: threads, error: e2 } = await supabase.from("whatsapp_threads").select("phone, display_name, ai_auto").order("last_message_at", { ascending: false }).limit(2);

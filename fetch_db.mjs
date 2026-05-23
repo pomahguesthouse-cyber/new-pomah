@@ -17,7 +17,7 @@ async function main() {
   const headers = { 'apikey': key, 'Authorization': `Bearer ${key}` };
   
   console.log("=== PROPERTIES ===");
-  let res = await fetch(`${url}/rest/v1/properties?select=ai_lab_config,meta_access_token,meta_phone_number_id&limit=1`, { headers });
+  let res = await fetch(`${url}/rest/v1/properties?select=ai_lab_config&limit=1`, { headers });
   console.log(await res.json());
 
   console.log("\n=== LAST 5 MESSAGES ===");

@@ -21,7 +21,7 @@ import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
-import { Route as ApiMetaRouteImport } from './routes/api.meta'
+import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -37,6 +37,7 @@ import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
+import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -98,9 +99,9 @@ const LpSlugRoute = LpSlugRouteImport.update({
   path: '/lp/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiMetaRoute = ApiMetaRouteImport.update({
-  id: '/api/meta',
-  path: '/api/meta',
+const ApiFonnteRoute = ApiFonnteRouteImport.update({
+  id: '/api/fonnte',
+  path: '/api/fonnte',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
@@ -178,6 +179,11 @@ const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   path: '/book/confirmation/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
+  id: '/api/cron/sync-explore',
+  path: '/api/cron/sync-explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -201,12 +207,13 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
-  '/api/meta': typeof ApiMetaRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
@@ -230,12 +237,13 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
-  '/api/meta': typeof ApiMetaRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
+  '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesById {
@@ -261,12 +269,13 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
-  '/api/meta': typeof ApiMetaRoute
+  '/api/fonnte': typeof ApiFonnteRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRouteTypes {
@@ -293,12 +302,13 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
-    | '/api/meta'
+    | '/api/fonnte'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -322,12 +332,13 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
-    | '/api/meta'
+    | '/api/fonnte'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin'
     | '/book'
     | '/rooms'
+    | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   id:
     | '__root__'
@@ -352,12 +363,13 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/training'
     | '/admin/whatsapp'
-    | '/api/meta'
+    | '/api/fonnte'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
 }
@@ -369,11 +381,12 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  ApiMetaRoute: typeof ApiMetaRoute
+  ApiFonnteRoute: typeof ApiFonnteRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRoute
 }
 
@@ -463,11 +476,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LpSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/meta': {
-      id: '/api/meta'
-      path: '/api/meta'
-      fullPath: '/api/meta'
-      preLoaderRoute: typeof ApiMetaRouteImport
+    '/api/fonnte': {
+      id: '/api/fonnte'
+      path: '/api/fonnte'
+      fullPath: '/api/fonnte'
+      preLoaderRoute: typeof ApiFonnteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/whatsapp': {
@@ -575,6 +588,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookConfirmationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/sync-explore': {
+      id: '/api/cron/sync-explore'
+      path: '/api/cron/sync-explore'
+      fullPath: '/api/cron/sync-explore'
+      preLoaderRoute: typeof ApiCronSyncExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -624,11 +644,12 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  ApiMetaRoute: ApiMetaRoute,
+  ApiFonnteRoute: ApiFonnteRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   BookConfirmationIdRoute: BookConfirmationIdRoute,
 }
 export const routeTree = rootRouteImport

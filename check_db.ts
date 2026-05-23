@@ -14,7 +14,7 @@ async function main() {
   console.log(JSON.stringify(messages, null, 2));
 
   console.log("\n=== PROPERTIES ===");
-  const { data: props } = await supabase.from("properties").select("ai_lab_config, meta_access_token, meta_phone_number_id").limit(1);
+  const { data: props } = await supabase.from("properties").select("ai_lab_config").limit(1);
   console.log(JSON.stringify(props, null, 2));
 }
 main();
