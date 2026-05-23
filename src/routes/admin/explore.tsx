@@ -18,8 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { MediaPicker } from "@/admin/components/media-picker";
-import { getPropertySettings } from "@/admin/modules/settings/settings.functions";
-import { updateExploreConfig, getDistanceBetweenPlaces } from "@/admin/modules/explore/explore.functions";
+import { updateExploreConfig, getDistanceBetweenPlaces, getAdminExploreData } from "@/admin/modules/explore/explore.functions";
 import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
@@ -29,21 +28,21 @@ export const Route = createFileRoute("/admin/explore")({
 });
 
 function AdminExplorePage() {
-  const getFn = useServerFn(getPropertySettings);
+  const getFn = useServerFn(getAdminExploreData);
   const updateFn = useServerFn(updateExploreConfig);
   const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["property-settings"],
+    queryKey: ["admin-explore"],
     queryFn: () => getFn(),
   });
-  useRealtimeInvalidate("admin-explore-stream", ["properties"], [["property-settings"], ["public-site"]]);
+  useRealtimeInvalidate("admin-explore-stream", ["properties"], [["admin-explore"], ["public-site"]]);
 
   const mutation = useMutation({
     mutationFn: (v: { id: string; explore_config: any }) => updateFn({ data: v }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["property-settings"] });
+      qc.invalidateQueries({ queryKey: ["admin-explore"] });
       qc.invalidateQueries({ queryKey: ["public-site"] });
       toast.success("Perubahan berhasil disimpan");
       setEditingItem(null); // Close any open edit mode on save
@@ -70,8 +69,8 @@ function AdminExplorePage() {
   if (isLoading || !config) return <p className="p-6 text-sm text-muted-foreground">Memuat...</p>;
 
   const id = data?.id;
-  const updatedAt = data?.property?.updated_at 
-    ? new Date(data.property.updated_at).toLocaleString("id-ID", {
+  const updatedAt = data?.updated_at 
+    ? new Date(data.updated_at).toLocaleString("id-ID", {
         day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
       }) 
     : "Belum pernah diperbarui";
