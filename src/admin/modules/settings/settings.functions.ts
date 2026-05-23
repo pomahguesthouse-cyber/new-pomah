@@ -171,9 +171,7 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
 /* ------------------------------------------------------------------ */
 
 const INTEGRATION_FIELDS = [
-  "meta_access_token",
-  "meta_phone_number_id",
-  "meta_verify_token",
+  "fonnte_token",
   "google_place_id",
   "google_places_api_key",
   "google_analytics_id",
@@ -209,9 +207,7 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
     const row = (data ?? {}) as Record<string, unknown>;
     return {
       id: (row.id as string | undefined) ?? null,
-      meta_access_token: (row.meta_access_token as string | null) ?? null,
-      meta_phone_number_id: (row.meta_phone_number_id as string | null) ?? null,
-      meta_verify_token: (row.meta_verify_token as string | null) ?? null,
+      fonnte_token: (row.fonnte_token as string | null) ?? null,
       google_place_id: (row.google_place_id as string | null) ?? null,
       google_places_api_key: (row.google_places_api_key as string | null) ?? null,
       google_analytics_id: (row.google_analytics_id as string | null) ?? null,
@@ -234,9 +230,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        meta_access_token: z.string().max(2000).nullable().optional(),
-        meta_phone_number_id: z.string().max(50).nullable().optional(),
-        meta_verify_token: z.string().max(100).nullable().optional(),
+        fonnte_token: z.string().max(100).nullable().optional(),
         google_place_id: z.string().max(300).nullable().optional(),
         google_places_api_key: z.string().max(500).nullable().optional(),
         google_analytics_id: z.string().max(100).nullable().optional(),
@@ -257,6 +251,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
     for (const k of INTEGRATION_FIELDS) {
       if (data[k] !== undefined) patch[k] = data[k];
     }
+
     const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
     if (error) throw error;
     return { ok: true };
