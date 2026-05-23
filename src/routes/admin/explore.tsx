@@ -318,7 +318,28 @@ function AdminExplorePage() {
             </div>
           </Card>
         </div>
-
+        {/* Gemini API Key Section */}
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-emerald-600" />
+            Konfigurasi AI Agent
+          </h2>
+          <Card className="p-4 border-stone-200 shadow-sm">
+            <div className="space-y-1.5 max-w-xl">
+              <label className="text-xs font-semibold text-stone-700">Google Gemini API Key</label>
+              <Input
+                type="password"
+                className="h-9 text-sm"
+                placeholder="AIzaSy..."
+                value={config.gemini_api_key || ""}
+                onChange={(e) => setConfig({ ...config, gemini_api_key: e.target.value })}
+              />
+              <p className="text-[10px] text-stone-500">
+                API Key dari Google AI Studio untuk digunakan fitur Tarik Data via AI. Wajib diisi agar AI bisa memfilter berita.
+              </p>
+            </div>
+          </Card>
+        </div>
         {/* Destinasi Wisata */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
