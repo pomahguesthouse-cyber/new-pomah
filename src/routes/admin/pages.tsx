@@ -357,6 +357,8 @@ function HomepageBuilder() {
         onClose={() => setPagesOpen(false)}
         pages={pages}
         activePageId={activePageId}
+        settingsPageId={null}
+        onSettingsPage={() => {}}
         onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
