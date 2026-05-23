@@ -22,6 +22,19 @@ export const updateExploreConfig = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const getAdminExploreData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("properties")
+      .select("id, explore_config, google_place_id, updated_at")
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  });
+
 export const getDistanceBetweenPlaces = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>

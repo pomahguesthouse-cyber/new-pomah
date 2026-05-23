@@ -47,7 +47,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     heading: "Jelajahi Semarang",
     subheading:
       "Temukan destinasi wisata terkenal, kuliner terbaik, event menarik\ndan informasi seputar Kota Semarang.",
-    bgImageUrl: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=1600",
+    bgImageUrl: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=1600",
   },
   destinations: [
     {
@@ -62,7 +62,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     {
       name: "Kota Lama Semarang",
       desc: "Kawasan cagar budaya dengan bangunan-bangunan tua bernuansa Eropa klasik yang indah.",
-      image: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=600",
+      image: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=600",
       rating: "4.9",
       reviewCount: "96",
       google_place_id: "ChIJO8C9WjBTdy4RI_1QJz1_Cbs",
@@ -71,7 +71,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     {
       name: "Sam Poo Kong",
       desc: "Kelenteng bersejarah tempat persinggahan Laksamana Cheng Ho, dengan nuansa merah yang fotogenik.",
-      image: "https://images.unsplash.com/photo-1616239129525-24dbec2291cd?auto=format&fit=crop&q=80&w=600",
+      image: "https://images.unsplash.com/photo-1528164344705-47542687000d?auto=format&fit=crop&q=80&w=600",
       rating: "4.7",
       reviewCount: "74",
       google_place_id: "ChIJW_Z73Z9Sdy4Rsx8B5Vp_1Wk",
@@ -80,7 +80,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     {
       name: "Masjid Agung Jawa Tengah",
       desc: "Masjid dengan arsitektur modern yang menjadi ikon religi kota Semarang.",
-      image: "https://images.unsplash.com/photo-1585036156261-1e2ac4e25e42?auto=format&fit=crop&q=80&w=600",
+      image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&q=80&w=600",
       rating: "4.8",
       reviewCount: "63",
       google_place_id: "ChIJa8wH40FSdy4RvA60D42eS5g",
@@ -100,7 +100,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     {
       name: "Lumpia Gang Lombok",
       desc: "Lumpia legendaris Semarang dengan isian rebung segar, udang, dan telur.",
-      image: "https://images.unsplash.com/photo-1606525437679-03e62698a1c1?auto=format&fit=crop&q=80&w=400",
+      image: "https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&q=80&w=400",
       category: "Cemilan",
       rating: "4.7",
       reviewCount: "231",
@@ -118,7 +118,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     {
       name: "Nasi Ayam Bu Wido",
       desc: "Nasi liwet khas Semarang disajikan dengan suwiran ayam, telur pindang, dan kuah opor.",
-      image: "https://images.unsplash.com/photo-1615486171434-601f6004df9f?auto=format&fit=crop&q=80&w=400",
+      image: "https://images.unsplash.com/photo-1562967914-6c822e12e200?auto=format&fit=crop&q=80&w=400",
       category: "Makan Malam",
       rating: "4.8",
       reviewCount: "156",
@@ -167,7 +167,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       date: "10 Mei 2026",
       desc: "Kawasan Taman Budaya Raden Saleh kini tampil lebih modern dan siap menjadi pusat kesenian warga Semarang.",
       url: "#",
-      image: "https://images.unsplash.com/photo-1582559937861-125691060eb7?auto=format&fit=crop&q=80&w=400",
+      image: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?auto=format&fit=crop&q=80&w=400",
       label: "BERITA",
       location: "Taman Budaya Raden Saleh",
     },
