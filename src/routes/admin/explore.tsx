@@ -55,7 +55,8 @@ function AdminExplorePage() {
   // State to handle MediaPicker
   const [pickerState, setPickerState] = useState<{
     open: boolean;
-    target: "hero" | { type: "dest" | "culinary" | "event" | "news"; index: number } | null;
+    kind?: "image" | "video" | "any";
+    target: "hero" | "hero-video" | { type: "dest" | "culinary" | "event" | "news"; index: number } | null;
   }>({ open: false, target: null });
 
   // State to handle inline editing
@@ -102,22 +103,27 @@ function AdminExplorePage() {
 
     if (target === "hero") {
       setConfig({ ...config, hero: { ...config.hero, bgImageUrl: url } });
-    } else if (target.type === "dest") {
-      const newDests = [...config.destinations];
-      newDests[target.index].image = url;
-      setConfig({ ...config, destinations: newDests });
-    } else if (target.type === "culinary") {
-      const newCul = [...config.culinary];
-      newCul[target.index].image = url;
-      setConfig({ ...config, culinary: newCul });
-    } else if (target.type === "event") {
-      const newEv = [...config.events];
-      newEv[target.index].image = url;
-      setConfig({ ...config, events: newEv });
-    } else if (target.type === "news") {
-      const newNw = [...config.news];
-      newNw[target.index].image = url;
-      setConfig({ ...config, news: newNw });
+    } else if (target === "hero-video") {
+      setConfig({ ...config, hero: { ...config.hero, videoUrl: url } });
+    } else {
+      const t = target as { type: "dest" | "culinary" | "event" | "news"; index: number };
+      if (t.type === "dest") {
+        const newDests = [...config.destinations];
+        newDests[t.index].image = url;
+        setConfig({ ...config, destinations: newDests });
+      } else if (t.type === "culinary") {
+        const newCul = [...config.culinary];
+        newCul[t.index].image = url;
+        setConfig({ ...config, culinary: newCul });
+      } else if (t.type === "event") {
+        const newEv = [...config.events];
+        newEv[t.index].image = url;
+        setConfig({ ...config, events: newEv });
+      } else if (t.type === "news") {
+        const newNw = [...config.news];
+        newNw[t.index].image = url;
+        setConfig({ ...config, news: newNw });
+      }
     }
   };
 
@@ -128,7 +134,7 @@ function AdminExplorePage() {
       
       <MediaPicker
         open={pickerState.open}
-        kind="image"
+        kind={pickerState.kind || "image"}
         onPick={handlePickMedia}
         onClose={() => setPickerState({ open: false, target: null })}
       />
@@ -216,13 +222,36 @@ function AdminExplorePage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-stone-700">URL Video Banner (Opsional)</label>
-                <Input
-                  className="h-9 text-sm"
-                  placeholder="Tautan video latar belakang (e.g. .mp4)..."
-                  value={config.hero.videoUrl || ""}
-                  onChange={(e) => setConfig({ ...config, hero: { ...config.hero, videoUrl: e.target.value } })}
-                />
+                <label className="text-xs font-semibold text-stone-700">Video Latar Belakang (Opsional)</label>
+                <div className="flex gap-2">
+                  <Input
+                    className="h-9 text-sm bg-stone-50/50"
+                    placeholder="Belum ada video terpilih..."
+                    value={config.hero.videoUrl || ""}
+                    readOnly
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 shrink-0 gap-1.5"
+                    onClick={() => setPickerState({ open: true, kind: "video", target: "hero-video" })}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Pilih Video
+                  </Button>
+                  {config.hero.videoUrl && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 shrink-0 text-red-500 hover:text-red-650 hover:bg-red-50"
+                      onClick={() => setConfig({ ...config, hero: { ...config.hero, videoUrl: "" } })}
+                    >
+                      Hapus
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </Card>
