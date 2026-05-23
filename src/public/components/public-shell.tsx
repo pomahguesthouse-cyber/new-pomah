@@ -53,6 +53,12 @@ export function PublicNav({
             Kamar
           </Link>
           <Link
+            to="/explore"
+            className="text-sm text-stone-600 transition-colors hover:text-stone-900"
+          >
+            Jelajahi Semarang
+          </Link>
+          <Link
             to="/book"
             search={{}}
             className="text-sm text-stone-600 transition-colors hover:text-stone-900"
@@ -97,6 +103,7 @@ export function PublicNav({
           <div className="flex flex-col gap-1 px-6 py-4">
             {[
               { to: "/rooms", label: "Kamar" },
+              { to: "/explore", label: "Jelajahi Semarang" },
               { to: "/book", label: "Fasilitas" },
               { to: "/book", label: "Lokasi" },
             ].map((item) => (
@@ -193,6 +200,7 @@ export function PublicFooter({
               {[
                 { to: "/", label: "Beranda" },
                 { to: "/rooms", label: "Kamar" },
+                { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
               ].map((l) => (
                 <li key={l.label}>
