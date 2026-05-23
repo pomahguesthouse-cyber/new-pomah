@@ -46,10 +46,11 @@ function ExploreSemarang() {
     initialData: loaderData.items,
   });
 
-  const destinations = (items ?? []).filter((i) => i.category === "destination");
-  const culinary = (items ?? []).filter((i) => i.category === "culinary");
-  const events = (items ?? []).filter((i) => i.category === "event");
-  const news = (items ?? []).filter((i) => i.category === "news");
+  const all = (items ?? []) as PublicExploreItem[];
+  const destinations = all.filter((i) => i.category === "destination");
+  const culinary = all.filter((i) => i.category === "culinary");
+  const events = all.filter((i) => i.category === "event");
+  const news = all.filter((i) => i.category === "news");
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
