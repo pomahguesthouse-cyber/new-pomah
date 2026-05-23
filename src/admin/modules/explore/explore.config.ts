@@ -21,12 +21,14 @@ export type ExploreConfig = {
     date: string;
     location: string;
     desc: string;
+    image: string;
   }[];
   news: {
     title: string;
     date: string;
     desc: string;
     url: string;
+    image: string;
   }[];
 };
 
@@ -89,18 +91,21 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       date: "15 Agustus 2026",
       location: "Kawasan Simpang Lima",
       desc: "Pawai budaya tahunan terbesar di Semarang dengan kostum-kostum meriah.",
+      image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400"
     },
     {
       title: "Festival Kota Lama",
       date: "10-12 September 2026",
       location: "Kawasan Kota Lama",
       desc: "Festival seni, budaya, dan kuliner tempo dulu di tengah gemerlap lampu malam.",
+      image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=400"
     },
     {
       title: "Pasar Semawis",
       date: "Setiap Akhir Pekan (Jumat-Minggu)",
       location: "Kawasan Pecinan Semarang",
       desc: "Pusat jajanan kaki lima terpanjang dengan ragam kuliner halal dan non-halal.",
+      image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400"
     },
   ],
   news: [
@@ -109,12 +114,14 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       date: "10 Mei 2026",
       desc: "Kawasan Taman Budaya Raden Saleh kini tampil lebih modern dan siap menjadi pusat kesenian warga Semarang.",
       url: "#",
+      image: "https://images.unsplash.com/photo-1582559937861-125691060eb7?auto=format&fit=crop&q=80&w=400"
     },
     {
       title: "Rute Bus Trans Semarang Baru Resmi Dibuka",
       date: "05 Mei 2026",
       desc: "Pemerintah Kota Semarang membuka koridor baru untuk mempermudah akses pariwisata hingga ke pinggiran kota.",
       url: "#",
+      image: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=400"
     },
   ],
 };
