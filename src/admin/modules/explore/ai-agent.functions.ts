@@ -33,17 +33,44 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
     }
     const parser = new Parser();
     let feedItems: any[] = [];
+    
+    // Fetch from Detik Jateng
     try {
-      const feed = await parser.parseURL("https://www.detik.com/jateng/rss");
-      feedItems = feed.items.slice(0, 20); // Top 20 latest news
+      const feedDetik = await parser.parseURL("https://www.detik.com/jateng/rss");
+      const items = feedDetik.items.slice(0, 15).map(item => ({
+        title: item.title,
+        link: item.link,
+        pubDate: item.pubDate,
+        contentSnippet: item.contentSnippet,
+        source: "Detik"
+      }));
+      feedItems.push(...items);
     } catch (e) {
-      console.error("Gagal menarik RSS Feed:", e);
+      console.error("Gagal menarik RSS Feed Detik:", e);
+    }
+
+    // Fetch from Antara Jateng
+    try {
+      const feedAntara = await parser.parseURL("https://jateng.antaranews.com/rss/terkini.xml");
+      const items = feedAntara.items.slice(0, 15).map(item => ({
+        title: item.title,
+        link: item.link,
+        pubDate: item.pubDate,
+        contentSnippet: item.contentSnippet,
+        source: "Antara"
+      }));
+      feedItems.push(...items);
+    } catch (e) {
+      console.error("Gagal menarik RSS Feed Antara:", e);
+    }
+
+    if (feedItems.length === 0) {
       throw new Error("Gagal menarik sumber berita (RSS).");
     }
 
     // Prepare text for AI
     const rssText = feedItems
-      .map((i, idx) => `[${idx}] Title: ${i.title}\nLink: ${i.link}\nDate: ${i.pubDate}\nDesc: ${i.contentSnippet}\nImage: ${i.enclosure?.url || ""}`)
+      .map((i, idx) => `[${idx}] Source: ${i.source}\nTitle: ${i.title}\nLink: ${i.link}\nDate: ${i.pubDate || ""}\nDesc: ${i.contentSnippet || ""}`)
       .join("\n\n");
 
     // 3. Initialize Google Gemini
@@ -54,14 +81,32 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
 
     // 4. Generate Object with AI
     const prompt = `
-Anda adalah asisten AI untuk website hotel di Semarang.
-Saya punya daftar 20 berita terbaru dari portal berita Jawa Tengah. 
-Tugas Anda adalah:
-1. Cari 3-5 berita positif yang berkaitan dengan pariwisata, gaya hidup, kuliner, event, atau perkembangan kota Semarang.
-2. JANGAN masukkan berita kecelakaan, kriminalitas, atau politik.
-3. Jika tidak ada berita pariwisata/event, silakan ambil berita umum seputar kota Semarang asalkan BUKAN berita negatif/kriminal. Wajib mengembalikan minimal 2 berita!
-4. Ubah formatnya menjadi array berita (news). Jika ada berita tentang event/acara spesifik yang akan datang, masukkan ke array events.
-5. Gunakan bahasa Indonesia yang menarik.
+Anda adalah asisten AI khusus pariwisata untuk website hotel "Pomah Guesthouse" di Semarang.
+Saya memiliki daftar ${feedItems.length} berita terbaru dari portal berita Jawa Tengah.
+
+Tugas Anda adalah memproses berita-berita tersebut untuk mengisi dua bagian website kami:
+
+1. BERITA TERBARU (news) — Wajib mengembalikan 2-4 berita:
+   - Cari berita positif/menarik seputar Kota Semarang (pariwisata, kuliner, event, perkembangan kota, infrastruktur, atau gaya hidup).
+   - JANGAN masukkan berita negatif (kriminalitas, politik praktis, kecelakaan, bencana, dll.).
+   - Jika tidak ada berita khusus Semarang, Anda boleh mengambil berita positif dari daerah sekitarnya di Jawa Tengah (seperti Solo, Magelang, Karimunjawa) yang relevan bagi turis.
+
+2. ACARA MENDATANG (events) — Wajib mengembalikan minimal 3 events:
+   - Cari berita yang mengumumkan acara, konser, festival, perayaan keagamaan (seperti kirab Waisak thudong, festival lampion, pameran seni, pertunjukan tradisonal) yang akan atau sedang berlangsung di Semarang atau Jawa Tengah.
+   - PENTING: Jika tidak ada berita tentang event spesifik di Semarang pada daftar berita, Anda WAJIB memformulasikan rekomendasi kegiatan/event berkala atau aktivitas wisata menarik di Semarang berdasarkan berita kuliner/wisata yang ada, atau landmark populer (seperti Lawang Sewu, Kota Lama, Sam Poo Kong, Pasar Semawis). Contoh:
+     * "Eksplorasi Sejarah Kota Lama" (Lokasi: Kawasan Kota Lama, Semarang, Tanggal: Setiap Akhir Pekan, Kategori: WISATA SEJARAH)
+     * "Wisata Kuliner Malam Pasar Semawis" (Lokasi: Pecinan Semarang (Jalan Gang Warung), Tanggal: Jumat - Minggu Malam, Kategori: KULINER)
+     * "Kirab Budaya Thudong Waisak" (Lokasi: Candi Borobudur / Magelang, Tanggal: Bulan Waisak ini, Kategori: BUDAYA)
+   - Jadikan rekomendasi aktivitas ini sebagai item di array "events" agar bagian event website kami tidak kosong. Setiap event harus memiliki detail lokasi, deskripsi singkat, kategori label (misal: WISATA, KULINER, PAMERAN, BUDAYA), dan perkiraan tanggal pelaksanaan yang realistis.
+
+3. GAMBAR & MEDIA:
+   - Semua gambar ("image") berita atau event harus menggunakan URL gambar yang valid.
+   - Jika berita tidak memiliki URL gambar yang valid atau tidak terdefinisi di RSS, Anda WAJIB menggunakan URL gambar pemandangan/landmark Semarang yang indah dari Unsplash berikut sebagai fallback (pilihlah yang paling cocok dengan konten):
+     * Landmark Kota/Wisata: https://images.unsplash.com/photo-1571731956622-7a72726b909c?auto=format&fit=crop&w=800&q=80
+     * Kuliner: https://images.unsplash.com/photo-1544644181-1484b3fdfc62?auto=format&fit=crop&w=800&q=80
+     * Suasana Kota Lama/Heritage: https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&w=800&q=80
+     * Event/Konser/Budaya: https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=800&q=80
+   - JANGAN mengarang URL gambar fiktif atau menggunakan domain yang tidak valid.
 
 Berikut daftar beritanya:
 ${rssText}
@@ -80,11 +125,11 @@ ${rssText}
         })),
         events: z.array(z.object({
           title: z.string(),
-          date: z.string().describe("Tanggal pelaksanaan acara, format: DD MMM YYYY (misal: 25 Mei 2026)"),
+          date: z.string().describe("Tanggal pelaksanaan acara, format: DD/MM/YYYY atau 'Setiap Akhir Pekan' atau 'Tiap Hari'"),
           location: z.string().describe("Lokasi acara"),
           desc: z.string().describe("Deskripsi singkat acara"),
-          image: z.string().url().describe("URL gambar acara (gunakan gambar berita jika ada)"),
-          label: z.string().describe("Label kategori, misal: KONSER, PAMERAN, dsb."),
+          image: z.string().url().describe("URL gambar acara (gunakan gambar berita atau unsplash fallback)"),
+          label: z.string().describe("Label kategori, misal: KONSER, PAMERAN, WISATA dsb."),
         })),
       }),
       prompt,
