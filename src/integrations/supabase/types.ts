@@ -566,6 +566,7 @@ export type Database = {
           currency: string
           description: string | null
           email: string | null
+          explore_config: Json
           favicon_url: string | null
           fonnte_token: string | null
           google_analytics_id: string | null
@@ -603,6 +604,7 @@ export type Database = {
           currency?: string
           description?: string | null
           email?: string | null
+          explore_config?: Json
           favicon_url?: string | null
           fonnte_token?: string | null
           google_analytics_id?: string | null
@@ -640,6 +642,7 @@ export type Database = {
           currency?: string
           description?: string | null
           email?: string | null
+          explore_config?: Json
           favicon_url?: string | null
           fonnte_token?: string | null
           google_analytics_id?: string | null
