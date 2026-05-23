@@ -262,23 +262,56 @@ function AdminExplorePage() {
                   </div>
                   
                   {isEditing("dest", i) ? (
-                    <Textarea 
-                      className="flex-1 min-h-0 text-[11px] text-stone-500 mt-1 resize-none p-2"
-                      value={dest.desc}
-                      onChange={(e) => {
-                        const newDests = [...config.destinations];
-                        newDests[i].desc = e.target.value;
-                        setConfig({ ...config, destinations: newDests });
-                      }}
-                    />
+                    <div className="space-y-1.5 mt-1.5 flex-1 flex flex-col">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Input 
+                          className="h-6 text-[10px] px-2 py-0"
+                          placeholder="Alamat/Lokasi"
+                          value={dest.address || ""}
+                          onChange={(e) => {
+                            const newDests = [...config.destinations];
+                            newDests[i].address = e.target.value;
+                            setConfig({ ...config, destinations: newDests });
+                          }}
+                        />
+                        <Input 
+                          className="h-6 text-[10px] px-2 py-0"
+                          placeholder="Ulasan (e.g. 128)"
+                          value={dest.reviewCount || ""}
+                          onChange={(e) => {
+                            const newDests = [...config.destinations];
+                            newDests[i].reviewCount = e.target.value;
+                            setConfig({ ...config, destinations: newDests });
+                          }}
+                        />
+                      </div>
+                      <Textarea 
+                        className="h-12 text-[10px] text-stone-500 mt-1 resize-none p-1.5"
+                        placeholder="Deskripsi..."
+                        value={dest.desc}
+                        onChange={(e) => {
+                          const newDests = [...config.destinations];
+                          newDests[i].desc = e.target.value;
+                          setConfig({ ...config, destinations: newDests });
+                        }}
+                      />
+                    </div>
                   ) : (
-                    <p className="flex-1 text-[11px] text-stone-500 mt-1 line-clamp-3 leading-relaxed">
-                      {dest.desc || "Tidak ada deskripsi."}
-                    </p>
+                    <>
+                      {dest.address && (
+                        <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1">
+                          <MapPin className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+                          <span className="truncate">{dest.address}</span>
+                        </p>
+                      )}
+                      <p className="flex-1 text-[11px] text-stone-500 mt-1 line-clamp-2 leading-relaxed">
+                        {dest.desc || "Tidak ada deskripsi."}
+                      </p>
+                    </>
                   )}
                   
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-stone-100">
-                    <div className="flex items-center gap-1.5 text-xs text-stone-600">
+                    <div className="flex items-center gap-1.5 text-xs text-stone-600 font-medium">
                       <span>Rating</span>
                       <span className="text-amber-400">★</span>
                       {isEditing("dest", i) ? (
@@ -292,7 +325,10 @@ function AdminExplorePage() {
                           }}
                         />
                       ) : (
-                        <span className="font-semibold">{dest.rating}</span>
+                        <span className="font-semibold text-stone-900">{dest.rating}</span>
+                      )}
+                      {!isEditing("dest", i) && dest.reviewCount && (
+                        <span className="text-stone-400 font-normal">({dest.reviewCount} ulasan)</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
@@ -349,7 +385,7 @@ function AdminExplorePage() {
           
           <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
             {config.culinary.map((cul, i) => (
-              <Card key={i} className="w-64 shrink-0 border-stone-200 shadow-sm overflow-hidden flex flex-col snap-start relative group">
+              <Card key={i} className="w-64 shrink-0 border-stone-200 shadow-sm overflow-hidden flex flex-col snap-start relative group bg-white">
                 <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6 text-white bg-black/20 rounded-full hover:bg-black/40 z-10">
                   <MoreVertical className="h-3 w-3" />
                 </Button>
@@ -370,9 +406,10 @@ function AdminExplorePage() {
                 
                 <div className="flex-1 flex flex-col p-4 gap-2">
                   {isEditing("culinary", i) ? (
-                    <>
+                    <div className="space-y-2 flex-1 flex flex-col">
                       <Input 
                         className="h-7 text-sm font-bold px-2 py-0"
+                        placeholder="Nama Kuliner"
                         value={cul.name}
                         onChange={(e) => {
                           const newCul = [...config.culinary];
@@ -380,17 +417,53 @@ function AdminExplorePage() {
                           setConfig({ ...config, culinary: newCul });
                         }}
                       />
-                      <Input 
-                        className="h-6 text-[10px] text-stone-500 px-2 py-0"
-                        value={cul.category}
-                        onChange={(e) => {
-                          const newCul = [...config.culinary];
-                          newCul[i].category = e.target.value;
-                          setConfig({ ...config, culinary: newCul });
-                        }}
-                      />
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Input 
+                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          placeholder="Kategori (e.g. Cemilan)"
+                          value={cul.category}
+                          onChange={(e) => {
+                            const newCul = [...config.culinary];
+                            newCul[i].category = e.target.value;
+                            setConfig({ ...config, culinary: newCul });
+                          }}
+                        />
+                        <Input 
+                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          placeholder="Rating (e.g. 4.7)"
+                          value={cul.rating || ""}
+                          onChange={(e) => {
+                            const newCul = [...config.culinary];
+                            newCul[i].rating = e.target.value;
+                            setConfig({ ...config, culinary: newCul });
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Input 
+                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          placeholder="Alamat"
+                          value={cul.address || ""}
+                          onChange={(e) => {
+                            const newCul = [...config.culinary];
+                            newCul[i].address = e.target.value;
+                            setConfig({ ...config, culinary: newCul });
+                          }}
+                        />
+                        <Input 
+                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          placeholder="Ulasan"
+                          value={cul.reviewCount || ""}
+                          onChange={(e) => {
+                            const newCul = [...config.culinary];
+                            newCul[i].reviewCount = e.target.value;
+                            setConfig({ ...config, culinary: newCul });
+                          }}
+                        />
+                      </div>
                       <Textarea 
-                        className="flex-1 text-xs text-stone-600 resize-none p-2"
+                        className="h-14 text-xs text-stone-650 resize-none p-2 mt-1"
+                        placeholder="Deskripsi..."
                         value={cul.desc}
                         onChange={(e) => {
                           const newCul = [...config.culinary];
@@ -398,14 +471,25 @@ function AdminExplorePage() {
                           setConfig({ ...config, culinary: newCul });
                         }}
                       />
-                    </>
+                    </div>
                   ) : (
                     <>
                       <h3 className="text-sm font-bold text-stone-900 truncate">{cul.name}</h3>
-                      <p className="text-[10px] text-stone-500">{cul.category}</p>
-                      <p className="flex-1 text-xs text-stone-600 line-clamp-3 leading-relaxed mt-1">
+                      <p className="text-[10px] text-stone-500 font-semibold">{cul.category}</p>
+                      {cul.address && (
+                        <p className="text-[10px] text-stone-400 flex items-start gap-1">
+                          <MapPin className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+                          <span className="truncate">{cul.address}</span>
+                        </p>
+                      )}
+                      <p className="flex-1 text-xs text-stone-600 line-clamp-2 leading-relaxed mt-1">
                         {cul.desc || "Tidak ada deskripsi."}
                       </p>
+                      <div className="flex items-center gap-1 text-[10px] text-stone-500 mt-2 border-t border-stone-100 pt-1.5 font-medium">
+                        <span className="text-amber-400">★</span>
+                        <span className="font-semibold text-stone-900">{cul.rating || "—"}</span>
+                        {cul.reviewCount && <span>({cul.reviewCount} ulasan)</span>}
+                      </div>
                     </>
                   )}
                 </div>
@@ -479,9 +563,10 @@ function AdminExplorePage() {
                   <div className="flex-1 space-y-1.5 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       {isEditing("event", i) ? (
-                        <>
+                        <div className="flex gap-1.5 w-full">
                           <Input 
-                            className="h-6 text-xs font-bold text-stone-900 px-1 py-0"
+                            className="h-6 flex-1 text-xs font-bold text-stone-900 px-1.5 py-0"
+                            placeholder="Judul Event"
                             value={ev.title}
                             onChange={(e) => {
                               const newEv = [...config.events];
@@ -490,7 +575,17 @@ function AdminExplorePage() {
                             }}
                           />
                           <Input 
-                            className="h-5 w-24 text-[10px] text-stone-500 px-1.5 shrink-0"
+                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
+                            placeholder="Label (e.g. EVENT)"
+                            value={ev.label || ""}
+                            onChange={(e) => {
+                              const newEv = [...config.events];
+                              newEv[i].label = e.target.value;
+                              setConfig({ ...config, events: newEv });
+                            }}
+                          />
+                          <Input 
+                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
                             placeholder="Tanggal"
                             value={ev.date}
                             onChange={(e) => {
@@ -499,10 +594,15 @@ function AdminExplorePage() {
                               setConfig({ ...config, events: newEv });
                             }}
                           />
-                        </>
+                        </div>
                       ) : (
                         <>
-                          <h3 className="text-xs font-bold text-stone-900 truncate">{ev.title}</h3>
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-[8px] font-bold bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded border border-emerald-100 shrink-0">
+                              {ev.label || "EVENT"}
+                            </span>
+                            <h3 className="text-xs font-bold text-stone-900 truncate">{ev.title}</h3>
+                          </div>
                           <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{ev.date}</span>
                         </>
                       )}
@@ -510,7 +610,7 @@ function AdminExplorePage() {
                     
                     {isEditing("event", i) ? (
                       <div className="flex items-center gap-1 text-[10px] text-stone-400 px-1">
-                        <MapPin className="h-3 w-3" />
+                        <MapPin className="h-3 w-3 text-stone-450 shrink-0" />
                         <Input 
                           className="h-5 flex-1 text-[10px] px-1 py-0"
                           placeholder="Lokasi"
@@ -524,7 +624,7 @@ function AdminExplorePage() {
                       </div>
                     ) : (
                       <p className="text-[10px] text-stone-500 flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-stone-400" /> {ev.location}
+                        <MapPin className="h-3 w-3 text-stone-400 shrink-0" /> {ev.location}
                       </p>
                     )}
                     
@@ -610,9 +710,10 @@ function AdminExplorePage() {
                   <div className="flex-1 space-y-1.5 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       {isEditing("news", i) ? (
-                        <>
+                        <div className="flex gap-1.5 w-full">
                           <Input 
-                            className="h-6 text-xs font-bold text-stone-900 px-1 py-0"
+                            className="h-6 flex-1 text-xs font-bold text-stone-900 px-1 py-0"
+                            placeholder="Judul Berita"
                             value={nw.title}
                             onChange={(e) => {
                               const newNw = [...config.news];
@@ -621,7 +722,17 @@ function AdminExplorePage() {
                             }}
                           />
                           <Input 
-                            className="h-5 w-24 text-[10px] text-stone-500 px-1.5 shrink-0"
+                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
+                            placeholder="Label (e.g. BERITA)"
+                            value={nw.label || ""}
+                            onChange={(e) => {
+                              const newNw = [...config.news];
+                              newNw[i].label = e.target.value;
+                              setConfig({ ...config, news: newNw });
+                            }}
+                          />
+                          <Input 
+                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
                             placeholder="Tanggal"
                             value={nw.date}
                             onChange={(e) => {
@@ -630,17 +741,32 @@ function AdminExplorePage() {
                               setConfig({ ...config, news: newNw });
                             }}
                           />
-                        </>
+                        </div>
                       ) : (
                         <>
-                          <h3 className="text-xs font-bold text-stone-900 truncate">{nw.title}</h3>
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-[8px] font-bold bg-purple-50 text-purple-700 px-1 py-0.5 rounded border border-purple-100 shrink-0">
+                              {nw.label || "BERITA"}
+                            </span>
+                            <h3 className="text-xs font-bold text-stone-900 truncate">{nw.title}</h3>
+                          </div>
                           <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{nw.date}</span>
                         </>
                       )}
                     </div>
                     
                     {isEditing("news", i) ? (
-                      <>
+                      <div className="grid grid-cols-2 gap-1.5 mt-1">
+                        <Input 
+                          className="h-5 text-[10px] px-1 py-0"
+                          placeholder="Lokasi"
+                          value={nw.location || ""}
+                          onChange={(e) => {
+                            const newNw = [...config.news];
+                            newNw[i].location = e.target.value;
+                            setConfig({ ...config, news: newNw });
+                          }}
+                        />
                         <Input 
                           className="h-5 text-[10px] px-1 py-0"
                           placeholder="URL Artikel"
@@ -651,17 +777,26 @@ function AdminExplorePage() {
                             setConfig({ ...config, news: newNw });
                           }}
                         />
-                        <Textarea 
-                          className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
-                          placeholder="Deskripsi..."
-                          value={nw.desc}
-                          onChange={(e) => {
-                            const newNw = [...config.news];
-                            newNw[i].desc = e.target.value;
-                            setConfig({ ...config, news: newNw });
-                          }}
-                        />
-                      </>
+                      </div>
+                    ) : (
+                      nw.location && (
+                        <p className="text-[10px] text-stone-500 flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-stone-400 shrink-0" /> {nw.location}
+                        </p>
+                      )
+                    )}
+                    
+                    {isEditing("news", i) ? (
+                      <Textarea 
+                        className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
+                        placeholder="Deskripsi..."
+                        value={nw.desc}
+                        onChange={(e) => {
+                          const newNw = [...config.news];
+                          newNw[i].desc = e.target.value;
+                          setConfig({ ...config, news: newNw });
+                        }}
+                      />
                     ) : (
                       <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
                         {nw.desc || "Tidak ada deskripsi."}

@@ -1,9 +1,33 @@
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { MapPin, Calendar, Coffee, Newspaper, ArrowRight, Star } from "lucide-react";
+import {
+  MapPin,
+  Calendar,
+  Search,
+  Star,
+  ArrowRight,
+  Bookmark,
+  ChevronRight,
+  ChevronLeft,
+  Utensils,
+  TreePine,
+  ShoppingBag,
+  Drama,
+  Bus,
+  LayoutGrid,
+  Droplets,
+  Wind,
+  Eye,
+  CloudSun,
+  BookOpen,
+  RefreshCw,
+  ThumbsUp,
+  Navigation,
+} from "lucide-react";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 
 export const Route = createFileRoute("/explore")({
@@ -23,6 +47,88 @@ export const Route = createFileRoute("/explore")({
   component: ExploreSemarang,
 });
 
+/* ── Helpers ────────────────────────────────────────────────────────── */
+
+const DAYS_ID = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const MONTHS_ID = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+function useCurrentTime() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
+const CATEGORIES = [
+  { key: "all", label: "Semua", icon: LayoutGrid },
+  { key: "dest", label: "Destinasi", icon: MapPin },
+  { key: "culinary", label: "Kuliner", icon: Utensils },
+  { key: "event", label: "Event", icon: Calendar },
+  { key: "alam", label: "Alam", icon: TreePine },
+  { key: "belanja", label: "Belanja", icon: ShoppingBag },
+  { key: "budaya", label: "Budaya", icon: Drama },
+  { key: "transport", label: "Transportasi", icon: Bus },
+] as const;
+
+const POPULAR_TAGS = ["Lawang Sewu", "Kota Lama", "Kuliner", "Event", "Wisata Alam"];
+
+const getLabelStyle = (label: string) => {
+  const l = label.toUpperCase();
+  if (l === "EVENT") return "bg-emerald-50 text-emerald-700 border border-emerald-100";
+  if (l === "BERITA") return "bg-purple-50 text-purple-700 border border-purple-100";
+  if (l === "TRANSPORTASI" || l === "TRANSPORT") return "bg-blue-50 text-blue-700 border border-blue-100";
+  return "bg-stone-50 text-stone-600 border border-stone-100";
+};
+
+/* ── Horizontal scroll hook ─────────────────────────────────────────── */
+
+function useHorizontalScroll() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [showLeft, setShowLeft] = useState(false);
+  const [showRight, setShowRight] = useState(true);
+
+  const checkScroll = () => {
+    if (ref.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = ref.current;
+      setShowLeft(scrollLeft > 5);
+      setShowRight(scrollLeft < scrollWidth - clientWidth - 5);
+    }
+  };
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      el.addEventListener("scroll", checkScroll);
+      // Run initially
+      setTimeout(checkScroll, 100);
+    }
+    return () => el?.removeEventListener("scroll", checkScroll);
+  }, []);
+
+  const scroll = (dir: "left" | "right") => {
+    ref.current?.scrollBy({ left: dir === "left" ? -320 : 320, behavior: "smooth" });
+  };
+
+  return { ref, scroll, showLeft, showRight };
+}
+
+/* ── Main Component ─────────────────────────────────────────────────── */
+
 function ExploreSemarang() {
   const loaderData = Route.useLoaderData();
   const fn = useServerFn(getPublicSiteData);
@@ -33,145 +139,720 @@ function ExploreSemarang() {
   });
 
   const config = mergeExploreConfig(data?.property?.explore_config);
+  const now = useCurrentTime();
+  const [activeTab, setActiveTab] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const destScroll = useHorizontalScroll();
+  const culScroll = useHorizontalScroll();
+
+  // Combine events + news for the sidebar
+  const sidebarItems = [
+    ...config.events.map((ev) => ({
+      type: "event" as const,
+      title: ev.title,
+      date: ev.date,
+      location: ev.location,
+      desc: ev.desc,
+      image: ev.image,
+      label: ev.label || "EVENT",
+    })),
+    ...config.news.map((nw) => ({
+      type: "news" as const,
+      title: nw.title,
+      date: nw.date,
+      location: nw.location || "",
+      desc: nw.desc,
+      image: nw.image,
+      label: nw.label || "BERITA",
+    })),
+  ];
+
+  // Filters for keyword-based tabs (Alam, Belanja, Budaya, Transportasi)
+  const getKeywordsForTab = (tab: string) => {
+    if (tab === "alam") return ["alam", "pantai", "gunung", "wisata alam", "outdoor", "park", "taman", "air", "sungai", "curug", "laut"];
+    if (tab === "belanja") return ["belanja", "mall", "pasar", "oleh-oleh", "shopping", "toko", "suvenir", "pusat"];
+    if (tab === "budaya") return ["budaya", "sejarah", "museum", "candi", "kelenteng", "masjid", "gereja", "culture", "monumen", "tua", "heritage"];
+    if (tab === "transport") return ["transport", "bus", "kereta", "stasiun", "bandara", "rute", "jalan", "trans", "akses"];
+    return [];
+  };
+
+  const itemMatchesTabKeywords = (name: string, desc: string, tab: string) => {
+    const kws = getKeywordsForTab(tab);
+    if (kws.length === 0) return true;
+    const txt = `${name} ${desc}`.toLowerCase();
+    return kws.some((kw) => txt.includes(kw));
+  };
+
+  // Filtered items based on tab and search query
+  const filteredDestinations = config.destinations.filter((d) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.desc.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesTab = activeTab === "all" || activeTab === "dest" || itemMatchesTabKeywords(d.name, d.desc, activeTab);
+    return matchesSearch && matchesTab;
+  });
+
+  const filteredCulinary = config.culinary.filter((c) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.category.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesTab = activeTab === "all" || activeTab === "culinary" || itemMatchesTabKeywords(c.name, c.desc, activeTab);
+    return matchesSearch && matchesTab;
+  });
+
+  const filteredEvents = config.events.filter((e) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      e.location.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesTab = activeTab === "all" || activeTab === "event" || itemMatchesTabKeywords(e.title, e.desc, activeTab);
+    return matchesSearch && matchesTab;
+  });
+
+  const filteredSidebarItems = sidebarItems.filter((item) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.location.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesTab = activeTab === "all" || (item.type === "event" && activeTab === "event") || itemMatchesTabKeywords(item.title, item.desc, activeTab);
+    return matchesSearch && matchesTab;
+  });
+
+  const isBrowsingAll = activeTab === "all";
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
+    <div className="min-h-screen bg-stone-50 text-stone-900" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       <PublicNav property={data?.property} />
 
-      {/* Hero Section */}
-      <header className="relative bg-teal-800 py-24 text-white overflow-hidden">
-        <div 
-          className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay"
+      {/* ═══════════════ HERO SECTION ═══════════════ */}
+      <header className="relative overflow-hidden h-[380px] md:h-[420px] flex items-center">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/20 to-transparent" />
-        <div className="relative mx-auto max-w-6xl px-6 text-center">
-          <span className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-teal-300">
-            <span className="h-px w-6 bg-teal-300" />
-            City Guide
-            <span className="h-px w-6 bg-teal-300" />
-          </span>
-          <h1 className="mt-5 font-serif text-5xl font-bold tracking-tight md:text-6xl drop-shadow-md">
-            {config.hero.heading}
-          </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-teal-50 drop-shadow-sm leading-relaxed whitespace-pre-wrap">
-            {config.hero.subheading}
-          </p>
+        <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-900/60 to-stone-950/45" />
+
+        <div className="relative mx-auto max-w-7xl px-6 w-full py-10">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-10">
+            {/* Left — Title + Search */}
+            <div className="flex-1 max-w-2xl">
+              <span className="inline-block text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-400 mb-3 bg-emerald-950/30 px-2.5 py-1 rounded-md border border-emerald-900/20">
+                City Guide
+              </span>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight tracking-tight">
+                {config.hero.heading}
+              </h1>
+              <p className="mt-3 text-stone-300 text-sm md:text-base leading-relaxed max-w-lg">
+                Temukan destinasi wisata, kuliner, event menarik dan informasi seputar Kota Semarang.
+              </p>
+
+              {/* Search bar */}
+              <div className="mt-8 flex items-center bg-white rounded-xl shadow-lg border border-stone-200/20 max-w-lg p-1">
+                <input
+                  type="text"
+                  placeholder="Cari destinasi, kuliner, atau event..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 px-4 py-3 text-sm text-stone-850 placeholder:text-stone-400 outline-none bg-transparent"
+                />
+                <button className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-lg transition-colors shadow-sm shadow-emerald-500/10">
+                  <Search className="h-4.5 w-4.5" />
+                </button>
+              </div>
+
+              {/* Popular tags */}
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-stone-300 uppercase tracking-wider">Populer:</span>
+                {POPULAR_TAGS.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => setSearchQuery(tag)}
+                    className="text-[11px] text-stone-100 bg-black/35 hover:bg-black/50 px-3.5 py-1.5 rounded-full transition-colors border border-white/5"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Right — Weather Widget */}
+            <div className="shrink-0 bg-black/35 backdrop-blur-md border border-white/10 rounded-xl p-5 text-white w-full sm:w-[320px] lg:w-[300px] shadow-xl">
+              <div className="text-right text-[11px] text-stone-300 font-medium">
+                {DAYS_ID[now.getDay()]}, {now.getDate()} {MONTHS_ID[now.getMonth()]} {now.getFullYear()}
+              </div>
+              <div className="text-right mt-1">
+                <span className="text-3xl font-bold tracking-tight tabular-nums">
+                  {String(now.getHours()).padStart(2, "0")}:{String(now.getMinutes()).padStart(2, "0")}
+                </span>
+                <span className="text-[10px] text-stone-300 ml-1">WIB</span>
+              </div>
+
+              <div className="mt-4 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs text-stone-200">
+                    <MapPin className="h-3 w-3 text-emerald-400" /> Semarang
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-0.5">Jawa Tengah, Indonesia</p>
+                </div>
+                <div className="text-right flex items-center gap-2">
+                  <div>
+                    <div className="text-2xl font-bold">31°C</div>
+                    <p className="text-[10px] text-stone-300">Cerah Berawan</p>
+                  </div>
+                  <CloudSun className="h-9 w-9 text-amber-300 ml-1.5" />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3.5 border-t border-white/10 grid grid-cols-3 gap-2 text-[10px] text-stone-300">
+                <div className="flex flex-col items-center text-center">
+                  <Droplets className="h-4 w-4 text-emerald-400 mb-1" />
+                  <span className="font-semibold text-white">62%</span>
+                  <span className="text-[9px] text-stone-400">Kelembapan</span>
+                </div>
+                <div className="flex flex-col items-center text-center">
+                  <Wind className="h-4 w-4 text-emerald-400 mb-1" />
+                  <span className="font-semibold text-white">12 km/jam</span>
+                  <span className="text-[9px] text-stone-400">Angin</span>
+                </div>
+                <div className="flex flex-col items-center text-center">
+                  <Eye className="h-4 w-4 text-emerald-400 mb-1" />
+                  <span className="font-semibold text-white">10 km</span>
+                  <span className="text-[9px] text-stone-400">Jarak Pandang</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-16 space-y-24">
-        
-        {/* 1. Destinasi Wisata */}
-        <section>
-          <div className="mb-10 flex items-end justify-between">
-            <div>
-              <h2 className="flex items-center gap-2 font-serif text-3xl font-bold text-stone-900">
-                <MapPin className="h-7 w-7 text-teal-700" />
-                Destinasi Wisata Terkenal
-              </h2>
-              <p className="mt-2 text-stone-500">Ikon pariwisata yang wajib Anda kunjungi di Semarang.</p>
-            </div>
+      {/* ═══════════════ CATEGORY TABS ═══════════════ */}
+      <div className="bg-white border-b border-stone-200/80 sticky top-[65px] z-30 shadow-sm">
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="flex items-center gap-2.5 overflow-x-auto py-4 scrollbar-hide md:justify-center">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const active = activeTab === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => {
+                    setActiveTab(cat.key);
+                    setSearchQuery(""); // Clear search when switching tabs
+                  }}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap border ${
+                    active
+                      ? "bg-emerald-600 border-emerald-600 text-white shadow-sm shadow-emerald-600/10"
+                      : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50 hover:text-stone-850"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {cat.label}
+                </button>
+              );
+            })}
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {config.destinations.map((dest, i) => (
-              <div key={i} className="group overflow-hidden rounded-2xl bg-white shadow-sm border border-stone-200 transition hover:shadow-xl">
-                <div className="relative h-48 overflow-hidden">
-                  <img src={dest.image} alt={dest.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
-                  <div className="absolute top-3 right-3 flex items-center gap-1 rounded-full bg-white/90 backdrop-blur px-2.5 py-1 text-xs font-bold text-stone-800 shadow-sm">
-                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                    {dest.rating}
-                  </div>
-                </div>
-                <div className="p-6">
-                  <h3 className="font-serif text-xl font-bold text-stone-900">{dest.name}</h3>
-                  <p className="mt-2 text-sm text-stone-600 leading-relaxed">{dest.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+        </div>
+      </div>
 
-        {/* 2. Kuliner Terbaik */}
-        <section>
-          <div className="mb-10 text-center">
-            <h2 className="flex items-center justify-center gap-2 font-serif text-3xl font-bold text-stone-900">
-              <Coffee className="h-7 w-7 text-amber-600" />
-              Kuliner Terbaik
-            </h2>
-            <p className="mx-auto mt-2 max-w-lg text-stone-500">Manjakan lidah Anda dengan cita rasa lokal yang menggugah selera.</p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {config.culinary.map((cul, i) => (
-              <div key={i} className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border border-stone-200 transition hover:-translate-y-1 hover:shadow-lg">
-                <div className="h-40 overflow-hidden bg-stone-100">
-                  <img src={cul.image} alt={cul.name} className="h-full w-full object-cover" />
-                </div>
-                <div className="flex flex-1 flex-col p-5">
-                  <span className="mb-2 w-max rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-                    {cul.category}
-                  </span>
-                  <h3 className="font-serif text-lg font-bold text-stone-900">{cul.name}</h3>
-                  <p className="mt-2 text-sm text-stone-600 flex-1">{cul.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* 3. Event & 4. Berita */}
-        <div className="grid gap-12 lg:grid-cols-3">
+      {/* ═══════════════ MAIN CONTENT ═══════════════ */}
+      <main className="mx-auto max-w-7xl px-6 py-10">
+        <div className="flex flex-col lg:flex-row gap-8">
           
-          {/* Event */}
-          <section className="lg:col-span-2">
-            <h2 className="flex items-center gap-2 font-serif text-2xl font-bold text-stone-900 mb-6">
-              <Calendar className="h-6 w-6 text-teal-700" />
-              Event Mendatang
-            </h2>
-            <div className="space-y-4">
-              {config.events.map((ev, i) => (
-                <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl bg-white p-5 shadow-sm border border-stone-200 hover:border-teal-300 transition">
-                  <div className="shrink-0 sm:w-32">
-                    <p className="text-sm font-bold text-teal-700">{ev.date}</p>
-                    <p className="text-xs text-stone-400 mt-0.5 flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> {ev.location}
-                    </p>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-serif text-lg font-bold text-stone-900">{ev.title}</h3>
-                    <p className="mt-1 text-sm text-stone-600">{ev.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+          {/* ── LEFT COLUMN (feed items or grid views) ── */}
+          <div className="flex-1 min-w-0 space-y-10">
+            
+            {/* If browsing dashboard view ("Semua") */}
+            {isBrowsingAll && (
+              <>
+                {/* Destinasi Wisata */}
+                {filteredDestinations.length > 0 && (
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="flex items-center gap-2 text-base font-bold text-stone-900 uppercase tracking-wide">
+                        <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                          <MapPin className="h-4.5 w-4.5" />
+                        </span>
+                        Destinasi Wisata
+                      </h2>
+                      <button 
+                        onClick={() => setActiveTab("dest")}
+                        className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition"
+                      >
+                        Lihat Semua <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
 
-          {/* Berita */}
-          <section>
-            <h2 className="flex items-center gap-2 font-serif text-2xl font-bold text-stone-900 mb-6">
-              <Newspaper className="h-6 w-6 text-stone-700" />
-              Berita Lainnya
-            </h2>
-            <div className="space-y-6 rounded-xl bg-stone-100 p-6 border border-stone-200/60">
-              {config.news.map((nw, i) => (
-                <a href={nw.url} key={i} className="group cursor-pointer block">
-                  <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-widest">{nw.date}</p>
-                  <h3 className="mt-1 font-serif text-base font-bold text-stone-900 group-hover:text-teal-700 transition">
-                    {nw.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-stone-600 line-clamp-3">{nw.desc}</p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-teal-700 group-hover:gap-2 transition-all">
-                    Baca selengkapnya <ArrowRight className="h-3 w-3" />
+                    <div className="relative group/scroll">
+                      <div
+                        ref={destScroll.ref}
+                        className="flex gap-4 overflow-x-auto pb-4 scroll-smooth scrollbar-hide snap-x"
+                      >
+                        {filteredDestinations.map((dest, i) => (
+                          <div
+                            key={i}
+                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer"
+                          >
+                            <div className="relative h-[135px] overflow-hidden bg-stone-100">
+                              {dest.image ? (
+                                <img
+                                  src={dest.image}
+                                  alt={dest.name}
+                                  className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-stone-300 text-xs">
+                                  No Image
+                                </div>
+                              )}
+                              <button className="absolute top-2.5 right-2.5 bg-white border border-stone-100 p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 hover:shadow-sm transition">
+                                <Bookmark className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <div className="p-4">
+                              <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
+                                {dest.name}
+                              </h3>
+                              <p className="mt-1.5 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
+                                {dest.desc}
+                              </p>
+                              <div className="mt-3.5 pt-2.5 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                                <span className="text-stone-900 font-bold">{dest.rating}</span>
+                                {dest.reviewCount && (
+                                  <span className="text-stone-400 font-normal">({dest.reviewCount} ulasan)</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Scroll arrows */}
+                      {destScroll.showLeft && (
+                        <button
+                          onClick={() => destScroll.scroll("left")}
+                          className="absolute left-0 top-[67px] -translate-y-1/2 -translate-x-3.5 bg-white border border-stone-200 rounded-full p-2 shadow-md text-stone-600 hover:text-stone-950 transition z-10"
+                        >
+                          <ChevronLeft className="h-4.5 w-4.5" />
+                        </button>
+                      )}
+                      {destScroll.showRight && (
+                        <button
+                          onClick={() => destScroll.scroll("right")}
+                          className="absolute right-0 top-[67px] -translate-y-1/2 translate-x-3.5 bg-white border border-stone-200 rounded-full p-2 shadow-md text-stone-600 hover:text-stone-950 transition z-10"
+                        >
+                          <ChevronRight className="h-4.5 w-4.5" />
+                        </button>
+                      )}
+                    </div>
+                  </section>
+                )}
+
+                {/* Kuliner Terbaik */}
+                {filteredCulinary.length > 0 && (
+                  <section className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="flex items-center gap-2 text-base font-bold text-stone-900 uppercase tracking-wide">
+                        <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                          <Utensils className="h-4.5 w-4.5" />
+                        </span>
+                        Kuliner Terbaik
+                      </h2>
+                      <button 
+                        onClick={() => setActiveTab("culinary")}
+                        className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition"
+                      >
+                        Lihat Semua <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="relative group/scroll">
+                      <div
+                        ref={culScroll.ref}
+                        className="flex gap-4 overflow-x-auto pb-4 scroll-smooth scrollbar-hide snap-x"
+                      >
+                        {filteredCulinary.map((cul, i) => (
+                          <div
+                            key={i}
+                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer"
+                          >
+                            <div className="relative h-[135px] overflow-hidden bg-stone-100">
+                              {cul.image ? (
+                                <img
+                                  src={cul.image}
+                                  alt={cul.name}
+                                  className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                                />
+                              ) : (
+                                <div className="h-full w-full flex items-center justify-center text-stone-300 text-xs">
+                                  No Image
+                                </div>
+                              )}
+                              <button className="absolute top-2.5 right-2.5 bg-white border border-stone-100 p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 hover:shadow-sm transition">
+                                <Bookmark className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            <div className="p-4">
+                              <div className="flex items-center justify-between gap-1">
+                                <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
+                                  {cul.name}
+                                </h3>
+                              </div>
+                              <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">{cul.category}</p>
+                              {cul.address && (
+                                <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1 leading-snug">
+                                  <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
+                                  <span className="truncate">{cul.address}</span>
+                                </p>
+                              )}
+                              <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-2">
+                                {cul.desc}
+                              </p>
+                              <div className="mt-3.5 pt-2.5 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                                <span className="text-stone-900 font-bold">{cul.rating || "—"}</span>
+                                {cul.reviewCount && (
+                                  <span className="text-stone-400 font-normal">({cul.reviewCount} ulasan)</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Scroll arrows */}
+                      {culScroll.showLeft && (
+                        <button
+                          onClick={() => culScroll.scroll("left")}
+                          className="absolute left-0 top-[67px] -translate-y-1/2 -translate-x-3.5 bg-white border border-stone-200 rounded-full p-2 shadow-md text-stone-600 hover:text-stone-950 transition z-10"
+                        >
+                          <ChevronLeft className="h-4.5 w-4.5" />
+                        </button>
+                      )}
+                      {culScroll.showRight && (
+                        <button
+                          onClick={() => culScroll.scroll("right")}
+                          className="absolute right-0 top-[67px] -translate-y-1/2 translate-x-3.5 bg-white border border-stone-200 rounded-full p-2 shadow-md text-stone-600 hover:text-stone-950 transition z-10"
+                        >
+                          <ChevronRight className="h-4.5 w-4.5" />
+                        </button>
+                      )}
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+
+            {/* If a specific category tab is active (shows grid layout) */}
+            {!isBrowsingAll && (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-200/80">
+                  <h2 className="text-lg font-extrabold text-stone-900 flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
+                      {activeTab === "dest" ? <MapPin className="h-5 w-5" /> : activeTab === "culinary" ? <Utensils className="h-5 w-5" /> : activeTab === "event" ? <Calendar className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+                    </span>
+                    {CATEGORIES.find((c) => c.key === activeTab)?.label || "City Guide"}
+                  </h2>
+                  <span className="text-xs font-semibold text-stone-500">
+                    {filteredDestinations.length + filteredCulinary.length + (activeTab === "event" ? filteredEvents.length : 0)} items ditemukan
                   </span>
-                </a>
-              ))}
-            </div>
-          </section>
+                </div>
+
+                {/* Grid container */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {/* Destinations Grid */}
+                  {(activeTab === "dest" || activeTab === "alam" || activeTab === "belanja" || activeTab === "budaya" || activeTab === "transport") &&
+                    filteredDestinations.map((dest, i) => (
+                      <div
+                        key={`dest-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                      >
+                        <div className="relative h-[150px] overflow-hidden bg-stone-100">
+                          {dest.image ? (
+                            <img
+                              src={dest.image}
+                              alt={dest.name}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-stone-300 text-xs">
+                              No Image
+                            </div>
+                          )}
+                          <button className="absolute top-2.5 right-2.5 bg-white border border-stone-100 p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 transition">
+                            <Bookmark className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
+                              {dest.name}
+                            </h3>
+                            <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
+                              {dest.desc}
+                            </p>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                            <span className="text-stone-900 font-bold">{dest.rating}</span>
+                            {dest.reviewCount && (
+                              <span className="text-stone-400 font-normal">({dest.reviewCount} ulasan)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Culinary Grid */}
+                  {(activeTab === "culinary" || activeTab === "alam" || activeTab === "belanja" || activeTab === "budaya" || activeTab === "transport") &&
+                    filteredCulinary.map((cul, i) => (
+                      <div
+                        key={`cul-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                      >
+                        <div className="relative h-[150px] overflow-hidden bg-stone-100">
+                          {cul.image ? (
+                            <img
+                              src={cul.image}
+                              alt={cul.name}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-stone-300 text-xs">
+                              No Image
+                            </div>
+                          )}
+                          <button className="absolute top-2.5 right-2.5 bg-white border border-stone-100 p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 transition">
+                            <Bookmark className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
+                              {cul.name}
+                            </h3>
+                            <p className="text-[10px] font-semibold text-emerald-600 mt-0.5">{cul.category}</p>
+                            {cul.address && (
+                              <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1">
+                                <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
+                                <span className="truncate">{cul.address}</span>
+                              </p>
+                            )}
+                            <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
+                              {cul.desc}
+                            </p>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                            <span className="text-stone-900 font-bold">{cul.rating || "—"}</span>
+                            {cul.reviewCount && (
+                              <span className="text-stone-400 font-normal">({cul.reviewCount} ulasan)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                  {/* Event Grid (only if activeTab === "event") */}
+                  {activeTab === "event" &&
+                    filteredEvents.map((ev, i) => (
+                      <div
+                        key={`ev-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                      >
+                        <div className="relative h-[150px] overflow-hidden bg-stone-100">
+                          {ev.image ? (
+                            <img
+                              src={ev.image}
+                              alt={ev.title}
+                              className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex items-center justify-center text-stone-300 text-xs">
+                              No Image
+                            </div>
+                          )}
+                          <span className="absolute top-2.5 left-2.5 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm">
+                            {ev.label || "EVENT"}
+                          </span>
+                          <button className="absolute top-2.5 right-2.5 bg-white border border-stone-100 p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 transition">
+                            <Bookmark className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="p-4 flex-1 flex flex-col justify-between">
+                          <div>
+                            <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
+                              {ev.title}
+                            </h3>
+                            <div className="mt-2 space-y-0.5 text-[10px] text-stone-400 font-medium">
+                              <p className="flex items-center gap-1">
+                                <Calendar className="h-3.5 w-3.5 text-stone-400" /> {ev.date}
+                              </p>
+                              {ev.location && (
+                                <p className="flex items-center gap-1">
+                                  <MapPin className="h-3.5 w-3.5 text-stone-400" /> {ev.location}
+                                </p>
+                              )}
+                            </div>
+                            <p className="mt-2.5 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
+                              {ev.desc}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {filteredDestinations.length === 0 && filteredCulinary.length === 0 && (activeTab !== "event" || filteredEvents.length === 0) && (
+                  <div className="py-16 text-center border border-dashed border-stone-200 rounded-xl bg-white">
+                    <p className="text-sm font-semibold text-stone-400">Tidak ada konten ditemukan untuk kategori ini.</p>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+
+          {/* ── RIGHT SIDEBAR (News & Events) ── */}
+          {filteredSidebarItems.length > 0 && (
+            <aside className="w-full lg:w-[350px] shrink-0 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-stone-900 uppercase tracking-wide">
+                  News &amp; Event Terbaru
+                </h2>
+                {isBrowsingAll && (
+                  <button 
+                    onClick={() => setActiveTab("event")}
+                    className="flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition"
+                  >
+                    Lihat Semua <ChevronRight className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-4.5">
+                {filteredSidebarItems.slice(0, 4).map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex gap-4 bg-white rounded-xl border border-stone-200/60 p-3.5 hover:shadow-md transition-shadow duration-300 cursor-pointer group/item relative"
+                  >
+                    {/* Image */}
+                    <div className="w-22 h-[92px] shrink-0 rounded-lg overflow-hidden bg-stone-100">
+                      {item.image ? (
+                        <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-103" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-stone-300 text-[10px]">
+                          No Img
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md ${getLabelStyle(
+                            item.label
+                          )}`}
+                        >
+                          {item.label}
+                        </span>
+                        <button className="text-stone-300 hover:text-emerald-600 transition shrink-0">
+                          <Bookmark className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      <h3 className="mt-2 text-xs font-bold text-stone-900 leading-snug line-clamp-2 group-hover/item:text-emerald-700 transition-colors">
+                        {item.title}
+                      </h3>
+
+                      <div className="mt-1.5 space-y-0.5 text-[10px] text-stone-400 font-medium">
+                        <p className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-stone-400" /> {item.date}
+                        </p>
+                        {item.location && (
+                          <p className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3 text-stone-400" /> {item.location}
+                          </p>
+                        )}
+                      </div>
+
+                      <p className="mt-2 text-[10px] text-stone-500 line-clamp-2 leading-relaxed">
+                        {item.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          )}
 
         </div>
       </main>
 
+      {/* ═══════════════ BOTTOM INFO BAR ═══════════════ */}
+      <div className="border-t border-stone-200/80 bg-white">
+        <div className="mx-auto max-w-7xl px-6 py-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              {
+                icon: BookOpen,
+                title: "Panduan Lengkap",
+                desc: "Informasi lengkap seputar wisata, kuliner, dan event di Semarang.",
+              },
+              {
+                icon: RefreshCw,
+                title: "Update Terbaru",
+                desc: "Konten selalu diperbarui agar Anda tidak ketinggalan informasi terbaru.",
+              },
+              {
+                icon: ThumbsUp,
+                title: "Rekomendasi Terbaik",
+                desc: "Pilihan destinasi dan kuliner terbaik berdasarkan ulasan pengunjung.",
+              },
+              {
+                icon: Navigation,
+                title: "Mudah Dijangkau",
+                desc: "Temukan lokasi dengan akses mudah dan transportasi terdekat.",
+              },
+            ].map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={i}
+                  className="flex items-start gap-4 rounded-xl border border-stone-200/60 p-5 hover:border-emerald-200 hover:shadow-sm transition-all duration-300"
+                >
+                  <div className="shrink-0 p-3 rounded-lg bg-emerald-50 text-emerald-600">
+                    <Icon className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wide">{item.title}</h3>
+                    <p className="mt-1.5 text-[11px] text-stone-500 leading-relaxed">{item.desc}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       <PublicFooter property={data?.property} />
+
+      {/* ─── Scrollbar-hide utility ─── */}
+      <style>{`
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+      `}</style>
     </div>
   );
 }
