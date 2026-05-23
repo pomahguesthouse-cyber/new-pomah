@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { getPublicSiteData, getPublicExploreItems } from "@/public/functions/public.functions";
+import { getPublicSiteData, getPublicExploreItems, type PublicExploreItem } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { MapPin, Calendar, Coffee, Newspaper, ArrowRight, Star } from "lucide-react";
 
