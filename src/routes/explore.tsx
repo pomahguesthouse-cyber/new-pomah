@@ -235,7 +235,7 @@ function ExploreSemarang() {
       <PublicNav property={data?.property} transparent={true} />
 
       {/* ═══════════════ HERO SECTION ═══════════════ */}
-      <header className="relative overflow-hidden h-[440px] md:h-[485px] flex items-center">
+      <header className="relative overflow-hidden min-h-[580px] md:h-[485px] flex items-stretch md:items-center">
         {/* Background image or video */}
         {config.hero.videoUrl ? (
           <video
@@ -254,7 +254,7 @@ function ExploreSemarang() {
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-900/60 to-stone-950/45" />
 
-        <div className="relative mx-auto max-w-7xl px-6 w-full pt-24 pb-8">
+        <div className="relative mx-auto max-w-7xl px-6 w-full pt-28 pb-8 md:pt-24">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-10">
             {/* Left — Title + Search */}
             <div className="flex-1 max-w-2xl">
@@ -348,7 +348,7 @@ function ExploreSemarang() {
       </header>
 
       {/* ═══════════════ CATEGORY TABS ═══════════════ */}
-      <div className="bg-white border-b border-stone-200/80 sticky top-[65px] z-30 shadow-sm">
+      <div className="bg-white border-b border-stone-200/80 sticky top-0 z-30 shadow-sm">
         <div className="mx-auto max-w-7xl px-6">
           <div className="flex items-center gap-2.5 overflow-x-auto py-4 scrollbar-hide md:justify-center">
             {CATEGORIES.map((cat) => {
