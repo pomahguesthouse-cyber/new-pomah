@@ -3,6 +3,7 @@ export type ExploreConfig = {
     heading: string;
     subheading: string;
     bgImageUrl: string;
+    videoUrl?: string;
   };
   destinations: {
     name: string;
@@ -48,6 +49,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
     subheading:
       "Temukan destinasi wisata terkenal, kuliner terbaik, event menarik\ndan informasi seputar Kota Semarang.",
     bgImageUrl: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=1600",
+    videoUrl: "https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-a-harbor-city-at-sunset-41484-large.mp4",
   },
   destinations: [
     {
@@ -186,7 +188,11 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
 export function mergeExploreConfig(data: any): ExploreConfig {
   if (!data || typeof data !== "object") return DEFAULT_EXPLORE_CONFIG;
   return {
-    hero: { ...DEFAULT_EXPLORE_CONFIG.hero, ...(data.hero || {}) },
+    hero: { 
+      ...DEFAULT_EXPLORE_CONFIG.hero, 
+      ...(data.hero || {}),
+      videoUrl: data.hero?.videoUrl !== undefined ? data.hero.videoUrl : DEFAULT_EXPLORE_CONFIG.hero.videoUrl
+    },
     destinations: data.destinations || DEFAULT_EXPLORE_CONFIG.destinations,
     culinary: data.culinary || DEFAULT_EXPLORE_CONFIG.culinary,
     events: data.events || DEFAULT_EXPLORE_CONFIG.events,

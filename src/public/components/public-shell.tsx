@@ -9,12 +9,14 @@ import { Button } from "@/components/ui/button";
 export function PublicNav({
   property,
   showBackHome = false,
+  transparent = false,
 }: {
   property?: {
     name?: string | null;
     logo_url?: string | null;
   } | null;
   showBackHome?: boolean;
+  transparent?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const fullName = property?.name || "Pomah Guesthouse";
@@ -22,7 +24,11 @@ export function PublicNav({
   const firstWord = parts[0];
   const restWords = parts.slice(1).join(" ");
   return (
-    <nav className="sticky top-0 z-50 border-b border-stone-200 bg-white/95 backdrop-blur-sm">
+    <nav className={`z-50 transition-all duration-300 ${
+      transparent 
+        ? "absolute top-0 left-0 right-0 border-b border-white/10 bg-transparent" 
+        : "sticky top-0 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm"
+    }`}>
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <Link to="/" className="flex items-center">
@@ -34,11 +40,11 @@ export function PublicNav({
             />
           ) : (
             <div className="flex items-baseline gap-1">
-              <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">
+              <span className={`font-serif text-xl font-semibold tracking-tight ${transparent ? "text-white" : "text-stone-900"}`}>
                 {firstWord}
               </span>
               {restWords && (
-                <span className="font-serif text-xl font-light text-amber-700">{restWords}</span>
+                <span className={`font-serif text-xl font-light ${transparent ? "text-amber-300 animate-pulse" : "text-amber-700"}`}>{restWords}</span>
               )}
             </div>
           )}
@@ -48,32 +54,32 @@ export function PublicNav({
         <div className="hidden items-center gap-8 md:flex">
           <Link
             to="/rooms"
-            className="text-sm text-stone-600 transition-colors hover:text-stone-900"
+            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
             Kamar
           </Link>
           <Link
             to="/explore"
-            className="text-sm text-stone-600 transition-colors hover:text-stone-900"
+            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
             Jelajahi Semarang
           </Link>
           <Link
             to="/book"
             search={{}}
-            className="text-sm text-stone-600 transition-colors hover:text-stone-900"
+            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
             Fasilitas
           </Link>
           <Link
             to="/book"
             search={{}}
-            className="text-sm text-stone-600 transition-colors hover:text-stone-900"
+            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
             Lokasi
           </Link>
           {showBackHome ? (
-            <Button asChild size="sm" variant="outline" className="border-stone-300 hover:bg-stone-100">
+            <Button asChild size="sm" variant="outline" className={`border-stone-300 hover:bg-stone-100 ${transparent ? "bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white" : ""}`}>
               <Link to="/">
                 Kembali
               </Link>
@@ -89,7 +95,7 @@ export function PublicNav({
  
         {/* Mobile menu toggle */}
         <button
-          className="md:hidden text-stone-700"
+          className={`md:hidden ${transparent ? "text-white" : "text-stone-700"}`}
           onClick={() => setOpen(!open)}
           aria-label="Toggle menu"
         >
@@ -99,7 +105,7 @@ export function PublicNav({
  
       {/* Mobile dropdown */}
       {open && (
-        <div className="border-t border-stone-100 bg-white md:hidden">
+        <div className={`border-t md:hidden ${transparent ? "border-white/10 bg-stone-950/95 backdrop-blur-md" : "border-stone-100 bg-white"}`}>
           <div className="flex flex-col gap-1 px-6 py-4">
             {[
               { to: "/rooms", label: "Kamar" },
@@ -111,13 +117,13 @@ export function PublicNav({
                 key={item.label}
                 to={item.to}
                 onClick={() => setOpen(false)}
-                className="py-2 text-sm text-stone-600 hover:text-stone-900"
+                className={`py-2 text-sm ${transparent ? "text-stone-300 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
               >
                 {item.label}
               </Link>
             ))}
             {showBackHome ? (
-              <Button asChild size="sm" variant="outline" className="mt-2 border-stone-300 hover:bg-stone-100">
+              <Button asChild size="sm" variant="outline" className={`mt-2 border-stone-300 hover:bg-stone-100 ${transparent ? "bg-white/10 text-white border-white/20 hover:bg-white/20" : ""}`}>
                 <Link to="/" onClick={() => setOpen(false)}>
                   Kembali
                 </Link>

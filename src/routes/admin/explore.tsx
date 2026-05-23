@@ -165,11 +165,13 @@ function AdminExplorePage() {
           <Card className="p-4 border-stone-200 shadow-sm flex flex-col md:flex-row gap-6">
             <div className="md:w-[40%] shrink-0 space-y-3">
               <div className="aspect-video bg-stone-100 rounded-lg border border-stone-200 overflow-hidden relative group">
-                {config.hero.bgImageUrl ? (
+                {config.hero.videoUrl ? (
+                  <video src={config.hero.videoUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                ) : config.hero.bgImageUrl ? (
                   <img src={config.hero.bgImageUrl} alt="Hero Banner" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-stone-400 text-xs">
-                    No Image
+                    No Image / Video
                   </div>
                 )}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -196,7 +198,7 @@ function AdminExplorePage() {
               </div>
             </div>
             
-            <div className="flex-1 space-y-4 relative">
+            <div className="flex-1 space-y-3 relative">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">Judul</label>
                 <Input
@@ -208,9 +210,18 @@ function AdminExplorePage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">Sub-judul</label>
                 <Textarea
-                  className="h-20 text-sm resize-none"
+                  className="h-16 text-sm resize-none"
                   value={config.hero.subheading}
                   onChange={(e) => setConfig({ ...config, hero: { ...config.hero, subheading: e.target.value } })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-stone-700">URL Video Banner (Opsional)</label>
+                <Input
+                  className="h-9 text-sm"
+                  placeholder="Tautan video latar belakang (e.g. .mp4)..."
+                  value={config.hero.videoUrl || ""}
+                  onChange={(e) => setConfig({ ...config, hero: { ...config.hero, videoUrl: e.target.value } })}
                 />
               </div>
             </div>

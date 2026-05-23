@@ -232,18 +232,29 @@ function ExploreSemarang() {
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      <PublicNav property={data?.property} />
+      <PublicNav property={data?.property} transparent={true} />
 
       {/* ═══════════════ HERO SECTION ═══════════════ */}
-      <header className="relative overflow-hidden h-[380px] md:h-[420px] flex items-center">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
-        />
+      <header className="relative overflow-hidden h-[440px] md:h-[485px] flex items-center">
+        {/* Background image or video */}
+        {config.hero.videoUrl ? (
+          <video
+            className="absolute inset-0 w-full h-full object-cover"
+            src={config.hero.videoUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-900/60 to-stone-950/45" />
 
-        <div className="relative mx-auto max-w-7xl px-6 w-full py-10">
+        <div className="relative mx-auto max-w-7xl px-6 w-full pt-24 pb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-10">
             {/* Left — Title + Search */}
             <div className="flex-1 max-w-2xl">
