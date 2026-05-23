@@ -16,13 +16,21 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     // 1. Get Gemini API Key
-    const settings = await getIntegrationSettings();
-    const apiKey = settings.gemini_api_key;
-    if (!apiKey) {
-      throw new Error("Gemini API Key belum diatur di menu Integrasi.");
-    }
+    const { data: propData } = await db(context.supabase)
+      .from("properties")
+      .select("id, explore_config")
+      .limit(1)
+      .maybeSingle();
 
-    // 2. Fetch RSS Feeds
+    if (!propData?.id) {
+      throw new Error("Properti tidak ditemukan.");
+    }
+    const currentConfig = (propData.explore_config || {}) as ExploreConfig;
+
+    const apiKey = currentConfig.gemini_api_key;
+    if (!apiKey) {
+      throw new Error("Gemini API Key belum diatur. Silakan atur di bagian atas halaman Jelajahi Semarang.");
+    }
     const parser = new Parser();
     let feedItems: any[] = [];
     try {
@@ -49,10 +57,11 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
 Anda adalah asisten AI untuk website hotel di Semarang.
 Saya punya daftar 20 berita terbaru dari portal berita Jawa Tengah. 
 Tugas Anda adalah:
-1. Cari maksimal 3-5 berita positif yang berkaitan dengan pariwisata, gaya hidup, kuliner, event, atau perkembangan kota Semarang.
-2. JANGAN masukkan berita kecelakaan, kriminalitas, politik, atau berita negatif lainnya.
-3. Ubah formatnya menjadi array berita (news). Jika ada berita tentang event/acara spesifik yang akan datang, masukkan ke array events.
-4. Gunakan bahasa Indonesia yang menarik.
+1. Cari 3-5 berita positif yang berkaitan dengan pariwisata, gaya hidup, kuliner, event, atau perkembangan kota Semarang.
+2. JANGAN masukkan berita kecelakaan, kriminalitas, atau politik.
+3. Jika tidak ada berita pariwisata/event, silakan ambil berita umum seputar kota Semarang asalkan BUKAN berita negatif/kriminal. Wajib mengembalikan minimal 2 berita!
+4. Ubah formatnya menjadi array berita (news). Jika ada berita tentang event/acara spesifik yang akan datang, masukkan ke array events.
+5. Gunakan bahasa Indonesia yang menarik.
 
 Berikut daftar beritanya:
 ${rssText}
@@ -65,6 +74,7 @@ ${rssText}
           title: z.string(),
           date: z.string().describe("Tanggal rilis berita, format: DD MMM YYYY (misal: 25 Mei 2026)"),
           desc: z.string().describe("Ringkasan berita singkat 1-2 kalimat"),
+          url: z.string().url().describe("URL asli berita dari feed RSS"),
           image: z.string().url().describe("URL gambar dari feed, harus URL valid"),
           label: z.string().describe("Label kategori, misal: BERITA LOKAL, PARIWISATA, dsb."),
         })),
