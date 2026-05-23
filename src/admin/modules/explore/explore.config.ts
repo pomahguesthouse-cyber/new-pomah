@@ -189,15 +189,17 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
 
 export function mergeExploreConfig(data: any): ExploreConfig {
   if (!data || typeof data !== "object") return DEFAULT_EXPLORE_CONFIG;
+  // Deep clone to avoid mutating frozen objects from React Query
+  const clonedData = JSON.parse(JSON.stringify(data));
   return {
     hero: { 
       ...DEFAULT_EXPLORE_CONFIG.hero, 
-      ...(data.hero || {}),
-      videoUrl: data.hero?.videoUrl !== undefined ? data.hero.videoUrl : DEFAULT_EXPLORE_CONFIG.hero.videoUrl
+      ...(clonedData.hero || {}),
+      videoUrl: clonedData.hero?.videoUrl !== undefined ? clonedData.hero.videoUrl : DEFAULT_EXPLORE_CONFIG.hero.videoUrl
     },
-    destinations: data.destinations || DEFAULT_EXPLORE_CONFIG.destinations,
-    culinary: data.culinary || DEFAULT_EXPLORE_CONFIG.culinary,
-    events: data.events || DEFAULT_EXPLORE_CONFIG.events,
-    news: data.news || DEFAULT_EXPLORE_CONFIG.news,
+    destinations: clonedData.destinations || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.destinations)),
+    culinary: clonedData.culinary || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.culinary)),
+    events: clonedData.events || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.events)),
+    news: clonedData.news || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.news)),
   };
 }
