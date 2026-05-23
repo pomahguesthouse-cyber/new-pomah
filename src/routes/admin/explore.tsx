@@ -10,7 +10,8 @@ import {
   Check, 
   MoreVertical, 
   MapPin, 
-  ListOrdered
+  ListOrdered,
+  Navigation
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { MediaPicker } from "@/admin/components/media-picker";
 import { getPropertySettings } from "@/admin/modules/settings/settings.functions";
-import { updateExploreConfig } from "@/admin/modules/explore/explore.functions";
+import { updateExploreConfig, getDistanceBetweenPlaces } from "@/admin/modules/explore/explore.functions";
 import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
@@ -77,6 +78,23 @@ function AdminExplorePage() {
   const handleSave = () => {
     if (!id) return;
     mutation.mutate({ id, explore_config: config });
+  };
+
+  const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
+  const fetchDistance = async (destPlaceId: string, index: number) => {
+    try {
+      const res = await fetchDistanceFn({ data: { destPlaceId } });
+      if (res && res.text) {
+        const newDests = [...config.destinations];
+        newDests[index].nearby_distance = res.text;
+        setConfig({ ...config, destinations: newDests });
+      } else {
+        throw new Error("Respons kosong dari server");
+      }
+    } catch (e) {
+      console.error(e);
+      throw e;
+    }
   };
 
   const handlePickMedia = (url: string) => {
@@ -285,6 +303,52 @@ function AdminExplorePage() {
                           }}
                         />
                       </div>
+                      
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Input 
+                          className="h-6 text-[10px] px-2 py-0"
+                          placeholder="Google Place ID"
+                          value={dest.google_place_id || ""}
+                          onChange={(e) => {
+                            const newDests = [...config.destinations];
+                            newDests[i].google_place_id = e.target.value;
+                            setConfig({ ...config, destinations: newDests });
+                          }}
+                        />
+                        <div className="flex gap-1">
+                          <Input 
+                            className="h-6 text-[10px] px-2 py-0 flex-1"
+                            placeholder="Jarak Pomah (e.g. 3 km)"
+                            value={dest.nearby_distance || ""}
+                            onChange={(e) => {
+                              const newDests = [...config.destinations];
+                              newDests[i].nearby_distance = e.target.value;
+                              setConfig({ ...config, destinations: newDests });
+                            }}
+                          />
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="secondary"
+                            className="h-6 text-[9px] px-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shrink-0 font-bold"
+                            onClick={async () => {
+                              if (!dest.google_place_id) {
+                                toast.error("Isi Google Place ID destinasi terlebih dahulu!");
+                                return;
+                              }
+                              const promise = fetchDistance(dest.google_place_id, i);
+                              toast.promise(promise, {
+                                loading: "Menghitung jarak dari Pomah...",
+                                success: "Jarak berhasil diperbarui!",
+                                error: (err) => err.message || "Gagal menarik jarak",
+                              });
+                            }}
+                          >
+                            Tarik
+                          </Button>
+                        </div>
+                      </div>
+
                       <Textarea 
                         className="h-12 text-[10px] text-stone-500 mt-1 resize-none p-1.5"
                         placeholder="Deskripsi..."
@@ -298,12 +362,20 @@ function AdminExplorePage() {
                     </div>
                   ) : (
                     <>
-                      {dest.address && (
-                        <p className="text-[10px] text-stone-400 mt-1 flex items-start gap-1">
-                          <MapPin className="h-2.5 w-2.5 shrink-0 mt-0.5" />
-                          <span className="truncate">{dest.address}</span>
-                        </p>
-                      )}
+                      <div className="space-y-0.5 mt-1">
+                        {dest.address && (
+                          <p className="text-[10px] text-stone-400 flex items-start gap-1">
+                            <MapPin className="h-2.5 w-2.5 shrink-0 mt-0.5" />
+                            <span className="truncate">{dest.address}</span>
+                          </p>
+                        )}
+                        {dest.nearby_distance && (
+                          <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                            <Navigation className="h-2.5 w-2.5 shrink-0" />
+                            <span>Nearby: {dest.nearby_distance}</span>
+                          </p>
+                        )}
+                      </div>
                       <p className="flex-1 text-[11px] text-stone-500 mt-1 line-clamp-2 leading-relaxed">
                         {dest.desc || "Tidak ada deskripsi."}
                       </p>
