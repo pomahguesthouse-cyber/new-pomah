@@ -156,7 +156,13 @@ export const autoFillFromGoogleMaps = createServerFn({ method: "POST" })
           if (pathMatch) extractedQuery = decodeURIComponent(pathMatch[1].replace(/\+/g, " "));
         }
         
-        if (extractedQuery) query = extractedQuery;
+        if (extractedQuery) {
+          // Cegah penggunaan token enkripsi (seperti EgSinh...) sebagai query
+          if (extractedQuery.length > 40 && !extractedQuery.includes(" ")) {
+            throw new Error("Tautan Google Maps ini menggunakan token terenkripsi. Harap ketik nama tempat secara langsung (misal: 'Lawang Sewu') untuk hasil yang akurat.");
+          }
+          query = extractedQuery;
+        }
       }
 
       // 3. Search Place ID via Text Search API
