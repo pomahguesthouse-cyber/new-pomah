@@ -48,6 +48,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin/bookings", label: "Bookings", icon: CalendarDays },
       { to: "/admin/rooms", label: "Rooms", icon: BedDouble },
       { to: "/admin/media", label: "Media Library", icon: Images },
+      { to: "/admin/explore", label: "Explore Content", icon: Compass },
       { to: "/admin/pages", label: "Page Builder", icon: LayoutTemplate },
       { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
     ],
