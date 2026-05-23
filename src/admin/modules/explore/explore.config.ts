@@ -11,6 +11,8 @@ export type ExploreConfig = {
     rating: string;
     reviewCount?: string;
     address?: string;
+    google_place_id?: string;
+    nearby_distance?: string;
   }[];
   culinary: {
     name: string;
@@ -54,6 +56,8 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       image: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=600",
       rating: "4.8",
       reviewCount: "128",
+      google_place_id: "ChIJL7O5z-VSdy4R90j2V95Rksw",
+      nearby_distance: "3.2 km (8 menit)",
     },
     {
       name: "Kota Lama Semarang",
@@ -61,6 +65,8 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       image: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=600",
       rating: "4.9",
       reviewCount: "96",
+      google_place_id: "ChIJO8C9WjBTdy4RI_1QJz1_Cbs",
+      nearby_distance: "4.5 km (12 menit)",
     },
     {
       name: "Sam Poo Kong",
@@ -68,6 +74,8 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       image: "https://images.unsplash.com/photo-1616239129525-24dbec2291cd?auto=format&fit=crop&q=80&w=600",
       rating: "4.7",
       reviewCount: "74",
+      google_place_id: "ChIJW_Z73Z9Sdy4Rsx8B5Vp_1Wk",
+      nearby_distance: "2.8 km (7 menit)",
     },
     {
       name: "Masjid Agung Jawa Tengah",
@@ -75,6 +83,8 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       image: "https://images.unsplash.com/photo-1585036156261-1e2ac4e25e42?auto=format&fit=crop&q=80&w=600",
       rating: "4.8",
       reviewCount: "63",
+      google_place_id: "ChIJa8wH40FSdy4RvA60D42eS5g",
+      nearby_distance: "5.1 km (15 menit)",
     },
     {
       name: "Pantai Marina",
@@ -82,6 +92,8 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=600",
       rating: "4.6",
       reviewCount: "42",
+      google_place_id: "ChIJt7P4kXVSdy4Re9r_Vf98_aQ",
+      nearby_distance: "7.4 km (18 menit)",
     },
   ],
   culinary: [

@@ -423,6 +423,14 @@ function ExploreSemarang() {
                               <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
                                 {dest.name}
                               </h3>
+                              {dest.nearby_distance && (
+                                <div className="mt-1 flex">
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-100/50">
+                                    <Navigation className="h-2.5 w-2.5 shrink-0" />
+                                    {dest.nearby_distance} dari Pomah
+                                  </span>
+                                </div>
+                              )}
                               <p className="mt-1.5 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
                                 {dest.desc}
                               </p>
@@ -599,6 +607,14 @@ function ExploreSemarang() {
                             <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
                               {dest.name}
                             </h3>
+                            {dest.nearby_distance && (
+                              <div className="mt-1 flex">
+                                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold border border-emerald-100/50">
+                                  <Navigation className="h-2.5 w-2.5 shrink-0" />
+                                  {dest.nearby_distance} dari Pomah
+                                </span>
+                              </div>
+                            )}
                             <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
                               {dest.desc}
                             </p>
