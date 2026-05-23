@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { MediaPicker } from "@/admin/components/media-picker";
-import { updateExploreConfig, getDistanceBetweenPlaces, getAdminExploreData } from "@/admin/modules/explore/explore.functions";
+import { updateExploreConfig, getDistanceBetweenPlaces, getAdminExploreData, autoFillFromGoogleMaps } from "@/admin/modules/explore/explore.functions";
 import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
@@ -31,6 +31,7 @@ function AdminExplorePage() {
   const getFn = useServerFn(getAdminExploreData);
   const updateFn = useServerFn(updateExploreConfig);
   const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
+  const autoFillFn = useServerFn(autoFillFromGoogleMaps);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -61,6 +62,9 @@ function AdminExplorePage() {
 
   // State to handle inline editing
   const [editingItem, setEditingItem] = useState<{ type: string; index: number } | null>(null);
+  
+  // State for Auto-Fill inputs
+  const [autoFillQuery, setAutoFillQuery] = useState<{ [key: string]: string }>({});
 
   // Sync state on load
   if (data && !config && !isLoading) {
@@ -94,6 +98,36 @@ function AdminExplorePage() {
     } catch (e) {
       console.error(e);
       throw e;
+    }
+  };
+
+  const handleAutoFill = async (index: number, type: "dest" | "culinary") => {
+    const q = autoFillQuery[`${type}-${index}`];
+    if (!q) {
+       toast.error("Masukkan URL atau nama tempat terlebih dahulu!");
+       return;
+    }
+    
+    try {
+      const promise = autoFillFn({ data: { urlOrQuery: q } }).then((res) => {
+         if (type === "dest") {
+            const newDests = [...config.destinations];
+            newDests[index] = { ...newDests[index], ...res };
+            setConfig({ ...config, destinations: newDests });
+         } else {
+            const newCul = [...config.culinary];
+            newCul[index] = { ...newCul[index], ...res };
+            setConfig({ ...config, culinary: newCul });
+         }
+      });
+      
+      toast.promise(promise, {
+        loading: "Menarik data dari Google Maps...",
+        success: "Data berhasil ditarik!",
+        error: (err) => err.message || "Gagal menarik data dari Google Maps",
+      });
+    } catch(e) {
+      console.error(e);
     }
   };
 
@@ -320,6 +354,23 @@ function AdminExplorePage() {
                   
                   {isEditing("dest", i) ? (
                     <div className="space-y-1.5 mt-1.5 flex-1 flex flex-col">
+                      <div className="flex gap-1.5 p-1.5 bg-emerald-50 rounded border border-emerald-100">
+                        <Input
+                          className="h-6 text-[10px] px-2 py-0 bg-white"
+                          placeholder="Paste Link Share / Ketik Nama Tempat..."
+                          value={autoFillQuery[`dest-${i}`] || ""}
+                          onChange={(e) => setAutoFillQuery(prev => ({ ...prev, [`dest-${i}`]: e.target.value }))}
+                        />
+                        <Button
+                          size="sm"
+                          type="button"
+                          className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
+                          onClick={() => handleAutoFill(i, "dest")}
+                        >
+                          Tarik Otomatis
+                        </Button>
+                      </div>
+                      
                       <div className="grid grid-cols-2 gap-1.5">
                         <Input 
                           className="h-6 text-[10px] px-2 py-0"
@@ -518,6 +569,23 @@ function AdminExplorePage() {
                 <div className="flex-1 flex flex-col p-4 gap-2">
                   {isEditing("culinary", i) ? (
                     <div className="space-y-2 flex-1 flex flex-col">
+                      <div className="flex gap-1.5 p-1.5 bg-emerald-50 rounded border border-emerald-100">
+                        <Input
+                          className="h-6 text-[10px] px-2 py-0 bg-white"
+                          placeholder="Paste Link Share Google Maps..."
+                          value={autoFillQuery[`culinary-${i}`] || ""}
+                          onChange={(e) => setAutoFillQuery(prev => ({ ...prev, [`culinary-${i}`]: e.target.value }))}
+                        />
+                        <Button
+                          size="sm"
+                          type="button"
+                          className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
+                          onClick={() => handleAutoFill(i, "culinary")}
+                        >
+                          Tarik Data
+                        </Button>
+                      </div>
+
                       <Input 
                         className="h-7 text-sm font-bold px-2 py-0"
                         placeholder="Nama Kuliner"

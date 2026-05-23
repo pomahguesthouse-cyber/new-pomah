@@ -97,33 +97,45 @@ const getLabelStyle = (label: string) => {
 
 /* ── Horizontal scroll hook ─────────────────────────────────────────── */
 
-function useHorizontalScroll(autoScroll: boolean = true) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [showLeft, setShowLeft] = useState(false);
-  const [showRight, setShowRight] = useState(true);
+function useSliderTransform(itemCount: number, autoScroll: boolean = true) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const [maxTranslate, setMaxTranslate] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
 
-  const checkScroll = () => {
-    if (ref.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = ref.current;
-      setShowLeft(scrollLeft > 5);
-      setShowRight(scrollLeft < scrollWidth - clientWidth - 5);
+  const itemWidth = 220;
+  const gap = 16;
+  const step = itemWidth + gap;
+
+  const updateMeasurements = () => {
+    if (containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      const totalWidth = itemCount * itemWidth + (itemCount > 0 ? (itemCount - 1) * gap : 0);
+      setMaxTranslate(Math.max(0, totalWidth - containerWidth));
     }
   };
 
   useEffect(() => {
-    const el = ref.current;
-    if (el) {
-      el.addEventListener("scroll", checkScroll);
-      setTimeout(checkScroll, 100);
+    updateMeasurements();
+    window.addEventListener("resize", updateMeasurements);
+    return () => window.removeEventListener("resize", updateMeasurements);
+  }, [itemCount]);
 
+  const maxIndex = Math.ceil(maxTranslate / step);
+
+  useEffect(() => {
+    // Reset index if maxTranslate shrinks
+    setIndex((prev) => Math.min(prev, Math.max(0, maxIndex)));
+  }, [maxIndex]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (el) {
       const handleMouseEnter = () => setIsHovered(true);
       const handleMouseLeave = () => setIsHovered(false);
       el.addEventListener("mouseenter", handleMouseEnter);
       el.addEventListener("mouseleave", handleMouseLeave);
-
       return () => {
-        el.removeEventListener("scroll", checkScroll);
         el.removeEventListener("mouseenter", handleMouseEnter);
         el.removeEventListener("mouseleave", handleMouseLeave);
       };
@@ -131,26 +143,25 @@ function useHorizontalScroll(autoScroll: boolean = true) {
   }, []);
 
   const scroll = (dir: "left" | "right") => {
-    // 220px card + 16px gap = 236px
-    ref.current?.scrollBy({ left: dir === "left" ? -236 : 236, behavior: "smooth" });
+    setIndex((prev) => {
+      if (dir === "left") return Math.max(0, prev - 1);
+      return Math.min(maxIndex, prev + 1);
+    });
   };
 
   useEffect(() => {
-    if (!autoScroll || isHovered) return;
+    if (!autoScroll || isHovered || maxIndex <= 0) return;
     const interval = setInterval(() => {
-      if (ref.current) {
-        const { scrollLeft, scrollWidth, clientWidth } = ref.current;
-        if (scrollLeft >= scrollWidth - clientWidth - 10) {
-          ref.current.scrollTo({ left: 0, behavior: "smooth" });
-        } else {
-          scroll("right");
-        }
-      }
-    }, 3500);
+      setIndex((prev) => (prev >= maxIndex ? 0 : prev + 1));
+    }, 4500); // 4.5 seconds for slower auto play
     return () => clearInterval(interval);
-  }, [autoScroll, isHovered]);
+  }, [autoScroll, isHovered, maxIndex]);
 
-  return { ref, scroll, showLeft, showRight };
+  const currentTranslate = Math.min(index * step, maxTranslate);
+  const showLeft = currentTranslate > 0;
+  const showRight = currentTranslate < maxTranslate;
+
+  return { containerRef, currentTranslate, showLeft, showRight, scroll };
 }
 
 /* ── Main Component ─────────────────────────────────────────────────── */
@@ -168,9 +179,6 @@ function ExploreSemarang() {
   const now = useCurrentTime();
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-
-  const destScroll = useHorizontalScroll();
-  const culScroll = useHorizontalScroll();
 
   // Combine events + news for the sidebar
   const sidebarItems = [
@@ -231,6 +239,9 @@ function ExploreSemarang() {
     const matchesTab = activeTab === "all" || activeTab === "culinary" || itemMatchesTabKeywords(c.name, c.desc, activeTab);
     return matchesSearch && matchesTab;
   });
+
+  const destScroll = useSliderTransform(filteredDestinations.length, true);
+  const culScroll = useSliderTransform(filteredCulinary.length, true);
 
   const filteredEvents = config.events.filter((e) => {
     const matchesSearch =
@@ -430,13 +441,14 @@ function ExploreSemarang() {
                       </button>
                     </div>
 
-                    <div className="relative group/scroll">
-                      <div
-                        ref={destScroll.ref}
-                        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"
-                      >
-                        {filteredDestinations.map((dest, i) => (
-                          <div
+                    <div className="relative group/scroll" ref={destScroll.containerRef}>
+                      <div className="overflow-hidden pb-4">
+                        <div
+                          className="flex gap-4 transition-transform duration-[800ms] ease-out"
+                          style={{ transform: `translateX(-${destScroll.currentTranslate}px)` }}
+                        >
+                          {filteredDestinations.map((dest, i) => (
+                            <div
                             key={`dest-${dest.name}-${i}`}
                             className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
@@ -483,6 +495,7 @@ function ExploreSemarang() {
                           </div>
                         ))}
                       </div>
+                      </div>
 
                       {/* Scroll arrows */}
                       {destScroll.showLeft && (
@@ -523,13 +536,14 @@ function ExploreSemarang() {
                       </button>
                     </div>
 
-                    <div className="relative group/scroll">
-                      <div
-                        ref={culScroll.ref}
-                        className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide"
-                      >
-                        {filteredCulinary.map((cul, i) => (
-                          <div
+                    <div className="relative group/scroll" ref={culScroll.containerRef}>
+                      <div className="overflow-hidden pb-4">
+                        <div
+                          className="flex gap-4 transition-transform duration-[800ms] ease-out"
+                          style={{ transform: `translateX(-${culScroll.currentTranslate}px)` }}
+                        >
+                          {filteredCulinary.map((cul, i) => (
+                            <div
                             key={`cul-${cul.name}-${i}`}
                             className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
@@ -576,6 +590,7 @@ function ExploreSemarang() {
                             </div>
                           </div>
                         ))}
+                      </div>
                       </div>
 
                       {/* Scroll arrows */}
