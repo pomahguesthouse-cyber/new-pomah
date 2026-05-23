@@ -31,6 +31,7 @@ export const Route = createFileRoute("/admin/explore")({
 function AdminExplorePage() {
   const getFn = useServerFn(getPropertySettings);
   const updateFn = useServerFn(updateExploreConfig);
+  const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -80,7 +81,6 @@ function AdminExplorePage() {
     mutation.mutate({ id, explore_config: config });
   };
 
-  const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
   const fetchDistance = async (destPlaceId: string, index: number) => {
     try {
       const res = await fetchDistanceFn({ data: { destPlaceId } });
