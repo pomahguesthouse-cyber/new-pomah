@@ -23,6 +23,8 @@ export type ExploreConfig = {
     rating?: string;
     reviewCount?: string;
     address?: string;
+    google_place_id?: string;
+    nearby_distance?: string;
   }[];
   events: {
     title: string;

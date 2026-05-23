@@ -577,6 +577,12 @@ function ExploreSemarang() {
                                   <span className="truncate">{cul.address}</span>
                                 </p>
                               )}
+                              {cul.nearby_distance && (
+                                <p className="text-[10px] text-emerald-600 font-semibold mt-1 flex items-center gap-1 leading-snug">
+                                  <Navigation className="h-3 w-3 shrink-0" />
+                                  <span>Nearby: {cul.nearby_distance}</span>
+                                </p>
+                              )}
                               <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-2">
                                 {cul.desc}
                               </p>
