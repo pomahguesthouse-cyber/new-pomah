@@ -411,8 +411,9 @@ function ExploreSemarang() {
                       >
                         {filteredDestinations.map((dest, i) => (
                           <div
-                            key={i}
-                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer"
+                            key={`dest-${dest.name}-${i}`}
+                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            style={{ animationDelay: `${i * 80}ms` }}
                           >
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {dest.image ? (
@@ -503,8 +504,9 @@ function ExploreSemarang() {
                       >
                         {filteredCulinary.map((cul, i) => (
                           <div
-                            key={i}
-                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer"
+                            key={`cul-${cul.name}-${i}`}
+                            className="snap-start shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            style={{ animationDelay: `${i * 80}ms` }}
                           >
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {cul.image ? (
@@ -594,8 +596,9 @@ function ExploreSemarang() {
                   {(activeTab === "dest" || activeTab === "alam" || activeTab === "belanja" || activeTab === "budaya" || activeTab === "transport") &&
                     filteredDestinations.map((dest, i) => (
                       <div
-                        key={`dest-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                        key={`dest-grid-${dest.name}-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        style={{ animationDelay: `${i * 80}ms` }}
                       >
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {dest.image ? (
@@ -645,8 +648,9 @@ function ExploreSemarang() {
                   {(activeTab === "culinary" || activeTab === "alam" || activeTab === "belanja" || activeTab === "budaya" || activeTab === "transport") &&
                     filteredCulinary.map((cul, i) => (
                       <div
-                        key={`cul-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                        key={`cul-grid-${cul.name}-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        style={{ animationDelay: `${i * 80}ms` }}
                       >
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {cul.image ? (
@@ -695,8 +699,9 @@ function ExploreSemarang() {
                   {activeTab === "event" &&
                     filteredEvents.map((ev, i) => (
                       <div
-                        key={`ev-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col"
+                        key={`ev-grid-${ev.title}-${i}`}
+                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        style={{ animationDelay: `${i * 80}ms` }}
                       >
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {ev.image ? (
@@ -875,10 +880,24 @@ function ExploreSemarang() {
 
       <PublicFooter property={data?.property} />
 
-      {/* ─── Scrollbar-hide utility ─── */}
+      {/* ─── Scrollbar-hide utility & animations ─── */}
       <style>{`
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
+        @keyframes slowSlideIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        .animate-card-slide {
+          opacity: 0;
+          animation: slowSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
       `}</style>
     </div>
   );
