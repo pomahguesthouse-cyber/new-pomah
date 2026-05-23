@@ -115,6 +115,14 @@ export type LPSection =
   | LPRoomSliderSection
   | LPDatePickerSection;
 
+export type LPSplitSections = {
+  split: boolean;
+  desktop: LPSection[];
+  mobile: LPSection[];
+};
+
+export type LPSectionsData = LPSection[] | LPSplitSections;
+
 export type SeoLandingPage = {
   id: string;
   property_id: string | null;
@@ -130,7 +138,7 @@ export type SeoLandingPage = {
   meta_description: string | null;
   og_image_url: string | null;
   published: boolean;
-  sections: LPSection[] | null;
+  sections: LPSectionsData | null;
   /* ── Advanced SEO ── */
   custom_head: string | null;
   custom_robots: string | null;
@@ -153,7 +161,7 @@ const pageShape = z.object({
   meta_description: z.string().max(160).optional().nullable(),
   og_image_url:     z.string().url().max(500).optional().nullable(),
   published:        z.boolean().default(false),
-  sections:         z.array(z.record(z.string(), z.unknown())).optional().nullable(),
+  sections:         z.union([z.array(z.record(z.string(), z.unknown())), z.record(z.string(), z.unknown())]).optional().nullable(),
   custom_head:      z.string().max(20000).optional().nullable(),
   custom_robots:    z.string().max(10000).optional().nullable(),
   json_ld_enabled:  z.boolean().optional(),

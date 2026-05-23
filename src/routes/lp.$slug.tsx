@@ -71,10 +71,16 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
   const { page } = Route.useLoaderData() as { page: SeoLandingPage };
-  const sections = (page.sections ?? []) as LPSection[];
-  const hasSections = sections.length > 0;
-  // A page-supplied header section replaces the default LP nav.
-  const hasHeaderSection = sections.some((s) => s.type === "header");
+  const sectionsData = page.sections;
+  const isSplit = !!(sectionsData && !Array.isArray(sectionsData) && (sectionsData as any).split);
+
+  const desktopSections = isSplit ? ((sectionsData as any).desktop ?? []) : (Array.isArray(sectionsData) ? sectionsData : []);
+  const mobileSections = isSplit ? ((sectionsData as any).mobile ?? []) : (Array.isArray(sectionsData) ? sectionsData : []);
+
+  const hasSections = isSplit ? (desktopSections.length > 0 || mobileSections.length > 0) : (desktopSections.length > 0);
+  const hasDesktopHeader = desktopSections.some((s: any) => s.type === "header");
+  const hasMobileHeader = mobileSections.some((s: any) => s.type === "header");
+  const hasHeaderSection = isSplit ? (hasDesktopHeader || hasMobileHeader) : hasDesktopHeader;
 
   // Shared booking dates (date picker → room slider).
   const [today, setToday] = useState("");
@@ -117,10 +123,24 @@ function LandingPage() {
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut }}>
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
-
       {hasSections ? (
-        sections.map((s) => <LPSectionRenderer key={s.id} section={s} />)
+        isSplit ? (
+          <>
+            <div className="hidden md:block space-y-0">
+              {!hasDesktopHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+              {desktopSections.map((s: any) => <LPSectionRenderer key={s.id} section={s} />)}
+            </div>
+            <div className="block md:hidden space-y-0">
+              {!hasMobileHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+              {mobileSections.map((s: any) => <LPSectionRenderer key={s.id} section={s} />)}
+            </div>
+          </>
+        ) : (
+          <>
+            {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+            {desktopSections.map((s: any) => <LPSectionRenderer key={s.id} section={s} />)}
+          </>
+        )
       ) : (
         /* ── Legacy fallback for pages without sections ── */
         <>

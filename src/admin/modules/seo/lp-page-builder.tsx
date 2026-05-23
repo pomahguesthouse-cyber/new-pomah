@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import type {
   LPSection,
   LPHeroSection,
@@ -56,6 +57,7 @@ import type {
   LPButtonSection,
   LPRoomSliderSection,
   LPDatePickerSection,
+  LPSectionsData,
 } from "./landing-page.functions";
 
 /* ─── helpers ──────────────────────────────────────────────────────── */
@@ -118,51 +120,134 @@ export function LpPageBuilder({
   sections,
   onChange,
 }: {
-  sections: LPSection[];
-  onChange: (s: LPSection[]) => void;
+  sections: LPSectionsData;
+  onChange: (s: LPSectionsData) => void;
 }) {
+  const isSplit = !!(sections && !Array.isArray(sections) && (sections as any).split);
+  const desktopList = isSplit ? ((sections as any).desktop ?? []) : (Array.isArray(sections) ? sections : []);
+  const mobileList = isSplit ? ((sections as any).mobile ?? []) : (Array.isArray(sections) ? sections : []);
+
+  const [activeTab, setActiveTab] = useState<"desktop" | "mobile">("desktop");
   const [activeId,   setActiveId]   = useState<string | null>(null);
   const [addDialog,  setAddDialog]  = useState(false);
 
-  const active = sections.find((s) => s.id === activeId) ?? null;
+  const currentList = activeTab === "desktop" || !isSplit ? desktopList : mobileList;
+  const active = currentList.find((s) => s.id === activeId) ?? null;
+
+  const handleToggleSplit = (checked: boolean) => {
+    if (checked) {
+      onChange({
+        split: true,
+        desktop: [...desktopList],
+        mobile: [...desktopList],
+      });
+      setActiveTab("desktop");
+      setActiveId(null);
+    } else {
+      if (confirm("Menonaktifkan pemisahan desain akan menghapus desain khusus Mobile dan menyamakan dengan desain Desktop. Lanjutkan?")) {
+        onChange(desktopList);
+        setActiveTab("desktop");
+        setActiveId(null);
+      }
+    }
+  };
+
+  const updateCurrentList = (nextList: LPSection[]) => {
+    if (isSplit) {
+      if (activeTab === "desktop") {
+        onChange({
+          split: true,
+          desktop: nextList,
+          mobile: mobileList,
+        });
+      } else {
+        onChange({
+          split: true,
+          desktop: desktopList,
+          mobile: nextList,
+        });
+      }
+    } else {
+      onChange(nextList);
+    }
+  };
 
   const add = (type: LPSection["type"]) => {
     const s = makeDefault(type);
-    onChange([...sections, s]);
+    updateCurrentList([...currentList, s]);
     setActiveId(s.id);
     setAddDialog(false);
   };
 
   const remove = (id: string) => {
-    onChange(sections.filter((s) => s.id !== id));
+    updateCurrentList(currentList.filter((s) => s.id !== id));
     if (activeId === id) setActiveId(null);
   };
 
   const move = (id: string, dir: -1 | 1) => {
-    const idx = sections.findIndex((s) => s.id === id);
+    const idx = currentList.findIndex((s) => s.id === id);
     if (idx < 0) return;
-    const next = [...sections];
+    const next = [...currentList];
     const target = idx + dir;
     if (target < 0 || target >= next.length) return;
     [next[idx], next[target]] = [next[target], next[idx]];
-    onChange(next);
+    updateCurrentList(next);
   };
 
   const update = (id: string, patch: Partial<LPSection>) => {
-    onChange(sections.map((s) => (s.id === id ? ({ ...s, ...patch } as LPSection) : s)));
+    updateCurrentList(currentList.map((s) => (s.id === id ? ({ ...s, ...patch } as LPSection) : s)));
   };
 
   return (
     <div className="space-y-4">
+      {/* Toggle Split */}
+      <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-white p-3.5 shadow-sm">
+        <div>
+          <h3 className="text-xs font-bold text-stone-900">Pemisahan Desain Desktop & Mobile</h3>
+          <p className="text-[11px] text-stone-400 mt-0.5">Diferensiasikan elemen atau konten khusus perangkat mobile.</p>
+        </div>
+        <Switch checked={isSplit} onCheckedChange={handleToggleSplit} />
+      </div>
+
+      {/* Tabs for desktop / mobile */}
+      {isSplit && (
+        <div className="flex rounded-lg border border-stone-200 bg-stone-100 p-1">
+          <button
+            type="button"
+            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
+              activeTab === "desktop"
+                ? "bg-white text-stone-900 shadow-sm"
+                : "text-stone-500 hover:text-stone-850"
+            }`}
+            onClick={() => { setActiveTab("desktop"); setActiveId(null); }}
+          >
+            🖥️ Desktop View ({desktopList.length})
+          </button>
+          <button
+            type="button"
+            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition ${
+              activeTab === "mobile"
+                ? "bg-white text-stone-900 shadow-sm"
+                : "text-stone-500 hover:text-stone-850"
+            }`}
+            onClick={() => { setActiveTab("mobile"); setActiveId(null); }}
+          >
+            📱 Mobile View ({mobileList.length})
+          </button>
+        </div>
+      )}
+
       {/* Section list */}
-      {sections.length === 0 ? (
+      {currentList.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-stone-200 py-10 text-center">
           <Layers className="mx-auto h-8 w-8 text-stone-200" />
-          <p className="mt-2 text-xs text-stone-400">Belum ada section. Klik "+ Tambah Section" untuk mulai.</p>
+          <p className="mt-2 text-xs text-stone-400">
+            Belum ada section di {isSplit ? (activeTab === "desktop" ? "Desktop" : "Mobile") : "halaman ini"}. Klik "+ Tambah Section" untuk mulai.
+          </p>
         </div>
       ) : (
         <div className="space-y-1.5">
-          {sections.map((s, idx) => {
+          {currentList.map((s, idx) => {
             const meta = typeMeta(s.type);
             const isActive = s.id === activeId;
             return (
@@ -191,7 +276,7 @@ export function LpPageBuilder({
                     onClick={() => move(s.id, -1)}>
                     <ChevronUp className="h-3.5 w-3.5 text-stone-500" />
                   </button>
-                  <button type="button" title="Turun" disabled={idx === sections.length - 1}
+                  <button type="button" title="Turun" disabled={idx === currentList.length - 1}
                     className="rounded p-1 hover:bg-stone-100 disabled:opacity-30"
                     onClick={() => move(s.id, 1)}>
                     <ChevronDown className="h-3.5 w-3.5 text-stone-500" />
@@ -217,7 +302,7 @@ export function LpPageBuilder({
       {active && (
         <div className="mt-2 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-teal-600">
-            Edit: {typeMeta(active.type).label}
+            Edit: {typeMeta(active.type).label} ({isSplit ? (activeTab === "desktop" ? "Desktop" : "Mobile") : "Shared"})
           </p>
           <SectionEditor section={active} onUpdate={(patch) => update(active.id, patch)} />
         </div>
