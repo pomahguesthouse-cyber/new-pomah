@@ -9,12 +9,17 @@ export type ExploreConfig = {
     desc: string;
     image: string;
     rating: string;
+    reviewCount?: string;
+    address?: string;
   }[];
   culinary: {
     name: string;
     desc: string;
     image: string;
     category: string;
+    rating?: string;
+    reviewCount?: string;
+    address?: string;
   }[];
   events: {
     title: string;
@@ -22,6 +27,7 @@ export type ExploreConfig = {
     location: string;
     desc: string;
     image: string;
+    label?: string;
   }[];
   news: {
     title: string;
@@ -29,6 +35,8 @@ export type ExploreConfig = {
     desc: string;
     url: string;
     image: string;
+    label?: string;
+    location?: string;
   }[];
 };
 
@@ -36,7 +44,7 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
   hero: {
     heading: "Jelajahi Semarang",
     subheading:
-      "Temukan pesona wisata bersejarah, ragam kuliner otentik, dan deretan acara seru di ibu kota Jawa Tengah.",
+      "Temukan destinasi wisata terkenal, kuliner terbaik, event menarik\ndan informasi seputar Kota Semarang.",
     bgImageUrl: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=1600",
   },
   destinations: [
@@ -45,18 +53,35 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       desc: "Gedung bersejarah peninggalan Belanda yang ikonik dengan ribuan pintu dan arsitektur megah.",
       image: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=600",
       rating: "4.8",
+      reviewCount: "128",
     },
     {
       name: "Kota Lama Semarang",
       desc: "Kawasan cagar budaya dengan bangunan-bangunan tua bernuansa Eropa klasik yang indah.",
       image: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=600",
       rating: "4.9",
+      reviewCount: "96",
     },
     {
       name: "Sam Poo Kong",
       desc: "Kelenteng bersejarah tempat persinggahan Laksamana Cheng Ho, dengan nuansa merah yang fotogenik.",
       image: "https://images.unsplash.com/photo-1616239129525-24dbec2291cd?auto=format&fit=crop&q=80&w=600",
       rating: "4.7",
+      reviewCount: "74",
+    },
+    {
+      name: "Masjid Agung Jawa Tengah",
+      desc: "Masjid dengan arsitektur modern yang menjadi ikon religi kota Semarang.",
+      image: "https://images.unsplash.com/photo-1585036156261-1e2ac4e25e42?auto=format&fit=crop&q=80&w=600",
+      rating: "4.8",
+      reviewCount: "63",
+    },
+    {
+      name: "Pantai Marina",
+      desc: "Pantai populer dengan pemandangan laut indah, cocok untuk bersantai saat sore hari.",
+      image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&q=80&w=600",
+      rating: "4.6",
+      reviewCount: "42",
     },
   ],
   culinary: [
@@ -65,47 +90,63 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       desc: "Lumpia legendaris Semarang dengan isian rebung segar, udang, dan telur.",
       image: "https://images.unsplash.com/photo-1606525437679-03e62698a1c1?auto=format&fit=crop&q=80&w=400",
       category: "Cemilan",
+      rating: "4.7",
+      reviewCount: "231",
+      address: "Jl. Gang Lombok No. 11, Semarang",
     },
     {
       name: "Tahu Gimbal Pak Edy",
       desc: "Perpaduan tahu goreng, gimbal udang, irisan kol, tauge, disiram kuah kacang petis.",
       image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=400",
       category: "Makan Siang",
+      rating: "4.6",
+      reviewCount: "189",
+      address: "Jl. Sriwijaya No. 29, Semarang",
     },
     {
       name: "Nasi Ayam Bu Wido",
       desc: "Nasi liwet khas Semarang disajikan dengan suwiran ayam, telur pindang, dan kuah opor.",
       image: "https://images.unsplash.com/photo-1615486171434-601f6004df9f?auto=format&fit=crop&q=80&w=400",
       category: "Makan Malam",
+      rating: "4.8",
+      reviewCount: "156",
+      address: "Jl. S. Parman No. 75, Semarang",
     },
     {
       name: "Tahu Pong Karangturi",
       desc: "Tahu pong gurih yang disajikan hangat dengan cocolan kecap pedas manis.",
       image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&q=80&w=400",
       category: "Cemilan",
+      rating: "4.5",
+      reviewCount: "142",
+      address: "Jl. Karangturi Raya, Semarang",
+    },
+    {
+      name: "Soto Bangkong",
+      desc: "Soto khas Semarang dengan kuah bening yang gurih dan pelengkap sate kerang.",
+      image: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&q=80&w=400",
+      category: "Makan Siang",
+      rating: "4.6",
+      reviewCount: "198",
+      address: "Jl. Brigjen Katamso, Semarang",
     },
   ],
   events: [
     {
-      title: "Semarang Night Carnival",
+      title: "Semarang Night Carnival 2026",
       date: "15 Agustus 2026",
       location: "Kawasan Simpang Lima",
-      desc: "Pawai budaya tahunan terbesar di Semarang dengan kostum-kostum meriah.",
-      image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400"
+      desc: "Pawai budaya tahunan terbesar di Semarang dengan kostum-kostum meriah dan lampu gemerlap.",
+      image: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&q=80&w=400",
+      label: "EVENT",
     },
     {
       title: "Festival Kota Lama",
       date: "10-12 September 2026",
       location: "Kawasan Kota Lama",
       desc: "Festival seni, budaya, dan kuliner tempo dulu di tengah gemerlap lampu malam.",
-      image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=400"
-    },
-    {
-      title: "Pasar Semawis",
-      date: "Setiap Akhir Pekan (Jumat-Minggu)",
-      location: "Kawasan Pecinan Semarang",
-      desc: "Pusat jajanan kaki lima terpanjang dengan ragam kuliner halal dan non-halal.",
-      image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&q=80&w=400"
+      image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=400",
+      label: "EVENT",
     },
   ],
   news: [
@@ -114,14 +155,18 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       date: "10 Mei 2026",
       desc: "Kawasan Taman Budaya Raden Saleh kini tampil lebih modern dan siap menjadi pusat kesenian warga Semarang.",
       url: "#",
-      image: "https://images.unsplash.com/photo-1582559937861-125691060eb7?auto=format&fit=crop&q=80&w=400"
+      image: "https://images.unsplash.com/photo-1582559937861-125691060eb7?auto=format&fit=crop&q=80&w=400",
+      label: "BERITA",
+      location: "Taman Budaya Raden Saleh",
     },
     {
       title: "Rute Bus Trans Semarang Baru Resmi Dibuka",
       date: "05 Mei 2026",
       desc: "Pemerintah Kota Semarang membuka koridor baru untuk mempermudah akses pariwisata hingga ke pinggiran kota.",
       url: "#",
-      image: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=400"
+      image: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&q=80&w=400",
+      label: "TRANSPORTASI",
+      location: "Seluruh Kota Semarang",
     },
   ],
 };
