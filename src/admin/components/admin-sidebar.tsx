@@ -14,6 +14,7 @@ import {
   FlaskConical,
   MessageCircle,
   Images,
+  Compass,
 } from "lucide-react";
 
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
