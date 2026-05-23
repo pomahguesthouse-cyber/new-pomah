@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-start";
+import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import Parser from "rss-parser";
 import { generateObject } from "ai";
