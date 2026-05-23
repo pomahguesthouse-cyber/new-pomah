@@ -1489,6 +1489,8 @@ function SitePagesModal({
   onClose: () => void;
   pages: SeoLandingPage[];
   activePageId: string;
+  settingsPageId: string | null;
+  onSettingsPage: (id: string | null) => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
