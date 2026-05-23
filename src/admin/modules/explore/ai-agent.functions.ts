@@ -91,18 +91,6 @@ ${rssText}
     });
 
     // 5. Update Database
-    // First, fetch current config
-    const { data: propData } = await db(context.supabase)
-      .from("properties")
-      .select("id, explore_config")
-      .limit(1)
-      .maybeSingle();
-
-    if (!propData?.id) {
-      throw new Error("Properti tidak ditemukan.");
-    }
-
-    const currentConfig = (propData.explore_config || {}) as ExploreConfig;
     
     // Auto-remove old events: parse date if possible, but for simplicity, 
     // the AI can just replace the old arrays, or we prepend/replace.
