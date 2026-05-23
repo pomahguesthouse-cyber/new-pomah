@@ -277,6 +277,54 @@ export type Database = {
           },
         ]
       }
+      explore_items: {
+        Row: {
+          badge: string | null
+          category: Database["public"]["Enums"]["explore_category"]
+          created_at: string
+          date_text: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_published: boolean
+          location_text: string | null
+          rating: number | null
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          badge?: string | null
+          category: Database["public"]["Enums"]["explore_category"]
+          created_at?: string
+          date_text?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_published?: boolean
+          location_text?: string | null
+          rating?: number | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          badge?: string | null
+          category?: Database["public"]["Enums"]["explore_category"]
+          created_at?: string
+          date_text?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_published?: boolean
+          location_text?: string | null
+          rating?: number | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       guests: {
         Row: {
           country: string | null
@@ -1821,6 +1869,7 @@ export type Database = {
         | "checked_in"
         | "checked_out"
         | "cancelled"
+      explore_category: "destination" | "culinary" | "event" | "news"
       message_direction: "in" | "out"
       payment_status: "unpaid" | "partial" | "paid"
       room_status: "clean" | "dirty" | "maintenance" | "out_of_order"
@@ -1962,6 +2011,7 @@ export const Constants = {
         "checked_out",
         "cancelled",
       ],
+      explore_category: ["destination", "culinary", "event", "news"],
       message_direction: ["in", "out"],
       payment_status: ["unpaid", "partial", "paid"],
       room_status: ["clean", "dirty", "maintenance", "out_of_order"],

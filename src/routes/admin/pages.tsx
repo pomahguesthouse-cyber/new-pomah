@@ -357,6 +357,8 @@ function HomepageBuilder() {
         onClose={() => setPagesOpen(false)}
         pages={pages}
         activePageId={activePageId}
+        settingsPageId={null}
+        onSettingsPage={() => {}}
         onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
@@ -1489,6 +1491,8 @@ function SitePagesModal({
   onClose: () => void;
   pages: SeoLandingPage[];
   activePageId: string;
+  settingsPageId: string | null;
+  onSettingsPage: (id: string | null) => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
