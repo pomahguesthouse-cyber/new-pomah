@@ -717,6 +717,7 @@ function IntegrationTab() {
       ai_api_key?: string | null;
       ai_base_url?: string | null;
       ai_model?: string | null;
+      gemini_api_key?: string | null;
       payment_bank_name?: string | null;
       payment_account_number?: string | null;
       payment_account_holder?: string | null;
@@ -787,13 +788,14 @@ function IntegrationTab() {
         onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
       />
       <TextSettingCard
-        icon={<Search className="h-4 w-4" />}
-        label="Google Search Console"
-        description="Kode verifikasi Search Console (isi meta tag verification)."
-        placeholder="kode verifikasi"
-        value={data?.google_search_console ?? null}
+        icon={<Sparkles className="h-4 w-4" />}
+        label="Google Gemini API Key (Untuk AI Agent)"
+        description="API Key dari Google AI Studio untuk digunakan fitur Auto-Scrape Berita & Event."
+        placeholder="AIzaSy..."
+        secret
+        value={data?.gemini_api_key ?? null}
         disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
+        onSave={(v) => id && mutation.mutate({ id, gemini_api_key: v })}
       />
       <TextSettingCard
         icon={<Landmark className="h-4 w-4" />}

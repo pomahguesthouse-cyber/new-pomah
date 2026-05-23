@@ -22,6 +22,8 @@ import { updateExploreConfig, getDistanceBetweenPlaces, getAdminExploreData, aut
 import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
+import { syncExploreFromAI } from "@/admin/modules/explore/ai-agent.functions";
+import { Sparkles } from "lucide-react";
 
 export const Route = createFileRoute("/admin/explore")({
   component: AdminExplorePage,
@@ -32,6 +34,7 @@ function AdminExplorePage() {
   const updateFn = useServerFn(updateExploreConfig);
   const fetchDistanceFn = useServerFn(getDistanceBetweenPlaces);
   const autoFillFn = useServerFn(autoFillFromGoogleMaps);
+  const syncAIFn = useServerFn(syncExploreFromAI);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -47,6 +50,25 @@ function AdminExplorePage() {
       qc.invalidateQueries({ queryKey: ["public-site"] });
       toast.success("Perubahan berhasil disimpan");
       setEditingItem(null); // Close any open edit mode on save
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const syncAIMutation = useMutation({
+    mutationFn: () => syncAIFn(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["admin-explore"] });
+      qc.invalidateQueries({ queryKey: ["public-site"] });
+      toast.success(res.message);
+      
+      // Merge new data visually
+      if (res.data) {
+         setConfig(prev => prev ? {
+           ...prev,
+           news: res.data.news.length > 0 ? res.data.news : prev.news,
+           events: res.data.events.length > 0 ? res.data.events : prev.events,
+         } : prev);
+      }
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -759,7 +781,19 @@ function AdminExplorePage() {
           {/* Event Mendatang */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-stone-200 pb-2">
-              <h2 className="text-sm font-bold text-stone-900">Event Mendatang</h2>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-bold text-stone-900">Event Mendatang</h2>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-6 text-[10px] px-2 gap-1 text-emerald-700 hover:text-emerald-800"
+                  disabled={syncAIMutation.isPending}
+                  onClick={() => syncAIMutation.mutate()}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {syncAIMutation.isPending ? "Sedang Menarik AI..." : "Tarik Data via AI"}
+                </Button>
+              </div>
               <Button
                 size="sm"
                 variant="ghost"
