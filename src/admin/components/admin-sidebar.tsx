@@ -14,6 +14,7 @@ import {
   FlaskConical,
   MessageCircle,
   Images,
+  Compass,
 } from "lucide-react";
 
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
@@ -48,6 +49,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin/rooms", label: "Rooms", icon: BedDouble },
       { to: "/admin/media", label: "Media Library", icon: Images },
       { to: "/admin/pages", label: "Page Builder", icon: LayoutTemplate },
+      { to: "/admin/explore", label: "City Guide", icon: Compass },
       { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
     ],
   },

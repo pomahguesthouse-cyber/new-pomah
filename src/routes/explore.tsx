@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { MapPin, Calendar, Coffee, Newspaper, ArrowRight, Star } from "lucide-react";
+import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 
 export const Route = createFileRoute("/explore")({
   loader: async () => {
@@ -22,88 +23,7 @@ export const Route = createFileRoute("/explore")({
   component: ExploreSemarang,
 });
 
-// Data Dummy
-const DESTINATIONS = [
-  {
-    name: "Lawang Sewu",
-    desc: "Gedung bersejarah peninggalan Belanda yang ikonik dengan ribuan pintu dan arsitektur megah.",
-    image: "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=600",
-    rating: 4.8,
-  },
-  {
-    name: "Kota Lama Semarang",
-    desc: "Kawasan cagar budaya dengan bangunan-bangunan tua bernuansa Eropa klasik yang indah.",
-    image: "https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=600",
-    rating: 4.9,
-  },
-  {
-    name: "Sam Poo Kong",
-    desc: "Kelenteng bersejarah tempat persinggahan Laksamana Cheng Ho, dengan nuansa merah yang fotogenik.",
-    image: "https://images.unsplash.com/photo-1616239129525-24dbec2291cd?auto=format&fit=crop&q=80&w=600",
-    rating: 4.7,
-  },
-];
 
-const CULINARY = [
-  {
-    name: "Lumpia Gang Lombok",
-    desc: "Lumpia legendaris Semarang dengan isian rebung segar, udang, dan telur.",
-    image: "https://images.unsplash.com/photo-1606525437679-03e62698a1c1?auto=format&fit=crop&q=80&w=400",
-    category: "Cemilan",
-  },
-  {
-    name: "Tahu Gimbal Pak Edy",
-    desc: "Perpaduan tahu goreng, gimbal udang, irisan kol, tauge, disiram kuah kacang petis.",
-    image: "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=400",
-    category: "Makan Siang",
-  },
-  {
-    name: "Nasi Ayam Bu Wido",
-    desc: "Nasi liwet khas Semarang disajikan dengan suwiran ayam, telur pindang, dan kuah opor.",
-    image: "https://images.unsplash.com/photo-1615486171434-601f6004df9f?auto=format&fit=crop&q=80&w=400",
-    category: "Makan Malam",
-  },
-  {
-    name: "Tahu Pong Karangturi",
-    desc: "Tahu pong gurih yang disajikan hangat dengan cocolan kecap pedas manis.",
-    image: "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&q=80&w=400",
-    category: "Cemilan",
-  },
-];
-
-const EVENTS = [
-  {
-    title: "Semarang Night Carnival",
-    date: "15 Agustus 2026",
-    location: "Kawasan Simpang Lima",
-    desc: "Pawai budaya tahunan terbesar di Semarang dengan kostum-kostum meriah.",
-  },
-  {
-    title: "Festival Kota Lama",
-    date: "10-12 September 2026",
-    location: "Kawasan Kota Lama",
-    desc: "Festival seni, budaya, dan kuliner tempo dulu di tengah gemerlap lampu malam.",
-  },
-  {
-    title: "Pasar Semawis",
-    date: "Setiap Akhir Pekan (Jumat-Minggu)",
-    location: "Kawasan Pecinan Semarang",
-    desc: "Pusat jajanan kaki lima terpanjang dengan ragam kuliner halal dan non-halal.",
-  },
-];
-
-const NEWS = [
-  {
-    title: "Revitalisasi Taman Budaya Raden Saleh Selesai",
-    date: "10 Mei 2026",
-    desc: "Kawasan Taman Budaya Raden Saleh kini tampil lebih modern dan siap menjadi pusat kesenian warga Semarang.",
-  },
-  {
-    title: "Rute Bus Trans Semarang Baru Resmi Dibuka",
-    date: "05 Mei 2026",
-    desc: "Pemerintah Kota Semarang membuka koridor baru untuk mempermudah akses pariwisata hingga ke pinggiran kota.",
-  },
-];
 
 function ExploreSemarang() {
   const loaderData = Route.useLoaderData();
@@ -114,13 +34,18 @@ function ExploreSemarang() {
     initialData: loaderData,
   });
 
+  const config = mergeExploreConfig(data?.property?.explore_config);
+
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <PublicNav property={data?.property} />
 
       {/* Hero Section */}
       <header className="relative bg-teal-800 py-24 text-white overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1629827014691-30cc0ed06927?auto=format&fit=crop&q=80&w=1600')] bg-cover bg-center opacity-20 mix-blend-overlay"></div>
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay"
+          style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
+        ></div>
         <div className="absolute inset-0 bg-gradient-to-t from-stone-900/80 via-stone-900/20 to-transparent"></div>
         <div className="relative mx-auto max-w-6xl px-6 text-center">
           <span className="inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.3em] text-teal-300">
@@ -129,10 +54,10 @@ function ExploreSemarang() {
             <span className="h-px w-6 bg-teal-300" />
           </span>
           <h1 className="mt-5 font-serif text-5xl font-bold tracking-tight md:text-6xl drop-shadow-md">
-            Jelajahi Semarang
+            {config.hero.heading}
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-teal-50 drop-shadow-sm leading-relaxed">
-            Temukan pesona wisata bersejarah, ragam kuliner otentik, dan deretan acara seru di ibu kota Jawa Tengah.
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-teal-50 drop-shadow-sm leading-relaxed whitespace-pre-wrap">
+            {config.hero.subheading}
           </p>
         </div>
       </header>
@@ -151,7 +76,7 @@ function ExploreSemarang() {
             </div>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {DESTINATIONS.map((dest, i) => (
+            {config.destinations.map((dest, i) => (
               <div key={i} className="group overflow-hidden rounded-2xl bg-white shadow-sm border border-stone-200 transition hover:shadow-xl">
                 <div className="relative h-48 overflow-hidden">
                   <img src={dest.image} alt={dest.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-110" />
@@ -179,7 +104,7 @@ function ExploreSemarang() {
             <p className="mx-auto mt-2 max-w-lg text-stone-500">Manjakan lidah Anda dengan cita rasa lokal yang menggugah selera.</p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {CULINARY.map((cul, i) => (
+            {config.culinary.map((cul, i) => (
               <div key={i} className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm border border-stone-200 transition hover:-translate-y-1 hover:shadow-lg">
                 <div className="h-40 overflow-hidden bg-stone-100">
                   <img src={cul.image} alt={cul.name} className="h-full w-full object-cover" />
@@ -206,7 +131,7 @@ function ExploreSemarang() {
               Event Mendatang
             </h2>
             <div className="space-y-4">
-              {EVENTS.map((ev, i) => (
+              {config.events.map((ev, i) => (
                 <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl bg-white p-5 shadow-sm border border-stone-200 hover:border-teal-300 transition">
                   <div className="shrink-0 sm:w-32">
                     <p className="text-sm font-bold text-teal-700">{ev.date}</p>
@@ -230,8 +155,8 @@ function ExploreSemarang() {
               Berita Lainnya
             </h2>
             <div className="space-y-6 rounded-xl bg-stone-100 p-6 border border-stone-200/60">
-              {NEWS.map((nw, i) => (
-                <article key={i} className="group cursor-pointer">
+              {config.news.map((nw, i) => (
+                <a href={nw.url} key={i} className="group cursor-pointer block">
                   <p className="text-[11px] font-semibold text-teal-700 uppercase tracking-widest">{nw.date}</p>
                   <h3 className="mt-1 font-serif text-base font-bold text-stone-900 group-hover:text-teal-700 transition">
                     {nw.title}
@@ -240,7 +165,7 @@ function ExploreSemarang() {
                   <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-teal-700 group-hover:gap-2 transition-all">
                     Baca selengkapnya <ArrowRight className="h-3 w-3" />
                   </span>
-                </article>
+                </a>
               ))}
             </div>
           </section>
