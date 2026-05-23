@@ -43,6 +43,7 @@ function AdminExplorePage() {
       qc.invalidateQueries({ queryKey: ["property-settings"] });
       qc.invalidateQueries({ queryKey: ["public-site"] });
       toast.success("Perubahan berhasil disimpan");
+      setEditingItem(null); // Close any open edit mode on save
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -55,6 +56,9 @@ function AdminExplorePage() {
     target: "hero" | { type: "dest" | "culinary" | "event" | "news"; index: number } | null;
   }>({ open: false, target: null });
 
+  // State to handle inline editing
+  const [editingItem, setEditingItem] = useState<{ type: string; index: number } | null>(null);
+
   // Sync state on load
   if (data && !config && !isLoading) {
     setConfig(mergeExploreConfig((data as any).explore_config));
@@ -63,6 +67,11 @@ function AdminExplorePage() {
   if (isLoading || !config) return <p className="p-6 text-sm text-muted-foreground">Memuat...</p>;
 
   const id = data?.id;
+  const updatedAt = data?.property?.updated_at 
+    ? new Date(data.property.updated_at).toLocaleString("id-ID", {
+        day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit"
+      }) 
+    : "Belum pernah diperbarui";
 
   const handleSave = () => {
     if (!id) return;
@@ -83,15 +92,22 @@ function AdminExplorePage() {
       const newCul = [...config.culinary];
       newCul[target.index].image = url;
       setConfig({ ...config, culinary: newCul });
+    } else if (target.type === "event") {
+      const newEv = [...config.events];
+      newEv[target.index].image = url;
+      setConfig({ ...config, events: newEv });
+    } else if (target.type === "news") {
+      const newNw = [...config.news];
+      newNw[target.index].image = url;
+      setConfig({ ...config, news: newNw });
     }
-    // Event/News image integration is possible if the schema supports it.
-    // The current explore.config.ts might not have images for events/news, but we can add them later.
   };
 
+  const isEditing = (type: string, index: number) => editingItem?.type === type && editingItem?.index === index;
+
   return (
-    <div className="flex p-6 md:p-10 gap-8 h-full bg-stone-50/50">
+    <div className="flex p-6 md:p-10 gap-8 h-full bg-stone-50/50 min-h-screen">
       
-      {/* Media Picker Dialog */}
       <MediaPicker
         open={pickerState.open}
         kind="image"
@@ -99,7 +115,6 @@ function AdminExplorePage() {
         onClose={() => setPickerState({ open: false, target: null })}
       />
 
-      {/* Main Content Area */}
       <div className="flex-1 min-w-0 space-y-8">
         
         {/* Header */}
@@ -114,14 +129,14 @@ function AdminExplorePage() {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-[11px] text-stone-500 mb-2">Terakhir diperbarui: 12 Mei 2026 09:15</p>
+            <p className="text-[11px] text-stone-500 mb-2">Terakhir diperbarui: {updatedAt}</p>
             <Button 
               onClick={handleSave} 
               disabled={mutation.isPending}
               className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2 h-9"
             >
-              Simpan Semua Perubahan
-              <Check className="h-4 w-4" />
+              {mutation.isPending ? "Menyimpan..." : "Simpan Semua Perubahan"}
+              {!mutation.isPending && <Check className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -164,9 +179,6 @@ function AdminExplorePage() {
             </div>
             
             <div className="flex-1 space-y-4 relative">
-              <Button variant="ghost" size="icon" className="absolute -top-2 -right-2 h-8 w-8 text-stone-400">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">Judul</label>
                 <Input
@@ -198,12 +210,13 @@ function AdminExplorePage() {
               size="sm"
               variant="outline"
               className="h-8 gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-              onClick={() =>
+              onClick={() => {
                 setConfig({
                   ...config,
                   destinations: [...config.destinations, { name: "Destinasi Baru", desc: "", image: "", rating: "5.0" }],
-                })
-              }
+                });
+                setEditingItem({ type: "dest", index: config.destinations.length });
+              }}
             >
               <Plus className="h-3.5 w-3.5" />
               Tambah Destinasi
@@ -229,48 +242,68 @@ function AdminExplorePage() {
                 
                 <div className="flex-1 flex flex-col min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <Input 
-                      className="h-7 text-sm font-bold px-2 py-0"
-                      value={dest.name}
-                      onChange={(e) => {
-                        const newDests = [...config.destinations];
-                        newDests[i].name = e.target.value;
-                        setConfig({ ...config, destinations: newDests });
-                      }}
-                    />
+                    {isEditing("dest", i) ? (
+                      <Input 
+                        className="h-7 text-sm font-bold px-2 py-0"
+                        value={dest.name}
+                        onChange={(e) => {
+                          const newDests = [...config.destinations];
+                          newDests[i].name = e.target.value;
+                          setConfig({ ...config, destinations: newDests });
+                        }}
+                      />
+                    ) : (
+                      <h3 className="text-sm font-bold text-stone-900 truncate">{dest.name}</h3>
+                    )}
                     <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 -mr-2 -mt-1 text-stone-400">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </div>
                   
-                  <Textarea 
-                    className="flex-1 min-h-0 text-[11px] text-stone-500 mt-1 resize-none p-2"
-                    value={dest.desc}
-                    onChange={(e) => {
-                      const newDests = [...config.destinations];
-                      newDests[i].desc = e.target.value;
-                      setConfig({ ...config, destinations: newDests });
-                    }}
-                  />
+                  {isEditing("dest", i) ? (
+                    <Textarea 
+                      className="flex-1 min-h-0 text-[11px] text-stone-500 mt-1 resize-none p-2"
+                      value={dest.desc}
+                      onChange={(e) => {
+                        const newDests = [...config.destinations];
+                        newDests[i].desc = e.target.value;
+                        setConfig({ ...config, destinations: newDests });
+                      }}
+                    />
+                  ) : (
+                    <p className="flex-1 text-[11px] text-stone-500 mt-1 line-clamp-3 leading-relaxed">
+                      {dest.desc || "Tidak ada deskripsi."}
+                    </p>
+                  )}
                   
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-stone-100">
                     <div className="flex items-center gap-1.5 text-xs text-stone-600">
                       <span>Rating</span>
                       <span className="text-amber-400">★</span>
-                      <Input 
-                        className="h-6 w-12 text-xs px-1 py-0 text-center font-semibold"
-                        value={dest.rating}
-                        onChange={(e) => {
-                          const newDests = [...config.destinations];
-                          newDests[i].rating = e.target.value;
-                          setConfig({ ...config, destinations: newDests });
-                        }}
-                      />
+                      {isEditing("dest", i) ? (
+                        <Input 
+                          className="h-6 w-12 text-xs px-1 py-0 text-center font-semibold"
+                          value={dest.rating}
+                          onChange={(e) => {
+                            const newDests = [...config.destinations];
+                            newDests[i].rating = e.target.value;
+                            setConfig({ ...config, destinations: newDests });
+                          }}
+                        />
+                      ) : (
+                        <span className="font-semibold">{dest.rating}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600">
-                        <Pencil className="h-3 w-3" />
-                      </Button>
+                      {isEditing("dest", i) ? (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
+                          <Check className="h-3 w-3" />
+                        </Button>
+                      ) : (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "dest", index: i })}>
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      )}
                       <Button 
                         variant="ghost" 
                         size="icon" 
@@ -300,12 +333,13 @@ function AdminExplorePage() {
               size="sm"
               variant="outline"
               className="h-8 gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-              onClick={() =>
+              onClick={() => {
                 setConfig({
                   ...config,
                   culinary: [...config.culinary, { name: "Kuliner Baru", desc: "", image: "", category: "Cemilan" }],
-                })
-              }
+                });
+                setEditingItem({ type: "culinary", index: config.culinary.length });
+              }}
             >
               <Plus className="h-3.5 w-3.5" />
               Tambah Kuliner
@@ -334,40 +368,61 @@ function AdminExplorePage() {
                 </div>
                 
                 <div className="flex-1 flex flex-col p-4 gap-2">
-                  <Input 
-                    className="h-7 text-sm font-bold px-2 py-0"
-                    value={cul.name}
-                    onChange={(e) => {
-                      const newCul = [...config.culinary];
-                      newCul[i].name = e.target.value;
-                      setConfig({ ...config, culinary: newCul });
-                    }}
-                  />
-                  <Input 
-                    className="h-6 text-[10px] text-stone-500 px-2 py-0 border-transparent hover:border-stone-200 bg-stone-50"
-                    value={cul.category}
-                    onChange={(e) => {
-                      const newCul = [...config.culinary];
-                      newCul[i].category = e.target.value;
-                      setConfig({ ...config, culinary: newCul });
-                    }}
-                  />
-                  <Textarea 
-                    className="flex-1 text-xs text-stone-600 resize-none p-2 border-transparent hover:border-stone-200"
-                    value={cul.desc}
-                    onChange={(e) => {
-                      const newCul = [...config.culinary];
-                      newCul[i].desc = e.target.value;
-                      setConfig({ ...config, culinary: newCul });
-                    }}
-                  />
+                  {isEditing("culinary", i) ? (
+                    <>
+                      <Input 
+                        className="h-7 text-sm font-bold px-2 py-0"
+                        value={cul.name}
+                        onChange={(e) => {
+                          const newCul = [...config.culinary];
+                          newCul[i].name = e.target.value;
+                          setConfig({ ...config, culinary: newCul });
+                        }}
+                      />
+                      <Input 
+                        className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                        value={cul.category}
+                        onChange={(e) => {
+                          const newCul = [...config.culinary];
+                          newCul[i].category = e.target.value;
+                          setConfig({ ...config, culinary: newCul });
+                        }}
+                      />
+                      <Textarea 
+                        className="flex-1 text-xs text-stone-600 resize-none p-2"
+                        value={cul.desc}
+                        onChange={(e) => {
+                          const newCul = [...config.culinary];
+                          newCul[i].desc = e.target.value;
+                          setConfig({ ...config, culinary: newCul });
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-sm font-bold text-stone-900 truncate">{cul.name}</h3>
+                      <p className="text-[10px] text-stone-500">{cul.category}</p>
+                      <p className="flex-1 text-xs text-stone-600 line-clamp-3 leading-relaxed mt-1">
+                        {cul.desc || "Tidak ada deskripsi."}
+                      </p>
+                    </>
+                  )}
                 </div>
                 
-                <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  {isEditing("culinary", i) ? (
+                    <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm text-emerald-600" onClick={() => setEditingItem(null)}>
+                      <Check className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm text-stone-600" onClick={() => setEditingItem({ type: "culinary", index: i })}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <Button 
                     variant="destructive" 
                     size="icon" 
-                    className="h-6 w-6 shadow-sm"
+                    className="h-7 w-7 shadow-sm"
                     onClick={() =>
                       setConfig({ ...config, culinary: config.culinary.filter((_, idx) => idx !== i) })
                     }
@@ -381,7 +436,7 @@ function AdminExplorePage() {
         </div>
 
         {/* Events & News Container */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid lg:grid-cols-2 gap-8">
           
           {/* Event Mendatang */}
           <div className="space-y-3">
@@ -391,12 +446,13 @@ function AdminExplorePage() {
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() =>
+                onClick={() => {
                   setConfig({
                     ...config,
-                    events: [...config.events, { title: "Event Baru", date: "", location: "", desc: "" }],
-                  })
-                }
+                    events: [...config.events, { title: "Event Baru", date: "", location: "", desc: "", image: "" }],
+                  });
+                  setEditingItem({ type: "event", index: config.events.length });
+                }}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -404,64 +460,105 @@ function AdminExplorePage() {
             
             <div className="space-y-3">
               {config.events.map((ev, i) => (
-                <div key={i} className="flex gap-3 items-start group">
-                  <div className="h-16 w-16 bg-stone-200 rounded overflow-hidden shrink-0">
-                    <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
+                <div key={i} className="flex gap-4 items-start group">
+                  <div 
+                    className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 cursor-pointer relative"
+                    onClick={() => setPickerState({ open: true, target: { type: "event", index: i } })}
+                  >
+                    {ev.image ? (
+                      <img src={ev.image} alt={ev.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
+                    )}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Pencil className="h-3 w-3 text-white" />
+                    </div>
                   </div>
+                  
                   <div className="flex-1 space-y-1.5 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <Input 
-                        className="h-6 text-xs font-bold text-stone-900 px-1 py-0 bg-transparent border-transparent hover:border-stone-200 focus:bg-white"
-                        value={ev.title}
-                        onChange={(e) => {
-                          const newEv = [...config.events];
-                          newEv[i].title = e.target.value;
-                          setConfig({ ...config, events: newEv });
-                        }}
-                      />
-                      <Input 
-                        className="h-5 w-24 text-[10px] text-stone-500 bg-stone-100 px-1.5 border-transparent text-right shrink-0"
-                        placeholder="Tanggal"
-                        value={ev.date}
-                        onChange={(e) => {
-                          const newEv = [...config.events];
-                          newEv[i].date = e.target.value;
-                          setConfig({ ...config, events: newEv });
-                        }}
-                      />
+                      {isEditing("event", i) ? (
+                        <>
+                          <Input 
+                            className="h-6 text-xs font-bold text-stone-900 px-1 py-0"
+                            value={ev.title}
+                            onChange={(e) => {
+                              const newEv = [...config.events];
+                              newEv[i].title = e.target.value;
+                              setConfig({ ...config, events: newEv });
+                            }}
+                          />
+                          <Input 
+                            className="h-5 w-24 text-[10px] text-stone-500 px-1.5 shrink-0"
+                            placeholder="Tanggal"
+                            value={ev.date}
+                            onChange={(e) => {
+                              const newEv = [...config.events];
+                              newEv[i].date = e.target.value;
+                              setConfig({ ...config, events: newEv });
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-xs font-bold text-stone-900 truncate">{ev.title}</h3>
+                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{ev.date}</span>
+                        </>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1 text-[10px] text-stone-400 px-1">
-                      <MapPin className="h-3 w-3" />
-                      <Input 
-                        className="h-5 flex-1 text-[10px] px-1 py-0 bg-transparent border-transparent hover:border-stone-200"
-                        placeholder="Lokasi"
-                        value={ev.location}
+                    
+                    {isEditing("event", i) ? (
+                      <div className="flex items-center gap-1 text-[10px] text-stone-400 px-1">
+                        <MapPin className="h-3 w-3" />
+                        <Input 
+                          className="h-5 flex-1 text-[10px] px-1 py-0"
+                          placeholder="Lokasi"
+                          value={ev.location}
+                          onChange={(e) => {
+                            const newEv = [...config.events];
+                            newEv[i].location = e.target.value;
+                            setConfig({ ...config, events: newEv });
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-stone-500 flex items-center gap-1">
+                        <MapPin className="h-3 w-3 text-stone-400" /> {ev.location}
+                      </p>
+                    )}
+                    
+                    {isEditing("event", i) ? (
+                      <Textarea 
+                        className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
+                        placeholder="Deskripsi..."
+                        value={ev.desc}
                         onChange={(e) => {
                           const newEv = [...config.events];
-                          newEv[i].location = e.target.value;
+                          newEv[i].desc = e.target.value;
                           setConfig({ ...config, events: newEv });
                         }}
                       />
-                    </div>
-                    <Textarea 
-                      className="h-12 text-[10px] text-stone-500 resize-none p-1 border-transparent hover:border-stone-200 leading-snug"
-                      placeholder="Deskripsi..."
-                      value={ev.desc}
-                      onChange={(e) => {
-                        const newEv = [...config.events];
-                        newEv[i].desc = e.target.value;
-                        setConfig({ ...config, events: newEv });
-                      }}
-                    />
+                    ) : (
+                      <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
+                        {ev.desc || "Tidak ada deskripsi."}
+                      </p>
+                    )}
                   </div>
+                  
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400">
-                      <Pencil className="h-3 w-3" />
-                    </Button>
+                    {isEditing("event", i) ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "event", index: i })}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-red-400"
+                      className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
                       onClick={() => setConfig({ ...config, events: config.events.filter((_, idx) => idx !== i) })}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -480,12 +577,13 @@ function AdminExplorePage() {
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() =>
+                onClick={() => {
                   setConfig({
                     ...config,
-                    news: [...config.news, { title: "Berita Baru", date: "", url: "", desc: "" }],
-                  })
-                }
+                    news: [...config.news, { title: "Berita Baru", date: "", url: "", desc: "", image: "" }],
+                  });
+                  setEditingItem({ type: "news", index: config.news.length });
+                }}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -493,51 +591,97 @@ function AdminExplorePage() {
             
             <div className="space-y-3">
               {config.news.map((nw, i) => (
-                <div key={i} className="flex gap-3 items-start group">
-                  <div className="h-16 w-16 bg-stone-200 rounded overflow-hidden shrink-0">
-                    <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
+                <div key={i} className="flex gap-4 items-start group">
+                  <div 
+                    className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 cursor-pointer relative"
+                    onClick={() => setPickerState({ open: true, target: { type: "news", index: i } })}
+                  >
+                    {nw.image ? (
+                      <img src={nw.image} alt={nw.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
+                    )}
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Pencil className="h-3 w-3 text-white" />
+                    </div>
                   </div>
+                  
                   <div className="flex-1 space-y-1.5 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <Input 
-                        className="h-6 text-xs font-bold text-stone-900 px-1 py-0 bg-transparent border-transparent hover:border-stone-200 focus:bg-white"
-                        value={nw.title}
-                        onChange={(e) => {
-                          const newNw = [...config.news];
-                          newNw[i].title = e.target.value;
-                          setConfig({ ...config, news: newNw });
-                        }}
-                      />
-                      <Input 
-                        className="h-5 w-24 text-[10px] text-stone-500 bg-stone-100 px-1.5 border-transparent text-right shrink-0"
-                        placeholder="Tanggal"
-                        value={nw.date}
-                        onChange={(e) => {
-                          const newNw = [...config.news];
-                          newNw[i].date = e.target.value;
-                          setConfig({ ...config, news: newNw });
-                        }}
-                      />
+                      {isEditing("news", i) ? (
+                        <>
+                          <Input 
+                            className="h-6 text-xs font-bold text-stone-900 px-1 py-0"
+                            value={nw.title}
+                            onChange={(e) => {
+                              const newNw = [...config.news];
+                              newNw[i].title = e.target.value;
+                              setConfig({ ...config, news: newNw });
+                            }}
+                          />
+                          <Input 
+                            className="h-5 w-24 text-[10px] text-stone-500 px-1.5 shrink-0"
+                            placeholder="Tanggal"
+                            value={nw.date}
+                            onChange={(e) => {
+                              const newNw = [...config.news];
+                              newNw[i].date = e.target.value;
+                              setConfig({ ...config, news: newNw });
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-xs font-bold text-stone-900 truncate">{nw.title}</h3>
+                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{nw.date}</span>
+                        </>
+                      )}
                     </div>
-                    <Textarea 
-                      className="h-14 text-[10px] text-stone-500 resize-none p-1 border-transparent hover:border-stone-200 leading-snug"
-                      placeholder="Deskripsi..."
-                      value={nw.desc}
-                      onChange={(e) => {
-                        const newNw = [...config.news];
-                        newNw[i].desc = e.target.value;
-                        setConfig({ ...config, news: newNw });
-                      }}
-                    />
+                    
+                    {isEditing("news", i) ? (
+                      <>
+                        <Input 
+                          className="h-5 text-[10px] px-1 py-0"
+                          placeholder="URL Artikel"
+                          value={nw.url}
+                          onChange={(e) => {
+                            const newNw = [...config.news];
+                            newNw[i].url = e.target.value;
+                            setConfig({ ...config, news: newNw });
+                          }}
+                        />
+                        <Textarea 
+                          className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
+                          placeholder="Deskripsi..."
+                          value={nw.desc}
+                          onChange={(e) => {
+                            const newNw = [...config.news];
+                            newNw[i].desc = e.target.value;
+                            setConfig({ ...config, news: newNw });
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
+                        {nw.desc || "Tidak ada deskripsi."}
+                      </p>
+                    )}
                   </div>
+                  
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400">
-                      <Pencil className="h-3 w-3" />
-                    </Button>
+                    {isEditing("news", i) ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
+                        <Check className="h-3 w-3" />
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "news", index: i })}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-red-400"
+                      className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
                       onClick={() => setConfig({ ...config, news: config.news.filter((_, idx) => idx !== i) })}
                     >
                       <Trash2 className="h-3 w-3" />
