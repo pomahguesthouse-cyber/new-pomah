@@ -85,13 +85,19 @@ function AdminExplorePage() {
     mutation.mutate({ id, explore_config: config });
   };
 
-  const fetchDistance = async (destPlaceId: string, index: number) => {
+  const fetchDistance = async (destPlaceId: string, index: number, type: "dest" | "culinary" = "dest") => {
     try {
       const res = await fetchDistanceFn({ data: { destPlaceId } });
       if (res && res.text) {
-        const newDests = [...config.destinations];
-        newDests[index].nearby_distance = res.text;
-        setConfig({ ...config, destinations: newDests });
+        if (type === "dest") {
+           const newDests = [...config.destinations];
+           newDests[index].nearby_distance = res.text;
+           setConfig({ ...config, destinations: newDests });
+        } else {
+           const newCul = [...config.culinary];
+           newCul[index].nearby_distance = res.text;
+           setConfig({ ...config, culinary: newCul });
+        }
       } else {
         throw new Error("Respons kosong dari server");
       }
@@ -640,6 +646,41 @@ function AdminExplorePage() {
                           }}
                         />
                       </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Input 
+                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          placeholder="Google Place ID"
+                          value={cul.google_place_id || ""}
+                          onChange={(e) => {
+                            const newCul = [...config.culinary];
+                            newCul[i].google_place_id = e.target.value;
+                            setConfig({ ...config, culinary: newCul });
+                          }}
+                        />
+                        <div className="flex gap-1">
+                          <Input 
+                            className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                            placeholder="Jarak Pomah (e.g. 3 km)"
+                            value={cul.nearby_distance || ""}
+                            onChange={(e) => {
+                              const newCul = [...config.culinary];
+                              newCul[i].nearby_distance = e.target.value;
+                              setConfig({ ...config, culinary: newCul });
+                            }}
+                          />
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-6 text-[10px] px-2"
+                            disabled={!cul.google_place_id}
+                            onClick={() => {
+                               if (cul.google_place_id) fetchDistance(cul.google_place_id, i, "culinary");
+                            }}
+                          >
+                            Tarik
+                          </Button>
+                        </div>
+                      </div>
                       <Textarea 
                         className="h-14 text-xs text-stone-650 resize-none p-2 mt-1"
                         placeholder="Deskripsi..."
@@ -653,17 +694,30 @@ function AdminExplorePage() {
                     </div>
                   ) : (
                     <>
-                      <h3 className="text-sm font-bold text-stone-900 truncate">{cul.name}</h3>
-                      <p className="text-[10px] text-stone-500 font-semibold">{cul.category}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-stone-900 text-sm truncate">{cul.name}</h3>
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-[10px] font-semibold rounded">
+                          {cul.category}
+                        </span>
+                      </div>
+                      
                       {cul.address && (
                         <p className="text-[10px] text-stone-400 flex items-start gap-1">
                           <MapPin className="h-2.5 w-2.5 shrink-0 mt-0.5" />
                           <span className="truncate">{cul.address}</span>
                         </p>
                       )}
-                      <p className="flex-1 text-xs text-stone-600 line-clamp-2 leading-relaxed mt-1">
+                      {cul.nearby_distance && (
+                        <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                          <Navigation className="h-2.5 w-2.5 shrink-0" />
+                          <span>Nearby: {cul.nearby_distance}</span>
+                        </p>
+                      )}
+                      
+                      <p className="flex-1 text-[11px] text-stone-500 mt-2 line-clamp-2 leading-relaxed">
                         {cul.desc || "Tidak ada deskripsi."}
                       </p>
+
                       <div className="flex items-center gap-1 text-[10px] text-stone-500 mt-2 border-t border-stone-100 pt-1.5 font-medium">
                         <span className="text-amber-400">★</span>
                         <span className="font-semibold text-stone-900">{cul.rating || "—"}</span>
