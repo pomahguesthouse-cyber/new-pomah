@@ -30,7 +30,6 @@ import {
   runMultiAgentOrchestration,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
-import { queueUpsert, resolveQueueTiming }    from "@/services/queue.service";
 import { scheduleAutoreply }                  from "@/services/wa-autoreply.service";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,32 +157,21 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Execute AI Asynchronously (Memory Buffer) ────────────────────────────
-        console.log(`[Webhook] Processing AI in background (memory buffer) | ${logCtx}`);
-        
+        // ── 7. Execute AI synchronously before returning 200 ───────────────────────
+        // Cloudflare cancels `waitUntil` background work once the response is sent and
+        // Fonnte disconnects, which silently dropped slower (tool-using) replies.
+        // Awaiting here keeps the request alive until the WhatsApp message is sent.
+        console.log(`[Webhook] Processing AI synchronously | ${logCtx}`);
+
         try {
           const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
-          const { getWaitUntil } = await import("@/lib/cf-context");
           const origin = new URL(request.url).origin;
-
-          const work = async () => {
-            const outcome = await executeAutoreplyForPhone(customerPhone, origin);
-            console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
-          };
-
-          const waitUntil = getWaitUntil();
-          if (waitUntil) {
-            waitUntil(work());
-            console.log(`[Webhook] Scheduled via waitUntil | ${logCtx}`);
-          } else {
-            void work();
-            console.log(`[Webhook] Scheduled via fire-and-forget | ${logCtx}`);
-          }
+          const outcome = await executeAutoreplyForPhone(customerPhone, origin);
+          console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
         } catch (e) {
           console.error(`[Webhook] fatal AI error: ${e} | ${logCtx}`);
         }
 
-        // Return 200 OK immediately
         return new Response("OK", { status: 200 });
       },
 
