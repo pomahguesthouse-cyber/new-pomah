@@ -59,15 +59,24 @@ export const Route = createFileRoute("/book/")({
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
     return getPublicSiteData();
   },
-  head: () => ({
-    meta: [
-      { title: "Reservasi Online Langsung — Pomah Guesthouse Semarang" },
-      {
-        name: "description",
-        content: "Pesan kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.",
-      },
-    ],
-  }),
+  head: ({ loaderData }: any) => {
+    const bookingSeo = mergeHomepageConfig(
+      (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
+    ).bookingSeo;
+    const title = bookingSeo.metaTitle || "Booking Kamar | Pomah Guesthouse Semarang";
+    const desc =
+      bookingSeo.metaDescription ||
+      "Booking kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: desc },
+        { property: "og:title", content: title },
+        { property: "og:description", content: desc },
+        ...(bookingSeo.ogImageUrl ? [{ property: "og:image", content: bookingSeo.ogImageUrl }] : []),
+      ],
+    };
+  },
   component: BookPage,
 });
 

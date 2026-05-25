@@ -1270,7 +1270,7 @@ function PageSettingsPanel({
 
   useEffect(() => {
     if (target.kind === "home" || target.kind === "book") {
-      const s = target.cfg.seo;
+      const s = target.kind === "book" ? target.cfg.bookingSeo : target.cfg.seo;
       setSlug("");
       setMetaTitle(s.metaTitle ?? "");
       setMetaDesc(s.metaDescription ?? "");
@@ -1300,18 +1300,21 @@ function PageSettingsPanel({
   const handleSave = async () => {
     setSaving(true);
     try {
-      if (target.kind === "home") {
+      if (target.kind === "home" || target.kind === "book") {
         if (!target.propertyId) { toast.error("Properti belum tersedia."); setSaving(false); return; }
+        
+        const newSeo = {
+          metaTitle: metaTitle, metaDescription: metaDesc, targetKeyword: targetKw,
+          ogImageUrl: ogImage, customHead, customRobots,
+          jsonLdEnabled: jsonLdOn, customJsonLd,
+        };
+        
         await updateHomepageConfig({
           data: {
             id: target.propertyId,
             config: {
               ...target.cfg,
-              seo: {
-                metaTitle: metaTitle, metaDescription: metaDesc, targetKeyword: targetKw,
-                ogImageUrl: ogImage, customHead, customRobots,
-                jsonLdEnabled: jsonLdOn, customJsonLd,
-              },
+              ...(target.kind === "book" ? { bookingSeo: newSeo } : { seo: newSeo }),
             } as unknown as Record<string, unknown>,
           },
         });

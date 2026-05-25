@@ -112,6 +112,16 @@ export interface HomepageConfig {
     jsonLdEnabled: boolean;
     customJsonLd: string;
   };
+  bookingSeo: {
+    metaTitle: string;
+    metaDescription: string;
+    targetKeyword: string;
+    ogImageUrl: string;
+    customHead: string;
+    customRobots: string;
+    jsonLdEnabled: boolean;
+    customJsonLd: string;
+  };
 }
 
 /** Lowest / highest z-index a section layer can take. */
@@ -215,6 +225,17 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     jsonLdEnabled: true,
     customJsonLd: "",
   },
+  bookingSeo: {
+    metaTitle: "Booking Kamar | Pomah Guesthouse Semarang",
+    metaDescription:
+      "Booking kamar di Pomah Guesthouse Semarang. Cek ketersediaan dan pesan kamar dengan harga terbaik langsung dari website resmi kami.",
+    targetKeyword: "",
+    ogImageUrl: "",
+    customHead: "",
+    customRobots: "",
+    jsonLdEnabled: true,
+    customJsonLd: "",
+  },
 };
 
 /** Merge a stored (possibly partial) config onto the defaults. */
@@ -229,5 +250,6 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
     seo: { ...d.seo, ...c.seo },
+    bookingSeo: { ...d.bookingSeo, ...c.bookingSeo },
   };
 }
