@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getGoogleReviews } from "@/public/functions/public.functions";
+import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 
 // Existing simple SEO page routes
 export const listSeoPages = createServerFn({ method: "GET" })
@@ -513,7 +513,7 @@ export const getReviewIntelligence = createServerFn({ method: "GET" })
     try {
       const gRes = await getGoogleReviews();
       if (gRes && gRes.status === "OK" && Array.isArray(gRes.reviews)) {
-        googleReviewsMapped = gRes.reviews.map((rv, index) => {
+        googleReviewsMapped = gRes.reviews.map((rv: GoogleReview, index: number) => {
           const content = rv.text || "";
           const sentiment = rv.rating >= 4 ? "positive" : rv.rating >= 3 ? "neutral" : "negative";
           
