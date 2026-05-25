@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import {
   getPublicSiteData,
-  getGoogleReviews,
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
+import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
@@ -35,18 +35,19 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
-    const { getPublicSiteData } = await import("@/public/functions/public.functions");
-    return getPublicSiteData();
-  },
+  loader: async () => getPublicSiteData(),
+  staleTime: 5 * 60 * 1000,
+
   head: ({ loaderData }: any) => {
-    const seo = mergeHomepageConfig(
+    const cfg = mergeHomepageConfig(
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
-    ).seo;
+    );
+    const seo = cfg.seo;
     const title = seo.metaTitle || "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang";
     const desc =
       seo.metaDescription ||
       "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
+    const heroImage = cfg.hero.slides?.[0]?.imageUrl;
     return {
       meta: [
         { title },
@@ -55,10 +56,14 @@ export const Route = createFileRoute("/")({
         { property: "og:description", content: desc },
         ...(seo.ogImageUrl ? [{ property: "og:image", content: seo.ogImageUrl }] : []),
       ],
+      links: heroImage
+        ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" }]
+        : [],
     };
   },
   component: PomahHome,
 });
+
 
 /* ------------------------------------------------------------------ */
 /* Static content (no DB source)                                       */
@@ -138,12 +143,18 @@ function PomahHome() {
     queryKey: ["public-site"],
     queryFn: () => fetchData(),
     initialData: loaderData,
+    staleTime: 5 * 60 * 1000,
   });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
 
   const reviewsFn = useServerFn(getGoogleReviews);
-  const { data: gr } = useQuery({ queryKey: ["google-reviews"], queryFn: () => reviewsFn() });
+  const { data: gr } = useQuery({
+    queryKey: ["google-reviews"],
+    queryFn: () => reviewsFn(),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const gRating = gr?.rating ?? 4.8;
   const gTotal = gr?.total ?? 76;
   const gReviews = gr?.reviews ?? [];
@@ -238,6 +249,7 @@ function PomahHome() {
     queryKey: ["availability", effCheckIn, effCheckOut],
     queryFn: () => availFn({ data: { checkIn: effCheckIn, checkOut: effCheckOut } }),
     enabled: !!effCheckIn && !!effCheckOut && effCheckIn < effCheckOut,
+    staleTime: 60 * 1000,
   });
   const availability = availData?.availability ?? null;
 
@@ -354,7 +366,7 @@ function PomahHome() {
         <ReviewSlider
           items={
             gReviews.length > 0
-              ? gReviews.map((rv) => ({ text: rv.text, author: rv.author, isGoogle: true }))
+              ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
               : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
           }
         />

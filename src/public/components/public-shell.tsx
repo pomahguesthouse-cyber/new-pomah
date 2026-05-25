@@ -585,7 +585,9 @@ export function HeroSlider({
           <img
             src={active.imageUrl}
             alt={active.heading}
-            loading="lazy"
+            loading={i === 0 ? "eager" : "lazy"}
+            fetchPriority={i === 0 ? "high" : "auto"}
+            decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
