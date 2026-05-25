@@ -157,9 +157,30 @@ export const autoFillFromGoogleMaps = createServerFn({ method: "POST" })
         }
         
         if (extractedQuery) {
-          // Cegah penggunaan token enkripsi (seperti EgSinh...) sebagai query
+          // Cegah penggunaan token enkripsi (seperti EgSinh...) sebagai query ke textsearch
           if (extractedQuery.length > 40 && !extractedQuery.includes(" ")) {
-            throw new Error("Tautan Google Maps ini menggunakan token terenkripsi. Harap ketik nama tempat secara langsung (misal: 'Lawang Sewu') untuk hasil yang akurat.");
+            // Tautan ini pakai token, coba ekstrak nama tempat dari meta tag/HTML
+            try {
+              const html = await res.text();
+              const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i) 
+                                || html.match(/<title>([^<]+)<\/title>/i);
+              if (ogTitleMatch && ogTitleMatch[1]) {
+                const parsedTitle = ogTitleMatch[1]
+                  .replace(/\s*-\s*Google Maps/i, "")
+                  .replace(/\s*-\s*Google Search/i, "")
+                  .trim();
+                if (parsedTitle && parsedTitle !== "Google Maps") {
+                  extractedQuery = parsedTitle;
+                }
+              }
+            } catch (e) {
+              // Abaikan jika gagal parsing HTML, biarkan error dilempar di bawah
+            }
+
+            // Jika masih berupa token setelah mencoba parse HTML
+            if (extractedQuery.length > 40 && !extractedQuery.includes(" ")) {
+              throw new Error("Tautan Google Maps ini menggunakan token terenkripsi. Harap ketik nama tempat secara langsung (misal: 'Lawang Sewu') untuk hasil yang akurat.");
+            }
           }
           query = extractedQuery;
         }
