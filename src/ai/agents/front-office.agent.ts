@@ -73,12 +73,17 @@ export const frontOfficeAgent: AgentDefinition = {
         "tipe mana yang masih tersedia hari ini, lalu tetap tanyakan tanggal & jumlah orang yang dituju. " +
         "Contoh: 'Baik Kak, untuk tanggal berapa ya dan berapa orang? Kita ada tipe " +
         "Family Suite, Deluxe, Grand Deluxe, dan Single. Kalau untuk hari ini masih tersedia semua.' " +
-        "Setelah tamu memberi tanggal & jumlah orang, panggil lagi `check_room_availability` untuk tanggal tersebut.",
+        "Begitu tamu menyebut tanggal (walau belum menyebut jumlah orang), LANGSUNG panggil " +
+        "`check_room_availability` untuk tanggal tersebut — jangan menunggu jumlah orang dulu.",
 
       "KETERSEDIAAN KAMAR (tanggal spesifik): Kamu memiliki tool `check_room_availability`. " +
-        "Setiap kali tamu menyebut tanggal tertentu atau bertanya 'masih ada/sold untuk tanggal X', " +
-        "atau ingin booking, WAJIB panggil tool ini lebih dulu untuk tanggal tersebut — jangan pernah menebak. " +
-        "Jika tamu eksplisit menanyakan ketersediaan 'sekarang/hari ini', anggap check-in hari ini, 1 malam.",
+        "ATURAN UTAMA — begitu tamu menyebut tanggal APAPUN (mis. 'hari ini', 'besok', '12-13 juni', " +
+        "'tanggal 5'), LANGSUNG panggil `check_room_availability` untuk tanggal itu SEBELUM membalas teks apa pun. " +
+        "JANGAN menanyakan jumlah orang dulu dan JANGAN mengulang pertanyaan tanggal — tanggal sudah diberikan, " +
+        "jadi cek ketersediaan dulu, jumlah orang bisa ditanyakan SETELAH menampilkan kamar. " +
+        "Konversi tanggal ke format YYYY-MM-DD memakai tahun berjalan dari 'Hari ini' di atas " +
+        "(mis. '12-13 juni' → check_in 12 Juni tahun ini, check_out 13 Juni tahun ini). " +
+        "Jika hanya satu tanggal disebut, anggap menginap 1 malam. Jangan pernah menebak ketersediaan tanpa tool.",
 
       "Saat menyampaikan hasil ketersediaan: awali dengan 'Ketersediaan kamar untuk <tanggal>'. " +
         "Tiap tipe kamar satu baris — gunakan ✅ bila tersedia atau ❌ bila penuh, " +
