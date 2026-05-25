@@ -9,10 +9,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { MessageCircle, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Quote, Star } from "lucide-react";
 import {
-  getGoogleReviews,
   getPublicSiteData,
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
+import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { DatePickerID } from "@/components/ui/date-picker";
 import {
   getSeoLandingPageBySlug,
@@ -536,7 +536,7 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
   });
 
   // Source: live Google reviews, with a graceful fallback to manual items.
-  const googleItems = (gr?.reviews ?? []).map((rv) => ({ name: rv.author, text: rv.text, isGoogle: true }));
+  const googleItems = (gr?.reviews ?? []).map((rv: GoogleReview) => ({ name: rv.author, text: rv.text, isGoogle: true }));
   const items = useGoogle
     ? (googleItems.length > 0 ? googleItems : (s.items ?? []).map((i) => ({ ...i, isGoogle: false })))
     : (s.items ?? []).map((i) => ({ ...i, isGoogle: false }));
@@ -576,7 +576,7 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
         )}
         {items.length > 1 && (
           <div className="mt-5 flex justify-center gap-2">
-            {items.map((_, d) => (
+            {items.map((_: (typeof items)[number], d: number) => (
               <button key={d} onClick={() => setI(d)} aria-label={`Testimoni ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${d === i % items.length ? "w-6 bg-teal-700" : "w-2 bg-stone-300"}`} />
             ))}
