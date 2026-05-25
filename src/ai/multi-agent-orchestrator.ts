@@ -46,7 +46,9 @@ async function callLlm(
       body: JSON.stringify({
         model:       config.model,
         temperature: 0.6,
-        max_tokens:  600,
+        // Gemini 2.5 thinking tokens count against this budget; keep it generous
+        // so reasoning + tool calls don't exhaust it and return empty content.
+        max_tokens:  2000,
         messages,
         tools:       agent.tools.length > 0 ? agent.tools : undefined,
         tool_choice: agent.tools.length > 0 ? "auto"      : undefined,
