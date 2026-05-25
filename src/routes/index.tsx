@@ -19,9 +19,9 @@ import {
 } from "lucide-react";
 import {
   getPublicSiteData,
-  getGoogleReviews,
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
+import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
@@ -354,7 +354,7 @@ function PomahHome() {
         <ReviewSlider
           items={
             gReviews.length > 0
-              ? gReviews.map((rv) => ({ text: rv.text, author: rv.author, isGoogle: true }))
+              ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
               : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
           }
         />
