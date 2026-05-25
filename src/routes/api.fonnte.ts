@@ -378,6 +378,33 @@ export const Route = createFileRoute("/api/fonnte")({
 
                   const rollingMessages = (c.messages ?? []).slice(-20);
 
+                  // Optionally mirror production by loading SOP text + brosur files.
+                  let sopText = "";
+                  let brosurFiles: { name: string; url: string }[] = [];
+                  if (url.searchParams.get("sop") === "1") {
+                    const { data: docs } = await (supabaseAdmin as any)
+                      .from("sop_documents")
+                      .select("name, content, source_url, file_path, doc_category")
+                      .order("created_at", { ascending: true })
+                      .limit(40);
+                    const supaUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+                    const parts: string[] = [];
+                    for (const d of (docs ?? [])) {
+                      const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
+                      if (cat === "brosur" || cat === "brochure") {
+                        if (d.file_path) brosurFiles.push({ name: d.name, url: `${supaUrl}/storage/v1/object/public/sop-documents/${d.file_path}` });
+                        continue;
+                      }
+                      const content = d.content?.trim(); const u = d.source_url?.trim();
+                      if (!content && !u) continue;
+                      const head = u ? `### ${d.name} (Tautan: ${u})` : `### ${d.name}`;
+                      parts.push(content ? `${head}\n${content}` : head);
+                    }
+                    sopText = parts.join("\n\n").slice(0, 8000);
+                    result.sop_len = sopText.length;
+                    result.brosur_count = brosurFiles.length;
+                  }
+
                   const t0 = Date.now();
                   const orchResult = await runMultiAgentOrchestration({
                     phone:     testPhone,
@@ -385,9 +412,10 @@ export const Route = createFileRoute("/api/fonnte")({
                     agentCtx: {
                       property: p as any,
                       rooms:    roomList,
-                      sopText:  "",
+                      sopText,
+                      brosurFiles,
                       today,
-                    },
+                    } as any,
                     toolCtx: {
                       supabasePublic: supabasePublic as any,
                       supabaseAdmin:  supabaseAdmin  as any,
