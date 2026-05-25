@@ -638,6 +638,17 @@ function CredentialTab() {
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
       />
+      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+        <strong>Webhook Fonnte (wajib):</strong>{" "}
+        <code className="break-all">
+          {typeof window !== "undefined"
+            ? `${window.location.origin}/api/fonnte`
+            : "https://pomahguesthouse.com/api/fonnte"}
+        </code>
+        <br />
+        Jangan pakai Supabase Edge Function (<code>…/functions/v1/whatsapp-webhook</code>) — itu
+        proyek/layanan lain dan tidak menjalankan chatbot aplikasi ini.
+      </p>
       <TextSettingCard
         icon={<Sparkles className="h-4 w-4" />}
         label="AI Chatbot — API Key"

@@ -21,7 +21,9 @@ import { classifyMessageIntent }              from "@/webhook/intent-classifier"
 import {
   saveInboundMessage,
   saveMessageMetadata,
+  saveOutboundMessage,
 }                                             from "@/repositories/message.repository";
+import { sendWhatsAppMessage }                from "@/services/whatsapp.service";
 
 // ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
 import {
@@ -318,6 +320,7 @@ export const Route = createFileRoute("/api/fonnte")({
               result.detail = (ctxErr as any)?.message ?? "null ctx";
             } else {
               const c = ctx as {
+                thread_id:          string;
                 auto_reply_enabled: boolean;
                 fonnte_token:       string;
                 messages:           Array<{ direction: string; body: string }>;
@@ -390,6 +393,27 @@ export const Route = createFileRoute("/api/fonnte")({
                   result.escalated          = orchResult.escalated;
                   result.reply_ok           = !!orchResult.reply;
                   if (orchResult.error) result.error = orchResult.error;
+
+                  if (
+                    url.searchParams.get("send") === "1" &&
+                    orchResult.reply &&
+                    c.fonnte_token
+                  ) {
+                    const { ok, error: sendErr } = await sendWhatsAppMessage(
+                      c.fonnte_token,
+                      testPhone,
+                      orchResult.reply,
+                    );
+                    result.sent       = ok;
+                    result.send_error = sendErr;
+                    if (ok && c.thread_id) {
+                      await saveOutboundMessage(supabaseAdmin, {
+                        threadId: c.thread_id,
+                        body:     orchResult.reply,
+                        metadata: { agent: "test_reply", is_test: true } as any,
+                      });
+                    }
+                  }
                 }
               }
             }
