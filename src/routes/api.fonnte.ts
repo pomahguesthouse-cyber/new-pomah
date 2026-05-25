@@ -158,45 +158,41 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Enqueue (smart debounce) ─────────────────────────────────────
-        const { delayMs, maxWaitMs } = resolveQueueTiming(
-          message,
-          c.smart_delay_config as Parameters<typeof resolveQueueTiming>[1],
-        );
+        // ── 7. Memory Buffer Debounce (Synchronous) ───────────────────────────
+        const delayMs = 3000; // wait 3 seconds to see if more messages arrive
+        console.log(`[Webhook] buffering for ${delayMs}ms | ${logCtx}`);
+        
+        // Wait asynchronously without returning
+        await new Promise(resolve => setTimeout(resolve, delayMs));
 
-        const queued = await queueUpsert(supabaseAdmin, {
-          phone:      customerPhone,
-          threadId:   c.thread_id,
-          messageId,
-          body:       message,
-          delayMs,
-          maxWaitMs,
-        });
+        // After sleep, check if a NEWER message arrived for this thread
+        const { data: latestMsg } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "in")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-        const entryId = queued?.entryId ?? null;
-        if (!queued) {
-          console.error(`[Webhook] Queue upsert FAILED — direct autoreply fallback | ${logCtx}`);
-        } else {
-          console.log(
-            `[Webhook] Queue ${queued.entryId.slice(0, 8)} ` +
-              `debounce delay=${delayMs}ms maxWait=${maxWaitMs}ms ` +
-              `new_burst=${queued.isNewBurst} | ${logCtx}`,
-          );
+        if (latestMsg && latestMsg.id !== messageId) {
+          console.log(`[Webhook] Superseded by newer message (debounce) | ${logCtx}`);
+          return new Response("OK", { status: 200 }); // Let the newer request handle it
         }
 
-        // Always schedule autoreply (waitUntil): uses queue timing when available.
-        scheduleAutoreply(request, {
-          phone:            customerPhone,
-          body:             message,
-          smartDelayConfig: c.smart_delay_config,
-          queueEntryId:     entryId,
-        });
+        console.log(`[Webhook] Winner! Processing AI | ${logCtx}`);
+        
+        // ── 8. Execute AI Synchronously ───────────────────────────────────────
+        try {
+          const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
+          const origin = new URL(request.url).origin;
+          const outcome = await executeAutoreplyForPhone(customerPhone, origin);
+          console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
+        } catch (e) {
+          console.error(`[Webhook] fatal AI error: ${e} | ${logCtx}`);
+        }
 
-        void (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies").catch((e: unknown) =>
-          console.warn("[Webhook] zombie cleanup:", e),
-        );
-
-        // Return 200 OK immediately. The AI orchestration runs asynchronously.
+        // Return 200 OK after sending the message
         return new Response("OK", { status: 200 });
       },
 
