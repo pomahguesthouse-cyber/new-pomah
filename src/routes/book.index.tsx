@@ -614,14 +614,6 @@ function BookPage() {
                     <span className="font-serif text-2xl font-semibold text-stone-900">Rp{grandTotal.toLocaleString("id-ID")}</span>
                   </div>
                   
-                  <div className="bg-[#FFF9E6] border border-[#FFE5A3] rounded-xl p-4 flex gap-3 mb-6">
-                    <Clock className="w-5 h-5 text-amber-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">Status</p>
-                      <p className="text-xs text-amber-700">Menunggu konfirmasi admin</p>
-                    </div>
-                  </div>
-
                   <div className="space-y-3">
                     <Button 
                       type="submit" 
@@ -629,7 +621,7 @@ function BookPage() {
                       disabled={pending}
                       className="w-full h-12 bg-[#364935] hover:bg-[#2A3929] text-white rounded-xl font-medium text-base"
                     >
-                      {pending ? "Memproses..." : "Kirim booking"}
+                      {pending ? "Memproses..." : "Pesan Kamar"}
                     </Button>
                     <Button 
                       variant="outline" 
