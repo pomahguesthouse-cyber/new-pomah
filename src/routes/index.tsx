@@ -250,6 +250,7 @@ function PomahHome() {
     queryKey: ["availability", effCheckIn, effCheckOut],
     queryFn: () => availFn({ data: { checkIn: effCheckIn, checkOut: effCheckOut } }),
     enabled: !!effCheckIn && !!effCheckOut && effCheckIn < effCheckOut,
+    staleTime: 60 * 1000,
   });
   const availability = availData?.availability ?? null;
 
