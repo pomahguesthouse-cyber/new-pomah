@@ -609,7 +609,7 @@ function BookPage() {
                   </div>
 
                   <div className="flex justify-between items-end mb-6">
-                    <span className="text-stone-600 font-medium">Total estimasi</span>
+                    <span className="text-stone-600 font-medium">Total pembayaran</span>
                     <span className="font-serif text-2xl font-semibold text-stone-900">Rp{grandTotal.toLocaleString("id-ID")}</span>
                   </div>
                   
