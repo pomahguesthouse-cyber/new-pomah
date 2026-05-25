@@ -111,7 +111,7 @@ async function pickAvailableRooms(
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
   const [{ data: property }, { data: roomTypes }] = await Promise.all([
-    supabasePublic.from("properties").select("*").limit(1).maybeSingle(),
+    supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
     supabasePublic
       .from("room_types")
       .select(
@@ -143,7 +143,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const { data: property } = await supabasePublic
+    const { data: property } = await supabaseAdmin
       .from("properties")
       .select("id")
       .limit(1)
@@ -359,7 +359,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       // Try fetching property info
       let p: Record<string, unknown> = {};
       try {
-        const { data: pRow } = await sb
+        const { data: pRow } = await supabaseAdmin
           .from("properties")
           .select("name, address, payment_bank_name, payment_account_number, payment_account_holder")
           .limit(1)
@@ -459,7 +459,7 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       "id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url, images";
     const sb = db(supabasePublic);
     const [{ data: property }, { data: room }, { data: others }] = await Promise.all([
-      sb.from("properties").select("*").limit(1).maybeSingle(),
+      supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
       sb.from("room_types").select(fields).eq("slug", data.slug).maybeSingle(),
       sb.from("room_types").select(fields).neq("slug", data.slug).order("base_rate"),
     ]);
@@ -560,7 +560,7 @@ const empty = (status: string): GoogleReviewsResult => ({
  * (so the homepage falls back) on any failure.
  */
 export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
-  const { data: prop } = await supabasePublic
+  const { data: prop } = await supabaseAdmin
     .from("properties")
     .select("google_place_id, google_places_api_key")
     .limit(1)
@@ -645,7 +645,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const { data: prop } = await supabasePublic
+    const { data: prop } = await supabaseAdmin
       .from("properties")
       .select("*")
       .limit(1)
