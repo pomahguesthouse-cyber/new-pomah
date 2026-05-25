@@ -44,9 +44,9 @@ const hashString = (str: string) => {
 };
 
 export const Route = createFileRoute("/api/queue-worker")({
-  component: () => null,
-  APIRoute: {
-    POST: async ({ request }) => {
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
       try {
         const payload = await request.json().catch(() => null);
         if (!payload || !payload.record) {
@@ -56,34 +56,65 @@ export const Route = createFileRoute("/api/queue-worker")({
         const entry = payload.record;
         const entryId = entry.id;
         const phone = entry.phone;
-        const processAfter = entry.process_after ? new Date(entry.process_after).getTime() : Date.now();
-        const nowMs = Date.now();
+        const maxWaitUntil = entry.max_wait_until
+          ? new Date(entry.max_wait_until).getTime()
+          : Date.now() + 25_000;
 
-        // 1. Wait until process_after
-        const waitMs = processAfter - nowMs;
-        if (waitMs > 0) {
-          console.log(`[QueueWorker] Waiting ${waitMs}ms for ${phone}`);
-          await sleep(waitMs);
-        }
-
-        // 2. Claim the queue item
         const workerId = `worker_${Math.random().toString(36).substring(2, 15)}`;
-        const { data: claimData, error: claimErr } = await (supabaseAdmin as any).rpc(
-          "wa_queue_claim",
-          { p_entry_id: entryId, p_worker_id: workerId }
-        );
 
-        if (claimErr) {
-          console.error(`[QueueWorker] Claim error: ${claimErr.message}`);
-          return new Response("Claim Error", { status: 500 });
+        // 1–2. Wait for smart-delay window, then claim (retry while debounce extends process_after)
+        let claimedItem: {
+          message_count: number;
+          last_message_body: string;
+        } | null = null;
+
+        while (Date.now() < maxWaitUntil) {
+          const { data: row, error: rowErr } = await (supabaseAdmin as any)
+            .from("wa_conversation_queue")
+            .select("process_after, status")
+            .eq("id", entryId)
+            .maybeSingle();
+
+          if (rowErr || !row) {
+            console.log(`[QueueWorker] Entry ${entryId} gone`);
+            return new Response("Gone", { status: 200 });
+          }
+
+          if (!["pending", "waiting"].includes(row.status as string)) {
+            console.log(`[QueueWorker] Entry ${entryId} status=${row.status} — skip`);
+            return new Response("Not Active", { status: 200 });
+          }
+
+          const processAfterMs = new Date(row.process_after as string).getTime();
+          const waitMs = processAfterMs - Date.now();
+          if (waitMs > 0) {
+            const capped = Math.min(waitMs, maxWaitUntil - Date.now());
+            console.log(`[QueueWorker] Waiting ${capped}ms for ${phone}`);
+            await sleep(capped);
+          }
+
+          const { data: claimData, error: claimErr } = await (supabaseAdmin as any).rpc(
+            "wa_queue_claim",
+            { p_entry_id: entryId, p_worker_id: workerId },
+          );
+
+          if (claimErr) {
+            console.error(`[QueueWorker] Claim error: ${claimErr.message}`);
+            return new Response("Claim Error", { status: 500 });
+          }
+
+          if (claimData?.[0]?.claimed) {
+            claimedItem = claimData[0];
+            break;
+          }
+
+          await sleep(300);
         }
 
-        if (!claimData || claimData.length === 0 || !claimData[0].claimed) {
-          console.log(`[QueueWorker] Item ${entryId} already claimed or superseded.`);
+        if (!claimedItem) {
+          console.log(`[QueueWorker] Item ${entryId} not claimed before max_wait_until`);
           return new Response("Not Claimed", { status: 200 });
         }
-
-        const claimedItem = claimData[0];
         console.log(`[QueueWorker] Claimed ${entryId} for ${phone} (msgs: ${claimedItem.message_count})`);
 
         // 3. Load Autoreply Context
@@ -284,6 +315,7 @@ export const Route = createFileRoute("/api/queue-worker")({
         console.error("[QueueWorker] Fatal error:", err);
         return new Response("Fatal Error", { status: 500 });
       }
-    }
-  }
+      },
+    },
+  },
 });
