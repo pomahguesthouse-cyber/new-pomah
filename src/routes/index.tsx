@@ -40,13 +40,15 @@ export const Route = createFileRoute("/")({
     return getPublicSiteData();
   },
   head: ({ loaderData }: any) => {
-    const seo = mergeHomepageConfig(
+    const cfg = mergeHomepageConfig(
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
-    ).seo;
+    );
+    const seo = cfg.seo;
     const title = seo.metaTitle || "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang";
     const desc =
       seo.metaDescription ||
       "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
+    const heroImage = cfg.hero.slides?.[0]?.imageUrl;
     return {
       meta: [
         { title },
@@ -55,10 +57,14 @@ export const Route = createFileRoute("/")({
         { property: "og:description", content: desc },
         ...(seo.ogImageUrl ? [{ property: "og:image", content: seo.ogImageUrl }] : []),
       ],
+      links: heroImage
+        ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" }]
+        : [],
     };
   },
   component: PomahHome,
 });
+
 
 /* ------------------------------------------------------------------ */
 /* Static content (no DB source)                                       */
