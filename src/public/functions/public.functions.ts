@@ -111,7 +111,7 @@ async function pickAvailableRooms(
 
 export type PublicProperty = {
   id?: string;
-  name?: string | null;
+  name?: string;
   tagline?: string | null;
   description?: string | null;
   address?: string | null;
@@ -130,8 +130,8 @@ export type PublicProperty = {
   google_search_console?: string | null;
   google_place_id?: string | null;
   hotel_policy?: string | null;
-  homepage_config?: Record<string, unknown> | null;
-  explore_config?: Record<string, unknown> | null;
+  homepage_config?: unknown;
+  explore_config?: unknown;
   currency?: string | null;
   timezone?: string | null;
 };
