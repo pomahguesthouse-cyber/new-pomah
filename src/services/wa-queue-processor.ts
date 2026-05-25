@@ -18,7 +18,8 @@ const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 
 const AI_TIMEOUT_MS = 22_000;
-const RECOVERY_GRACE_MS = 120_000;
+/** Extra time after max_wait_until to claim (debounce must finish first). */
+const POST_DEADLINE_GRACE_MS = 15_000;
 
 interface SopCache {
   docs: any[];
@@ -85,9 +86,12 @@ export async function processWaQueueEntry(
       const processAfterMs = new Date(row.process_after as string).getTime();
       const maxWaitMs = new Date(row.max_wait_until as string).getTime();
 
-      if (now < processAfterMs) {
+      const debounceDone = now >= processAfterMs;
+      const pastHardDeadline = now > maxWaitMs + POST_DEADLINE_GRACE_MS;
+
+      if (!debounceDone) {
         const capped = Math.min(processAfterMs - now, 2000);
-        console.log(`[QueueProcessor] Waiting ${capped}ms for ${phone}`);
+        console.log(`[QueueProcessor] Debounce wait ${capped}ms for ${phone}`);
         await sleep(capped);
         continue;
       }
@@ -107,12 +111,15 @@ export async function processWaQueueEntry(
         break;
       }
 
-      if (now > maxWaitMs + RECOVERY_GRACE_MS) {
-        console.log(`[QueueProcessor] Item ${entryId} not claimed after recovery window`);
+      // Debounce window ended but claim lost race — retry until hard deadline.
+      if (pastHardDeadline) {
+        console.log(
+          `[QueueProcessor] Item ${entryId} not claimed (debounce done, past deadline)`,
+        );
         return "not_claimed";
       }
 
-      await sleep(400);
+      await sleep(300);
     }
 
     console.log(

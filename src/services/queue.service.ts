@@ -59,6 +59,33 @@ export function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
   return Math.min(base, cfg.maxWaitMs);
 }
 
+/** Map properties.smart_delay_config (admin JSON) → queue timing. */
+export function resolveQueueTiming(
+  body: string,
+  raw: Partial<{
+    enabled: boolean;
+    shortMs: number;
+    mediumMs: number;
+    longMs: number;
+    waitSignalMs: number;
+    maxDelayMs: number;
+  }> | null | undefined,
+): { delayMs: number; maxWaitMs: number } {
+  const maxWaitMs = raw?.maxDelayMs ?? DEFAULT_SMART_DELAY.maxWaitMs;
+  if (raw?.enabled === false) {
+    return { delayMs: 0, maxWaitMs };
+  }
+  const delayMs = calcDelayMs(body, {
+    enabled:      true,
+    shortMs:      raw?.shortMs      ?? DEFAULT_SMART_DELAY.shortMs,
+    mediumMs:     raw?.mediumMs     ?? DEFAULT_SMART_DELAY.mediumMs,
+    longMs:       raw?.longMs       ?? DEFAULT_SMART_DELAY.longMs,
+    waitSignalMs: raw?.waitSignalMs ?? DEFAULT_SMART_DELAY.waitSignalMs,
+    maxWaitMs,
+  });
+  return { delayMs, maxWaitMs };
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface QueueEntry {

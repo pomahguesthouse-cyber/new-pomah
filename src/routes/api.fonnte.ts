@@ -31,6 +31,7 @@ import {
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
 import { dispatchQueueWorker }                from "@/services/queue-worker-dispatch";
+import { queueUpsert, resolveQueueTiming }    from "@/services/queue.service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -142,9 +143,10 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         const c = ctx as {
-          thread_id:          string;
-          auto_reply_enabled: boolean;
-          fonnte_token:       string;
+          thread_id:           string;
+          auto_reply_enabled:  boolean;
+          fonnte_token:        string;
+          smart_delay_config?: Record<string, unknown> | null;
         };
 
         if (!c.auto_reply_enabled) {
@@ -156,37 +158,38 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Enqueue to Database ────────────────────────────────────────
-        // pg_net trigger may also call the worker; we always dispatch as fallback.
+        // ── 7. Enqueue (smart debounce) ─────────────────────────────────────
+        const { delayMs, maxWaitMs } = resolveQueueTiming(
+          message,
+          c.smart_delay_config as Parameters<typeof resolveQueueTiming>[1],
+        );
+
+        const queued = await queueUpsert(supabaseAdmin, {
+          phone:      customerPhone,
+          threadId:   c.thread_id,
+          messageId,
+          body:       message,
+          delayMs,
+          maxWaitMs,
+        });
+
+        if (!queued) {
+          console.error(`[Webhook] Queue upsert FAILED | ${logCtx}`);
+        } else {
+          console.log(
+            `[Webhook] Queue ${queued.entryId.slice(0, 8)} ` +
+              `debounce delay=${delayMs}ms maxWait=${maxWaitMs}ms ` +
+              `new_burst=${queued.isNewBurst} sleep=${queued.sleepMs}ms | ${logCtx}`,
+          );
+          // Only start one worker per burst; extends only push process_after in DB.
+          if (queued.isNewBurst) {
+            dispatchQueueWorker(request, queued.entryId);
+          }
+        }
+
         void (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies").catch((e: unknown) =>
           console.warn("[Webhook] zombie cleanup:", e),
         );
-
-        const { data: qRows, error: qErr } = await (supabaseAdmin as any).rpc("wa_queue_upsert", {
-          p_phone:       customerPhone,
-          p_thread_id:   c.thread_id,
-          p_message_id:  messageId,
-          p_body:        message,
-          p_delay_ms:    3000,
-          p_max_wait_ms: 25000,
-        });
-
-        if (qErr) {
-          console.error(
-            `[Webhook] Queue upsert FAILED: ${qErr.message} (code=${(qErr as { code?: string }).code}) | ${logCtx}`,
-          );
-        } else {
-          const entryId = (qRows as { entry_id?: string }[] | null)?.[0]?.entry_id;
-          const sleepMs = (qRows as { sleep_ms?: number }[] | null)?.[0]?.sleep_ms;
-          console.log(
-            `[Webhook] Enqueued ${entryId ?? "?"} sleep_ms=${sleepMs ?? "?"} | ${logCtx}`,
-          );
-          if (entryId) {
-            dispatchQueueWorker(request, entryId);
-          } else {
-            console.error(`[Webhook] wa_queue_upsert returned no entry_id | ${logCtx}`);
-          }
-        }
 
         // Return 200 OK immediately. The AI orchestration runs asynchronously.
         return new Response("OK", { status: 200 });
