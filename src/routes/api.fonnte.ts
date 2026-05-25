@@ -233,7 +233,12 @@ export const Route = createFileRoute("/api/fonnte")({
 
             const { getAgent } = await import("@/ai/agents/registry");
             const agentR = getAgent("front-office");
-            const rollingR = (cR.messages ?? []).slice(-20);
+            let rollingR = (cR.messages ?? []).slice(-20);
+            // Optionally drop trailing assistant turns so the array ends on a user message.
+            if (url.searchParams.get("trim_tail") === "1") {
+              while (rollingR.length && rollingR[rollingR.length - 1].direction !== "in") rollingR.pop();
+            }
+            out.tail = rollingR.slice(-3).map((m: any) => ({ d: m.direction, b: m.body?.slice(0, 40) }));
             const messagesR = [
               { role: "system", content: agentR.buildSystemPrompt({ property: pR, rooms: roomsR || [], sopText: "", today: todayWIB() } as any) },
               ...rollingR.map((m: any) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.body })),
