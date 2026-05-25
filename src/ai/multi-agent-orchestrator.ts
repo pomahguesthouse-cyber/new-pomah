@@ -99,10 +99,17 @@ async function runAgent(
 ): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
   const toolsUsed = new Set<string>();
 
+  // Drop trailing assistant turns: Gemini returns an empty completion when the
+  // conversation ends on an assistant message (it has nothing new to answer).
+  // The meaningful last turn is always the guest's latest inbound message.
+  const trimmed = [...conversationMsgs];
+  while (trimmed.length && trimmed[trimmed.length - 1].direction !== "in") trimmed.pop();
+  const history = trimmed.length ? trimmed : conversationMsgs;
+
   // Build message array: agent system prompt + conversation history
   const messages: AiMessage[] = [
     { role: "system", content: agent.buildSystemPrompt(agentCtx) },
-    ...conversationMsgs.map((m) => ({
+    ...history.map((m) => ({
       role:    (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
       content: m.body,
     })),

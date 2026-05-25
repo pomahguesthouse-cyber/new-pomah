@@ -71,10 +71,16 @@ export async function runOrchestration(
   const maxTurns  = input.maxTurns ?? DEFAULT_MAX_TURNS;
   const toolsUsed = new Set<string>();
 
+  // Drop trailing assistant turns: the LLM returns an empty completion when the
+  // conversation ends on an assistant message (nothing new to answer).
+  const trimmed = [...input.messages];
+  while (trimmed.length && trimmed[trimmed.length - 1].direction !== "in") trimmed.pop();
+  const history = trimmed.length ? trimmed : input.messages;
+
   // Build the initial message array: system + conversation history
   const messages: AiMessage[] = [
     { role: "system", content: input.systemPrompt },
-    ...input.messages.map((m) => ({
+    ...history.map((m) => ({
       role:    (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
       content: m.body,
     })),
