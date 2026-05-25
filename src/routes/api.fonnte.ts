@@ -29,9 +29,9 @@ import {
 }                                             from "@/repositories/message.repository";
 
 // ── Services ───────────────────────────────────────────────────────────────────
-import { sendWhatsAppMessage }                from "@/services/whatsapp.service";
 
 // ── Multi-Agent AI pipeline ────────────────────────────────────────────────────
+<<<<<<< Updated upstream
 import {
   runMultiAgentOrchestration,
   deriveAgentLabelFromKey,
@@ -48,17 +48,12 @@ const FALLBACK_MESSAGE =
 /** AI request timeout (AbortController) */
 const AI_TIMEOUT_MS = 12_000;
 
+=======
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+>>>>>>> Stashed changes
 // ─── Global Cache & Fault Tolerance State ─────────────────────────────────────
-
-interface SopCache {
-  docs: any[];
-  fetchedAt: number;
-}
-
-let globalSopCache: SopCache | null = null;
-const SOP_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes cache TTL
-
-/**
  * Identify a brochure doc by doc_category OR by its storage path prefix.
  * The path-based check handles files uploaded before the doc_category column
  * was migrated (those have doc_category = null or 'sop').
@@ -97,28 +92,6 @@ function hashString(str: string): string {
   return hash.toString(36);
 }
 
-/** Fallback helper that sends a fallback reply and persists it to the database */
-async function sendFallbackAndSave(
-  token: string,
-  sender: string,
-  threadId: string,
-  logCtx: string
-): Promise<void> {
-  const { ok: sent, error: sendErr } = await sendWhatsAppMessage(token, sender, FALLBACK_MESSAGE);
-  if (!sent) {
-    console.error(`[AutoReply] Fallback send failed: ${sendErr} | ${logCtx}`);
-    return;
-  }
-  await saveOutboundMessage(supabaseAdmin, {
-    threadId,
-    body:     FALLBACK_MESSAGE,
-    metadata: {
-      agent:              "Front Office Agent",
-      tools_used:         [],
-      agent_key:          "front-office",
-      is_fallback:        true,
-    } as any,
-  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,14 +221,15 @@ export const Route = createFileRoute("/api/fonnte")({
         };
 
         if (!c.auto_reply_enabled) {
-          console.log(`[AutoReply] auto_reply_enabled=false — skipping | ${logCtx}`);
+          console.log(`[Webhook] auto_reply_enabled=false — skipping | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }
         if (!c.fonnte_token) {
-          console.error(`[AutoReply] fonnte_token not configured | ${logCtx}`);
+          console.error(`[Webhook] fonnte_token not configured | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }
 
+<<<<<<< Updated upstream
         // ── 7. Lightweight Smart Debounce (Last-One-Wins) ─────────────────
         const DEBOUNCE_MS = 1500;
         console.log(`[AutoReply] debouncing ${DEBOUNCE_MS}ms | thread=${c.thread_id} | ${logCtx}`);
@@ -573,6 +547,23 @@ export const Route = createFileRoute("/api/fonnte")({
             ? unexpectedErr.message
             : String(unexpectedErr);
           console.error(`[AutoReply] unexpected crash: ${errMsg} | ${logCtx}`);
+=======
+        // ── 7. Enqueue to Database ────────────────────────────────────────
+        // This triggers the async worker via pg_net (Database Trigger)
+        const { error: qErr } = await (supabaseAdmin as any).rpc("wa_queue_upsert", {
+          p_phone:       customerPhone,
+          p_thread_id:   c.thread_id,
+          p_message_id:  messageId,
+          p_body:        message,
+          p_delay_ms:    3000,
+          p_max_wait_ms: 25000,
+        });
+
+        if (qErr) {
+          console.error(`[Webhook] Queue upsert error: ${qErr.message} | ${logCtx}`);
+        } else {
+          console.log(`[Webhook] Enqueued message to wa_conversation_queue | ${logCtx}`);
+>>>>>>> Stashed changes
         }
         }; // end processAutoReply
 
@@ -588,6 +579,7 @@ export const Route = createFileRoute("/api/fonnte")({
           await processAutoReply();
         }
 
+        // Return 200 OK immediately. The AI orchestration runs asynchronously.
         return new Response("OK", { status: 200 });
       },
 
