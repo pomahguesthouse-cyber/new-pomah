@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabasePublic } from "@/integrations/supabase/client.server";
+import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const Route = createFileRoute("/llms.txt")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const origin = new URL(request.url).origin;
-        const { data: property } = await supabasePublic
+        const { data: property } = await supabaseAdmin
           .from("properties")
           .select("name, tagline, description, address, whatsapp_number, email")
           .limit(1)
