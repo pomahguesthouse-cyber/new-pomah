@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X } from "lucide-react";
+import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 /* ------------------------------------------------------------------ */
@@ -39,13 +39,18 @@ export function PublicNav({
               className="h-8 max-w-[180px] object-contain"
             />
           ) : (
-            <div className="flex items-baseline gap-1">
-              <span className={`font-serif text-xl font-semibold tracking-tight ${transparent ? "text-white" : "text-stone-900"}`}>
-                {firstWord}
-              </span>
-              {restWords && (
-                <span className={`font-serif text-xl font-light ${transparent ? "text-amber-300 animate-pulse" : "text-amber-700"}`}>{restWords}</span>
-              )}
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center justify-center rounded-md p-1.5 ${transparent ? "bg-white/10 text-white" : "bg-[#1A3620] text-white"}`}>
+                <Home className="w-5 h-5" />
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className={`font-serif text-xl font-semibold tracking-tight ${transparent ? "text-white" : "text-stone-900"}`}>
+                  {firstWord}
+                </span>
+                {restWords && (
+                  <span className={`font-serif text-xl font-light ${transparent ? "text-amber-300 animate-pulse" : "text-amber-700"}`}>{restWords}</span>
+                )}
+              </div>
             </div>
           )}
         </Link>
