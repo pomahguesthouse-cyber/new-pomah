@@ -29,12 +29,6 @@ import {
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function newWorkerId(): string {
-  return `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/api/fonnte")({
@@ -44,6 +38,7 @@ export const Route = createFileRoute("/api/fonnte")({
       //  POST — primary webhook receiver
       // ══════════════════════════════════════════════════════════════════════
       POST: async ({ request }) => {
+        const newWorkerId = () => `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const workerId = newWorkerId();
 
         // ── 1. Token verification ─────────────────────────────────────────
