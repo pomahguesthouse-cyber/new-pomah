@@ -139,6 +139,8 @@ function HomepageBuilder() {
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
   const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
+  
+  const activeName = activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
