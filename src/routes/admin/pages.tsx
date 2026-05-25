@@ -1622,6 +1622,8 @@ function SitePagesModal({
             <PageSettingsPanel target={{ kind: "lp", page: activeLp }} onSaved={onSaved} onClose={onClose} />
           ) : activePageId === "home" ? (
             <PageSettingsPanel target={{ kind: "home", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={onClose} />
+          ) : activePageId === "book" ? (
+            <PageSettingsPanel target={{ kind: "book", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={onClose} />
           ) : null}
         </div>
       </DialogContent>
