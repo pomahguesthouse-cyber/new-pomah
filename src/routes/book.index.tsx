@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { getPublicSiteData, submitPublicBooking } from "@/public/functions/public.functions";
+import { getPublicSiteData, submitCartBooking } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,10 @@ import {
   Clock,
   ShieldCheck,
   BedDouble,
-  CheckCircle2
+  CheckCircle2,
+  Plus,
+  Minus,
+  Trash2
 } from "lucide-react";
 
 /** Optional prefill carried from a room's dedicated booking page. */
@@ -67,12 +70,18 @@ export const Route = createFileRoute("/book/")({
   component: BookPage,
 });
 
+type CartItem = {
+  roomTypeId: string;
+  quantity: number;
+  extraBeds: number;
+};
+
 function BookPage() {
   const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
   const search = Route.useSearch();
   const fn = useServerFn(getPublicSiteData);
-  const submit = useServerFn(submitPublicBooking);
+  const submit = useServerFn(submitCartBooking);
   const { data } = useQuery({
     queryKey: ["public-site"],
     queryFn: () => fn(),
@@ -88,14 +97,13 @@ function BookPage() {
     fullName: "",
     email: "",
     phone: "",
-    roomTypeId: "",
     checkIn: search.checkIn ?? today,
     checkOut: search.checkOut ?? tomorrow,
     adults: search.adults ?? 2,
     children: 0,
-    rooms: 1, // Jumlah Kamar
     specialRequests: "",
   });
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [pending, setPending] = useState(false);
 
   // Prefill the room from the ?room=<slug> param once room types load.
@@ -103,22 +111,10 @@ function BookPage() {
   useEffect(() => {
     if (!prefillRoom || rooms.length === 0) return;
     const match = rooms.find((r: any) => r.slug === prefillRoom || r.id === prefillRoom);
-    if (match) setForm((f) => (f.roomTypeId ? f : { ...f, roomTypeId: match.id }));
-  }, [prefillRoom, rooms]);
-
-  // Recalculate room requirements automatically based on guests
-  useEffect(() => {
-    const match = rooms.find((r: any) => r.id === form.roomTypeId);
-    if (match && match.capacity) {
-      const requiredRooms = Math.ceil(form.adults / match.capacity);
-      // Auto-set rooms if it's less than what's needed for the guests
-      if (form.rooms < requiredRooms) {
-        setForm((f) => ({ ...f, rooms: requiredRooms }));
-      }
+    if (match && cartItems.length === 0) {
+      setCartItems([{ roomTypeId: match.id, quantity: 1, extraBeds: 0 }]);
     }
-  }, [form.adults, form.roomTypeId, rooms]);
-
-  const selectedRoom = useMemo(() => rooms.find((r: any) => r.id === form.roomTypeId), [form.roomTypeId, rooms]);
+  }, [prefillRoom, rooms]);
 
   // Calculations for summary
   const nights = useMemo(() => {
@@ -128,10 +124,44 @@ function BookPage() {
     return diff > 0 ? Math.round(diff) : 0;
   }, [form.checkIn, form.checkOut]);
 
-  const subtotal = useMemo(() => {
-    if (!selectedRoom || nights <= 0) return 0;
-    return Number(selectedRoom.base_rate) * nights * form.rooms;
-  }, [selectedRoom, nights, form.rooms]);
+  const grandTotal = useMemo(() => {
+    if (nights <= 0) return 0;
+    let total = 0;
+    cartItems.forEach(item => {
+      const room = rooms.find((r: any) => r.id === item.roomTypeId);
+      if (room) {
+        total += Number(room.base_rate) * nights * item.quantity;
+        if (item.extraBeds > 0) {
+          total += Number(room.extrabed_rate || 0) * nights * item.extraBeds;
+        }
+      }
+    });
+    return total;
+  }, [cartItems, nights, rooms]);
+
+  const handleAddToCart = (roomTypeId: string) => {
+    setCartItems(prev => {
+      const existing = prev.find(item => item.roomTypeId === roomTypeId);
+      if (existing) {
+        const room = rooms.find((r: any) => r.id === roomTypeId);
+        const limit = room?.total_physical_rooms || 10;
+        if (existing.quantity < limit) {
+           return prev.map(item => item.roomTypeId === roomTypeId ? { ...item, quantity: item.quantity + 1 } : item);
+        }
+        return prev;
+      } else {
+        return [...prev, { roomTypeId, quantity: 1, extraBeds: 0 }];
+      }
+    });
+  };
+
+  const updateCartItem = (roomTypeId: string, updates: Partial<CartItem>) => {
+    setCartItems(prev => prev.map(item => item.roomTypeId === roomTypeId ? { ...item, ...updates } : item));
+  };
+
+  const removeFromCart = (roomTypeId: string) => {
+    setCartItems(prev => prev.filter(item => item.roomTypeId !== roomTypeId));
+  };
 
   const roomListRef = useRef<HTMLDivElement>(null);
 
@@ -141,12 +171,17 @@ function BookPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.roomTypeId) return toast.error("Silakan pilih kamar terlebih dahulu");
+    if (cartItems.length === 0) return toast.error("Silakan pilih minimal satu kamar terlebih dahulu");
     if (nights <= 0) return toast.error("Check-out harus setelah check-in");
     
     setPending(true);
     try {
-      const res = await submit({ data: form });
+      const res = await submit({ 
+        data: {
+          ...form,
+          cart: cartItems
+        }
+      });
       toast.success("Booking berhasil dibuat");
       navigate({ to: "/book/confirmation/$id", params: { id: res.id }, search: {} });
     } catch (err) {
@@ -262,56 +297,125 @@ function BookPage() {
                 className="w-full"
               >
                 <CarouselContent className="-ml-6">
-                  {rooms.map((room: any, index: number) => (
-                    <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
-                      <div className={`h-full bg-white rounded-2xl border ${form.roomTypeId === room.id ? 'border-[#364935] ring-1 ring-[#364935]' : 'border-stone-200'} overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md relative`}>
-                        {index === 1 && (
-                           <div className="absolute top-4 left-4 z-10 bg-stone-900/80 backdrop-blur text-white text-xs font-medium px-3 py-1 rounded-full">
-                             Populer
-                           </div>
-                        )}
-                        <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
-                          {room.hero_image_url ? (
-                            <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-stone-300">
-                              <BedDouble className="w-12 h-12" />
-                            </div>
+                  {rooms.map((room: any, index: number) => {
+                    const cartItem = cartItems.find(item => item.roomTypeId === room.id);
+                    const isInCart = !!cartItem;
+                    const availableCount = room.total_physical_rooms || 10;
+                    
+                    return (
+                      <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
+                        <div className={`h-full bg-white rounded-2xl border ${isInCart ? 'border-[#364935] ring-1 ring-[#364935]' : 'border-stone-200'} overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md relative`}>
+                          {index === 1 && (
+                             <div className="absolute top-4 left-4 z-10 bg-stone-900/80 backdrop-blur text-white text-xs font-medium px-3 py-1 rounded-full">
+                               Populer
+                             </div>
                           )}
-                        </div>
-                        <div className="p-5 flex flex-col flex-1">
-                          <h3 className="font-serif text-xl font-semibold mb-1">{room.name}</h3>
-                          <p className="text-sm text-stone-500 mb-4">Mulai dari <span className="font-semibold text-stone-900">Rp{Number(room.base_rate).toLocaleString("id-ID")}</span> / malam</p>
-                          
-                          <ul className="space-y-2 mb-6 flex-1">
-                            <li className="flex items-center gap-2 text-sm text-stone-600">
-                              <Users className="w-4 h-4" /> {room.capacity} Tamu
-                            </li>
-                            <li className="flex items-center gap-2 text-sm text-stone-600">
-                              <AirVent className="w-4 h-4" /> AC
-                            </li>
-                            <li className="flex items-center gap-2 text-sm text-stone-600">
-                              <Wifi className="w-4 h-4" /> WiFi
-                            </li>
-                            <li className="flex items-center gap-2 text-sm text-stone-600">
-                              <Bath className="w-4 h-4" /> Kamar mandi dalam
-                            </li>
-                            <li className="flex items-center gap-2 text-sm text-stone-600">
-                              <Coffee className="w-4 h-4" /> Sarapan opsional
-                            </li>
-                          </ul>
+                          <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
+                            {room.hero_image_url ? (
+                              <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-stone-300">
+                                <BedDouble className="w-12 h-12" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-5 flex flex-col flex-1">
+                            <h3 className="font-serif text-xl font-semibold mb-1">{room.name}</h3>
+                            <p className="text-sm text-stone-500 mb-4">Mulai dari <span className="font-semibold text-stone-900">Rp{Number(room.base_rate).toLocaleString("id-ID")}</span> / malam</p>
+                            
+                            <ul className="space-y-2 mb-6 flex-1">
+                              <li className="flex items-center gap-2 text-sm text-stone-600">
+                                <Users className="w-4 h-4" /> {room.capacity} Tamu
+                              </li>
+                              <li className="flex items-center gap-2 text-sm text-stone-600">
+                                <AirVent className="w-4 h-4" /> AC
+                              </li>
+                              <li className="flex items-center gap-2 text-sm text-stone-600">
+                                <Wifi className="w-4 h-4" /> WiFi
+                              </li>
+                              <li className="flex items-center gap-2 text-sm text-stone-600">
+                                <Bath className="w-4 h-4" /> Kamar mandi dalam
+                              </li>
+                              <li className="flex items-center gap-2 text-sm text-stone-600">
+                                <Coffee className="w-4 h-4" /> Sarapan opsional
+                              </li>
+                            </ul>
 
-                          <Button 
-                            variant={form.roomTypeId === room.id ? "default" : "outline"}
-                            className={`w-full rounded-xl ${form.roomTypeId === room.id ? 'bg-[#364935] hover:bg-[#2A3929] text-white' : 'border-[#364935] text-[#364935] hover:bg-stone-50'}`}
-                            onClick={() => setForm({...form, roomTypeId: room.id})}
-                          >
-                            {form.roomTypeId === room.id ? "Kamar terpilih" : "Pilih kamar"}
-                          </Button>
+                            {isInCart ? (
+                               <div className="space-y-4 bg-stone-50 p-4 rounded-xl border border-[#364935]/20 mt-auto">
+                                 <div className="flex items-center justify-between">
+                                   <span className="text-sm font-medium text-stone-700">Jumlah Kamar</span>
+                                   <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
+                                     <Button 
+                                       type="button"
+                                       variant="ghost" 
+                                       size="icon" 
+                                       className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                       onClick={() => cartItem.quantity > 1 ? updateCartItem(room.id, { quantity: cartItem.quantity - 1 }) : removeFromCart(room.id)}
+                                     >
+                                       {cartItem.quantity > 1 ? <Minus className="h-3 w-3" /> : <Trash2 className="h-3 w-3 text-red-500" />}
+                                     </Button>
+                                     <span className="text-sm font-semibold w-4 text-center">{cartItem.quantity}</span>
+                                     <Button 
+                                       type="button"
+                                       variant="ghost" 
+                                       size="icon" 
+                                       className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                       disabled={cartItem.quantity >= availableCount}
+                                       onClick={() => updateCartItem(room.id, { quantity: cartItem.quantity + 1 })}
+                                     >
+                                       <Plus className="h-3 w-3" />
+                                     </Button>
+                                   </div>
+                                 </div>
+                                 
+                                 {(room.extrabed_capacity > 0) && (
+                                   <div className="flex items-center justify-between pt-3 border-t border-stone-200">
+                                     <div className="flex flex-col">
+                                       <span className="text-sm font-medium text-stone-700">Extrabed</span>
+                                       <span className="text-xs text-stone-500">+Rp{Number(room.extrabed_rate || 0).toLocaleString("id-ID")}</span>
+                                     </div>
+                                     <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
+                                       <Button 
+                                         type="button"
+                                         variant="ghost" 
+                                         size="icon" 
+                                         className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                         disabled={cartItem.extraBeds <= 0}
+                                         onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds - 1 })}
+                                       >
+                                         <Minus className="h-3 w-3" />
+                                       </Button>
+                                       <span className="text-sm font-semibold w-4 text-center">{cartItem.extraBeds}</span>
+                                       <Button 
+                                         type="button"
+                                         variant="ghost" 
+                                         size="icon" 
+                                         className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                         disabled={cartItem.extraBeds >= (room.extrabed_capacity * cartItem.quantity)}
+                                         onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds + 1 })}
+                                       >
+                                         <Plus className="h-3 w-3" />
+                                       </Button>
+                                     </div>
+                                   </div>
+                                 )}
+                               </div>
+                            ) : (
+                              <Button 
+                                type="button"
+                                variant="outline"
+                                className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 mt-auto"
+                                onClick={() => handleAddToCart(room.id)}
+                              >
+                                Tambahkan kamar
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </CarouselItem>
-                  ))}
+                      </CarouselItem>
+                    );
+                  })}
                 </CarouselContent>
                 <div className="flex justify-end gap-3 mt-6 pr-2">
                   <CarouselPrevious className="static translate-y-0 bg-white border-stone-200 hover:bg-stone-50" />
@@ -398,42 +502,6 @@ function BookPage() {
                   </div>
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-stone-700">Pilih kamar <span className="text-red-500">*</span></Label>
-                    <Select value={form.roomTypeId} onValueChange={v => setForm({...form, roomTypeId: v})}>
-                      <SelectTrigger className="rounded-xl border-stone-200">
-                        <SelectValue placeholder="Pilih tipe kamar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {rooms.map((r: any) => (
-                          <SelectItem key={r.id} value={r.id}>
-                            {r.name} — Rp {Number(r.base_rate).toLocaleString("id-ID")} / malam
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-stone-700 flex justify-between">
-                      <span>Jumlah kamar <span className="text-red-500">*</span></span>
-                      {selectedRoom && (
-                         <span className="text-xs text-amber-600 font-normal">Min. {Math.ceil(form.adults / (selectedRoom.capacity || 2))} kamar untuk {form.adults} tamu</span>
-                      )}
-                    </Label>
-                    <Select value={form.rooms.toString()} onValueChange={v => setForm({...form, rooms: Number(v)})}>
-                      <SelectTrigger className="rounded-xl border-stone-200">
-                        <SelectValue placeholder="Pilih jumlah kamar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1,2,3,4,5,6,7,8,9,10].map(n => (
-                          <SelectItem key={n} value={n.toString()}>{n} Kamar</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-stone-700">Catatan khusus (opsional)</Label>
                   <Textarea 
@@ -472,23 +540,39 @@ function BookPage() {
             <div className="sticky top-24 bg-white rounded-3xl border border-stone-200 shadow-xl shadow-stone-200/50 p-6">
               <h3 className="font-serif text-xl font-semibold mb-6">Ringkasan Booking</h3>
               
-              {selectedRoom ? (
+              {cartItems.length > 0 ? (
                 <>
-                  <div className="flex gap-4 items-center mb-6 pb-6 border-b border-stone-100">
-                    <div className="w-20 h-20 rounded-xl overflow-hidden bg-stone-100 shrink-0">
-                      {selectedRoom.hero_image_url ? (
-                        <img src={selectedRoom.hero_image_url} alt={selectedRoom.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <BedDouble className="w-8 h-8 m-6 text-stone-300" />
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-semibold text-stone-900">{selectedRoom.name}</h4>
-                      <p className="text-sm text-stone-500">Kapasitas {selectedRoom.capacity} tamu per kamar</p>
-                    </div>
+                  <div className="max-h-[40vh] overflow-y-auto pr-2 mb-6 space-y-4">
+                  {cartItems.map((item, idx) => {
+                     const room = rooms.find((r: any) => r.id === item.roomTypeId);
+                     if (!room) return null;
+                     const roomSubtotal = Number(room.base_rate) * nights * item.quantity;
+                     const extrabedSubtotal = item.extraBeds > 0 ? Number(room.extrabed_rate || 0) * nights * item.extraBeds : 0;
+                     
+                     return (
+                        <div key={idx} className="pb-4 border-b border-stone-100 last:border-b-0 last:pb-0">
+                           <div className="flex justify-between items-start mb-2">
+                             <div>
+                               <h4 className="font-semibold text-stone-900 leading-tight">{room.name}</h4>
+                               <p className="text-xs text-stone-500 mt-1">{item.quantity}x Kamar</p>
+                             </div>
+                             <span className="font-medium text-stone-900">Rp{roomSubtotal.toLocaleString("id-ID")}</span>
+                           </div>
+                           
+                           {item.extraBeds > 0 && (
+                             <div className="flex justify-between items-start mt-2 bg-stone-50 p-2.5 rounded-lg border border-stone-100">
+                               <div>
+                                 <span className="text-xs font-medium text-stone-700">{item.extraBeds}x Extrabed</span>
+                               </div>
+                               <span className="text-xs font-medium text-stone-900">Rp{extrabedSubtotal.toLocaleString("id-ID")}</span>
+                             </div>
+                           )}
+                        </div>
+                     );
+                  })}
                   </div>
 
-                  <div className="space-y-4 mb-6 pb-6 border-b border-stone-100 text-sm">
+                  <div className="space-y-3 mb-6 pb-6 border-b border-t pt-6 border-stone-100 text-sm">
                     <div className="flex justify-between">
                       <span className="text-stone-500 flex items-center gap-2"><CalendarDays className="w-4 h-4"/> Check-in</span>
                       <span className="font-medium text-stone-900">{formatDate(form.checkIn)}</span>
@@ -505,26 +589,11 @@ function BookPage() {
                       <span className="text-stone-500 flex items-center gap-2"><Users className="w-4 h-4"/> Tamu</span>
                       <span className="font-medium text-stone-900">{form.adults} Tamu</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-stone-500 flex items-center gap-2"><BedDouble className="w-4 h-4"/> Kamar</span>
-                      <span className="font-medium text-stone-900">{form.rooms} Kamar</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 mb-6 pb-6 border-b border-stone-100 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-stone-500">Harga per malam</span>
-                      <span className="font-medium text-stone-900">Rp{Number(selectedRoom.base_rate).toLocaleString("id-ID")}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-stone-500">Subtotal ({nights}x malam, {form.rooms}x kamar)</span>
-                      <span className="font-medium text-stone-900">Rp{subtotal.toLocaleString("id-ID")}</span>
-                    </div>
                   </div>
 
                   <div className="flex justify-between items-end mb-6">
                     <span className="text-stone-600 font-medium">Total estimasi</span>
-                    <span className="font-serif text-2xl font-semibold text-stone-900">Rp{subtotal.toLocaleString("id-ID")}</span>
+                    <span className="font-serif text-2xl font-semibold text-stone-900">Rp{grandTotal.toLocaleString("id-ID")}</span>
                   </div>
                   
                   <div className="bg-[#FFF9E6] border border-[#FFE5A3] rounded-xl p-4 flex gap-3 mb-6">
@@ -563,7 +632,7 @@ function BookPage() {
                   <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mb-4">
                     <Search className="w-6 h-6 text-stone-300" />
                   </div>
-                  <p className="text-stone-500 text-sm">Pilih tipe kamar di sebelah kiri untuk melihat ringkasan pesanan Anda.</p>
+                  <p className="text-stone-500 text-sm">Tambahkan kamar di sebelah kiri untuk melihat ringkasan pesanan Anda.</p>
                 </div>
               )}
             </div>

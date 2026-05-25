@@ -110,16 +110,23 @@ async function pickAvailableRooms(
 }
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const [{ data: property }, { data: roomTypes }] = await Promise.all([
+  const [{ data: property }, { data: roomTypesRaw }] = await Promise.all([
     supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
-    supabasePublic
+    supabaseAdmin
       .from("room_types")
       .select(
-        "id, name, slug, description, base_rate, capacity, bed_type, size_sqm, amenities, hero_image_url",
+        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, size_sqm, amenities, hero_image_url, rooms(id)",
       )
       .order("base_rate"),
   ]);
-  return { property, roomTypes: roomTypes ?? [] };
+  
+  const roomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
+    ...rt,
+    rooms: undefined,
+    total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
+  }));
+
+  return { property, roomTypes };
 });
 
 export const submitPublicBooking = createServerFn({ method: "POST" })
@@ -234,7 +241,153 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       reference_code: booking.reference_code,
       total,
       nights,
-      rooms: roomsCount,
+    };
+  });
+
+export const submitCartBooking = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z
+      .object({
+        fullName: z.string().min(1).max(120),
+        email: z.string().email().max(200),
+        phone: z.string().min(3).max(40).optional().or(z.literal("")),
+        cart: z.array(
+          z.object({
+            roomTypeId: z.string().uuid(),
+            quantity: z.number().int().min(1).max(8),
+            extraBeds: z.number().int().min(0).max(8).optional(),
+          })
+        ).min(1),
+        checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        adults: z.number().int().min(1).max(30),
+        children: z.number().int().min(0).max(30),
+        checkInTime: z.string().max(10).optional().or(z.literal("")),
+        checkOutTime: z.string().max(10).optional().or(z.literal("")),
+        paymentMethod: z.enum(["transfer", "onsite"]).optional(),
+        specialRequests: z.string().max(2000).optional().or(z.literal("")),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { data: property } = await supabaseAdmin
+      .from("properties")
+      .select("id")
+      .limit(1)
+      .single();
+    if (!property) throw new Error("Property not configured");
+
+    const nights =
+      (new Date(data.checkOut).getTime() - new Date(data.checkIn).getTime()) / 86400000;
+    if (nights < 1) throw new Error("Check-out must be after check-in");
+
+    // Fetch all needed room types
+    const roomTypeIds = Array.from(new Set(data.cart.map((c) => c.roomTypeId)));
+    const { data: rts } = await supabasePublic
+      .from("room_types")
+      .select("id, name, base_rate, extrabed_rate")
+      .in("id", roomTypeIds);
+    if (!rts || rts.length !== roomTypeIds.length) {
+      throw new Error("One or more room types not found");
+    }
+
+    let grandTotal = 0;
+    let totalRooms = 0;
+    const roomInserts: any[] = [];
+    const extraBedNotes: string[] = [];
+
+    // Calculate totals, extra beds notes, and assign physical rooms
+    for (const item of data.cart) {
+      const rt = rts.find((r) => r.id === item.roomTypeId)!;
+      const roomBaseTotal = Number(rt.base_rate) * nights * item.quantity;
+      const extrabedTotal = item.extraBeds ? (Number(rt.extrabed_rate) * nights * item.extraBeds) : 0;
+      
+      grandTotal += roomBaseTotal + extrabedTotal;
+      totalRooms += item.quantity;
+
+      if (item.extraBeds && item.extraBeds > 0) {
+        extraBedNotes.push(`${item.quantity}x ${rt.name} dengan total ${item.extraBeds} Extrabed`);
+      }
+
+      // Assign physical rooms
+      const assigned = await pickAvailableRooms(rt.id, data.checkIn, data.checkOut, item.quantity);
+      for (const roomId of assigned) {
+        roomInserts.push({
+          room_id: roomId,
+          room_type_id: rt.id,
+          nightly_rate: rt.base_rate,
+        });
+      }
+    }
+
+    const finalSpecialRequests = extraBedNotes.length > 0 
+      ? `(Add-ons: ${extraBedNotes.join(", ")})\n${data.specialRequests || ""}`.trim()
+      : data.specialRequests || null;
+
+    const { data: guest, error: gerr } = await supabaseAdmin
+      .from("guests")
+      .insert({
+        full_name: data.fullName,
+        email: data.email,
+        phone: data.phone || null,
+      })
+      .select("id")
+      .single();
+    if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
+
+    const { data: booking, error: berr } = await db(supabaseAdmin)
+      .from("bookings")
+      .insert({
+        property_id: property.id,
+        guest_id: guest.id,
+        check_in: data.checkIn,
+        check_out: data.checkOut,
+        nights: Math.round(nights),
+        adults: data.adults,
+        children: data.children,
+        total_amount: grandTotal,
+        source: "direct",
+        status: "pending",
+        special_requests: finalSpecialRequests,
+        check_in_time: data.checkInTime || null,
+        check_out_time: data.checkOutTime || null,
+        payment_method: data.paymentMethod || null,
+      })
+      .select("id, reference_code")
+      .single();
+    if (berr || !booking) throw berr ?? new Error("Could not create booking");
+
+    // Insert booking_rooms
+    const { error: brErr } = await supabaseAdmin.from("booking_rooms").insert(
+      roomInserts.map(r => ({
+        ...r,
+        booking_id: booking.id
+      }))
+    );
+    if (brErr) throw brErr;
+
+    try {
+      const request = getRequest();
+      const origin = request ? new URL(request.url).origin : undefined;
+      void import("@/services/invoice-notification.service").then(({ generateAndSendInvoiceNotification }) =>
+        generateAndSendInvoiceNotification({
+          supabase: supabaseAdmin,
+          bookingId: booking.id,
+          origin,
+        })
+      ).catch((err) => {
+        console.error("[submitCartBooking] Notification error:", err);
+      });
+    } catch (notificationErr) {
+      console.error("[submitCartBooking] Notification trigger error:", notificationErr);
+    }
+
+    return {
+      id: booking.id,
+      reference_code: booking.reference_code,
+      total: grandTotal,
+      nights,
+      rooms: totalRooms,
     };
   });
 
