@@ -287,7 +287,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
         try {
           // Load property + rooms data
-          const { data: prop } = await (supabasePublic as any)
+          const { data: prop } = await (supabaseAdmin as any)
             .from("properties").select("*").limit(1).maybeSingle();
           const p = (prop ?? {}) as Record<string, unknown>;
 
@@ -679,7 +679,7 @@ export const Route = createFileRoute("/api/fonnte")({
               if (!c.auto_reply_enabled) {
                 result.skipped = "auto_reply_enabled is false";
               } else {
-                const { data: prop } = await (supabasePublic as any)
+                const { data: prop } = await (supabaseAdmin as any)
                   .from("properties").select("*").limit(1).maybeSingle();
                 const p    = (prop ?? {}) as Record<string, unknown>;
                 const { data: rooms } = await (supabasePublic as any)
