@@ -16,6 +16,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { 
   Users, 
   CalendarDays, 
@@ -248,56 +255,69 @@ function BookPage() {
               <h2 className="font-serif text-2xl font-semibold mb-2">Pilih kamar yang tersedia</h2>
               <p className="text-stone-500 mb-6">Pilih kamar yang paling cocok untuk kebutuhan Anda.</p>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {rooms.map((room: any, index: number) => (
-                  <div key={room.id} className={`bg-white rounded-2xl border ${form.roomTypeId === room.id ? 'border-[#364935] ring-1 ring-[#364935]' : 'border-stone-200'} overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md relative`}>
-                    {index === 1 && (
-                       <div className="absolute top-4 left-4 z-10 bg-stone-900/80 backdrop-blur text-white text-xs font-medium px-3 py-1 rounded-full">
-                         Populer
-                       </div>
-                    )}
-                    <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
-                      {room.hero_image_url ? (
-                        <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-stone-300">
-                          <BedDouble className="w-12 h-12" />
+              <Carousel
+                opts={{
+                  align: "start",
+                }}
+                className="w-full"
+              >
+                <CarouselContent className="-ml-6">
+                  {rooms.map((room: any, index: number) => (
+                    <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
+                      <div className={`h-full bg-white rounded-2xl border ${form.roomTypeId === room.id ? 'border-[#364935] ring-1 ring-[#364935]' : 'border-stone-200'} overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md relative`}>
+                        {index === 1 && (
+                           <div className="absolute top-4 left-4 z-10 bg-stone-900/80 backdrop-blur text-white text-xs font-medium px-3 py-1 rounded-full">
+                             Populer
+                           </div>
+                        )}
+                        <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
+                          {room.hero_image_url ? (
+                            <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-stone-300">
+                              <BedDouble className="w-12 h-12" />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    <div className="p-5 flex flex-col flex-1">
-                      <h3 className="font-serif text-xl font-semibold mb-1">{room.name}</h3>
-                      <p className="text-sm text-stone-500 mb-4">Mulai dari <span className="font-semibold text-stone-900">Rp{Number(room.base_rate).toLocaleString("id-ID")}</span> / malam</p>
-                      
-                      <ul className="space-y-2 mb-6 flex-1">
-                        <li className="flex items-center gap-2 text-sm text-stone-600">
-                          <Users className="w-4 h-4" /> {room.capacity} Tamu
-                        </li>
-                        <li className="flex items-center gap-2 text-sm text-stone-600">
-                          <AirVent className="w-4 h-4" /> AC
-                        </li>
-                        <li className="flex items-center gap-2 text-sm text-stone-600">
-                          <Wifi className="w-4 h-4" /> WiFi
-                        </li>
-                        <li className="flex items-center gap-2 text-sm text-stone-600">
-                          <Bath className="w-4 h-4" /> Kamar mandi dalam
-                        </li>
-                        <li className="flex items-center gap-2 text-sm text-stone-600">
-                          <Coffee className="w-4 h-4" /> Sarapan opsional
-                        </li>
-                      </ul>
+                        <div className="p-5 flex flex-col flex-1">
+                          <h3 className="font-serif text-xl font-semibold mb-1">{room.name}</h3>
+                          <p className="text-sm text-stone-500 mb-4">Mulai dari <span className="font-semibold text-stone-900">Rp{Number(room.base_rate).toLocaleString("id-ID")}</span> / malam</p>
+                          
+                          <ul className="space-y-2 mb-6 flex-1">
+                            <li className="flex items-center gap-2 text-sm text-stone-600">
+                              <Users className="w-4 h-4" /> {room.capacity} Tamu
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-stone-600">
+                              <AirVent className="w-4 h-4" /> AC
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-stone-600">
+                              <Wifi className="w-4 h-4" /> WiFi
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-stone-600">
+                              <Bath className="w-4 h-4" /> Kamar mandi dalam
+                            </li>
+                            <li className="flex items-center gap-2 text-sm text-stone-600">
+                              <Coffee className="w-4 h-4" /> Sarapan opsional
+                            </li>
+                          </ul>
 
-                      <Button 
-                        variant={form.roomTypeId === room.id ? "default" : "outline"}
-                        className={`w-full rounded-xl ${form.roomTypeId === room.id ? 'bg-[#364935] hover:bg-[#2A3929] text-white' : 'border-[#364935] text-[#364935] hover:bg-stone-50'}`}
-                        onClick={() => setForm({...form, roomTypeId: room.id})}
-                      >
-                        {form.roomTypeId === room.id ? "Kamar terpilih" : "Pilih kamar"}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                          <Button 
+                            variant={form.roomTypeId === room.id ? "default" : "outline"}
+                            className={`w-full rounded-xl ${form.roomTypeId === room.id ? 'bg-[#364935] hover:bg-[#2A3929] text-white' : 'border-[#364935] text-[#364935] hover:bg-stone-50'}`}
+                            onClick={() => setForm({...form, roomTypeId: room.id})}
+                          >
+                            {form.roomTypeId === room.id ? "Kamar terpilih" : "Pilih kamar"}
+                          </Button>
+                        </div>
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <div className="flex justify-end gap-3 mt-6 pr-2">
+                  <CarouselPrevious className="static translate-y-0 bg-white border-stone-200 hover:bg-stone-50" />
+                  <CarouselNext className="static translate-y-0 bg-white border-stone-200 hover:bg-stone-50" />
+                </div>
+              </Carousel>
             </section>
 
             {/* Form Section */}
