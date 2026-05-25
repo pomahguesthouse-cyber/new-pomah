@@ -248,6 +248,7 @@ export async function runMultiAgentOrchestration(
     );
 
     return {
+      status:            agentResult.reply ? "reply" : "error",
       reply:             agentResult.reply,
       toolsUsed:         agentResult.toolsUsed,
       agentKey:          "manager",
@@ -272,6 +273,7 @@ export async function runMultiAgentOrchestration(
 
     if (stateResult.handled && stateResult.reply) {
       return {
+        status:            "reply",
         reply:             stateResult.reply,
         toolsUsed:         ["booking_state_machine"],
         agentKey:          "front-office",
@@ -359,6 +361,7 @@ export async function runMultiAgentOrchestration(
     );
 
     return {
+      status:            foResult.reply ? "reply" : "error",
       reply:             foResult.reply,
       toolsUsed:         foResult.toolsUsed,
       agentKey:          "front-office",
@@ -370,6 +373,7 @@ export async function runMultiAgentOrchestration(
   }
 
   return {
+    status:            agentResult.reply ? "reply" : "error",
     reply:             agentResult.reply,
     toolsUsed:         agentResult.toolsUsed,
     agentKey:          routing.agentKey,
