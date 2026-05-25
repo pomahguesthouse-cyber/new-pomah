@@ -51,12 +51,69 @@ async function pickAvailableRoom(
   return free ? free.id : null;
 }
 
+/**
+ * Look up a booking already created for this idempotency key and rebuild the
+ * success payload. Returns null if none exists. Used to make create_booking
+ * safe under webhook retries of the same inbound message.
+ */
+async function findBookingByIdemKey(
+  ctx:     ToolContext,
+  idemKey: string,
+): Promise<string | null> {
+  const { data: b } = await (ctx.supabaseAdmin as any)
+    .from("bookings")
+    .select(
+      "id, reference_code, check_in, check_out, nights, total_amount, " +
+      "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate)",
+    )
+    .eq("idempotency_key", idemKey)
+    .maybeSingle();
+
+  if (!b) return null;
+
+  const br = Array.isArray(b.booking_rooms) ? b.booking_rooms[0] : b.booking_rooms;
+  const g  = Array.isArray(b.guests)        ? b.guests[0]        : b.guests;
+  const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
+
+  return JSON.stringify({
+    ok:               true,
+    reference_code:   b.reference_code,
+    room_type:        rt?.name ?? "",
+    check_in:         b.check_in,
+    check_out:        b.check_out,
+    check_in_tampil:  fmtDateID(b.check_in),
+    check_out_tampil: fmtDateID(b.check_out),
+    nights:           b.nights,
+    nightly_rate:     Number(br?.nightly_rate ?? 0),
+    total:            Number(b.total_amount ?? 0),
+    guest:            { full_name: g?.full_name, email: g?.email, phone: g?.phone },
+    pembayaran: {
+      bank:        ctx.property.payment_bank_name      ?? null,
+      no_rekening: ctx.property.payment_account_number ?? null,
+      atas_nama:   ctx.property.payment_account_holder  ?? null,
+    },
+    invoice_url: ctx.origin
+      ? `${ctx.origin}/book/confirmation/${b.id}`
+      : `https://pomahguesthouse.com/book/confirmation/${b.id}`,
+    idempotent_replay: true,
+  });
+}
+
 // ─── Tool handler ─────────────────────────────────────────────────────────────
 
 export const createBooking: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
+  // ── Idempotency short-circuit ────────────────────────────────────────────────
+  // If a prior webhook retry already created this booking, return it as-is
+  // instead of creating a duplicate.
+  const idemKey = ctx.idempotencyKey?.trim();
+  if (idemKey) {
+    const existing = await findBookingByIdemKey(ctx, idemKey);
+    if (existing) return existing;
+  }
+
   // ── Validate inputs ────────────────────────────────────────────────────────
   const fullName      = str(args.full_name);
   const email         = str(args.email);
@@ -155,11 +212,18 @@ export const createBooking: ToolHandler = async (
       total_amount: total,
       source:       "direct",
       status:       "pending",
+      idempotency_key: idemKey ?? null,
     })
     .select("id, reference_code")
     .single();
 
   if (bErr || !booking) {
+    // Unique-violation on idempotency_key = a concurrent retry won the race.
+    // Return the booking it created instead of erroring.
+    if (idemKey && (bErr as any)?.code === "23505") {
+      const existing = await findBookingByIdemKey(ctx, idemKey);
+      if (existing) return existing;
+    }
     return JSON.stringify({
       ok:    false,
       error: `Gagal membuat booking: ${bErr?.message ?? "tidak diketahui"}`,

@@ -380,6 +380,7 @@ export const Route = createFileRoute("/api/fonnte")({
           // ── 12. Run AI with retry loop & AbortController ────────────────
           const MAX_AI_RETRIES = 3;
           let reply: string | null = null;
+          let isNoop = false;
           let lastAiError = "";
           let orchResult: Awaited<ReturnType<typeof runMultiAgentOrchestration>> | null = null;
 
@@ -418,12 +419,14 @@ export const Route = createFileRoute("/api/fonnte")({
                   property:       p as any,
                   today,
                   origin,
+                  idempotencyKey: dedupKey,
                 },
                 llmConfig: { apiKey, baseUrl, model },
                 signal: controller.signal,
               });
 
-              if (orchResult?.reply) {
+              // Three-state contract: reply → send, noop → silent stop, error → retry
+              if (orchResult?.status === "reply" && orchResult.reply) {
                 reply = orchResult.reply;
                 console.log(
                   `[AutoReply] AI ok (attempt ${attempt}) | ` +
@@ -433,8 +436,15 @@ export const Route = createFileRoute("/api/fonnte")({
                 break;
               }
 
+              if (orchResult?.status === "noop") {
+                isNoop = true;
+                console.log(`[AutoReply] orchestration noop — staying silent | ${logCtx}`);
+                break;
+              }
+
+              // status === "error" (or missing reply): retry
               lastAiError = orchResult?.error ?? "empty_reply";
-              console.warn(`[AutoReply] AI attempt ${attempt} empty: ${lastAiError} | ${logCtx}`);
+              console.warn(`[AutoReply] AI attempt ${attempt} error: ${lastAiError} | ${logCtx}`);
             } catch (e) {
               lastAiError = e instanceof Error ? e.message : String(e);
               const isAbort = lastAiError.includes("abort") || lastAiError.includes("AbortError");
@@ -447,7 +457,13 @@ export const Route = createFileRoute("/api/fonnte")({
             }
           }
 
-          // ── 13. AI failure tracking & Fallback reply selection ──────────
+          // ── 13. Noop: orchestration intentionally stayed silent ─────────
+          if (isNoop) {
+            aiFailureCount = 0; // a noop is a deliberate success, not a failure
+            return new Response("OK", { status: 200 });
+          }
+
+          // ── 13a. AI failure tracking & Fallback reply selection ─────────
           const finalReply = reply ?? FALLBACK_MESSAGE;
           const isFallback = !reply;
 
@@ -729,6 +745,7 @@ export const Route = createFileRoute("/api/fonnte")({
                   });
 
                   result.elapsed_ms         = Date.now() - t0;
+                  result.status             = orchResult.status;
                   result.reply              = orchResult.reply;
                   result.tools_used         = orchResult.toolsUsed;
                   result.agent_key          = orchResult.agentKey;

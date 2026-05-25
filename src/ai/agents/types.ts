@@ -77,7 +77,19 @@ export interface AgentRunResult {
   error?:    string;
 }
 
+/**
+ * Explicit outcome of an orchestration run. The webhook uses this to decide
+ * what to do, instead of inferring from a nullable reply:
+ *   - "reply": a reply was produced — send it.
+ *   - "noop":  intentionally stay silent — send nothing, do NOT retry.
+ *              (Reserved: no producer wired yet. Add when a real silence case
+ *              exists, e.g. mid-conversation human takeover.)
+ *   - "error": the run failed — retryable by the webhook.
+ */
+export type OrchestrationStatus = "reply" | "noop" | "error";
+
 export interface MultiAgentResult {
+  status:             OrchestrationStatus;
   reply:              string | null;
   toolsUsed:          string[];
   agentKey:           AgentKey;

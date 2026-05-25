@@ -35,8 +35,17 @@ flowchart TD
 
 Retry yang sesungguhnya ada di lapisan webhook (`MAX_AI_RETRIES = 3`) dan
 membungkus seluruh orkestrasi. Pesan fallback (`FALLBACK_MESSAGE`) juga
-ditentukan di lapisan webhook — orchestrator hanya mengembalikan `reply`
-atau `null`, sehingga user tidak pernah menerima respons kosong.
+ditentukan di lapisan webhook.
+
+Orchestration memakai **kontrak tiga-status** (`MultiAgentResult.status`):
+- `reply` → kirim balasan, berhenti retry.
+- `noop` → sengaja diam: tidak kirim apa pun, tidak retry (cadangan — belum ada
+  produser; disiapkan untuk kasus mis. takeover di tengah percakapan).
+- `error` → gagal: webhook retry sampai 3×, lalu pakai `FALLBACK_MESSAGE`.
+
+Hanya `error` yang memicu retry, sehingga user tidak pernah menerima respons
+kosong dan retry tidak membuang side-effect (digabung idempotency key di
+`create_booking`).
 
 ```mermaid
 flowchart TD
@@ -44,9 +53,10 @@ flowchart TD
         direction TB
         S0[Pesan masuk lolos dedup,<br/>debounce, circuit breaker] --> RT{Retry orkestrasi<br/>attempt ≤ 3?}
         RT -- ya --> ORCH[[Multi-Agent Orchestration]]
-        ORCH --> RC{Dapat reply?}
-        RC -- ya --> OK[Reset failure count]
-        RC -- tidak --> RT
+        ORCH --> RC{status?}
+        RC -- reply --> OK[Reset failure count]
+        RC -- noop --> NO[Stop, tidak kirim<br/>tidak retry] --> Z2([Return OK 200])
+        RC -- error --> RT
         RT -- habis 3× --> FB[finalReply = FALLBACK_MESSAGE<br/>isFallback = true<br/>naikkan failure → trip breaker]
         OK --> SEND
         FB --> SEND[Cek outbound dedup → kirim Fonnte → simpan]
@@ -59,7 +69,7 @@ flowchart TD
         B -- tidak --> C[getBookingState]
         C --> D{State != IDLE?}
         D -- ya --> E[processBookingState] --> F{Handled + reply?}
-        F -- ya --> OUT[Return reply ATAU null]
+        F -- ya --> OUT["Return { status, reply? }"]
         F -- tidak --> G
         D -- tidak --> G[classifyIntent]
         G --> H[routeToAgent + jalankan agent]
