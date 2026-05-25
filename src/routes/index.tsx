@@ -35,10 +35,9 @@ import {
 } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
-    const { getPublicSiteData } = await import("@/public/functions/public.functions");
-    return getPublicSiteData();
-  },
+  loader: async () => getPublicSiteData(),
+  staleTime: 5 * 60 * 1000,
+
   head: ({ loaderData }: any) => {
     const cfg = mergeHomepageConfig(
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
