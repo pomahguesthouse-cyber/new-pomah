@@ -141,6 +141,7 @@ function HomepageBuilder() {
   const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
   
   const activeName = activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
+  const previewSrc = activeLp ? `/lp/${activeLp.slug}` : activePageId === "book" ? "/book?builder=1" : "/?builder=1";
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
