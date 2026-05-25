@@ -20,6 +20,9 @@ const storage = new AsyncLocalStorage<CfRequestContext>();
 
 /** Run `fn` with the given Worker context bound for the duration of the request. */
 export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
+  if (ctx.waitUntil) {
+    (globalThis as any).__cfWaitUntil = ctx.waitUntil;
+  }
   return storage.run(ctx, fn);
 }
 
@@ -28,5 +31,5 @@ export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
  * / non-Cloudflare runtime). Callers should fall back to `await`-ing their work.
  */
 export function getWaitUntil(): WaitUntil | undefined {
-  return storage.getStore()?.waitUntil;
+  return storage.getStore()?.waitUntil || (globalThis as any).__cfWaitUntil;
 }
