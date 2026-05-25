@@ -57,6 +57,16 @@ export interface HomepageConfig {
     /** Heading font style. */
     fontStyle: "normal" | "bold" | "italic";
   };
+  bookingHero: {
+    slides: HeroSlide[];
+    autoplayMs: number;
+    height: number;
+    transition: "fade" | "slide" | "zoom" | "none";
+    layer: number;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+  };
   datePicker: {
     enabled: boolean;
     heading: string;
@@ -145,6 +155,23 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 48,
     fontStyle: "bold",
   },
+  bookingHero: {
+    slides: [
+      {
+        imageUrl: "",
+        videoUrl: "",
+        heading: "Pesan kamar dengan mudah",
+        subheading: "Cek ketersediaan, pilih kamar, dan konfirmasi booking dalam beberapa langkah.",
+      },
+    ],
+    autoplayMs: 5000,
+    height: 480,
+    transition: "fade",
+    layer: 10,
+    fontFamily: "serif",
+    fontSize: 48,
+    fontStyle: "bold",
+  },
   datePicker: {
     enabled: true,
     heading: "Cek Ketersediaan",
@@ -197,6 +224,7 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
   return {
     header: { ...d.header, ...c.header },
     hero: { ...d.hero, ...c.hero },
+    bookingHero: { ...d.bookingHero, ...c.bookingHero },
     datePicker: { ...d.datePicker, ...c.datePicker },
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },

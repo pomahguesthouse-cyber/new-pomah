@@ -82,7 +82,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "datepicker" | "story" | "carousel";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel";
 
 const SECTIONS: {
   key: SectionKey;
@@ -91,6 +91,7 @@ const SECTIONS: {
 }[] = [
   { key: "header",        label: "Header",       icon: LayoutPanelTop     },
   { key: "hero",          label: "Hero Slider",   icon: GalleryHorizontal  },
+  { key: "bookingHero",   label: "Booking Hero",  icon: GalleryHorizontal  },
   { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
@@ -344,6 +345,8 @@ function HomepageBuilder() {
                   <HeaderTab cfg={cfg} setCfg={setCfg} />
                 ) : section === "hero" ? (
                   <HeroTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "bookingHero" ? (
+                  <HeroTab cfg={cfg} setCfg={setCfg} isBooking />
                 ) : section === "datepicker" ? (
                   <DatePickerTab cfg={cfg} setCfg={setCfg} />
                 ) : section === "story" ? (
@@ -798,10 +801,11 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
 /* 3. Hero slider                                                      */
 /* ================================================================== */
 
-function HeroTab({ cfg, setCfg }: TabProps) {
-  const hero = cfg.hero;
+function HeroTab({ cfg, setCfg, isBooking }: TabProps & { isBooking?: boolean }) {
+  const heroKey = isBooking ? "bookingHero" : "hero";
+  const hero = cfg[heroKey];
   const set = (patch: Partial<HomepageConfig["hero"]>) =>
-    setCfg((c) => ({ ...c, hero: { ...c.hero, ...patch } }));
+    setCfg((c) => ({ ...c, [heroKey]: { ...c[heroKey], ...patch } }));
   const setSlide = (i: number, patch: Partial<HeroSlide>) => {
     const slides = [...hero.slides];
     slides[i] = { ...slides[i], ...patch };

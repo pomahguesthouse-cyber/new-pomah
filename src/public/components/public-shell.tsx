@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -283,3 +285,370 @@ export function PublicFooter({
     </footer>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Extracted Page Builder Components                                   */
+/* ------------------------------------------------------------------ */
+
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+export type Pb = { isBuilder: boolean; sel: string | null; onSelect: (key: string) => void };
+
+/** Wraps a homepage section so it is click-to-select inside the builder. */
+export function PbZone({
+  id,
+  label,
+  pb,
+  children,
+}: {
+  id: string;
+  label: string;
+  pb: Pb;
+  children: React.ReactNode;
+}) {
+  if (!pb.isBuilder) return <>{children}</>;
+  const active = pb.sel === id;
+  return (
+    <div
+      onClickCapture={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pb.onSelect(id);
+      }}
+      className={`relative ${
+        active
+          ? "outline outline-2 -outline-offset-2 outline-orange-500"
+          : "hover:outline hover:outline-2 hover:-outline-offset-2 hover:outline-orange-300"
+      }`}
+    >
+      {active && (
+        <span className="pointer-events-none absolute right-0 top-0 z-[60] rounded-bl bg-orange-500 px-2 py-0.5 text-[10px] font-medium text-white">
+          {label}
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+export function PomahNav({
+  name,
+  logo,
+  header,
+  pb,
+}: {
+  name: string;
+  logo: string | null;
+  header: HomepageConfig["header"];
+  pb: Pb;
+}) {
+  const background = header.transparent
+    ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
+    : header.bgColor;
+
+  // Scroll behaviour: "scroll" leaves the header in flow; the others pin
+  // it with `position: fixed` (reliable regardless of ancestor overflow).
+  const mode = header.scrollBehavior;
+  const pinned = mode !== "scroll";
+  const headerHeight = Math.max(header.logoSize, 36) + 32;
+
+  const [hidden, setHidden] = useState(false);
+  const [faded, setFaded] = useState(false);
+  useEffect(() => {
+    if (mode !== "disappear" && mode !== "fade") {
+      setHidden(false);
+      setFaded(false);
+      return;
+    }
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (mode === "disappear") setHidden(y > 120 && y > last);
+      if (mode === "fade") setFaded(y > 120);
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [mode]);
+
+  let positionClass: string;
+  if (pinned) {
+    positionClass = "fixed inset-x-0 top-0";
+  } else if (header.transparent) {
+    positionClass = "absolute inset-x-0 top-0";
+  } else {
+    positionClass = "relative";
+  }
+  const needsSpacer = pinned && !header.transparent;
+  const selected = pb.isBuilder && pb.sel === "header";
+
+  const logoEl = (
+    <Link to="/" className="flex items-baseline gap-1.5" title={name} key="logo">
+      {logo ? (
+        <img
+          src={logo}
+          alt={name}
+          style={{ height: header.logoSize }}
+          className="w-auto max-w-[240px] object-contain"
+        />
+      ) : (
+        <>
+          <span className="font-serif text-2xl font-bold">Pomah</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
+            guesthouse
+          </span>
+        </>
+      )}
+    </Link>
+  );
+
+  const linksEl = (
+    <div className="hidden items-center gap-7 text-sm font-medium md:flex" key="links">
+      {header.links.map((n) => (
+        <a key={n.label} href={n.href} className="transition hover:text-white/70">
+          {n.label}
+        </a>
+      ))}
+    </div>
+  );
+
+  const actionsEl = (
+    <div className="flex items-center gap-3" key="actions">
+      <Link
+        to="/book"
+        search={{}}
+        className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
+        style={{ color: header.bgColor }}
+      >
+        {header.bookLabel}
+      </Link>
+      <button className="text-white md:hidden" aria-label="Menu">
+        <Menu className="h-5 w-5" />
+      </button>
+    </div>
+  );
+
+  const slots =
+    header.logoPosition === "center"
+      ? [linksEl, logoEl, actionsEl]
+      : header.logoPosition === "right"
+        ? [linksEl, actionsEl, logoEl]
+        : [logoEl, linksEl, actionsEl];
+
+  return (
+    <>
+      <nav
+        onClickCapture={
+          pb.isBuilder
+            ? (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                pb.onSelect("header");
+              }
+            : undefined
+        }
+        className={`z-40 text-white transition-all duration-300 ${positionClass} ${
+          header.dropShadow ? "shadow-md" : ""
+        } ${selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""}`}
+        style={{
+          background,
+          transform: hidden ? "translateY(-110%)" : undefined,
+          opacity: faded ? 0 : undefined,
+          ...(header.blur
+            ? {
+                backdropFilter: `blur(${header.blurAmount}px)`,
+                WebkitBackdropFilter: `blur(${header.blurAmount}px)`,
+              }
+            : {}),
+        }}
+      >
+        {selected && (
+          <span className="pointer-events-none absolute right-0 top-0 z-[60] rounded-bl bg-orange-500 px-2 py-0.5 text-[10px] font-medium text-white">
+            Header
+          </span>
+        )}
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
+        <span className="sr-only">{name}</span>
+      </nav>
+      {needsSpacer && <div style={{ height: headerHeight }} aria-hidden />}
+    </>
+  );
+}
+
+export function PomahFooter({ name }: { name: string }) {
+  return (
+    <footer className="bg-teal-800 text-teal-100">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
+        <div>
+          <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
+          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
+            Experience comfort and hospitality at {name}.
+          </p>
+        </div>
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+            Quick Links
+          </p>
+          <ul className="mt-4 space-y-2 text-sm">
+            <li>
+              <Link to="/" className="transition hover:text-white">
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link to="/rooms" className="transition hover:text-white">
+                Rooms
+              </Link>
+            </li>
+            <li>
+              <a href="#facilities" className="transition hover:text-white">
+                Amenities
+              </a>
+            </li>
+            <li>
+              <a href="#lokasi" className="transition hover:text-white">
+                Lokasi
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+            Follow Us
+          </p>
+          <a
+            href="#"
+            aria-label="Instagram"
+            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-600 text-teal-200 transition hover:border-white hover:text-white"
+          >
+            <Instagram className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
+      <div className="border-t border-teal-700/60 py-5 text-center text-xs text-teal-300/70">
+        © {new Date().getFullYear()} {name}. Semua hak dilindungi.
+      </div>
+    </footer>
+  );
+}
+
+const HERO_ANIM: Record<string, string> = {
+  fade: "animate-in fade-in duration-700",
+  slide: "animate-in slide-in-from-right-full duration-500 ease-out",
+  zoom: "animate-in zoom-in-95 duration-700",
+  none: "",
+};
+
+export function HeroSlider({
+  hero,
+  fallbackTitle,
+}: {
+  hero: HomepageConfig["hero"];
+  fallbackTitle: string;
+}) {
+  const slides = hero.slides.length
+    ? hero.slides
+    : [{ imageUrl: "", videoUrl: "", heading: fallbackTitle, subheading: "" }];
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    if (slides.length < 2 || hero.autoplayMs <= 0) return;
+    const t = setInterval(() => setI((v) => (v + 1) % slides.length), hero.autoplayMs);
+    return () => clearInterval(t);
+  }, [slides.length, hero.autoplayMs]);
+
+  const active = slides[i % slides.length];
+  const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+
+  return (
+    <header
+      className="relative w-full overflow-hidden"
+      style={{ height: hero.height, zIndex: hero.layer }}
+    >
+      <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
+        {active.videoUrl ? (
+          <video
+            src={active.videoUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : active.imageUrl ? (
+          <img
+            src={active.imageUrl}
+            alt={active.heading}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+        )}
+        <div className="absolute inset-0 bg-black/35" />
+        <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+          <h1
+            className={`max-w-3xl tracking-tight text-white drop-shadow ${
+              hero.fontFamily === "mono"
+                ? "font-mono"
+                : hero.fontFamily === "sans"
+                  ? "font-sans"
+                  : "font-serif"
+            }`}
+            style={{
+              fontSize: hero.fontSize,
+              lineHeight: 1.1,
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+            }}
+          >
+            {active.heading}
+          </h1>
+          {active.subheading && (
+            <>
+              <span className="my-4 h-px w-40 bg-white/70" />
+              <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
+            </>
+          )}
+        </div>
+      </div>
+      {slides.length > 1 && (
+        <>
+          <button
+            onClick={() => go(-1)}
+            aria-label="Sebelumnya"
+            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => go(1)}
+            aria-label="Berikutnya"
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/25 p-2 text-white hover:bg-white/40"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+          <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
+            {slides.map((s, d) => (
+              <button
+                key={d}
+                onClick={() => setI(d)}
+                aria-label={`Slide ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${
+                  d === i % slides.length ? "w-6 bg-white" : "w-2 bg-white/50"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </header>
+  );
+}
+

@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { getPublicSiteData, submitCartBooking } from "@/public/functions/public.functions";
-import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
+import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +93,11 @@ function BookPage() {
   const today = new Date().toISOString().slice(0, 10);
   const tomorrowDate = new Date(Date.now() + 86400000);
   const tomorrow = tomorrowDate.toISOString().slice(0, 10);
+
+  const pb: Pb = { isBuilder: false, sel: null, onSelect: () => {} };
+  const propertyName = data?.property?.name || "Pomah Guesthouse";
+  const logoUrl = data?.property?.logo_url ?? null;
+  const cfg = mergeHomepageConfig((data?.property as any)?.homepage_config);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -200,29 +206,13 @@ function BookPage() {
 
   return (
     <div className="min-h-screen bg-[#F9F9F7] text-stone-900 font-sans">
-      <PublicNav property={data?.property} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
       {/* Hero Section */}
-      <section className="relative pt-16 pb-12 md:pt-24 md:pb-16 bg-stone-900 overflow-hidden">
-        {/* Placeholder for Page Builder Image */}
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=2070&auto=format&fit=crop" 
-            alt="Hero Background" 
-            className="w-full h-full object-cover opacity-60"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#F9F9F7] via-transparent to-stone-900/40" />
-        </div>
-        
-        <div className="relative z-10 mx-auto max-w-[1440px] px-6">
-          <div className="max-w-2xl text-white">
-            <h1 className="font-serif text-5xl md:text-6xl font-semibold tracking-tight leading-tight">
-              Pesan kamar dengan mudah
-            </h1>
-            <p className="mt-4 text-lg text-stone-200">
-              Cek ketersediaan, pilih kamar, dan konfirmasi booking dalam beberapa langkah.
-            </p>
-          </div>
+      <HeroSlider hero={cfg.bookingHero} fallbackTitle="Pesan kamar dengan mudah" />
+      
+      <section className="relative -mt-12 mb-12 z-20">
+        <div className="mx-auto max-w-[1440px] px-6">
 
           {/* Search Bar */}
           <div className="mt-10 bg-white rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-center gap-4 max-w-4xl">
@@ -699,7 +689,7 @@ function BookPage() {
         </div>
       </section>
 
-      <PublicFooter property={data?.property} />
+      <PomahFooter name={propertyName} />
     </div>
   );
 }
