@@ -139,15 +139,12 @@ function HomepageBuilder() {
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
   const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
-  const activeName = activePageId === "home" ? "Home" : (activeLp?.title ?? "Home");
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
-    if (activePageId !== "home" && !lpQuery.isLoading && !activeLp) setActivePageId("home");
+    if (activePageId !== "home" && activePageId !== "book" && !lpQuery.isLoading && !activeLp) setActivePageId("home");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lpQuery.isLoading, activeLp, activePageId]);
-
-  const previewSrc = activeLp ? `/lp/${activeLp.slug}` : "/?builder=1";
 
   useEffect(() => {
     if (data?.config) setCfg(data.config);
@@ -170,6 +167,14 @@ function HomepageBuilder() {
       iframeRef.current?.contentWindow?.postMessage({ source: "pb-host", section }, "*");
     }
   }, [section, previewKey, activeLp]);
+
+  useEffect(() => {
+    if (activePageId === "book" && !["header", "bookingHero"].includes(section)) {
+      setSection("bookingHero");
+    } else if (activePageId === "home" && section === "bookingHero") {
+      setSection("hero");
+    }
+  }, [activePageId, section]);
 
   const save = async () => {
     setSaving(true);
@@ -230,7 +235,11 @@ function HomepageBuilder() {
     }
   };
 
-  const active = SECTIONS.find((s) => s.key === section)!;
+  const visibleSections = activePageId === "book" 
+    ? SECTIONS.filter(s => ["header", "bookingHero"].includes(s.key))
+    : SECTIONS.filter(s => s.key !== "bookingHero");
+
+  const active = visibleSections.find((s) => s.key === section) || visibleSections[0];
 
   return (
     <div className="flex h-full flex-col bg-stone-100">
@@ -316,12 +325,12 @@ function HomepageBuilder() {
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="text-sm font-semibold">Edit — {active.label}</p>
                 <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
-                  onClick={() => openPageSettings("home")}>
+                  onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}>
                   <Settings2 className="h-3.5 w-3.5" /> SEO
                 </Button>
               </div>
               <div className="flex gap-1 border-b border-border p-2">
-                {SECTIONS.map((s) => (
+                {visibleSections.map((s) => (
                   <button
                     key={s.key}
                     onClick={() => setSection(s.key)}
@@ -1150,7 +1159,25 @@ function SiteMenu({
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
             <button type="button" title="Pengaturan SEO"
               onClick={(e) => { e.stopPropagation(); onSeo("home"); }}
-              className="rounded p-0.5 text-stone-400 hover:text-teal-600">
+              className="p-1 hover:bg-stone-200 rounded text-stone-400 hover:text-teal-600">
+              <Settings2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Booking Page */}
+        <div
+          className={cn(
+            "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+            activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+          )}
+          onClick={() => onSelect("book")}>
+          <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+          <span className="flex-1 truncate text-xs font-medium text-stone-700">Booking Page</span>
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+            <button type="button" title="Pengaturan SEO"
+              onClick={(e) => { e.stopPropagation(); onSeo("book"); }}
+              className="p-1 hover:bg-stone-200 rounded text-stone-400 hover:text-teal-600">
               <Settings2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -1205,7 +1232,8 @@ type PageSettingsTab = "access" | "basics" | "advanced" | "social";
 /** Settings target: a landing page, or the Home page (homepage_config). */
 type SettingsTarget =
   | { kind: "lp"; page: SeoLandingPage }
-  | { kind: "home"; cfg: HomepageConfig; propertyId: string | null };
+  | { kind: "home"; cfg: HomepageConfig; propertyId: string | null }
+  | { kind: "book"; cfg: HomepageConfig; propertyId: string | null };
 
 function PageSettingsPanel({
   target,
@@ -1217,9 +1245,11 @@ function PageSettingsPanel({
   onClose: () => void;
 }) {
   const isHome = target.kind === "home";
-  const pageTitle = isHome ? "Home" : target.page.title;
-  const pageSlug = isHome ? "" : target.page.slug;
-  const targetKey = isHome ? "home" : target.page.id;
+  const isBook = target.kind === "book";
+  const isFixedPage = isHome || isBook;
+  const pageTitle = isHome ? "Home" : isBook ? "Booking Page" : target.page.title;
+  const pageSlug = isHome ? "" : isBook ? "book" : target.page.slug;
+  const targetKey = isHome ? "home" : isBook ? "book" : target.page.id;
 
   const [tab, setTab] = useState<PageSettingsTab>("access");
   const [saving, setSaving] = useState(false);
@@ -1236,7 +1266,7 @@ function PageSettingsPanel({
   const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
-    if (target.kind === "home") {
+    if (target.kind === "home" || target.kind === "book") {
       const s = target.cfg.seo;
       setSlug("");
       setMetaTitle(s.metaTitle ?? "");
@@ -1343,19 +1373,19 @@ function PageSettingsPanel({
         {/* ── Access ── */}
         {tab === "access" && (
           <div className="space-y-4">
-            {isHome ? (
+            {isFixedPage ? (
               <>
                 <FieldRow label="URL halaman">
                   <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
-                    <span className="font-mono text-stone-700">pomahguesthouse.com/</span>
+                    <span className="font-mono text-stone-700">pomahguesthouse.com/{isBook ? "book" : ""}</span>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">URL halaman depan tidak dapat diubah.</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">URL halaman {isBook ? "booking" : "depan"} tidak dapat diubah.</p>
                 </FieldRow>
                 <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
                   <p className="text-xs font-medium">Halaman selalu publik</p>
-                  <p className="text-[10px] text-muted-foreground">Halaman depan selalu dapat diakses & diindeks.</p>
+                  <p className="text-[10px] text-muted-foreground">Halaman {isBook ? "booking" : "depan"} selalu dapat diakses & diindeks.</p>
                 </div>
-                <a href="/" target="_blank" rel="noopener noreferrer"
+                <a href={isBook ? "/book" : "/"} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
                   <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
                 </a>
@@ -1397,7 +1427,7 @@ function PageSettingsPanel({
           <div className="space-y-4">
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
               <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Preview on Google</p>
-              <p className="text-[12px] text-stone-500">pomahguesthouse.com{isHome ? "" : ` › lp › ${pageSlug}`}</p>
+              <p className="text-[12px] text-stone-500">pomahguesthouse.com{isFixedPage ? (isBook ? " › book" : "") : ` › lp › ${pageSlug}`}</p>
               <p className="text-[15px] font-medium text-blue-700 leading-snug">{metaTitle || pageTitle || "Title tag belum diisi"}</p>
               <p className="text-xs text-stone-600 leading-relaxed">
                 {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
@@ -1554,6 +1584,12 @@ function SitePagesModal({
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Home" active={activePageId === "home"}
                     onClick={() => onSelect("home")}
+                  />
+                  {/* Booking Page */}
+                  <PageRow
+                    icon={<CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
+                    label="Booking Page" active={activePageId === "book"}
+                    onClick={() => onSelect("book")}
                   />
                   {pages.map((p) => (
                     <PageRow key={p.id}
