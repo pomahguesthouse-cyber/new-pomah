@@ -3,6 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
@@ -109,17 +110,46 @@ async function pickAvailableRooms(
   return Array.from({ length: n }, (_, i) => free[i] ?? null);
 }
 
+export type PublicProperty = {
+  id?: string;
+  name?: string;
+  tagline?: string | null;
+  description?: string | null;
+  address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp_number?: string | null;
+  hero_image_url?: string | null;
+  logo_url?: string | null;
+  invoice_logo_url?: string | null;
+  favicon_url?: string | null;
+  public_domain?: string | null;
+  google_analytics_id?: string | null;
+  google_tag_manager_id?: string | null;
+  google_search_console?: string | null;
+  google_place_id?: string | null;
+  hotel_policy?: string | null;
+  homepage_config?: Json;
+  explore_config?: Json;
+  currency?: string | null;
+  timezone?: string | null;
+};
+
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const [{ data: property }, { data: roomTypesRaw }] = await Promise.all([
-    supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
-    supabaseAdmin
+  const [{ data: propertyData }, { data: roomTypesRaw }] = await Promise.all([
+    supabasePublic.rpc("get_public_property" as never),
+    supabasePublic
       .from("room_types")
       .select(
         "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, size_sqm, amenities, hero_image_url, rooms(id)",
       )
       .order("base_rate"),
   ]);
-  
+
+  const property = (propertyData ?? null) as PublicProperty | null;
+
   const roomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
     rooms: undefined,
