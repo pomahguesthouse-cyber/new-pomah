@@ -26,6 +26,12 @@ export interface ToolContext {
   today:          string;
   /** App base URL (e.g. https://pomahguesthouse.com) */
   origin?:        string;
+  /**
+   * Stable per-inbound-message key (phone + message id). Used by write tools
+   * (create_booking) to stay idempotent across webhook retries of the same
+   * message, preventing duplicate bookings.
+   */
+  idempotencyKey?: string;
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */

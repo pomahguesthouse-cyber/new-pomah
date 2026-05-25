@@ -418,6 +418,7 @@ export const Route = createFileRoute("/api/fonnte")({
                   property:       p as any,
                   today,
                   origin,
+                  idempotencyKey: dedupKey,
                 },
                 llmConfig: { apiKey, baseUrl, model },
                 signal: controller.signal,
