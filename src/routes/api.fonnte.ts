@@ -218,12 +218,15 @@ export const Route = createFileRoute("/api/fonnte")({
         // ── ?debug=1 ─────────────────────────────────────────────────────────
         if (url.searchParams.get("debug") === "1") {
           const debugPhone = url.searchParams.get("phone") ?? "debug_test_000";
+          const { getWaitUntil } = await import("@/lib/cf-context");
           const report: Record<string, unknown> = {
             env_token_set:           !!process.env.FONNTE_WEBHOOK_TOKEN,
             env_supabase_url_set:    !!process.env.SUPABASE_URL,
             env_supabase_key_set:    !!process.env.SUPABASE_PUBLISHABLE_KEY,
             env_lovable_api_key_set: !!process.env.LOVABLE_API_KEY,
             debug_phone: debugPhone,
+            wait_until_present: !!getWaitUntil(),
+            headers: Object.fromEntries(request.headers.entries()),
           };
 
           if (debugPhone === "debug_test_000") {
