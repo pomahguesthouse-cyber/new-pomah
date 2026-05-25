@@ -37,6 +37,7 @@ import {
   deriveAgentLabelFromKey,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
+import { getWaitUntil }                        from "@/lib/cf-context";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 
 /** AI request timeout (AbortController) */
-const AI_TIMEOUT_MS = 22_000;
+const AI_TIMEOUT_MS = 12_000;
 
 // ─── Global Cache & Fault Tolerance State ─────────────────────────────────────
 
@@ -218,6 +219,12 @@ export const Route = createFileRoute("/api/fonnte")({
           metadata: { intent_label: classifyMessageIntent(message) },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
+        // ── Background AI processing ──────────────────────────────────────
+        // The heavy pipeline (debounce + LLM + send) runs AFTER we return 200
+        // to Fonnte, so its quick webhook timeout never kills our reply. On
+        // Cloudflare we keep the worker alive with waitUntil; in local dev
+        // (no waitUntil) we await it inline.
+        const processAutoReply = async (): Promise<unknown> => {
         // ── 6. Load autoreply context ─────────────────────────────────────
         const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
           "get_autoreply_context",
@@ -250,7 +257,7 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         // ── 7. Lightweight Smart Debounce (Last-One-Wins) ─────────────────
-        const DEBOUNCE_MS = 3000;
+        const DEBOUNCE_MS = 1500;
         console.log(`[AutoReply] debouncing ${DEBOUNCE_MS}ms | thread=${c.thread_id} | ${logCtx}`);
         await sleep(DEBOUNCE_MS);
 
@@ -378,7 +385,7 @@ export const Route = createFileRoute("/api/fonnte")({
           const rollingMessages = (c.messages ?? []).slice(-20);
 
           // ── 12. Run AI with retry loop & AbortController ────────────────
-          const MAX_AI_RETRIES = 3;
+          const MAX_AI_RETRIES = 2;
           let reply: string | null = null;
           let isNoop = false;
           let lastAiError = "";
@@ -566,6 +573,19 @@ export const Route = createFileRoute("/api/fonnte")({
             ? unexpectedErr.message
             : String(unexpectedErr);
           console.error(`[AutoReply] unexpected crash: ${errMsg} | ${logCtx}`);
+        }
+        }; // end processAutoReply
+
+        // Return 200 to Fonnte immediately; process the reply in the background.
+        const waitUntil = getWaitUntil();
+        if (waitUntil) {
+          waitUntil(
+            processAutoReply().catch((e) =>
+              console.error(`[AutoReply] background crash: ${e} | ${logCtx}`),
+            ),
+          );
+        } else {
+          await processAutoReply();
         }
 
         return new Response("OK", { status: 200 });

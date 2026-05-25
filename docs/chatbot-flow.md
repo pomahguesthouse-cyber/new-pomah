@@ -18,30 +18,37 @@ flowchart TD
     E -- tidak --> F{Duplikat in-memory?<br/>dedupKey}
     F -- ya --> Z
     F -- tidak --> G[Simpan pesan masuk + intent badge]
-    G --> H[get_autoreply_context p_phone]
+    G --> R200([Return OK 200 ke Fonnte — SEGERA])
+    G -. waitUntil background .-> H[get_autoreply_context p_phone]
     H --> I{Thread ada?<br/>auto_reply aktif?<br/>fonnte_token ada?}
-    I -- tidak --> Z
-    I -- ya --> J[Debounce 3 detik]
+    I -- tidak --> STOP([Stop background])
+    I -- ya --> J[Debounce 1.5 dtk]
     J --> K{Ada pesan lebih baru?<br/>superseded}
-    K -- ya --> Z
+    K -- ya --> STOP
     K -- tidak --> L{Circuit breaker aktif?}
-    L -- ya --> M[Kirim fallback] --> Z
+    L -- ya --> M[Kirim fallback] --> STOP
     L -- tidak --> N[Load property + rooms + SOP/brosur cache]
-    N --> O[[Retry orkestrasi + balasan]]
-    O --> Z
+    N --> O[[Retry orkestrasi + balasan → kirim Fonnte]]
 ```
+
+> **Penting (Cloudflare Workers):** balasan `200` dikirim ke Fonnte
+> **segera** setelah pesan masuk disimpan; pipeline berat (debounce + LLM +
+> kirim) berjalan di background lewat `ctx.waitUntil`, sehingga timeout webhook
+> Fonnte yang singkat tidak lagi mematikan proses balasan. Di dev lokal (tanpa
+> `waitUntil`) proses tetap di-`await`. Timeout AI 12 dtk, retry maks 2×.
 
 ## 2. Retry webhook + lokasi fallback
 
-Retry yang sesungguhnya ada di lapisan webhook (`MAX_AI_RETRIES = 3`) dan
-membungkus seluruh orkestrasi. Pesan fallback (`FALLBACK_MESSAGE`) juga
-ditentukan di lapisan webhook.
+Retry yang sesungguhnya ada di lapisan webhook (`MAX_AI_RETRIES = 2`) dan
+membungkus seluruh orkestrasi, kini berjalan di dalam tugas background
+`waitUntil`. Pesan fallback (`FALLBACK_MESSAGE`) juga ditentukan di lapisan
+webhook.
 
 Orchestration memakai **kontrak tiga-status** (`MultiAgentResult.status`):
 - `reply` → kirim balasan, berhenti retry.
 - `noop` → sengaja diam: tidak kirim apa pun, tidak retry (cadangan — belum ada
   produser; disiapkan untuk kasus mis. takeover di tengah percakapan).
-- `error` → gagal: webhook retry sampai 3×, lalu pakai `FALLBACK_MESSAGE`.
+- `error` → gagal: webhook retry sampai 2×, lalu pakai `FALLBACK_MESSAGE`.
 
 Hanya `error` yang memicu retry, sehingga user tidak pernah menerima respons
 kosong dan retry tidak membuang side-effect (digabung idempotency key di
@@ -51,13 +58,13 @@ kosong dan retry tidak membuang side-effect (digabung idempotency key di
 flowchart TD
     subgraph WEBHOOK["Lapisan Webhook — /api/fonnte"]
         direction TB
-        S0[Pesan masuk lolos dedup,<br/>debounce, circuit breaker] --> RT{Retry orkestrasi<br/>attempt ≤ 3?}
+        S0[Pesan masuk lolos dedup,<br/>debounce, circuit breaker] --> RT{Retry orkestrasi<br/>attempt ≤ 2?}
         RT -- ya --> ORCH[[Multi-Agent Orchestration]]
         ORCH --> RC{status?}
         RC -- reply --> OK[Reset failure count]
         RC -- noop --> NO[Stop, tidak kirim<br/>tidak retry] --> Z2([Return OK 200])
         RC -- error --> RT
-        RT -- habis 3× --> FB[finalReply = FALLBACK_MESSAGE<br/>isFallback = true<br/>naikkan failure → trip breaker]
+        RT -- habis 2× --> FB[finalReply = FALLBACK_MESSAGE<br/>isFallback = true<br/>naikkan failure → trip breaker]
         OK --> SEND
         FB --> SEND[Cek outbound dedup → kirim Fonnte → simpan]
     end
