@@ -1728,6 +1728,7 @@ export type Database = {
       generate_booking_reference: { Args: never; Returns: string }
       get_active_booking_state: { Args: { p_phone: string }; Returns: Json }
       get_autoreply_context: { Args: { p_phone: string }; Returns: Json }
+      get_public_property: { Args: never; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
