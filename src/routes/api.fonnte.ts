@@ -203,6 +203,57 @@ export const Route = createFileRoute("/api/fonnte")({
           }
         }
 
+        // ── ?raw_llm=1&phone=628xxx — dump raw gateway response (temporary) ──
+        if (url.searchParams.get("raw_llm") === "1") {
+          const rawPhone = url.searchParams.get("phone");
+          if (!rawPhone) {
+            return new Response(JSON.stringify({ error: "phone param required" }), {
+              status: 400, headers: { "Content-Type": "application/json" },
+            });
+          }
+          const out: Record<string, unknown> = { phone: rawPhone };
+          try {
+            const { data: ctxR } = await (supabaseAdmin as any).rpc("get_autoreply_context", { p_phone: rawPhone });
+            const cR = (ctxR ?? {}) as any;
+            const { data: propR } = await (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle();
+            const pR = (propR ?? {}) as any;
+            const { data: roomsR } = await (supabasePublic as any)
+              .from("room_types").select("id, name, base_rate, capacity, bed_type, description, amenities").order("base_rate");
+
+            const explicitKeyR = pR.ai_api_key?.trim();
+            const lovableKeyR = process.env.LOVABLE_API_KEY?.trim();
+            const useLovableR = !explicitKeyR && !!lovableKeyR;
+            const apiKeyR = explicitKeyR || lovableKeyR;
+            const baseUrlR = useLovableR ? "https://ai.gateway.lovable.dev/v1"
+              : (pR.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+            const cfgModelR = pR.ai_model?.trim();
+            const modelR = useLovableR ? (cfgModelR?.includes("/") ? cfgModelR : "google/gemini-2.5-flash") : (cfgModelR || "gpt-4o-mini");
+            out.model = modelR;
+            out.base_url = baseUrlR;
+
+            const { getAgent } = await import("@/ai/agents/registry");
+            const agentR = getAgent("front-office");
+            const rollingR = (cR.messages ?? []).slice(-20);
+            const messagesR = [
+              { role: "system", content: agentR.buildSystemPrompt({ property: pR, rooms: roomsR || [], sopText: "", today: todayWIB() } as any) },
+              ...rollingR.map((m: any) => ({ role: m.direction === "in" ? "user" : "assistant", content: m.body })),
+            ];
+            const r = await fetch(`${baseUrlR}/chat/completions`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKeyR}` },
+              body: JSON.stringify({
+                model: modelR, temperature: 0.6, max_tokens: 2000,
+                messages: messagesR, tools: agentR.tools, tool_choice: "auto",
+              }),
+            });
+            out.http_status = r.status;
+            out.raw = await r.json().catch(async () => ({ text: await r.text() }));
+          } catch (e) { out.error = String(e); }
+          return new Response(JSON.stringify(out, null, 2), {
+            status: 200, headers: { "Content-Type": "application/json" },
+          });
+        }
+
         // ── ?debug=1 ─────────────────────────────────────────────────────────
         if (url.searchParams.get("debug") === "1") {
           const debugPhone = url.searchParams.get("phone") ?? "debug_test_000";
