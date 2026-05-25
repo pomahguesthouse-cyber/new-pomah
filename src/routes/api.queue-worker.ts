@@ -53,25 +53,36 @@ export const Route = createFileRoute("/api/queue-worker")({
           return new Response("Invalid payload", { status: 400 });
         }
 
-        const entry = payload.record;
-        const entryId = entry.id;
-        const phone = entry.phone;
-        const maxWaitUntil = entry.max_wait_until
-          ? new Date(entry.max_wait_until).getTime()
-          : Date.now() + 25_000;
+        const entryId = payload.record?.id as string | undefined;
+        if (!entryId) {
+          return new Response("Invalid payload: missing record.id", { status: 400 });
+        }
 
+        const { data: queueRow, error: rowLoadErr } = await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .select("id, phone, process_after, max_wait_until, status")
+          .eq("id", entryId)
+          .maybeSingle();
+
+        if (rowLoadErr || !queueRow) {
+          console.log(`[QueueWorker] Entry ${entryId} not found`);
+          return new Response("Gone", { status: 200 });
+        }
+
+        const phone = queueRow.phone as string;
         const workerId = `worker_${Math.random().toString(36).substring(2, 15)}`;
+        const RECOVERY_GRACE_MS = 120_000;
 
-        // 1–2. Wait for smart-delay window, then claim (retry while debounce extends process_after)
+        // 1–2. Wait for smart-delay, then claim (handles debounce + stuck overdue entries)
         let claimedItem: {
           message_count: number;
           last_message_body: string;
         } | null = null;
 
-        while (Date.now() < maxWaitUntil) {
+        while (true) {
           const { data: row, error: rowErr } = await (supabaseAdmin as any)
             .from("wa_conversation_queue")
-            .select("process_after, status")
+            .select("process_after, max_wait_until, status")
             .eq("id", entryId)
             .maybeSingle();
 
@@ -85,12 +96,15 @@ export const Route = createFileRoute("/api/queue-worker")({
             return new Response("Not Active", { status: 200 });
           }
 
+          const now = Date.now();
           const processAfterMs = new Date(row.process_after as string).getTime();
-          const waitMs = processAfterMs - Date.now();
-          if (waitMs > 0) {
-            const capped = Math.min(waitMs, maxWaitUntil - Date.now());
+          const maxWaitMs = new Date(row.max_wait_until as string).getTime();
+
+          if (now < processAfterMs) {
+            const capped = Math.min(processAfterMs - now, 2000);
             console.log(`[QueueWorker] Waiting ${capped}ms for ${phone}`);
             await sleep(capped);
+            continue;
           }
 
           const { data: claimData, error: claimErr } = await (supabaseAdmin as any).rpc(
@@ -108,12 +122,12 @@ export const Route = createFileRoute("/api/queue-worker")({
             break;
           }
 
-          await sleep(300);
-        }
+          if (now > maxWaitMs + RECOVERY_GRACE_MS) {
+            console.log(`[QueueWorker] Item ${entryId} not claimed after recovery window`);
+            return new Response("Not Claimed", { status: 200 });
+          }
 
-        if (!claimedItem) {
-          console.log(`[QueueWorker] Item ${entryId} not claimed before max_wait_until`);
-          return new Response("Not Claimed", { status: 200 });
+          await sleep(400);
         }
         console.log(`[QueueWorker] Claimed ${entryId} for ${phone} (msgs: ${claimedItem.message_count})`);
 

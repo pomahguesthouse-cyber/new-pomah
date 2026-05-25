@@ -28,6 +28,7 @@ import {
   runMultiAgentOrchestration,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
+import { dispatchQueueWorker }                from "@/services/queue-worker-dispatch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -154,8 +155,12 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         // ── 7. Enqueue to Database ────────────────────────────────────────
-        // This triggers the async worker via pg_net (Database Trigger)
-        const { error: qErr } = await (supabaseAdmin as any).rpc("wa_queue_upsert", {
+        // pg_net trigger may also call the worker; we always dispatch as fallback.
+        void (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies").catch((e: unknown) =>
+          console.warn("[Webhook] zombie cleanup:", e),
+        );
+
+        const { data: qRows, error: qErr } = await (supabaseAdmin as any).rpc("wa_queue_upsert", {
           p_phone:       customerPhone,
           p_thread_id:   c.thread_id,
           p_message_id:  messageId,
@@ -167,7 +172,9 @@ export const Route = createFileRoute("/api/fonnte")({
         if (qErr) {
           console.error(`[Webhook] Queue upsert error: ${qErr.message} | ${logCtx}`);
         } else {
-          console.log(`[Webhook] Enqueued message to wa_conversation_queue | ${logCtx}`);
+          const entryId = (qRows as { entry_id?: string }[] | null)?.[0]?.entry_id;
+          console.log(`[Webhook] Enqueued ${entryId ?? "?"} | ${logCtx}`);
+          if (entryId) dispatchQueueWorker(request, entryId);
         }
 
         // Return 200 OK immediately. The AI orchestration runs asynchronously.
