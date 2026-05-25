@@ -110,16 +110,18 @@ async function pickAvailableRooms(
 }
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const [{ data: property }, { data: roomTypesRaw }] = await Promise.all([
-    supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
-    supabaseAdmin
+  const [{ data: propertyData }, { data: roomTypesRaw }] = await Promise.all([
+    supabasePublic.rpc("get_public_property" as never),
+    supabasePublic
       .from("room_types")
       .select(
         "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, size_sqm, amenities, hero_image_url, rooms(id)",
       )
       .order("base_rate"),
   ]);
-  
+
+  const property = (propertyData ?? null) as Record<string, unknown> | null;
+
   const roomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
     rooms: undefined,
