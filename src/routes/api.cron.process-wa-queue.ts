@@ -4,6 +4,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { processWaQueueEntry } from "@/services/wa-queue-processor";
 
 export const Route = createFileRoute("/api/cron/process-wa-queue")({
   server: {
@@ -31,31 +32,13 @@ export const Route = createFileRoute("/api/cron/process-wa-queue")({
         const results: { id: string; phone: string; status: number; body: string }[] = [];
 
         for (const row of rows ?? []) {
-          try {
-            const res = await fetch(`${origin}/api/queue-worker`, {
-              method:  "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                type:   "CRON",
-                table:  "wa_conversation_queue",
-                record: { id: row.id },
-              }),
-            });
-            const body = await res.text();
-            results.push({
-              id:     row.id,
-              phone:  row.phone,
-              status: res.status,
-              body:   body.slice(0, 80),
-            });
-          } catch (e) {
-            results.push({
-              id:     row.id,
-              phone:  row.phone,
-              status: 0,
-              body:   String(e),
-            });
-          }
+          const outcome = await processWaQueueEntry(row.id as string, origin);
+          results.push({
+            id:     row.id,
+            phone:  row.phone,
+            status: 200,
+            body:   outcome,
+          });
         }
 
         return new Response(

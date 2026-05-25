@@ -172,11 +172,20 @@ export const Route = createFileRoute("/api/fonnte")({
         });
 
         if (qErr) {
-          console.error(`[Webhook] Queue upsert error: ${qErr.message} | ${logCtx}`);
+          console.error(
+            `[Webhook] Queue upsert FAILED: ${qErr.message} (code=${(qErr as { code?: string }).code}) | ${logCtx}`,
+          );
         } else {
           const entryId = (qRows as { entry_id?: string }[] | null)?.[0]?.entry_id;
-          console.log(`[Webhook] Enqueued ${entryId ?? "?"} | ${logCtx}`);
-          if (entryId) dispatchQueueWorker(request, entryId);
+          const sleepMs = (qRows as { sleep_ms?: number }[] | null)?.[0]?.sleep_ms;
+          console.log(
+            `[Webhook] Enqueued ${entryId ?? "?"} sleep_ms=${sleepMs ?? "?"} | ${logCtx}`,
+          );
+          if (entryId) {
+            dispatchQueueWorker(request, entryId);
+          } else {
+            console.error(`[Webhook] wa_queue_upsert returned no entry_id | ${logCtx}`);
+          }
         }
 
         // Return 200 OK immediately. The AI orchestration runs asynchronously.
@@ -233,8 +242,9 @@ export const Route = createFileRoute("/api/fonnte")({
           }
 
           try {
-            const { data: ctx, error } = await (supabasePublic as any).rpc(
-              "get_autoreply_context", { p_phone: debugPhone },
+            const { data: ctx, error } = await (supabaseAdmin as any).rpc(
+              "get_autoreply_context",
+              { p_phone: debugPhone },
             );
             report.rpc_autoreply_ok    = !error;
             report.rpc_autoreply_error = error ? (error as any).message : null;
@@ -243,6 +253,26 @@ export const Route = createFileRoute("/api/fonnte")({
               report.auto_reply_enabled = c.auto_reply_enabled;
               report.fonnte_token_set   = !!(c.fonnte_token as string)?.length;
               report.message_count      = Array.isArray(c.messages) ? c.messages.length : 0;
+
+              const threadId = c.thread_id as string | undefined;
+              if (threadId) {
+                const { data: qTest, error: qTestErr } = await (supabaseAdmin as any).rpc(
+                  "wa_queue_upsert",
+                  {
+                    p_phone:       debugPhone,
+                    p_thread_id:   threadId,
+                    p_message_id:  null,
+                    p_body:        "[DEBUG] queue upsert probe",
+                    p_delay_ms:    3000,
+                    p_max_wait_ms: 25000,
+                  },
+                );
+                report.queue_upsert_ok    = !qTestErr;
+                report.queue_upsert_error = qTestErr ? (qTestErr as { message?: string }).message : null;
+                if (qTest?.[0]) {
+                  report.queue_upsert_entry_id = (qTest[0] as { entry_id?: string }).entry_id;
+                }
+              }
             }
           } catch (e) { report.rpc_autoreply_error = String(e); }
 

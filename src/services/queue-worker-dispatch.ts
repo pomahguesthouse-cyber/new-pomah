@@ -1,34 +1,16 @@
 /**
- * Dispatch /api/queue-worker after enqueue.
- *
- * pg_net trigger is the primary path; this is a reliable fallback when pg_net
- * fails or when queue entries are stuck past max_wait_until.
+ * Start queue processing in the background after enqueue.
+ * Calls the processor directly (no HTTP self-fetch — unreliable on Cloudflare).
  */
 import { getWaitUntil } from "@/lib/cf-context";
+import { processWaQueueEntry } from "@/services/wa-queue-processor";
 
 export function dispatchQueueWorker(request: Request, entryId: string): void {
   const origin = new URL(request.url).origin;
 
   const work = async () => {
-    try {
-      const res = await fetch(`${origin}/api/queue-worker`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type:   "INSERT",
-          table:  "wa_conversation_queue",
-          record: { id: entryId },
-        }),
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        console.error(`[QueueDispatch] worker HTTP ${res.status}: ${text.slice(0, 200)}`);
-      } else {
-        console.log(`[QueueDispatch] worker ${res.status} entry=${entryId.slice(0, 8)} body=${text.slice(0, 40)}`);
-      }
-    } catch (e) {
-      console.error("[QueueDispatch] worker fetch failed:", e);
-    }
+    const outcome = await processWaQueueEntry(entryId, origin);
+    console.log(`[QueueDispatch] entry=${entryId.slice(0, 8)} outcome=${outcome}`);
   };
 
   const waitUntil = getWaitUntil();
