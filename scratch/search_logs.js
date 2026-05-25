@@ -1,24 +1,33 @@
 import fs from 'fs';
+import path from 'path';
 
-const logPath = 'C:\\Users\\LENOVO\\.gemini\\antigravity\\brain\\0c4ab46e-74d8-4116-a0c3-a337cf174796\\.system_generated\\logs\\transcript.jsonl';
-
-if (fs.existsSync(logPath)) {
-  const content = fs.readFileSync(logPath, 'utf8');
-  const lines = content.split('\n');
-  
-  lines.forEach((line, index) => {
-    if (line.includes('"type":"RUN_COMMAND"')) {
-      // parse JSON
-      try {
-        const obj = JSON.parse(line);
-        if (obj.step_index < 900) {
-          console.log(`[Step ${obj.step_index}] Cmd: ${obj.tool_calls?.[0]?.args?.CommandLine || obj.content?.slice(0, 150)}`);
-        }
-      } catch (e) {
-        // ignore
+function findLovableApp(dir) {
+  const files = fs.readdirSync(dir);
+  for (const file of files) {
+    const fullPath = path.join(dir, file);
+    if (file === 'node_modules' || file === '.git' || file === 'dist' || file === '.tanstack' || file === 'scratch') continue;
+    
+    let stat;
+    try {
+      stat = fs.statSync(fullPath);
+    } catch (e) {
+      continue;
+    }
+    
+    if (stat.isDirectory()) {
+      findLovableApp(fullPath);
+    } else if (stat.isFile()) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+      if (content.includes('lovable.app')) {
+        const lines = content.split('\n');
+        lines.forEach((line, index) => {
+          if (line.includes('lovable.app')) {
+            console.log(`${fullPath}:${index + 1}: ${line.trim()}`);
+          }
+        });
       }
     }
-  });
-} else {
-  console.log("Not found");
+  }
 }
+
+findLovableApp('.');
