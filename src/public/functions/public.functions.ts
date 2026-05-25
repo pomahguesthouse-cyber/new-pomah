@@ -3,6 +3,7 @@ import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
+import type { Json } from "@/integrations/supabase/types";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
