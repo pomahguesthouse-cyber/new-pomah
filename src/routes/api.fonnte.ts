@@ -158,31 +158,9 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Memory Buffer Debounce (Synchronous) ───────────────────────────
-        const delayMs = 3000; // wait 3 seconds to see if more messages arrive
-        console.log(`[Webhook] buffering for ${delayMs}ms | ${logCtx}`);
+        // ── 7. Execute AI Synchronously (NO DELAY) ────────────────────────────
+        console.log(`[Webhook] Processing AI immediately | ${logCtx}`);
         
-        // Wait asynchronously without returning
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-
-        // After sleep, check if a NEWER message arrived for this thread
-        const { data: latestMsg } = await (supabaseAdmin as any)
-          .from("whatsapp_messages")
-          .select("id")
-          .eq("thread_id", c.thread_id)
-          .eq("direction", "in")
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (latestMsg && latestMsg.id !== messageId) {
-          console.log(`[Webhook] Superseded by newer message (debounce) | ${logCtx}`);
-          return new Response("OK", { status: 200 }); // Let the newer request handle it
-        }
-
-        console.log(`[Webhook] Winner! Processing AI | ${logCtx}`);
-        
-        // ── 8. Execute AI Synchronously ───────────────────────────────────────
         try {
           const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
           const origin = new URL(request.url).origin;
