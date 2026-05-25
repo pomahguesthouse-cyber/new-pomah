@@ -1728,6 +1728,13 @@ export type Database = {
       generate_booking_reference: { Args: never; Returns: string }
       get_active_booking_state: { Args: { p_phone: string }; Returns: Json }
       get_autoreply_context: { Args: { p_phone: string }; Returns: Json }
+      get_google_reviews_config: {
+        Args: never
+        Returns: {
+          google_place_id: string
+          google_places_api_key: string
+        }[]
+      }
       get_public_property: { Args: never; Returns: Json }
       has_role: {
         Args: {

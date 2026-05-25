@@ -743,12 +743,8 @@ const empty = (status: string): GoogleReviewsResult => ({
  * (so the homepage falls back) on any failure.
  */
 export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
-  const { data: prop } = await supabaseAdmin
-    .from("properties")
-    .select("google_place_id, google_places_api_key")
-    .limit(1)
-    .maybeSingle();
-  const row = (prop as Record<string, unknown> | null) ?? {};
+  const { data: prop } = await supabasePublic.rpc("get_google_reviews_config" as never);
+  const row = (Array.isArray(prop) ? prop[0] : prop) as Record<string, unknown> | null ?? {};
   const placeId = (row.google_place_id as string | undefined)?.trim();
   const key = (
     (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY
