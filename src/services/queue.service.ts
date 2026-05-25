@@ -37,11 +37,11 @@ export interface SmartDelayConfig {
 
 export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   enabled:      true,
-  shortMs:      6_000,
+  shortMs:      2_000,
   mediumMs:     3_000,
-  longMs:       1_500,
-  waitSignalMs: 8_000,
-  maxWaitMs:    20_000,   // bot WILL reply within 20s of first message
+  longMs:       4_000,
+  waitSignalMs: 5_000,
+  maxWaitMs:    8_000,   // Reduced from 20s to 8s to prevent Lovable edge timeout
 };
 
 /** Keywords/patterns that indicate user is still typing */
