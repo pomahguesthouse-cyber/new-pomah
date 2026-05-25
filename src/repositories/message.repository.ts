@@ -65,13 +65,42 @@ export async function saveOutboundMessage(
     };
   },
 ): Promise<void> {
-  const { error } = await (client as any).rpc("save_outbound_whatsapp", {
+  // Try 3-arg RPC first
+  let { error } = await (client as any).rpc("save_outbound_whatsapp", {
     p_thread_id: params.threadId,
     p_body:      params.body,
     p_metadata:  params.metadata ?? null,
   });
+
   if (error) {
-    console.error("[MessageRepo] saveOutbound error:", error);
+    console.warn("[MessageRepo] 3-arg RPC failed, trying 2-arg...", error.message);
+    
+    // Try 2-arg RPC fallback (if DB hasn't been migrated)
+    const fallback = await (client as any).rpc("save_outbound_whatsapp", {
+      p_thread_id: params.threadId,
+      p_body:      params.body,
+    });
+    
+    if (fallback.error) {
+      console.warn("[MessageRepo] 2-arg RPC failed, trying direct insert...", fallback.error.message);
+      
+      // Last resort: direct insert + update
+      const insertRes = await (client as any).from("whatsapp_messages").insert({
+        thread_id: params.threadId,
+        direction: "out",
+        body:      params.body,
+        metadata:  params.metadata ?? null,
+      });
+      
+      if (insertRes.error) {
+        console.error("[MessageRepo] Direct insert failed:", insertRes.error);
+      } else {
+        await (client as any)
+          .from("whatsapp_threads")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", params.threadId);
+      }
+    }
   }
 }
 

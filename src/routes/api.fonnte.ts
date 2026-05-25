@@ -108,7 +108,7 @@ async function sendFallbackAndSave(
     console.error(`[AutoReply] Fallback send failed: ${sendErr} | ${logCtx}`);
     return;
   }
-  await saveOutboundMessage(supabasePublic, {
+  await saveOutboundMessage(supabaseAdmin, {
     threadId,
     body:     FALLBACK_MESSAGE,
     metadata: {
@@ -204,7 +204,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
         // ── 5. Save inbound message ───────────────────────────────────────
         const { messageId, error: saveErr } = await saveInboundMessage(
-          supabasePublic,
+          supabaseAdmin,
           { phone: customerPhone, name, body: message },
         );
         if (saveErr || !messageId) {
@@ -213,13 +213,13 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         // Intent badge (fire-and-forget — non-critical)
-        void saveMessageMetadata(supabasePublic, {
+        void saveMessageMetadata(supabaseAdmin, {
           messageId,
           metadata: { intent_label: classifyMessageIntent(message) },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
         // ── 6. Load autoreply context ─────────────────────────────────────
-        const { data: ctx, error: ctxErr } = await (supabasePublic as any).rpc(
+        const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
           "get_autoreply_context",
           { p_phone: customerPhone },
         );
@@ -521,7 +521,7 @@ export const Route = createFileRoute("/api/fonnte")({
           const agentKey   = orchResult?.agentKey ?? "front-office";
           const agentLabel = deriveAgentLabelFromKey(agentKey);
 
-          await saveOutboundMessage(supabasePublic, {
+          await saveOutboundMessage(supabaseAdmin, {
             threadId: c.thread_id,
             body:     replyWithLinks,
             metadata: {
