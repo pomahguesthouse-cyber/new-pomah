@@ -37,7 +37,7 @@ async function callLlm(
       body: JSON.stringify({
         model:       config.model,
         temperature: 0.6,
-        max_tokens:  600,
+        max_tokens:  2000,
         messages,
         tools,
         tool_choice: "auto",
