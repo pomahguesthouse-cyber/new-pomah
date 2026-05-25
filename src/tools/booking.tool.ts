@@ -107,6 +107,17 @@ export const createBooking: ToolHandler = async (
     });
   }
 
+  // ── Pick a concrete free room BEFORE any write ───────────────────────────────
+  // Fail fast if no physical room is free: avoids creating an orphan guest/booking
+  // and prevents silently inserting a booking_room with room_id = null.
+  const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+  if (!assignedRoomId) {
+    return JSON.stringify({
+      ok:    false,
+      error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+    });
+  }
+
   // ── Create guest record ────────────────────────────────────────────────────
   const propId = (ctx.property as Record<string, unknown>).id as string | undefined;
   if (!propId) return JSON.stringify({ ok: false, error: "Properti belum dikonfigurasi." });
@@ -155,8 +166,7 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Assign room ────────────────────────────────────────────────────────────
-  const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+  // ── Assign room (resolved above, guaranteed non-null) ────────────────────────
   const { error: brErr } = await (ctx.supabaseAdmin as any)
     .from("booking_rooms")
     .insert({
