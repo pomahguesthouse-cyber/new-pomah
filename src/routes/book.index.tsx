@@ -161,7 +161,7 @@ function BookPage() {
       <PublicNav property={data?.property} />
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-24 md:pt-40 md:pb-32 bg-stone-900 overflow-hidden">
+      <section className="relative pt-24 pb-16 md:pt-32 md:pb-24 bg-stone-900 overflow-hidden">
         {/* Placeholder for Page Builder Image */}
         <div className="absolute inset-0 z-0">
           <img 
@@ -172,7 +172,7 @@ function BookPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-[#F9F9F7] via-transparent to-stone-900/40" />
         </div>
         
-        <div className="relative z-10 mx-auto max-w-6xl px-6">
+        <div className="relative z-10 mx-auto max-w-7xl px-6">
           <div className="max-w-2xl text-white">
             <h1 className="font-serif text-5xl md:text-6xl font-semibold tracking-tight leading-tight">
               Pesan kamar dengan mudah
@@ -237,8 +237,8 @@ function BookPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-6xl px-6 py-12" ref={roomListRef}>
-        <div className="flex flex-col lg:flex-row gap-8">
+      <main className="mx-auto max-w-7xl px-6 py-10" ref={roomListRef}>
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
           
           {/* Left Column */}
           <div className="flex-1 space-y-12">
@@ -553,8 +553,8 @@ function BookPage() {
       </main>
 
       {/* Benefits Section */}
-      <section className="bg-white border-t border-stone-200 py-16">
-        <div className="max-w-6xl mx-auto px-6">
+      <section className="bg-white border-t border-stone-200 py-12">
+        <div className="max-w-7xl mx-auto px-6">
           <h2 className="font-serif text-2xl font-semibold mb-8 text-center md:text-left">Kenapa memilih New Pomah Guesthouse?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="flex gap-4 p-4 rounded-2xl bg-[#F9F9F7] border border-stone-100">
