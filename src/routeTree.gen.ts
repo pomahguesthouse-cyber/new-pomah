@@ -21,6 +21,7 @@ import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
+import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
@@ -97,6 +98,11 @@ const RoomsSlugRoute = RoomsSlugRouteImport.update({
 const LpSlugRoute = LpSlugRouteImport.update({
   id: '/lp/$slug',
   path: '/lp/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
+  id: '/api/queue-worker',
+  path: '/api/queue-worker',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFonnteRoute = ApiFonnteRouteImport.update({
@@ -208,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -238,6 +245,7 @@ export interface FileRoutesByTo {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -270,6 +278,7 @@ export interface FileRoutesById {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -333,6 +343,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin'
@@ -364,6 +375,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -382,6 +394,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiFonnteRoute: typeof ApiFonnteRoute
+  ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
@@ -474,6 +487,13 @@ declare module '@tanstack/react-router' {
       path: '/lp/$slug'
       fullPath: '/lp/$slug'
       preLoaderRoute: typeof LpSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/queue-worker': {
+      id: '/api/queue-worker'
+      path: '/api/queue-worker'
+      fullPath: '/api/queue-worker'
+      preLoaderRoute: typeof ApiQueueWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/fonnte': {
@@ -645,6 +665,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiFonnteRoute: ApiFonnteRoute,
+  ApiQueueWorkerRoute: ApiQueueWorkerRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
@@ -655,3 +676,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

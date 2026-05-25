@@ -29,7 +29,7 @@ DROP TRIGGER IF EXISTS t_process_wa_queue ON public.wa_conversation_queue;
 -- We trigger it AFTER INSERT to signal the worker there's a new job.
 CREATE TRIGGER t_process_wa_queue
 AFTER INSERT ON public.wa_conversation_queue
-FOR EACH STATEMENT
+FOR EACH ROW
 EXECUTE FUNCTION public.trigger_process_wa_queue();
 
 -- For retry scenarios or delayed processes, you can optionally add UPDATE triggers.
