@@ -158,19 +158,32 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Execute AI Synchronously (NO DELAY) ────────────────────────────
-        console.log(`[Webhook] Processing AI immediately | ${logCtx}`);
+        // ── 7. Execute AI Asynchronously (Memory Buffer) ────────────────────────────
+        console.log(`[Webhook] Processing AI in background (memory buffer) | ${logCtx}`);
         
         try {
           const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
+          const { getWaitUntil } = await import("@/lib/cf-context");
           const origin = new URL(request.url).origin;
-          const outcome = await executeAutoreplyForPhone(customerPhone, origin);
-          console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
+
+          const work = async () => {
+            const outcome = await executeAutoreplyForPhone(customerPhone, origin);
+            console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
+          };
+
+          const waitUntil = getWaitUntil();
+          if (waitUntil) {
+            waitUntil(work());
+            console.log(`[Webhook] Scheduled via waitUntil | ${logCtx}`);
+          } else {
+            void work();
+            console.log(`[Webhook] Scheduled via fire-and-forget | ${logCtx}`);
+          }
         } catch (e) {
           console.error(`[Webhook] fatal AI error: ${e} | ${logCtx}`);
         }
 
-        // Return 200 OK after sending the message
+        // Return 200 OK immediately
         return new Response("OK", { status: 200 });
       },
 
