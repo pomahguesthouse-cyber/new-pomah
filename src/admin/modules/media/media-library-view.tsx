@@ -1044,14 +1044,29 @@ export function MediaLibraryView() {
         const file = rawFile.type.startsWith("image/") ? await convertToWebP(rawFile) : rawFile;
         const ext  = (file.name.split(".").pop() ?? "bin").toLowerCase();
         const base = rawFile.name.replace(/\.[^.]+$/, "");
-        const path = `brosur/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await supabase.storage.from("sop-documents").upload(path, file, { upsert: false });
+
+        const folder = folders.find((f) => f.id === defaultUploadFolderId);
+        let prefix = "brosur";
+        if (folder) {
+          let curr: MediaFolder | undefined = folder;
+          while (curr) {
+            const auto = ROOM_IMAGE_PREFIXES.find((p) => p.folderName === curr!.name);
+            if (auto) { prefix = auto.prefix; break; }
+            curr = folders.find(f => f.id === curr!.parent_id);
+          }
+        }
+
+        const path = `${prefix}/${base.replace(/[^a-zA-Z0-9_-]/g, "")}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+        const targetBucket = "room-images";
+
+        const { error: upErr } = await supabase.storage.from(targetBucket).upload(path, file, { upsert: false });
         if (upErr) throw upErr;
         const createFn = (await import("@/admin/modules/ai-lab/sop.functions")).createSopDocument;
         await createFn({
           data: {
             name: base, filePath: path, fileType: ext, content: "",
             docCategory: "brosur",
+            storageBucket: targetBucket,
             folderId: defaultUploadFolderId || null,
           },
         });

@@ -218,11 +218,12 @@ export const deleteSopDocument = createServerFn({ method: "POST" })
     const sb = db(context.supabase);
     const { data: row } = await sb
       .from("sop_documents")
-      .select("file_path")
+      .select("file_path, storage_bucket")
       .eq("id", data.id)
       .maybeSingle();
     const filePath = (row as Record<string, unknown> | null)?.file_path as string | undefined;
-    if (filePath) await sb.storage.from("sop-documents").remove([filePath]);
+    const bucket = ((row as Record<string, unknown> | null)?.storage_bucket as string | undefined) || "sop-documents";
+    if (filePath) await sb.storage.from(bucket).remove([filePath]);
     const { error } = await sb.from("sop_documents").delete().eq("id", data.id);
     if (error) throw error;
     return { ok: true };
