@@ -306,10 +306,14 @@ function BookPage() {
                       <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
                         <div className={`h-full bg-white rounded-2xl border ${isInCart ? 'border-[#364935] ring-1 ring-[#364935]' : 'border-stone-200'} overflow-hidden shadow-sm flex flex-col transition-all hover:shadow-md relative`}>
                           {index === 1 && (
-                             <div className="absolute top-4 left-4 z-10 bg-stone-900/80 backdrop-blur text-white text-xs font-medium px-3 py-1 rounded-full">
+                             <div className="absolute top-4 left-4 z-10 bg-[#1A3620] text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
+                               <svg className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" /></svg>
                                Populer
                              </div>
                           )}
+                          <div className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 shadow-sm cursor-pointer hover:bg-stone-50">
+                            <svg className="w-5 h-5 text-stone-700" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" /></svg>
+                          </div>
                           <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
                             {room.hero_image_url ? (
                               <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
@@ -320,59 +324,73 @@ function BookPage() {
                             )}
                           </div>
                           <div className="p-5 flex flex-col flex-1">
-                            <h3 className="font-serif text-xl font-semibold mb-1">{room.name}</h3>
-                            <p className="text-sm text-stone-500 mb-4">Mulai dari <span className="font-semibold text-stone-900">Rp{Number(room.base_rate).toLocaleString("id-ID")}</span> / malam</p>
+                            <h3 className="font-serif text-xl font-semibold mb-1 text-[#1A3620]">{room.name}</h3>
+                            <p className="text-sm text-stone-500 mb-6 flex items-end gap-1">
+                              <span className="font-semibold text-2xl text-[#1A3620]">Rp. {Number(room.base_rate).toLocaleString("id-ID")},-</span>
+                              <span className="mb-1 text-xs">/malam</span>
+                            </p>
                             
-                            <ul className="space-y-2 mb-6 flex-1">
-                              <li className="flex items-center gap-2 text-sm text-stone-600">
-                                <Users className="w-4 h-4" /> {room.capacity} Tamu
-                              </li>
-                              <li className="flex items-center gap-2 text-sm text-stone-600">
-                                <AirVent className="w-4 h-4" /> AC
-                              </li>
-                              <li className="flex items-center gap-2 text-sm text-stone-600">
-                                <Wifi className="w-4 h-4" /> WiFi
-                              </li>
-                              <li className="flex items-center gap-2 text-sm text-stone-600">
-                                <Bath className="w-4 h-4" /> Kamar mandi dalam
-                              </li>
-                              <li className="flex items-center gap-2 text-sm text-stone-600">
-                                <Coffee className="w-4 h-4" /> Sarapan opsional
-                              </li>
-                            </ul>
+                            <div className="flex justify-between items-start mb-6 flex-1 pt-5 border-t border-stone-100">
+                              <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
+                                <AirVent className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
+                                <span className="text-[10px] text-stone-500 text-center">AC</span>
+                              </div>
+                              <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
+                                <Wifi className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
+                                <span className="text-[10px] text-stone-500 text-center">Wi-Fi</span>
+                              </div>
+                              <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
+                                <Bath className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
+                                <span className="text-[10px] text-stone-500 text-center">1 K. Mandi</span>
+                              </div>
+                              <div className="flex flex-col items-center gap-2 flex-1 border-r border-stone-100 last:border-r-0 px-1">
+                                <BedDouble className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
+                                <span className="text-[10px] text-stone-500 text-center">1 K. Tidur</span>
+                              </div>
+                              <div className="flex flex-col items-center gap-2 flex-1 px-1">
+                                <Users className="w-5 h-5 text-stone-700" strokeWidth={1.5} />
+                                <span className="text-[10px] text-stone-500 text-center">{room.capacity} Orang</span>
+                              </div>
+                            </div>
 
                             {isInCart ? (
-                               <div className="space-y-4 bg-stone-50 p-4 rounded-xl border border-[#364935]/20 mt-auto">
-                                 <div className="flex items-center justify-between">
-                                   <span className="text-sm font-medium text-stone-700">Jumlah Kamar</span>
+                               <div className="bg-[#FAF9F7] rounded-xl border border-stone-200 mt-auto divide-y divide-stone-200">
+                                 <div className="flex items-center justify-between p-4">
+                                   <div className="flex flex-col">
+                                     <span className="text-sm font-semibold text-stone-800">Jumlah Kamar</span>
+                                     <span className="text-[10px] text-stone-500">(Maksimal {availableCount})</span>
+                                   </div>
                                    <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
                                      <Button 
                                        type="button"
                                        variant="ghost" 
                                        size="icon" 
-                                       className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                       className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
                                        onClick={() => cartItem.quantity > 1 ? updateCartItem(room.id, { quantity: cartItem.quantity - 1 }) : removeFromCart(room.id)}
                                      >
-                                       {cartItem.quantity > 1 ? <Minus className="h-3 w-3" /> : <Trash2 className="h-3 w-3 text-red-500" />}
+                                       {cartItem.quantity > 1 ? <Minus className="h-4 w-4" /> : <Trash2 className="h-4 w-4 text-red-500" />}
                                      </Button>
-                                     <span className="text-sm font-semibold w-4 text-center">{cartItem.quantity}</span>
+                                     <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.quantity}</span>
                                      <Button 
                                        type="button"
                                        variant="ghost" 
                                        size="icon" 
-                                       className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                       className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
                                        disabled={cartItem.quantity >= availableCount}
                                        onClick={() => updateCartItem(room.id, { quantity: cartItem.quantity + 1 })}
                                      >
-                                       <Plus className="h-3 w-3" />
+                                       <Plus className="h-4 w-4" />
                                      </Button>
                                    </div>
                                  </div>
                                  
                                  {(room.extrabed_capacity > 0) && (
-                                   <div className="flex items-center justify-between pt-3 border-t border-stone-200">
+                                   <div className="flex items-center justify-between p-4">
                                      <div className="flex flex-col">
-                                       <span className="text-sm font-medium text-stone-700">Extrabed</span>
+                                       <div className="flex items-baseline gap-1">
+                                          <span className="text-sm font-semibold text-stone-800">Extrabed</span>
+                                          <span className="text-[10px] text-stone-500">(Maksimal {room.extrabed_capacity * cartItem.quantity})</span>
+                                       </div>
                                        <span className="text-xs text-stone-500">+Rp{Number(room.extrabed_rate || 0).toLocaleString("id-ID")}</span>
                                      </div>
                                      <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
@@ -380,22 +398,22 @@ function BookPage() {
                                          type="button"
                                          variant="ghost" 
                                          size="icon" 
-                                         className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                         className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
                                          disabled={cartItem.extraBeds <= 0}
                                          onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds - 1 })}
                                        >
-                                         <Minus className="h-3 w-3" />
+                                         <Minus className="h-4 w-4" />
                                        </Button>
-                                       <span className="text-sm font-semibold w-4 text-center">{cartItem.extraBeds}</span>
+                                       <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.extraBeds}</span>
                                        <Button 
                                          type="button"
                                          variant="ghost" 
                                          size="icon" 
-                                         className="h-7 w-7 rounded-md hover:bg-stone-100"
+                                         className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
                                          disabled={cartItem.extraBeds >= (room.extrabed_capacity * cartItem.quantity)}
                                          onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds + 1 })}
                                        >
-                                         <Plus className="h-3 w-3" />
+                                         <Plus className="h-4 w-4" />
                                        </Button>
                                      </div>
                                    </div>
