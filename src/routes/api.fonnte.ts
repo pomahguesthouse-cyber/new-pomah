@@ -157,17 +157,31 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Execute AI synchronously before returning 200 ───────────────────────
-        // Cloudflare cancels `waitUntil` background work once the response is sent and
-        // Fonnte disconnects, which silently dropped slower (tool-using) replies.
-        // Awaiting here keeps the request alive until the WhatsApp message is sent.
-        console.log(`[Webhook] Processing AI synchronously | ${logCtx}`);
+        // ── 7. Return 200 immediately, run AI in waitUntil ─────────────────────────
+        // Processing synchronously kept the request alive past Fonnte's webhook
+        // timeout on slow (tool-using) turns: Fonnte disconnected, Cloudflare
+        // cancelled the request mid-send, and the reply was lost. Returning 200
+        // first keeps Fonnte happy; `waitUntil` keeps the worker alive until the
+        // WhatsApp message is actually sent, regardless of reply latency.
+        console.log(`[Webhook] Scheduling AI via waitUntil | ${logCtx}`);
 
         try {
           const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
+          const { getWaitUntil } = await import("@/lib/cf-context");
           const origin = new URL(request.url).origin;
-          const outcome = await executeAutoreplyForPhone(customerPhone, origin);
-          console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
+
+          const work = async () => {
+            try {
+              const outcome = await executeAutoreplyForPhone(customerPhone, origin);
+              console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
+            } catch (e) {
+              console.error(`[Webhook] AI work error: ${e} | ${logCtx}`);
+            }
+          };
+
+          const waitUntil = getWaitUntil();
+          if (waitUntil) waitUntil(work());
+          else void work();
         } catch (e) {
           console.error(`[Webhook] fatal AI error: ${e} | ${logCtx}`);
         }
