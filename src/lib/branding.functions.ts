@@ -1,14 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabasePublic } from "@/integrations/supabase/client.server";
 
 export const getBranding = createServerFn({ method: "GET" }).handler(async () => {
-  const { data } = await supabaseAdmin
-    .from("properties")
-    .select("favicon_url, logo_url")
-    .limit(1)
-    .maybeSingle();
+  const { data } = await supabasePublic.rpc("get_public_property" as never);
+  const prop = (data ?? {}) as Record<string, unknown>;
   return {
-    faviconUrl: (data?.favicon_url as string | null) ?? null,
-    logoUrl: (data?.logo_url as string | null) ?? null,
+    faviconUrl: (prop.favicon_url as string | null) ?? null,
+    logoUrl: (prop.logo_url as string | null) ?? null,
   };
 });

@@ -1,16 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabasePublic } from "@/integrations/supabase/client.server";
 
 export const Route = createFileRoute("/llms.txt")({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const origin = new URL(request.url).origin;
-        const { data: property } = await supabaseAdmin
-          .from("properties")
-          .select("name, tagline, description, address, whatsapp_number, email")
-          .limit(1)
-          .single();
+        const { data: propData } = await supabasePublic.rpc("get_public_property" as never);
+        const property = (propData ?? {}) as Record<string, string | null | undefined>;
         const { data: roomTypes } = await supabasePublic
           .from("room_types")
           .select("name, slug, description, base_rate, capacity, bed_type");
