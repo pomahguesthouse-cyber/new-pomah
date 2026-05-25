@@ -144,12 +144,18 @@ function PomahHome() {
     queryKey: ["public-site"],
     queryFn: () => fetchData(),
     initialData: loaderData,
+    staleTime: 5 * 60 * 1000,
   });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
 
   const reviewsFn = useServerFn(getGoogleReviews);
-  const { data: gr } = useQuery({ queryKey: ["google-reviews"], queryFn: () => reviewsFn() });
+  const { data: gr } = useQuery({
+    queryKey: ["google-reviews"],
+    queryFn: () => reviewsFn(),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const gRating = gr?.rating ?? 4.8;
   const gTotal = gr?.total ?? 76;
   const gReviews = gr?.reviews ?? [];
