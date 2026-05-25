@@ -130,8 +130,8 @@ export type PublicProperty = {
   google_search_console?: string | null;
   google_place_id?: string | null;
   hotel_policy?: string | null;
-  homepage_config?: unknown;
-  explore_config?: unknown;
+  homepage_config?: Json;
+  explore_config?: Json;
   currency?: string | null;
   timezone?: string | null;
 };
