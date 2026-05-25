@@ -9,7 +9,7 @@ SECURITY DEFINER
 AS $$
 BEGIN
   PERFORM net.http_post(
-    url := 'https://new-pomah.lovable.app/api/queue-worker',
+    url := 'https://pomahguesthouse.com/api/queue-worker',
     body := jsonb_build_object(
       'type', TG_OP,
       'table', TG_TABLE_NAME,
