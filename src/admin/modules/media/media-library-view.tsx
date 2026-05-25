@@ -1049,10 +1049,14 @@ export function MediaLibraryView() {
         let prefix = "brosur";
         if (folder) {
           let curr: MediaFolder | undefined = folder;
+          let matched = false;
           while (curr) {
             const auto = ROOM_IMAGE_PREFIXES.find((p) => p.folderName === curr!.name);
-            if (auto) { prefix = auto.prefix; break; }
+            if (auto) { prefix = auto.prefix; matched = true; break; }
             curr = folders.find(f => f.id === curr!.parent_id);
+          }
+          if (!matched) {
+            prefix = folder.name.toLowerCase().replace(/[^a-z0-9]/g, "-") || "brosur";
           }
         }
 
