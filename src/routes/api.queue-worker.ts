@@ -1,29 +1,42 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { processWaQueueEntry } from "@/services/wa-queue-processor";
+import { scheduleAutoreply } from "@/services/wa-autoreply.service";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+/** pg_net / cron entry — delegates to the same autoreply pipeline as the webhook. */
 export const Route = createFileRoute("/api/queue-worker")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        try {
-          const payload = await request.json().catch(() => null);
-          if (!payload?.record?.id) {
-            return new Response("Invalid payload", { status: 400 });
-          }
-
-          const entryId = payload.record.id as string;
-          const origin = new URL(request.url).origin;
-          const outcome = await processWaQueueEntry(entryId, origin);
-
-          const status =
-            outcome === "claim_error" || outcome === "fatal" || outcome === "send_failed"
-              ? 500
-              : 200;
-          return new Response(outcome, { status });
-        } catch (err) {
-          console.error("[QueueWorker] Fatal error:", err);
-          return new Response("Fatal Error", { status: 500 });
+        const payload = await request.json().catch(() => null);
+        if (!payload?.record?.id) {
+          return new Response("Invalid payload", { status: 400 });
         }
+
+        const entryId = payload.record.id as string;
+        const { data: row } = await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .select("phone, last_message_body")
+          .eq("id", entryId)
+          .maybeSingle();
+
+        if (!row?.phone) {
+          return new Response("Gone", { status: 200 });
+        }
+
+        const { data: prop } = await (supabaseAdmin as any)
+          .from("properties")
+          .select("smart_delay_config")
+          .limit(1)
+          .maybeSingle();
+
+        scheduleAutoreply(request, {
+          phone:            row.phone,
+          body:             row.last_message_body ?? "",
+          smartDelayConfig: prop?.smart_delay_config,
+          queueEntryId:     entryId,
+        });
+
+        return new Response("Scheduled", { status: 200 });
       },
     },
   },

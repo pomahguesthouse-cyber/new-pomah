@@ -30,8 +30,8 @@ import {
   runMultiAgentOrchestration,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
-import { dispatchQueueWorker }                from "@/services/queue-worker-dispatch";
 import { queueUpsert, resolveQueueTiming }    from "@/services/queue.service";
+import { scheduleAutoreply }                  from "@/services/wa-autoreply.service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -173,19 +173,24 @@ export const Route = createFileRoute("/api/fonnte")({
           maxWaitMs,
         });
 
+        const entryId = queued?.entryId ?? null;
         if (!queued) {
-          console.error(`[Webhook] Queue upsert FAILED | ${logCtx}`);
+          console.error(`[Webhook] Queue upsert FAILED — direct autoreply fallback | ${logCtx}`);
         } else {
           console.log(
             `[Webhook] Queue ${queued.entryId.slice(0, 8)} ` +
               `debounce delay=${delayMs}ms maxWait=${maxWaitMs}ms ` +
-              `new_burst=${queued.isNewBurst} sleep=${queued.sleepMs}ms | ${logCtx}`,
+              `new_burst=${queued.isNewBurst} | ${logCtx}`,
           );
-          // Only start one worker per burst; extends only push process_after in DB.
-          if (queued.isNewBurst) {
-            dispatchQueueWorker(request, queued.entryId);
-          }
         }
+
+        // Always schedule autoreply (waitUntil): uses queue timing when available.
+        scheduleAutoreply(request, {
+          phone:            customerPhone,
+          body:             message,
+          smartDelayConfig: c.smart_delay_config,
+          queueEntryId:     entryId,
+        });
 
         void (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies").catch((e: unknown) =>
           console.warn("[Webhook] zombie cleanup:", e),

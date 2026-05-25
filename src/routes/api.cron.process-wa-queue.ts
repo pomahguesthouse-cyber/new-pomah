@@ -1,48 +1,40 @@
-/**
- * Drain stuck WhatsApp queue entries (pending/waiting, ready to process).
- * Call periodically or once after deploy: GET /api/cron/process-wa-queue
- */
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { processWaQueueEntry } from "@/services/wa-queue-processor";
+import { scheduleAutoreply } from "@/services/wa-autoreply.service";
 
 export const Route = createFileRoute("/api/cron/process-wa-queue")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const origin = new URL(request.url).origin;
-
         await (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies");
 
-        const { data: rows, error } = await (supabaseAdmin as any)
+        const { data: rows } = await (supabaseAdmin as any)
           .from("wa_conversation_queue")
-          .select("id, phone, status, process_after")
+          .select("id, phone, last_message_body, status, process_after")
           .in("status", ["pending", "waiting"])
           .lte("process_after", new Date().toISOString())
           .order("created_at", { ascending: true })
-          .limit(20);
+          .limit(10);
 
-        if (error) {
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
+        const { data: prop } = await (supabaseAdmin as any)
+          .from("properties")
+          .select("smart_delay_config")
+          .limit(1)
+          .maybeSingle();
 
-        const results: { id: string; phone: string; status: number; body: string }[] = [];
-
+        const results: { id: string; phone: string }[] = [];
         for (const row of rows ?? []) {
-          const outcome = await processWaQueueEntry(row.id as string, origin);
-          results.push({
-            id:     row.id,
-            phone:  row.phone,
-            status: 200,
-            body:   outcome,
+          scheduleAutoreply(request, {
+            phone:            row.phone,
+            body:             row.last_message_body ?? "",
+            smartDelayConfig: prop?.smart_delay_config,
+            queueEntryId:     row.id,
           });
+          results.push({ id: row.id, phone: row.phone });
         }
 
         return new Response(
-          JSON.stringify({ processed: results.length, results }, null, 2),
+          JSON.stringify({ scheduled: results.length, results }, null, 2),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       },

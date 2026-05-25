@@ -1,19 +1,20 @@
 /**
- * Start queue processing in the background after enqueue.
- * Calls the processor directly (no HTTP self-fetch — unreliable on Cloudflare).
+ * @deprecated Use scheduleAutoreply from wa-autoreply.service.ts
  */
-import { getWaitUntil } from "@/lib/cf-context";
-import { processWaQueueEntry } from "@/services/wa-queue-processor";
+import type { ScheduleAutoreplyParams } from "@/services/wa-autoreply.service";
+import { scheduleAutoreply } from "@/services/wa-autoreply.service";
 
-export function dispatchQueueWorker(request: Request, entryId: string): void {
-  const origin = new URL(request.url).origin;
-
-  const work = async () => {
-    const outcome = await processWaQueueEntry(entryId, origin);
-    console.log(`[QueueDispatch] entry=${entryId.slice(0, 8)} outcome=${outcome}`);
-  };
-
-  const waitUntil = getWaitUntil();
-  if (waitUntil) waitUntil(work());
-  else void work();
+export function dispatchQueueWorker(
+  request: Request,
+  entryId: string,
+  phone: string,
+  body: string,
+  smartDelayConfig: unknown,
+): void {
+  scheduleAutoreply(request, {
+    phone,
+    body,
+    smartDelayConfig,
+    queueEntryId: entryId,
+  });
 }
