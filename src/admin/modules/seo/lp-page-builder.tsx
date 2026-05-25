@@ -124,8 +124,8 @@ export function LpPageBuilder({
   onChange: (s: LPSectionsData) => void;
 }) {
   const isSplit = !!(sections && !Array.isArray(sections) && (sections as any).split);
-  const desktopList = isSplit ? ((sections as any).desktop ?? []) : (Array.isArray(sections) ? sections : []);
-  const mobileList = isSplit ? ((sections as any).mobile ?? []) : (Array.isArray(sections) ? sections : []);
+  const desktopList: LPSection[] = isSplit ? ((sections as any).desktop ?? []) : (Array.isArray(sections) ? sections : []);
+  const mobileList: LPSection[] = isSplit ? ((sections as any).mobile ?? []) : (Array.isArray(sections) ? sections : []);
 
   const [activeTab, setActiveTab] = useState<"desktop" | "mobile">("desktop");
   const [activeId,   setActiveId]   = useState<string | null>(null);
