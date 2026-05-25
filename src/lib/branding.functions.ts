@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const getBranding = createServerFn({ method: "GET" }).handler(async () => {
-  const { data } = await supabase
+  const { data } = await supabaseAdmin
     .from("properties")
     .select("favicon_url, logo_url")
     .limit(1)
