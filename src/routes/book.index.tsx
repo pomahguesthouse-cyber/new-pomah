@@ -435,10 +435,8 @@ function BookPage() {
                     );
                   })}
                 </CarouselContent>
-                <div className="flex justify-end gap-3 mt-6 pr-2">
-                  <CarouselPrevious className="static translate-y-0 bg-white border-stone-200 hover:bg-stone-50" />
-                  <CarouselNext className="static translate-y-0 bg-white border-stone-200 hover:bg-stone-50" />
-                </div>
+                <CarouselPrevious className="hidden md:flex bg-white/90 backdrop-blur shadow-md hover:bg-white border-stone-200 h-12 w-12 -left-6 z-10" />
+                <CarouselNext className="hidden md:flex bg-white/90 backdrop-blur shadow-md hover:bg-white border-stone-200 h-12 w-12 -right-6 z-10" />
               </Carousel>
             </section>
 
