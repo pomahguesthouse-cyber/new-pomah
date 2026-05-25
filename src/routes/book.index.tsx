@@ -353,45 +353,13 @@ function BookPage() {
                               </div>
                             </div>
 
-                            {isInCart ? (
-                               <div className="bg-[#FAF9F7] rounded-xl border border-stone-200 mt-auto divide-y divide-stone-200">
-                                 <div className="flex items-center justify-between p-4">
-                                   <div className="flex flex-col">
-                                     <span className="text-sm font-semibold text-stone-800">Jumlah Kamar</span>
-                                     <span className="text-[10px] text-stone-500">(Maksimal {availableCount})</span>
-                                   </div>
-                                   <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
-                                     <Button 
-                                       type="button"
-                                       variant="ghost" 
-                                       size="icon" 
-                                       className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
-                                       onClick={() => cartItem.quantity > 1 ? updateCartItem(room.id, { quantity: cartItem.quantity - 1 }) : removeFromCart(room.id)}
-                                     >
-                                       {cartItem.quantity > 1 ? <Minus className="h-4 w-4" /> : <Trash2 className="h-4 w-4 text-red-500" />}
-                                     </Button>
-                                     <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.quantity}</span>
-                                     <Button 
-                                       type="button"
-                                       variant="ghost" 
-                                       size="icon" 
-                                       className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
-                                       disabled={cartItem.quantity >= availableCount}
-                                       onClick={() => updateCartItem(room.id, { quantity: cartItem.quantity + 1 })}
-                                     >
-                                       <Plus className="h-4 w-4" />
-                                     </Button>
-                                   </div>
-                                 </div>
-                                 
-                                 {(room.extrabed_capacity > 0) && (
+                            <div className={`mt-auto flex flex-col justify-end ${room.extrabed_capacity > 0 ? 'min-h-[131px]' : 'min-h-[66px]'}`}>
+                              {isInCart ? (
+                                 <div className="bg-[#FAF9F7] rounded-xl border border-stone-200 divide-y divide-stone-200">
                                    <div className="flex items-center justify-between p-4">
                                      <div className="flex flex-col">
-                                       <div className="flex items-baseline gap-1">
-                                          <span className="text-sm font-semibold text-stone-800">Extrabed</span>
-                                          <span className="text-[10px] text-stone-500">(Maksimal {room.extrabed_capacity * cartItem.quantity})</span>
-                                       </div>
-                                       <span className="text-xs text-stone-500">+Rp{Number(room.extrabed_rate || 0).toLocaleString("id-ID")}</span>
+                                       <span className="text-sm font-semibold text-stone-800">Jumlah Kamar</span>
+                                       <span className="text-[10px] text-stone-500">(Maksimal {availableCount})</span>
                                      </div>
                                      <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
                                        <Button 
@@ -399,36 +367,70 @@ function BookPage() {
                                          variant="ghost" 
                                          size="icon" 
                                          className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
-                                         disabled={cartItem.extraBeds <= 0}
-                                         onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds - 1 })}
+                                         onClick={() => cartItem.quantity > 1 ? updateCartItem(room.id, { quantity: cartItem.quantity - 1 }) : removeFromCart(room.id)}
                                        >
-                                         <Minus className="h-4 w-4" />
+                                         {cartItem.quantity > 1 ? <Minus className="h-4 w-4" /> : <Trash2 className="h-4 w-4 text-red-500" />}
                                        </Button>
-                                       <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.extraBeds}</span>
+                                       <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.quantity}</span>
                                        <Button 
                                          type="button"
                                          variant="ghost" 
                                          size="icon" 
                                          className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
-                                         disabled={cartItem.extraBeds >= (room.extrabed_capacity * cartItem.quantity)}
-                                         onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds + 1 })}
+                                         disabled={cartItem.quantity >= availableCount}
+                                         onClick={() => updateCartItem(room.id, { quantity: cartItem.quantity + 1 })}
                                        >
                                          <Plus className="h-4 w-4" />
                                        </Button>
                                      </div>
                                    </div>
-                                 )}
-                               </div>
-                            ) : (
-                              <Button 
-                                type="button"
-                                variant="outline"
-                                className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 mt-auto"
-                                onClick={() => handleAddToCart(room.id)}
-                              >
-                                Tambahkan kamar
-                              </Button>
-                            )}
+                                   
+                                   {(room.extrabed_capacity > 0) && (
+                                     <div className="flex items-center justify-between p-4">
+                                       <div className="flex flex-col">
+                                         <div className="flex items-baseline gap-1">
+                                            <span className="text-sm font-semibold text-stone-800">Extrabed</span>
+                                            <span className="text-[10px] text-stone-500">(Maksimal {room.extrabed_capacity * cartItem.quantity})</span>
+                                         </div>
+                                         <span className="text-xs text-stone-500">+Rp{Number(room.extrabed_rate || 0).toLocaleString("id-ID")}</span>
+                                       </div>
+                                       <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
+                                         <Button 
+                                           type="button"
+                                           variant="ghost" 
+                                           size="icon" 
+                                           className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
+                                           disabled={cartItem.extraBeds <= 0}
+                                           onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds - 1 })}
+                                         >
+                                           <Minus className="h-4 w-4" />
+                                         </Button>
+                                         <span className="text-sm font-semibold w-5 text-center text-stone-800">{cartItem.extraBeds}</span>
+                                         <Button 
+                                           type="button"
+                                           variant="ghost" 
+                                           size="icon" 
+                                           className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
+                                           disabled={cartItem.extraBeds >= (room.extrabed_capacity * cartItem.quantity)}
+                                           onClick={() => updateCartItem(room.id, { extraBeds: cartItem.extraBeds + 1 })}
+                                         >
+                                           <Plus className="h-4 w-4" />
+                                         </Button>
+                                       </div>
+                                     </div>
+                                   )}
+                                 </div>
+                              ) : (
+                                <Button 
+                                  type="button"
+                                  variant="outline"
+                                  className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12"
+                                  onClick={() => handleAddToCart(room.id)}
+                                >
+                                  Tambahkan kamar
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </CarouselItem>

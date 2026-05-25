@@ -53,6 +53,12 @@ export function PublicNav({
         {/* Desktop menu */}
         <div className="hidden items-center gap-8 md:flex">
           <Link
+            to="/"
+            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
+          >
+            Beranda
+          </Link>
+          <Link
             to="/rooms"
             className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
@@ -108,6 +114,7 @@ export function PublicNav({
         <div className={`border-t md:hidden ${transparent ? "border-white/10 bg-stone-950/95 backdrop-blur-md" : "border-stone-100 bg-white"}`}>
           <div className="flex flex-col gap-1 px-6 py-4">
             {[
+              { to: "/", label: "Beranda" },
               { to: "/rooms", label: "Kamar" },
               { to: "/explore", label: "Jelajahi Semarang" },
               { to: "/book", label: "Fasilitas" },
