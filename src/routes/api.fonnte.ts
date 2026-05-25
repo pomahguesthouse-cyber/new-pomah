@@ -266,6 +266,32 @@ export const Route = createFileRoute("/api/fonnte")({
             report.llm_error     = "LOVABLE_API_KEY not set";
           }
 
+          // Query the queue items
+          try {
+            const { data: queueItems, error: qErr } = await (supabaseAdmin as any)
+              .from("wa_conversation_queue")
+              .select("id, phone, status, message_count, attempt, lock_expires_at, process_after, created_at, completed_at, last_error")
+              .order("created_at", { ascending: false })
+              .limit(10);
+            if (qErr) report.queue_error = qErr.message;
+            else report.queue_items = queueItems;
+          } catch (e) {
+            report.queue_error = String(e);
+          }
+
+          // Query the last messages
+          try {
+            const { data: lastMsgs, error: mErr } = await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .select("id, direction, body, sent_at")
+              .order("sent_at", { ascending: false })
+              .limit(10);
+            if (mErr) report.last_messages_error = mErr.message;
+            else report.last_messages = lastMsgs;
+          } catch (e) {
+            report.last_messages_error = String(e);
+          }
+
           return new Response(JSON.stringify(report, null, 2), {
             status: 200, headers: { "Content-Type": "application/json" },
           });
