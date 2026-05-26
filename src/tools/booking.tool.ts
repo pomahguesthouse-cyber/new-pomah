@@ -247,13 +247,13 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Generate + send the invoice PDF as a WhatsApp attachment ─────────────────
-  // The PDF render (renderToBuffer) is CPU-heavy and the send is a second Fonnte
-  // subrequest. Running it inline here would compete with the AI turn's 22s abort
-  // budget (see wa-queue-processor) and block/delay the chatbot reply. Instead we
-  // hand it to the Worker's `waitUntil` — the same background mechanism the
-  // webhook and public-booking paths use — so it completes independently of the
-  // AI reply turn. Best-effort: booking success never depends on it.
+  // ── Send the invoice notification (link to the confirmation page) ────────────
+  // We don't render a PDF server-side (unreliable on Cloudflare Workers); the
+  // guest gets a WhatsApp message with the confirmation-page link, which renders
+  // the invoice client-side. We hand it to the Worker's `waitUntil` — the same
+  // background mechanism the webhook and public-booking paths use — so it runs
+  // independently of the AI reply turn. Best-effort: booking success never
+  // depends on it.
   const sendInvoice = async () => {
     try {
       const { generateAndSendInvoiceNotification } = await import(
