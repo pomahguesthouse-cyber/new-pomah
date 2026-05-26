@@ -248,6 +248,38 @@ export const createBooking: ToolHandler = async (
   }
 
   // ── Generate + send the invoice PDF as a WhatsApp attachment ─────────────────
+  // The PDF render (renderToBuffer) is CPU-heavy and the send is a second Fonnte
+  // subrequest. Running it inline here would compete with the AI turn's 22s abort
+  // budget (see wa-queue-processor) and block/delay the chatbot reply. Instead we
+  // hand it to the Worker's `waitUntil` — the same background mechanism the
+  // webhook and public-booking paths use — so it completes independently of the
+  // AI reply turn. Best-effort: booking success never depends on it.
+  const sendInvoice = async () => {
+    try {
+      const { generateAndSendInvoiceNotification } = await import(
+        "@/services/invoice-notification.service"
+      );
+      const res = await generateAndSendInvoiceNotification({
+        supabase:  ctx.supabaseAdmin as any,
+        bookingId: booking.id,
+        origin:    ctx.origin,
+      });
+      if (!res.ok) {
+        console.error(`[create_booking] invoice generation failed for ${booking.id}: ${res.error}`);
+      } else if (!res.wa_sent) {
+        console.warn(`[create_booking] invoice PDF generated but WhatsApp not sent for ${booking.id}`);
+      } else {
+        console.log(`[create_booking] invoice PDF sent for ${booking.id}`);
+      }
+    } catch (e) {
+      console.error(`[create_booking] invoice PDF send threw for ${booking.id}:`, e);
+    }
+  };
+
+  const { getWaitUntil } = await import("@/lib/cf-context");
+  const waitUntil = getWaitUntil();
+  if (waitUntil) waitUntil(sendInvoice());
+  else await sendInvoice();
   // Same mechanism the public booking form uses; sends the PDF (not just a link)
   // directly to the guest. Best-effort — booking success does not depend on it.
   let invoicePdfSent = false;
