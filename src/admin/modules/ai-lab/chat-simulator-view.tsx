@@ -11,7 +11,8 @@
  * (booking state, and create_booking creates real records). Use a test number.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -29,8 +30,12 @@ import {
   Check,
   X,
   GraduationCap,
+  MessagesSquare,
+  Search,
 } from "lucide-react";
 import { simulateChatTurn, resetSimulation, saveSimulationAsTraining } from "./simulator.functions";
+import { listThreads, getThread } from "@/admin/functions/whatsapp.functions";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,6 +161,8 @@ export function ChatSimulatorView() {
   const runTurn = useServerFn(simulateChatTurn);
   const runReset = useServerFn(resetSimulation);
   const runSaveTraining = useServerFn(saveSimulationAsTraining);
+  const runListThreads = useServerFn(listThreads);
+  const runGetThread = useServerFn(getThread);
 
   const [phone, setPhone] = useState("6281234567899");
   const [transcript, setTranscript] = useState<TranscriptMsg[]>([]);
@@ -176,6 +183,11 @@ export function ChatSimulatorView() {
   // Save training states
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [savingTraining, setSavingTraining] = useState(false);
+
+  // Import WhatsApp conversation states
+  const [importOpen, setImportOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [importingId, setImportingId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
@@ -266,6 +278,55 @@ export function ChatSimulatorView() {
     }
   }
 
+  // ── Import WhatsApp conversation ──────────────────────────────────────────
+  const threadsQuery = useQuery({
+    queryKey: ["wa-threads"],
+    queryFn: () => runListThreads(),
+    enabled: importOpen,
+  });
+
+  const filteredThreads = useMemo(() => {
+    const threads: any[] = threadsQuery.data?.threads ?? [];
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter((t) => {
+      const name = (t.display_name ?? "").toLowerCase();
+      const phoneNum = (t.phone ?? "").toLowerCase();
+      return name.includes(q) || phoneNum.includes(q);
+    });
+  }, [threadsQuery.data, searchQuery]);
+
+  async function handleImportThread(thread: any) {
+    if (importingId) return;
+    setImportingId(thread.id);
+    try {
+      const res: any = await runGetThread({ data: { id: thread.id } });
+      const messages: any[] = res?.messages ?? [];
+      const imported: TranscriptMsg[] = messages
+        .filter((m) => m.body)
+        .map((m) => ({
+          direction: m.direction === "in" ? "in" : "out",
+          body: m.body as string,
+        }));
+      setTranscript(imported);
+      setPhone(thread.phone ?? phone);
+      setLastMeta(null);
+      setResults([]);
+      setEditedIndices({});
+      setEditingIdx(null);
+      setImportOpen(false);
+      setSearchQuery("");
+      scrollToBottom();
+      toast.success(
+        `Mengimpor ${imported.length} pesan dari ${thread.display_name || thread.phone}`,
+      );
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal mengimpor percakapan");
+    } finally {
+      setImportingId(null);
+    }
+  }
+
   // ── Scenario runner ─────────────────────────────────────────────────────────
   async function handleRunScenario() {
     if (running) return;
@@ -345,6 +406,15 @@ export function ChatSimulatorView() {
                 Simpan Training
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+              disabled={busy}
+            >
+              <MessagesSquare className="mr-1 h-3.5 w-3.5" />
+              Impor Chat WA
+            </Button>
             <Button variant="outline" size="sm" onClick={handleReset} disabled={busy}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               Reset
@@ -710,6 +780,91 @@ export function ChatSimulatorView() {
               </>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Impor Percakapan WhatsApp */}
+      <Dialog
+        open={importOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setImportOpen(false);
+            setSearchQuery("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessagesSquare className="h-5 w-5 text-teal-600" />
+              Impor Chat WhatsApp
+            </DialogTitle>
+            <DialogDescription>
+              Pilih percakapan tamu riil untuk dimuat ke simulator. Nomor uji akan
+              otomatis disesuaikan dengan nomor tamu.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari nama atau nomor telepon…"
+              className="pl-8"
+            />
+          </div>
+
+          <ScrollArea className="h-[340px] rounded-lg border">
+            {threadsQuery.isLoading ? (
+              <div className="flex h-[340px] items-center justify-center text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memuat percakapan…
+              </div>
+            ) : filteredThreads.length === 0 ? (
+              <div className="flex h-[340px] items-center justify-center text-center text-sm text-muted-foreground">
+                Tidak ada percakapan yang cocok.
+              </div>
+            ) : (
+              <ul className="divide-y">
+                {filteredThreads.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      onClick={() => handleImportThread(t)}
+                      disabled={!!importingId}
+                      className="flex w-full items-center gap-3 p-3 text-left transition hover:bg-muted disabled:opacity-60"
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-medium">
+                            {t.display_name || t.phone}
+                          </p>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                              t.ai_auto
+                                ? "bg-teal-100 text-teal-700"
+                                : "bg-stone-100 text-stone-600",
+                            )}
+                          >
+                            {t.ai_auto ? "AI Auto" : "Human"}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {t.last_message_preview || "—"}
+                        </p>
+                      </div>
+                      {importingId === t.id && (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal-600" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
