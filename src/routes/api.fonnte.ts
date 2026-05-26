@@ -429,10 +429,9 @@ export const Route = createFileRoute("/api/fonnte")({
                     agentCtx: {
                       property: p as any,
                       rooms:    roomList,
-                      sopText,
-                      brosurFiles,
+                      sopText:  "",
                       today,
-                    } as any,
+                    },
                     toolCtx: {
                       supabasePublic: supabasePublic as any,
                       supabaseAdmin:  supabaseAdmin  as any,
