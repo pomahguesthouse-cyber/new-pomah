@@ -157,21 +157,40 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Return 200 immediately, run AI in waitUntil ─────────────────────────
-        // Processing synchronously kept the request alive past Fonnte's webhook
-        // timeout on slow (tool-using) turns: Fonnte disconnected, Cloudflare
-        // cancelled the request mid-send, and the reply was lost. Returning 200
-        // first keeps Fonnte happy; `waitUntil` keeps the worker alive until the
-        // WhatsApp message is actually sent, regardless of reply latency.
-        console.log(`[Webhook] Scheduling AI via waitUntil | ${logCtx}`);
+        // ── 7. Debounce burst, then run AI in waitUntil ────────────────────────────
+        // Memory-buffer behaviour: when a guest fires several messages in quick
+        // succession, wait a short window and let only the LAST message reply — so
+        // the bot answers once with the full context instead of once per message.
+        // Returning 200 first keeps Fonnte from timing out; `waitUntil` keeps the
+        // worker alive until the WhatsApp message is actually sent.
+        console.log(`[Webhook] Scheduling AI (debounced) via waitUntil | ${logCtx}`);
 
         try {
           const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
           const { getWaitUntil } = await import("@/lib/cf-context");
+          const { resolveQueueTiming } = await import("@/services/queue.service");
           const origin = new URL(request.url).origin;
+          const { delayMs } = resolveQueueTiming(message, c.smart_delay_config as any);
 
           const work = async () => {
             try {
+              if (delayMs > 0) {
+                await new Promise((r) => setTimeout(r, delayMs));
+                // If a newer inbound message arrived during the debounce window,
+                // abort: the later invocation will reply with the full context.
+                const { data: latest } = await (supabaseAdmin as any)
+                  .from("whatsapp_messages")
+                  .select("id")
+                  .eq("thread_id", c.thread_id)
+                  .eq("direction", "in")
+                  .order("sent_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (latest?.id && messageId && latest.id !== messageId) {
+                  console.log(`[Webhook] superseded by newer message — skip | ${logCtx}`);
+                  return;
+                }
+              }
               const outcome = await executeAutoreplyForPhone(customerPhone, origin);
               console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
             } catch (e) {
