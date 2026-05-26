@@ -290,7 +290,10 @@ export function scheduleAutoreply(
   params: ScheduleAutoreplyParams,
 ): void {
   const origin = new URL(request.url).origin;
-  const { delayMs, maxWaitMs } = resolveQueueTiming(params.body, params.smartDelayConfig);
+  const { delayMs, maxWaitMs } = resolveQueueTiming(
+    params.body,
+    params.smartDelayConfig as Parameters<typeof resolveQueueTiming>[1],
+  );
 
   const work = async () => {
     const logPhone = params.phone.slice(-6);
