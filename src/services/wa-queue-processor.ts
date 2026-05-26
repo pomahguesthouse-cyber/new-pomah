@@ -122,6 +122,8 @@ export async function processWaQueueEntry(
       await sleep(300);
     }
 
+    if (!claimedItem) return "not_claimed";
+
     console.log(
       `[QueueProcessor] Claimed ${entryId} for ${phone} (msgs: ${claimedItem.message_count})`,
     );
