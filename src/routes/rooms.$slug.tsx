@@ -509,7 +509,7 @@ function BookingDialog({
         },
       });
       toast.success("Pemesanan berhasil dibuat");
-      navigate({ to: "/book/confirmation/$id", params: { id: res.id }, search: {} });
+      navigate({ to: "/book/confirmation/$id", params: { id: res.reference_code ?? res.id }, search: {} });
     } catch (e) {
       toast.error((e as Error).message);
     } finally {

@@ -93,8 +93,8 @@ async function findBookingByIdemKey(
       atas_nama:   ctx.property.payment_account_holder  ?? null,
     },
     invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${b.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${b.id}`,
+      ? `${ctx.origin}/book/confirmation/${b.reference_code ?? b.id}`
+      : `https://pomahguesthouse.com/book/confirmation/${b.reference_code ?? b.id}`,
     idempotent_replay: true,
   });
 }
@@ -247,13 +247,13 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Generate + send the invoice PDF as a WhatsApp attachment ─────────────────
-  // The PDF render (renderToBuffer) is CPU-heavy and the send is a second Fonnte
-  // subrequest. Running it inline here would compete with the AI turn's 22s abort
-  // budget (see wa-queue-processor) and block/delay the chatbot reply. Instead we
-  // hand it to the Worker's `waitUntil` — the same background mechanism the
-  // webhook and public-booking paths use — so it completes independently of the
-  // AI reply turn. Best-effort: booking success never depends on it.
+  // ── Send the invoice notification (link to the confirmation page) ────────────
+  // We don't render a PDF server-side (unreliable on Cloudflare Workers); the
+  // guest gets a WhatsApp message with the confirmation-page link, which renders
+  // the invoice client-side. We hand it to the Worker's `waitUntil` — the same
+  // background mechanism the webhook and public-booking paths use — so it runs
+  // independently of the AI reply turn. Best-effort: booking success never
+  // depends on it.
   const sendInvoice = async () => {
     try {
       const { generateAndSendInvoiceNotification } = await import(
@@ -280,25 +280,6 @@ export const createBooking: ToolHandler = async (
   const waitUntil = getWaitUntil();
   if (waitUntil) waitUntil(sendInvoice());
   else await sendInvoice();
-  // Same mechanism the public booking form uses; sends the PDF (not just a link)
-  // directly to the guest. Best-effort — booking success does not depend on it.
-  let invoicePdfSent = false;
-  let pdfUrl: string | null = null;
-  try {
-    const { generateAndSendInvoiceNotification } = await import(
-      "@/services/invoice-notification.service"
-    );
-    const res = await generateAndSendInvoiceNotification({
-      supabase:  ctx.supabaseAdmin as any,
-      bookingId: booking.id,
-      origin:    ctx.origin,
-      skipWhatsApp: true, // Let the AI chatbot attach the PDF directly instead
-    });
-    invoicePdfSent = res.wa_sent;
-    pdfUrl = res.pdf_url;
-  } catch (e) {
-    console.error("[create_booking] invoice PDF send failed:", e);
-  }
 
   // ── Return success payload ─────────────────────────────────────────────────
   return JSON.stringify({
@@ -318,10 +299,8 @@ export const createBooking: ToolHandler = async (
       no_rekening: ctx.property.payment_account_number ?? null,
       atas_nama:  ctx.property.payment_account_holder  ?? null,
     },
-    invoice_pdf_sent: invoicePdfSent,
-    invoice_pdf_url: pdfUrl,
     invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${booking.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
+      ? `${ctx.origin}/book/confirmation/${booking.reference_code ?? booking.id}`
+      : `https://pomahguesthouse.com/book/confirmation/${booking.reference_code ?? booking.id}`,
   });
 };

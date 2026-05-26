@@ -198,7 +198,7 @@ function BookPage() {
         }
       });
       toast.success("Booking berhasil dibuat");
-      navigate({ to: "/book/confirmation/$id", params: { id: res.id }, search: {} });
+      navigate({ to: "/book/confirmation/$id", params: { id: res.reference_code ?? res.id }, search: {} });
     } catch (err) {
       toast.error((err as Error).message);
     } finally {

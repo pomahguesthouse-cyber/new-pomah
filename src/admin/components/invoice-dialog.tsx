@@ -14,7 +14,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { getBrandingSettings, getPropertySettings } from "@/admin/modules/settings/settings.functions";
 import { resendInvoice } from "@/admin/functions/bookings.functions";
 import { InvoiceDocument, type InvoiceBookingData } from "./invoice-pdf";
-import { supabase } from "@/integrations/supabase/client";
 
 type PDFDownloadLinkRenderProps = {
   loading: boolean;
@@ -89,23 +88,17 @@ export function InvoiceDialog({
   if (!booking) return null;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : "";
-  const webInvoiceUrl = `${origin}/book/confirmation/${booking.id}`;
-  const pdfPublicUrl = supabase.storage
-    .from("room-images")
-    .getPublicUrl(`invoices/${booking.id}.pdf`).data.publicUrl;
+  const webInvoiceUrl = `${origin}/book/confirmation/${booking.reference_code ?? booking.id}`;
 
   const emailBody = `Halo ${booking.guests?.full_name || ""},
-  
+
 Terima kasih telah memesan kamar di ${propertyName}.
 Berikut adalah detail pemesanan Anda:
 Booking ID: ${booking.reference_code || booking.id.slice(0, 8)}
 Check-in: ${formatDateID(booking.check_in)}
 Check-out: ${formatDateID(booking.check_out)}
 
-Unduh Invoice PDF: ${pdfPublicUrl}
-Lihat Detail Reservasi: ${webInvoiceUrl}
-
-Silakan periksa attachment untuk invoice lengkap Anda.
+Lihat & Unduh Invoice: ${webInvoiceUrl}
 
 Salam,
 ${propertyName}`;
@@ -117,8 +110,7 @@ Booking ID: ${booking.reference_code || booking.id.slice(0, 8)}
 Check-in: ${formatDateID(booking.check_in)}
 Check-out: ${formatDateID(booking.check_out)}
 
-Unduh Invoice PDF: ${pdfPublicUrl}
-Lihat Detail Reservasi: ${webInvoiceUrl}
+Lihat & Unduh Invoice: ${webInvoiceUrl}
 
 Silakan simpan pesan ini sebagai referensi.`;
 
