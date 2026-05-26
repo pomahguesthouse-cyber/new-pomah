@@ -233,6 +233,17 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // If no brochure was attached, check if the LLM provided a PDF URL directly (e.g. invoice)
+  if (!attachUrl) {
+    const pdfMatch = finalReply.match(/(https?:\/\/[^\s]+?\.pdf)/i);
+    if (pdfMatch) {
+      attachUrl = pdfMatch[1];
+      attachName = "Invoice.pdf";
+      // Remove the raw URL from the text body to keep the message clean
+      finalReply = finalReply.replace(pdfMatch[1], "").trim();
+    }
+  }
+
   // Strip any bare image URLs the model included so WhatsApp doesn't render a photo.
   finalReply = finalReply
     .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")

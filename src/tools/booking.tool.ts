@@ -280,6 +280,25 @@ export const createBooking: ToolHandler = async (
   const waitUntil = getWaitUntil();
   if (waitUntil) waitUntil(sendInvoice());
   else await sendInvoice();
+  // Same mechanism the public booking form uses; sends the PDF (not just a link)
+  // directly to the guest. Best-effort — booking success does not depend on it.
+  let invoicePdfSent = false;
+  let pdfUrl: string | null = null;
+  try {
+    const { generateAndSendInvoiceNotification } = await import(
+      "@/services/invoice-notification.service"
+    );
+    const res = await generateAndSendInvoiceNotification({
+      supabase:  ctx.supabaseAdmin as any,
+      bookingId: booking.id,
+      origin:    ctx.origin,
+      skipWhatsApp: true, // Let the AI chatbot attach the PDF directly instead
+    });
+    invoicePdfSent = res.wa_sent;
+    pdfUrl = res.pdf_url;
+  } catch (e) {
+    console.error("[create_booking] invoice PDF send failed:", e);
+  }
 
   // ── Return success payload ─────────────────────────────────────────────────
   return JSON.stringify({
@@ -299,6 +318,8 @@ export const createBooking: ToolHandler = async (
       no_rekening: ctx.property.payment_account_number ?? null,
       atas_nama:  ctx.property.payment_account_holder  ?? null,
     },
+    invoice_pdf_sent: invoicePdfSent,
+    invoice_pdf_url: pdfUrl,
     invoice_url: ctx.origin
       ? `${ctx.origin}/book/confirmation/${booking.id}`
       : `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
