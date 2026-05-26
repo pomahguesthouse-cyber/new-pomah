@@ -15,13 +15,31 @@ import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.
 const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
 
 export const Route = createFileRoute("/book/confirmation/$id")({
-  head: () => ({
-    meta: [
-      { title: "Invoice Pemesanan — Pomah Guesthouse" },
-      { name: "description", content: "Invoice reservasi Anda." },
-      { name: "robots", content: "noindex" },
-    ],
-  }),
+  loader: async () => getPublicSiteData(),
+  // Override the site-wide og:image (homepage hero) with the property logo so
+  // the WhatsApp link preview for the invoice shows appropriate branding
+  // instead of the generic homepage screenshot.
+  head: ({ loaderData }: any) => {
+    const prop = loaderData?.property;
+    const ogImage = prop?.invoice_logo_url || prop?.logo_url || undefined;
+    const title = "Invoice Pemesanan — Pomah Guesthouse";
+    const desc = "Invoice reservasi Anda.";
+    return {
+      meta: [
+        { title },
+        { name: "description", content: desc },
+        { name: "robots", content: "noindex" },
+        { property: "og:title", content: title },
+        { property: "og:description", content: desc },
+        ...(ogImage
+          ? [
+              { property: "og:image", content: ogImage },
+              { name: "twitter:image", content: ogImage },
+            ]
+          : []),
+      ],
+    };
+  },
   component: ConfirmationPage,
 });
 
