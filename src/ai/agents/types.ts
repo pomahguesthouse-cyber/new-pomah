@@ -42,6 +42,8 @@ export interface AgentContext {
   /** Brochure/image files stored in the Brosur tab — name + public URL */
   brosurFiles?: { name: string; url: string }[];
   today:    string;
+  /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
+  chatPhone?: string;
   /** The raw last user message — agents may use it for tone awareness */
   lastMessage?: string;
   /** The instructions configured in the AI Lab Dashboard for this agent */

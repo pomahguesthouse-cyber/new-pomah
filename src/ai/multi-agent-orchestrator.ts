@@ -211,6 +211,9 @@ export async function runMultiAgentOrchestration(
 ): Promise<MultiAgentResult> {
   const maxTurns = input.maxTurns ?? DEFAULT_MAX_TURNS;
 
+  // Make the guest's chat number available to every agent's prompt builder.
+  input.agentCtx.chatPhone = input.phone;
+
   // 1. Extract last user message for classification
   const lastUserMsg = [...input.messages]
     .reverse()
