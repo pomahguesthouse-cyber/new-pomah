@@ -178,6 +178,7 @@ export type Database = {
           created_at: string
           guest_id: string
           id: string
+          idempotency_key: string | null
           internal_notes: string | null
           nightly_rate: number | null
           nights: number | null
@@ -204,6 +205,7 @@ export type Database = {
           created_at?: string
           guest_id: string
           id?: string
+          idempotency_key?: string | null
           internal_notes?: string | null
           nightly_rate?: number | null
           nights?: number | null
@@ -230,6 +232,7 @@ export type Database = {
           created_at?: string
           guest_id?: string
           id?: string
+          idempotency_key?: string | null
           internal_notes?: string | null
           nightly_rate?: number | null
           nights?: number | null
