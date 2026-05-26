@@ -23,7 +23,7 @@ import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
-import { getBookingState, processBookingState } from "./state-machine/booking-machine";
+import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -211,8 +211,10 @@ export async function runMultiAgentOrchestration(
 ): Promise<MultiAgentResult> {
   const maxTurns = input.maxTurns ?? DEFAULT_MAX_TURNS;
 
-  // Make the guest's chat number available to every agent's prompt builder.
+  // Make the guest's chat number available to every agent's prompt builder
+  // and to tools / the booking state machine.
   input.agentCtx.chatPhone = input.phone;
+  input.toolCtx.phone = input.phone;
 
   // 1. Extract last user message for classification
   const lastUserMsg = [...input.messages]
@@ -277,7 +279,7 @@ export async function runMultiAgentOrchestration(
   if (stateRecord.state !== "IDLE") {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
     const stateResult = await processBookingState(
-      input.toolCtx.supabasePublic,
+      input.toolCtx,
       input.phone,
       lastUserMsg,
       stateRecord
@@ -294,8 +296,12 @@ export async function runMultiAgentOrchestration(
         escalated:         false,
       };
     }
-    // If not handled or needs LLM processing, we can either fall through or force front-office
-    // For now, if the state machine didn't handle it with a direct reply, we let the normal flow run.
+    // Not handled = the guest interrupted the booking with an unrelated question.
+    // Let the LLM answer it, but flag that a booking is in progress so the agent
+    // does not restart the flow (the state machine resumes on the next reply).
+    if (isDataEntryState(stateRecord.state)) {
+      input.agentCtx.bookingInProgress = true;
+    }
   }
 
   // 4. Classify intent

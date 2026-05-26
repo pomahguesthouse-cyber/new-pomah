@@ -17,15 +17,7 @@ export const frontOfficeAgent: AgentDefinition = {
   tools:       TOOL_DEFINITIONS, // check_room_availability + create_booking
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, sopText, brosurFiles, today, chatPhone } = ctx;
-
-    // Friendly local format of the number the guest is chatting from.
-    const chatPhoneLocal = chatPhone
-      ? (() => {
-          const d = chatPhone.replace(/[^0-9]/g, "");
-          return d.startsWith("62") ? "0" + d.slice(2) : d;
-        })()
-      : "";
+    const { property, rooms, sopText, brosurFiles, today, bookingInProgress } = ctx;
 
     const roomLines = rooms.map((r) => {
       const extrabedCap  = Number((r as any).extrabed_capacity ?? 0);
@@ -108,25 +100,14 @@ export const frontOfficeAgent: AgentDefinition = {
         "Jangan tawarkan extra bed jika tamu masih dalam kapasitas default.",
 
       "BOOKING VIA CHAT: Alurnya: " +
-        "(1) cek ketersediaan dengan tool, " +
-        "(2) setelah tamu memilih tipe kamar, minta nama lengkap, email, dan nomor HP, " +
-        "(3) setelah SEMUA data lengkap baru panggil tool `create_booking`. " +
-        "JANGAN mengarang data tamu — bila belum diberikan, tanyakan dulu.",
-
-      "KONFIRMASI NAMA UNTUK BOOKING: Saat mengumpulkan data booking dan tamu sudah pernah " +
-        "menyebutkan namanya di percakapan, JANGAN langsung memakainya. Konfirmasi dulu: " +
-        "tanyakan apakah ingin memakai nama tersebut untuk pemesanan atau memakai nama lain. " +
-        "Contoh: 'Untuk pemesanan, apakah memakai nama Faizal atau ingin pakai nama lain Kak?'. " +
-        "Pakai nama yang dikonfirmasi tamu pada `create_booking`.",
-
-      chatPhoneLocal
-        ? "KONFIRMASI NOMOR UNTUK BOOKING: Nomor WhatsApp yang sedang dipakai tamu untuk chat ini " +
-          `adalah ${chatPhoneLocal}. Saat meminta nomor HP untuk booking, JANGAN langsung minta tamu mengetik nomor. ` +
-          `Tawarkan dulu: tanyakan apakah ingin memakai nomor ini (${chatPhoneLocal}) yang sedang dipakai chat, ` +
-          "atau memakai nomor lain. Contoh: 'Untuk nomor kontak, pakai nomor ini (" + chatPhoneLocal + ") " +
-          "yang sedang dipakai chat, atau nomor lain Kak?'. Bila tamu setuju memakai nomor ini, gunakan " +
-          `${chatPhoneLocal} pada \`create_booking\`. Bila tamu memberi nomor lain, pakai nomor itu.`
-        : "",
+        "(1) cek ketersediaan dengan tool `check_room_availability`, " +
+        "(2) setelah tamu memilih tipe kamar DAN tanggal menginap sudah jelas serta tamu ingin booking, " +
+        "LANGSUNG panggil tool `start_booking_details` (sertakan room_type, check_in, check_out, " +
+        "adults/children bila diketahui, dan guest_name bila tamu sudah pernah menyebut namanya). " +
+        "JANGAN menanyakan nama/email/nomor HP sendiri — tool ini yang akan mengambil alih dan " +
+        "mengumpulkan serta mengonfirmasi data tamu secara bertahap. " +
+        "Setelah memanggil `start_booking_details`, sampaikan pesan pada field `message` dari hasil tool itu " +
+        "APA ADANYA (verbatim) kepada tamu, jangan diubah atau ditambah-tambah.",
 
       "Setelah `create_booking` berhasil: sampaikan sapaan nama tamu, kode booking, " +
         "total harga, lalu instruksi transfer ke rekening (bank, nomor, atas nama) bila tersedia, " +
@@ -146,6 +127,14 @@ export const frontOfficeAgent: AgentDefinition = {
           "Saat tamu meminta brosur, katalog, gambar kamar, atau materi promosi, " +
           "kirimkan link berikut secara langsung. Tulis URL POLOS dan UTUH — jangan potong atau bungkus tanda kurung/markdown.\n" +
           brosurFiles.map((f) => `• ${f.name}: ${f.url}`).join("\n")
+        : "",
+
+      bookingInProgress
+        ? "PENTING — TAMU SEDANG MENGISI DATA BOOKING: Tamu sedang dalam proses pengisian data pemesanan " +
+          "lalu menanyakan hal lain. Jawab pertanyaannya secara SINGKAT, lalu ingatkan dengan ramah bahwa " +
+          "kita akan melanjutkan pengisian data pemesanan. JANGAN memanggil tool `start_booking_details` " +
+          "atau `create_booking` lagi, dan JANGAN menanyakan nama/email/nomor HP — proses itu sudah berjalan " +
+          "dan akan dilanjutkan otomatis. Contoh penutup: 'Kembali ke pemesanan tadi ya Kak, silakan dilanjut.'"
         : "",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
