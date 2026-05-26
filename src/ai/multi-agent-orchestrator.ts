@@ -23,7 +23,7 @@ import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
-import { getBookingState, processBookingState } from "./state-machine/booking-machine";
+import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -296,8 +296,12 @@ export async function runMultiAgentOrchestration(
         escalated:         false,
       };
     }
-    // If not handled or needs LLM processing, we can either fall through or force front-office
-    // For now, if the state machine didn't handle it with a direct reply, we let the normal flow run.
+    // Not handled = the guest interrupted the booking with an unrelated question.
+    // Let the LLM answer it, but flag that a booking is in progress so the agent
+    // does not restart the flow (the state machine resumes on the next reply).
+    if (isDataEntryState(stateRecord.state)) {
+      input.agentCtx.bookingInProgress = true;
+    }
   }
 
   // 4. Classify intent

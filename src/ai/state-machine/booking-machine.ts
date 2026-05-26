@@ -107,6 +107,59 @@ function extractPhone(text: string): string | null {
   return null;
 }
 
+// States in which the bot is collecting/confirming guest data and can be
+// interrupted by an unrelated question.
+const DATA_ENTRY_STATES: BookingState[] = [
+  "AWAITING_NAME",
+  "CONFIRMING_NAME",
+  "AWAITING_EMAIL",
+  "CONFIRMING_PHONE",
+  "AWAITING_PHONE",
+  "CONFIRMING_BOOKING",
+];
+
+export function isDataEntryState(state: BookingState): boolean {
+  return DATA_ENTRY_STATES.includes(state);
+}
+
+// Question / info-request signals that indicate the guest is asking something
+// else instead of answering the current prompt.
+const QUESTION_PATTERN =
+  /\?|\b(apa|apakah|berapa|bagaimana|gimana|kapan|di ?mana|dimana|kenapa|mengapa|tanya|fasilitas|wifi|parkir|sarapan|breakfast|lokasi|alamat|harga|tarif|refund|kebijakan|check ?in|check ?out|jam berapa)\b/i;
+
+/**
+ * Is the message the answer we're currently expecting for `state`?
+ * Used to avoid misreading a valid answer as an interruption.
+ */
+function isExpectedAnswer(state: BookingState, message: string): boolean {
+  switch (state) {
+    case "AWAITING_EMAIL":
+      return !!extractEmail(message);
+    case "AWAITING_PHONE":
+    case "CONFIRMING_PHONE":
+      return !!extractPhone(message) || USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
+    case "CONFIRMING_NAME":
+      return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
+    case "CONFIRMING_BOOKING":
+      return /\b(ya|lanjut|benar|oke|ok|setuju|betul|tidak|batal|salah|ubah|ganti)\b/i.test(message);
+    case "AWAITING_NAME":
+    default:
+      return false; // a name is freeform — rely on interruption signals instead
+  }
+}
+
+// Intent categories that should pause data entry and be answered by the LLM /
+// specialist agents (the booking state is preserved so the flow can resume).
+const INTERRUPT_INTENTS = new Set([
+  "complaint",
+  "maintenance",
+  "customer-care",
+  "pricing_inquiry",
+  "payment",
+  "availability_check",
+  "booking_inquiry",
+]);
+
 /**
  * Evaluates the message against the current state and returns whether the state machine handled it.
  */
@@ -119,26 +172,27 @@ export async function processBookingState(
   const supabase = ctx.supabasePublic;
   let { state, context } = currentStateRecord;
 
-  // Interruption Check (Cancellation)
+  // Interruption Check (Cancellation) — explicit "batal" resets the flow.
   if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
     await updateBookingState(supabase, phone, "IDLE", {});
     return { handled: true, reply: "Baik Kak, proses reservasi telah dibatalkan. Ada hal lain yang bisa saya bantu?" };
   }
 
-  // Interruption Check (General Questions)
-  const intent = classifyIntent(message);
-  if (intent.category !== "booking_inquiry" && intent.category !== "availability_check" && state !== "IDLE" && state !== "ROOM_SELECTED" && state !== "AWAITING_DATES") {
-    // If we are strictly expecting a name, email, or phone, we might want to still accept it
-    // if the intent is 'general' (since a name might be classified as general).
-    // If it's a 'complaint' or 'housekeeping' in the middle of a booking, we interrupt.
-    if (["complaint", "maintenance", "customer-care"].includes(intent.category)) {
-      await updateBookingState(supabase, phone, "IDLE", {});
-      return { handled: false }; // Let the main router handle this escalation/interruption
-    }
-  }
-
   if (state === "IDLE") {
     return { handled: false }; // Handled by LLM via normal AI workflow
+  }
+
+  // Mid-booking interruption: the guest asks something unrelated instead of
+  // answering the current prompt. Hand the turn to the LLM / specialist agents
+  // to answer, but KEEP the booking state so the flow resumes on the next
+  // relevant reply (the state auto-resets after 15 min if truly abandoned).
+  if (isDataEntryState(state) && !isExpectedAnswer(state, message)) {
+    const interruptByQuestion = QUESTION_PATTERN.test(message);
+    const interruptByIntent   = INTERRUPT_INTENTS.has(classifyIntent(message).category);
+    if (interruptByQuestion || interruptByIntent) {
+      console.info(`[BookingState] Interruption during ${state} — preserving state, deferring to LLM`);
+      return { handled: false };
+    }
   }
 
   // State: ROOM_SELECTED -> AWAITING_NAME

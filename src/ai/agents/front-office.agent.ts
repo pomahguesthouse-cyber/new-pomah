@@ -17,7 +17,7 @@ export const frontOfficeAgent: AgentDefinition = {
   tools:       TOOL_DEFINITIONS, // check_room_availability + create_booking
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, sopText, brosurFiles, today } = ctx;
+    const { property, rooms, sopText, brosurFiles, today, bookingInProgress } = ctx;
 
     const roomLines = rooms.map((r) => {
       const extrabedCap  = Number((r as any).extrabed_capacity ?? 0);
@@ -127,6 +127,14 @@ export const frontOfficeAgent: AgentDefinition = {
           "Saat tamu meminta brosur, katalog, gambar kamar, atau materi promosi, " +
           "kirimkan link berikut secara langsung. Tulis URL POLOS dan UTUH — jangan potong atau bungkus tanda kurung/markdown.\n" +
           brosurFiles.map((f) => `• ${f.name}: ${f.url}`).join("\n")
+        : "",
+
+      bookingInProgress
+        ? "PENTING — TAMU SEDANG MENGISI DATA BOOKING: Tamu sedang dalam proses pengisian data pemesanan " +
+          "lalu menanyakan hal lain. Jawab pertanyaannya secara SINGKAT, lalu ingatkan dengan ramah bahwa " +
+          "kita akan melanjutkan pengisian data pemesanan. JANGAN memanggil tool `start_booking_details` " +
+          "atau `create_booking` lagi, dan JANGAN menanyakan nama/email/nomor HP — proses itu sudah berjalan " +
+          "dan akan dilanjutkan otomatis. Contoh penutup: 'Kembali ke pemesanan tadi ya Kak, silakan dilanjut.'"
         : "",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",

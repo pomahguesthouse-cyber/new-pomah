@@ -152,6 +152,26 @@ Langkah deterministik:
 `ToolContext.phone` & `AgentContext.chatPhone` diisi orchestrator dari
 `input.phone` agar tool dan state machine tahu nomor chat tamu.
 
+### Penanganan interupsi di tengah pengisian data
+
+Bila tamu menanyakan hal lain saat sedang mengisi data booking (mis. "fasilitas
+deluxe apa saja?", "AC nya dingin ga?"), state machine TIDAK menghapus progres:
+
+1. `isExpectedAnswer(state, message)` mengecek apakah pesan adalah jawaban yang
+   sedang ditunggu (email valid, nomor, "Ya", dll). Bila ya → diproses normal.
+2. Bila bukan jawaban DAN terdeteksi pertanyaan (`QUESTION_PATTERN`) atau intent
+   eskalasi (`INTERRUPT_INTENTS`: complaint, maintenance, customer-care, pricing,
+   payment, availability, booking) → `processBookingState` mengembalikan
+   `handled: false` **tanpa mengubah state**.
+3. Orchestrator melanjutkan ke LLM untuk menjawab, dan menyetel
+   `AgentContext.bookingInProgress = true` sehingga Front Office Agent menjawab
+   singkat lalu mengingatkan untuk melanjutkan — tanpa memanggil
+   `start_booking_details`/`create_booking` lagi.
+4. Pesan tamu berikutnya kembali diintersep state machine pada state yang sama,
+   sehingga pengisian data lanjut dari titik terakhir. Hanya "batal/cancel"
+   (`CANCELLATION_PATTERNS`) yang benar-benar mereset ke `IDLE`; selain itu
+   state auto-reset 15 menit bila percakapan ditinggalkan.
+
 ## Catatan robustness
 
 - **create_booking** memilih kamar fisik (`pickAvailableRoom`) *sebelum* menulis

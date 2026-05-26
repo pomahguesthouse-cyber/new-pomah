@@ -44,6 +44,12 @@ export interface AgentContext {
   today:    string;
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   chatPhone?: string;
+  /**
+   * True when the guest is mid-way through the deterministic booking data-entry
+   * flow and has interrupted with an unrelated question. Agents should answer
+   * the question briefly WITHOUT restarting the booking flow.
+   */
+  bookingInProgress?: boolean;
   /** The raw last user message — agents may use it for tone awareness */
   lastMessage?: string;
   /** The instructions configured in the AI Lab Dashboard for this agent */
