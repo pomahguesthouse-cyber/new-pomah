@@ -25,12 +25,25 @@ import {
   User,
   Wrench,
   Activity,
+  Pencil,
+  Check,
+  X,
+  GraduationCap,
 } from "lucide-react";
-import { simulateChatTurn, resetSimulation } from "./simulator.functions";
+import { simulateChatTurn, resetSimulation, saveSimulationAsTraining } from "./simulator.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -142,6 +155,7 @@ function evaluateChecks(
 export function ChatSimulatorView() {
   const runTurn = useServerFn(simulateChatTurn);
   const runReset = useServerFn(resetSimulation);
+  const runSaveTraining = useServerFn(saveSimulationAsTraining);
 
   const [phone, setPhone] = useState("6281234567899");
   const [transcript, setTranscript] = useState<TranscriptMsg[]>([]);
@@ -153,6 +167,15 @@ export function ChatSimulatorView() {
   const [activeScenario, setActiveScenario] = useState<string>(SCENARIOS[0].key);
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<StepResult[]>([]);
+
+  // Response modification states
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [editedIndices, setEditedIndices] = useState<Record<number, string>>({}); // index -> original text
+
+  // Save training states
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [savingTraining, setSavingTraining] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollToBottom = () => {
@@ -216,9 +239,30 @@ export function ChatSimulatorView() {
       setTranscript([]);
       setLastMeta(null);
       setResults([]);
+      setEditedIndices({});
+      setEditingIdx(null);
       toast.success("Percakapan & state booking direset");
     } catch (e: any) {
       toast.error(e.message ?? "Gagal reset");
+    }
+  }
+
+  // ── Save simulation as training ───────────────────────────────────────────
+  async function handleSaveTraining(pairs: any[]) {
+    if (savingTraining || pairs.length === 0) return;
+    setSavingTraining(true);
+    try {
+      const res = await runSaveTraining({ data: { pairs } });
+      if (res.ok) {
+        toast.success(`Berhasil menyimpan ${res.savedCount} pasangan percakapan ke training data.`);
+        setSaveConfirmOpen(false);
+      } else {
+        toast.error("Gagal menyimpan training data");
+      }
+    } catch (e: any) {
+      toast.error(e.message ?? "Error saat menyimpan training");
+    } finally {
+      setSavingTraining(false);
     }
   }
 
@@ -289,6 +333,18 @@ export function ChatSimulatorView() {
               className="h-8 w-40 font-mono text-xs"
               placeholder="628xxxxxxxxxx"
             />
+            {transcript.length > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                className="bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-sm transition-colors"
+                onClick={() => setSaveConfirmOpen(true)}
+                disabled={busy}
+              >
+                <GraduationCap className="mr-1.5 h-3.5 w-3.5" />
+                Simpan Training
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleReset} disabled={busy}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               Reset
@@ -304,23 +360,96 @@ export function ChatSimulatorView() {
                 Mulai mengetik atau jalankan skenario otomatis di kanan.
               </div>
             ) : (
-              transcript.map((m, i) => (
-                <div
-                  key={i}
-                  className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
-                >
+              transcript.map((m, i) => {
+                const isEdited = editedIndices[i] !== undefined;
+                const isEditing = editingIdx === i;
+
+                return (
                   <div
-                    className={cn(
-                      "max-w-[75%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-                      m.direction === "in"
-                        ? "rounded-br-sm bg-emerald-600 text-white"
-                        : "rounded-bl-sm bg-white text-stone-800",
-                    )}
+                    key={i}
+                    className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
                   >
-                    {m.body}
+                    <div
+                      className={cn(
+                        "relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm group transition-all duration-200",
+                        m.direction === "in"
+                          ? "rounded-br-sm bg-emerald-600 text-white"
+                          : cn(
+                              "rounded-bl-sm bg-white text-stone-800 border border-transparent",
+                              isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40"
+                            ),
+                        !isEditing && m.direction === "out" && "pr-8"
+                      )}
+                    >
+                      {isEditing ? (
+                        <div className="space-y-2 min-w-[200px] sm:min-w-[300px]">
+                          <Textarea
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            className="text-xs p-2 min-h-[85px] bg-white text-stone-800 border border-stone-300 focus-visible:ring-teal-500"
+                            placeholder="Tulis respon chatbot yang seharusnya..."
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs rounded-md"
+                              onClick={() => setEditingIdx(null)}
+                            >
+                              <X className="mr-1 h-3.5 w-3.5" />
+                              Batal
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="h-7 px-2.5 text-xs bg-teal-700 hover:bg-teal-800 text-white rounded-md"
+                              onClick={() => {
+                                const trimmed = editingText.trim();
+                                if (!trimmed) {
+                                  toast.error("Respon tidak boleh kosong");
+                                  return;
+                                }
+                                if (editedIndices[i] === undefined) {
+                                  setEditedIndices((prev) => ({ ...prev, [i]: m.body }));
+                                }
+                                const updated = [...transcript];
+                                updated[i] = { ...m, body: trimmed };
+                                setTranscript(updated);
+                                setEditingIdx(null);
+                                toast.success("Respon chatbot berhasil dikoreksi");
+                              }}
+                            >
+                              <Check className="mr-1 h-3.5 w-3.5" />
+                              Simpan
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                          {m.direction === "out" && !isEditing && (
+                            <button
+                              onClick={() => {
+                                setEditingIdx(i);
+                                setEditingText(m.body);
+                              }}
+                              className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 p-1 hover:bg-stone-100 rounded text-stone-400 hover:text-stone-700 transition cursor-pointer"
+                              title="Koreksi respon chatbot"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
+                          {isEdited && (
+                            <span className="mt-1 flex items-center justify-end gap-1 text-[9px] font-semibold text-teal-600 uppercase tracking-wider">
+                              <Pencil className="h-2 w-2" /> Diedit
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             {busy && (
               <div className="flex justify-start">
@@ -469,6 +598,120 @@ export function ChatSimulatorView() {
           )}
         </Card>
       </div>
+
+      {/* Dialog Konfirmasi Simpan Training */}
+      <Dialog open={saveConfirmOpen} onOpenChange={(open) => !open && setSaveConfirmOpen(false)}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-teal-600" />
+              Simpan sebagai Training Data
+            </DialogTitle>
+            <DialogDescription>
+              Simpan pasangan percakapan dari simulasi ini sebagai data latih chatbot.
+              Setiap pasangan akan ditandai dengan rating <strong>Baik</strong> agar digunakan chatbot sebagai panduan merespon di masa depan.
+            </DialogDescription>
+          </DialogHeader>
+
+          {(() => {
+            const pairs: Array<{
+              userMessage: string;
+              aiResponse: string;
+              wasEdited: boolean;
+              originalResponse?: string | null;
+            }> = [];
+
+            for (let i = 0; i < transcript.length; i++) {
+              const msg = transcript[i];
+              if (msg.direction === "out") {
+                let priorUserMsg = "";
+                for (let j = i - 1; j >= 0; j--) {
+                  if (transcript[j].direction === "in") {
+                    priorUserMsg = transcript[j].body;
+                    break;
+                  }
+                }
+
+                if (priorUserMsg && msg.body) {
+                  const wasEdited = editedIndices[i] !== undefined;
+                  pairs.push({
+                    userMessage: priorUserMsg,
+                    aiResponse: msg.body,
+                    wasEdited,
+                    originalResponse: wasEdited ? editedIndices[i] : null,
+                  });
+                }
+              }
+            }
+
+            if (pairs.length === 0) {
+              return (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Tidak ada pasangan pesan (tamu & respons bot) yang lengkap untuk disimpan.
+                </div>
+              );
+            }
+
+            return (
+              <>
+                <div className="my-2 border rounded-lg overflow-hidden bg-stone-50">
+                  <div className="px-3 py-2 border-b bg-stone-100 flex justify-between text-xs font-semibold text-stone-600">
+                    <span>Preview Training Data</span>
+                    <span>{pairs.length} pasangan</span>
+                  </div>
+                  <div className="max-h-[250px] overflow-y-auto p-3 space-y-3">
+                    {pairs.map((p, idx) => (
+                      <div key={idx} className="bg-white border rounded-md p-2.5 text-xs space-y-1.5 shadow-sm">
+                        <div className="space-y-0.5">
+                          <span className="font-semibold text-stone-400 uppercase tracking-wider text-[9px] block">Tamu</span>
+                          <p className="text-stone-700 font-medium">{p.userMessage}</p>
+                        </div>
+                        <div className="border-t pt-1.5 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-teal-600 uppercase tracking-wider text-[9px] block">Respons Ideal AI</span>
+                            {p.wasEdited && (
+                              <span className="bg-teal-100 text-teal-800 text-[8px] font-semibold px-1 rounded uppercase tracking-wider scale-90 origin-right">
+                                Diedit
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-stone-800 whitespace-pre-wrap">{p.aiResponse}</p>
+                          {p.wasEdited && (
+                            <p className="text-[10px] text-stone-400 mt-1 line-through italic">
+                              Semula: {p.originalResponse}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <DialogFooter className="mt-4">
+                  <Button variant="outline" onClick={() => setSaveConfirmOpen(false)} disabled={savingTraining}>
+                    Batal
+                  </Button>
+                  <Button
+                    className="bg-teal-700 hover:bg-teal-800 text-white"
+                    disabled={savingTraining}
+                    onClick={() => handleSaveTraining(pairs)}
+                  >
+                    {savingTraining ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
+                      </>
+                    ) : (
+                      <>
+                        <GraduationCap className="mr-1.5 h-4 w-4" /> Simpan Training
+                      </>
+                    )}
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

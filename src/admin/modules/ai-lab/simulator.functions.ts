@@ -169,7 +169,43 @@ export const getSimBookingState = createServerFn({ method: "GET" })
 export const resetSimulation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ phone: z.string().min(5) }).parse(d))
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     await updateBookingState(supabasePublic as any, data.phone, "IDLE", {});
     return { ok: true };
+  });
+
+export const saveSimulationAsTraining = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        pairs: z.array(
+          z.object({
+            userMessage: z.string().min(1).max(4000),
+            aiResponse: z.string().min(1).max(8000),
+            wasEdited: z.boolean(),
+            originalResponse: z.string().nullable().optional(),
+          })
+        ),
+      })
+      .parse(d)
+  )
+  .handler(async ({ data, context }) => {
+    const rows = data.pairs.map((p) => ({
+      user_message: p.userMessage,
+      ai_response: p.aiResponse,
+      rating: "good" as const,
+      used: true,
+      source: "simulator",
+      correction: p.wasEdited ? p.originalResponse : null,
+    }));
+
+    if (rows.length === 0) {
+      return { ok: true, savedCount: 0 };
+    }
+
+    const { error } = await context.supabase.from("ai_conversation_logs").insert(rows);
+    if (error) throw error;
+
+    return { ok: true, savedCount: rows.length };
   });
