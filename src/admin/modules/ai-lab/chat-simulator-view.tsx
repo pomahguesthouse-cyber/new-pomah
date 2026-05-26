@@ -1,0 +1,485 @@
+/**
+ * Chatbot Simulator — AI Lab view.
+ *
+ * Two modes that share one server function (`simulateChatTurn`):
+ *  1. Interactive: type messages, see the bot reply through the real
+ *     orchestration pipeline (classifier → agent → tools → state machine).
+ *  2. Scenario runner: auto-play predefined conversation scripts and show a
+ *     transcript with heuristic pass/fail per step.
+ *
+ * End-to-end: runs against a sandbox test phone and writes real data
+ * (booking state, and create_booking creates real records). Use a test number.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import {
+  Bot,
+  Send,
+  RotateCcw,
+  Play,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  User,
+  Wrench,
+  Activity,
+} from "lucide-react";
+import { simulateChatTurn, resetSimulation } from "./simulator.functions";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+type Direction = "in" | "out";
+interface TranscriptMsg {
+  direction: Direction;
+  body: string;
+}
+interface TurnMeta {
+  agentKey?: string;
+  intent?: string;
+  toolsUsed?: string[];
+  bookingState?: string;
+  elapsedMs?: number;
+  status?: string;
+  error?: string | null;
+}
+
+interface ScenarioStep {
+  send: string;
+  expectTool?: string;
+  expectReply?: string;
+  expectState?: string;
+}
+interface Scenario {
+  key: string;
+  name: string;
+  desc: string;
+  steps: ScenarioStep[];
+}
+
+interface StepResult {
+  step: ScenarioStep;
+  reply: string | null;
+  meta: TurnMeta;
+  passed: boolean;
+  checks: { label: string; ok: boolean }[];
+}
+
+// ─── Predefined scenarios ─────────────────────────────────────────────────────
+
+const SCENARIOS: Scenario[] = [
+  {
+    key: "happy-path",
+    name: "Booking — alur lengkap",
+    desc: "Sapaan → cek kamar → pilih → konfirmasi nama & nomor → buat booking.",
+    steps: [
+      { send: "halo" },
+      { send: "mau pesan kamar deluxe hari ini", expectTool: "Room Availability" },
+      { send: "2 orang", expectTool: "Booking Flow", expectState: "CONFIRMING_NAME" },
+      { send: "ya", expectState: "AWAITING_EMAIL" },
+      { send: "test.simulasi@example.com", expectState: "CONFIRMING_PHONE" },
+      { send: "ya", expectState: "CONFIRMING_BOOKING" },
+      { send: "ya", expectTool: "Booking Engine", expectReply: "Kode Booking" },
+    ],
+  },
+  {
+    key: "interrupt",
+    name: "Interupsi di tengah pengisian data",
+    desc: "Tamu bertanya hal lain saat mengisi data — progres tidak hilang.",
+    steps: [
+      { send: "mau pesan kamar deluxe hari ini", expectTool: "Room Availability" },
+      { send: "2 orang", expectState: "CONFIRMING_NAME" },
+      { send: "ya", expectState: "AWAITING_EMAIL" },
+      { send: "fasilitas kamar deluxe apa saja?", expectState: "AWAITING_EMAIL" },
+      { send: "test.simulasi@example.com", expectState: "CONFIRMING_PHONE" },
+    ],
+  },
+  {
+    key: "cancel",
+    name: "Pembatalan",
+    desc: "Tamu membatalkan di tengah proses booking.",
+    steps: [
+      { send: "mau pesan kamar deluxe hari ini" },
+      { send: "2 orang", expectState: "CONFIRMING_NAME" },
+      { send: "batal", expectReply: "dibatalkan", expectState: "IDLE" },
+    ],
+  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function evaluateChecks(
+  step: ScenarioStep,
+  reply: string | null,
+  meta: TurnMeta,
+): { label: string; ok: boolean }[] {
+  const checks: { label: string; ok: boolean }[] = [];
+  if (step.expectTool) {
+    const ok = (meta.toolsUsed ?? []).some((t) =>
+      t.toLowerCase().includes(step.expectTool!.toLowerCase()),
+    );
+    checks.push({ label: `Tool: ${step.expectTool}`, ok });
+  }
+  if (step.expectReply) {
+    const ok = !!reply && reply.toLowerCase().includes(step.expectReply.toLowerCase());
+    checks.push({ label: `Balasan memuat: "${step.expectReply}"`, ok });
+  }
+  if (step.expectState) {
+    const ok = meta.bookingState === step.expectState;
+    checks.push({ label: `State: ${step.expectState} (≡ ${meta.bookingState ?? "?"})`, ok });
+  }
+  return checks;
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────────
+
+export function ChatSimulatorView() {
+  const runTurn = useServerFn(simulateChatTurn);
+  const runReset = useServerFn(resetSimulation);
+
+  const [phone, setPhone] = useState("6281234567899");
+  const [transcript, setTranscript] = useState<TranscriptMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [lastMeta, setLastMeta] = useState<TurnMeta | null>(null);
+
+  // Scenario runner state
+  const [activeScenario, setActiveScenario] = useState<string>(SCENARIOS[0].key);
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState<StepResult[]>([]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollToBottom = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+  };
+
+  const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+
+  async function sendOne(message: string, history: TranscriptMsg[]) {
+    const res: any = await runTurn({ data: { phone, message, transcript: history, origin } });
+    if (!res?.ok) {
+      throw new Error(res?.error || "Gagal menjalankan simulasi");
+    }
+    const meta: TurnMeta = {
+      agentKey: res.agentKey,
+      intent: res.intent,
+      toolsUsed: res.toolsUsed,
+      bookingState: res.bookingState,
+      elapsedMs: res.elapsedMs,
+      status: res.status,
+      error: res.error,
+    };
+    return { reply: res.reply as string | null, meta };
+  }
+
+  // ── Interactive send ──────────────────────────────────────────────────────────
+  async function handleSend() {
+    const message = input.trim();
+    if (!message || sending) return;
+    setInput("");
+    const history = transcript;
+    const withUser = [...history, { direction: "in" as const, body: message }];
+    setTranscript(withUser);
+    scrollToBottom();
+    setSending(true);
+    try {
+      const { reply, meta } = await sendOne(message, history);
+      setLastMeta(meta);
+      if (reply) {
+        setTranscript([...withUser, { direction: "out", body: reply }]);
+      } else {
+        setTranscript([
+          ...withUser,
+          { direction: "out", body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` },
+        ]);
+      }
+      scrollToBottom();
+    } catch (e: any) {
+      toast.error(e.message ?? "Error");
+      setTranscript(history); // roll back the optimistic user bubble
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function handleReset() {
+    try {
+      await runReset({ data: { phone } });
+      setTranscript([]);
+      setLastMeta(null);
+      setResults([]);
+      toast.success("Percakapan & state booking direset");
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal reset");
+    }
+  }
+
+  // ── Scenario runner ─────────────────────────────────────────────────────────
+  async function handleRunScenario() {
+    if (running) return;
+    const scenario = SCENARIOS.find((s) => s.key === activeScenario);
+    if (!scenario) return;
+    setRunning(true);
+    setResults([]);
+    setTranscript([]);
+    setLastMeta(null);
+    try {
+      // Fresh start
+      await runReset({ data: { phone } });
+      let history: TranscriptMsg[] = [];
+      const stepResults: StepResult[] = [];
+      for (const step of scenario.steps) {
+        const withUser = [...history, { direction: "in" as const, body: step.send }];
+        setTranscript(withUser);
+        scrollToBottom();
+        const { reply, meta } = await sendOne(step.send, history);
+        const next = reply ? [...withUser, { direction: "out" as const, body: reply }] : withUser;
+        setTranscript(next);
+        setLastMeta(meta);
+        history = next;
+        const checks = evaluateChecks(step, reply, meta);
+        const passed = checks.every((c) => c.ok);
+        stepResults.push({ step, reply, meta, passed, checks });
+        setResults([...stepResults]);
+        scrollToBottom();
+      }
+      const allPass = stepResults.every((r) => r.passed);
+      if (allPass) toast.success(`Skenario "${scenario.name}" lulus`);
+      else toast.warning(`Skenario "${scenario.name}" ada langkah gagal`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Skenario gagal dijalankan");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const busy = sending || running;
+  const passCount = results.filter((r) => r.passed).length;
+
+  return (
+    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
+      {/* ── Left: chat ─────────────────────────────────────────────────────── */}
+      <div className="flex min-h-0 flex-col gap-3">
+        <Card className="flex items-center gap-3 p-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-tight">Simulator Chatbot</p>
+            <p className="text-xs text-muted-foreground">
+              Pipeline asli — menulis data nyata. Pakai nomor uji.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="sim-phone" className="text-xs text-muted-foreground">
+              Nomor uji
+            </Label>
+            <Input
+              id="sim-phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="h-8 w-40 font-mono text-xs"
+              placeholder="628xxxxxxxxxx"
+            />
+            <Button variant="outline" size="sm" onClick={handleReset} disabled={busy}>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+              Reset
+            </Button>
+          </div>
+        </Card>
+
+        {/* Transcript */}
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-stone-50 p-4">
+            {transcript.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+                Mulai mengetik atau jalankan skenario otomatis di kanan.
+              </div>
+            ) : (
+              transcript.map((m, i) => (
+                <div
+                  key={i}
+                  className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
+                >
+                  <div
+                    className={cn(
+                      "max-w-[75%] whitespace-pre-wrap rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+                      m.direction === "in"
+                        ? "rounded-br-sm bg-emerald-600 text-white"
+                        : "rounded-bl-sm bg-white text-stone-800",
+                    )}
+                  >
+                    {m.body}
+                  </div>
+                </div>
+              ))
+            )}
+            {busy && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-white px-3.5 py-2 text-sm text-muted-foreground shadow-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> mengetik…
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Composer */}
+          <div className="flex items-center gap-2 border-t border-border bg-card p-3">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Ketik pesan sebagai tamu…"
+              disabled={busy}
+            />
+            <Button onClick={handleSend} disabled={busy || !input.trim()}>
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Right: meta + scenario runner ──────────────────────────────────── */}
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+        {/* Last turn meta */}
+        <Card className="p-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Activity className="h-3.5 w-3.5" /> Detail giliran terakhir
+          </p>
+          {lastMeta ? (
+            <div className="space-y-1.5 text-sm">
+              <MetaRow label="Agent" value={lastMeta.agentKey} />
+              <MetaRow label="Intent" value={lastMeta.intent} />
+              <MetaRow label="State booking" value={lastMeta.bookingState} mono />
+              <MetaRow
+                label="Tools"
+                value={lastMeta.toolsUsed?.length ? lastMeta.toolsUsed.join(", ") : "—"}
+              />
+              <MetaRow
+                label="Waktu"
+                value={lastMeta.elapsedMs != null ? `${lastMeta.elapsedMs} ms` : undefined}
+              />
+              {lastMeta.error && <p className="text-xs text-red-600">Error: {lastMeta.error}</p>}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Belum ada giliran.</p>
+          )}
+        </Card>
+
+        {/* Scenario runner */}
+        <Card className="flex min-h-0 flex-1 flex-col p-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Play className="h-3.5 w-3.5" /> Runner skenario otomatis
+          </p>
+
+          <div className="space-y-2">
+            {SCENARIOS.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => setActiveScenario(s.key)}
+                disabled={busy}
+                className={cn(
+                  "w-full rounded-lg border p-2.5 text-left transition",
+                  activeScenario === s.key
+                    ? "border-teal-500 bg-teal-50"
+                    : "border-border hover:bg-muted",
+                )}
+              >
+                <p className="text-sm font-medium">{s.name}</p>
+                <p className="text-xs text-muted-foreground">{s.desc}</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {s.steps.length} langkah
+                </p>
+              </button>
+            ))}
+          </div>
+
+          <Button className="mt-3" onClick={handleRunScenario} disabled={busy}>
+            {running ? (
+              <>
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menjalankan…
+              </>
+            ) : (
+              <>
+                <Play className="mr-1.5 h-4 w-4" /> Jalankan skenario
+              </>
+            )}
+          </Button>
+
+          {/* Results */}
+          {results.length > 0 && (
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+              <p className="mb-2 text-xs font-semibold">
+                Hasil: {passCount}/{results.length} langkah lulus
+              </p>
+              <ol className="space-y-2">
+                {results.map((r, i) => (
+                  <li key={i} className="rounded-lg border border-border p-2 text-xs">
+                    <div className="flex items-start gap-1.5">
+                      {r.checks.length === 0 ? (
+                        <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" />
+                      ) : r.passed ? (
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                      ) : (
+                        <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1 font-medium">
+                          <User className="h-3 w-3" /> {r.step.send}
+                        </p>
+                        {r.checks.map((c, j) => (
+                          <p
+                            key={j}
+                            className={cn(
+                              "flex items-center gap-1",
+                              c.ok ? "text-emerald-700" : "text-red-700",
+                            )}
+                          >
+                            {c.ok ? "✓" : "✗"} {c.label}
+                          </p>
+                        ))}
+                        {r.meta.toolsUsed && r.meta.toolsUsed.length > 0 && (
+                          <p className="mt-0.5 flex items-center gap-1 text-muted-foreground">
+                            <Wrench className="h-3 w-3" /> {r.meta.toolsUsed.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function MetaRow({ label, value, mono }: { label: string; value?: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className={cn("text-right text-sm font-medium", mono && "font-mono text-xs")}>
+        {value ?? "—"}
+      </span>
+    </div>
+  );
+}
