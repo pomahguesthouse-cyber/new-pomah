@@ -211,6 +211,8 @@ export async function executeAutoreplyForPhone(
   let attachUrl: string | undefined;
   let attachName: string | undefined;
 
+  const isImage = (s: string) => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(s);
+
   if (!isFallback && brosurFiles.length > 0) {
     for (const f of brosurFiles) {
       const baseName = f.name.replace(/\.[a-z0-9]+$/i, "");
@@ -219,6 +221,8 @@ export async function executeAutoreplyForPhone(
         lowered.includes(f.name.toLowerCase()) ||
         lowered.includes(baseName.toLowerCase())
       ) {
+        // Only attach non-image materials (e.g. PDF brochures). Photos are removed.
+        if (isImage(f.name) || isImage(f.url)) continue;
         if (!finalReply.includes(f.url)) finalReply += `\n${f.url}`;
         if (!attachUrl) {
           attachUrl = f.url;
@@ -227,6 +231,13 @@ export async function executeAutoreplyForPhone(
       }
     }
   }
+
+  // Strip any bare image URLs the model included so WhatsApp doesn't render a photo.
+  finalReply = finalReply
+    .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
   const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,
