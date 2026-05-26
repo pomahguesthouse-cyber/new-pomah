@@ -117,6 +117,22 @@ flowchart TD
     J --> N[Konfirmasi: kode booking,<br/>total harga, instruksi transfer]
 ```
 
+## Konfirmasi nama & nomor saat pengisian data
+
+State machine booking (`src/ai/state-machine/booking-machine.ts`) kini
+mengonfirmasi dua identitas tamu sebelum melanjutkan:
+
+- **`AWAITING_NAME` → `CONFIRMING_NAME`**: setelah tamu mengetik nama, bot
+  bertanya apakah ingin memakai nama itu atau nama lain. Balas "Ya" untuk
+  memakai, atau ketik nama lain langsung untuk menggantinya.
+- **`AWAITING_EMAIL` → `CONFIRMING_PHONE`**: setelah email, bot menampilkan
+  nomor WhatsApp yang sedang dipakai chat (diturunkan dari `phone` payload,
+  diformat lokal `0xxxx`) dan menanyakan apakah memakai nomor itu atau nomor
+  lain. Balas "Ya" untuk memakai nomor chat, ketik nomor lain untuk
+  menggantinya, atau minta nomor lain → masuk `AWAITING_PHONE`.
+
+Kedua state baru bermuara ke `CONFIRMING_BOOKING` dengan ringkasan yang sama.
+
 ## Catatan robustness
 
 - **create_booking** memilih kamar fisik (`pickAvailableRoom`) *sebelum* menulis
