@@ -398,7 +398,7 @@ export const Route = createFileRoute("/api/fonnte")({
                   if (url.searchParams.get("sop") === "1") {
                     const { data: docs } = await (supabaseAdmin as any)
                       .from("sop_documents")
-                      .select("name, content, source_url, file_path, doc_category")
+                      .select("name, content, source_url, file_path, doc_category, storage_bucket")
                       .order("created_at", { ascending: true })
                       .limit(40);
                     const supaUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
@@ -406,7 +406,10 @@ export const Route = createFileRoute("/api/fonnte")({
                     for (const d of (docs ?? [])) {
                       const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
                       if (cat === "brosur" || cat === "brochure") {
-                        if (d.file_path) brosurFiles.push({ name: d.name, url: `${supaUrl}/storage/v1/object/public/sop-documents/${d.file_path}` });
+                        if (d.file_path) {
+                          const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
+                          brosurFiles.push({ name: d.name, url: `${supaUrl}/storage/v1/object/public/${bucket}/${d.file_path}` });
+                        }
                         continue;
                       }
                       const content = d.content?.trim(); const u = d.source_url?.trim();
