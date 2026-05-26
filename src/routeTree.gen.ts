@@ -39,6 +39,7 @@ import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
+import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -190,6 +191,11 @@ const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   path: '/api/cron/sync-explore',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
+  id: '/api/cron/process-wa-queue',
+  path: '/api/cron/process-wa-queue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
+  '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/process-wa-queue'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -349,6 +359,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/book'
     | '/rooms'
+    | '/api/cron/process-wa-queue'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   id:
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/process-wa-queue'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
@@ -399,6 +411,7 @@ export interface RootRouteChildren {
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRoute
 }
@@ -615,6 +628,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronSyncExploreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/process-wa-queue': {
+      id: '/api/cron/process-wa-queue'
+      path: '/api/cron/process-wa-queue'
+      fullPath: '/api/cron/process-wa-queue'
+      preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -670,9 +690,20 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   BookConfirmationIdRoute: BookConfirmationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
