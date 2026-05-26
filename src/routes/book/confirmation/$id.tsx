@@ -15,13 +15,12 @@ import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.
 const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
 
 export const Route = createFileRoute("/book/confirmation/$id")({
-  loader: async () => getPublicSiteData(),
-  // Override the site-wide og:image (homepage hero) with the property logo so
-  // the WhatsApp link preview for the invoice shows appropriate branding
-  // instead of the generic homepage screenshot.
-  head: ({ loaderData }: any) => {
-    const prop = loaderData?.property;
-    const ogImage = prop?.invoice_logo_url || prop?.logo_url || undefined;
+  // Override the site-wide og:image (homepage hero) with a dedicated invoice
+  // banner so the WhatsApp link preview shows appropriate branding instead of
+  // the generic homepage screenshot.
+  head: () => {
+    const ogImage =
+      "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/banner/banner-1200x600-d45c57c0.webp";
     const title = "Invoice Pemesanan — Pomah Guesthouse";
     const desc = "Invoice reservasi Anda.";
     return {
