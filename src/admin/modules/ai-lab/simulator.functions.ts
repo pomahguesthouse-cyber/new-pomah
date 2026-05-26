@@ -209,3 +209,30 @@ export const saveSimulationAsTraining = createServerFn({ method: "POST" })
 
     return { ok: true, savedCount: rows.length };
   });
+
+/** List training examples saved from the simulator, newest first. */
+export const listSimulatorTraining = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("ai_conversation_logs")
+      .select("id, user_message, ai_response, correction, created_at")
+      .eq("source", "simulator")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return { logs: data ?? [] };
+  });
+
+/** Delete a single saved training example. */
+export const deleteSimulatorTraining = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("ai_conversation_logs")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });

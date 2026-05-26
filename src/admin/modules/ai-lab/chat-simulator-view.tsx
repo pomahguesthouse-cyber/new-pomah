@@ -12,7 +12,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -32,8 +32,16 @@ import {
   GraduationCap,
   MessagesSquare,
   Search,
+  Trash2,
+  BookOpen,
 } from "lucide-react";
-import { simulateChatTurn, resetSimulation, saveSimulationAsTraining } from "./simulator.functions";
+import {
+  simulateChatTurn,
+  resetSimulation,
+  saveSimulationAsTraining,
+  listSimulatorTraining,
+  deleteSimulatorTraining,
+} from "./simulator.functions";
 import { listThreads, getThread } from "@/admin/functions/whatsapp.functions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -163,6 +171,9 @@ export function ChatSimulatorView() {
   const runSaveTraining = useServerFn(saveSimulationAsTraining);
   const runListThreads = useServerFn(listThreads);
   const runGetThread = useServerFn(getThread);
+  const runListTraining = useServerFn(listSimulatorTraining);
+  const runDeleteTraining = useServerFn(deleteSimulatorTraining);
+  const qc = useQueryClient();
 
   const [phone, setPhone] = useState("6281234567899");
   const [transcript, setTranscript] = useState<TranscriptMsg[]>([]);
@@ -268,6 +279,7 @@ export function ChatSimulatorView() {
       if (res.ok) {
         toast.success(`Berhasil menyimpan ${res.savedCount} pasangan percakapan ke training data.`);
         setSaveConfirmOpen(false);
+        qc.invalidateQueries({ queryKey: ["simulator-training"] });
       } else {
         toast.error("Gagal menyimpan training data");
       }
@@ -275,6 +287,23 @@ export function ChatSimulatorView() {
       toast.error(e.message ?? "Error saat menyimpan training");
     } finally {
       setSavingTraining(false);
+    }
+  }
+
+  // ── Saved training list ───────────────────────────────────────────────────
+  const trainingQuery = useQuery({
+    queryKey: ["simulator-training"],
+    queryFn: () => runListTraining(),
+  });
+  const savedTraining: any[] = trainingQuery.data?.logs ?? [];
+
+  async function handleDeleteTraining(id: string) {
+    try {
+      await runDeleteTraining({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["simulator-training"] });
+      toast.success("Training data dihapus");
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menghapus");
     }
   }
 
@@ -665,6 +694,68 @@ export function ChatSimulatorView() {
                 ))}
               </ol>
             </div>
+          )}
+        </Card>
+
+        {/* Saved training list */}
+        <Card className="flex min-h-0 flex-col p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5" /> Training tersimpan
+            </p>
+            {savedTraining.length > 0 && (
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {savedTraining.length} item
+              </span>
+            )}
+          </div>
+
+          {trainingQuery.isLoading ? (
+            <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Memuat…
+            </div>
+          ) : savedTraining.length === 0 ? (
+            <p className="py-4 text-sm text-muted-foreground">
+              Belum ada training tersimpan dari simulator.
+            </p>
+          ) : (
+            <ScrollArea className="max-h-[320px]">
+              <ul className="space-y-2 pr-2">
+                {savedTraining.map((log) => (
+                  <li
+                    key={log.id}
+                    className="group rounded-lg border border-border p-2.5 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="flex items-center gap-1 font-medium text-stone-700">
+                          <User className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{log.user_message}</span>
+                        </p>
+                        <p className="flex items-start gap-1 text-stone-600">
+                          <Bot className="mt-0.5 h-3 w-3 shrink-0 text-teal-600" />
+                          <span className="line-clamp-3 whitespace-pre-wrap">
+                            {log.ai_response}
+                          </span>
+                        </p>
+                        {log.correction && (
+                          <span className="inline-flex items-center gap-1 rounded bg-teal-100 px-1 text-[8px] font-semibold uppercase tracking-wider text-teal-800">
+                            <Pencil className="h-2 w-2" /> Dikoreksi
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTraining(log.id)}
+                        className="shrink-0 rounded p-1 text-stone-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                        title="Hapus training"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
           )}
         </Card>
       </div>
