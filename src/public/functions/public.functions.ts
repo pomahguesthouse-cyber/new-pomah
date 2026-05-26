@@ -463,13 +463,31 @@ export type BookingInvoice = {
 
 /** Full invoice detail for a booking — used by the public confirmation page. */
 export const getBookingInvoice = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().min(1) }).parse(d))
   .handler(async ({ data }) => {
     try {
       // Reads via the service-role client: a guest holding the (unguessable)
       // booking id sees their own invoice; the anon role has no SELECT on bookings.
       const sb = db(supabaseAdmin);
-      const bookingId = data.id;
+
+      // The URL param may be either the booking UUID or the human-friendly
+      // booking code (reference_code, e.g. "PG-9J6Y2"). Resolve to the UUID.
+      const rawId = data.id.trim();
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+      let bookingId = rawId;
+      if (!isUuid) {
+        const { data: byCode } = await sb
+          .from("bookings")
+          .select("id")
+          .ilike("reference_code", rawId)
+          .maybeSingle();
+        if (!byCode) {
+          console.warn("[getBookingInvoice] booking not found by code:", rawId);
+          return { invoice: null as BookingInvoice | null };
+        }
+        bookingId = (byCode as { id: string }).id;
+      }
 
       // ── Step 1: minimal query — only columns present since day-one ────────
       // This MUST succeed for any booking that exists; never fails on missing columns.
@@ -1026,7 +1044,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
           no_rekening: (p.payment_account_number as string | undefined) || null,
           atas_nama: (p.payment_account_holder as string | undefined) || null,
         },
-        invoice_url: `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
+        invoice_url: `https://pomahguesthouse.com/book/confirmation/${booking.reference_code ?? booking.id}`,
       });
     };
 

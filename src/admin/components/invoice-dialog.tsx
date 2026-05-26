@@ -88,7 +88,7 @@ export function InvoiceDialog({
   if (!booking) return null;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : "";
-  const webInvoiceUrl = `${origin}/book/confirmation/${booking.id}`;
+  const webInvoiceUrl = `${origin}/book/confirmation/${booking.reference_code ?? booking.id}`;
 
   const emailBody = `Halo ${booking.guests?.full_name || ""},
 

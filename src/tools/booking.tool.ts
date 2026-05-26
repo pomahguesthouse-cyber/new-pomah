@@ -93,8 +93,8 @@ async function findBookingByIdemKey(
       atas_nama:   ctx.property.payment_account_holder  ?? null,
     },
     invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${b.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${b.id}`,
+      ? `${ctx.origin}/book/confirmation/${b.reference_code ?? b.id}`
+      : `https://pomahguesthouse.com/book/confirmation/${b.reference_code ?? b.id}`,
     idempotent_replay: true,
   });
 }
@@ -300,7 +300,7 @@ export const createBooking: ToolHandler = async (
       atas_nama:  ctx.property.payment_account_holder  ?? null,
     },
     invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${booking.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${booking.id}`,
+      ? `${ctx.origin}/book/confirmation/${booking.reference_code ?? booking.id}`
+      : `https://pomahguesthouse.com/book/confirmation/${booking.reference_code ?? booking.id}`,
   });
 };

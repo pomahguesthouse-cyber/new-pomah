@@ -98,7 +98,9 @@ export async function generateAndSendInvoiceNotification({
       ? rawDomain.startsWith("http") ? rawDomain : `https://${rawDomain}`
       : null;
     const cleanDomain = (propertyWebsite ?? "https://pomahguesthouse.com").replace(/\/+$/, "");
-    const invoiceUrl = `${cleanDomain}/book/confirmation/${bookingId}`;
+    // Use the human-friendly booking code in the URL when available.
+    const invoiceRef = booking.reference_code ?? bookingId;
+    const invoiceUrl = `${cleanDomain}/book/confirmation/${encodeURIComponent(invoiceRef)}`;
     const propertyName = property?.name || "Pomah Guesthouse";
 
     // ── 4. Upsert invoices record (keeps admin/reporting in sync) ───────
