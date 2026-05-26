@@ -211,8 +211,10 @@ export async function runMultiAgentOrchestration(
 ): Promise<MultiAgentResult> {
   const maxTurns = input.maxTurns ?? DEFAULT_MAX_TURNS;
 
-  // Make the guest's chat number available to every agent's prompt builder.
+  // Make the guest's chat number available to every agent's prompt builder
+  // and to tools / the booking state machine.
   input.agentCtx.chatPhone = input.phone;
+  input.toolCtx.phone = input.phone;
 
   // 1. Extract last user message for classification
   const lastUserMsg = [...input.messages]
@@ -277,7 +279,7 @@ export async function runMultiAgentOrchestration(
   if (stateRecord.state !== "IDLE") {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
     const stateResult = await processBookingState(
-      input.toolCtx.supabasePublic,
+      input.toolCtx,
       input.phone,
       lastUserMsg,
       stateRecord

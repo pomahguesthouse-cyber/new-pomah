@@ -26,6 +26,8 @@ export interface ToolContext {
   today:          string;
   /** App base URL (e.g. https://pomahguesthouse.com) */
   origin?:        string;
+  /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
+  phone?:         string;
   /**
    * Stable per-inbound-message key (phone + message id). Used by write tools
    * (create_booking) to stay idempotent across webhook retries of the same

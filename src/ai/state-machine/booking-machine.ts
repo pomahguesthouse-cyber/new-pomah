@@ -1,5 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
+import { createBooking } from "@/tools/booking.tool";
+import type { ToolContext } from "@/tools/types";
 
 export type BookingState =
   | "IDLE"
@@ -25,6 +27,8 @@ export interface BookingContext {
   guestEmail?: string;
   guestPhone?: string;
   bookingCode?: string;
+  adults?: number;
+  children?: number;
 }
 
 export interface StateRecord {
@@ -107,11 +111,12 @@ function extractPhone(text: string): string | null {
  * Evaluates the message against the current state and returns whether the state machine handled it.
  */
 export async function processBookingState(
-  supabase: SupabaseClient,
+  ctx: ToolContext,
   phone: string,
   message: string,
   currentStateRecord: StateRecord
 ): Promise<StateMachineResult> {
+  const supabase = ctx.supabasePublic;
   let { state, context } = currentStateRecord;
 
   // Interruption Check (Cancellation)
@@ -231,15 +236,52 @@ export async function processBookingState(
 
   if (state === "CONFIRMING_BOOKING") {
     if (/\b(ya|lanjut|benar|oke|ok|setuju|betul)\b/i.test(message)) {
-      // Create booking via tool normally or here.
-      // Since this is intercepting, we can instruct the user to wait or we can call the tool directly.
-      // But creating the booking requires DB access. We will let the orchestrator know it's time to trigger create_booking.
-      // To keep it simple, we tell the orchestrator to run the Front Office Agent with a forced system prompt.
-      // Or we can just set state to PAYMENT_PENDING and return unhandled so the AI handles the tool call.
-      context.bookingCode = `BOOK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      // Create the booking deterministically with the data collected in context.
+      const raw = await createBooking(
+        {
+          room_type:  context.roomName,
+          full_name:  context.guestName,
+          email:      context.guestEmail,
+          phone:      context.guestPhone,
+          check_in:   context.checkIn,
+          check_out:  context.checkOut,
+          adults:     context.adults ?? 1,
+          children:   context.children ?? 0,
+        },
+        ctx,
+      );
+
+      let result: any = {};
+      try { result = JSON.parse(raw); } catch { /* ignore */ }
+
+      if (!result.ok) {
+        await updateBookingState(supabase, phone, "IDLE", {});
+        return {
+          handled: true,
+          reply: `Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. Silakan coba lagi atau hubungi staf kami.`,
+        };
+      }
+
+      context.bookingCode = result.reference_code;
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
-      
-      return { handled: false }; // Let the Front Office agent handle the actual `create_booking` tool call with this context!
+
+      const pay = result.pembayaran ?? {};
+      const payLines = pay.bank && pay.no_rekening
+        ? `\n\nSilakan lakukan pembayaran transfer ke:\n- Bank: ${pay.bank}\n- No. Rekening: ${pay.no_rekening}\n- Atas Nama: ${pay.atas_nama ?? "-"}\n\nSetelah transfer, kirim bukti pembayaran atau ketik "Sudah bayar".`
+        : "\n\nStaf kami akan mengirimkan detail rekening pembayaran sesaat lagi.";
+
+      return {
+        handled: true,
+        reply:
+          `Terima kasih Kak ${context.guestName}! Pemesanan berhasil dibuat.\n\n` +
+          `- Kode Booking: ${result.reference_code}\n` +
+          `- Kamar: ${result.room_type}\n` +
+          `- Check-in: ${result.check_in_tampil}\n` +
+          `- Check-out: ${result.check_out_tampil}\n` +
+          `- Total: Rp ${Number(result.total ?? 0).toLocaleString("id-ID")}` +
+          payLines +
+          `\n\nBukti pemesanan (invoice) akan dikirim melalui pesan terpisah di chat ini.`,
+      };
     } else if (/\b(tidak|batal|salah|ubah|ganti)\b/i.test(message)) {
       await updateBookingState(supabase, phone, "AWAITING_NAME", context);
       return { handled: true, reply: "Baik, mari kita ulangi pengisian datanya. Mohon ketik nama lengkap Kakak:" };

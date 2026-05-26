@@ -117,21 +117,40 @@ flowchart TD
     J --> N[Konfirmasi: kode booking,<br/>total harga, instruksi transfer]
 ```
 
-## Konfirmasi nama & nomor saat pengisian data
+## Pengumpulan data booking — alur hybrid
 
-State machine booking (`src/ai/state-machine/booking-machine.ts`) kini
-mengonfirmasi dua identitas tamu sebelum melanjutkan:
+Sapaan, cek ketersediaan, pilih kamar, dan tanya umum tetap ditangani LLM
+(Front Office Agent). Begitu tamu memilih tipe kamar + tanggal dan ingin
+booking, agent memanggil tool **`start_booking_details`** yang **memindahkan
+kontrol** ke state machine deterministik (`src/ai/state-machine/booking-machine.ts`).
+Sejak itu, setiap pesan tamu diintersep oleh state machine (state != IDLE),
+bukan LLM — sehingga langkahnya konsisten.
 
-- **`AWAITING_NAME` → `CONFIRMING_NAME`**: setelah tamu mengetik nama, bot
-  bertanya apakah ingin memakai nama itu atau nama lain. Balas "Ya" untuk
-  memakai, atau ketik nama lain langsung untuk menggantinya.
-- **`AWAITING_EMAIL` → `CONFIRMING_PHONE`**: setelah email, bot menampilkan
-  nomor WhatsApp yang sedang dipakai chat (diturunkan dari `phone` payload,
-  diformat lokal `0xxxx`) dan menanyakan apakah memakai nomor itu atau nomor
-  lain. Balas "Ya" untuk memakai nomor chat, ketik nomor lain untuk
-  menggantinya, atau minta nomor lain → masuk `AWAITING_PHONE`.
+State disimpan per-nomor di tabel `wa_booking_states` (RPC
+`get_active_booking_state` / `update_booking_state`), berfungsi sebagai memory
+temporer percakapan yang auto-reset 15 menit.
 
-Kedua state baru bermuara ke `CONFIRMING_BOOKING` dengan ringkasan yang sama.
+Langkah deterministik:
+
+- **`start_booking_details`** → set `CONFIRMING_NAME` (bila nama sudah diketahui
+  dari percakapan) atau `AWAITING_NAME`. Menyimpan kamar, tanggal, harga,
+  jumlah tamu ke context.
+- **`AWAITING_NAME` → `CONFIRMING_NAME`**: tamu mengetik nama → bot bertanya
+  pakai nama itu atau nama lain. "Ya" untuk memakai, ketik nama lain untuk
+  mengganti.
+- **`CONFIRMING_NAME` → `AWAITING_EMAIL`**: minta email.
+- **`AWAITING_EMAIL` → `CONFIRMING_PHONE`**: bot menampilkan nomor WhatsApp yang
+  sedang dipakai chat (dari `phone` payload, diformat `0xxxx`) dan menanyakan
+  pakai nomor itu atau nomor lain. "Ya" → pakai nomor chat; ketik nomor lain →
+  pakai itu; minta nomor lain → `AWAITING_PHONE`.
+- **`CONFIRMING_PHONE`/`AWAITING_PHONE` → `CONFIRMING_BOOKING`**: tampilkan
+  ringkasan.
+- **`CONFIRMING_BOOKING`**: bila tamu setuju, state machine memanggil
+  `create_booking` **langsung** (bukan via LLM), lalu membalas kode booking,
+  total, dan instruksi transfer → `PAYMENT_PENDING`.
+
+`ToolContext.phone` & `AgentContext.chatPhone` diisi orchestrator dari
+`input.phone` agar tool dan state machine tahu nomor chat tamu.
 
 ## Catatan robustness
 

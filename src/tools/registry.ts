@@ -57,6 +57,29 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "start_booking_details",
+      description:
+        "Mulai proses pengisian data pemesanan. Panggil SETELAH tamu memilih tipe kamar dan tanggal " +
+        "menginap serta menyatakan ingin booking — JANGAN menanyakan nama/email/HP sendiri. " +
+        "Tool ini mengambil alih percakapan untuk mengumpulkan & mengonfirmasi nama dan nomor secara bertahap. " +
+        "Sertakan guest_name bila tamu sudah pernah menyebutkan namanya.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih tamu." },
+          check_in:   { type: "string", description: "Tanggal check-in format YYYY-MM-DD." },
+          check_out:  { type: "string", description: "Tanggal check-out format YYYY-MM-DD. Kosongkan untuk 1 malam." },
+          adults:     { type: "number", description: "Jumlah tamu dewasa. Default 1." },
+          children:   { type: "number", description: "Jumlah anak. Default 0." },
+          guest_name: { type: "string", description: "Nama tamu bila sudah disebutkan di percakapan. Kosongkan bila belum." },
+        },
+        required: ["room_type", "check_in"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_bookings",
       description: "Daftar booking. Bisa difilter berdasarkan status (pending, confirmed, checked_in, dll) atau tanggal check_in/check_out.",
       parameters: {
@@ -104,6 +127,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 /** Human-readable label shown in the admin inbox for each tool call. */
 export const TOOL_LABELS: Record<string, string> = {
   check_room_availability:      "Room Availability",
+  start_booking_details:        "Booking Flow",
   create_booking:               "Booking Engine",
   request_housekeeping_service: "Housekeeping",
   report_maintenance_issue:     "Maintenance",
