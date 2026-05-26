@@ -118,7 +118,7 @@ export async function executeAutoreplyForPhone(
     if (!globalSopCache || Date.now() - globalSopCache.fetchedAt > SOP_CACHE_TTL_MS) {
       const { data: fetchedDocs } = await (supabaseAdmin as any)
         .from("sop_documents")
-        .select("name, content, source_url, file_path, doc_category")
+        .select("name, content, source_url, file_path, doc_category, storage_bucket")
         .order("created_at", { ascending: true })
         .limit(40);
       globalSopCache = { docs: fetchedDocs ?? [], fetchedAt: Date.now() };
@@ -128,9 +128,10 @@ export async function executeAutoreplyForPhone(
     for (const d of globalSopCache.docs) {
       if (isBrosurDoc(d)) {
         if (d.file_path) {
+          const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
           brosurFiles.push({
             name: d.name,
-            url: `${supabaseUrl}/storage/v1/object/public/sop-documents/${d.file_path}`,
+            url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`,
           });
         }
         continue;
@@ -301,7 +302,10 @@ export function scheduleAutoreply(
   params: ScheduleAutoreplyParams,
 ): void {
   const origin = new URL(request.url).origin;
-  const { delayMs, maxWaitMs } = resolveQueueTiming(params.body, params.smartDelayConfig);
+  const { delayMs, maxWaitMs } = resolveQueueTiming(
+    params.body,
+    params.smartDelayConfig as Parameters<typeof resolveQueueTiming>[1],
+  );
 
   const work = async () => {
     const logPhone = params.phone.slice(-6);
