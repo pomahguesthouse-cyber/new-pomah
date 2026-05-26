@@ -108,8 +108,8 @@ export const frontOfficeAgent: AgentDefinition = {
       "Setelah `create_booking` berhasil: sampaikan sapaan nama tamu, kode booking, " +
         "total harga, lalu instruksi transfer ke rekening (bank, nomor, atas nama) bila tersedia, " +
         "dan minta bukti pembayaran. Bila info rekening kosong, beritahu bahwa staf akan mengirim detail. " +
-        "Jika hasil tool berisi `invoice_pdf_sent: true`, beritahu tamu bahwa bukti pemesanan (invoice PDF) " +
-        "sudah dikirim sebagai lampiran di chat ini, dan JANGAN menempelkan tautan/URL invoice apa pun.",
+        "Beritahu tamu bahwa bukti pemesanan (invoice) akan dikirim melalui pesan terpisah di chat ini, " +
+        "dan JANGAN menempelkan tautan/URL invoice apa pun.",
 
       sopText
         ? "Basis Pengetahuan SOP:\n" +

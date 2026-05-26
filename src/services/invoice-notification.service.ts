@@ -152,18 +152,46 @@ export async function generateAndSendInvoiceNotification({
     const pdfBuffer = await renderToBuffer(doc as any);
 
     // ── 6. Upload PDF to Supabase Storage (upsert so regen works) ───────
+    // Wrap the rendered bytes in a Blob. A raw Node `Buffer` can serialize
+    // incorrectly as a fetch body under the Cloudflare Workers (nodejs_compat)
+    // runtime, producing a "successful" upload call that never persists the
+    // object — which later surfaces as a 404 "Object not found" on the URL.
+    const pdfBlob = new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" });
     const storagePath = `invoices/${bookingId}.pdf`;
-    const { error: uploadErr } = await supabase.storage
+    const { data: uploadData, error: uploadErr } = await supabase.storage
       .from("room-images")
-      .upload(storagePath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+      .upload(storagePath, pdfBlob, { contentType: "application/pdf", upsert: true });
 
-    if (uploadErr) {
-      return { ok: false, error: `Failed to upload PDF: ${uploadErr.message}`, pdf_url: null, wa_sent: false };
+    if (uploadErr || !uploadData?.path) {
+      return {
+        ok: false,
+        error: `Failed to upload PDF: ${uploadErr?.message ?? "upload returned no path"}`,
+        pdf_url: null,
+        wa_sent: false,
+      };
     }
 
     const { data: publicUrlData } = supabase.storage.from("room-images").getPublicUrl(storagePath);
     const pdfPublicUrl = publicUrlData.publicUrl;
     console.log(`[InvoiceNotification] PDF uploaded: ${pdfPublicUrl}`);
+
+    // ── 6.5 Verify the stored object is actually reachable ──────────────
+    // If the upload silently failed (a known Workers failure mode), the public
+    // URL 404s. Handing such a URL to Fonnte makes it reject the ENTIRE message,
+    // so the guest gets nothing. We probe it here and only attach when reachable;
+    // otherwise we still send the message with the working confirmation-page link.
+    let attachmentReachable = false;
+    try {
+      const probe = await fetch(pdfPublicUrl, { method: "GET" });
+      attachmentReachable = probe.ok;
+      if (!probe.ok) {
+        console.warn(
+          `[InvoiceNotification] Stored PDF not reachable (HTTP ${probe.status}) for ${bookingId} — sending link only`,
+        );
+      }
+    } catch (e) {
+      console.warn(`[InvoiceNotification] Could not verify stored PDF reachability for ${bookingId}:`, e);
+    }
 
     // ── 7. Upsert invoices record (Fix 3) ───────────────────────────────
     const invoiceNumber = `INV-${booking.reference_code ?? booking.id.slice(0, 8)}`;
@@ -201,6 +229,13 @@ export async function generateAndSendInvoiceNotification({
       const cleanDomain = (propertyWebsite ?? "https://pomahguesthouse.com").replace(/\/+$/, "");
       const webInvoiceUrl = `${cleanDomain}/book/confirmation/${bookingId}`;
 
+      // When the PDF attachment is reachable we say "terlampir" (attached);
+      // otherwise we point the guest to the confirmation page, which renders
+      // and downloads the invoice client-side and always works.
+      const invoiceLine = attachmentReachable
+        ? `Terlampir adalah invoice PDF resmi untuk reservasi Anda. Anda juga dapat memantau status pembayaran dan detail lengkapnya melalui tautan berikut:\n${webInvoiceUrl}`
+        : `Untuk melihat dan mengunduh invoice resmi serta memantau status pembayaran, silakan buka tautan berikut:\n${webInvoiceUrl}`;
+
       const messageBody = `Halo ${guest.full_name},
 
 Terima kasih telah memesan kamar di ${propertyName}. Reservasi Anda telah berhasil dibuat.
@@ -212,19 +247,20 @@ Berikut ringkasan pemesanan Anda:
 • Check-out: ${fmtDateID(booking.check_out)}
 • Total: ${totalFormatted}${bankDetails}
 
-Terlampir adalah invoice PDF resmi untuk reservasi Anda. Anda juga dapat memantau status pembayaran dan detail lengkapnya melalui tautan berikut:
-${webInvoiceUrl}
+${invoiceLine}
 
 Terima kasih.`;
 
       const filename = `Invoice-${booking.reference_code ?? booking.id.slice(0, 8)}.pdf`;
-      console.log(`[InvoiceNotification] Sending WhatsApp to ${cleanedPhone}…`);
+      console.log(
+        `[InvoiceNotification] Sending WhatsApp to ${cleanedPhone} (attachment: ${attachmentReachable ? "yes" : "link-only"})…`,
+      );
       const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
         fonnte_token,
         cleanedPhone,
         messageBody,
-        pdfPublicUrl,
-        filename,
+        attachmentReachable ? pdfPublicUrl : undefined,
+        attachmentReachable ? filename : undefined,
       );
 
       if (sent) {
