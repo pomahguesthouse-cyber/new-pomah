@@ -277,14 +277,6 @@ export async function executeAutoreplyForPhone(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // When the guest asked for a brochure, also append direct link(s) so they can
-  // open it even if the file attachment can't be delivered. Done after the
-  // image-URL strip above so the links survive.
-  if (!isFallback && brosurFiles.length > 0 && isBrochureRequest(lastMessage)) {
-    const links = brosurFiles.map((f) => `${f.name}:\n${f.url}`).join("\n\n");
-    finalReply = `${finalReply}\n\n${links}`.trim();
-  }
-
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,
     phone,
@@ -293,14 +285,14 @@ export async function executeAutoreplyForPhone(
     attachName,
   );
 
-  // If the attachment broke the send (e.g. unreachable file URL), retry
-  // text-only so the guest still gets a reply instead of silence.
+  // If the attachment broke the send (e.g. unreachable file URL), retry with
+  // the direct link appended so the guest still gets the brochure.
   if (!sent && attachUrl) {
-    console.warn(`[Autoreply] Send with attachment failed (${sendErr}) — retrying text-only`);
+    console.warn(`[Autoreply] Send with attachment failed (${sendErr}) — retrying with link`);
     ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.fonnte_token,
       phone,
-      finalReply,
+      `${finalReply}\n\n${attachUrl}`.trim(),
     ));
   }
 
