@@ -30,16 +30,25 @@ const SOP_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function isBrosurDoc(d: any) {
   const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
-  return cat === "brosur" || cat === "brochure";
+  const name = (d.name as string | undefined)?.toLowerCase() || "";
+  const filePath = (d.file_path as string | undefined)?.toLowerCase() || "";
+  return (
+    cat === "brosur" ||
+    cat === "brochure" ||
+    name.includes("brosur") ||
+    name.includes("brochure") ||
+    filePath.includes("brosur") ||
+    filePath.includes("brochure")
+  );
 }
 
 /** Detect if the guest is requesting brochure / images / photos. */
 const BROCHURE_REQUEST_PATTERNS = [
-  /\b(brosur|brochure|katalog|catalogue|catalog)\b/i,
-  /\b(gambar|foto|photo|picture|image)\b.*\b(kamar|hotel|room|tipe|type|penginapan)\b/i,
-  /\b(kamar|room|tipe|type)\b.*\b(gambar|foto|photo|picture|image)\b/i,
-  /\b(lihat|minta|kirim|kirimin|kasih|tunjuk(?:kan|in)?|ada|boleh|bisa)\b.*\b(gambar|foto|brosur|brochure)\b/i,
-  /\b(gambar|foto|brosur)\b.*\b(lihat|minta|kirim|dong|ya|kak|nya)\b/i,
+  /\b(brosur|brochure|katalog|catalogue|catalog)(?:nya)?\b/i,
+  /\b(gambar|foto|photo|picture|image)(?:nya)?\b.*\b(kamar|hotel|room|tipe|type|penginapan)(?:nya)?\b/i,
+  /\b(kamar|room|tipe|type)(?:nya)?\b.*\b(gambar|foto|photo|picture|image)(?:nya)?\b/i,
+  /\b(lihat|minta|kirim|kirimin|kasih|tunjuk(?:kan|in)?|ada|boleh|bisa)\b.*\b(gambar|foto|brosur|brochure)(?:nya)?\b/i,
+  /\b(gambar|foto|brosur)(?:nya)?\b.*\b(lihat|minta|kirim|dong|ya|kak|nya)\b/i,
 ];
 
 function isBrochureRequest(text: string): boolean {

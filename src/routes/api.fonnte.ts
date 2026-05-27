@@ -424,7 +424,16 @@ export const Route = createFileRoute("/api/fonnte")({
                     const parts: string[] = [];
                     for (const d of (docs ?? [])) {
                       const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
-                      if (cat === "brosur" || cat === "brochure") {
+                      const name = (d.name as string | undefined)?.toLowerCase() || "";
+                      const filePath = (d.file_path as string | undefined)?.toLowerCase() || "";
+                      const isBrosur =
+                        cat === "brosur" ||
+                        cat === "brochure" ||
+                        name.includes("brosur") ||
+                        name.includes("brochure") ||
+                        filePath.includes("brosur") ||
+                        filePath.includes("brochure");
+                      if (isBrosur) {
                         if (d.file_path) {
                           const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
                           brosurFiles.push({ name: d.name, url: `${supaUrl}/storage/v1/object/public/${bucket}/${d.file_path}` });
