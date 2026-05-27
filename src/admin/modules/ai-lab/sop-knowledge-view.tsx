@@ -41,7 +41,11 @@ import { cn } from "@/lib/utils";
 const ACCEPT = ".pdf,.doc,.docx,.txt";
 const ALLOWED = ["pdf", "doc", "docx", "txt"];
 
+const ACCEPT_BROSUR = ".pdf,.jpg,.jpeg,.png,.webp";
+const ALLOWED_BROSUR = ["pdf", "jpg", "jpeg", "png", "webp"];
+
 type DocCategory = "knowledge" | "sop";
+type Tab = DocCategory | "brosur";
 
 const AGENTS = [
   { key: "front-office",   name: "Front Office Agent",   icon: Building2,  desc: "Reservasi, check-in, info tamu" },
@@ -57,7 +61,7 @@ const AGENTS = [
 /* ================================================================== */
 
 export function SopKnowledgeView() {
-  const [tab, setTab] = useState<DocCategory>("knowledge");
+  const [tab, setTab] = useState<Tab>("knowledge");
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -74,9 +78,10 @@ export function SopKnowledgeView() {
         <div className="mb-6 flex gap-1 rounded-lg border border-border bg-muted/40 p-1 w-fit">
           <TabBtn active={tab === "knowledge"} icon={BookOpen}      label="Knowledge" onClick={() => setTab("knowledge")} />
           <TabBtn active={tab === "sop"}       icon={GraduationCap} label="SOP"       onClick={() => setTab("sop")} />
+          <TabBtn active={tab === "brosur"}    icon={Images}        label="Brosur"    onClick={() => setTab("brosur")} />
         </div>
 
-        {tab === "knowledge" ? <KnowledgePanel /> : <SopPanel />}
+        {tab === "knowledge" ? <KnowledgePanel /> : tab === "sop" ? <SopPanel /> : <BrosurPanel />}
 
         {/* Link to Media Library */}
         <a
@@ -197,6 +202,130 @@ function KnowledgePanel() {
 
       <LinkDialog open={linkOpen} docCategory="knowledge" agentKey={null} onClose={() => setLinkOpen(false)} onSaved={refresh} />
     </>
+  );
+}
+
+/* ================================================================== */
+/* Brosur panel (files sent to guests on request)                     */
+/* ================================================================== */
+
+function BrosurPanel() {
+  const qc = useQueryClient();
+  const listFn = useServerFn(listSopDocuments);
+  const createFn = useServerFn(createSopDocument);
+  const deleteFn = useServerFn(deleteSopDocument);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["sop-documents", "brosur"],
+    queryFn: () => listFn({ data: { category: "brosur" } }),
+  });
+  const documents = (data?.documents ?? []) as SopDocument[];
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const refresh = () => qc.invalidateQueries({ queryKey: ["sop-documents", "brosur"] });
+
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+    if (!ALLOWED_BROSUR.includes(ext)) { toast.error("Format harus PDF, JPG, PNG, atau WEBP"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error("Ukuran file maksimal 10 MB"); return; }
+    setUploading(true);
+    try {
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("brosur").upload(path, file, { upsert: false });
+      if (upErr) throw upErr;
+      await createFn({ data: { name: file.name, filePath: path, fileType: ext, docCategory: "brosur", storageBucket: "brosur" } });
+      toast.success("Brosur diunggah");
+      refresh();
+    } catch (err) { toast.error((err as Error).message); } finally { setUploading(false); }
+  };
+
+  const remove = async (doc: SopDocument) => {
+    if (!confirm(`Hapus "${doc.name}"?`)) return;
+    try { await deleteFn({ data: { id: doc.id } }); toast.success("Brosur dihapus"); refresh(); }
+    catch (err) { toast.error((err as Error).message); }
+  };
+
+  return (
+    <>
+      <div className="mb-4 rounded-xl border border-dashed border-teal-300 bg-teal-50 px-4 py-3">
+        <p className="text-sm text-teal-800">
+          File di sini dikirim otomatis oleh chatbot saat tamu meminta brosur, katalog, atau foto kamar.
+          Upload PDF atau gambar (JPG, PNG, WEBP).
+        </p>
+      </div>
+
+      <div className="mb-4 flex justify-end">
+        <input ref={fileRef} type="file" accept={ACCEPT_BROSUR} className="hidden" onChange={onPick} />
+        <Button
+          disabled={uploading}
+          className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+          {uploading ? "Mengunggah..." : "Upload Brosur"}
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Memuat...</p>
+      ) : documents.length === 0 ? (
+        <EmptyState label="Belum ada file brosur." />
+      ) : (
+        <div className="space-y-3">
+          {documents.map((doc) => (
+            <BrosurCard key={doc.id} doc={doc} onDelete={() => remove(doc)} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function BrosurCard({ doc, onDelete }: { doc: SopDocument; onDelete: () => void }) {
+  const bucket = doc.storage_bucket?.trim() || "sop-documents";
+  const publicUrl = doc.file_path
+    ? supabase.storage.from(bucket).getPublicUrl(doc.file_path).data.publicUrl
+    : null;
+  const isImage = /\.(jpe?g|png|webp|gif)$/i.test(doc.file_path ?? "");
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-white p-3">
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-stone-100">
+        {isImage && publicUrl ? (
+          <img src={publicUrl} alt={doc.name} className="h-full w-full object-cover" />
+        ) : (
+          <FileText className="h-5 w-5 text-stone-500" />
+        )}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{doc.name}</p>
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          {doc.file_type ?? "—"} · {formatDateID(doc.created_at)}
+        </p>
+      </div>
+      {publicUrl && (
+        <a
+          href={publicUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-stone-100 hover:text-foreground"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      )}
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-8 shrink-0 px-2 text-xs text-rose-600 hover:text-rose-700"
+        onClick={onDelete}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
 

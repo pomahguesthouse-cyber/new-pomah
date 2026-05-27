@@ -236,11 +236,13 @@ export async function executeAutoreplyForPhone(
 
   // Proactively attach the PDF brochure when the guest asks for brosur/gambar/foto
   if (!isFallback && brosurFiles.length > 0 && isBrochureRequest(lastMessage)) {
-    const pdfBrosur = brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url));
-    if (pdfBrosur) {
-      attachUrl = pdfBrosur.url;
-      attachName = pdfBrosur.name;
-      console.info(`[Autoreply] Brochure request detected — attaching ${pdfBrosur.name}`);
+    // Prefer a PDF brochure, but fall back to any brochure file (e.g. JPG/PNG).
+    const brosur =
+      brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url)) ?? brosurFiles[0];
+    if (brosur) {
+      attachUrl = brosur.url;
+      attachName = brosur.name;
+      console.info(`[Autoreply] Brochure request detected — attaching ${brosur.name}`);
     }
   }
 
