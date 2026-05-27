@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   BarChart3,
   RefreshCw,
+  RotateCcw,
   Info,
 } from "lucide-react";
 import {
@@ -212,6 +213,18 @@ export function SmartDelaySettings() {
     setDirty(true);
   };
 
+  // Fill the recommended default timings (keeps the current enable toggle).
+  const resetToDefaults = () => {
+    update({
+      shortMs:      DEFAULT_SMART_DELAY.shortMs,
+      mediumMs:     DEFAULT_SMART_DELAY.mediumMs,
+      longMs:       DEFAULT_SMART_DELAY.longMs,
+      waitSignalMs: DEFAULT_SMART_DELAY.waitSignalMs,
+      maxDelayMs:   DEFAULT_SMART_DELAY.maxDelayMs,
+    });
+    toast.info("Nilai default diisi — klik Simpan untuk menyimpan.");
+  };
+
   const saveMut = useMutation({
     mutationFn: async () => {
       if (!cfgData?.id) throw new Error("Properti belum tersedia.");
@@ -283,7 +296,24 @@ export function SmartDelaySettings() {
 
       {/* Delay sliders */}
       <Card className={cn("space-y-6 p-5", !cfg.enabled && "pointer-events-none opacity-50")}>
-        <p className="text-sm font-semibold">Waktu Tunggu per Jenis Pesan</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Waktu Tunggu per Jenis Pesan</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetToDefaults}
+            className="h-8 gap-1.5 text-xs"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Atur ke Default
+          </Button>
+        </div>
+        <p className="-mt-3 text-[11px] text-muted-foreground">
+          Default: Pendek {fmtMs(DEFAULT_SMART_DELAY.shortMs)} · Sedang{" "}
+          {fmtMs(DEFAULT_SMART_DELAY.mediumMs)} · Panjang {fmtMs(DEFAULT_SMART_DELAY.longMs)} ·
+          Sinyal Tunggu {fmtMs(DEFAULT_SMART_DELAY.waitSignalMs)} · Maksimum{" "}
+          {fmtMs(DEFAULT_SMART_DELAY.maxDelayMs)}
+        </p>
 
         <DelaySlider
           label="Pesan Sangat Pendek  (< 15 karakter)"

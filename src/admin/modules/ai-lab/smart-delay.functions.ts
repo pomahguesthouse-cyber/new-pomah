@@ -20,11 +20,14 @@ export interface SmartDelayConfig {
 
 export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   enabled: true,
-  shortMs: 6000,
-  mediumMs: 3000,
-  longMs: 1000,
-  waitSignalMs: 8000,
-  maxDelayMs: 10000,
+  shortMs: 5000,
+  mediumMs: 4000,
+  longMs: 2000,
+  waitSignalMs: 7000,
+  // Hard cap from the first message of a burst. The delay now lives in the DB
+  // (process_after), not in the request, so this can comfortably exceed the old
+  // edge-timeout-driven 8s — giving multi-message bursts room to group fully.
+  maxDelayMs: 12000,
 };
 
 const SmartDelayConfigSchema = z.object({
