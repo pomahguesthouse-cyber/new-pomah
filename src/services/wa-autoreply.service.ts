@@ -13,14 +13,12 @@ import {
   deriveAgentLabelFromKey,
 } from "@/ai/multi-agent-orchestrator";
 import { todayWIB } from "@/lib/date";
-import { getWaitUntil } from "@/lib/cf-context";
-import { resolveQueueTiming } from "@/services/queue.service";
+import { queueClaimNext, queueComplete, queueFail } from "@/services/queue.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 
 const AI_TIMEOUT_MS = 22_000;
-const POST_DEADLINE_GRACE_MS = 15_000;
 
 interface SopCache {
   docs: any[];
@@ -64,38 +62,6 @@ export type AutoreplyOutcome =
   | "already_done"
   | "not_claimed"
   | "fatal";
-
-/** Wait until smart-delay window ends (polls DB when queue entry exists). */
-export async function waitForDebounce(
-  entryId: string | null,
-  fallbackDelayMs: number,
-  maxWaitMs: number,
-): Promise<void> {
-  if (!entryId) {
-    await sleep(fallbackDelayMs);
-    return;
-  }
-
-  const deadline = Date.now() + maxWaitMs + POST_DEADLINE_GRACE_MS;
-
-  while (Date.now() < deadline) {
-    const { data: row } = await (supabaseAdmin as any)
-      .from("wa_conversation_queue")
-      .select("process_after, max_wait_until, status")
-      .eq("id", entryId)
-      .maybeSingle();
-
-    if (!row) return;
-    if (row.status === "sent") return;
-    if (!["pending", "waiting"].includes(row.status as string)) return;
-
-    const now = Date.now();
-    const processAfterMs = new Date(row.process_after as string).getTime();
-    if (now >= processAfterMs) return;
-
-    await sleep(Math.min(processAfterMs - now, 2000));
-  }
-}
 
 /** Generate reply and send via Fonnte (no queue claim required). */
 export async function executeAutoreplyForPhone(
@@ -325,114 +291,62 @@ export async function executeAutoreplyForPhone(
   return "ok";
 }
 
-async function claimQueueEntry(
-  entryId: string,
-): Promise<{ claimed: boolean; workerId: string }> {
-  const workerId = `worker_${Math.random().toString(36).substring(2, 15)}`;
-  const { data: claimData, error } = await (supabaseAdmin as any).rpc("wa_queue_claim", {
-    p_entry_id: entryId,
-    p_worker_id: workerId,
-  });
-  if (error) console.error(`[Autoreply] claim error: ${error.message}`);
-  return { claimed: !!claimData?.[0]?.claimed, workerId };
-}
+// Outcomes that must NOT be retried — they are config/permanent, so retrying
+// just burns attempts and delays the 'failed' terminal state.
+const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set([
+  "skipped_config",
+  "no_api_key",
+]);
 
-export interface ScheduleAutoreplyParams {
-  phone: string;
-  body: string;
-  smartDelayConfig: unknown;
-  queueEntryId: string | null;
-}
+/**
+ * Poll-based worker: drain all currently-ready queue entries.
+ *
+ * Each iteration atomically claims the next ready entry (wa_queue_claim_next,
+ * FOR UPDATE SKIP LOCKED), generates + sends the reply, then marks the entry
+ * complete/failed under the claiming worker_id. The debounce/idle window is
+ * enforced entirely by process_after in the DB — this worker never sleeps
+ * waiting for it, so it is safe to run on a short interval and across many
+ * instances concurrently (each entry is claimed by exactly one worker).
+ *
+ * Returns how many entries were processed in this invocation.
+ */
+export async function drainQueue(
+  origin: string,
+  maxBatch = 10,
+): Promise<{ processed: number }> {
+  const workerId = `w-${
+    globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+  }`;
+  let processed = 0;
 
-/** Schedule debounce + autoreply after webhook returns 200. */
-export function scheduleAutoreply(
-  request: Request,
-  params: ScheduleAutoreplyParams,
-): void {
-  const origin = new URL(request.url).origin;
-  const { delayMs, maxWaitMs } = resolveQueueTiming(
-    params.body,
-    params.smartDelayConfig as Parameters<typeof resolveQueueTiming>[1],
-  );
+  for (let i = 0; i < maxBatch; i++) {
+    const claim = await queueClaimNext(supabaseAdmin, workerId);
+    if (!claim) break; // nothing ready → done
 
-  const work = async () => {
-    const logPhone = params.phone.slice(-6);
+    const logPhone = claim.phone.slice(-6);
+    let outcome: AutoreplyOutcome = "fatal";
     try {
-      if (params.queueEntryId) {
-        const { data: row } = await (supabaseAdmin as any)
-          .from("wa_conversation_queue")
-          .select("status")
-          .eq("id", params.queueEntryId)
-          .maybeSingle();
-        if (row?.status === "sent") {
-          console.log(`[Autoreply] ${logPhone} queue already sent`);
-          return;
-        }
-      }
-
-      console.log(
-        `[Autoreply] ${logPhone} debounce start delay=${delayMs}ms max=${maxWaitMs}ms entry=${params.queueEntryId?.slice(0, 8) ?? "none"}`,
-      );
-
-      await waitForDebounce(params.queueEntryId, delayMs, maxWaitMs);
-
-      let workerId = `direct_${Date.now()}`;
-      if (params.queueEntryId) {
-        const claim = await claimQueueEntry(params.queueEntryId);
-        if (!claim.claimed) {
-          for (let i = 0; i < 40; i++) {
-            const { data: row } = await (supabaseAdmin as any)
-              .from("wa_conversation_queue")
-              .select("status")
-              .eq("id", params.queueEntryId)
-              .maybeSingle();
-            if (row?.status === "sent") {
-              console.log(`[Autoreply] ${logPhone} already sent by peer worker`);
-              return;
-            }
-            if (row?.status === "processing") {
-              await sleep(500);
-              continue;
-            }
-            break;
-          }
-          console.log(`[Autoreply] ${logPhone} not_claimed — skip send to avoid duplicate`);
-          return;
-        }
-        workerId = claim.workerId;
-      }
-
-      const outcome = await executeAutoreplyForPhone(params.phone, origin);
-      console.log(`[Autoreply] ${logPhone} outcome=${outcome}`);
-
-      if (params.queueEntryId) {
-        if (outcome === "ok") {
-          await (supabaseAdmin as any).rpc("wa_queue_complete", {
-            p_entry_id: params.queueEntryId,
-            p_worker_id: workerId,
-            p_reply: "sent",
-          });
-        } else {
-          await (supabaseAdmin as any).rpc("wa_queue_fail", {
-            p_entry_id: params.queueEntryId,
-            p_worker_id: workerId,
-            p_error: outcome,
-          }).catch(() => {});
-        }
-      }
+      outcome = await executeAutoreplyForPhone(claim.phone, origin);
     } catch (e) {
-      console.error(`[Autoreply] ${logPhone} fatal:`, e);
+      console.error(`[Drain] ${logPhone} error:`, e);
+      outcome = "fatal";
     }
-  };
 
-  const waitUntil = getWaitUntil();
-  if (waitUntil) {
-    waitUntil(work());
-    console.log(`[Autoreply] ${params.phone.slice(-6)} scheduled via waitUntil`);
-  } else {
-    console.error(
-      `[Autoreply] waitUntil MISSING — background reply may not run for ${params.phone.slice(-6)}`,
-    );
-    void work();
+    if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
+      await queueComplete(
+        supabaseAdmin,
+        claim.entryId,
+        workerId,
+        outcome === "ok" ? "sent" : outcome,
+      );
+    } else {
+      // send_failed / context_error / fatal → retry with backoff (or fail).
+      await queueFail(supabaseAdmin, claim.entryId, workerId, outcome);
+    }
+
+    console.log(`[Drain] ${logPhone} outcome=${outcome} (entry ${claim.entryId.slice(0, 8)})`);
+    processed++;
   }
+
+  return { processed };
 }
