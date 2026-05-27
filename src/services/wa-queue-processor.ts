@@ -33,6 +33,19 @@ function isBrosurDoc(d: any) {
   return cat === "brosur" || cat === "brochure";
 }
 
+/** Detect if the guest is requesting brochure / images / photos. */
+const BROCHURE_REQUEST_PATTERNS = [
+  /\b(brosur|brochure|katalog|catalogue|catalog)\b/i,
+  /\b(gambar|foto|photo|picture|image)\b.*\b(kamar|hotel|room|tipe|type|penginapan)\b/i,
+  /\b(kamar|room|tipe|type)\b.*\b(gambar|foto|photo|picture|image)\b/i,
+  /\b(lihat|minta|kirim|kirimin|kasih|tunjuk(?:kan|in)?|ada|boleh|bisa)\b.*\b(gambar|foto|brosur|brochure)\b/i,
+  /\b(gambar|foto|brosur)\b.*\b(lihat|minta|kirim|dong|ya|kak|nya)\b/i,
+];
+
+function isBrochureRequest(text: string): boolean {
+  return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type WaQueueProcessOutcome =
@@ -281,9 +294,18 @@ export async function processWaQueueEntry(
     let attachUrl: string | undefined;
     let attachName: string | undefined;
 
-    const isImage = (s: string) => /\.(jpe?g|png|webp|gif)(\?|$)/i.test(s);
+    // Proactively attach the PDF brochure when the guest asks for brosur/gambar/foto
+    if (!isFallback && brosurFiles.length > 0 && isBrochureRequest(lastMessage)) {
+      const pdfBrosur = brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url));
+      if (pdfBrosur) {
+        attachUrl = pdfBrosur.url;
+        attachName = pdfBrosur.name;
+        console.info(`[QueueProcessor] Brochure request detected — attaching ${pdfBrosur.name}`);
+      }
+    }
 
-    if (!isFallback && brosurFiles.length > 0) {
+    // Fallback: if LLM mentioned a brosur file name in its reply, attach it
+    if (!attachUrl && !isFallback && brosurFiles.length > 0) {
       for (const f of brosurFiles) {
         const baseName = f.name.replace(/\.[a-z0-9]+$/i, "");
         const lowered = finalReply.toLowerCase();
@@ -291,14 +313,21 @@ export async function processWaQueueEntry(
           lowered.includes(f.name.toLowerCase()) ||
           lowered.includes(baseName.toLowerCase())
         ) {
-          // Only attach non-image materials (e.g. PDF brochures). Photos are removed.
-          if (isImage(f.name) || isImage(f.url)) continue;
-          if (!finalReply.includes(f.url)) finalReply += `\n${f.url}`;
-          if (!attachUrl) {
-            attachUrl = f.url;
-            attachName = f.name;
-          }
+          attachUrl = f.url;
+          attachName = f.name;
+          break;
         }
+      }
+    }
+
+    // If no brochure was attached, check if the LLM provided a PDF URL directly (e.g. invoice)
+    if (!attachUrl) {
+      const pdfMatch = finalReply.match(/(https?:\/\/[^\s]+?\.pdf)/i);
+      if (pdfMatch) {
+        attachUrl = pdfMatch[1];
+        attachName = "Invoice.pdf";
+        // Remove the raw URL from the text body to keep the message clean
+        finalReply = finalReply.replace(pdfMatch[1], "").trim();
       }
     }
 
