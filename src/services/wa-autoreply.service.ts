@@ -29,18 +29,15 @@ interface SopCache {
 let globalSopCache: SopCache | null = null;
 const SOP_CACHE_TTL_MS = 10 * 60 * 1000;
 
+/**
+ * A sendable brochure is a file uploaded via the Brosur tab into the dedicated
+ * public `brosur` bucket. This deliberately excludes Media Library assets
+ * (room photos, banners) which share doc_category='brosur' but live in the
+ * `room-images` bucket and must NOT be sent as brochures.
+ */
 function isBrosurDoc(d: any) {
-  const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
-  const name = (d.name as string | undefined)?.toLowerCase() || "";
-  const filePath = (d.file_path as string | undefined)?.toLowerCase() || "";
-  return (
-    cat === "brosur" ||
-    cat === "brochure" ||
-    name.includes("brosur") ||
-    name.includes("brochure") ||
-    filePath.includes("brosur") ||
-    filePath.includes("brochure")
-  );
+  const bucket = (d.storage_bucket as string | undefined)?.trim().toLowerCase() || "";
+  return bucket === "brosur";
 }
 
 /** Detect if the guest is requesting brochure / images / photos. */

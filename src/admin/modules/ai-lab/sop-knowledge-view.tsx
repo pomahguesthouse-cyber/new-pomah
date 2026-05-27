@@ -219,7 +219,11 @@ function BrosurPanel() {
     queryKey: ["sop-documents", "brosur"],
     queryFn: () => listFn({ data: { category: "brosur" } }),
   });
-  const documents = (data?.documents ?? []) as SopDocument[];
+  // Only files in the dedicated `brosur` bucket are sendable brochures; exclude
+  // Media Library assets (room-images bucket) that share doc_category='brosur'.
+  const documents = ((data?.documents ?? []) as SopDocument[]).filter(
+    (d) => (d.storage_bucket ?? "").toLowerCase() === "brosur",
+  );
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
