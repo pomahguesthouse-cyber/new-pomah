@@ -30,7 +30,6 @@ import {
   runMultiAgentOrchestration,
 }                                             from "@/ai/multi-agent-orchestrator";
 import { todayWIB }                           from "@/lib/date";
-import { scheduleAutoreply }                  from "@/services/wa-autoreply.service";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,52 +156,40 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        // ── 7. Debounce burst, then run AI in waitUntil ────────────────────────────
-        // Memory-buffer behaviour: when a guest fires several messages in quick
-        // succession, wait a short window and let only the LAST message reply — so
-        // the bot answers once with the full context instead of once per message.
-        // Returning 200 first keeps Fonnte from timing out; `waitUntil` keeps the
-        // worker alive until the WhatsApp message is actually sent.
-        console.log(`[Webhook] Scheduling AI (debounced) via waitUntil | ${logCtx}`);
-
+        // ── 7. Enqueue to the conversation buffer, then return 200 ─────────────────
+        // Idle batching is enforced entirely in the DB: each new message in a burst
+        // EXTENDS process_after (capped at max_wait_until) via wa_queue_upsert, so
+        // the bot answers once with the full burst context. The webhook does NOT
+        // wait — a separate poll worker (pg_cron → /api/cron/process-wa-queue, plus
+        // the AFTER INSERT pg_net trigger → /api/queue-worker) atomically claims the
+        // entry once process_after elapses and sends exactly ONE reply, safe across
+        // multiple instances. This keeps the webhook fast and stateless.
         try {
-          const { executeAutoreplyForPhone } = await import("@/services/wa-autoreply.service");
-          const { getWaitUntil } = await import("@/lib/cf-context");
-          const { resolveQueueTiming } = await import("@/services/queue.service");
-          const origin = new URL(request.url).origin;
-          const { delayMs } = resolveQueueTiming(message, c.smart_delay_config as any);
+          const { resolveQueueTiming, queueUpsert, queueCleanupZombies } = await import(
+            "@/services/queue.service"
+          );
+          const { delayMs, maxWaitMs } = resolveQueueTiming(
+            message,
+            c.smart_delay_config as any,
+          );
 
-          const work = async () => {
-            try {
-              if (delayMs > 0) {
-                await new Promise((r) => setTimeout(r, delayMs));
-                // If a newer inbound message arrived during the debounce window,
-                // abort: the later invocation will reply with the full context.
-                const { data: latest } = await (supabaseAdmin as any)
-                  .from("whatsapp_messages")
-                  .select("id")
-                  .eq("thread_id", c.thread_id)
-                  .eq("direction", "in")
-                  .order("sent_at", { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                if (latest?.id && messageId && latest.id !== messageId) {
-                  console.log(`[Webhook] superseded by newer message — skip | ${logCtx}`);
-                  return;
-                }
-              }
-              const outcome = await executeAutoreplyForPhone(customerPhone, origin);
-              console.log(`[Webhook] AI outcome: ${outcome} | ${logCtx}`);
-            } catch (e) {
-              console.error(`[Webhook] AI work error: ${e} | ${logCtx}`);
-            }
-          };
+          // Reset any zombie workers (cheap — partial index on lock_expires_at).
+          await queueCleanupZombies(supabaseAdmin);
 
-          const waitUntil = getWaitUntil();
-          if (waitUntil) waitUntil(work());
-          else void work();
+          const entry = await queueUpsert(supabaseAdmin, {
+            phone:     customerPhone,
+            threadId:  c.thread_id,
+            messageId,
+            body:      message,
+            delayMs,
+            maxWaitMs,
+          });
+
+          console.log(
+            `[Webhook] Enqueued (entry=${entry?.entryId?.slice(0, 8) ?? "none"} delay=${delayMs}ms) | ${logCtx}`,
+          );
         } catch (e) {
-          console.error(`[Webhook] fatal AI error: ${e} | ${logCtx}`);
+          console.error(`[Webhook] enqueue error: ${e} | ${logCtx}`);
         }
 
         return new Response("OK", { status: 200 });

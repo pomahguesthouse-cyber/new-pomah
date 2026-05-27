@@ -103,6 +103,15 @@ export interface ClaimResult {
   attempt:          number;
 }
 
+export interface ClaimNextResult {
+  entryId:          string;
+  phone:            string;
+  threadId:         string;
+  messageCount:     number;
+  lastMessageBody:  string;
+  attempt:          number;
+}
+
 export type QueueStatus =
   | "pending"
   | "waiting"
@@ -185,6 +194,43 @@ export async function queueClaim(
 
   return {
     claimed:         true,
+    messageCount:    row.message_count    ?? 1,
+    lastMessageBody: row.last_message_body ?? "",
+    attempt:         row.attempt          ?? 1,
+  };
+}
+
+/**
+ * Atomically claim the next ready entry across ALL conversations.
+ *
+ * Picks the oldest entry whose idle window (process_after) has elapsed, or a
+ * retrying entry whose backoff has elapsed. Uses FOR UPDATE SKIP LOCKED so
+ * multiple worker instances can poll concurrently without blocking or
+ * double-processing. Returns null when nothing is ready.
+ *
+ * This is the poll-based dispatcher primitive: the debounce window is enforced
+ * purely by process_after in the DB, so workers never sleep inside a request.
+ */
+export async function queueClaimNext(
+  supabase:  AnySupabase,
+  workerId:  string,
+): Promise<ClaimNextResult | null> {
+  const { data, error } = await supabase.rpc("wa_queue_claim_next", {
+    p_worker_id: workerId,
+  });
+
+  if (error) {
+    console.error("[Queue] claim_next error:", error.message);
+    return null;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.entry_id) return null;
+
+  return {
+    entryId:         row.entry_id,
+    phone:           row.phone,
+    threadId:        row.thread_id,
     messageCount:    row.message_count    ?? 1,
     lastMessageBody: row.last_message_body ?? "",
     attempt:         row.attempt          ?? 1,

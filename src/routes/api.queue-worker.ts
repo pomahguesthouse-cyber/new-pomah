@@ -1,42 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { scheduleAutoreply } from "@/services/wa-autoreply.service";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { drainQueue } from "@/services/wa-autoreply.service";
 
-/** pg_net / cron entry — delegates to the same autoreply pipeline as the webhook. */
+/**
+ * Poll-based queue worker.
+ *
+ * Invoked by the pg_cron driver and the AFTER INSERT pg_net trigger. Drains all
+ * currently-ready entries via atomic claim (FOR UPDATE SKIP LOCKED), so it is
+ * safe to call concurrently from multiple instances and ignores the payload —
+ * readiness is decided by process_after in the DB, not by the caller.
+ */
 export const Route = createFileRoute("/api/queue-worker")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const payload = await request.json().catch(() => null);
-        if (!payload?.record?.id) {
-          return new Response("Invalid payload", { status: 400 });
-        }
-
-        const entryId = payload.record.id as string;
-        const { data: row } = await (supabaseAdmin as any)
-          .from("wa_conversation_queue")
-          .select("phone, last_message_body")
-          .eq("id", entryId)
-          .maybeSingle();
-
-        if (!row?.phone) {
-          return new Response("Gone", { status: 200 });
-        }
-
-        const { data: prop } = await (supabaseAdmin as any)
-          .from("properties")
-          .select("smart_delay_config")
-          .limit(1)
-          .maybeSingle();
-
-        scheduleAutoreply(request, {
-          phone:            row.phone,
-          body:             row.last_message_body ?? "",
-          smartDelayConfig: prop?.smart_delay_config,
-          queueEntryId:     entryId,
+        const origin = new URL(request.url).origin;
+        const { processed } = await drainQueue(origin);
+        return new Response(JSON.stringify({ processed }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
         });
-
-        return new Response("Scheduled", { status: 200 });
       },
     },
   },
