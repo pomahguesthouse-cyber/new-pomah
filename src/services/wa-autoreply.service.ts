@@ -13,7 +13,12 @@ import {
   deriveAgentLabelFromKey,
 } from "@/ai/multi-agent-orchestrator";
 import { todayWIB } from "@/lib/date";
-import { queueClaimNext, queueComplete, queueFail } from "@/services/queue.service";
+import {
+  queueClaimNext,
+  queueComplete,
+  queueFail,
+  queueHeartbeat,
+} from "@/services/queue.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -63,10 +68,16 @@ export type AutoreplyOutcome =
   | "not_claimed"
   | "fatal";
 
-/** Generate reply and send via Fonnte (no queue claim required). */
+/**
+ * Generate reply and send via Fonnte (no queue claim required).
+ *
+ * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
+ * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
+ */
 export async function executeAutoreplyForPhone(
   phone: string,
   origin: string,
+  onBeforeAttempt?: () => Promise<void>,
 ): Promise<AutoreplyOutcome> {
   const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
     "get_autoreply_context",
@@ -156,6 +167,8 @@ export async function executeAutoreplyForPhone(
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
+    // Extend the worker lock before each (potentially slow) AI attempt.
+    if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     try {
@@ -326,7 +339,9 @@ export async function drainQueue(
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
     try {
-      outcome = await executeAutoreplyForPhone(claim.phone, origin);
+      outcome = await executeAutoreplyForPhone(claim.phone, origin, () =>
+        queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
+      );
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
