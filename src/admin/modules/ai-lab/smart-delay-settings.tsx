@@ -308,6 +308,12 @@ export function SmartDelaySettings() {
             Atur ke Default
           </Button>
         </div>
+        <p className="-mt-3 text-[11px] text-muted-foreground">
+          Default: Pendek {fmtMs(DEFAULT_SMART_DELAY.shortMs)} · Sedang{" "}
+          {fmtMs(DEFAULT_SMART_DELAY.mediumMs)} · Panjang {fmtMs(DEFAULT_SMART_DELAY.longMs)} ·
+          Sinyal Tunggu {fmtMs(DEFAULT_SMART_DELAY.waitSignalMs)} · Maksimum{" "}
+          {fmtMs(DEFAULT_SMART_DELAY.maxDelayMs)}
+        </p>
 
         <DelaySlider
           label="Pesan Sangat Pendek  (< 15 karakter)"
