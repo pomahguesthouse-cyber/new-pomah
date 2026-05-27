@@ -55,16 +55,10 @@ async function buildEnv(): Promise<OrchestrationEnv> {
   const supaUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
   const parts: string[] = [];
   for (const d of docs ?? []) {
-    const cat = (d.doc_category as string | undefined)?.toLowerCase() || "";
-    const name = (d.name as string | undefined)?.toLowerCase() || "";
-    const filePath = (d.file_path as string | undefined)?.toLowerCase() || "";
+    // Sendable brochures live only in the dedicated public `brosur` bucket
+    // (uploaded via the Brosur tab) — not Media Library assets.
     const isBrosur =
-      cat === "brosur" ||
-      cat === "brochure" ||
-      name.includes("brosur") ||
-      name.includes("brochure") ||
-      filePath.includes("brosur") ||
-      filePath.includes("brochure");
+      ((d.storage_bucket as string | undefined)?.trim().toLowerCase() || "") === "brosur";
     if (isBrosur) {
       if (d.file_path) {
         const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
