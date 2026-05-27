@@ -887,7 +887,11 @@ export function MediaLibraryView() {
     queryKey: ["media-library"],
     queryFn:  () => listFn({ data: { category: "brosur" } }),
   });
-  const brosurDocs = (data?.documents ?? []) as SopDocument[];
+  // Exclude WhatsApp brochures (dedicated `brosur` bucket) — those are managed
+  // in the Brosur tab under Knowledge & SOP, not the Media Library.
+  const brosurDocs = ((data?.documents ?? []) as SopDocument[]).filter(
+    (d) => (d.storage_bucket ?? "").toLowerCase() !== "brosur",
+  );
 
   /* Folders */
   const folderListFn = useServerFn(listMediaFolders);
