@@ -349,13 +349,24 @@ export async function processWaQueueEntry(
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
-    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
+    let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.fonnte_token,
       phone,
       finalReply,
       attachUrl,
       attachName,
     );
+
+    // If the attachment broke the send (e.g. unreachable file URL), retry
+    // text-only so the guest still gets a reply instead of silence.
+    if (!sent && attachUrl) {
+      console.warn(`[QueueProcessor] Send with attachment failed (${sendErr}) — retrying text-only`);
+      ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
+        c.fonnte_token,
+        phone,
+        finalReply,
+      ));
+    }
 
     if (!sent) {
       console.error(`[QueueProcessor] Send failed for ${phone}: ${sendErr}`);
