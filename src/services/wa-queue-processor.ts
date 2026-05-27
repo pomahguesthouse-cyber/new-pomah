@@ -349,6 +349,14 @@ export async function processWaQueueEntry(
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 
+    // When the guest asked for a brochure, also append direct link(s) so they can
+    // open it even if the file attachment can't be delivered. Done after the
+    // image-URL strip above so the links survive.
+    if (!isFallback && brosurFiles.length > 0 && isBrochureRequest(lastMessage)) {
+      const links = brosurFiles.map((f) => `${f.name}:\n${f.url}`).join("\n\n");
+      finalReply = `${finalReply}\n\n${links}`.trim();
+    }
+
     let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.fonnte_token,
       phone,
