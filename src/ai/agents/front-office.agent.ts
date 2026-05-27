@@ -124,9 +124,11 @@ export const frontOfficeAgent: AgentDefinition = {
 
       brosurFiles && brosurFiles.length > 0
         ? "BROSUR & MATERI PROMOSI:\n" +
-          "Saat tamu meminta brosur, katalog, gambar kamar, atau materi promosi, " +
-          "kirimkan link berikut secara langsung. Tulis URL POLOS dan UTUH — jangan potong atau bungkus tanda kurung/markdown.\n" +
-          brosurFiles.map((f) => `• ${f.name}: ${f.url}`).join("\n")
+          "Saat tamu meminta brosur, katalog, gambar kamar, atau foto penginapan, " +
+          "beritahu tamu bahwa file brosur akan dikirimkan bersamaan dengan pesan ini. " +
+          "Contoh: 'Baik Kak, berikut saya kirimkan brosur kami ya.' " +
+          "JANGAN tulis URL atau link brosur — file PDF akan otomatis terlampir.\n" +
+          "File brosur tersedia: " + brosurFiles.map((f) => f.name).join(", ")
         : "",
 
       bookingInProgress
