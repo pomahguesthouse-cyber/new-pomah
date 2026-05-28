@@ -89,6 +89,7 @@ export type RoomRow = {
   images: string[] | null;
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
+  total_physical_rooms?: number | null;
 };
 
 export const DEFAULT_HOTEL_POLICY = [
