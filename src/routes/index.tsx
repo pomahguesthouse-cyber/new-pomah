@@ -308,7 +308,34 @@ function PomahHome() {
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
       <PbZone id="hero" label="Hero Slider" pb={pb}>
-        <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
+        <HeroSlider
+          hero={cfg.hero}
+          fallbackTitle={`Selamat Datang Di ${propertyName}`}
+          rating={{ score: gRating, total: gTotal }}
+          actions={
+            <>
+              <Link
+                to="/book"
+                search={{}}
+                className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-amber-800"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Pesan kamar sekarang
+              </Link>
+              {wa && (
+                <a
+                  href={`https://wa.me/${wa}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-stone-800 shadow-lg transition hover:bg-amber-50"
+                >
+                  <MessageCircle className="h-4 w-4 text-green-600" />
+                  Chat WhatsApp
+                </a>
+              )}
+            </>
+          }
+        />
       </PbZone>
 
       {/* ── DATE PICKER WIDGET ── */}
