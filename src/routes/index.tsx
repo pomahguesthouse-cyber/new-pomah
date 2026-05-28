@@ -36,14 +36,6 @@ import {
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   loader: async () => getPublicSiteData(),
@@ -279,8 +271,6 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
-  const [tempCheckIn, setTempCheckIn] = useState("");
-  const [tempCheckOut, setTempCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
 
   // Detect when the sticky date picker pins to the top — used to stretch
@@ -369,12 +359,12 @@ function PomahHome() {
           <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:-mt-12 md:block" />
           <div
             className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
-              stuck ? "md:max-w-full md:px-4" : "md:max-w-4xl md:px-6"
+              stuck ? "md:max-w-full md:px-10" : "md:max-w-4xl md:px-6"
             }`}
             style={{ zIndex: 60 }}
           >
             <div
-              className={`border border-stone-200 bg-white p-2 shadow-xl md:p-4 ${
+              className={`border border-stone-200 bg-white px-3 py-2 shadow-xl md:px-8 md:py-4 ${
                 stuck ? "rounded-b-2xl md:flex md:items-center md:gap-4" : "rounded-2xl"
               }`}
             >
@@ -594,80 +584,13 @@ function PomahHome() {
                     </p>
                   )}
                   {(usingDateFilter || today) && (
-                    <div className="mt-2 flex flex-col items-center gap-2">
-                      <p className="mt-3 text-sm md:text-base text-stone-600 font-medium">
-                        {usingDateFilter
-                          ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
-                              checkOut,
-                            )} (${nightsBetween(checkIn, checkOut)} Malam)`
-                          : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
-                      </p>
-                      <Dialog
-                        onOpenChange={(open) => {
-                          if (open) {
-                            setTempCheckIn(checkIn || today);
-                            setTempCheckOut(
-                              checkOut ||
-                                (checkIn
-                                  ? isoAddDays(checkIn, 1)
-                                  : today
-                                    ? isoAddDays(today, 1)
-                                    : ""),
-                            );
-                          }
-                        }}
-                      >
-                        <DialogTrigger asChild>
-                          <button
-                            type="button"
-                            className="cursor-pointer rounded-full bg-orange-500 px-6 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 mt-2"
-                          >
-                            Ganti
-                          </button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-[340px] rounded-2xl bg-white p-6 shadow-xl border border-stone-200">
-                          <DialogHeader className="text-left">
-                            <DialogTitle className="font-serif text-lg text-stone-900">Ganti Tanggal</DialogTitle>
-                          </DialogHeader>
-                          <div className="mt-4 space-y-4">
-                            <Field label="Check-In">
-                              <DatePickerID
-                                value={tempCheckIn}
-                                onChange={(val) => {
-                                  setTempCheckIn(val);
-                                  if (tempCheckOut && val >= tempCheckOut) {
-                                    setTempCheckOut(isoAddDays(val, 1));
-                                  }
-                                }}
-                                placeholder="Pilih tanggal"
-                                className="h-10 text-sm"
-                              />
-                            </Field>
-                            <Field label="Check-Out">
-                              <DatePickerID
-                                value={tempCheckOut}
-                                onChange={setTempCheckOut}
-                                min={tempCheckIn || today || undefined}
-                                placeholder="Pilih tanggal"
-                                className="h-10 text-sm"
-                              />
-                            </Field>
-                            <DialogClose asChild>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setCheckIn(tempCheckIn);
-                                  setCheckOut(tempCheckOut);
-                                }}
-                                className="cursor-pointer w-full rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
-                              >
-                                Terapkan
-                              </button>
-                            </DialogClose>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                    <p className="mt-3 text-sm font-medium text-stone-600 md:text-base">
+                      {usingDateFilter
+                        ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
+                            checkOut,
+                          )} (${nightsBetween(checkIn, checkOut)} Malam)`
+                        : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
+                    </p>
                   )}
                 </div>
                 <RoomCarousel
