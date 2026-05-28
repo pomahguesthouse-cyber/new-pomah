@@ -350,10 +350,10 @@ function PomahHome() {
             className="sticky top-24 mx-auto -mt-12 max-w-4xl px-6"
             style={{ zIndex: Math.min(cfg.datePicker.layer, 30) }}
           >
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
+            <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
               {cfg.datePicker.heading && (
                 <p
-                  className={`mb-3 text-center text-amber-700 ${
+                  className={`mb-3 hidden text-center text-amber-700 md:block ${
                     cfg.datePicker.fontFamily === "mono"
                       ? "font-mono"
                       : cfg.datePicker.fontFamily === "sans"
@@ -369,13 +369,13 @@ function PomahHome() {
                   {cfg.datePicker.heading}
                 </p>
               )}
-              <div className="flex flex-col gap-3 md:flex-row md:items-end">
+              <div className="flex flex-row items-end gap-1.5 md:gap-3">
                 <Field label="Check-In">
                   <DatePickerID
                     value={checkIn}
                     onChange={setCheckIn}
-                    placeholder="Pilih tanggal"
-                    className="h-10"
+                    placeholder="Check-in"
+                    className="h-9 text-xs md:h-10 md:text-sm"
                   />
                 </Field>
                 <Field label="Check-Out">
@@ -383,25 +383,25 @@ function PomahHome() {
                     value={checkOut}
                     onChange={setCheckOut}
                     min={checkIn || undefined}
-                    placeholder="Pilih tanggal"
-                    className="h-10"
+                    placeholder="Check-out"
+                    className="h-9 text-xs md:h-10 md:text-sm"
                   />
                 </Field>
                 <Field label="Tamu">
                   <div className="relative">
-                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <Users className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:left-3" />
                     <select
                       value={guests}
                       onChange={(e) => setGuests(Number(e.target.value))}
-                      className="h-10 w-full appearance-none rounded-md border border-stone-200 bg-background pl-9 pr-8 text-sm outline-none focus:ring-1 focus:ring-amber-500"
+                      className="h-9 w-full appearance-none rounded-md border border-stone-200 bg-background pl-8 pr-6 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-8 md:text-sm"
                     >
                       {[1, 2, 3, 4, 5, 6].map((g) => (
                         <option key={g} value={g}>
-                          {g} Tamu
+                          {g}
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:right-3" />
                   </div>
                 </Field>
                 <button
@@ -411,10 +411,11 @@ function PomahHome() {
                       .getElementById("our-room")
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
-                  className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800"
+                  aria-label={cfg.datePicker.buttonLabel}
+                  className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3 text-sm font-semibold text-white transition hover:bg-amber-800 md:h-10 md:px-8"
                 >
                   <Search className="h-4 w-4" />
-                  {cfg.datePicker.buttonLabel}
+                  <span className="hidden md:inline">{cfg.datePicker.buttonLabel}</span>
                 </button>
               </div>
             </div>
@@ -1368,8 +1369,8 @@ function SectionHeading({
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex-1">
-      <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-stone-400">
+    <div className="min-w-0 flex-1">
+      <label className="mb-1 hidden font-mono text-[10px] uppercase tracking-widest text-stone-400 md:block">
         {label}
       </label>
       {children}
