@@ -57,6 +57,14 @@ export interface HeroSlide {
 
 export interface HomepageConfig {
   header: {
+    /**
+     * Visual preset:
+     *  - "pill"        floating white pill over the hero (overlaps)
+     *  - "transparent" transparent bar over the hero, white text (overlaps)
+     *  - "solid"       solid colored bar in flow (no overlap)
+     *  - "minimal"     white bar with dark text in flow (no overlap)
+     */
+    style: "pill" | "transparent" | "solid" | "minimal";
     bgColor: string;
     bookLabel: string;
     links: NavLink[];
@@ -93,6 +101,8 @@ export interface HomepageConfig {
     fontStyle: "normal" | "bold" | "italic";
     /** Gold script accent line under the heading (e.g. "di Semarang"). */
     accent: string;
+    /** Horizontal alignment of the hero content. */
+    textAlign: "left" | "center" | "right";
   };
   bookingHero: {
     slides: HeroSlide[];
@@ -104,6 +114,7 @@ export interface HomepageConfig {
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     accent: string;
+    textAlign: "left" | "center" | "right";
   };
   datePicker: {
     enabled: boolean;
@@ -182,6 +193,7 @@ export const LAYER_MAX = 50;
 /** Sensible defaults used before an admin has saved anything. */
 export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   header: {
+    style: "pill",
     bgColor: "#7c4a21",
     bookLabel: "Pesan Kamar",
     links: [
@@ -216,6 +228,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 48,
     fontStyle: "bold",
     accent: "",
+    textAlign: "center",
   },
   bookingHero: {
     slides: [
@@ -234,6 +247,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 48,
     fontStyle: "bold",
     accent: "",
+    textAlign: "center",
   },
   datePicker: {
     enabled: true,
