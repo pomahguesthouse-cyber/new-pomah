@@ -283,16 +283,23 @@ function PomahHome() {
   const [tempCheckOut, setTempCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
 
-  // Detect when the sticky date picker has crossed the hero — used to stretch
-  // the bar full-width and reveal the logo on the left.
+  // Detect when the sticky date picker pins to the top — used to stretch
+  // the bar full-width and reveal the logo on the left. Uses a sentinel placed
+  // above the sticky wrapper: when it scrolls out of view (top < 0), pinned.
   const [stuck, setStuck] = useState(false);
+  const stuckSentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const threshold = Math.max(120, (cfg.hero.height ?? 480) - 80);
-    const onScroll = () => setStuck(window.scrollY > threshold);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [cfg.hero.height]);
+    const el = stuckSentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setStuck(entry.boundingClientRect.top < 0),
+      { threshold: 0 },
+    );
+    obs.observe(el);
+    // Initial check (in case the page loads already scrolled).
+    setStuck(el.getBoundingClientRect().top < 0);
+    return () => obs.disconnect();
+  }, []);
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -357,6 +364,9 @@ function PomahHome() {
       {/* ── DATE PICKER WIDGET ── */}
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
+          {/* Sentinel — when this leaves the viewport from the top, the picker
+              below has pinned. Observed by the stuck IntersectionObserver. */}
+          <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:block" />
           <div
             className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
               stuck ? "md:max-w-full md:px-4" : "md:max-w-4xl md:px-6"
