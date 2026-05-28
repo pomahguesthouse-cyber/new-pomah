@@ -185,6 +185,19 @@ function RoomBookingPage() {
   const [checkOut, setCheckOut] = useState(
     search.checkOut || isoAddDays(search.checkIn || today, 1),
   );
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkOutOpen, setCheckOutOpen] = useState(false);
+
+  const handleCheckInChange = (val: string) => {
+    setCheckIn(val);
+    setCheckInOpen(false);
+    if (!checkOut || checkOut <= val) {
+      setCheckOut(isoAddDays(val, 1));
+    }
+    setTimeout(() => {
+      setCheckOutOpen(true);
+    }, 150);
+  };
   const [rooms, setRooms] = useState(1);
   const [guests, setGuests] = useState<number>(search.guests ?? 1);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -344,10 +357,22 @@ function RoomBookingPage() {
 
               <div className="mt-5 space-y-4">
                 <Labeled label="Check-in">
-                  <DateField value={checkIn} min={today} onChange={setCheckIn} />
+                  <DateField
+                    value={checkIn}
+                    min={today}
+                    onChange={handleCheckInChange}
+                    open={checkInOpen}
+                    onOpenChange={setCheckInOpen}
+                  />
                 </Labeled>
                 <Labeled label="Check-out">
-                  <DateField value={checkOut} min={isoAddDays(checkIn, 1)} onChange={setCheckOut} />
+                  <DateField
+                    value={checkOut}
+                    min={checkIn ? isoAddDays(checkIn, 1) : today}
+                    onChange={setCheckOut}
+                    open={checkOutOpen}
+                    onOpenChange={setCheckOutOpen}
+                  />
                 </Labeled>
 
                 <Stepper
@@ -799,10 +824,14 @@ function DateField({
   value,
   min,
   onChange,
+  open,
+  onOpenChange,
 }: {
   value: string;
   min?: string;
   onChange: (v: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
     <div>
@@ -810,6 +839,8 @@ function DateField({
         value={value}
         min={min}
         onChange={onChange}
+        open={open}
+        onOpenChange={onOpenChange}
         className="h-[42px] border-stone-200 bg-white shadow-none hover:bg-stone-50"
       />
     </div>

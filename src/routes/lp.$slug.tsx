@@ -36,10 +36,13 @@ import {
 type BookingDates = {
   checkIn: string; checkOut: string; today: string;
   setCheckIn: (v: string) => void; setCheckOut: (v: string) => void;
+  checkInOpen: boolean; setCheckInOpen: (v: boolean) => void;
+  checkOutOpen: boolean; setCheckOutOpen: (v: boolean) => void;
+  handleCheckInChange: (v: string) => void;
 };
 const BookingCtx = createContext<BookingDates | null>(null);
 const isoAddDays = (iso: string, n: number) => {
-  const d = new Date(iso); d.setDate(d.getDate() + n);
+  const d = new Date(`${iso}T00:00:00`); d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
@@ -86,6 +89,20 @@ function LandingPage() {
   const [today, setToday] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkOutOpen, setCheckOutOpen] = useState(false);
+
+  const handleCheckInChange = (val: string) => {
+    setCheckIn(val);
+    setCheckInOpen(false);
+    if (!checkOut || checkOut <= val) {
+      setCheckOut(isoAddDays(val, 1));
+    }
+    setTimeout(() => {
+      setCheckOutOpen(true);
+    }, 150);
+  };
+
   useEffect(() => {
     const d = new Date();
     setToday(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
@@ -121,7 +138,7 @@ function LandingPage() {
   }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled]);
 
   return (
-    <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut }}>
+    <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
       {hasSections ? (
         isSplit ? (
@@ -592,9 +609,30 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
   const ctx = useContext(BookingCtx);
   const [localIn, setLocalIn] = useState("");
   const [localOut, setLocalOut] = useState("");
+  const [localInOpen, setLocalInOpen] = useState(false);
+  const [localOutOpen, setLocalOutOpen] = useState(false);
+
+  const today = ctx?.today ?? "";
   const checkIn = ctx?.checkIn ?? localIn;
   const checkOut = ctx?.checkOut ?? localOut;
-  const setCheckIn = ctx?.setCheckIn ?? setLocalIn;
+  const checkInOpen = ctx?.checkInOpen ?? localInOpen;
+  const checkOutOpen = ctx?.checkOutOpen ?? localOutOpen;
+  const setCheckInOpen = ctx?.setCheckInOpen ?? setLocalInOpen;
+  const setCheckOutOpen = ctx?.setCheckOutOpen ?? setLocalOutOpen;
+
+  const handleCheckInChange = ctx?.handleCheckInChange ?? ((val) => {
+    const setCheckIn = ctx?.setCheckIn ?? setLocalIn;
+    const setCheckOut = ctx?.setCheckOut ?? setLocalOut;
+    setCheckIn(val);
+    setCheckInOpen(false);
+    if (!checkOut || checkOut <= val) {
+      setCheckOut(isoAddDays(val, 1));
+    }
+    setTimeout(() => {
+      setCheckOutOpen(true);
+    }, 150);
+  });
+
   const setCheckOut = ctx?.setCheckOut ?? setLocalOut;
 
   const onSubmit = () => {
@@ -612,11 +650,27 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-stone-500">Check-In</label>
-            <DatePickerID value={checkIn} onChange={setCheckIn} placeholder="Pilih tanggal" className="h-10" />
+            <DatePickerID
+              value={checkIn}
+              onChange={handleCheckInChange}
+              min={today}
+              open={checkInOpen}
+              onOpenChange={setCheckInOpen}
+              placeholder="Pilih tanggal"
+              className="h-10"
+            />
           </div>
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-stone-500">Check-Out</label>
-            <DatePickerID value={checkOut} onChange={setCheckOut} min={checkIn || undefined} placeholder="Pilih tanggal" className="h-10" />
+            <DatePickerID
+              value={checkOut}
+              onChange={setCheckOut}
+              min={checkIn ? isoAddDays(checkIn, 1) : today}
+              open={checkOutOpen}
+              onOpenChange={setCheckOutOpen}
+              placeholder="Pilih tanggal"
+              className="h-10"
+            />
           </div>
           <button type="button" onClick={onSubmit}
             className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800">

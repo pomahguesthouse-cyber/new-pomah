@@ -295,6 +295,20 @@ function PomahHome() {
   // Booking date-picker state.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [checkOutOpen, setCheckOutOpen] = useState(false);
+
+  const handleCheckInChange = (val: string) => {
+    setCheckIn(val);
+    setCheckInOpen(false);
+    if (!checkOut || checkOut <= val) {
+      setCheckOut(isoAddDays(val, 1));
+    }
+    setTimeout(() => {
+      setCheckOutOpen(true);
+    }, 150);
+  };
+
   const [guests, setGuests] = useState(1);
   // Cart of rooms picked from the carousel; keyed by room type id.
   const [cart, setCart] = useState<Record<string, CartItem>>({});
@@ -494,7 +508,10 @@ function PomahHome() {
                 <Field label="Check-In">
                   <DatePickerID
                     value={checkIn}
-                    onChange={setCheckIn}
+                    onChange={handleCheckInChange}
+                    min={today}
+                    open={checkInOpen}
+                    onOpenChange={setCheckInOpen}
                     placeholder="Check-in"
                     className="h-11 text-xs md:h-10 md:text-sm"
                   />
@@ -503,7 +520,9 @@ function PomahHome() {
                   <DatePickerID
                     value={checkOut}
                     onChange={setCheckOut}
-                    min={checkIn || undefined}
+                    min={checkIn ? isoAddDays(checkIn, 1) : today}
+                    open={checkOutOpen}
+                    onOpenChange={setCheckOutOpen}
                     placeholder="Check-out"
                     className="h-11 text-xs md:h-10 md:text-sm"
                   />

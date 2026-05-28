@@ -54,6 +54,8 @@ type Props = {
   disabled?: boolean;
   id?: string;
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -69,8 +71,17 @@ export function DatePickerID({
   disabled,
   id,
   className,
+  open: controlledOpen,
+  onOpenChange,
 }: Props) {
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (o: boolean) => {
+    if (onOpenChange) onOpenChange(o);
+    if (!isControlled) setUncontrolledOpen(o);
+  };
+
   const selected = parseIso(value);
   const minDate = parseIso(min ?? undefined);
 
@@ -126,7 +137,7 @@ export function DatePickerID({
           {value ? formatDateID(value) : placeholder}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="start">
+      <PopoverContent className="w-auto p-3 z-[9999]" align="start">
         {/* Month navigation */}
         <div className="mb-2 flex items-center justify-between">
           <Button
