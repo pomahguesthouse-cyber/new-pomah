@@ -124,6 +124,22 @@ function fmtDateID(iso: string): string {
 function fmtFullDateID(iso: string): string {
   return fmtDateID(iso);
 }
+/**
+ * Parse a free-text Indonesian date ("05 Mei 2026", "10-12 September 2026")
+ * into a sortable epoch (ms). Uses the START day of any range. Returns 0 when
+ * the month/year can't be found, so unparseable items sort last.
+ */
+function parseIdDate(s: string): number {
+  if (!s) return 0;
+  const lower = s.toLowerCase();
+  const monthIdx = ID_MONTHS.findIndex((m) => lower.includes(m.toLowerCase()));
+  const yearMatch = lower.match(/\d{4}/);
+  if (monthIdx < 0 || !yearMatch) return 0;
+  const dayMatch = lower.match(/\b\d{1,2}\b/);
+  const day = dayMatch ? parseInt(dayMatch[0], 10) : 1;
+  return new Date(parseInt(yearMatch[0], 10), monthIdx, day).getTime();
+}
+
 /** Whole nights between two `YYYY-MM-DD` strings. */
 function nightsBetween(a: string, b: string): number {
   return Math.max(
@@ -187,6 +203,7 @@ function PomahHome() {
       title: e.title,
       excerpt: e.desc,
       image: e.image,
+      ts: parseIdDate(e.date),
     })),
     ...exploreCfg.news.map((n) => ({
       date: n.date,
@@ -194,8 +211,11 @@ function PomahHome() {
       title: n.title,
       excerpt: n.desc,
       image: n.image,
+      ts: parseIdDate(n.date),
     })),
-  ].slice(0, 3);
+  ]
+    .sort((a, b) => b.ts - a.ts) // newest first
+    .slice(0, 5);
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {
