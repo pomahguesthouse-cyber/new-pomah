@@ -527,7 +527,7 @@ function PomahHome() {
                     className="h-11 text-xs md:h-10 md:text-sm"
                   />
                 </Field>
-                <Field label="Tamu">
+                <Field label="Tamu" className="flex-none w-[72px] md:flex-1 md:w-auto">
                   <div className="relative">
                     <Users className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:left-3" />
                     <input
@@ -2170,9 +2170,9 @@ function SectionHeading({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="min-w-0 flex-1">
+    <div className={cn("min-w-0 flex-1", className)}>
       <label className="mb-1 hidden font-mono text-[10px] uppercase tracking-widest text-stone-400 md:block">
         {label}
       </label>
