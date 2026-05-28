@@ -347,7 +347,7 @@ function PomahHome() {
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           <div
-            className="sticky top-24 mx-auto -mt-12 max-w-4xl px-6"
+            className="fixed inset-x-0 bottom-0 px-3 pb-3 md:sticky md:bottom-auto md:left-auto md:right-auto md:top-24 md:mx-auto md:-mt-12 md:max-w-4xl md:px-6 md:pb-0"
             style={{ zIndex: Math.min(cfg.datePicker.layer, 30) }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
@@ -375,7 +375,7 @@ function PomahHome() {
                     value={checkIn}
                     onChange={setCheckIn}
                     placeholder="Check-in"
-                    className="h-9 text-xs md:h-10 md:text-sm"
+                    className="h-11 text-xs md:h-10 md:text-sm"
                   />
                 </Field>
                 <Field label="Check-Out">
@@ -384,7 +384,7 @@ function PomahHome() {
                     onChange={setCheckOut}
                     min={checkIn || undefined}
                     placeholder="Check-out"
-                    className="h-9 text-xs md:h-10 md:text-sm"
+                    className="h-11 text-xs md:h-10 md:text-sm"
                   />
                 </Field>
                 <Field label="Tamu">
@@ -393,7 +393,7 @@ function PomahHome() {
                     <select
                       value={guests}
                       onChange={(e) => setGuests(Number(e.target.value))}
-                      className="h-9 w-full appearance-none rounded-md border border-stone-200 bg-background pl-8 pr-6 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-8 md:text-sm"
+                      className="h-11 w-full appearance-none rounded-md border border-stone-200 bg-background pl-8 pr-6 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-8 md:text-sm"
                     >
                       {[1, 2, 3, 4, 5, 6].map((g) => (
                         <option key={g} value={g}>
@@ -412,7 +412,7 @@ function PomahHome() {
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
                   aria-label={cfg.datePicker.buttonLabel}
-                  className="flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3 text-sm font-semibold text-white transition hover:bg-amber-800 md:h-10 md:px-8"
+                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-3 text-sm font-semibold text-white transition hover:bg-amber-800 md:h-10 md:px-8"
                 >
                   <Search className="h-4 w-4" />
                   <span className="hidden md:inline">{cfg.datePicker.buttonLabel}</span>
