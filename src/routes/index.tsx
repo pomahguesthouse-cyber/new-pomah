@@ -632,6 +632,8 @@ function PomahHome() {
                       amenities: null,
                       hero_image_url: rt.hero_image_url ?? null,
                       images: null,
+                      extrabed_rate: rt.extrabed_rate ?? null,
+                      extrabed_capacity: rt.extrabed_capacity ?? null,
                     })
                   }
                 />
@@ -1059,6 +1061,8 @@ type RoomType = {
   capacity?: number | null;
   size_sqm?: number | null;
   hero_image_url?: string | null;
+  extrabed_rate?: number | string | null;
+  extrabed_capacity?: number | null;
 };
 
 function RoomCarousel({

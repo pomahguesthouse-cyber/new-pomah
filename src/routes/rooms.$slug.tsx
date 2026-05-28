@@ -87,6 +87,8 @@ export type RoomRow = {
   amenities: string[] | null;
   hero_image_url: string | null;
   images: string[] | null;
+  extrabed_rate?: number | string | null;
+  extrabed_capacity?: number | null;
 };
 
 export const DEFAULT_HOTEL_POLICY = [
@@ -465,6 +467,7 @@ export function BookingDialog({
   const submit = useServerFn(submitPublicBooking);
 
   const [rooms, setRooms] = useState(initialRooms);
+  const [extrabed, setExtrabed] = useState(0);
   const [checkInTime, setCheckInTime] = useState("14:00");
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [fullName, setFullName] = useState("");
@@ -476,7 +479,9 @@ export function BookingDialog({
 
   const nights = nightsBetween(checkIn, checkOut);
   const rate = Number(room.base_rate ?? 0);
-  const total = rate * nights * rooms;
+  const extrabedRate = Number(room.extrabed_rate ?? 0);
+  const maxExtrabed = Math.max(0, Number(room.extrabed_capacity ?? 0));
+  const total = rate * nights * rooms + extrabedRate * nights * extrabed;
   const policyLines = hotelPolicy
     .split("\n")
     .map((l) => l.trim())
@@ -504,6 +509,7 @@ export function BookingDialog({
           adults: guests,
           children: 0,
           rooms,
+          extrabed,
           checkInTime,
           checkOutTime,
           paymentMethod: payment,
@@ -554,6 +560,38 @@ export function BookingDialog({
               <span className="text-sm text-stone-400">Maks: {maxRooms} kamar</span>
             </div>
           </div>
+
+          {/* Extra bed */}
+          {maxExtrabed > 0 && (
+            <div className="rounded-lg bg-stone-100 p-4">
+              <p className="mb-2 flex items-baseline justify-between font-semibold">
+                <span>
+                  Extrabed{" "}
+                  <span className="text-xs font-normal text-stone-500">
+                    (Maksimal {maxExtrabed})
+                  </span>
+                </span>
+                {extrabedRate > 0 && (
+                  <span className="text-xs font-normal text-stone-500">+{idr(extrabedRate)} / malam</span>
+                )}
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setExtrabed((v) => Math.max(0, v - 1))}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <span className="w-8 text-center text-xl font-bold text-amber-700">{extrabed}</span>
+                <button
+                  onClick={() => setExtrabed((v) => Math.min(maxExtrabed, v + 1))}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Times */}
           <div className="grid grid-cols-2 gap-3">
@@ -615,8 +653,16 @@ export function BookingDialog({
               <span>
                 Kamar: {idr(rate)} × {nights} malam × {rooms} kamar
               </span>
-              <span>{idr(total)}</span>
+              <span>{idr(rate * nights * rooms)}</span>
             </div>
+            {extrabed > 0 && (
+              <div className="mt-1 flex items-center justify-between text-stone-600">
+                <span>
+                  Extrabed: {idr(extrabedRate)} × {nights} malam × {extrabed}
+                </span>
+                <span>{idr(extrabedRate * nights * extrabed)}</span>
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2">
               <span className="text-base font-bold">Total</span>
               <span className="text-xl font-bold text-amber-700">{idr(total)}</span>
