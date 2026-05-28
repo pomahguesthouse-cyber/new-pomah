@@ -18,6 +18,9 @@ import {
   CalendarCheck,
   RectangleHorizontal,
   MapPin,
+  ListOrdered,
+  ArrowUp,
+  ArrowDown,
   Images,
   Plus,
   Trash2,
@@ -74,7 +77,7 @@ import {
   type HomepageConfig,
   type HeroSlide,
 } from "@/admin/modules/homepage/homepage.functions";
-import { LAYER_MIN, LAYER_MAX } from "@/admin/modules/homepage/homepage.config";
+import { LAYER_MIN, LAYER_MAX, HOME_SECTION_LABELS } from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/admin/pages")({
   component: HomepageBuilder,
@@ -83,7 +86,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi" | "order";
 
 const SECTIONS: {
   key: SectionKey;
@@ -97,6 +100,7 @@ const SECTIONS: {
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
   { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
+  { key: "order",         label: "Urutan",        icon: ListOrdered        },
 ];
 
 /**
@@ -367,6 +371,8 @@ function HomepageBuilder() {
                   <StoryTab cfg={cfg} setCfg={setCfg} />
                 ) : section === "lokasi" ? (
                   <LokasiTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "order" ? (
+                  <OrderTab cfg={cfg} setCfg={setCfg} />
                 ) : (
                   <CarouselTab cfg={cfg} setCfg={setCfg} />
                 )}
@@ -1049,6 +1055,58 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           onStyleChange={(v) => set({ fontStyle: v })}
           onSizeChange={(v) => set({ fontSize: v })}
         />
+      </div>
+    </Section>
+  );
+}
+
+function OrderTab({ cfg, setCfg }: TabProps) {
+  const order = cfg.sectionOrder;
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    setCfg((c) => ({ ...c, sectionOrder: next }));
+  };
+  return (
+    <Section
+      title="Urutan Section"
+      desc="Atur urutan tampil section di halaman depan. Hero, date picker, dan footer tetap di posisinya."
+    >
+      <div className="space-y-2">
+        {order.map((key, i) => (
+          <div
+            key={key}
+            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+          >
+            <span className="text-sm font-medium">
+              {i + 1}. {HOME_SECTION_LABELS[key]}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+                aria-label="Naikkan"
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                disabled={i === order.length - 1}
+                onClick={() => move(i, 1)}
+                aria-label="Turunkan"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
       </div>
     </Section>
   );

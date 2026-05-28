@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -28,7 +28,11 @@ import {
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
-import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import {
+  mergeHomepageConfig,
+  type HomepageConfig,
+  type HomeSectionKey,
+} from "@/admin/modules/homepage/homepage.config";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
@@ -418,214 +422,243 @@ function PomahHome() {
         </PbZone>
       )}
 
-      {/* ── TRUST BADGES ── */}
-      <section className="mx-auto max-w-5xl px-6 pt-16">
-        <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-5">
-          {FEATURE_BADGES.map((f) => (
-            <div key={f.title} className="flex flex-col items-center text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm">
-                <f.icon className="h-5 w-5" />
-              </span>
-              <p className="mt-2.5 text-sm font-semibold text-stone-800">{f.title}</p>
-              <p className="text-xs text-stone-400">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {cfg.sectionOrder.map((key) => (
+        <Fragment key={key}>{renderHomeSection(key)}</Fragment>
+      ))}
 
-      {/* ── YOUR PERFECT STAY ── */}
-      <PbZone id="story" label="Your Perfect Stay" pb={pb}>
-        <section className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <SectionHeading
-            fontFamily={cfg.story.fontFamily}
-            fontSize={cfg.story.fontSize}
-            fontStyle={cfg.story.fontStyle}
-          >
-            {cfg.story.heading}
-          </SectionHeading>
-          <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
-            {cfg.story.paragraphs.map((p, i) => (
-              <p key={i}>{p}</p>
-            ))}
-          </div>
-        </section>
-      </PbZone>
+      <PomahFooter name={propertyName} />
 
-      {/* ── GOOGLE RATING ── */}
-      <section className="mx-auto max-w-4xl px-6 pb-16">
-        <div className="flex flex-col items-center">
-          <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
-            <span className="text-base font-bold">G</span> Google Rating
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <div className="flex gap-0.5">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <Star
-                  key={i}
-                  className={`h-5 w-5 ${
-                    i < Math.round(gRating)
-                      ? "fill-amber-400 text-amber-400"
-                      : "fill-stone-200 text-stone-200"
-                  }`}
-                />
+      {wa && (
+        <a
+          href={`https://wa.me/${wa}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Hubungi via WhatsApp"
+          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+        >
+          <MessageCircle className="h-7 w-7" />
+        </a>
+      )}
+    </div>
+  );
+
+  /* ── Reorderable content sections (order controlled by cfg.sectionOrder) ── */
+  function renderHomeSection(key: HomeSectionKey): React.ReactNode {
+    switch (key) {
+      case "badges":
+        return (
+          <section className="mx-auto max-w-5xl px-6 pt-16">
+            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-5">
+              {FEATURE_BADGES.map((f) => (
+                <div key={f.title} className="flex flex-col items-center text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm">
+                    <f.icon className="h-5 w-5" />
+                  </span>
+                  <p className="mt-2.5 text-sm font-semibold text-stone-800">{f.title}</p>
+                  <p className="text-xs text-stone-400">{f.desc}</p>
+                </div>
               ))}
             </div>
-            <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
-          </div>
-          <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
-        </div>
-        <ReviewSlider
-          items={
-            gReviews.length > 0
-              ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
-              : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
-          }
-        />
-      </section>
-
-      {/* ── OUR ROOM (CAROUSEL) ── */}
-      <PbZone id="carousel" label="Our Room" pb={pb}>
-        <section
-          id="our-room"
-          className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
-          style={{
-            zIndex: cfg.roomCarousel.layer,
-            backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
-            backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
-          }}
-        >
-          <div className="mx-auto max-w-6xl px-6">
-            <div className="text-center">
+          </section>
+        );
+      case "story":
+        return (
+          <PbZone id="story" label="Your Perfect Stay" pb={pb}>
+            <section className="mx-auto max-w-4xl px-6 py-20 text-center">
               <SectionHeading
-                normalCase
-                noUnderline
-                fontFamily={cfg.roomCarousel.fontFamily}
-                fontSize={cfg.roomCarousel.fontSize}
-                fontStyle={cfg.roomCarousel.fontStyle}
+                fontFamily={cfg.story.fontFamily}
+                fontSize={cfg.story.fontSize}
+                fontStyle={cfg.story.fontStyle}
               >
-                {cfg.roomCarousel.heading}
+                {cfg.story.heading}
               </SectionHeading>
-              {cfg.roomCarousel.subheading && (
-                <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
-                  {cfg.roomCarousel.subheading}
-                </p>
-              )}
-              {(usingDateFilter || today) && (
-                <div className="mt-2 flex flex-col items-center gap-2">
-                  <p className="mt-3 text-sm md:text-base text-stone-600 font-medium">
-                    {usingDateFilter
-                      ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
-                          checkOut,
-                        )} (${nightsBetween(checkIn, checkOut)} Malam)`
-                      : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
-                  </p>
-                  <Dialog
-                    onOpenChange={(open) => {
-                      if (open) {
-                        setTempCheckIn(checkIn || today);
-                        setTempCheckOut(
-                          checkOut ||
-                            (checkIn
-                              ? isoAddDays(checkIn, 1)
-                              : today
-                                ? isoAddDays(today, 1)
-                                : ""),
-                        );
-                      }
-                    }}
+              <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
+                {cfg.story.paragraphs.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
+            </section>
+          </PbZone>
+        );
+      case "reviews":
+        return (
+          <section className="mx-auto max-w-4xl px-6 py-16">
+            <div className="flex flex-col items-center">
+              <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
+                <span className="text-base font-bold">G</span> Google Rating
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex gap-0.5">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <Star
+                      key={i}
+                      className={`h-5 w-5 ${
+                        i < Math.round(gRating)
+                          ? "fill-amber-400 text-amber-400"
+                          : "fill-stone-200 text-stone-200"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
+              </div>
+              <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
+            </div>
+            <ReviewSlider
+              items={
+                gReviews.length > 0
+                  ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
+                  : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
+              }
+            />
+          </section>
+        );
+      case "rooms":
+        return (
+          <PbZone id="carousel" label="Our Room" pb={pb}>
+            <section
+              id="our-room"
+              className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
+              style={{
+                zIndex: cfg.roomCarousel.layer,
+                backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
+                backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
+              }}
+            >
+              <div className="mx-auto max-w-6xl px-6">
+                <div className="text-center">
+                  <SectionHeading
+                    normalCase
+                    noUnderline
+                    fontFamily={cfg.roomCarousel.fontFamily}
+                    fontSize={cfg.roomCarousel.fontSize}
+                    fontStyle={cfg.roomCarousel.fontStyle}
                   >
-                    <DialogTrigger asChild>
-                      <button
-                        type="button"
-                        className="cursor-pointer rounded-full bg-orange-500 px-6 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 mt-2"
+                    {cfg.roomCarousel.heading}
+                  </SectionHeading>
+                  {cfg.roomCarousel.subheading && (
+                    <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
+                      {cfg.roomCarousel.subheading}
+                    </p>
+                  )}
+                  {(usingDateFilter || today) && (
+                    <div className="mt-2 flex flex-col items-center gap-2">
+                      <p className="mt-3 text-sm md:text-base text-stone-600 font-medium">
+                        {usingDateFilter
+                          ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
+                              checkOut,
+                            )} (${nightsBetween(checkIn, checkOut)} Malam)`
+                          : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
+                      </p>
+                      <Dialog
+                        onOpenChange={(open) => {
+                          if (open) {
+                            setTempCheckIn(checkIn || today);
+                            setTempCheckOut(
+                              checkOut ||
+                                (checkIn
+                                  ? isoAddDays(checkIn, 1)
+                                  : today
+                                    ? isoAddDays(today, 1)
+                                    : ""),
+                            );
+                          }
+                        }}
                       >
-                        Ganti
-                      </button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-[340px] rounded-2xl bg-white p-6 shadow-xl border border-stone-200">
-                      <DialogHeader className="text-left">
-                        <DialogTitle className="font-serif text-lg text-stone-900">Ganti Tanggal</DialogTitle>
-                      </DialogHeader>
-                      <div className="mt-4 space-y-4">
-                        <Field label="Check-In">
-                          <DatePickerID
-                            value={tempCheckIn}
-                            onChange={(val) => {
-                              setTempCheckIn(val);
-                              if (tempCheckOut && val >= tempCheckOut) {
-                                setTempCheckOut(isoAddDays(val, 1));
-                              }
-                            }}
-                            placeholder="Pilih tanggal"
-                            className="h-10 text-sm"
-                          />
-                        </Field>
-                        <Field label="Check-Out">
-                          <DatePickerID
-                            value={tempCheckOut}
-                            onChange={setTempCheckOut}
-                            min={tempCheckIn || today || undefined}
-                            placeholder="Pilih tanggal"
-                            className="h-10 text-sm"
-                          />
-                        </Field>
-                        <DialogClose asChild>
+                        <DialogTrigger asChild>
                           <button
                             type="button"
-                            onClick={() => {
-                              setCheckIn(tempCheckIn);
-                              setCheckOut(tempCheckOut);
-                            }}
-                            className="cursor-pointer w-full rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
+                            className="cursor-pointer rounded-full bg-orange-500 px-6 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-600 mt-2"
                           >
-                            Terapkan
+                            Ganti
                           </button>
-                        </DialogClose>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-[340px] rounded-2xl bg-white p-6 shadow-xl border border-stone-200">
+                          <DialogHeader className="text-left">
+                            <DialogTitle className="font-serif text-lg text-stone-900">Ganti Tanggal</DialogTitle>
+                          </DialogHeader>
+                          <div className="mt-4 space-y-4">
+                            <Field label="Check-In">
+                              <DatePickerID
+                                value={tempCheckIn}
+                                onChange={(val) => {
+                                  setTempCheckIn(val);
+                                  if (tempCheckOut && val >= tempCheckOut) {
+                                    setTempCheckOut(isoAddDays(val, 1));
+                                  }
+                                }}
+                                placeholder="Pilih tanggal"
+                                className="h-10 text-sm"
+                              />
+                            </Field>
+                            <Field label="Check-Out">
+                              <DatePickerID
+                                value={tempCheckOut}
+                                onChange={setTempCheckOut}
+                                min={tempCheckIn || today || undefined}
+                                placeholder="Pilih tanggal"
+                                className="h-10 text-sm"
+                              />
+                            </Field>
+                            <DialogClose asChild>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCheckIn(tempCheckIn);
+                                  setCheckOut(tempCheckOut);
+                                }}
+                                className="cursor-pointer w-full rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
+                              >
+                                Terapkan
+                              </button>
+                            </DialogClose>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <RoomCarousel
-              rooms={rooms}
-              rc={cfg.roomCarousel}
-              availability={availability}
-              checkIn={checkIn}
-              checkOut={checkOut}
-              guests={guests}
-            />
-          </div>
-        </section>
-      </PbZone>
-
-      {/* ── FACILITIES ── */}
-      <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
-        <div className="text-center">
-          <SectionHeading>Facilities</SectionHeading>
-          <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
-            Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
-          </p>
-        </div>
-        <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {FACILITIES.map((f) => (
-            <div
-              key={f.title}
-                className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
-            >
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
-                <f.icon className="h-6 w-6" />
+                <RoomCarousel
+                  rooms={rooms}
+                  rc={cfg.roomCarousel}
+                  availability={availability}
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  guests={guests}
+                />
               </div>
-              <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
-              <p className="mt-1 text-sm text-stone-500">{f.desc}</p>
+            </section>
+          </PbZone>
+        );
+      case "facilities":
+        return (
+          <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
+            <div className="text-center">
+              <SectionHeading>Facilities</SectionHeading>
+              <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+                Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── LOKASI KAMI ── */}
-      <PbZone id="lokasi" label="Lokasi Kami" pb={pb}>
-        <section id="lokasi" className="bg-[#f3ece0] py-20">
+            <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {FACILITIES.map((f) => (
+                <div
+                  key={f.title}
+                  className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
+                >
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                    <f.icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
+                  <p className="mt-1 text-sm text-stone-500">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      case "lokasi":
+        return (
+          <PbZone id="lokasi" label="Lokasi Kami" pb={pb}>
+            <section id="lokasi" className="bg-[#f3ece0] py-20">
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
               <h2 className="font-serif text-3xl font-bold tracking-tight text-amber-700 md:text-4xl">
@@ -680,77 +713,66 @@ function PomahHome() {
             </div>
           </div>
         </section>
-      </PbZone>
-
-      {/* ── NEWS & EVENT (from City Guide) ── */}
-      {newsEvents.length > 0 && (
-        <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
-          <div className="text-center">
-            <SectionHeading>News &amp; Event</SectionHeading>
-            <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
-              Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
-            </p>
-          </div>
-          <NewsEventSlider items={newsEvents} />
-          <div className="mt-10 text-center">
-            <Link
-              to="/explore"
-              className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
-            >
-              Lihat Selengkapnya di City Guide
-            </Link>
-          </div>
-        </section>
-      )}
-
-      {/* ── CTA BANNER ── */}
-      <section className="mx-auto max-w-6xl px-6 pb-20">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
-          <h2 className="font-serif text-2xl font-bold text-white md:text-3xl">
-            Siap menginap di {propertyName}?
-          </h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-amber-100">
-            Booking mudah dan cepat. Tim kami siap menyambut Anda.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              to="/book"
-              search={{}}
-              className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
-            >
-              <CalendarDays className="h-4 w-4" />
-              Pesan kamar sekarang
-            </Link>
-            {wa && (
-              <a
-                href={`https://wa.me/${wa}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-white/40 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+          </PbZone>
+        );
+      case "news":
+        return newsEvents.length > 0 ? (
+          <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
+            <div className="text-center">
+              <SectionHeading>News &amp; Event</SectionHeading>
+              <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+                Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
+              </p>
+            </div>
+            <NewsEventSlider items={newsEvents} />
+            <div className="mt-10 text-center">
+              <Link
+                to="/explore"
+                className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
               >
-                <MessageCircle className="h-4 w-4" />
-                Chat WhatsApp
-              </a>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <PomahFooter name={propertyName} />
-
-      {wa && (
-        <a
-          href={`https://wa.me/${wa}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Hubungi via WhatsApp"
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
-        >
-          <MessageCircle className="h-7 w-7" />
-        </a>
-      )}
-    </div>
-  );
+                Lihat Selengkapnya di City Guide
+              </Link>
+            </div>
+          </section>
+        ) : null;
+      case "cta":
+        return (
+          <section className="mx-auto max-w-6xl px-6 pb-20">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
+              <h2 className="font-serif text-2xl font-bold text-white md:text-3xl">
+                Siap menginap di {propertyName}?
+              </h2>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-amber-100">
+                Booking mudah dan cepat. Tim kami siap menyambut Anda.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/book"
+                  search={{}}
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Pesan kamar sekarang
+                </Link>
+                {wa && (
+                  <a
+                    href={`https://wa.me/${wa}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/40 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Chat WhatsApp
+                  </a>
+                )}
+              </div>
+            </div>
+          </section>
+        );
+      default:
+        return null;
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
