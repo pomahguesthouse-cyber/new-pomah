@@ -129,6 +129,7 @@ function HomepageBuilder() {
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [activeMode, setActiveMode] = useState<"desktop" | "mobile">("desktop");
 
   // Active page in the Site Menu: "home" or a landing-page id.
   const [activePageId, setActivePageId] = useState<string>("home");
@@ -146,7 +147,7 @@ function HomepageBuilder() {
   const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
   
   const activeName = activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
-  const previewSrc = activeLp ? `/lp/${activeLp.slug}` : activePageId === "book" ? "/book?builder=1" : "/?builder=1";
+  const previewSrc = activeLp ? `/lp/${activeLp.slug}?builder=1` : activePageId === "book" ? "/book?builder=1" : "/?builder=1";
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
@@ -301,14 +302,31 @@ function HomepageBuilder() {
         />
 
         {/* ── Centre: live preview ── */}
-        <div className="flex flex-1 items-start justify-center overflow-auto p-6">
-          <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-white shadow-lg">
+        <div className="flex flex-1 items-center justify-center overflow-auto p-6 bg-stone-100">
+          <div
+            className={cn(
+              "transition-all duration-300 overflow-hidden shadow-xl border border-border bg-white relative",
+              activeMode === "mobile" && activeLp
+                ? "w-[390px] h-[800px] border-[12px] border-stone-850 rounded-[36px]"
+                : "w-full max-w-5xl rounded-xl"
+            )}
+          >
+            {activeMode === "mobile" && activeLp && (
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-stone-850 rounded-full z-50 flex items-center justify-center">
+                <div className="w-12 h-1 bg-stone-700 rounded-full" />
+              </div>
+            )}
             <iframe
               ref={iframeRef}
-              key={`${previewKey}-${previewSrc}`}
+              key={`${previewKey}-${previewSrc}-${activeMode}`}
               title="Preview"
               src={previewSrc}
-              className="h-[calc(100vh-9rem)] w-full"
+              className={cn(
+                "w-full transition-all duration-300",
+                activeMode === "mobile" && activeLp 
+                  ? "h-[776px] pt-4" 
+                  : "h-[calc(100vh-9rem)]"
+              )}
             />
           </div>
         </div>
@@ -325,7 +343,7 @@ function HomepageBuilder() {
                 </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-3">
-                <LpPageBuilder sections={lpSections} onChange={setLpSections} />
+                <LpPageBuilder sections={lpSections} onChange={setLpSections} activeMode={activeMode} setActiveMode={setActiveMode} />
               </div>
             </>
           ) : (
