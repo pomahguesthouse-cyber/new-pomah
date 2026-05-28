@@ -10,6 +10,7 @@ import {
   MapPin,
   Clock,
   Star,
+  CalendarDays,
   MessageCircle,
   Menu,
   Quote,
@@ -88,6 +89,30 @@ const REVIEWS = [
   "Kmr nya bersih, rapih dekat dgn Unnes.... pelayanan ramah sekali",
   "Tempatnya nyaman, cocok untuk keluarga. Parkir luas dan aman.",
   "Penginapan murah tapi kualitas oke, staff sangat membantu.",
+];
+
+const NEWS_EVENTS = [
+  {
+    date: "20 Mei 2026",
+    category: "Promo",
+    title: "Promo Menginap Akhir Pekan",
+    excerpt:
+      "Diskon spesial untuk pemesanan kamar di akhir pekan sepanjang bulan ini. Pesan langsung untuk dapatkan harga terbaik.",
+  },
+  {
+    date: "12 Mei 2026",
+    category: "Event",
+    title: "Live Music di Mini Cafe",
+    excerpt:
+      "Nikmati suasana santai dengan live music setiap Sabtu malam di Mini Cafe kami. Terbuka untuk tamu menginap.",
+  },
+  {
+    date: "1 Mei 2026",
+    category: "Info",
+    title: "Fasilitas Balkon Baru",
+    excerpt:
+      "Kini tersedia kamar dengan balkon untuk pengalaman menginap yang lebih nyaman dan pemandangan yang lebih luas.",
+  },
 ];
 
 const ID_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -565,6 +590,36 @@ function PomahHome() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── NEWS & EVENT ── */}
+      <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
+        <div className="text-center">
+          <SectionHeading>News &amp; Event</SectionHeading>
+          <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+            Kabar terbaru, promo, dan acara di {propertyName}.
+          </p>
+        </div>
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {NEWS_EVENTS.map((n) => (
+            <article
+              key={n.title}
+              className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition hover:shadow-xl"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                  {n.date}
+                </span>
+                <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
+                  {n.category}
+                </span>
+              </div>
+              <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
+            </article>
+          ))}
         </div>
       </section>
 
