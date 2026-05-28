@@ -28,3 +28,26 @@ export function todayWIB(): string {
 export function isDateString(v: unknown): v is string {
   return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
+
+/** Current hour (0–23) at UTC+7 (WIB). */
+export function hourWIB(): number {
+  return new Date(Date.now() + 7 * 3600 * 1000).getUTCHours();
+}
+
+/** Current clock as "HH:MM" at UTC+7 (WIB). */
+export function clockWIB(): string {
+  const d = new Date(Date.now() + 7 * 3600 * 1000);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+/**
+ * Time-of-day Indonesian greeting based on the CURRENT WIB time — not on what
+ * the guest typed. Pagi 04–10:59, Siang 11–14:59, Sore 15–17:59, Malam 18–03:59.
+ */
+export function greetingWIB(): string {
+  const h = hourWIB();
+  if (h >= 4 && h < 11) return "Selamat pagi";
+  if (h >= 11 && h < 15) return "Selamat siang";
+  if (h >= 15 && h < 18) return "Selamat sore";
+  return "Selamat malam";
+}
