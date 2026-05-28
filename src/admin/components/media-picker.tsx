@@ -176,8 +176,9 @@ export function MediaPicker({
       listFn({ data: { category: "brosur" } }).then((res) =>
         (res.documents ?? []).map((doc) => {
           const ext = (doc.file_type ?? "").toLowerCase();
+          const bucket = doc.storage_bucket || "sop-documents";
           const url = doc.file_path
-            ? supabase.storage.from("sop-documents").getPublicUrl(doc.file_path).data.publicUrl
+            ? supabase.storage.from(bucket).getPublicUrl(doc.file_path).data.publicUrl
             : "";
           return {
             id: `brosur:${doc.id}`,

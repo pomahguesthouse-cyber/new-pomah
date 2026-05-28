@@ -871,6 +871,7 @@ function UploadBar({ progress, total }: { progress: number; total: number }) {
 
 export function MediaLibraryView() {
   const listFn  = useServerFn(listSopDocuments);
+  const createDocFn = useServerFn(createSopDocument);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const [filter,        setFilter]        = React.useState<FilterType>("all");
@@ -1081,8 +1082,7 @@ export function MediaLibraryView() {
 
         const { error: upErr } = await supabase.storage.from(targetBucket).upload(path, file, { upsert: false });
         if (upErr) throw upErr;
-        const createFn = (await import("@/admin/modules/ai-lab/sop.functions")).createSopDocument;
-        await createFn({
+        await createDocFn({
           data: {
             name: base, filePath: path, fileType: ext, content: "",
             docCategory: "brosur",
@@ -1097,7 +1097,11 @@ export function MediaLibraryView() {
       }
     }
     setTotal(0); setUploaded(0);
-    if (ok > 0) { toast.success(`${ok} file diunggah`); refresh(); }
+    if (ok > 0) {
+      toast.success(`${ok} file diunggah`);
+      refresh();
+      void loadStorage(registeredPaths, false);
+    }
   };
 
   /* ---- Breadcrumb label ---- */
