@@ -279,6 +279,30 @@ function HomepageBuilder() {
               <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </div>
+
+          {/* View Mode Toggle (Desktop / Mobile) */}
+          <div className="ml-4 flex items-center rounded-md border border-input bg-background p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveMode("desktop")}
+              className={cn(
+                "rounded-sm px-3 py-1.5 text-xs font-medium transition",
+                activeMode === "desktop" ? "bg-stone-200 text-stone-900 shadow-sm" : "text-muted-foreground hover:bg-stone-100 hover:text-foreground"
+              )}
+            >
+              Desktop
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMode("mobile")}
+              className={cn(
+                "rounded-sm px-3 py-1.5 text-xs font-medium transition",
+                activeMode === "mobile" ? "bg-stone-200 text-stone-900 shadow-sm" : "text-muted-foreground hover:bg-stone-100 hover:text-foreground"
+              )}
+            >
+              Mobile
+            </button>
+          </div>
         </div>
         <Button
           className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
