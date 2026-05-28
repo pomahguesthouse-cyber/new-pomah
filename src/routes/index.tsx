@@ -324,7 +324,11 @@ function PomahHome() {
         const { [id]: _drop, ...rest } = c;
         return rest;
       }
-      return { ...c, [id]: { ...c[id], rooms: n } };
+      // Clamp extrabed to new max (rooms × extrabed_capacity per room)
+      const perRoomCap = Math.max(0, Number(c[id].room.extrabed_capacity ?? 0));
+      const newMaxExtrabed = perRoomCap * n;
+      const clampedExtrabed = Math.min(c[id].extrabed, newMaxExtrabed);
+      return { ...c, [id]: { ...c[id], rooms: n, extrabed: clampedExtrabed } };
     });
   const setCartExtrabed = (id: string, n: number) =>
     setCart((c) =>
@@ -661,7 +665,7 @@ function PomahHome() {
                 backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
               }}
             >
-              <div className="mx-auto max-w-6xl px-6">
+              <div className="mx-auto max-w-7xl px-6">
                 <div className="text-center">
                   <SectionHeading
                     normalCase
@@ -703,6 +707,7 @@ function PomahHome() {
                       checkOut={checkOut}
                       guests={guests}
                       cart={cart}
+                      cartOpen={cartOpen}
                       onAddRoom={addToCart}
                       onChangeRooms={setCartRooms}
                       onChangeExtrabed={setCartExtrabed}
@@ -1171,6 +1176,7 @@ function RoomCardSteppers({
   onChangeRooms,
   onChangeExtrabed,
   onRemove,
+  compact,
 }: {
   rooms: number;
   extrabed: number;
@@ -1180,70 +1186,73 @@ function RoomCardSteppers({
   onChangeRooms: (v: number) => void;
   onChangeExtrabed: (v: number) => void;
   onRemove: () => void;
+  compact?: boolean;
 }) {
   const dec = (v: number, min = 0) => Math.max(min, v - 1);
   const incRooms = (v: number) => Math.min(maxRooms, v + 1);
   const incExtrabed = (v: number) => Math.min(maxExtrabed, v + 1);
+  const btnSize = compact ? "h-6 w-6" : "h-8 w-8";
+  const iconSize = compact ? "h-3 w-3" : "h-3.5 w-3.5";
   return (
-    <div className="mt-5 space-y-2">
-      <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2">
+    <div className={compact ? "mt-3 space-y-1.5" : "mt-5 space-y-2"}>
+      <div className={`flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 ${compact ? "px-2 py-1.5" : "px-2.5 py-2"}`}>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-900">Jumlah Kamar</p>
-          <p className="text-[10px] text-stone-400">Maksimal {maxRooms}</p>
+          <p className={`font-semibold text-stone-900 ${compact ? "text-xs" : "text-sm"}`}>Jumlah Kamar</p>
+          <p className={compact ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>Maksimal {maxRooms}</p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className={`flex items-center ${compact ? "gap-1" : "gap-1.5"}`}>
           <button
             type="button"
             onClick={() =>
               rooms <= 1 ? onRemove() : onChangeRooms(dec(rooms, 1))
             }
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50"
+            className={`flex ${btnSize} items-center justify-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50`}
             aria-label={rooms <= 1 ? "Hapus" : "Kurangi"}
           >
-            {rooms <= 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+            {rooms <= 1 ? <Trash2 className={iconSize} /> : <Minus className={iconSize} />}
           </button>
-          <span className="w-6 text-center text-sm font-bold text-stone-900 tabular-nums">{rooms}</span>
+          <span className={`w-5 text-center font-bold text-stone-900 tabular-nums ${compact ? "text-xs" : "text-sm"}`}>{rooms}</span>
           <button
             type="button"
             onClick={() => onChangeRooms(incRooms(rooms))}
             disabled={rooms >= maxRooms}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+            className={`flex ${btnSize} items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40`}
             aria-label="Tambah"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className={iconSize} />
           </button>
         </div>
       </div>
 
       {maxExtrabed > 0 && (
-        <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2">
+        <div className={`flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 ${compact ? "px-2 py-1.5" : "px-2.5 py-2"}`}>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-stone-900">
-              Extrabed <span className="text-[10px] font-normal text-stone-400">(Maksimal {maxExtrabed})</span>
+            <p className={`font-semibold text-stone-900 ${compact ? "text-xs" : "text-sm"}`}>
+              Extrabed <span className={`font-normal text-stone-400 ${compact ? "text-[8px]" : "text-[10px]"}`}>(Maks {maxExtrabed})</span>
             </p>
             {extrabedRate > 0 && (
-              <p className="text-[10px] text-stone-400">+Rp{extrabedRate.toLocaleString("id-ID")}</p>
+              <p className={compact ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>+Rp{extrabedRate.toLocaleString("id-ID")}</p>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center ${compact ? "gap-1" : "gap-1.5"}`}>
             <button
               type="button"
               onClick={() => onChangeExtrabed(dec(extrabed))}
               disabled={extrabed <= 0}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+              className={`flex ${btnSize} items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40`}
               aria-label="Kurangi"
             >
-              <Minus className="h-3.5 w-3.5" />
+              <Minus className={iconSize} />
             </button>
-            <span className="w-6 text-center text-sm font-bold text-stone-900 tabular-nums">{extrabed}</span>
+            <span className={`w-5 text-center font-bold text-stone-900 tabular-nums ${compact ? "text-xs" : "text-sm"}`}>{extrabed}</span>
             <button
               type="button"
               onClick={() => onChangeExtrabed(incExtrabed(extrabed))}
               disabled={extrabed >= maxExtrabed}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+              className={`flex ${btnSize} items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40`}
               aria-label="Tambah"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className={iconSize} />
             </button>
           </div>
         </div>
@@ -1579,6 +1588,7 @@ function RoomCarousel({
   checkOut,
   guests = 1,
   cart,
+  cartOpen,
   onAddRoom,
   onChangeRooms,
   onChangeExtrabed,
@@ -1590,6 +1600,7 @@ function RoomCarousel({
   checkOut?: string;
   guests?: number;
   cart?: Record<string, CartItem>;
+  cartOpen?: boolean;
   onAddRoom?: (room: RoomType) => void;
   onChangeRooms?: (id: string, n: number) => void;
   onChangeExtrabed?: (id: string, n: number) => void;
@@ -1746,25 +1757,25 @@ function RoomCarousel({
                     </div>
                   )}
                 </div>
-                <div className="p-6">
+                <div className={cartOpen ? "p-3" : "p-6"}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-serif text-xl font-semibold text-stone-900">{rt.name}</h3>
-                      <p className="mt-1 font-mono text-[11px] uppercase tracking-wider text-stone-400">
+                      <h3 className={`font-serif font-semibold text-stone-900 ${cartOpen ? "text-base" : "text-xl"}`}>{rt.name}</h3>
+                      <p className={`mt-1 font-mono uppercase tracking-wider text-stone-400 ${cartOpen ? "text-[9px]" : "text-[11px]"}`}>
                         {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`]
                            .filter(Boolean)
                            .join(" · ")}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-[10px] text-stone-400">Harga</p>
-                      <p className="text-lg font-bold text-amber-700">
+                      <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>Harga</p>
+                      <p className={`font-bold text-amber-700 ${cartOpen ? "text-sm" : "text-lg"}`}>
                         Rp {Number(rt.base_rate).toLocaleString("id-ID")}
                       </p>
                     </div>
                   </div>
                   {rt.description && (
-                    <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">
+                    <p className={`line-clamp-2 leading-relaxed text-stone-500 ${cartOpen ? "mt-2 text-xs" : "mt-3 text-sm"}`}>
                       {rt.description}
                     </p>
                   )}
@@ -1772,29 +1783,32 @@ function RoomCarousel({
                     const item = cart?.[rt.id];
                     if (rt.capacity != null && rt.capacity < guests && !item) {
                       return (
-                        <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-200 py-2.5 text-center text-sm font-semibold text-stone-500">
+                        <span className={`block cursor-not-allowed rounded-lg bg-stone-200 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
                           Kapasitas tidak cukup
                         </span>
                       );
                     }
                     if (availability && availability[rt.id] === false && !item) {
                       return (
-                        <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">
+                        <span className={`block cursor-not-allowed rounded-lg bg-stone-300 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
                           Tidak Tersedia
                         </span>
                       );
                     }
                     if (item) {
+                      const perRoomExtrabedCap = Math.max(0, Number(rt.extrabed_capacity ?? 0));
+                      const totalMaxExtrabed = perRoomExtrabedCap * item.rooms;
                       return (
                         <RoomCardSteppers
                           rooms={item.rooms}
-                          extrabed={item.extrabed}
+                          extrabed={Math.min(item.extrabed, totalMaxExtrabed)}
                           maxRooms={Math.max(1, Number(rt.total_physical_rooms ?? 0) || 1)}
-                          maxExtrabed={Math.max(0, Number(rt.extrabed_capacity ?? 0))}
+                          maxExtrabed={totalMaxExtrabed}
                           extrabedRate={Number(rt.extrabed_rate ?? 0)}
                           onChangeRooms={(v) => onChangeRooms?.(rt.id, v)}
                           onChangeExtrabed={(v) => onChangeExtrabed?.(rt.id, v)}
                           onRemove={() => onChangeRooms?.(rt.id, 0)}
+                          compact={cartOpen}
                         />
                       );
                     }
@@ -1802,7 +1816,7 @@ function RoomCarousel({
                       <button
                         type="button"
                         onClick={() => onAddRoom?.(rt)}
-                        className="mt-5 block w-full cursor-pointer rounded-lg border border-amber-700 bg-white py-2.5 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
+                        className={`block w-full cursor-pointer rounded-lg border border-amber-700 bg-white text-center font-semibold text-amber-700 transition hover:bg-amber-50 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}
                       >
                         Tambahkan kamar
                       </button>

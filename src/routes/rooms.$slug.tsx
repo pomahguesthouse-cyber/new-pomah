@@ -483,7 +483,8 @@ export function BookingDialog({
   const nights = nightsBetween(checkIn, checkOut);
   const rate = Number(room.base_rate ?? 0);
   const extrabedRate = Number(room.extrabed_rate ?? 0);
-  const maxExtrabed = Math.max(0, Number(room.extrabed_capacity ?? 0));
+  const perRoomExtrabedCap = Math.max(0, Number(room.extrabed_capacity ?? 0));
+  const maxExtrabed = perRoomExtrabedCap * rooms;
   const total = rate * nights * rooms + extrabedRate * nights * extrabed;
   const policyLines = hotelPolicy
     .split("\n")
@@ -548,7 +549,13 @@ export function BookingDialog({
             <p className="mb-2 font-semibold">Jumlah Kamar</p>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setRooms((v) => Math.max(1, v - 1))}
+                onClick={() => {
+                  const newRooms = Math.max(1, rooms - 1);
+                  setRooms(newRooms);
+                  // Clamp extrabed to new max
+                  const newMax = perRoomExtrabedCap * newRooms;
+                  if (extrabed > newMax) setExtrabed(newMax);
+                }}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
               >
                 <Minus className="h-4 w-4" />
