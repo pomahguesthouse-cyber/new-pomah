@@ -24,6 +24,7 @@ import {
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
 import {
@@ -89,30 +90,6 @@ const REVIEWS = [
   "Kmr nya bersih, rapih dekat dgn Unnes.... pelayanan ramah sekali",
   "Tempatnya nyaman, cocok untuk keluarga. Parkir luas dan aman.",
   "Penginapan murah tapi kualitas oke, staff sangat membantu.",
-];
-
-const NEWS_EVENTS = [
-  {
-    date: "20 Mei 2026",
-    category: "Promo",
-    title: "Promo Menginap Akhir Pekan",
-    excerpt:
-      "Diskon spesial untuk pemesanan kamar di akhir pekan sepanjang bulan ini. Pesan langsung untuk dapatkan harga terbaik.",
-  },
-  {
-    date: "12 Mei 2026",
-    category: "Event",
-    title: "Live Music di Mini Cafe",
-    excerpt:
-      "Nikmati suasana santai dengan live music setiap Sabtu malam di Mini Cafe kami. Terbuka untuk tamu menginap.",
-  },
-  {
-    date: "1 Mei 2026",
-    category: "Info",
-    title: "Fasilitas Balkon Baru",
-    excerpt:
-      "Kini tersedia kamar dengan balkon untuk pengalaman menginap yang lebih nyaman dan pemandangan yang lebih luas.",
-  },
 ];
 
 const ID_DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
@@ -198,6 +175,27 @@ function PomahHome() {
   const cfg = mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
+
+  // News & Event — sourced from the same City Guide data as /explore.
+  const exploreCfg = mergeExploreConfig(
+    (property as { explore_config?: unknown } | null | undefined)?.explore_config,
+  );
+  const newsEvents = [
+    ...exploreCfg.events.map((e) => ({
+      date: e.date,
+      category: e.label || "Event",
+      title: e.title,
+      excerpt: e.desc,
+      image: e.image,
+    })),
+    ...exploreCfg.news.map((n) => ({
+      date: n.date,
+      category: n.label || "Berita",
+      title: n.title,
+      excerpt: n.desc,
+      image: n.image,
+    })),
+  ].slice(0, 3);
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {
@@ -593,35 +591,57 @@ function PomahHome() {
         </div>
       </section>
 
-      {/* ── NEWS & EVENT ── */}
-      <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
-        <div className="text-center">
-          <SectionHeading>News &amp; Event</SectionHeading>
-          <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
-            Kabar terbaru, promo, dan acara di {propertyName}.
-          </p>
-        </div>
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {NEWS_EVENTS.map((n) => (
-            <article
-              key={n.title}
-              className="flex h-full flex-col rounded-2xl border border-stone-200 bg-white p-6 shadow-sm transition hover:shadow-xl"
+      {/* ── NEWS & EVENT (from City Guide) ── */}
+      {newsEvents.length > 0 && (
+        <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
+          <div className="text-center">
+            <SectionHeading>News &amp; Event</SectionHeading>
+            <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+              Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {newsEvents.map((n) => (
+              <article
+                key={`${n.title}-${n.date}`}
+                className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl"
+              >
+                {n.image && (
+                  <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
+                    <img
+                      src={n.image}
+                      alt={n.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {n.date}
+                    </span>
+                    <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+                      {n.category}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
+                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="mt-10 text-center">
+            <Link
+              to="/explore"
+              className="inline-flex items-center gap-2 rounded-full bg-teal-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800"
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                  {n.date}
-                </span>
-                <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-700">
-                  {n.category}
-                </span>
-              </div>
-              <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+              Lihat Selengkapnya di City Guide
+            </Link>
+          </div>
+        </section>
+      )}
 
       <PomahFooter name={propertyName} />
 
