@@ -347,7 +347,7 @@ function PomahHome() {
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           <div
-            className="relative mx-auto -mt-12 max-w-4xl px-6"
+            className="sticky top-20 mx-auto -mt-12 max-w-4xl px-6"
             style={{ zIndex: cfg.datePicker.layer }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
