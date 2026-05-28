@@ -19,8 +19,7 @@ import {
   RectangleHorizontal,
   MapPin,
   ListOrdered,
-  ArrowUp,
-  ArrowDown,
+  GripVertical,
   Images,
   Plus,
   Trash2,
@@ -1062,49 +1061,55 @@ function StoryTab({ cfg, setCfg }: TabProps) {
 
 function OrderTab({ cfg, setCfg }: TabProps) {
   const order = cfg.sectionOrder;
-  const move = (i: number, dir: -1 | 1) => {
-    const j = i + dir;
-    if (j < 0 || j >= order.length) return;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= order.length || to >= order.length) return;
     const next = [...order];
-    [next[i], next[j]] = [next[j], next[i]];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
     setCfg((c) => ({ ...c, sectionOrder: next }));
   };
+
   return (
     <Section
       title="Urutan Section"
-      desc="Atur urutan tampil section di halaman depan. Hero, date picker, dan footer tetap di posisinya."
+      desc="Seret kartu untuk mengubah urutan tampil di halaman depan. Hero, date picker, dan footer tetap di posisinya."
     >
       <div className="space-y-2">
         {order.map((key, i) => (
           <div
             key={key}
-            className="flex items-center justify-between rounded-lg border border-border px-3 py-2"
+            draggable
+            onDragStart={() => setDragIdx(i)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (overIdx !== i) setOverIdx(i);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIdx !== null) reorder(dragIdx, i);
+              setDragIdx(null);
+              setOverIdx(null);
+            }}
+            onDragEnd={() => {
+              setDragIdx(null);
+              setOverIdx(null);
+            }}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-2.5 transition cursor-grab active:cursor-grabbing",
+              dragIdx === i
+                ? "border-teal-400 bg-teal-50/60 opacity-60"
+                : overIdx === i
+                  ? "border-teal-400 bg-teal-50/40"
+                  : "border-border bg-background",
+            )}
           >
+            <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="text-sm font-medium">
               {i + 1}. {HOME_SECTION_LABELS[key]}
             </span>
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={i === 0}
-                onClick={() => move(i, -1)}
-                aria-label="Naikkan"
-              >
-                <ArrowUp className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                disabled={i === order.length - 1}
-                onClick={() => move(i, 1)}
-                aria-label="Turunkan"
-              >
-                <ArrowDown className="h-3.5 w-3.5" />
-              </Button>
-            </div>
           </div>
         ))}
       </div>
