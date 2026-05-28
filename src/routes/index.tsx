@@ -635,7 +635,7 @@ function PomahHome() {
       case "badges":
         return (
           <section className="mx-auto max-w-5xl px-6 pt-16">
-            <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-5">
+            <div className="grid grid-cols-4 gap-4 md:gap-6">
               {FEATURE_BADGES.map((f) => (
                 <div key={f.title} className="flex flex-col items-center text-center">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12">
