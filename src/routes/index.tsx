@@ -366,7 +366,7 @@ function PomahHome() {
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           {/* Sentinel — when this leaves the viewport from the top, the picker
               below has pinned. Observed by the stuck IntersectionObserver. */}
-          <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:block" />
+          <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:-mt-12 md:block" />
           <div
             className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
               stuck ? "md:max-w-full md:px-4" : "md:max-w-4xl md:px-6"
