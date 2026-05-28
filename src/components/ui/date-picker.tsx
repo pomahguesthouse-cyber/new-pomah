@@ -1,7 +1,7 @@
 import * as React from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { cn, formatDateID } from "@/lib/utils";
+import { cn, formatDateID, formatDateShortID } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -56,6 +56,8 @@ type Props = {
   className?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Jika true, tampilkan format pendek "18 Mei" di mobile dan format panjang di desktop. */
+  shortFormat?: boolean;
 };
 
 /**
@@ -73,6 +75,7 @@ export function DatePickerID({
   className,
   open: controlledOpen,
   onOpenChange,
+  shortFormat = false,
 }: Props) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -134,7 +137,14 @@ export function DatePickerID({
           )}
         >
           <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
-          {value ? formatDateID(value) : placeholder}
+          {value ? (
+            shortFormat ? (
+              <>
+                <span className="md:hidden">{formatDateShortID(value)}</span>
+                <span className="hidden md:inline">{formatDateID(value)}</span>
+              </>
+            ) : formatDateID(value)
+          ) : placeholder}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-3 z-[9999]" align="start">

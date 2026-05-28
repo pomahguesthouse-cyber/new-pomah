@@ -514,6 +514,7 @@ function PomahHome() {
                     onOpenChange={setCheckInOpen}
                     placeholder="Check-in"
                     className="h-11 text-xs md:h-10 md:text-sm"
+                    shortFormat
                   />
                 </Field>
                 <Field label="Check-Out">
@@ -525,6 +526,7 @@ function PomahHome() {
                     onOpenChange={setCheckOutOpen}
                     placeholder="Check-out"
                     className="h-11 text-xs md:h-10 md:text-sm"
+                    shortFormat
                   />
                 </Field>
                 <Field label="Tamu" className="flex-none w-[72px] md:flex-1 md:w-auto">

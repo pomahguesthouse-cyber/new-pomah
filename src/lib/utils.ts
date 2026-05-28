@@ -58,6 +58,13 @@ export function formatDateID(input: string | number | Date | null | undefined): 
   return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
+/** "18 Mei" — tanggal + nama bulan, tanpa tahun */
+export function formatDateShortID(input: string | number | Date | null | undefined): string {
+  const d = toDate(input);
+  if (!d) return "—";
+  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]}`;
+}
+
 /** "15/05/2026" (format baru) */
 export function formatDateMediumID(input: string | number | Date | null | undefined): string {
   return formatDateID(input);
