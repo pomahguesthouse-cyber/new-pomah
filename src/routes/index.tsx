@@ -638,11 +638,11 @@ function PomahHome() {
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-5">
               {FEATURE_BADGES.map((f) => (
                 <div key={f.title} className="flex flex-col items-center text-center">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm">
-                    <f.icon className="h-5 w-5" />
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12">
+                    <f.icon className="h-4 w-4 md:h-5 md:w-5" />
                   </span>
-                  <p className="mt-2.5 text-sm font-semibold text-stone-800">{f.title}</p>
-                  <p className="text-xs text-stone-400">{f.desc}</p>
+                  <p className="mt-2 text-xs font-semibold text-stone-800 md:text-sm">{f.title}</p>
+                  <p className="text-[10px] text-stone-400 md:text-xs">{f.desc}</p>
                 </div>
               ))}
             </div>

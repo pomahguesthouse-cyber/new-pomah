@@ -430,13 +430,6 @@ export function PomahNav({
 
   const actionsEl = (
     <div className="flex items-center gap-3" key="actions">
-      <Link
-        to="/book"
-        search={{}}
-        className="rounded-full bg-amber-700 px-5 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
-      >
-        {header.bookLabel}
-      </Link>
       <button className={`md:hidden ${darkText ? "text-stone-700" : "text-white"}`} aria-label="Menu">
         <Menu className="h-5 w-5" />
       </button>
