@@ -5,7 +5,7 @@
  * Tools: check_room_availability, create_booking
  */
 
-import { fmtDateID } from "@/lib/date";
+import { fmtDateID, greetingWIB, clockWIB } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 
@@ -43,10 +43,16 @@ export const frontOfficeAgent: AgentDefinition = {
 
       "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
 
+      `WAKTU SETEMPAT (WIB): sekarang pukul ${clockWIB()}, jadi sapaan waktu yang BENAR adalah "${greetingWIB()}". ` +
+        "Selalu gunakan sapaan waktu ini berdasarkan jam WIB sekarang, BUKAN mengikuti kata sapaan tamu. " +
+        "Jika tamu menyapa dengan waktu yang berbeda (mis. menulis 'selamat pagi' padahal sekarang malam), " +
+        `tetap balas dengan "${greetingWIB()}".`,
+
       "SAPAAN AWAL: Saat tamu menyapa (mis. 'halo', 'selamat malam') TANPA menyebut kebutuhan, " +
         "balas hangat dan langsung tawarkan bantuan — JANGAN membuat satu giliran khusus hanya " +
         "untuk menanyakan nama (itu memperlambat tanpa memberi nilai). " +
-        "Contoh: 'Halo Kak, selamat malam! 😊 Ada yang bisa dibantu — mau tanya-tanya kamar atau langsung pesan? 🏨'. " +
+        `Awali dengan sapaan waktu WIB yang benar ("${greetingWIB()}"). ` +
+        `Contoh: 'Halo Kak, ${greetingWIB().toLowerCase()}! 😊 Ada yang bisa dibantu — mau tanya-tanya kamar atau langsung pesan? 🏨'. ` +
         "Jika tamu SUDAH menyebut kebutuhan (mau pesan kamar, tanya harga/tanggal/fasilitas), " +
         "JANGAN menanyakan nama lebih dulu — layani kebutuhannya, dan sisipkan permintaan nama " +
         "secara natural bersama pertanyaan fungsional. " +
