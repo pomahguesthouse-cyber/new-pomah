@@ -25,6 +25,37 @@ import { AiSidebar } from "@/admin/components/ai-sidebar";
 import { syncExploreFromAI } from "@/admin/modules/explore/ai-agent.functions";
 import { Sparkles } from "lucide-react";
 
+function getDisplayImageUrl(url: string | undefined | null) {
+  if (!url) return "";
+  if (url.includes("maps.googleapis.com/maps/api/place/photo")) {
+    try {
+      const parsedUrl = new URL(url);
+      const photoReference = parsedUrl.searchParams.get("photo_reference");
+      if (photoReference) {
+        return `/api/place-photo?photo_reference=${encodeURIComponent(photoReference)}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return url;
+}
+
+const handleImageError = (
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  fallbackType: "dest" | "culinary" | "event" | "news"
+) => {
+  const target = e.currentTarget;
+  target.onerror = null;
+  if (fallbackType === "culinary") {
+    target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400";
+  } else if (fallbackType === "event") {
+    target.src = "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=400";
+  } else {
+    target.src = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=600";
+  }
+};
+
 export const Route = createFileRoute("/admin/explore")({
   component: AdminExplorePage,
 });
@@ -372,7 +403,7 @@ function AdminExplorePage() {
                   onClick={() => setPickerState({ open: true, target: { type: "dest", index: i } })}
                 >
                   {dest.image ? (
-                    <img src={dest.image} alt={dest.name} className="w-full h-full object-cover" />
+                    <img src={getDisplayImageUrl(dest.image)} alt={dest.name} onError={(e) => handleImageError(e, "dest")} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
                   )}
@@ -606,7 +637,7 @@ function AdminExplorePage() {
                   onClick={() => setPickerState({ open: true, target: { type: "culinary", index: i } })}
                 >
                   {cul.image ? (
-                    <img src={cul.image} alt={cul.name} className="w-full h-full object-cover" />
+                    <img src={getDisplayImageUrl(cul.image)} alt={cul.name} onError={(e) => handleImageError(e, "culinary")} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
                   )}
@@ -839,7 +870,7 @@ function AdminExplorePage() {
                     onClick={() => setPickerState({ open: true, target: { type: "event", index: i } })}
                   >
                     {ev.image ? (
-                      <img src={ev.image} alt={ev.title} className="w-full h-full object-cover" />
+                      <img src={getDisplayImageUrl(ev.image)} alt={ev.title} onError={(e) => handleImageError(e, "event")} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
                     )}
@@ -986,7 +1017,7 @@ function AdminExplorePage() {
                     onClick={() => setPickerState({ open: true, target: { type: "news", index: i } })}
                   >
                     {nw.image ? (
-                      <img src={nw.image} alt={nw.title} className="w-full h-full object-cover" />
+                      <img src={getDisplayImageUrl(nw.image)} alt={nw.title} onError={(e) => handleImageError(e, "news")} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
                     )}

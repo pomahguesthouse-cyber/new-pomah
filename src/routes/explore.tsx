@@ -74,6 +74,37 @@ function useCurrentTime() {
   return now;
 }
 
+function getDisplayImageUrl(url: string | undefined | null) {
+  if (!url) return "";
+  if (url.includes("maps.googleapis.com/maps/api/place/photo")) {
+    try {
+      const parsedUrl = new URL(url);
+      const photoReference = parsedUrl.searchParams.get("photo_reference");
+      if (photoReference) {
+        return `/api/place-photo?photo_reference=${encodeURIComponent(photoReference)}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return url;
+}
+
+const handleImageError = (
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  fallbackType: "dest" | "culinary" | "event" | "news"
+) => {
+  const target = e.currentTarget;
+  target.onerror = null;
+  if (fallbackType === "culinary") {
+    target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400";
+  } else if (fallbackType === "event") {
+    target.src = "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=400";
+  } else {
+    target.src = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=600";
+  }
+};
+
 const CATEGORIES = [
   { key: "all", label: "Semua", icon: LayoutGrid },
   { key: "dest", label: "Destinasi", icon: MapPin },
@@ -286,7 +317,7 @@ function ExploreSemarang() {
         ) : (
           <div
             className="absolute inset-0 bg-cover bg-center"
-            style={{ backgroundImage: `url('${config.hero.bgImageUrl}')` }}
+            style={{ backgroundImage: `url('${getDisplayImageUrl(config.hero.bgImageUrl)}')` }}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-900/60 to-stone-950/45" />
@@ -456,8 +487,9 @@ function ExploreSemarang() {
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {dest.image ? (
                                 <img
-                                  src={dest.image}
+                                  src={getDisplayImageUrl(dest.image)}
                                   alt={dest.name}
+                                  onError={(e) => handleImageError(e, "dest")}
                                   className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                                 />
                               ) : (
@@ -551,8 +583,9 @@ function ExploreSemarang() {
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {cul.image ? (
                                 <img
-                                  src={cul.image}
+                                  src={getDisplayImageUrl(cul.image)}
                                   alt={cul.name}
+                                  onError={(e) => handleImageError(e, "culinary")}
                                   className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                                 />
                               ) : (
@@ -650,8 +683,9 @@ function ExploreSemarang() {
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {dest.image ? (
                             <img
-                              src={dest.image}
+                              src={getDisplayImageUrl(dest.image)}
                               alt={dest.name}
+                              onError={(e) => handleImageError(e, "dest")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
                           ) : (
@@ -702,8 +736,9 @@ function ExploreSemarang() {
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {cul.image ? (
                             <img
-                              src={cul.image}
+                              src={getDisplayImageUrl(cul.image)}
                               alt={cul.name}
+                              onError={(e) => handleImageError(e, "culinary")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
                           ) : (
@@ -753,8 +788,9 @@ function ExploreSemarang() {
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {ev.image ? (
                             <img
-                              src={ev.image}
+                              src={getDisplayImageUrl(ev.image)}
                               alt={ev.title}
+                              onError={(e) => handleImageError(e, "event")}
                               className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
                             />
                           ) : (
@@ -828,7 +864,12 @@ function ExploreSemarang() {
                     {/* Image */}
                     <div className="w-22 h-[92px] shrink-0 rounded-lg overflow-hidden bg-stone-100">
                       {item.image ? (
-                        <img src={item.image} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-103" />
+                        <img
+                          src={getDisplayImageUrl(item.image)}
+                          alt={item.title}
+                          onError={(e) => handleImageError(e, item.type === "event" ? "event" : "news")}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-103"
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-stone-300 text-[10px]">
                           No Img

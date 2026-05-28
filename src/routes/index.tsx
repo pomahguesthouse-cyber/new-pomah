@@ -1044,6 +1044,37 @@ type NewsEventItem = {
   image: string;
 };
 
+function getDisplayImageUrl(url: string | undefined | null) {
+  if (!url) return "";
+  if (url.includes("maps.googleapis.com/maps/api/place/photo")) {
+    try {
+      const parsedUrl = new URL(url);
+      const photoReference = parsedUrl.searchParams.get("photo_reference");
+      if (photoReference) {
+        return `/api/place-photo?photo_reference=${encodeURIComponent(photoReference)}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return url;
+}
+
+const handleImageError = (
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  fallbackType: "dest" | "culinary" | "event" | "news"
+) => {
+  const target = e.currentTarget;
+  target.onerror = null;
+  if (fallbackType === "culinary") {
+    target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400";
+  } else if (fallbackType === "event") {
+    target.src = "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=400";
+  } else {
+    target.src = "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=600";
+  }
+};
+
 function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
   const [cardsPerView, setCardsPerView] = useState(3);
   useEffect(() => {
@@ -1154,9 +1185,10 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                 {n.image && (
                   <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
                     <img
-                      src={n.image}
+                      src={getDisplayImageUrl(n.image)}
                       alt={n.title}
                       loading="lazy"
+                      onError={(e) => handleImageError(e, n.category.toLowerCase().includes("event") ? "event" : "news")}
                       className="h-full w-full object-cover"
                     />
                   </div>

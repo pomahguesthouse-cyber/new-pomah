@@ -210,7 +210,7 @@ export const autoFillFromGoogleMaps = createServerFn({ method: "POST" })
       
       let imageUrl = "";
       if (result.photos && result.photos.length > 0) {
-        imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=${result.photos[0].photo_reference}&key=${apiKey}`;
+        imageUrl = `/api/place-photo?photo_reference=${result.photos[0].photo_reference}`;
       }
 
       let nearby_distance = "";

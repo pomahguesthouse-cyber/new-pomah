@@ -22,6 +22,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
+import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
@@ -104,6 +105,11 @@ const LpSlugRoute = LpSlugRouteImport.update({
 const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
   id: '/api/queue-worker',
   path: '/api/queue-worker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
+  id: '/api/place-photo',
+  path: '/api/place-photo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiFonnteRoute = ApiFonnteRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByTo {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
+  '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/place-photo'
     | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/place-photo'
     | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
+    | '/api/place-photo'
     | '/api/queue-worker'
     | '/lp/$slug'
     | '/rooms/$slug'
@@ -406,6 +418,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiFonnteRoute: typeof ApiFonnteRoute
+  ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
@@ -507,6 +520,13 @@ declare module '@tanstack/react-router' {
       path: '/api/queue-worker'
       fullPath: '/api/queue-worker'
       preLoaderRoute: typeof ApiQueueWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/place-photo': {
+      id: '/api/place-photo'
+      path: '/api/place-photo'
+      fullPath: '/api/place-photo'
+      preLoaderRoute: typeof ApiPlacePhotoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/fonnte': {
@@ -685,6 +705,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiFonnteRoute: ApiFonnteRoute,
+  ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
