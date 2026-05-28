@@ -282,6 +282,17 @@ function PomahHome() {
   const [tempCheckIn, setTempCheckIn] = useState("");
   const [tempCheckOut, setTempCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
+
+  // Detect when the sticky date picker has crossed the hero — used to stretch
+  // the bar full-width and reveal the logo on the left.
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const threshold = Math.max(120, (cfg.hero.height ?? 480) - 80);
+    const onScroll = () => setStuck(window.scrollY > threshold);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [cfg.hero.height]);
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -347,7 +358,9 @@ function PomahHome() {
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           <div
-            className="fixed inset-x-0 bottom-0 px-3 pb-3 md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:max-w-4xl md:px-6 md:pb-0"
+            className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
+              stuck ? "md:max-w-full md:px-4" : "md:max-w-4xl md:px-6"
+            }`}
             style={{ zIndex: 60 }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
@@ -370,6 +383,24 @@ function PomahHome() {
                 </p>
               )}
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
+                {stuck && (
+                  <Link
+                    to="/"
+                    aria-label={propertyName}
+                    className="hidden shrink-0 items-center gap-1.5 border-r border-stone-200 pb-1 pr-3 transition-opacity duration-500 md:flex"
+                  >
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={propertyName} className="h-9 w-auto object-contain" />
+                    ) : (
+                      <>
+                        <span className="font-serif text-xl font-bold text-stone-900">Pomah</span>
+                        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+                          guesthouse
+                        </span>
+                      </>
+                    )}
+                  </Link>
+                )}
                 <Field label="Check-In">
                   <DatePickerID
                     value={checkIn}
