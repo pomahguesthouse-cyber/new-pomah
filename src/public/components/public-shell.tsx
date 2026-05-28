@@ -334,14 +334,11 @@ export function PomahNav({
   logo,
   header,
   pb,
-  phone,
 }: {
   name: string;
   logo: string | null;
   header: HomepageConfig["header"];
   pb: Pb;
-  /** Optional contact number — renders a circular phone button in the nav. */
-  phone?: string;
 }) {
   // Visual preset drives layout (overlay vs in-flow) and colour scheme.
   const style = header.style ?? "pill";
@@ -433,19 +430,6 @@ export function PomahNav({
 
   const actionsEl = (
     <div className="flex items-center gap-3" key="actions">
-      {phone && (
-        <a
-          href={`tel:${phone.replace(/[^\d+]/g, "")}`}
-          aria-label="Telepon"
-          className={`hidden h-9 w-9 items-center justify-center rounded-full border transition sm:flex ${
-            darkText
-              ? "border-stone-200 text-amber-700 hover:bg-amber-50"
-              : "border-white/40 text-white hover:bg-white/10"
-          }`}
-        >
-          <Phone className="h-4 w-4" />
-        </a>
-      )}
       <Link
         to="/book"
         search={{}}

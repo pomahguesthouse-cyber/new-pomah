@@ -309,7 +309,7 @@ function PomahHome() {
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} phone={property?.whatsapp_number ?? undefined} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
       <PbZone id="hero" label="Hero Slider" pb={pb}>
         <HeroSlider
