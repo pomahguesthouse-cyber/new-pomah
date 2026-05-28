@@ -17,6 +17,7 @@ import {
   GalleryHorizontal,
   CalendarCheck,
   RectangleHorizontal,
+  MapPin,
   Images,
   Plus,
   Trash2,
@@ -82,7 +83,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi";
 
 const SECTIONS: {
   key: SectionKey;
@@ -95,6 +96,7 @@ const SECTIONS: {
   { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
+  { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
 ];
 
 /**
@@ -363,6 +365,8 @@ function HomepageBuilder() {
                   <DatePickerTab cfg={cfg} setCfg={setCfg} />
                 ) : section === "story" ? (
                   <StoryTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "lokasi" ? (
+                  <LokasiTab cfg={cfg} setCfg={setCfg} />
                 ) : (
                   <CarouselTab cfg={cfg} setCfg={setCfg} />
                 )}
@@ -1035,6 +1039,83 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           onStyleChange={(v) => set({ fontStyle: v })}
           onSizeChange={(v) => set({ fontSize: v })}
         />
+      </div>
+    </Section>
+  );
+}
+
+function LokasiTab({ cfg, setCfg }: TabProps) {
+  const lok = cfg.lokasi;
+  const set = (patch: Partial<HomepageConfig["lokasi"]>) =>
+    setCfg((c) => ({ ...c, lokasi: { ...c.lokasi, ...patch } }));
+  const setNearby = (nearby: HomepageConfig["lokasi"]["nearby"]) => set({ nearby });
+
+  return (
+    <Section title="Lokasi Kami" desc="Judul, deskripsi, dan daftar lokasi terdekat. Peta mengikuti alamat properti.">
+      <FieldRow label="Judul section">
+        <Input value={lok.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <FieldRow label="Teks di bawah judul">
+        <Textarea
+          rows={2}
+          value={lok.subheading}
+          onChange={(e) => set({ subheading: e.target.value })}
+        />
+      </FieldRow>
+      <FieldRow label="Judul kartu lokasi terdekat">
+        <Input value={lok.nearbyTitle} onChange={(e) => set({ nearbyTitle: e.target.value })} />
+      </FieldRow>
+
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">Daftar lokasi terdekat</Label>
+        {lok.nearby.map((n, i) => (
+          <div key={i} className="space-y-2 rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Lokasi {String(i + 1).padStart(2, "0")}
+              </span>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6 text-destructive"
+                onClick={() => setNearby(lok.nearby.filter((_, x) => x !== i))}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <Input
+              placeholder="Nama (mis. Unnes Sekaran)"
+              value={n.name}
+              onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+            />
+            <Input
+              placeholder="Kategori (mis. Universitas)"
+              value={n.type}
+              onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Jarak (mis. 8 km)"
+                value={n.distance}
+                onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, distance: e.target.value } : x)))}
+              />
+              <Input
+                placeholder="Waktu (mis. ~13 menit)"
+                value={n.time}
+                onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, time: e.target.value } : x)))}
+              />
+            </div>
+          </div>
+        ))}
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1.5"
+          onClick={() => setNearby([...lok.nearby, { name: "", type: "", distance: "", time: "" }])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Tambah lokasi
+        </Button>
       </div>
     </Section>
   );

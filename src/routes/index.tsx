@@ -78,14 +78,6 @@ const FACILITIES = [
   { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
 ];
 
-const NEARBY = [
-  { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
-  { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
-  { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
-  { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
-  { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
-];
-
 const REVIEWS = [
   "Kmr nya bersih, rapih dekat dgn Unnes.... pelayanan ramah sekali",
   "Tempatnya nyaman, cocok untuk keluarga. Parkir luas dan aman.",
@@ -555,61 +547,63 @@ function PomahHome() {
       </section>
 
       {/* ── LOKASI KAMI ── */}
-      <section id="lokasi" className="bg-[#f3ece0] py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="text-center">
-            <h2 className="font-serif text-3xl font-bold tracking-tight text-teal-700 md:text-4xl">
-              Lokasi Kami
-            </h2>
-            <p className="mt-3 text-sm text-stone-500">
-              Temukan kami di lokasi strategis yang mudah diakses
-            </p>
-          </div>
-
-          <div className="mt-10 grid gap-6 lg:grid-cols-2">
-            <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
-              <iframe
-                title="Lokasi Pomah Guesthouse"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
-                className="h-80 w-full"
-                loading="lazy"
-              />
+      <PbZone id="lokasi" label="Lokasi Kami" pb={pb}>
+        <section id="lokasi" className="bg-[#f3ece0] py-20">
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="text-center">
+              <h2 className="font-serif text-3xl font-bold tracking-tight text-teal-700 md:text-4xl">
+                {cfg.lokasi.heading}
+              </h2>
+              {cfg.lokasi.subheading && (
+                <p className="mt-3 text-sm text-stone-500">{cfg.lokasi.subheading}</p>
+              )}
             </div>
-            <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-              <p className="flex items-center gap-2 font-serif text-lg font-semibold text-teal-700">
-                <MapPin className="h-5 w-5" />
-                Lokasi Terdekat (Radius 5km)
-              </p>
-              <div className="mt-3 space-y-2">
-                {NEARBY.map((n) => (
-                  <div
-                    key={n.name}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50/60 px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="h-6 w-6 shrink-0 rounded-full border-2 border-teal-600" />
-                      <div>
-                        <p className="text-sm font-semibold text-stone-800">{n.name}</p>
-                        <p className="text-xs text-stone-400">{n.type}</p>
+
+            <div className="mt-10 grid gap-6 lg:grid-cols-2">
+              <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
+                <iframe
+                  title="Lokasi Pomah Guesthouse"
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+                  className="h-80 w-full"
+                  loading="lazy"
+                />
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                <p className="flex items-center gap-2 font-serif text-lg font-semibold text-teal-700">
+                  <MapPin className="h-5 w-5" />
+                  {cfg.lokasi.nearbyTitle}
+                </p>
+                <div className="mt-3 space-y-2">
+                  {cfg.lokasi.nearby.map((n, idx) => (
+                    <div
+                      key={`${n.name}-${idx}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50/60 px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="h-6 w-6 shrink-0 rounded-full border-2 border-teal-600" />
+                        <div>
+                          <p className="text-sm font-semibold text-stone-800">{n.name}</p>
+                          <p className="text-xs text-stone-400">{n.type}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="flex items-center gap-1 text-sm font-medium text-teal-700">
+                          <MapPin className="h-3.5 w-3.5" />
+                          {n.distance}
+                        </p>
+                        <p className="flex items-center gap-1 text-xs text-stone-400">
+                          <Clock className="h-3 w-3" />
+                          {n.time}
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="flex items-center gap-1 text-sm font-medium text-teal-700">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {n.distance}
-                      </p>
-                      <p className="flex items-center gap-1 text-xs text-stone-400">
-                        <Clock className="h-3 w-3" />
-                        {n.time}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </PbZone>
 
       {/* ── NEWS & EVENT (from City Guide) ── */}
       {newsEvents.length > 0 && (
