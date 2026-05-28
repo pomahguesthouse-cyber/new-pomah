@@ -474,22 +474,49 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ id: z.string().min(1) }).parse(d))
   .handler(async ({ data }) => {
     try {
-      // Reads via the service-role client: a guest holding the (unguessable)
-      // booking id sees their own invoice; the anon role has no SELECT on bookings.
-      const sb = db(supabaseAdmin);
+      // Reads via the service-role client if available (bypasses RLS).
+      // Fallback to supabasePublic in local development if service role key is not provisioned.
+      let sb;
+      try {
+        sb = db(supabaseAdmin);
+      } catch (err) {
+        console.warn("[getBookingInvoice] supabaseAdmin failed to initialize, using supabasePublic fallback:", err);
+        sb = db(supabasePublic);
+      }
 
       // The URL param may be either the booking UUID or the human-friendly
       // booking code (reference_code, e.g. "PG-9J6Y2"). Resolve to the UUID.
       const rawId = data.id.trim();
+
+      // Try fetching using the secure get_public_booking_invoice RPC.
+      // This works for anonymous guests, local development, and server environments.
+      try {
+        const { data: rpcData, error: rpcErr } = await sb.rpc(
+          "get_public_booking_invoice",
+          { p_id: rawId }
+        );
+        if (!rpcErr && rpcData) {
+          return { invoice: rpcData as BookingInvoice };
+        }
+        if (rpcErr) {
+          console.warn("[getBookingInvoice] RPC lookup failed, falling back to table query:", rpcErr);
+        }
+      } catch (rpcCatch) {
+        console.warn("[getBookingInvoice] RPC invocation threw, falling back to table query:", rpcCatch);
+      }
+
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
       let bookingId = rawId;
       if (!isUuid) {
-        const { data: byCode } = await sb
+        const { data: byCode, error: codeErr } = await sb
           .from("bookings")
           .select("id")
           .ilike("reference_code", rawId)
           .maybeSingle();
+        if (codeErr) {
+          console.error("[getBookingInvoice] Error resolving booking reference code:", codeErr);
+        }
         if (!byCode) {
           console.warn("[getBookingInvoice] booking not found by code:", rawId);
           return { invoice: null as BookingInvoice | null };

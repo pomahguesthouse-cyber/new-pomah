@@ -61,7 +61,18 @@ function fmtDateID(iso: string): string {
   if (!y || !m || !d) return iso || "—";
   return `${d} ${MONTHS_ID[m - 1]} ${y}`;
 }
-const idr = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
+const formatIDR = (
+  n: number,
+  sizeClass = "text-inherit",
+  numberClass = "font-sans font-bold tabular-nums"
+) => {
+  return (
+    <span className={`${sizeClass} inline-flex items-baseline font-sans`}>
+      <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
+      <span className={numberClass}>{n.toLocaleString("id-ID")}</span>
+    </span>
+  );
+};
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Menunggu Konfirmasi",
@@ -104,34 +115,36 @@ function ConfirmationPage() {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <PublicNav
-        property={
-          siteData?.property
-            ? {
-                ...siteData.property,
-                logo_url: siteData.property.invoice_logo_url || siteData.property.logo_url,
-              }
-            : null
-        }
-        showBackHome
-      />
-      <main className="mx-auto max-w-2xl px-6 py-12">
+    <div className="min-h-screen bg-stone-50 print:bg-white print:min-h-0 print:py-0">
+      <div className="print:hidden">
+        <PublicNav
+          property={
+            siteData?.property
+              ? {
+                  ...siteData.property,
+                  logo_url: siteData.property.invoice_logo_url || siteData.property.logo_url,
+                }
+              : null
+          }
+          showBackHome
+        />
+      </div>
+      <main className="mx-auto max-w-2xl px-6 py-12 print:py-0 print:px-0 print:max-w-none">
         {isLoading ? (
-          <div className="flex items-center justify-center py-24 text-sm text-stone-400">
+          <div className="flex items-center justify-center py-24 text-sm text-stone-400 print:hidden">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Memuat invoice…
           </div>
         ) : !inv ? (
           <div className="py-24 text-center">
             <h1 className="text-2xl font-semibold">Invoice tidak ditemukan</h1>
-            <Link to="/" className="mt-4 inline-block text-sm text-amber-700 underline">
+            <Link to="/" className="mt-4 inline-block text-sm text-amber-700 underline print:hidden">
               Kembali ke beranda
             </Link>
           </div>
         ) : (
           <>
-            <div className="mb-6 text-center">
+            <div className="mb-6 text-center print:hidden">
               <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
               <h1 className="mt-3 text-2xl font-bold tracking-tight">Pemesanan Berhasil</h1>
               <p className="mt-1 text-sm text-stone-500">
@@ -139,7 +152,7 @@ function ConfirmationPage() {
               </p>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+            <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white print:border-0 print:rounded-none print:shadow-none">
               {/* Invoice header */}
               <div className="flex items-start justify-between gap-4 border-b border-stone-200 bg-stone-50 px-6 py-5">
                 <div>
@@ -163,7 +176,7 @@ function ConfirmationPage() {
                   <p className="font-mono text-base font-bold text-amber-700">
                     {inv.reference_code}
                   </p>
-                  <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                  <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 print:text-black print:bg-stone-100 print:border print:border-stone-200">
                     {STATUS_LABEL[inv.status] ?? inv.status}
                   </span>
                 </div>
@@ -197,16 +210,16 @@ function ConfirmationPage() {
               </div>
 
               {/* Price */}
-              <div className="border-t border-stone-200 px-6 py-5 text-sm">
-                <div className="flex justify-between text-stone-600">
+               <div className="border-t border-stone-200 px-6 py-5 text-sm print:px-0">
+                <div className="flex justify-between text-stone-600 print:text-stone-700">
                   <span>
-                    {idr(inv.nightly_rate)} × {inv.nights} malam × {inv.rooms} kamar
+                    {formatIDR(inv.nightly_rate)} × {inv.nights} malam × {inv.rooms} kamar
                   </span>
-                  <span>{idr(inv.total_amount)}</span>
+                  <span>{formatIDR(inv.total_amount)}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
-                  <span className="text-base font-bold">Total</span>
-                  <span className="text-xl font-bold text-amber-700">{idr(inv.total_amount)}</span>
+                  <span className="text-base font-bold print:text-black">Total</span>
+                  <span className="text-xl font-bold text-amber-700 print:text-black">{formatIDR(inv.total_amount, "text-xl text-amber-700 print:text-black", "font-sans font-bold tabular-nums")}</span>
                 </div>
               </div>
 
@@ -309,7 +322,9 @@ function ConfirmationPage() {
           </>
         )}
       </main>
-      <PublicFooter property={siteData?.property} />
+      <div className="print:hidden">
+        <PublicFooter property={siteData?.property} />
+      </div>
     </div>
   );
 }
@@ -317,8 +332,8 @@ function ConfirmationPage() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4">
-      <span className="text-stone-400">{label}</span>
-      <span className="text-right font-medium text-stone-800">{value}</span>
+      <span className="text-stone-400 print:text-stone-600">{label}</span>
+      <span className="text-right font-medium text-stone-800 print:text-black print:font-semibold">{value}</span>
     </div>
   );
 }
