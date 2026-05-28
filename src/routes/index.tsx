@@ -374,8 +374,8 @@ function PomahHome() {
             style={{ zIndex: 60 }}
           >
             <div
-              className={`rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4 ${
-                stuck ? "md:flex md:items-center md:gap-4" : ""
+              className={`border border-stone-200 bg-white p-2 shadow-xl md:p-4 ${
+                stuck ? "rounded-b-2xl md:flex md:items-center md:gap-4" : "rounded-2xl"
               }`}
             >
               {stuck && (
