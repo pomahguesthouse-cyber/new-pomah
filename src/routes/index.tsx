@@ -394,6 +394,7 @@ function PomahHome() {
     staleTime: 60 * 1000,
   });
   const availability = availData?.availability ?? null;
+  const availableRooms = availData?.availableRooms ?? null;
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
