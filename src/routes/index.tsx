@@ -34,6 +34,7 @@ import {
   type HomeSectionKey,
 } from "@/admin/modules/homepage/homepage.config";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
+import { BookingDialog, DEFAULT_HOTEL_POLICY, type RoomRow } from "@/routes/rooms.$slug";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
 
@@ -272,6 +273,7 @@ function PomahHome() {
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
+  const [bookingRoom, setBookingRoom] = useState<RoomRow | null>(null);
 
   // Detect when the sticky date picker pins to the top — used to stretch
   // the bar full-width and reveal the logo on the left. Uses a sentinel placed
@@ -481,6 +483,23 @@ function PomahHome() {
           <MessageCircle className="h-7 w-7" />
         </a>
       )}
+
+      {bookingRoom && effCheckIn && effCheckOut && (
+        <BookingDialog
+          open={!!bookingRoom}
+          onClose={() => setBookingRoom(null)}
+          room={bookingRoom}
+          checkIn={effCheckIn}
+          checkOut={effCheckOut}
+          rooms={1}
+          maxRooms={4}
+          guests={guests}
+          hotelPolicy={
+            (property as { hotel_policy?: string | null } | null | undefined)?.hotel_policy ??
+            DEFAULT_HOTEL_POLICY
+          }
+        />
+      )}
     </div>
   );
 
@@ -600,6 +619,21 @@ function PomahHome() {
                   checkIn={checkIn}
                   checkOut={checkOut}
                   guests={guests}
+                  onBookRoom={(rt) =>
+                    setBookingRoom({
+                      id: rt.id,
+                      name: rt.name,
+                      slug: rt.slug,
+                      description: rt.description ?? null,
+                      base_rate: rt.base_rate,
+                      capacity: rt.capacity ?? null,
+                      bed_type: null,
+                      size_sqm: rt.size_sqm ?? null,
+                      amenities: null,
+                      hero_image_url: rt.hero_image_url ?? null,
+                      images: null,
+                    })
+                  }
                 />
               </div>
             </section>
@@ -1034,6 +1068,7 @@ function RoomCarousel({
   checkIn,
   checkOut,
   guests = 1,
+  onBookRoom,
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
@@ -1041,6 +1076,7 @@ function RoomCarousel({
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+  onBookRoom?: (room: RoomType) => void;
 }) {
   const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
   // Adjust cards per view for mobile screens (show 1 card on small widths)
@@ -1225,18 +1261,13 @@ function RoomCarousel({
                       Tidak Tersedia
                     </span>
                   ) : (
-                    <Link
-                      to="/rooms/$slug"
-                      params={{ slug: rt.slug }}
-                      search={{
-                        checkIn: checkIn || undefined,
-                        checkOut: checkOut || undefined,
-                        guests: guests > 1 ? guests : undefined,
-                      }}
-                      className="mt-5 block cursor-pointer rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
+                    <button
+                      type="button"
+                      onClick={() => onBookRoom?.(rt)}
+                      className="mt-5 block w-full cursor-pointer rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
                     >
                       Pesan Kamar
-                    </Link>
+                    </button>
                   )}
                 </div>
               </article>

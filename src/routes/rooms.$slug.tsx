@@ -75,7 +75,7 @@ export const Route = createFileRoute("/rooms/$slug")({
   component: RoomBookingPage,
 });
 
-type RoomRow = {
+export type RoomRow = {
   id: string;
   name: string;
   slug: string;
@@ -89,7 +89,7 @@ type RoomRow = {
   images: string[] | null;
 };
 
-const DEFAULT_HOTEL_POLICY = [
+export const DEFAULT_HOTEL_POLICY = [
   "Tidak diperbolehkan membawa makanan/buah berbau menyengat seperti durian",
   "Tidak diperbolehkan mengkonsumsi alkohol di penginapan ini",
   "Tidak diperbolehkan melakukan pesta",
@@ -440,7 +440,7 @@ function RoomBookingPage() {
 /* Booking confirmation dialog                                         */
 /* ================================================================== */
 
-function BookingDialog({
+export function BookingDialog({
   open,
   onClose,
   room,
