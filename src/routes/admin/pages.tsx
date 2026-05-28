@@ -850,6 +850,16 @@ function HeroTab({ cfg, setCfg, isBooking }: TabProps & { isBooking?: boolean })
         </FieldRow>
       </div>
 
+      {!isBooking && (
+        <FieldRow label="Aksen judul (script emas di bawah judul)">
+          <Input
+            value={hero.accent}
+            placeholder='mis. "di Semarang"'
+            onChange={(e) => set({ accent: e.target.value })}
+          />
+        </FieldRow>
+      )}
+
       <FieldRow label="Animasi transisi antar slide">
         <select
           value={hero.transition}

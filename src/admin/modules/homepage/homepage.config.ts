@@ -56,6 +56,8 @@ export interface HomepageConfig {
     fontSize: number;
     /** Heading font style. */
     fontStyle: "normal" | "bold" | "italic";
+    /** Gold script accent line under the heading (e.g. "di Semarang"). */
+    accent: string;
   };
   bookingHero: {
     slides: HeroSlide[];
@@ -66,6 +68,7 @@ export interface HomepageConfig {
     fontFamily: "sans" | "serif" | "mono";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
+    accent: string;
   };
   datePicker: {
     enabled: boolean;
@@ -171,6 +174,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontFamily: "serif",
     fontSize: 48,
     fontStyle: "bold",
+    accent: "di Semarang",
   },
   bookingHero: {
     slides: [
@@ -188,6 +192,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontFamily: "serif",
     fontSize: 48,
     fontStyle: "bold",
+    accent: "",
   },
   datePicker: {
     enabled: true,

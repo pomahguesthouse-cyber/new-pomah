@@ -46,10 +46,12 @@ import { DatePickerID } from "@/components/ui/date-picker";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
-  validateSearch: (s: Record<string, unknown>): { checkIn?: string; checkOut?: string } => {
-    const out: { checkIn?: string; checkOut?: string } = {};
+  validateSearch: (s: Record<string, unknown>): { checkIn?: string; checkOut?: string; guests?: number } => {
+    const out: { checkIn?: string; checkOut?: string; guests?: number } = {};
     if (typeof s.checkIn === "string") out.checkIn = s.checkIn;
     if (typeof s.checkOut === "string") out.checkOut = s.checkOut;
+    const g = Number(s.guests);
+    if (Number.isFinite(g) && g >= 1) out.guests = Math.floor(g);
     return out;
   },
   loader: async ({ params }) => {
@@ -168,7 +170,7 @@ function RoomBookingPage() {
     search.checkOut || isoAddDays(search.checkIn || today, 1),
   );
   const [rooms, setRooms] = useState(1);
-  const [guests, setGuests] = useState(1);
+  const [guests, setGuests] = useState<number>(search.guests ?? 1);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const capacity = room?.capacity ?? 2;
