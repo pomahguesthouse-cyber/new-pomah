@@ -18,6 +18,8 @@ import {
   CalendarCheck,
   RectangleHorizontal,
   MapPin,
+  ListOrdered,
+  GripVertical,
   Images,
   Plus,
   Trash2,
@@ -74,7 +76,7 @@ import {
   type HomepageConfig,
   type HeroSlide,
 } from "@/admin/modules/homepage/homepage.functions";
-import { LAYER_MIN, LAYER_MAX } from "@/admin/modules/homepage/homepage.config";
+import { LAYER_MIN, LAYER_MAX, HOME_SECTION_LABELS } from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/admin/pages")({
   component: HomepageBuilder,
@@ -83,7 +85,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi" | "order";
 
 const SECTIONS: {
   key: SectionKey;
@@ -97,6 +99,7 @@ const SECTIONS: {
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
   { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
+  { key: "order",         label: "Urutan",        icon: ListOrdered        },
 ];
 
 /**
@@ -367,6 +370,8 @@ function HomepageBuilder() {
                   <StoryTab cfg={cfg} setCfg={setCfg} />
                 ) : section === "lokasi" ? (
                   <LokasiTab cfg={cfg} setCfg={setCfg} />
+                ) : section === "order" ? (
+                  <OrderTab cfg={cfg} setCfg={setCfg} />
                 ) : (
                   <CarouselTab cfg={cfg} setCfg={setCfg} />
                 )}
@@ -1049,6 +1054,64 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           onStyleChange={(v) => set({ fontStyle: v })}
           onSizeChange={(v) => set({ fontSize: v })}
         />
+      </div>
+    </Section>
+  );
+}
+
+function OrderTab({ cfg, setCfg }: TabProps) {
+  const order = cfg.sectionOrder;
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= order.length || to >= order.length) return;
+    const next = [...order];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setCfg((c) => ({ ...c, sectionOrder: next }));
+  };
+
+  return (
+    <Section
+      title="Urutan Section"
+      desc="Seret kartu untuk mengubah urutan tampil di halaman depan. Hero, date picker, dan footer tetap di posisinya."
+    >
+      <div className="space-y-2">
+        {order.map((key, i) => (
+          <div
+            key={key}
+            draggable
+            onDragStart={() => setDragIdx(i)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (overIdx !== i) setOverIdx(i);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragIdx !== null) reorder(dragIdx, i);
+              setDragIdx(null);
+              setOverIdx(null);
+            }}
+            onDragEnd={() => {
+              setDragIdx(null);
+              setOverIdx(null);
+            }}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-3 py-2.5 transition cursor-grab active:cursor-grabbing",
+              dragIdx === i
+                ? "border-teal-400 bg-teal-50/60 opacity-60"
+                : overIdx === i
+                  ? "border-teal-400 bg-teal-50/40"
+                  : "border-border bg-background",
+            )}
+          >
+            <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="text-sm font-medium">
+              {i + 1}. {HOME_SECTION_LABELS[key]}
+            </span>
+          </div>
+        ))}
       </div>
     </Section>
   );

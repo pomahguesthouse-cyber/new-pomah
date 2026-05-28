@@ -12,6 +12,41 @@ export interface NavLink {
   href: string;
 }
 
+/** Reorderable homepage content sections (between hero/date-picker and footer). */
+export type HomeSectionKey =
+  | "badges"
+  | "story"
+  | "reviews"
+  | "rooms"
+  | "facilities"
+  | "lokasi"
+  | "news"
+  | "cta";
+
+/** Human labels for the section-order editor. */
+export const HOME_SECTION_LABELS: Record<HomeSectionKey, string> = {
+  badges: "Ikon Fitur",
+  story: "Teks (Your Perfect Stay)",
+  reviews: "Google Rating & Ulasan",
+  rooms: "Our Room (Kamar)",
+  facilities: "Facilities",
+  lokasi: "Lokasi Kami",
+  news: "News & Event",
+  cta: "CTA Banner",
+};
+
+/** Default render order, matching the current layout. */
+export const DEFAULT_SECTION_ORDER: HomeSectionKey[] = [
+  "badges",
+  "story",
+  "reviews",
+  "rooms",
+  "facilities",
+  "lokasi",
+  "news",
+  "cta",
+];
+
 export interface HeroSlide {
   imageUrl: string;
   /** Optional background video — takes precedence over the image. */
@@ -111,6 +146,12 @@ export interface HomepageConfig {
     nearbyTitle: string;
     nearby: { name: string; type: string; distance: string; time: string }[];
   };
+  /**
+   * Render order of the homepage content sections (between the hero/date-picker
+   * and the footer). Reorderable from the Page Builder. Unknown keys are
+   * ignored; missing known keys simply aren't rendered.
+   */
+  sectionOrder: HomeSectionKey[];
   /** SEO settings for the home page (edited in Page Builder → Page Settings). */
   seo: {
     metaTitle: string;
@@ -174,7 +215,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontFamily: "serif",
     fontSize: 48,
     fontStyle: "bold",
-    accent: "di Semarang",
+    accent: "",
   },
   bookingHero: {
     slides: [
@@ -238,6 +279,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
       { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
     ],
   },
+  sectionOrder: [...DEFAULT_SECTION_ORDER],
   seo: {
     metaTitle: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang",
     metaDescription:
@@ -262,6 +304,27 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   },
 };
 
+/**
+ * Normalise a stored section order: keep valid known keys in their saved order,
+ * then append any known keys that were missing — so new sections always appear
+ * and removed/duplicate entries can't break the layout.
+ */
+export function sanitizeSectionOrder(raw: unknown): HomeSectionKey[] {
+  const valid = new Set<HomeSectionKey>(DEFAULT_SECTION_ORDER);
+  const seen = new Set<HomeSectionKey>();
+  const result: HomeSectionKey[] = [];
+  if (Array.isArray(raw)) {
+    for (const k of raw) {
+      if (valid.has(k as HomeSectionKey) && !seen.has(k as HomeSectionKey)) {
+        seen.add(k as HomeSectionKey);
+        result.push(k as HomeSectionKey);
+      }
+    }
+  }
+  for (const k of DEFAULT_SECTION_ORDER) if (!seen.has(k)) result.push(k);
+  return result;
+}
+
 /** Merge a stored (possibly partial) config onto the defaults. */
 export function mergeHomepageConfig(raw: unknown): HomepageConfig {
   const c = (raw ?? {}) as Partial<HomepageConfig>;
@@ -274,6 +337,7 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
     lokasi: { ...d.lokasi, ...c.lokasi },
+    sectionOrder: sanitizeSectionOrder(c.sectionOrder),
     seo: { ...d.seo, ...c.seo },
     bookingSeo: { ...d.bookingSeo, ...c.bookingSeo },
   };
