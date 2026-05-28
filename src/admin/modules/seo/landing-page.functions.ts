@@ -101,7 +101,25 @@ export type LPButtonSection = {
   variant?: "solid" | "outline";
   color?: "teal" | "dark" | "light";
 };
-export type LPSection =
+export type LPElementStyles = {
+  fontSize?: string;
+  textSize?: string; // line-height
+  fontWeight?: string;
+  alignment?: "left" | "center" | "right" | "justify";
+  width?: string;
+  height?: string;
+  padding?: string;
+  margin?: string;
+  borderRadius?: string;
+  bgColor?: string;
+  textColor?: string;
+  display?: "block" | "none";
+  visibility?: "visible" | "hidden";
+  fullWidth?: boolean;
+  order?: number;
+};
+
+export type LPSection = (
   | LPHeroSection
   | LPTextSection
   | LPFeaturesSection
@@ -113,7 +131,62 @@ export type LPSection =
   | LPSliderSection
   | LPButtonSection
   | LPRoomSliderSection
-  | LPDatePickerSection;
+  | LPDatePickerSection
+) & {
+  styles?: {
+    desktop?: LPElementStyles;
+    mobile?: LPElementStyles;
+  };
+};
+
+export function ensureResponsiveStyles(section: LPSection): LPSection & {
+  styles: {
+    desktop: LPElementStyles;
+    mobile: LPElementStyles;
+  };
+} {
+  return {
+    ...section,
+    styles: {
+      desktop: {
+        fontSize: "",
+        textSize: "",
+        fontWeight: "",
+        alignment: undefined,
+        width: "",
+        height: "",
+        padding: "",
+        margin: "",
+        borderRadius: "",
+        bgColor: "",
+        textColor: "",
+        display: undefined,
+        visibility: undefined,
+        fullWidth: false,
+        order: 0,
+        ...section.styles?.desktop,
+      },
+      mobile: {
+        fontSize: "",
+        textSize: "",
+        fontWeight: "",
+        alignment: undefined,
+        width: "",
+        height: "",
+        padding: "",
+        margin: "",
+        borderRadius: "",
+        bgColor: "",
+        textColor: "",
+        display: undefined,
+        visibility: undefined,
+        fullWidth: false,
+        order: 0,
+        ...section.styles?.mobile,
+      },
+    },
+  } as any;
+}
 
 export type LPSplitSections = {
   split: boolean;

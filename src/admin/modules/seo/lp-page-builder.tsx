@@ -43,21 +43,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type {
-  LPSection,
-  LPHeroSection,
-  LPTextSection,
-  LPFeaturesSection,
-  LPGallerySection,
-  LPFaqSection,
-  LPCtaBannerSection,
-  LPTestimonialsSection,
-  LPHeaderSection,
-  LPSliderSection,
-  LPButtonSection,
-  LPRoomSliderSection,
-  LPDatePickerSection,
-  LPSectionsData,
+import {
+  ensureResponsiveStyles,
+  type LPElementStyles,
+  type LPSection,
+  type LPHeroSection,
+  type LPTextSection,
+  type LPFeaturesSection,
+  type LPGallerySection,
+  type LPFaqSection,
+  type LPCtaBannerSection,
+  type LPTestimonialsSection,
+  type LPHeaderSection,
+  type LPSliderSection,
+  type LPButtonSection,
+  type LPRoomSliderSection,
+  type LPDatePickerSection,
+  type LPSectionsData,
 } from "./landing-page.functions";
 
 /* ─── helpers ──────────────────────────────────────────────────────── */
@@ -119,17 +121,24 @@ function typeMeta(type: LPSection["type"]) {
 export function LpPageBuilder({
   sections,
   onChange,
+  activeMode = "desktop",
+  setActiveMode,
 }: {
   sections: LPSectionsData;
   onChange: (s: LPSectionsData) => void;
+  activeMode?: "desktop" | "mobile";
+  setActiveMode?: (mode: "desktop" | "mobile") => void;
 }) {
   const isSplit = !!(sections && !Array.isArray(sections) && (sections as any).split);
   const desktopList: LPSection[] = isSplit ? ((sections as any).desktop ?? []) : (Array.isArray(sections) ? sections : []);
   const mobileList: LPSection[] = isSplit ? ((sections as any).mobile ?? []) : (Array.isArray(sections) ? sections : []);
 
-  const [activeTab, setActiveTab] = useState<"desktop" | "mobile">("desktop");
   const [activeId,   setActiveId]   = useState<string | null>(null);
   const [addDialog,  setAddDialog]  = useState(false);
+  const [editorTab,  setEditorTab]  = useState<"content" | "style">("content");
+
+  const activeTab = activeMode;
+  const setActiveTab = setActiveMode || (() => {});
 
   const currentList = activeTab === "desktop" || !isSplit ? desktopList : mobileList;
   const active = currentList.find((s) => s.id === activeId) ?? null;
@@ -301,10 +310,40 @@ export function LpPageBuilder({
       {/* Section editor */}
       {active && (
         <div className="mt-2 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
-          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-teal-600">
-            Edit: {typeMeta(active.type).label} ({isSplit ? (activeTab === "desktop" ? "Desktop" : "Mobile") : "Shared"})
-          </p>
-          <SectionEditor section={active} onUpdate={(patch) => update(active.id, patch)} />
+          <div className="mb-3 flex items-center justify-between border-b border-teal-150 pb-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-teal-600">
+              Edit: {typeMeta(active.type).label}
+            </p>
+            <div className="flex rounded bg-stone-200/60 p-0.5">
+              <button
+                type="button"
+                className={`rounded px-2.5 py-0.5 text-[10px] font-semibold transition ${
+                  editorTab === "content" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                }`}
+                onClick={() => setEditorTab("content")}
+              >
+                Konten
+              </button>
+              <button
+                type="button"
+                className={`rounded px-2.5 py-0.5 text-[10px] font-semibold transition ${
+                  editorTab === "style" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                }`}
+                onClick={() => setEditorTab("style")}
+              >
+                Style
+              </button>
+            </div>
+          </div>
+          {editorTab === "content" ? (
+            <SectionEditor section={active} onUpdate={(patch) => update(active.id, patch)} />
+          ) : (
+            <ResponsiveStyleEditor
+              section={active}
+              activeMode={activeTab}
+              onUpdate={(patch) => update(active.id, patch)}
+            />
+          )}
         </div>
       )}
 
@@ -901,6 +940,250 @@ function TestimonialsEditor({ s, onUpdate }: { s: LPTestimonialsSection; onUpdat
           <Plus className="h-3.5 w-3.5" /> Tambah Testimoni
         </Button>
       </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Responsive Style Editor Components
+   ═══════════════════════════════════════════════════════════════════ */
+function LocalColorField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-1.5 mt-1">
+      <input
+        type="color"
+        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-8 w-8 shrink-0 cursor-pointer rounded border border-stone-200"
+      />
+      <Input
+        value={value}
+        placeholder="#ffffff"
+        className="font-mono text-xs h-8"
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function ResponsiveStyleEditor({
+  section,
+  activeMode,
+  onUpdate,
+}: {
+  section: LPSection;
+  activeMode: "desktop" | "mobile";
+  onUpdate: (patch: Partial<LPSection>) => void;
+}) {
+  const s = ensureResponsiveStyles(section);
+  const currentStyles = s.styles[activeMode] || {};
+
+  const updateStyle = (key: keyof LPElementStyles, value: any) => {
+    const nextStyles = {
+      ...s.styles,
+      [activeMode]: {
+        ...s.styles[activeMode],
+        [key]: value,
+      },
+    };
+    onUpdate({ styles: nextStyles } as any);
+  };
+
+  const isHiddenDesktop = s.styles.desktop?.display === "none" || s.styles.desktop?.visibility === "hidden";
+  const isHiddenMobile = s.styles.mobile?.display === "none" || s.styles.mobile?.visibility === "hidden";
+
+  return (
+    <div className="space-y-4 pt-2">
+      <div className="flex items-center justify-between rounded-lg bg-stone-150 p-2 text-xs font-semibold text-stone-700">
+        <span>Editing Mode: {activeMode === "desktop" ? "🖥️ Desktop" : "📱 Mobile"}</span>
+      </div>
+
+      {/* Visibility / Hide switches */}
+      <div className="space-y-2 border-b border-stone-200 pb-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold">Sembunyikan di Desktop</Label>
+          <Switch
+            checked={isHiddenDesktop}
+            onCheckedChange={(checked) => {
+              const nextStyles = {
+                ...s.styles,
+                desktop: {
+                  ...s.styles.desktop,
+                  display: checked ? "none" : "block",
+                  visibility: checked ? "hidden" : "visible",
+                },
+              };
+              onUpdate({ styles: nextStyles } as any);
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-semibold">Sembunyikan di Mobile</Label>
+          <Switch
+            checked={isHiddenMobile}
+            onCheckedChange={(checked) => {
+              const nextStyles = {
+                ...s.styles,
+                mobile: {
+                  ...s.styles.mobile,
+                  display: checked ? "none" : "block",
+                  visibility: checked ? "hidden" : "visible",
+                },
+              };
+              onUpdate({ styles: nextStyles } as any);
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Typography */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">Tipografi</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Font Size" hint="Contoh: 16px, 2rem">
+            <Input
+              value={currentStyles.fontSize ?? ""}
+              onChange={(e) => updateStyle("fontSize", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="e.g. 24px"
+            />
+          </Fld>
+          <Fld label="Line Height" hint="Contoh: 1.5, 24px">
+            <Input
+              value={currentStyles.textSize ?? ""}
+              onChange={(e) => updateStyle("textSize", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="e.g. 1.5"
+            />
+          </Fld>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Font Weight">
+            <Select
+              value={currentStyles.fontWeight ?? ""}
+              onValueChange={(v) => updateStyle("fontWeight", v)}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Bawaan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="medium">Medium (500)</SelectItem>
+                <SelectItem value="semibold">Semibold (600)</SelectItem>
+                <SelectItem value="bold">Bold (700)</SelectItem>
+              </SelectContent>
+            </Select>
+          </Fld>
+          <Fld label="Perataan Teks">
+            <Select
+              value={currentStyles.alignment ?? ""}
+              onValueChange={(v) => updateStyle("alignment", v === "" ? undefined : v)}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Bawaan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="left">Kiri</SelectItem>
+                <SelectItem value="center">Tengah</SelectItem>
+                <SelectItem value="right">Kanan</SelectItem>
+                <SelectItem value="justify">Rata Kiri-Kanan</SelectItem>
+              </SelectContent>
+            </Select>
+          </Fld>
+        </div>
+      </div>
+
+      {/* Colors */}
+      <div className="space-y-2 border-t border-stone-200 pt-3">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">Warna</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Warna Teks">
+            <LocalColorField
+              value={currentStyles.textColor ?? ""}
+              onChange={(v) => updateStyle("textColor", v)}
+            />
+          </Fld>
+          <Fld label="Warna Latar">
+            <LocalColorField
+              value={currentStyles.bgColor ?? ""}
+              onChange={(v) => updateStyle("bgColor", v)}
+            />
+          </Fld>
+        </div>
+      </div>
+
+      {/* Dimensions & Spacing */}
+      <div className="space-y-2 border-t border-stone-200 pt-3">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">Ukuran & Spacing</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Lebar" hint="Contoh: 100%, 400px">
+            <Input
+              value={currentStyles.width ?? ""}
+              onChange={(e) => updateStyle("width", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="auto"
+            />
+          </Fld>
+          <Fld label="Tinggi" hint="Contoh: 200px, auto">
+            <Input
+              value={currentStyles.height ?? ""}
+              onChange={(e) => updateStyle("height", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="auto"
+            />
+          </Fld>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Padding" hint="Contoh: 12px, 10px 20px">
+            <Input
+              value={currentStyles.padding ?? ""}
+              onChange={(e) => updateStyle("padding", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="0px"
+            />
+          </Fld>
+          <Fld label="Margin" hint="Contoh: 12px, 10px auto">
+            <Input
+              value={currentStyles.margin ?? ""}
+              onChange={(e) => updateStyle("margin", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="0px"
+            />
+          </Fld>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Fld label="Border Radius" hint="Contoh: 8px, 9999px">
+            <Input
+              value={currentStyles.borderRadius ?? ""}
+              onChange={(e) => updateStyle("borderRadius", e.target.value)}
+              className="h-8 text-xs"
+              placeholder="0px"
+            />
+          </Fld>
+        </div>
+      </div>
+
+      {/* Mobile Specific Features */}
+      {activeMode === "mobile" && (
+        <div className="space-y-2 border-t border-stone-200 pt-3">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-stone-400">Pengaturan Mobile</p>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold">Lebar Penuh di Mobile</Label>
+            <Switch
+              checked={!!currentStyles.fullWidth}
+              onCheckedChange={(checked) => updateStyle("fullWidth", checked)}
+            />
+          </div>
+          <Fld label="Urutan / Posisi (Flex Order)" hint="Mengatur susunan vertikal di Mobile">
+            <Input
+              type="number"
+              value={currentStyles.order ?? 0}
+              onChange={(e) => updateStyle("order", parseInt(e.target.value, 10) || 0)}
+              className="h-8 text-xs"
+            />
+          </Fld>
+        </div>
       )}
     </div>
   );
