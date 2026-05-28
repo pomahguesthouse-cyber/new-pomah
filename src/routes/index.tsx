@@ -179,6 +179,14 @@ function PomahHome() {
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
 
+  // Total normal capacity = sum of (capacity + extrabed_capacity) × total_physical_rooms per room type
+  const totalNormalCapacity = rooms.reduce((sum, rt) => {
+    const cap = Number(rt.capacity ?? 0);
+    const ebCap = Number(rt.extrabed_capacity ?? 0);
+    const physRooms = Number(rt.total_physical_rooms ?? 0);
+    return sum + (cap + ebCap) * physRooms;
+  }, 0);
+
   const reviewsFn = useServerFn(getGoogleReviews);
   const { data: gr } = useQuery({
     queryKey: ["google-reviews"],
@@ -497,18 +505,30 @@ function PomahHome() {
                 <Field label="Tamu">
                   <div className="relative">
                     <Users className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:left-3" />
-                    <select
-                      value={guests}
-                      onChange={(e) => setGuests(Number(e.target.value))}
-                      className="h-11 w-full appearance-none rounded-md border border-stone-200 bg-background pl-8 pr-6 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-8 md:text-sm"
-                    >
-                      {[1, 2, 3, 4, 5, 6].map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:right-3" />
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={30}
+                      value={guests === 0 ? "" : guests}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "") {
+                          setGuests(0);
+                        } else {
+                          const parsed = parseInt(val, 10);
+                          if (!isNaN(parsed)) {
+                            setGuests(Math.min(30, parsed));
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (guests < 1) {
+                          setGuests(1);
+                        }
+                      }}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-background pl-8 pr-3 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-4 md:text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
                   </div>
                 </Field>
                 <button
@@ -689,6 +709,29 @@ function PomahHome() {
                           )} (${nightsBetween(checkIn, checkOut)} Malam)`
                         : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
                     </p>
+                  )}
+                  {guests > totalNormalCapacity && totalNormalCapacity > 0 && wa && (
+                    <div className="mx-auto mt-4 flex max-w-xl items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                      <MessageCircle className="h-5 w-5 shrink-0 text-amber-700" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-amber-800">
+                          Jumlah tamu melebihi kapasitas normal ({totalNormalCapacity} tamu)
+                        </p>
+                        <p className="mt-0.5 text-xs text-amber-700">
+                          Silakan hubungi admin untuk pemesanan rombongan.
+                        </p>
+                      </div>
+                      <a
+                        href={`https://wa.me/${wa}?text=${encodeURIComponent(
+                          `Halo, saya ingin memesan untuk ${guests} tamu (${fmtDateID(checkIn || today)} – ${fmtDateID(checkOut || (today ? isoAddDays(today, 1) : ""))}). Mohon bantuannya.`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-green-700"
+                      >
+                        Chat Admin
+                      </a>
+                    </div>
                   )}
                 </div>
                 <div
@@ -1809,13 +1852,6 @@ function RoomCarousel({
                   )}
                   {(() => {
                     const item = cart?.[rt.id];
-                    if (rt.capacity != null && rt.capacity < guests && !item) {
-                      return (
-                        <span className={`block cursor-not-allowed rounded-lg bg-stone-200 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
-                          Kapasitas tidak cukup
-                        </span>
-                      );
-                    }
                     if (availability && availability[rt.id] === false && !item) {
                       return (
                         <span className={`block cursor-not-allowed rounded-lg bg-stone-300 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
