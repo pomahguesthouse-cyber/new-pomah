@@ -311,7 +311,7 @@ function PomahHome() {
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
-          accent="di Semarang"
+          accent={cfg.hero.accent}
           rating={{ score: gRating, total: gTotal }}
           actions={
             <>
@@ -1234,6 +1234,7 @@ function RoomCarousel({
                       search={{
                         checkIn: checkIn || undefined,
                         checkOut: checkOut || undefined,
+                        guests: guests > 1 ? guests : undefined,
                       }}
                       className="mt-5 block cursor-pointer rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
                     >
