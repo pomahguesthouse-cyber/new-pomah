@@ -886,6 +886,8 @@ export function MediaLibraryView() {
   const { data, isLoading: dbLoading, refetch } = useQuery({
     queryKey: ["media-library"],
     queryFn:  () => listFn({ data: { category: "brosur" } }),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
   // Exclude WhatsApp brochures (dedicated `brosur` bucket) — those are managed
   // in the Brosur tab under Knowledge & SOP, not the Media Library.
@@ -898,6 +900,8 @@ export function MediaLibraryView() {
   const { data: folderData, refetch: refetchFolders } = useQuery({
     queryKey: ["media-folders"],
     queryFn:  () => folderListFn({ data: undefined }),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
   const folders = (folderData?.folders ?? []) as MediaFolder[];
 
@@ -910,14 +914,22 @@ export function MediaLibraryView() {
     return s;
   }, [brosurDocs]);
 
-  const loadStorage = React.useCallback(async (regPaths: Set<string>) => {
-    setStorageLoading(true);
-    setStorageAssets(await loadStorageAssets(regPaths));
+  // Track whether storage has been loaded at least once
+  const storageLoadedRef = React.useRef(false);
+
+  const loadStorage = React.useCallback(async (regPaths: Set<string>, showSpinner = false) => {
+    if (showSpinner) setStorageLoading(true);
+    const assets = await loadStorageAssets(regPaths);
+    setStorageAssets(assets);
+    storageLoadedRef.current = true;
     setStorageLoading(false);
   }, []);
 
   React.useEffect(() => {
-    if (!dbLoading) void loadStorage(registeredPaths);
+    if (!dbLoading) {
+      // Only show the spinner on the very first load
+      void loadStorage(registeredPaths, !storageLoadedRef.current);
+    }
   }, [dbLoading, registeredPaths, loadStorage]);
 
   const refresh = () => { void refetch(); void refetchFolders(); };
