@@ -29,10 +29,10 @@ export const Route = createFileRoute("/rooms/")({
 const formatIDR = (
   n: number,
   sizeClass = "text-inherit",
-  numberClass = "font-mono font-bold"
+  numberClass = "font-sans font-bold tabular-nums"
 ) => {
   return (
-    <span className={`${sizeClass} inline-flex items-baseline`}>
+    <span className={`${sizeClass} inline-flex items-baseline font-sans`}>
       <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
       <span className={numberClass}>{n.toLocaleString("id-ID")}</span>
     </span>
@@ -111,7 +111,7 @@ function PublicRooms() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-amber-700">
-                      {formatIDR(Number(rt.base_rate), "text-lg", "font-mono font-bold")}
+                      {formatIDR(Number(rt.base_rate), "text-lg", "font-sans font-bold tabular-nums")}
                     </p>
                     <p className="font-mono text-[10px] text-stone-400">/malam</p>
                   </div>

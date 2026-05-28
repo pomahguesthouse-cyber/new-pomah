@@ -1283,7 +1283,7 @@ function RoomCardSteppers({
             </p>
             {extrabedRate > 0 && (
               <p className={compact ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>
-                +{formatIDR(extrabedRate, "text-inherit", "font-mono font-semibold")}
+                +{formatIDR(extrabedRate, "text-inherit", "font-sans font-semibold tabular-nums")}
               </p>
             )}
           </div>
@@ -1417,7 +1417,7 @@ function CartBookingDialog({
                   {item.extrabed > 0 ? ` (+${item.extrabed} extrabed)` : ""}
                 </span>
                 <span className="shrink-0 font-medium text-stone-900">
-                  {formatIDR(sub, "text-sm", "font-mono font-semibold")}
+                  {formatIDR(sub, "text-sm", "font-sans font-semibold tabular-nums")}
                 </span>
               </div>
             );
@@ -1425,7 +1425,7 @@ function CartBookingDialog({
           <div className="flex items-center justify-between border-t border-stone-200 pt-2">
             <span className="font-semibold">Total</span>
             <span className="font-serif text-lg font-bold text-amber-700">
-              {formatIDR(grandTotal, "text-lg", "font-mono font-bold text-amber-700")}
+              {formatIDR(grandTotal, "text-lg", "font-sans font-bold text-amber-700 tabular-nums")}
             </span>
           </div>
         </div>
@@ -1479,7 +1479,7 @@ function CartBookingDialog({
             "Memproses…"
           ) : (
             <span className="inline-flex items-center gap-1">
-              Konfirmasi Pemesanan · {formatIDR(grandTotal, "text-sm text-white", "font-mono font-bold text-white")}
+              Konfirmasi Pemesanan · {formatIDR(grandTotal, "text-sm text-white", "font-sans font-bold text-white tabular-nums")}
             </span>
           )}
         </button>
@@ -1638,7 +1638,7 @@ function BookingSidePanel({
                   isSoldOut ? "text-stone-400 line-through" : "text-stone-700",
                 )}
               >
-                {formatIDR(sub, "text-sm", "font-mono font-semibold")}
+                {formatIDR(sub, "text-sm", "font-sans font-semibold tabular-nums")}
               </p>
             </div>
           );
@@ -1689,7 +1689,7 @@ function BookingSidePanel({
       <div className="mb-3 flex items-end justify-between">
         <span className="text-stone-600">Total ({totalRooms} kamar)</span>
         <span className="font-serif text-2xl font-bold text-amber-700">
-          {formatIDR(grandTotal, "text-2xl", "font-mono font-bold text-amber-700")}
+          {formatIDR(grandTotal, "text-2xl", "font-sans font-bold text-amber-700 tabular-nums")}
         </span>
       </div>
 
@@ -1716,10 +1716,10 @@ function BookingSidePanel({
 const formatIDR = (
   n: number,
   sizeClass = "text-inherit",
-  numberClass = "font-mono font-bold"
+  numberClass = "font-sans font-bold tabular-nums"
 ) => {
   return (
-    <span className={`${sizeClass} inline-flex items-baseline`}>
+    <span className={`${sizeClass} inline-flex items-baseline font-sans`}>
       <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
       <span className={numberClass}>{n.toLocaleString("id-ID")}</span>
     </span>
@@ -1983,7 +1983,7 @@ function RoomCarousel({
                     <div className="shrink-0 text-right">
                       <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>Harga</p>
                       <p className="text-amber-700">
-                        {formatIDR(Number(rt.base_rate), cartOpen ? "text-sm" : "text-lg", "font-mono font-bold")}
+                        {formatIDR(Number(rt.base_rate), cartOpen ? "text-sm" : "text-lg", "font-sans font-bold tabular-nums")}
                       </p>
                     </div>
                   </div>

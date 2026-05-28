@@ -136,10 +136,10 @@ const idr = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 const formatIDR = (
   n: number,
   sizeClass = "text-inherit",
-  numberClass = "font-mono font-bold"
+  numberClass = "font-sans font-bold tabular-nums"
 ) => {
   return (
-    <span className={`${sizeClass} inline-flex items-baseline`}>
+    <span className={`${sizeClass} inline-flex items-baseline font-sans`}>
       <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
       <span className={numberClass}>{Number(n || 0).toLocaleString("id-ID")}</span>
     </span>
@@ -338,7 +338,7 @@ function RoomBookingPage() {
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-medium text-stone-500">Harga Kamar</p>
               <p className="mt-1 text-3xl font-bold text-amber-700">
-                {formatIDR(Number(room.base_rate), "text-3xl", "font-mono font-bold text-amber-700")}
+                {formatIDR(Number(room.base_rate), "text-3xl", "font-sans font-bold text-amber-700 tabular-nums")}
               </p>
               <p className="text-xs text-stone-400">per malam</p>
 
@@ -419,7 +419,7 @@ function RoomBookingPage() {
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-bold">{o.name}</h3>
                         <span className="text-sm font-semibold text-amber-700">
-                          {formatIDR(Number(o.base_rate), "text-sm", "font-mono font-bold text-amber-700")}
+                          {formatIDR(Number(o.base_rate), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
                         </span>
                       </div>
                       {o.description && (
@@ -598,7 +598,7 @@ export function BookingDialog({
                 </span>
                 {extrabedRate > 0 && (
                   <span className="text-xs font-normal text-stone-500">
-                    +{formatIDR(extrabedRate, "text-xs", "font-mono font-medium")} / malam
+                    +{formatIDR(extrabedRate, "text-xs", "font-sans font-medium tabular-nums")} / malam
                   </span>
                 )}
               </p>
@@ -678,21 +678,21 @@ export function BookingDialog({
           <div className="rounded-lg bg-stone-100 p-4 text-sm">
             <div className="flex items-center justify-between text-stone-600">
               <span>
-                Kamar: {formatIDR(rate, "text-xs", "font-mono font-medium")} × {nights} malam × {rooms} kamar
+                Kamar: {formatIDR(rate, "text-xs", "font-sans font-medium tabular-nums")} × {nights} malam × {rooms} kamar
               </span>
-              <span>{formatIDR(rate * nights * rooms, "text-sm", "font-mono font-semibold")}</span>
+              <span>{formatIDR(rate * nights * rooms, "text-sm", "font-sans font-semibold tabular-nums")}</span>
             </div>
             {extrabed > 0 && (
               <div className="mt-1 flex items-center justify-between text-stone-600">
                 <span>
-                  Extrabed: {formatIDR(extrabedRate, "text-xs", "font-mono font-medium")} × {nights} malam × {extrabed}
+                  Extrabed: {formatIDR(extrabedRate, "text-xs", "font-sans font-medium tabular-nums")} × {nights} malam × {extrabed}
                 </span>
-                <span>{formatIDR(extrabedRate * nights * extrabed, "text-sm", "font-mono font-semibold")}</span>
+                <span>{formatIDR(extrabedRate * nights * extrabed, "text-sm", "font-sans font-semibold tabular-nums")}</span>
               </div>
             )}
             <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2">
               <span className="text-base font-bold">Total</span>
-              <span className="text-xl font-bold text-amber-700">{formatIDR(total, "text-xl", "font-mono font-bold text-amber-700")}</span>
+              <span className="text-xl font-bold text-amber-700">{formatIDR(total, "text-xl", "font-sans font-bold text-amber-700 tabular-nums")}</span>
             </div>
           </div>
 
@@ -762,7 +762,7 @@ export function BookingDialog({
               </>
             ) : (
               <span className="inline-flex items-center gap-1">
-                Konfirmasi Pemesanan · {formatIDR(total, "text-sm text-white", "font-mono font-bold text-white")}
+                Konfirmasi Pemesanan · {formatIDR(total, "text-sm text-white", "font-sans font-bold text-white tabular-nums")}
               </span>
             )}
           </button>
