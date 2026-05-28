@@ -359,12 +359,12 @@ function PomahHome() {
           <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:-mt-12 md:block" />
           <div
             className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
-              stuck ? "md:max-w-full md:px-4" : "md:max-w-4xl md:px-6"
+              stuck ? "md:max-w-full md:px-10" : "md:max-w-4xl md:px-6"
             }`}
             style={{ zIndex: 60 }}
           >
             <div
-              className={`border border-stone-200 bg-white p-2 shadow-xl md:p-4 ${
+              className={`border border-stone-200 bg-white px-3 py-2 shadow-xl md:px-8 md:py-4 ${
                 stuck ? "rounded-b-2xl md:flex md:items-center md:gap-4" : "rounded-2xl"
               }`}
             >
