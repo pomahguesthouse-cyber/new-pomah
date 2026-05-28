@@ -755,17 +755,59 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
   }, []);
 
   const maxIndex = Math.max(0, items.length - cardsPerView);
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    setI((v) => Math.min(v, maxIndex));
-  }, [maxIndex]);
+  const isLoopable = items.length > cardsPerView;
 
-  // Autoplay (paused when everything already fits).
+  // Clone the edges so the track can wrap seamlessly in both directions.
+  const extended = isLoopable
+    ? [...items.slice(-cardsPerView), ...items, ...items.slice(0, cardsPerView)]
+    : items;
+
+  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+
+  // Keep the index valid when cardsPerView changes on resize.
   useEffect(() => {
-    if (items.length <= cardsPerView) return;
-    const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), 5000);
+    setI(isLoopable ? cardsPerView : 0);
+  }, [cardsPerView, isLoopable]);
+
+  // Autoplay.
+  useEffect(() => {
+    if (!isLoopable) return;
+    const t = setInterval(() => {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    }, 5000);
     return () => clearInterval(t);
-  }, [items.length, cardsPerView, maxIndex]);
+  }, [isLoopable]);
+
+  const handlePrev = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v - 1);
+    } else {
+      setI((v) => Math.max(0, v - 1));
+    }
+  };
+  const handleNext = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    } else {
+      setI((v) => Math.min(maxIndex, v + 1));
+    }
+  };
+
+  // After landing on a cloned edge, snap (without animation) to the real slide.
+  const handleTransitionEnd = () => {
+    if (!isLoopable) return;
+    if (i <= 0) {
+      setIsTransitioning(false);
+      setI(items.length);
+    } else if (i >= items.length + cardsPerView) {
+      setIsTransitioning(false);
+      setI(cardsPerView);
+    }
+  };
 
   // Touch swipe.
   const touchStartX = useRef<number | null>(null);
@@ -776,14 +818,18 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
     if (touchStartX.current === null) return;
     const dx = touchStartX.current - e.changedTouches[0].clientX;
     if (Math.abs(dx) > 50) {
-      if (dx > 0) setI((v) => Math.min(maxIndex, v + 1));
-      else setI((v) => Math.max(0, v - 1));
+      if (dx > 0) handleNext();
+      else handlePrev();
     }
     touchStartX.current = null;
   };
 
   if (items.length === 0) return null;
-  const totalDots = maxIndex + 1;
+
+  const activeDot = isLoopable
+    ? (((i - cardsPerView) % items.length) + items.length) % items.length
+    : i;
+  const totalDots = isLoopable ? items.length : maxIndex + 1;
 
   return (
     <div className="relative mt-12">
@@ -792,12 +838,13 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
           className="flex"
           style={{
             transform: `translateX(-${i * (100 / cardsPerView)}%)`,
-            transition: "transform 500ms ease-out",
+            transition: isTransitioning ? "transform 500ms ease-out" : "none",
           }}
+          onTransitionEnd={handleTransitionEnd}
         >
-          {items.map((n) => (
+          {extended.map((n, idx) => (
             <div
-              key={`${n.title}-${n.date}`}
+              key={`${n.title}-${n.date}-${idx}`}
               className="shrink-0 px-3"
               style={{ width: `${100 / cardsPerView}%` }}
             >
@@ -834,7 +881,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
       {totalDots > 1 && (
         <div className="mt-6 flex items-center justify-center gap-3">
           <button
-            onClick={() => setI((v) => Math.max(0, v - 1))}
+            onClick={handlePrev}
             aria-label="Sebelumnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
@@ -844,16 +891,19 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
             {Array.from({ length: totalDots }).map((_, d) => (
               <button
                 key={d}
-                onClick={() => setI(d)}
+                onClick={() => {
+                  setIsTransitioning(true);
+                  setI(isLoopable ? d + cardsPerView : d);
+                }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === i ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
           </div>
           <button
-            onClick={() => setI((v) => Math.min(maxIndex, v + 1))}
+            onClick={handleNext}
             aria-label="Berikutnya"
             className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
