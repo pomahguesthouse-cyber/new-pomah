@@ -10,6 +10,7 @@ import {
   MapPin,
   Clock,
   Star,
+  CalendarDays,
   MessageCircle,
   Menu,
   Quote,
@@ -23,6 +24,7 @@ import {
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { mergeHomepageConfig, type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
 import {
@@ -122,6 +124,22 @@ function fmtDateID(iso: string): string {
 function fmtFullDateID(iso: string): string {
   return fmtDateID(iso);
 }
+/**
+ * Parse a free-text Indonesian date ("05 Mei 2026", "10-12 September 2026")
+ * into a sortable epoch (ms). Uses the START day of any range. Returns 0 when
+ * the month/year can't be found, so unparseable items sort last.
+ */
+function parseIdDate(s: string): number {
+  if (!s) return 0;
+  const lower = s.toLowerCase();
+  const monthIdx = ID_MONTHS.findIndex((m) => lower.includes(m.toLowerCase()));
+  const yearMatch = lower.match(/\d{4}/);
+  if (monthIdx < 0 || !yearMatch) return 0;
+  const dayMatch = lower.match(/\b\d{1,2}\b/);
+  const day = dayMatch ? parseInt(dayMatch[0], 10) : 1;
+  return new Date(parseInt(yearMatch[0], 10), monthIdx, day).getTime();
+}
+
 /** Whole nights between two `YYYY-MM-DD` strings. */
 function nightsBetween(a: string, b: string): number {
   return Math.max(
@@ -173,6 +191,31 @@ function PomahHome() {
   const cfg = mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
+
+  // News & Event — sourced from the same City Guide data as /explore.
+  const exploreCfg = mergeExploreConfig(
+    (property as { explore_config?: unknown } | null | undefined)?.explore_config,
+  );
+  const newsEvents = [
+    ...exploreCfg.events.map((e) => ({
+      date: e.date,
+      category: e.label || "Event",
+      title: e.title,
+      excerpt: e.desc,
+      image: e.image,
+      ts: parseIdDate(e.date),
+    })),
+    ...exploreCfg.news.map((n) => ({
+      date: n.date,
+      category: n.label || "Berita",
+      title: n.title,
+      excerpt: n.desc,
+      image: n.image,
+      ts: parseIdDate(n.date),
+    })),
+  ]
+    .sort((a, b) => b.ts - a.ts) // newest first
+    .slice(0, 5);
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {
@@ -567,6 +610,58 @@ function PomahHome() {
           </div>
         </div>
       </section>
+
+      {/* ── NEWS & EVENT (from City Guide) ── */}
+      {newsEvents.length > 0 && (
+        <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
+          <div className="text-center">
+            <SectionHeading>News &amp; Event</SectionHeading>
+            <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+              Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
+            </p>
+          </div>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {newsEvents.map((n) => (
+              <article
+                key={`${n.title}-${n.date}`}
+                className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl"
+              >
+                {n.image && (
+                  <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
+                    <img
+                      src={n.image}
+                      alt={n.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {n.date}
+                    </span>
+                    <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+                      {n.category}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
+                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="mt-10 text-center">
+            <Link
+              to="/explore"
+              className="inline-flex items-center gap-2 rounded-full bg-teal-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800"
+            >
+              Lihat Selengkapnya di City Guide
+            </Link>
+          </div>
+        </section>
+      )}
 
       <PomahFooter name={propertyName} />
 
