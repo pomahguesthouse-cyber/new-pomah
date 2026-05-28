@@ -31,6 +31,11 @@ import {
   Minus,
   X,
   Trash2,
+  Tv,
+  Wind,
+  Bath,
+  Utensils,
+  CheckCircle2,
 } from "lucide-react";
 import {
   getPublicSiteData,
@@ -1623,6 +1628,17 @@ function BookingSidePanel({
   );
 }
 
+const getAmenityIcon = (name: string) => {
+  const n = name.toLowerCase();
+  if (n.includes("wifi") || n.includes("internet")) return <Wifi className="h-3.5 w-3.5" />;
+  if (n.includes("ac") || n.includes("air cond") || n.includes("pendingin")) return <Wind className="h-3.5 w-3.5" />;
+  if (n.includes("tv") || n.includes("televisi")) return <Tv className="h-3.5 w-3.5" />;
+  if (n.includes("shower") || n.includes("kamar mandi") || n.includes("air panas") || n.includes("toilet") || n.includes("bathtub")) return <Bath className="h-3.5 w-3.5" />;
+  if (n.includes("kopi") || n.includes("teh") || n.includes("kettle") || n.includes("coffee") || n.includes("minum") || n.includes("water")) return <Coffee className="h-3.5 w-3.5" />;
+  if (n.includes("sarapan") || n.includes("breakfast") || n.includes("makan")) return <Utensils className="h-3.5 w-3.5" />;
+  return <CheckCircle2 className="h-3.5 w-3.5" />;
+};
+
 function RoomCarousel({
   rooms,
   rc,
@@ -1849,6 +1865,24 @@ function RoomCarousel({
                     <p className={`line-clamp-2 leading-relaxed text-stone-500 ${cartOpen ? "mt-2 text-xs" : "mt-3 text-sm"}`}>
                       {rt.description}
                     </p>
+                  )}
+                  {rt.amenities && rt.amenities.length > 0 && (
+                    <div className={`flex flex-wrap gap-x-2.5 gap-y-1 border-t border-stone-100 pt-2.5 text-stone-600 ${cartOpen ? "mt-1.5" : "mt-3.5"}`}>
+                      {rt.amenities.slice(0, cartOpen ? 2 : 4).map((amenity: string) => {
+                        const icon = getAmenityIcon(amenity);
+                        return (
+                          <div key={amenity} className={`flex items-center gap-1 text-stone-600 ${cartOpen ? "text-[10px]" : "text-[11px]"}`}>
+                            <span className="text-amber-700">{icon}</span>
+                            <span>{amenity}</span>
+                          </div>
+                        );
+                      })}
+                      {rt.amenities.length > (cartOpen ? 2 : 4) && (
+                        <span className={`text-stone-400 font-medium ${cartOpen ? "text-[10px]" : "text-[11px]"}`}>
+                          +{rt.amenities.length - (cartOpen ? 2 : 4)}
+                        </span>
+                      )}
+                    </div>
                   )}
                   {(() => {
                     const item = cart?.[rt.id];
