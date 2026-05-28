@@ -290,13 +290,6 @@ export function PublicFooter({
 /* Extracted Page Builder Components                                   */
 /* ------------------------------------------------------------------ */
 
-function hexToRgba(hex: string, alpha: number): string {
-  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-}
-
 export type Pb = { isBuilder: boolean; sel: string | null; onSelect: (key: string) => void };
 
 /** Wraps a homepage section so it is click-to-select inside the builder. */
@@ -350,9 +343,10 @@ export function PomahNav({
   /** Optional contact number — renders a circular phone button in the nav. */
   phone?: string;
 }) {
-  const background = header.transparent
-    ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
-    : header.bgColor;
+  // Visual preset drives layout (overlay vs in-flow) and colour scheme.
+  const style = header.style ?? "pill";
+  const overlay = style === "pill" || style === "transparent"; // floats over hero
+  const darkText = style === "pill" || style === "minimal"; // dark text on light bg
 
   // Scroll behaviour: "scroll" leaves the header in flow; the others pin
   // it with `position: fixed` (reliable regardless of ancestor overflow).
@@ -381,14 +375,15 @@ export function PomahNav({
   }, [mode]);
 
   let positionClass: string;
-  if (pinned) {
-    positionClass = "fixed inset-x-0 top-0";
-  } else if (header.transparent) {
+  if (overlay) {
     positionClass = "absolute inset-x-0 top-0";
+  } else if (pinned) {
+    positionClass = "fixed inset-x-0 top-0";
   } else {
     positionClass = "relative";
   }
-  const needsSpacer = pinned && !header.transparent;
+  const needsSpacer = !overlay && pinned;
+  const navBg = style === "solid" ? header.bgColor : "transparent";
   const selected = pb.isBuilder && pb.sel === "header";
 
   const logoEl = (
@@ -402,8 +397,14 @@ export function PomahNav({
         />
       ) : (
         <>
-          <span className="font-serif text-2xl font-bold text-stone-900">Pomah</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
+          <span className={`font-serif text-2xl font-bold ${darkText ? "text-stone-900" : "text-white"}`}>
+            Pomah
+          </span>
+          <span
+            className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
+              darkText ? "text-stone-400" : "text-white/70"
+            }`}
+          >
             guesthouse
           </span>
         </>
@@ -412,9 +413,18 @@ export function PomahNav({
   );
 
   const linksEl = (
-    <div className="hidden items-center gap-7 text-sm font-medium text-stone-700 md:flex" key="links">
+    <div
+      className={`hidden items-center gap-7 text-sm font-medium md:flex ${
+        darkText ? "text-stone-700" : "text-white"
+      }`}
+      key="links"
+    >
       {header.links.map((n) => (
-        <a key={n.label} href={n.href} className="transition hover:text-amber-700">
+        <a
+          key={n.label}
+          href={n.href}
+          className={`transition ${darkText ? "hover:text-amber-700" : "hover:text-white/70"}`}
+        >
           {n.label}
         </a>
       ))}
@@ -427,7 +437,11 @@ export function PomahNav({
         <a
           href={`tel:${phone.replace(/[^\d+]/g, "")}`}
           aria-label="Telepon"
-          className="hidden h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-amber-700 transition hover:bg-amber-50 sm:flex"
+          className={`hidden h-9 w-9 items-center justify-center rounded-full border transition sm:flex ${
+            darkText
+              ? "border-stone-200 text-amber-700 hover:bg-amber-50"
+              : "border-white/40 text-white hover:bg-white/10"
+          }`}
         >
           <Phone className="h-4 w-4" />
         </a>
@@ -439,7 +453,7 @@ export function PomahNav({
       >
         {header.bookLabel}
       </Link>
-      <button className="text-stone-700 md:hidden" aria-label="Menu">
+      <button className={`md:hidden ${darkText ? "text-stone-700" : "text-white"}`} aria-label="Menu">
         <Menu className="h-5 w-5" />
       </button>
     </div>
@@ -465,10 +479,12 @@ export function PomahNav({
             : undefined
         }
         className={`z-40 transition-all duration-300 ${positionClass} ${
+          style === "minimal" ? "border-b border-stone-200 bg-white" : ""
+        } ${header.dropShadow && (style === "solid" || style === "minimal") ? "shadow-md" : ""} ${
           selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""
         }`}
         style={{
-          background: "transparent",
+          background: navBg,
           transform: hidden ? "translateY(-110%)" : undefined,
           opacity: faded ? 0 : undefined,
           ...(header.blur
@@ -484,7 +500,13 @@ export function PomahNav({
             Header
           </span>
         )}
-        <div className="mx-auto mt-4 flex max-w-6xl items-center justify-between gap-4 rounded-full border border-stone-100 bg-white/95 px-6 py-3 text-stone-800 shadow-lg backdrop-blur">
+        <div
+          className={
+            style === "pill"
+              ? "mx-auto mt-4 flex max-w-6xl items-center justify-between gap-4 rounded-full border border-stone-100 bg-white/95 px-6 py-3 text-stone-800 shadow-lg backdrop-blur"
+              : "mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4"
+          }
+        >
           {slots}
         </div>
         <span className="sr-only">{name}</span>
@@ -616,7 +638,15 @@ export function HeroSlider({
           <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
-        <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+        <div
+          className={`relative mx-auto flex h-full max-w-6xl flex-col justify-center px-6 ${
+            hero.textAlign === "left"
+              ? "items-start text-left"
+              : hero.textAlign === "right"
+                ? "items-end text-right"
+                : "items-center text-center"
+          }`}
+        >
           <h1
             className={`max-w-3xl tracking-tight text-white drop-shadow ${
               hero.fontFamily === "mono"

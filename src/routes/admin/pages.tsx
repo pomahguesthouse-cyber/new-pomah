@@ -650,9 +650,41 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
   return (
     <Section
       title="Desain Header"
-      desc="Warna, tombol, dan menu navigasi pada bagian atas halaman."
+      desc="Pilih gaya header, lalu sesuaikan warna, tombol, dan menu navigasi."
     >
-      <FieldRow label="Warna latar header">
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">Gaya header</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              { key: "pill", label: "Pill mengambang", desc: "Kapsul putih di atas hero" },
+              { key: "transparent", label: "Transparan", desc: "Menyatu di atas hero" },
+              { key: "solid", label: "Bar solid", desc: "Bar berwarna, tidak menumpuk" },
+              { key: "minimal", label: "Minimal", desc: "Bar putih, teks gelap" },
+            ] as const
+          ).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => set({ style: opt.key })}
+              className={cn(
+                "rounded-lg border p-3 text-left transition",
+                (header.style ?? "pill") === opt.key
+                  ? "border-teal-500 bg-teal-50 ring-1 ring-teal-500"
+                  : "border-border bg-background hover:bg-muted",
+              )}
+            >
+              <p className="text-sm font-semibold">{opt.label}</p>
+              <p className="text-[11px] text-muted-foreground">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Pill &amp; Transparan menumpuk di atas hero; Solid &amp; Minimal mengambil ruang sendiri.
+        </p>
+      </div>
+
+      <FieldRow label="Warna latar header (untuk gaya Bar solid)">
         <ColorField value={header.bgColor} onChange={(v) => set({ bgColor: v })} />
       </FieldRow>
       <FieldRow label="Teks tombol pesan">
@@ -878,6 +910,26 @@ function HeroTab({ cfg, setCfg, isBooking }: TabProps & { isBooking?: boolean })
           <option value="zoom">Zoom — membesar</option>
           <option value="none">Tanpa animasi</option>
         </select>
+      </FieldRow>
+
+      <FieldRow label="Perataan teks (justify)">
+        <div className="grid grid-cols-3 gap-2">
+          {(["left", "center", "right"] as const).map((al) => (
+            <button
+              key={al}
+              type="button"
+              onClick={() => set({ textAlign: al })}
+              className={cn(
+                "rounded-md border px-3 py-2 text-xs font-medium capitalize transition",
+                hero.textAlign === al
+                  ? "border-teal-500 bg-teal-50 text-teal-800"
+                  : "border-input bg-background hover:bg-muted",
+              )}
+            >
+              {al === "left" ? "Kiri" : al === "center" ? "Tengah" : "Kanan"}
+            </button>
+          ))}
+        </div>
       </FieldRow>
 
       <div className="space-y-3">
