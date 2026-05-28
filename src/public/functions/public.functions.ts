@@ -718,21 +718,24 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
         fn: string,
         args: Record<string, unknown>,
       ) => Promise<{
-        data: { room_type_id: string; available: boolean }[] | null;
+        data: { room_type_id: string; total: number; taken: number; available: number }[] | null;
         error: { message: string } | null;
       }>;
     };
-    const { data: rows, error } = await client.rpc("room_type_availability", {
+    const { data: rows, error } = await client.rpc("room_type_availability_detail", {
       p_check_in: checkIn,
       p_check_out: checkOut,
     });
 
     const availability: Record<string, boolean> = {};
+    const availableRooms: Record<string, number> = {};
     for (const r of rows ?? []) {
-      availability[r.room_type_id] = r.available;
+      availability[r.room_type_id] = r.available > 0;
+      availableRooms[r.room_type_id] = r.available;
     }
     return {
       availability,
+      availableRooms,
       debug: { rows: (rows ?? []).length, error: error?.message ?? null },
     };
   });

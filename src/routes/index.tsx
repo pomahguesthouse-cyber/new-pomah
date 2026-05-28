@@ -751,6 +751,7 @@ function PomahHome() {
                       rooms={rooms}
                       rc={cfg.roomCarousel}
                       availability={availability}
+                      availableRooms={availableRooms}
                       checkIn={checkIn}
                       checkOut={checkOut}
                       guests={guests}
@@ -768,6 +769,7 @@ function PomahHome() {
                         checkIn={effCheckIn}
                         checkOut={effCheckOut}
                         guests={guests}
+                        availableRooms={availableRooms}
                         onRemove={removeFromCart}
                         onClose={() => {
                           setCart({});
@@ -1482,6 +1484,7 @@ function BookingSidePanel({
   checkIn,
   checkOut,
   guests,
+  availableRooms,
   onRemove,
   onClose,
   onConfirm,
@@ -1490,6 +1493,7 @@ function BookingSidePanel({
   checkIn: string;
   checkOut: string;
   guests: number;
+  availableRooms?: Record<string, number> | null;
   onRemove: (id: string) => void;
   onClose: () => void;
   onConfirm: () => void;
@@ -1504,15 +1508,29 @@ function BookingSidePanel({
   );
   const idr = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
+  const hasConflicts = cart.some((item) => {
+    const currentAvail = availableRooms !== undefined && availableRooms !== null
+      ? availableRooms[item.room.id] ?? 0
+      : null;
+    return currentAvail !== null && currentAvail < item.rooms;
+  });
+
   let grandTotal = 0;
   let totalCapacity = 0;
   let totalRooms = 0;
   for (const item of cart) {
-    const rate = Number(item.room.base_rate ?? 0);
-    const erate = Number(item.room.extrabed_rate ?? 0);
-    grandTotal += rate * nights * item.rooms + erate * nights * item.extrabed;
-    totalCapacity += (Number(item.room.capacity ?? 0) || 0) * item.rooms + item.extrabed;
-    totalRooms += item.rooms;
+    const currentAvail = availableRooms !== undefined && availableRooms !== null
+      ? availableRooms[item.room.id] ?? 0
+      : null;
+    const isSoldOut = currentAvail === 0;
+
+    if (!isSoldOut) {
+      const rate = Number(item.room.base_rate ?? 0);
+      const erate = Number(item.room.extrabed_rate ?? 0);
+      grandTotal += rate * nights * item.rooms + erate * nights * item.extrabed;
+      totalCapacity += (Number(item.room.capacity ?? 0) || 0) * item.rooms + item.extrabed;
+      totalRooms += item.rooms;
+    }
   }
   const capacityShort = totalCapacity > 0 && totalCapacity < guests;
 
@@ -1529,35 +1547,86 @@ function BookingSidePanel({
         </button>
       </div>
 
+      {hasConflicts && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          <p className="font-semibold">⚠️ Kamar Terpesan / Berkurang</p>
+          <p className="mt-1 leading-relaxed">
+            Beberapa kamar pilihan Anda baru saja terbooking via chatbot/tamu lain. Silakan sesuaikan atau hapus kamar tersebut.
+          </p>
+        </div>
+      )}
+
       {/* Cart items */}
       <div className="mb-4 max-h-[44vh] space-y-3 overflow-y-auto pr-1">
         {cart.map((item) => {
           const rate = Number(item.room.base_rate ?? 0);
           const erate = Number(item.room.extrabed_rate ?? 0);
+          const currentAvail = availableRooms !== undefined && availableRooms !== null
+            ? availableRooms[item.room.id] ?? 0
+            : null;
+          const isSoldOut = currentAvail === 0;
+          const isReduced = currentAvail !== null && currentAvail > 0 && currentAvail < item.rooms;
           const sub = rate * nights * item.rooms + erate * nights * item.extrabed;
+
           return (
             <div
               key={item.room.id}
-              className="rounded-2xl border border-stone-100 bg-stone-50/60 p-3"
+              className={cn(
+                "rounded-2xl border p-3 transition",
+                isSoldOut
+                  ? "border-red-200 bg-red-50/40"
+                  : isReduced
+                  ? "border-amber-200 bg-amber-50/40"
+                  : "border-stone-100 bg-stone-50/60",
+              )}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-stone-900">{item.room.name}</p>
-                  <p className="text-xs text-stone-500">
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={cn(
+                      "truncate font-semibold",
+                      isSoldOut ? "text-stone-400 line-through decoration-red-400 decoration-2" : "text-stone-900",
+                    )}
+                  >
+                    {item.room.name}
+                  </p>
+                  <p
+                    className={cn(
+                      "text-xs",
+                      isSoldOut ? "text-stone-400 line-through" : "text-stone-500",
+                    )}
+                  >
                     {item.rooms}× Kamar
                     {item.extrabed > 0 ? ` · ${item.extrabed}× Extrabed` : ""}
                   </p>
+                  {isSoldOut && (
+                    <span className="mt-1.5 inline-block rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">
+                      Habis Terpesan (Chatbot/Tamu Lain)
+                    </span>
+                  )}
+                  {isReduced && (
+                    <span className="mt-1.5 inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
+                      Sisa {currentAvail} Kamar (Tersedia Berkurang)
+                    </span>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => onRemove(item.room.id)}
                   aria-label="Hapus"
-                  className="rounded-md p-1 text-stone-400 transition hover:bg-white hover:text-red-600"
+                  className="rounded-md p-1 text-stone-400 transition hover:bg-white hover:text-red-600 shrink-0"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <p className="mt-1 text-right text-sm font-medium text-stone-700">{idr(sub)}</p>
+              <p
+                className={cn(
+                  "mt-1 text-right text-sm font-medium",
+                  isSoldOut ? "text-stone-400 line-through" : "text-stone-700",
+                )}
+              >
+                {idr(sub)}
+              </p>
             </div>
           );
         })}
@@ -1617,9 +1686,10 @@ function BookingSidePanel({
 
       <button
         onClick={onConfirm}
-        className="w-full rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800"
+        disabled={hasConflicts}
+        className="w-full rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Lanjutkan Pemesanan
+        {hasConflicts ? "Sesuaikan Pilihan Kamar" : "Lanjutkan Pemesanan"}
       </button>
       <p className="mt-3 text-center text-[11px] text-stone-400">
         Isi data tamu di langkah berikutnya.
@@ -1643,6 +1713,7 @@ function RoomCarousel({
   rooms,
   rc,
   availability,
+  availableRooms,
   checkIn,
   checkOut,
   guests = 1,
@@ -1655,6 +1726,7 @@ function RoomCarousel({
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
   availability: Record<string, boolean> | null;
+  availableRooms?: Record<string, number> | null;
   checkIn?: string;
   checkOut?: string;
   guests?: number;
@@ -1832,6 +1904,32 @@ function RoomCarousel({
             <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">
+                  {availableRooms !== undefined && availableRooms !== null && (
+                    <div className="absolute left-3 top-3 z-10">
+                      {(() => {
+                        const count = availableRooms[rt.id] ?? 0;
+                        if (count === 0) {
+                          return (
+                            <span className="rounded-full bg-red-600/90 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+                              Habis Terpesan
+                            </span>
+                          );
+                        }
+                        if (count <= 2) {
+                          return (
+                            <span className="rounded-full bg-amber-600/95 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm animate-pulse">
+                              Sisa {count} Kamar!
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="rounded-full bg-stone-900/80 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+                            {count} Kamar Tersedia
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  )}
                   {rt.hero_image_url ? (
                     <img
                       src={rt.hero_image_url}
