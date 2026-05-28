@@ -101,6 +101,13 @@ export interface HomepageConfig {
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
   };
+  lokasi: {
+    heading: string;
+    subheading: string;
+    /** Title of the "nearby places" card. */
+    nearbyTitle: string;
+    nearby: { name: string; type: string; distance: string; time: string }[];
+  };
   /** SEO settings for the home page (edited in Page Builder → Page Settings). */
   seo: {
     metaTitle: string;
@@ -214,6 +221,18 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 32,
     fontStyle: "bold",
   },
+  lokasi: {
+    heading: "Lokasi Kami",
+    subheading: "Temukan kami di lokasi strategis yang mudah diakses",
+    nearbyTitle: "Lokasi Terdekat (Radius 5km)",
+    nearby: [
+      { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
+      { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
+      { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
+      { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
+      { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
+    ],
+  },
   seo: {
     metaTitle: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang",
     metaDescription:
@@ -249,6 +268,7 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     datePicker: { ...d.datePicker, ...c.datePicker },
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
+    lokasi: { ...d.lokasi, ...c.lokasi },
     seo: { ...d.seo, ...c.seo },
     bookingSeo: { ...d.bookingSeo, ...c.bookingSeo },
   };
