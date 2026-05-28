@@ -98,6 +98,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   hero:     "Hero Slider",
   room:     "Foto Kamar",
   branding: "Branding",
+  media:    "Media",
 };
 
 /* ------------------------------------------------------------------ */
@@ -180,6 +181,14 @@ export function MediaPicker({
           const url = doc.file_path
             ? supabase.storage.from(bucket).getPublicUrl(doc.file_path).data.publicUrl
             : "";
+          let category = "brosur";
+          if (bucket === "room-images" && doc.file_path) {
+            if (doc.file_path.startsWith("media/")) category = "hero";
+            else if (doc.file_path.startsWith("room-types/")) category = "room";
+            else if (doc.file_path.startsWith("branding/")) category = "branding";
+            else category = "media";
+          }
+
           return {
             id: `brosur:${doc.id}`,
             name: doc.name,
@@ -188,7 +197,7 @@ export function MediaPicker({
             isImage: IMAGE_EXTS.includes(ext),
             isVideo: VIDEO_EXTS.includes(ext),
             source: "brosur" as const,
-            category: "brosur",
+            category,
           } satisfies MediaAsset;
         }),
       ),
