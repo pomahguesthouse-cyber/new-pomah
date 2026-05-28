@@ -305,12 +305,13 @@ function PomahHome() {
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} phone={property?.whatsapp_number ?? undefined} />
 
       <PbZone id="hero" label="Hero Slider" pb={pb}>
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
+          accent="di Semarang"
           rating={{ score: gRating, total: gTotal }}
           actions={
             <>
@@ -592,6 +593,7 @@ function PomahHome() {
               availability={availability}
               checkIn={checkIn}
               checkOut={checkOut}
+              guests={guests}
             />
           </div>
         </section>
@@ -1034,12 +1036,14 @@ function RoomCarousel({
   availability,
   checkIn,
   checkOut,
+  guests = 1,
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
   availability: Record<string, boolean> | null;
   checkIn?: string;
   checkOut?: string;
+  guests?: number;
 }) {
   const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
   // Adjust cards per view for mobile screens (show 1 card on small widths)
@@ -1215,7 +1219,11 @@ function RoomCarousel({
                       {rt.description}
                     </p>
                   )}
-                  {availability && availability[rt.id] === false ? (
+                  {rt.capacity != null && rt.capacity < guests ? (
+                    <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-200 py-2.5 text-center text-sm font-semibold text-stone-500">
+                      Kapasitas tidak cukup
+                    </span>
+                  ) : availability && availability[rt.id] === false ? (
                     <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">
                       Tidak Tersedia
                     </span>

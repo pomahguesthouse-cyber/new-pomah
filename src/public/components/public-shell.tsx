@@ -341,11 +341,14 @@ export function PomahNav({
   logo,
   header,
   pb,
+  phone,
 }: {
   name: string;
   logo: string | null;
   header: HomepageConfig["header"];
   pb: Pb;
+  /** Optional contact number — renders a circular phone button in the nav. */
+  phone?: string;
 }) {
   const background = header.transparent
     ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
@@ -420,6 +423,15 @@ export function PomahNav({
 
   const actionsEl = (
     <div className="flex items-center gap-3" key="actions">
+      {phone && (
+        <a
+          href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+          aria-label="Telepon"
+          className="hidden h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-amber-700 transition hover:bg-amber-50 sm:flex"
+        >
+          <Phone className="h-4 w-4" />
+        </a>
+      )}
       <Link
         to="/book"
         search={{}}
@@ -549,11 +561,14 @@ const HERO_ANIM: Record<string, string> = {
 export function HeroSlider({
   hero,
   fallbackTitle,
+  accent,
   rating,
   actions,
 }: {
   hero: HomepageConfig["hero"];
   fallbackTitle: string;
+  /** Optional gold script accent rendered just under the heading (home only). */
+  accent?: string;
   /** Optional Google-rating badge shown under the subheading (home only). */
   rating?: { score: number; total: number };
   /** Optional CTA buttons rendered under the badge (home only). */
@@ -619,6 +634,11 @@ export function HeroSlider({
           >
             {active.heading}
           </h1>
+          {accent && (
+            <p className="mt-1 font-serif text-3xl italic text-amber-300 drop-shadow md:text-4xl">
+              {accent}
+            </p>
+          )}
           {active.subheading && (
             <>
               <span className="my-4 h-px w-40 bg-white/70" />
