@@ -374,6 +374,28 @@ function PomahHome() {
             style={{ zIndex: 60 }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
+              {stuck && (
+                <Link
+                  to="/"
+                  aria-label={propertyName}
+                  className="mb-2 hidden items-center justify-center gap-2 transition-opacity duration-500 md:flex"
+                >
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={propertyName}
+                      className="h-16 w-auto object-contain"
+                    />
+                  ) : (
+                    <>
+                      <span className="font-serif text-4xl font-bold text-stone-900">Pomah</span>
+                      <span className="font-mono text-xs uppercase tracking-[0.25em] text-stone-400">
+                        guesthouse
+                      </span>
+                    </>
+                  )}
+                </Link>
+              )}
               {cfg.datePicker.heading && (
                 <p
                   className={`mb-3 hidden text-center text-amber-700 md:block ${
@@ -393,24 +415,6 @@ function PomahHome() {
                 </p>
               )}
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
-                {stuck && (
-                  <Link
-                    to="/"
-                    aria-label={propertyName}
-                    className="hidden shrink-0 items-center gap-1.5 border-r border-stone-200 pb-1 pr-3 transition-opacity duration-500 md:flex"
-                  >
-                    {logoUrl ? (
-                      <img src={logoUrl} alt={propertyName} className="h-9 w-auto object-contain" />
-                    ) : (
-                      <>
-                        <span className="font-serif text-xl font-bold text-stone-900">Pomah</span>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
-                          guesthouse
-                        </span>
-                      </>
-                    )}
-                  </Link>
-                )}
                 <Field label="Check-In">
                   <DatePickerID
                     value={checkIn}
