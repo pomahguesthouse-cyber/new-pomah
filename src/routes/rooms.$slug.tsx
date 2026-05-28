@@ -209,7 +209,7 @@ function RoomBookingPage() {
         <PublicNav property={data?.property} />
         <div className="mx-auto max-w-6xl px-6 py-24 text-center">
           <h1 className="text-2xl font-semibold">Kamar tidak ditemukan</h1>
-          <Link to="/rooms" className="mt-4 inline-block text-sm text-teal-700 underline">
+          <Link to="/rooms" className="mt-4 inline-block text-sm text-amber-700 underline">
             Kembali ke daftar kamar
           </Link>
         </div>
@@ -224,12 +224,12 @@ function RoomBookingPage() {
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">
-          <Link to="/" className="flex items-center gap-1 hover:text-teal-700">
+          <Link to="/" className="flex items-center gap-1 hover:text-amber-700">
             <Home className="h-3.5 w-3.5" />
             Home
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
-          <Link to="/rooms" className="hover:text-teal-700">
+          <Link to="/rooms" className="hover:text-amber-700">
             Rooms
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
@@ -262,7 +262,7 @@ function RoomBookingPage() {
                     onClick={() => setActive(i)}
                     className={cn(
                       "h-20 w-28 shrink-0 overflow-hidden rounded-lg border-2 transition",
-                      i === active ? "border-teal-600" : "border-transparent opacity-80",
+                      i === active ? "border-amber-600" : "border-transparent opacity-80",
                     )}
                   >
                     <img src={src} alt="" className="h-full w-full object-cover" />
@@ -285,7 +285,7 @@ function RoomBookingPage() {
                       key={a}
                       className="flex items-center gap-2 rounded-lg bg-white px-3 py-2.5 text-sm text-stone-700 ring-1 ring-stone-200"
                     >
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" />
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-600" />
                       {a}
                     </div>
                   ))}
@@ -319,7 +319,7 @@ function RoomBookingPage() {
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-medium text-stone-500">Harga Kamar</p>
-              <p className="mt-1 text-3xl font-bold text-teal-700">{idr(Number(room.base_rate))}</p>
+              <p className="mt-1 text-3xl font-bold text-amber-700">{idr(Number(room.base_rate))}</p>
               <p className="text-xs text-stone-400">per malam</p>
 
               <div className="mt-5 space-y-4">
@@ -398,14 +398,14 @@ function RoomBookingPage() {
                     <div className="p-5">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-bold">{o.name}</h3>
-                        <span className="text-sm font-semibold text-teal-700">
+                        <span className="text-sm font-semibold text-amber-700">
                           {idr(Number(o.base_rate))}
                         </span>
                       </div>
                       {o.description && (
                         <p className="mt-2 line-clamp-2 text-sm text-stone-500">{o.description}</p>
                       )}
-                      <span className="mt-3 inline-block rounded-lg bg-teal-700 px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-teal-800">
+                      <span className="mt-3 inline-block rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-amber-800">
                         Lihat & Pesan
                       </span>
                     </div>
@@ -538,14 +538,14 @@ function BookingDialog({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setRooms((v) => Math.max(1, v - 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-teal-300 text-teal-700"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
               >
                 <Minus className="h-4 w-4" />
               </button>
-              <span className="w-8 text-center text-xl font-bold text-teal-700">{rooms}</span>
+              <span className="w-8 text-center text-xl font-bold text-amber-700">{rooms}</span>
               <button
                 onClick={() => setRooms((v) => Math.min(maxRooms, v + 1))}
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-teal-300 text-teal-700"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
               >
                 <Plus className="h-4 w-4" />
               </button>
@@ -617,7 +617,7 @@ function BookingDialog({
             </div>
             <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2">
               <span className="text-base font-bold">Total</span>
-              <span className="text-xl font-bold text-teal-700">{idr(total)}</span>
+              <span className="text-xl font-bold text-amber-700">{idr(total)}</span>
             </div>
           </div>
 
@@ -648,7 +648,7 @@ function BookingDialog({
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="h-4 w-4 accent-teal-700"
+                className="h-4 w-4 accent-amber-700"
               />
               Saya telah membaca dan menyetujui kebijakan hotel di atas
             </label>
@@ -678,7 +678,7 @@ function BookingDialog({
           <button
             onClick={submitBooking}
             disabled={pending}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-700 py-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-60"
           >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             {pending ? "Memproses…" : `Konfirmasi Pemesanan · ${idr(total)}`}
@@ -695,7 +695,7 @@ function Spec({ icon, label, value }: { icon: React.ReactNode; label: string; va
   return (
     <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
       <div className="flex items-center gap-1.5 text-xs text-stone-400">
-        <span className="text-teal-600">{icon}</span>
+        <span className="text-amber-600">{icon}</span>
         {label}
       </div>
       <p className="mt-1 font-semibold">{value}</p>
@@ -737,7 +737,7 @@ function ReadOnlyDate({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="mb-1 font-semibold">{label}</p>
-      <div className="flex items-center gap-2 rounded-lg border border-teal-500 px-3 py-2.5 text-sm font-medium text-teal-700">
+      <div className="flex items-center gap-2 rounded-lg border border-amber-500 px-3 py-2.5 text-sm font-medium text-amber-700">
         <CalendarDays className="h-4 w-4" />
         {fmtDateID(value)}
       </div>
@@ -770,7 +770,7 @@ function Input2({
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-teal-500"
+        className="w-full rounded-lg border border-stone-200 px-3 py-2.5 text-sm outline-none focus:border-amber-500"
       />
     </div>
   );
@@ -794,20 +794,20 @@ function PaymentOption({
       onClick={onClick}
       className={cn(
         "flex w-full gap-3 rounded-lg border p-3 text-left transition",
-        active ? "border-teal-500 bg-teal-50/50" : "border-stone-200 hover:bg-stone-50",
+        active ? "border-amber-500 bg-amber-50/50" : "border-stone-200 hover:bg-stone-50",
       )}
     >
       <span
         className={cn(
           "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2",
-          active ? "border-teal-600" : "border-stone-300",
+          active ? "border-amber-600" : "border-stone-300",
         )}
       >
-        {active && <span className="h-2 w-2 rounded-full bg-teal-600" />}
+        {active && <span className="h-2 w-2 rounded-full bg-amber-600" />}
       </span>
       <div>
         <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <span className="text-teal-600">{icon}</span>
+          <span className="text-amber-600">{icon}</span>
           {title}
         </p>
         <p className="mt-0.5 text-xs text-stone-500">{desc}</p>

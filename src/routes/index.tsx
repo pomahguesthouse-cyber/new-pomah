@@ -17,6 +17,11 @@ import {
   Instagram,
   ChevronLeft,
   ChevronRight,
+  Users,
+  BedDouble,
+  Headphones,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import {
   getPublicSiteData,
@@ -76,6 +81,15 @@ const FACILITIES = [
   { icon: Building2, title: "Balkon", desc: "Balkon" },
   { icon: Car, title: "Free Parking", desc: "Parkir Gratis" },
   { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
+];
+
+/** Trust badges shown as an icon row just under the hero / date picker. */
+const FEATURE_BADGES = [
+  { icon: Star, title: "Rating Google", desc: "76 ulasan" },
+  { icon: BedDouble, title: "Kamar Bersih", desc: "Nyaman & terawat" },
+  { icon: Users, title: "Cocok untuk", desc: "Keluarga" },
+  { icon: MapPin, title: "Lokasi Strategis", desc: "Dekat kampus & kota" },
+  { icon: Headphones, title: "Pelayanan Ramah", desc: "Siap membantu" },
 ];
 
 const REVIEWS = [
@@ -263,6 +277,7 @@ function PomahHome() {
   const [checkOut, setCheckOut] = useState("");
   const [tempCheckIn, setTempCheckIn] = useState("");
   const [tempCheckOut, setTempCheckOut] = useState("");
+  const [guests, setGuests] = useState(1);
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -290,10 +305,38 @@ function PomahHome() {
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} phone={property?.whatsapp_number ?? undefined} />
 
       <PbZone id="hero" label="Hero Slider" pb={pb}>
-        <HeroSlider hero={cfg.hero} fallbackTitle={`Selamat Datang Di ${propertyName}`} />
+        <HeroSlider
+          hero={cfg.hero}
+          fallbackTitle={`Selamat Datang Di ${propertyName}`}
+          accent="di Semarang"
+          rating={{ score: gRating, total: gTotal }}
+          actions={
+            <>
+              <Link
+                to="/book"
+                search={{}}
+                className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-amber-800"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Pesan kamar sekarang
+              </Link>
+              {wa && (
+                <a
+                  href={`https://wa.me/${wa}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-stone-800 shadow-lg transition hover:bg-amber-50"
+                >
+                  <MessageCircle className="h-4 w-4 text-green-600" />
+                  Chat WhatsApp
+                </a>
+              )}
+            </>
+          }
+        />
       </PbZone>
 
       {/* ── DATE PICKER WIDGET ── */}
@@ -306,7 +349,7 @@ function PomahHome() {
             <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
               {cfg.datePicker.heading && (
                 <p
-                  className={`mb-3 text-center text-teal-700 ${
+                  className={`mb-3 text-center text-amber-700 ${
                     cfg.datePicker.fontFamily === "mono"
                       ? "font-mono"
                       : cfg.datePicker.fontFamily === "sans"
@@ -340,6 +383,23 @@ function PomahHome() {
                     className="h-10"
                   />
                 </Field>
+                <Field label="Tamu">
+                  <div className="relative">
+                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <select
+                      value={guests}
+                      onChange={(e) => setGuests(Number(e.target.value))}
+                      className="h-10 w-full appearance-none rounded-md border border-stone-200 bg-background pl-9 pr-8 text-sm outline-none focus:ring-1 focus:ring-amber-500"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((g) => (
+                        <option key={g} value={g}>
+                          {g} Tamu
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                  </div>
+                </Field>
                 <button
                   type="button"
                   onClick={() =>
@@ -347,8 +407,9 @@ function PomahHome() {
                       .getElementById("our-room")
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
-                  className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800"
                 >
+                  <Search className="h-4 w-4" />
                   {cfg.datePicker.buttonLabel}
                 </button>
               </div>
@@ -356,6 +417,21 @@ function PomahHome() {
           </div>
         </PbZone>
       )}
+
+      {/* ── TRUST BADGES ── */}
+      <section className="mx-auto max-w-5xl px-6 pt-16">
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-5">
+          {FEATURE_BADGES.map((f) => (
+            <div key={f.title} className="flex flex-col items-center text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm">
+                <f.icon className="h-5 w-5" />
+              </span>
+              <p className="mt-2.5 text-sm font-semibold text-stone-800">{f.title}</p>
+              <p className="text-xs text-stone-400">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* ── YOUR PERFECT STAY ── */}
       <PbZone id="story" label="Your Perfect Stay" pb={pb}>
@@ -500,7 +576,7 @@ function PomahHome() {
                               setCheckIn(tempCheckIn);
                               setCheckOut(tempCheckOut);
                             }}
-                            className="cursor-pointer w-full rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                            className="cursor-pointer w-full rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
                           >
                             Terapkan
                           </button>
@@ -517,6 +593,7 @@ function PomahHome() {
               availability={availability}
               checkIn={checkIn}
               checkOut={checkOut}
+              guests={guests}
             />
           </div>
         </section>
@@ -536,7 +613,7 @@ function PomahHome() {
               key={f.title}
                 className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
             >
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-700">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
                 <f.icon className="h-6 w-6" />
               </div>
               <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
@@ -551,7 +628,7 @@ function PomahHome() {
         <section id="lokasi" className="bg-[#f3ece0] py-20">
           <div className="mx-auto max-w-6xl px-6">
             <div className="text-center">
-              <h2 className="font-serif text-3xl font-bold tracking-tight text-teal-700 md:text-4xl">
+              <h2 className="font-serif text-3xl font-bold tracking-tight text-amber-700 md:text-4xl">
                 {cfg.lokasi.heading}
               </h2>
               {cfg.lokasi.subheading && (
@@ -569,7 +646,7 @@ function PomahHome() {
                 />
               </div>
               <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-                <p className="flex items-center gap-2 font-serif text-lg font-semibold text-teal-700">
+                <p className="flex items-center gap-2 font-serif text-lg font-semibold text-amber-700">
                   <MapPin className="h-5 w-5" />
                   {cfg.lokasi.nearbyTitle}
                 </p>
@@ -580,14 +657,14 @@ function PomahHome() {
                       className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50/60 px-3 py-2.5"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="h-6 w-6 shrink-0 rounded-full border-2 border-teal-600" />
+                        <span className="h-6 w-6 shrink-0 rounded-full border-2 border-amber-600" />
                         <div>
                           <p className="text-sm font-semibold text-stone-800">{n.name}</p>
                           <p className="text-xs text-stone-400">{n.type}</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="flex items-center gap-1 text-sm font-medium text-teal-700">
+                        <p className="flex items-center gap-1 text-sm font-medium text-amber-700">
                           <MapPin className="h-3.5 w-3.5" />
                           {n.distance}
                         </p>
@@ -618,13 +695,46 @@ function PomahHome() {
           <div className="mt-10 text-center">
             <Link
               to="/explore"
-              className="inline-flex items-center gap-2 rounded-full bg-teal-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-800"
+              className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
             >
               Lihat Selengkapnya di City Guide
             </Link>
           </div>
         </section>
       )}
+
+      {/* ── CTA BANNER ── */}
+      <section className="mx-auto max-w-6xl px-6 pb-20">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
+          <h2 className="font-serif text-2xl font-bold text-white md:text-3xl">
+            Siap menginap di {propertyName}?
+          </h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-amber-100">
+            Booking mudah dan cepat. Tim kami siap menyambut Anda.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              to="/book"
+              search={{}}
+              className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Pesan kamar sekarang
+            </Link>
+            {wa && (
+              <a
+                href={`https://wa.me/${wa}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-white/40 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Chat WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      </section>
 
       <PomahFooter name={propertyName} />
 
@@ -675,7 +785,7 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null;
         key={idx}
         className="animate-in fade-in rounded-2xl border border-stone-200 bg-white p-7 text-center shadow-sm duration-500"
       >
-        <Quote className="mx-auto h-6 w-6 text-teal-600/40" />
+        <Quote className="mx-auto h-6 w-6 text-amber-600/40" />
         <p className="mt-3 text-sm leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
         {cur.author && <p className="mt-4 text-xs font-semibold text-stone-700">— {cur.author}</p>}
       </div>
@@ -695,7 +805,7 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null;
           <button
             onClick={() => setI((v) => (v - 1 + items.length) % items.length)}
             aria-label="Sebelumnya"
-            className="rounded-full border border-stone-300 bg-white p-1.5 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-1.5 text-amber-700 hover:bg-amber-50"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -706,7 +816,7 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null;
                 onClick={() => setI(d)}
                 aria-label={`Ulasan ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === idx ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === idx ? "w-6 bg-amber-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
@@ -714,7 +824,7 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null;
           <button
             onClick={() => setI((v) => (v + 1) % items.length)}
             aria-label="Berikutnya"
-            className="rounded-full border border-stone-300 bg-white p-1.5 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-1.5 text-amber-700 hover:bg-amber-50"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -859,7 +969,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                       <CalendarDays className="h-3.5 w-3.5" />
                       {n.date}
                     </span>
-                    <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
                       {n.category}
                     </span>
                   </div>
@@ -877,7 +987,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
           <button
             onClick={handlePrev}
             aria-label="Sebelumnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -891,7 +1001,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                 }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === activeDot ? "w-6 bg-amber-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
@@ -899,7 +1009,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
           <button
             onClick={handleNext}
             aria-label="Berikutnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -926,12 +1036,14 @@ function RoomCarousel({
   availability,
   checkIn,
   checkOut,
+  guests = 1,
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
   availability: Record<string, boolean> | null;
   checkIn?: string;
   checkOut?: string;
+  guests?: number;
 }) {
   const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
   // Adjust cards per view for mobile screens (show 1 card on small widths)
@@ -1072,7 +1184,7 @@ function RoomCarousel({
           {extendedRooms.map((rt, idx) => (
             <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">
                   {rt.hero_image_url ? (
                     <img
                       src={rt.hero_image_url}
@@ -1080,7 +1192,7 @@ function RoomCarousel({
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">
+                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-amber-600/50">
                       Foto Kamar
                     </div>
                   )}
@@ -1097,7 +1209,7 @@ function RoomCarousel({
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-[10px] text-stone-400">Harga hari ini</p>
-                      <p className="text-lg font-bold text-teal-700">
+                      <p className="text-lg font-bold text-amber-700">
                         Rp {Number(rt.base_rate).toLocaleString("id-ID")}
                       </p>
                     </div>
@@ -1107,7 +1219,11 @@ function RoomCarousel({
                       {rt.description}
                     </p>
                   )}
-                  {availability && availability[rt.id] === false ? (
+                  {rt.capacity != null && rt.capacity < guests ? (
+                    <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-200 py-2.5 text-center text-sm font-semibold text-stone-500">
+                      Kapasitas tidak cukup
+                    </span>
+                  ) : availability && availability[rt.id] === false ? (
                     <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">
                       Tidak Tersedia
                     </span>
@@ -1119,7 +1235,7 @@ function RoomCarousel({
                         checkIn: checkIn || undefined,
                         checkOut: checkOut || undefined,
                       }}
-                      className="mt-5 block cursor-pointer rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800"
+                      className="mt-5 block cursor-pointer rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
                     >
                       Pesan Kamar
                     </Link>
@@ -1136,7 +1252,7 @@ function RoomCarousel({
           <button
             onClick={handlePrev}
             aria-label="Sebelumnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -1154,7 +1270,7 @@ function RoomCarousel({
                 }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
-                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                  d === activeDot ? "w-6 bg-amber-700" : "w-2 bg-stone-300"
                 }`}
               />
             ))}
@@ -1162,7 +1278,7 @@ function RoomCarousel({
           <button
             onClick={handleNext}
             aria-label="Berikutnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -1222,7 +1338,7 @@ function SectionHeading({
       >
         {children}
       </h2>
-      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />}
+      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />}
     </div>
   );
 }

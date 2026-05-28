@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -341,11 +341,14 @@ export function PomahNav({
   logo,
   header,
   pb,
+  phone,
 }: {
   name: string;
   logo: string | null;
   header: HomepageConfig["header"];
   pb: Pb;
+  /** Optional contact number — renders a circular phone button in the nav. */
+  phone?: string;
 }) {
   const background = header.transparent
     ? hexToRgba(header.bgColor, Math.max(0, Math.min(header.opacity, 100)) / 100)
@@ -399,8 +402,8 @@ export function PomahNav({
         />
       ) : (
         <>
-          <span className="font-serif text-2xl font-bold">Pomah</span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/70">
+          <span className="font-serif text-2xl font-bold text-stone-900">Pomah</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">
             guesthouse
           </span>
         </>
@@ -409,9 +412,9 @@ export function PomahNav({
   );
 
   const linksEl = (
-    <div className="hidden items-center gap-7 text-sm font-medium md:flex" key="links">
+    <div className="hidden items-center gap-7 text-sm font-medium text-stone-700 md:flex" key="links">
       {header.links.map((n) => (
-        <a key={n.label} href={n.href} className="transition hover:text-white/70">
+        <a key={n.label} href={n.href} className="transition hover:text-amber-700">
           {n.label}
         </a>
       ))}
@@ -420,15 +423,23 @@ export function PomahNav({
 
   const actionsEl = (
     <div className="flex items-center gap-3" key="actions">
+      {phone && (
+        <a
+          href={`tel:${phone.replace(/[^\d+]/g, "")}`}
+          aria-label="Telepon"
+          className="hidden h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-amber-700 transition hover:bg-amber-50 sm:flex"
+        >
+          <Phone className="h-4 w-4" />
+        </a>
+      )}
       <Link
         to="/book"
         search={{}}
-        className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold transition hover:bg-white/90"
-        style={{ color: header.bgColor }}
+        className="rounded-full bg-amber-700 px-5 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
       >
         {header.bookLabel}
       </Link>
-      <button className="text-white md:hidden" aria-label="Menu">
+      <button className="text-stone-700 md:hidden" aria-label="Menu">
         <Menu className="h-5 w-5" />
       </button>
     </div>
@@ -453,11 +464,11 @@ export function PomahNav({
               }
             : undefined
         }
-        className={`z-40 text-white transition-all duration-300 ${positionClass} ${
-          header.dropShadow ? "shadow-md" : ""
-        } ${selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""}`}
+        className={`z-40 transition-all duration-300 ${positionClass} ${
+          selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""
+        }`}
         style={{
-          background,
+          background: "transparent",
           transform: hidden ? "translateY(-110%)" : undefined,
           opacity: faded ? 0 : undefined,
           ...(header.blur
@@ -473,7 +484,9 @@ export function PomahNav({
             Header
           </span>
         )}
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">{slots}</div>
+        <div className="mx-auto mt-4 flex max-w-6xl items-center justify-between gap-4 rounded-full border border-stone-100 bg-white/95 px-6 py-3 text-stone-800 shadow-lg backdrop-blur">
+          {slots}
+        </div>
         <span className="sr-only">{name}</span>
       </nav>
       {needsSpacer && <div style={{ height: headerHeight }} aria-hidden />}
@@ -483,16 +496,16 @@ export function PomahNav({
 
 export function PomahFooter({ name }: { name: string }) {
   return (
-    <footer className="bg-teal-800 text-teal-100">
+    <footer className="bg-amber-800 text-amber-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
         <div>
           <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
-          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
+          <p className="mt-3 max-w-xs text-sm text-amber-200/80">
             Experience comfort and hospitality at {name}.
           </p>
         </div>
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-300">
             Quick Links
           </p>
           <ul className="mt-4 space-y-2 text-sm">
@@ -519,19 +532,19 @@ export function PomahFooter({ name }: { name: string }) {
           </ul>
         </div>
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-300">
             Follow Us
           </p>
           <a
             href="#"
             aria-label="Instagram"
-            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-600 text-teal-200 transition hover:border-white hover:text-white"
+            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-600 text-amber-200 transition hover:border-white hover:text-white"
           >
             <Instagram className="h-4 w-4" />
           </a>
         </div>
       </div>
-      <div className="border-t border-teal-700/60 py-5 text-center text-xs text-teal-300/70">
+      <div className="border-t border-amber-700/60 py-5 text-center text-xs text-amber-300/70">
         © {new Date().getFullYear()} {name}. Semua hak dilindungi.
       </div>
     </footer>
@@ -548,9 +561,18 @@ const HERO_ANIM: Record<string, string> = {
 export function HeroSlider({
   hero,
   fallbackTitle,
+  accent,
+  rating,
+  actions,
 }: {
   hero: HomepageConfig["hero"];
   fallbackTitle: string;
+  /** Optional gold script accent rendered just under the heading (home only). */
+  accent?: string;
+  /** Optional Google-rating badge shown under the subheading (home only). */
+  rating?: { score: number; total: number };
+  /** Optional CTA buttons rendered under the badge (home only). */
+  actions?: React.ReactNode;
 }) {
   const slides = hero.slides.length
     ? hero.slides
@@ -591,7 +613,7 @@ export function HeroSlider({
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
         <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
@@ -612,11 +634,31 @@ export function HeroSlider({
           >
             {active.heading}
           </h1>
+          {accent && (
+            <p className="mt-1 font-serif text-3xl italic text-amber-300 drop-shadow md:text-4xl">
+              {accent}
+            </p>
+          )}
           {active.subheading && (
             <>
               <span className="my-4 h-px w-40 bg-white/70" />
               <p className="text-base text-white/90 md:text-lg">{active.subheading}</p>
             </>
+          )}
+          {rating && (
+            <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/95 px-4 py-1.5 text-sm font-medium text-stone-800 shadow">
+              <span className="font-bold">G</span>
+              <span>Google Rating {rating.score.toFixed(1)}</span>
+              <span className="flex gap-0.5">
+                {[0, 1, 2, 3, 4].map((s) => (
+                  <Star key={s} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                ))}
+              </span>
+              <span className="text-stone-500">{rating.total} ulasan</span>
+            </div>
+          )}
+          {actions && (
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{actions}</div>
           )}
         </div>
       </div>
