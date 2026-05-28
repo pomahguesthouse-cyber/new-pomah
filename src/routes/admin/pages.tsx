@@ -330,12 +330,12 @@ function HomepageBuilder() {
           <div
             className={cn(
               "transition-all duration-300 overflow-hidden shadow-xl border border-border bg-white relative",
-              activeMode === "mobile" && activeLp
+              activeMode === "mobile"
                 ? "w-[390px] h-[800px] border-[12px] border-stone-850 rounded-[36px]"
                 : "w-full max-w-5xl rounded-xl"
             )}
           >
-            {activeMode === "mobile" && activeLp && (
+            {activeMode === "mobile" && (
               <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-stone-850 rounded-full z-50 flex items-center justify-center">
                 <div className="w-12 h-1 bg-stone-700 rounded-full" />
               </div>
@@ -347,7 +347,7 @@ function HomepageBuilder() {
               src={previewSrc}
               className={cn(
                 "w-full transition-all duration-300",
-                activeMode === "mobile" && activeLp 
+                activeMode === "mobile" 
                   ? "h-[776px] pt-4" 
                   : "h-[calc(100vh-9rem)]"
               )}
