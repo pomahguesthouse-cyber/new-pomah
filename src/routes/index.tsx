@@ -25,6 +25,7 @@ import {
   Plus,
   Minus,
   X,
+  Trash2,
 } from "lucide-react";
 import {
   getPublicSiteData,
@@ -277,11 +278,12 @@ function PomahHome() {
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
   const [bookingRoom, setBookingRoom] = useState<RoomRow | null>(null);
-  // Dialog only opens after the user confirms on the side panel; carries the
-  // rooms + extrabed counts the user picked in the panel.
-  const [dialogConfig, setDialogConfig] = useState<{ rooms: number; extrabed: number } | null>(
-    null,
-  );
+  // Stepper values for the room currently being added to the booking. Lifted
+  // to the page so the inline card steppers and the summary panel stay in sync.
+  const [selectedRooms, setSelectedRooms] = useState(1);
+  const [selectedExtrabed, setSelectedExtrabed] = useState(0);
+  // Dialog only opens after the user confirms on the side panel.
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   // Detect when the sticky date picker pins to the top — used to stretch
   // the bar full-width and reveal the logo on the left. Uses a sentinel placed
@@ -492,16 +494,16 @@ function PomahHome() {
         </a>
       )}
 
-      {bookingRoom && dialogConfig && effCheckIn && effCheckOut && (
+      {bookingRoom && dialogOpen && effCheckIn && effCheckOut && (
         <BookingDialog
           open={true}
-          onClose={() => setDialogConfig(null)}
+          onClose={() => setDialogOpen(false)}
           room={bookingRoom}
           checkIn={effCheckIn}
           checkOut={effCheckOut}
-          rooms={dialogConfig.rooms}
-          extrabed={dialogConfig.extrabed}
-          maxRooms={4}
+          rooms={selectedRooms}
+          extrabed={selectedExtrabed}
+          maxRooms={Math.max(1, Number(bookingRoom.total_physical_rooms ?? 0) || 10)}
           guests={guests}
           hotelPolicy={
             (property as { hotel_policy?: string | null } | null | undefined)?.hotel_policy ??
@@ -636,7 +638,12 @@ function PomahHome() {
                       checkIn={checkIn}
                       checkOut={checkOut}
                       guests={guests}
-                      onBookRoom={(rt) =>
+                      selectedRoomId={bookingRoom?.id ?? null}
+                      selectedRooms={selectedRooms}
+                      selectedExtrabed={selectedExtrabed}
+                      onChangeRooms={setSelectedRooms}
+                      onChangeExtrabed={setSelectedExtrabed}
+                      onAddRoom={(rt) => {
                         setBookingRoom({
                           id: rt.id,
                           name: rt.name,
@@ -651,8 +658,16 @@ function PomahHome() {
                           images: null,
                           extrabed_rate: rt.extrabed_rate ?? null,
                           extrabed_capacity: rt.extrabed_capacity ?? null,
-                        })
-                      }
+                          total_physical_rooms: rt.total_physical_rooms ?? null,
+                        });
+                        setSelectedRooms(1);
+                        setSelectedExtrabed(0);
+                      }}
+                      onRemove={() => {
+                        setBookingRoom(null);
+                        setSelectedRooms(1);
+                        setSelectedExtrabed(0);
+                      }}
                     />
                   </div>
                   {bookingRoom && effCheckIn && effCheckOut && (
@@ -662,11 +677,13 @@ function PomahHome() {
                         checkIn={effCheckIn}
                         checkOut={effCheckOut}
                         guests={guests}
+                        rooms={selectedRooms}
+                        extrabed={selectedExtrabed}
                         onClose={() => {
                           setBookingRoom(null);
-                          setDialogConfig(null);
+                          setDialogOpen(false);
                         }}
-                        onConfirm={(r, e) => setDialogConfig({ rooms: r, extrabed: e })}
+                        onConfirm={() => setDialogOpen(true)}
                       />
                     </div>
                   )}
@@ -1097,7 +1114,103 @@ type RoomType = {
   hero_image_url?: string | null;
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
+  total_physical_rooms?: number | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* Per-card jumlah kamar + extrabed steppers (replaces the CTA button   */
+/* on a room card once it is added to the booking)                      */
+/* ------------------------------------------------------------------ */
+
+function RoomCardSteppers({
+  rooms,
+  extrabed,
+  maxRooms,
+  maxExtrabed,
+  extrabedRate,
+  onChangeRooms,
+  onChangeExtrabed,
+  onRemove,
+}: {
+  rooms: number;
+  extrabed: number;
+  maxRooms: number;
+  maxExtrabed: number;
+  extrabedRate: number;
+  onChangeRooms: (v: number) => void;
+  onChangeExtrabed: (v: number) => void;
+  onRemove: () => void;
+}) {
+  const dec = (v: number, min = 0) => Math.max(min, v - 1);
+  const incRooms = (v: number) => Math.min(maxRooms, v + 1);
+  const incExtrabed = (v: number) => Math.min(maxExtrabed, v + 1);
+  return (
+    <div className="mt-5 space-y-2">
+      <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-stone-900">Jumlah Kamar</p>
+          <p className="text-[10px] text-stone-400">Maksimal {maxRooms}</p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() =>
+              rooms <= 1 ? onRemove() : onChangeRooms(dec(rooms, 1))
+            }
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-red-200 text-red-600 transition hover:bg-red-50"
+            aria-label={rooms <= 1 ? "Hapus" : "Kurangi"}
+          >
+            {rooms <= 1 ? <Trash2 className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
+          </button>
+          <span className="w-6 text-center text-sm font-bold text-stone-900 tabular-nums">{rooms}</span>
+          <button
+            type="button"
+            onClick={() => onChangeRooms(incRooms(rooms))}
+            disabled={rooms >= maxRooms}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+            aria-label="Tambah"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {maxExtrabed > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-stone-900">
+              Extrabed <span className="text-[10px] font-normal text-stone-400">(Maksimal {maxExtrabed})</span>
+            </p>
+            {extrabedRate > 0 && (
+              <p className="text-[10px] text-stone-400">+Rp{extrabedRate.toLocaleString("id-ID")}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onChangeExtrabed(dec(extrabed))}
+              disabled={extrabed <= 0}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+              aria-label="Kurangi"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </button>
+            <span className="w-6 text-center text-sm font-bold text-stone-900 tabular-nums">{extrabed}</span>
+            <button
+              type="button"
+              onClick={() => onChangeExtrabed(incExtrabed(extrabed))}
+              disabled={extrabed >= maxExtrabed}
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 text-stone-700 transition hover:bg-stone-100 disabled:opacity-40"
+              aria-label="Tambah"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Inline booking summary panel                                         */
@@ -1108,6 +1221,8 @@ function BookingSidePanel({
   checkIn,
   checkOut,
   guests,
+  rooms,
+  extrabed,
   onClose,
   onConfirm,
 }: {
@@ -1115,15 +1230,13 @@ function BookingSidePanel({
   checkIn: string;
   checkOut: string;
   guests: number;
+  rooms: number;
+  extrabed: number;
   onClose: () => void;
-  onConfirm: (rooms: number, extrabed: number) => void;
+  onConfirm: () => void;
 }) {
-  const [rooms, setRooms] = useState(1);
-  const [extrabed, setExtrabed] = useState(0);
-
   const rate = Number(room.base_rate ?? 0);
   const extrabedRate = Number(room.extrabed_rate ?? 0);
-  const maxExtrabed = Math.max(0, Number(room.extrabed_capacity ?? 0));
   const nights = Math.max(
     1,
     Math.round(
@@ -1161,7 +1274,9 @@ function BookingSidePanel({
         )}
         <div className="min-w-0">
           <p className="truncate font-semibold text-stone-900">{room.name}</p>
-          <p className="text-xs text-stone-500">{idr(rate)} / malam</p>
+          <p className="text-xs text-stone-500">
+            {rooms}× Kamar{extrabed > 0 ? ` · ${extrabed}× Extrabed` : ""}
+          </p>
         </div>
       </div>
 
@@ -1193,61 +1308,8 @@ function BookingSidePanel({
         </div>
       </div>
 
-      {/* Jumlah Kamar */}
-      <div className="mb-3 rounded-xl bg-stone-50 p-3">
-        <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-stone-900">
-          Jumlah Kamar
-          <span className="text-xs font-normal text-stone-500">Maksimal 4</span>
-        </p>
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => setRooms((v) => Math.max(1, v - 1))}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
-          >
-            <Minus className="h-4 w-4" />
-          </button>
-          <span className="text-lg font-bold text-amber-700">{rooms}</span>
-          <button
-            onClick={() => setRooms((v) => Math.min(4, v + 1))}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Extrabed */}
-      {maxExtrabed > 0 && (
-        <div className="mb-4 rounded-xl bg-stone-50 p-3">
-          <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-stone-900">
-            <span>
-              Extrabed{" "}
-              <span className="text-xs font-normal text-stone-500">(Maksimal {maxExtrabed})</span>
-            </span>
-            {extrabedRate > 0 && (
-              <span className="text-xs font-normal text-stone-500">+{idr(extrabedRate)}</span>
-            )}
-          </p>
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setExtrabed((v) => Math.max(0, v - 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
-            <span className="text-lg font-bold text-amber-700">{extrabed}</span>
-            <button
-              onClick={() => setExtrabed((v) => Math.min(maxExtrabed, v + 1))}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Breakdown + total */}
-      <div className="mb-4 space-y-1 border-t border-stone-100 pt-4 text-sm">
+      <div className="mb-4 space-y-1 text-sm">
         <div className="flex justify-between text-stone-600">
           <span>
             {idr(rate)} × {nights} × {rooms}
@@ -1262,14 +1324,14 @@ function BookingSidePanel({
             <span>{idr(extrabedTotal)}</span>
           </div>
         )}
-        <div className="flex items-end justify-between pt-2">
+        <div className="flex items-end justify-between border-t border-stone-100 pt-3">
           <span className="text-stone-600">Total</span>
           <span className="font-serif text-2xl font-bold text-amber-700">{idr(total)}</span>
         </div>
       </div>
 
       <button
-        onClick={() => onConfirm(rooms, extrabed)}
+        onClick={onConfirm}
         className="w-full rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800"
       >
         Lanjutkan Pemesanan
@@ -1288,7 +1350,13 @@ function RoomCarousel({
   checkIn,
   checkOut,
   guests = 1,
-  onBookRoom,
+  selectedRoomId,
+  selectedRooms,
+  selectedExtrabed,
+  onChangeRooms,
+  onChangeExtrabed,
+  onAddRoom,
+  onRemove,
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
@@ -1296,7 +1364,13 @@ function RoomCarousel({
   checkIn?: string;
   checkOut?: string;
   guests?: number;
-  onBookRoom?: (room: RoomType) => void;
+  selectedRoomId?: string | null;
+  selectedRooms?: number;
+  selectedExtrabed?: number;
+  onChangeRooms?: (v: number) => void;
+  onChangeExtrabed?: (v: number) => void;
+  onAddRoom?: (room: RoomType) => void;
+  onRemove?: () => void;
 }) {
   const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
   // Adjust cards per view for mobile screens (show 1 card on small widths)
@@ -1461,7 +1535,7 @@ function RoomCarousel({
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-[10px] text-stone-400">Harga hari ini</p>
+                      <p className="text-[10px] text-stone-400">Harga</p>
                       <p className="text-lg font-bold text-amber-700">
                         Rp {Number(rt.base_rate).toLocaleString("id-ID")}
                       </p>
@@ -1480,13 +1554,24 @@ function RoomCarousel({
                     <span className="mt-5 block cursor-not-allowed rounded-lg bg-stone-300 py-2.5 text-center text-sm font-semibold text-stone-500">
                       Tidak Tersedia
                     </span>
+                  ) : selectedRoomId === rt.id ? (
+                    <RoomCardSteppers
+                      rooms={selectedRooms ?? 1}
+                      extrabed={selectedExtrabed ?? 0}
+                      maxRooms={Math.max(1, Number(rt.total_physical_rooms ?? 0) || 1)}
+                      maxExtrabed={Math.max(0, Number(rt.extrabed_capacity ?? 0))}
+                      extrabedRate={Number(rt.extrabed_rate ?? 0)}
+                      onChangeRooms={(v) => onChangeRooms?.(v)}
+                      onChangeExtrabed={(v) => onChangeExtrabed?.(v)}
+                      onRemove={() => onRemove?.()}
+                    />
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onBookRoom?.(rt)}
-                      className="mt-5 block w-full cursor-pointer rounded-lg bg-amber-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-amber-800"
+                      onClick={() => onAddRoom?.(rt)}
+                      className="mt-5 block w-full cursor-pointer rounded-lg border border-amber-700 bg-white py-2.5 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
                     >
-                      Pesan Kamar
+                      Tambahkan kamar
                     </button>
                   )}
                 </div>
