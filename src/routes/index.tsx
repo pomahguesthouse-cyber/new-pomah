@@ -309,7 +309,7 @@ function PomahHome() {
 
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
-      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} phone={property?.whatsapp_number ?? undefined} />
+      <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
       <PbZone id="hero" label="Hero Slider" pb={pb}>
         <HeroSlider
@@ -347,8 +347,8 @@ function PomahHome() {
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           <div
-            className="relative mx-auto -mt-12 max-w-4xl px-6"
-            style={{ zIndex: cfg.datePicker.layer }}
+            className="sticky top-24 mx-auto -mt-12 max-w-4xl px-6"
+            style={{ zIndex: Math.min(cfg.datePicker.layer, 30) }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
               {cfg.datePicker.heading && (
