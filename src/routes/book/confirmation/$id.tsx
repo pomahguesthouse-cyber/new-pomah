@@ -125,7 +125,7 @@ function ConfirmationPage() {
         ) : !inv ? (
           <div className="py-24 text-center">
             <h1 className="text-2xl font-semibold">Invoice tidak ditemukan</h1>
-            <Link to="/" className="mt-4 inline-block text-sm text-teal-700 underline">
+            <Link to="/" className="mt-4 inline-block text-sm text-amber-700 underline">
               Kembali ke beranda
             </Link>
           </div>
@@ -160,7 +160,7 @@ function ConfirmationPage() {
                   <p className="text-[10px] uppercase tracking-widest text-stone-400">
                     Kode Booking
                   </p>
-                  <p className="font-mono text-base font-bold text-teal-700">
+                  <p className="font-mono text-base font-bold text-amber-700">
                     {inv.reference_code}
                   </p>
                   <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
@@ -206,7 +206,7 @@ function ConfirmationPage() {
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
                   <span className="text-base font-bold">Total</span>
-                  <span className="text-xl font-bold text-teal-700">{idr(inv.total_amount)}</span>
+                  <span className="text-xl font-bold text-amber-700">{idr(inv.total_amount)}</span>
                 </div>
               </div>
 

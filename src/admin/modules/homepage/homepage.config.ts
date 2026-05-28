@@ -138,7 +138,7 @@ export const LAYER_MAX = 50;
 /** Sensible defaults used before an admin has saved anything. */
 export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   header: {
-    bgColor: "#0f766e",
+    bgColor: "#7c4a21",
     bookLabel: "Pesan Kamar",
     links: [
       { label: "Home", href: "/" },
