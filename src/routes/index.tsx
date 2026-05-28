@@ -20,6 +20,8 @@ import {
   Users,
   BedDouble,
   Headphones,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import {
   getPublicSiteData,
@@ -275,6 +277,7 @@ function PomahHome() {
   const [checkOut, setCheckOut] = useState("");
   const [tempCheckIn, setTempCheckIn] = useState("");
   const [tempCheckOut, setTempCheckOut] = useState("");
+  const [guests, setGuests] = useState(1);
   const [today, setToday] = useState("");
   useEffect(() => {
     const d = new Date();
@@ -352,6 +355,23 @@ function PomahHome() {
                     className="h-10"
                   />
                 </Field>
+                <Field label="Tamu">
+                  <div className="relative">
+                    <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <select
+                      value={guests}
+                      onChange={(e) => setGuests(Number(e.target.value))}
+                      className="h-10 w-full appearance-none rounded-md border border-stone-200 bg-background pl-9 pr-8 text-sm outline-none focus:ring-1 focus:ring-amber-500"
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((g) => (
+                        <option key={g} value={g}>
+                          {g} Tamu
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                  </div>
+                </Field>
                 <button
                   type="button"
                   onClick={() =>
@@ -359,8 +379,9 @@ function PomahHome() {
                       .getElementById("our-room")
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
-                  className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800"
+                  className="flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800"
                 >
+                  <Search className="h-4 w-4" />
                   {cfg.datePicker.buttonLabel}
                 </button>
               </div>
