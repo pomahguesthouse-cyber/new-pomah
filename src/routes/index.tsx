@@ -373,12 +373,16 @@ function PomahHome() {
             }`}
             style={{ zIndex: 60 }}
           >
-            <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
+            <div
+              className={`rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4 ${
+                stuck ? "md:flex md:items-center md:gap-4" : ""
+              }`}
+            >
               {stuck && (
                 <Link
                   to="/"
                   aria-label={propertyName}
-                  className="mb-2 hidden items-center justify-center gap-2 transition-opacity duration-500 md:flex"
+                  className="hidden shrink-0 items-center gap-2 border-r border-stone-200 pr-4 transition-opacity duration-500 md:flex"
                 >
                   {logoUrl ? (
                     <img
@@ -388,14 +392,15 @@ function PomahHome() {
                     />
                   ) : (
                     <>
-                      <span className="font-serif text-4xl font-bold text-stone-900">Pomah</span>
-                      <span className="font-mono text-xs uppercase tracking-[0.25em] text-stone-400">
+                      <span className="font-serif text-3xl font-bold text-stone-900">Pomah</span>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-stone-400">
                         guesthouse
                       </span>
                     </>
                   )}
                 </Link>
               )}
+              <div className={stuck ? "md:min-w-0 md:flex-1" : ""}>
               {cfg.datePicker.heading && (
                 <p
                   className={`mb-3 hidden text-center text-amber-700 md:block ${
@@ -462,6 +467,7 @@ function PomahHome() {
                   <Search className="h-4 w-4" />
                   <span className="hidden md:inline">{cfg.datePicker.buttonLabel}</span>
                 </button>
+              </div>
               </div>
             </div>
           </div>
