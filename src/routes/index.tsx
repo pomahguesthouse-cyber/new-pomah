@@ -1706,14 +1706,16 @@ function RoomCarousel({
     }
   };
 
+  const [hovered, setHovered] = useState(false);
+
   useEffect(() => {
-    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0) return;
+    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0 || hovered) return;
     const t = setInterval(() => {
       setIsTransitioning(true);
       setI((v) => v + 1);
     }, rc.slideMs);
     return () => clearInterval(t);
-  }, [rc.autoplay, rc.slideMs, isLoopable]);
+  }, [rc.autoplay, rc.slideMs, isLoopable, hovered]);
 
   if (rooms.length === 0) {
     return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
@@ -1726,7 +1728,33 @@ function RoomCarousel({
   const totalDots = isLoopable ? rooms.length : maxIndex + 1;
 
   return (
-    <div className="relative mt-12">
+    <div
+      className="relative mt-12"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Left arrow */}
+      {totalDots > 1 && (
+        <button
+          onClick={handlePrev}
+          aria-label="Sebelumnya"
+          className="absolute -left-4 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-stone-200 bg-white/90 p-2.5 text-amber-700 shadow-lg backdrop-blur transition hover:bg-amber-50 hover:shadow-xl md:flex items-center justify-center"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+
+      {/* Right arrow */}
+      {totalDots > 1 && (
+        <button
+          onClick={handleNext}
+          aria-label="Berikutnya"
+          className="absolute -right-4 top-1/2 z-10 hidden -translate-y-1/2 rounded-full border border-stone-200 bg-white/90 p-2.5 text-amber-700 shadow-lg backdrop-blur transition hover:bg-amber-50 hover:shadow-xl md:flex items-center justify-center"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+
       <div
         className="overflow-hidden"
         onTouchStart={onTouchStart}
@@ -1831,10 +1859,11 @@ function RoomCarousel({
 
       {totalDots > 1 && (
         <div className="mt-6 flex items-center justify-center gap-3">
+          {/* Mobile-only prev arrow */}
           <button
             onClick={handlePrev}
             aria-label="Sebelumnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50 md:hidden"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -1857,10 +1886,11 @@ function RoomCarousel({
               />
             ))}
           </div>
+          {/* Mobile-only next arrow */}
           <button
             onClick={handleNext}
             aria-label="Berikutnya"
-            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50"
+            className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50 md:hidden"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
