@@ -462,7 +462,7 @@ export function PomahNav({
               }
             : undefined
         }
-        className={`z-40 transition-all duration-300 ${positionClass} ${
+        className={`z-50 transition-all duration-300 ${positionClass} ${
           style === "minimal" ? "border-b border-stone-200 bg-white" : ""
         } ${header.dropShadow && (style === "solid" || style === "minimal") ? "shadow-md" : ""} ${
           selected ? "outline outline-2 -outline-offset-2 outline-orange-500" : ""
