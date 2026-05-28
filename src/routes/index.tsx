@@ -347,8 +347,8 @@ function PomahHome() {
       {cfg.datePicker.enabled && (
         <PbZone id="datepicker" label="Date Picker" pb={pb}>
           <div
-            className="fixed inset-x-0 bottom-0 px-3 pb-3 md:sticky md:bottom-auto md:left-auto md:right-auto md:top-24 md:mx-auto md:-mt-12 md:max-w-4xl md:px-6 md:pb-0"
-            style={{ zIndex: Math.min(cfg.datePicker.layer, 30) }}
+            className="fixed inset-x-0 bottom-0 px-3 pb-3 md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:max-w-4xl md:px-6 md:pb-0"
+            style={{ zIndex: 60 }}
           >
             <div className="rounded-2xl border border-stone-200 bg-white p-2 shadow-xl md:p-4">
               {cfg.datePicker.heading && (
