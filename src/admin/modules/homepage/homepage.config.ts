@@ -95,8 +95,10 @@ export interface HomepageConfig {
     layer: number;
     /** Heading font family (tipe). */
     fontFamily: "sans" | "serif" | "mono";
-    /** Heading font size in pixels. */
+    /** Heading font size in pixels (Desktop). */
     fontSize: number;
+    /** Heading font size in pixels (Mobile). */
+    fontSizeMobile?: number;
     /** Heading font style. */
     fontStyle: "normal" | "bold" | "italic";
     /** Gold script accent line under the heading (e.g. "di Semarang"). */
@@ -112,6 +114,7 @@ export interface HomepageConfig {
     layer: number;
     fontFamily: "sans" | "serif" | "mono";
     fontSize: number;
+    fontSizeMobile?: number;
     fontStyle: "normal" | "bold" | "italic";
     accent: string;
     textAlign: "left" | "center" | "right";
@@ -226,6 +229,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     layer: 10,
     fontFamily: "serif",
     fontSize: 48,
+    fontSizeMobile: 32,
     fontStyle: "bold",
     accent: "",
     textAlign: "center",
@@ -245,6 +249,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     layer: 10,
     fontFamily: "serif",
     fontSize: 48,
+    fontSizeMobile: 32,
     fontStyle: "bold",
     accent: "",
     textAlign: "center",

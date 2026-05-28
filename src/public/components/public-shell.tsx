@@ -632,20 +632,31 @@ export function HeroSlider({
           }`}
         >
           <h1
-            className={`max-w-3xl tracking-tight text-white drop-shadow ${
+            className={`hero-heading max-w-3xl tracking-tight text-white drop-shadow ${
               hero.fontFamily === "mono"
                 ? "font-mono"
                 : hero.fontFamily === "sans"
                   ? "font-sans"
                   : "font-serif"
             }`}
-            style={{
-              fontSize: hero.fontSize,
-              lineHeight: 1.1,
-              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
-              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
-            }}
+            style={
+              {
+                "--fs-mob": `${hero.fontSizeMobile ?? 32}px`,
+                "--fs-desk": `${hero.fontSize}px`,
+                fontSize: "var(--fs-mob)",
+                lineHeight: 1.1,
+                fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+                fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+              } as React.CSSProperties
+            }
           >
+            <style>{`
+              @media (min-width: 768px) {
+                .hero-heading {
+                  font-size: var(--fs-desk) !important;
+                }
+              }
+            `}</style>
             {active.heading}
           </h1>
           {accent && (

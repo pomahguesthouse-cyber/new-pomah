@@ -401,21 +401,21 @@ function HomepageBuilder() {
                 {isLoading ? (
                   <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
                 ) : section === "header" ? (
-                  <HeaderTab cfg={cfg} setCfg={setCfg} />
+                  <HeaderTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "hero" ? (
-                  <HeroTab cfg={cfg} setCfg={setCfg} />
+                  <HeroTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "bookingHero" ? (
-                  <HeroTab cfg={cfg} setCfg={setCfg} isBooking />
+                  <HeroTab cfg={cfg} setCfg={setCfg} isBooking activeMode={activeMode} />
                 ) : section === "datepicker" ? (
-                  <DatePickerTab cfg={cfg} setCfg={setCfg} />
+                  <DatePickerTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "story" ? (
-                  <StoryTab cfg={cfg} setCfg={setCfg} />
+                  <StoryTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "lokasi" ? (
-                  <LokasiTab cfg={cfg} setCfg={setCfg} />
+                  <LokasiTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "order" ? (
-                  <OrderTab cfg={cfg} setCfg={setCfg} />
+                  <OrderTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : (
-                  <CarouselTab cfg={cfg} setCfg={setCfg} />
+                  <CarouselTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 )}
               </div>
             </>
@@ -449,6 +449,7 @@ function HomepageBuilder() {
 type TabProps = {
   cfg: HomepageConfig;
   setCfg: React.Dispatch<React.SetStateAction<HomepageConfig>>;
+  activeMode?: "desktop" | "mobile";
 };
 
 function Section({
@@ -896,7 +897,7 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
 /* 3. Hero slider                                                      */
 /* ================================================================== */
 
-function HeroTab({ cfg, setCfg, isBooking }: TabProps & { isBooking?: boolean }) {
+function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?: boolean }) {
   const heroKey = isBooking ? "bookingHero" : "hero";
   const hero = cfg[heroKey];
   const set = (patch: Partial<HomepageConfig["hero"]>) =>
@@ -1029,12 +1030,12 @@ function HeroTab({ cfg, setCfg, isBooking }: TabProps & { isBooking?: boolean })
       <FontStyleFields
         family={hero.fontFamily}
         style={hero.fontStyle}
-        size={hero.fontSize}
-        minSize={24}
+        size={activeMode === "mobile" ? (hero.fontSizeMobile ?? 32) : hero.fontSize}
+        minSize={16}
         maxSize={96}
         onFamilyChange={(v) => set({ fontFamily: v })}
         onStyleChange={(v) => set({ fontStyle: v })}
-        onSizeChange={(v) => set({ fontSize: v })}
+        onSizeChange={(v) => activeMode === "mobile" ? set({ fontSizeMobile: v }) : set({ fontSize: v })}
       />
 
       <LayerArrange value={hero.layer} onChange={(v) => set({ layer: v })} />
