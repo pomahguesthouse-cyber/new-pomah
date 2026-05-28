@@ -26,6 +26,19 @@ export const Route = createFileRoute("/rooms/")({
   component: PublicRooms,
 });
 
+const formatIDR = (
+  n: number,
+  sizeClass = "text-inherit",
+  numberClass = "font-mono font-bold"
+) => {
+  return (
+    <span className={`${sizeClass} inline-flex items-baseline`}>
+      <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
+      <span className={numberClass}>{n.toLocaleString("id-ID")}</span>
+    </span>
+  );
+};
+
 function PublicRooms() {
   const loaderData = Route.useLoaderData();
   const fn = useServerFn(getPublicSiteData);
@@ -97,8 +110,8 @@ function PublicRooms() {
                     </p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-lg font-semibold text-amber-700">
-                      Rp {Number(rt.base_rate).toLocaleString("id-ID")}
+                    <p className="text-amber-700">
+                      {formatIDR(Number(rt.base_rate), "text-lg", "font-mono font-bold")}
                     </p>
                     <p className="font-mono text-[10px] text-stone-400">/malam</p>
                   </div>

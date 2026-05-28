@@ -133,6 +133,19 @@ function nightsBetween(a: string, b: string): number {
 
 const idr = (n: number) => `Rp ${Number(n || 0).toLocaleString("id-ID")}`;
 
+const formatIDR = (
+  n: number,
+  sizeClass = "text-inherit",
+  numberClass = "font-mono font-bold"
+) => {
+  return (
+    <span className={`${sizeClass} inline-flex items-baseline`}>
+      <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
+      <span className={numberClass}>{Number(n || 0).toLocaleString("id-ID")}</span>
+    </span>
+  );
+};
+
 /** All gallery images for a room, cover first, with sensible fallbacks. */
 function galleryOf(room: RoomRow): string[] {
   const imgs = (room.images ?? []).filter(Boolean);
@@ -324,7 +337,9 @@ function RoomBookingPage() {
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-medium text-stone-500">Harga Kamar</p>
-              <p className="mt-1 text-3xl font-bold text-amber-700">{idr(Number(room.base_rate))}</p>
+              <p className="mt-1 text-3xl font-bold text-amber-700">
+                {formatIDR(Number(room.base_rate), "text-3xl", "font-mono font-bold text-amber-700")}
+              </p>
               <p className="text-xs text-stone-400">per malam</p>
 
               <div className="mt-5 space-y-4">
@@ -404,7 +419,7 @@ function RoomBookingPage() {
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="font-bold">{o.name}</h3>
                         <span className="text-sm font-semibold text-amber-700">
-                          {idr(Number(o.base_rate))}
+                          {formatIDR(Number(o.base_rate), "text-sm", "font-mono font-bold text-amber-700")}
                         </span>
                       </div>
                       {o.description && (
@@ -582,7 +597,9 @@ export function BookingDialog({
                   </span>
                 </span>
                 {extrabedRate > 0 && (
-                  <span className="text-xs font-normal text-stone-500">+{idr(extrabedRate)} / malam</span>
+                  <span className="text-xs font-normal text-stone-500">
+                    +{formatIDR(extrabedRate, "text-xs", "font-mono font-medium")} / malam
+                  </span>
                 )}
               </p>
               <div className="flex items-center gap-3">
@@ -661,21 +678,21 @@ export function BookingDialog({
           <div className="rounded-lg bg-stone-100 p-4 text-sm">
             <div className="flex items-center justify-between text-stone-600">
               <span>
-                Kamar: {idr(rate)} × {nights} malam × {rooms} kamar
+                Kamar: {formatIDR(rate, "text-xs", "font-mono font-medium")} × {nights} malam × {rooms} kamar
               </span>
-              <span>{idr(rate * nights * rooms)}</span>
+              <span>{formatIDR(rate * nights * rooms, "text-sm", "font-mono font-semibold")}</span>
             </div>
             {extrabed > 0 && (
               <div className="mt-1 flex items-center justify-between text-stone-600">
                 <span>
-                  Extrabed: {idr(extrabedRate)} × {nights} malam × {extrabed}
+                  Extrabed: {formatIDR(extrabedRate, "text-xs", "font-mono font-medium")} × {nights} malam × {extrabed}
                 </span>
-                <span>{idr(extrabedRate * nights * extrabed)}</span>
+                <span>{formatIDR(extrabedRate * nights * extrabed, "text-sm", "font-mono font-semibold")}</span>
               </div>
             )}
             <div className="mt-2 flex items-center justify-between border-t border-stone-200 pt-2">
               <span className="text-base font-bold">Total</span>
-              <span className="text-xl font-bold text-amber-700">{idr(total)}</span>
+              <span className="text-xl font-bold text-amber-700">{formatIDR(total, "text-xl", "font-mono font-bold text-amber-700")}</span>
             </div>
           </div>
 
@@ -738,8 +755,16 @@ export function BookingDialog({
             disabled={pending}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-60"
           >
-            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {pending ? "Memproses…" : `Konfirmasi Pemesanan · ${idr(total)}`}
+            {pending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Memproses…</span>
+              </>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                Konfirmasi Pemesanan · {formatIDR(total, "text-sm text-white", "font-mono font-bold text-white")}
+              </span>
+            )}
           </button>
         </div>
       </DialogContent>

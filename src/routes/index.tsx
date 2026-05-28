@@ -1282,7 +1282,9 @@ function RoomCardSteppers({
               Extrabed <span className={`font-normal text-stone-400 ${compact ? "text-[8px]" : "text-[10px]"}`}>(Maks {maxExtrabed})</span>
             </p>
             {extrabedRate > 0 && (
-              <p className={compact ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>+Rp{extrabedRate.toLocaleString("id-ID")}</p>
+              <p className={compact ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>
+                +{formatIDR(extrabedRate, "text-inherit", "font-mono font-semibold")}
+              </p>
             )}
           </div>
           <div className={`flex items-center ${compact ? "gap-1" : "gap-1.5"}`}>
@@ -1414,13 +1416,17 @@ function CartBookingDialog({
                   {item.rooms}× {item.room.name}
                   {item.extrabed > 0 ? ` (+${item.extrabed} extrabed)` : ""}
                 </span>
-                <span className="shrink-0 font-medium text-stone-900">{idr(sub)}</span>
+                <span className="shrink-0 font-medium text-stone-900">
+                  {formatIDR(sub, "text-sm", "font-mono font-semibold")}
+                </span>
               </div>
             );
           })}
           <div className="flex items-center justify-between border-t border-stone-200 pt-2">
             <span className="font-semibold">Total</span>
-            <span className="font-serif text-lg font-bold text-amber-700">{idr(grandTotal)}</span>
+            <span className="font-serif text-lg font-bold text-amber-700">
+              {formatIDR(grandTotal, "text-lg", "font-mono font-bold text-amber-700")}
+            </span>
           </div>
         </div>
 
@@ -1469,7 +1475,13 @@ function CartBookingDialog({
           disabled={pending}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-60"
         >
-          {pending ? "Memproses…" : `Konfirmasi Pemesanan · ${idr(grandTotal)}`}
+          {pending ? (
+            "Memproses…"
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              Konfirmasi Pemesanan · {formatIDR(grandTotal, "text-sm text-white", "font-mono font-bold text-white")}
+            </span>
+          )}
         </button>
       </DialogContent>
     </Dialog>
@@ -1626,7 +1638,7 @@ function BookingSidePanel({
                   isSoldOut ? "text-stone-400 line-through" : "text-stone-700",
                 )}
               >
-                {idr(sub)}
+                {formatIDR(sub, "text-sm", "font-mono font-semibold")}
               </p>
             </div>
           );
@@ -1676,7 +1688,9 @@ function BookingSidePanel({
       {/* Total */}
       <div className="mb-3 flex items-end justify-between">
         <span className="text-stone-600">Total ({totalRooms} kamar)</span>
-        <span className="font-serif text-2xl font-bold text-amber-700">{idr(grandTotal)}</span>
+        <span className="font-serif text-2xl font-bold text-amber-700">
+          {formatIDR(grandTotal, "text-2xl", "font-mono font-bold text-amber-700")}
+        </span>
       </div>
 
       {capacityShort && (
@@ -1698,6 +1712,19 @@ function BookingSidePanel({
     </div>
   );
 }
+
+const formatIDR = (
+  n: number,
+  sizeClass = "text-inherit",
+  numberClass = "font-mono font-bold"
+) => {
+  return (
+    <span className={`${sizeClass} inline-flex items-baseline`}>
+      <span className="text-[0.75em] font-normal text-stone-500 mr-0.5 tracking-normal">Rp</span>
+      <span className={numberClass}>{n.toLocaleString("id-ID")}</span>
+    </span>
+  );
+};
 
 const getAmenityIcon = (name: string) => {
   const n = name.toLowerCase();
@@ -1955,8 +1982,8 @@ function RoomCarousel({
                     </div>
                     <div className="shrink-0 text-right">
                       <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>Harga</p>
-                      <p className={`font-bold text-amber-700 ${cartOpen ? "text-sm" : "text-lg"}`}>
-                        Rp {Number(rt.base_rate).toLocaleString("id-ID")}
+                      <p className="text-amber-700">
+                        {formatIDR(Number(rt.base_rate), cartOpen ? "text-sm" : "text-lg", "font-mono font-bold")}
                       </p>
                     </div>
                   </div>
