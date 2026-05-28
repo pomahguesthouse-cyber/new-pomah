@@ -1815,7 +1815,7 @@ function RoomCarousel({
       )}
 
       <div
-        className="overflow-hidden"
+        className="overflow-hidden py-4 -my-4"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
