@@ -449,6 +449,7 @@ export function BookingDialog({
   checkIn,
   checkOut,
   rooms: initialRooms,
+  extrabed: initialExtrabed = 0,
   maxRooms,
   guests,
   hotelPolicy,
@@ -459,6 +460,7 @@ export function BookingDialog({
   checkIn: string;
   checkOut: string;
   rooms: number;
+  extrabed?: number;
   maxRooms: number;
   guests: number;
   hotelPolicy: string;
@@ -467,7 +469,7 @@ export function BookingDialog({
   const submit = useServerFn(submitPublicBooking);
 
   const [rooms, setRooms] = useState(initialRooms);
-  const [extrabed, setExtrabed] = useState(0);
+  const [extrabed, setExtrabed] = useState(initialExtrabed);
   const [checkInTime, setCheckInTime] = useState("14:00");
   const [checkOutTime, setCheckOutTime] = useState("12:00");
   const [fullName, setFullName] = useState("");

@@ -22,6 +22,9 @@ import {
   Headphones,
   ChevronDown,
   Search,
+  Plus,
+  Minus,
+  X,
 } from "lucide-react";
 import {
   getPublicSiteData,
@@ -274,6 +277,11 @@ function PomahHome() {
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(1);
   const [bookingRoom, setBookingRoom] = useState<RoomRow | null>(null);
+  // Dialog only opens after the user confirms on the side panel; carries the
+  // rooms + extrabed counts the user picked in the panel.
+  const [dialogConfig, setDialogConfig] = useState<{ rooms: number; extrabed: number } | null>(
+    null,
+  );
 
   // Detect when the sticky date picker pins to the top — used to stretch
   // the bar full-width and reveal the logo on the left. Uses a sentinel placed
@@ -484,14 +492,15 @@ function PomahHome() {
         </a>
       )}
 
-      {bookingRoom && effCheckIn && effCheckOut && (
+      {bookingRoom && dialogConfig && effCheckIn && effCheckOut && (
         <BookingDialog
-          open={!!bookingRoom}
-          onClose={() => setBookingRoom(null)}
+          open={true}
+          onClose={() => setDialogConfig(null)}
           room={bookingRoom}
           checkIn={effCheckIn}
           checkOut={effCheckOut}
-          rooms={1}
+          rooms={dialogConfig.rooms}
+          extrabed={dialogConfig.extrabed}
           maxRooms={4}
           guests={guests}
           hotelPolicy={
@@ -612,31 +621,56 @@ function PomahHome() {
                     </p>
                   )}
                 </div>
-                <RoomCarousel
-                  rooms={rooms}
-                  rc={cfg.roomCarousel}
-                  availability={availability}
-                  checkIn={checkIn}
-                  checkOut={checkOut}
-                  guests={guests}
-                  onBookRoom={(rt) =>
-                    setBookingRoom({
-                      id: rt.id,
-                      name: rt.name,
-                      slug: rt.slug,
-                      description: rt.description ?? null,
-                      base_rate: rt.base_rate,
-                      capacity: rt.capacity ?? null,
-                      bed_type: null,
-                      size_sqm: rt.size_sqm ?? null,
-                      amenities: null,
-                      hero_image_url: rt.hero_image_url ?? null,
-                      images: null,
-                      extrabed_rate: rt.extrabed_rate ?? null,
-                      extrabed_capacity: rt.extrabed_capacity ?? null,
-                    })
+                <div
+                  className={
+                    bookingRoom
+                      ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]"
+                      : ""
                   }
-                />
+                >
+                  <div className="min-w-0">
+                    <RoomCarousel
+                      rooms={rooms}
+                      rc={cfg.roomCarousel}
+                      availability={availability}
+                      checkIn={checkIn}
+                      checkOut={checkOut}
+                      guests={guests}
+                      onBookRoom={(rt) =>
+                        setBookingRoom({
+                          id: rt.id,
+                          name: rt.name,
+                          slug: rt.slug,
+                          description: rt.description ?? null,
+                          base_rate: rt.base_rate,
+                          capacity: rt.capacity ?? null,
+                          bed_type: null,
+                          size_sqm: rt.size_sqm ?? null,
+                          amenities: null,
+                          hero_image_url: rt.hero_image_url ?? null,
+                          images: null,
+                          extrabed_rate: rt.extrabed_rate ?? null,
+                          extrabed_capacity: rt.extrabed_capacity ?? null,
+                        })
+                      }
+                    />
+                  </div>
+                  {bookingRoom && effCheckIn && effCheckOut && (
+                    <div className="lg:pt-2">
+                      <BookingSidePanel
+                        room={bookingRoom}
+                        checkIn={effCheckIn}
+                        checkOut={effCheckOut}
+                        guests={guests}
+                        onClose={() => {
+                          setBookingRoom(null);
+                          setDialogConfig(null);
+                        }}
+                        onConfirm={(r, e) => setDialogConfig({ rooms: r, extrabed: e })}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </PbZone>
@@ -1064,6 +1098,188 @@ type RoomType = {
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
 };
+
+/* ------------------------------------------------------------------ */
+/* Inline booking summary panel                                         */
+/* ------------------------------------------------------------------ */
+
+function BookingSidePanel({
+  room,
+  checkIn,
+  checkOut,
+  guests,
+  onClose,
+  onConfirm,
+}: {
+  room: RoomRow;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  onClose: () => void;
+  onConfirm: (rooms: number, extrabed: number) => void;
+}) {
+  const [rooms, setRooms] = useState(1);
+  const [extrabed, setExtrabed] = useState(0);
+
+  const rate = Number(room.base_rate ?? 0);
+  const extrabedRate = Number(room.extrabed_rate ?? 0);
+  const maxExtrabed = Math.max(0, Number(room.extrabed_capacity ?? 0));
+  const nights = Math.max(
+    1,
+    Math.round(
+      (new Date(`${checkOut}T00:00:00`).getTime() -
+        new Date(`${checkIn}T00:00:00`).getTime()) /
+        86400000,
+    ),
+  );
+  const roomTotal = rate * nights * rooms;
+  const extrabedTotal = extrabedRate * nights * extrabed;
+  const total = roomTotal + extrabedTotal;
+  const idr = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
+
+  return (
+    <div className="sticky top-28 rounded-3xl border border-stone-200 bg-white p-5 shadow-xl">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <h3 className="font-serif text-xl font-bold text-stone-900">Ringkasan Booking</h3>
+        <button
+          onClick={onClose}
+          aria-label="Tutup"
+          className="rounded-full p-1 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Selected room */}
+      <div className="mb-4 flex gap-3 rounded-2xl border border-stone-100 bg-stone-50/60 p-3">
+        {room.hero_image_url && (
+          <img
+            src={room.hero_image_url}
+            alt={room.name}
+            className="h-16 w-20 shrink-0 rounded-lg object-cover"
+          />
+        )}
+        <div className="min-w-0">
+          <p className="truncate font-semibold text-stone-900">{room.name}</p>
+          <p className="text-xs text-stone-500">{idr(rate)} / malam</p>
+        </div>
+      </div>
+
+      {/* Stay info */}
+      <div className="mb-4 space-y-2 border-y border-stone-100 py-4 text-sm">
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1.5 text-stone-500">
+            <CalendarDays className="h-3.5 w-3.5" /> Check-in
+          </span>
+          <span className="font-medium text-stone-800">{fmtDateID(checkIn)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1.5 text-stone-500">
+            <CalendarDays className="h-3.5 w-3.5" /> Check-out
+          </span>
+          <span className="font-medium text-stone-800">{fmtDateID(checkOut)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1.5 text-stone-500">
+            <Clock className="h-3.5 w-3.5" /> Malam
+          </span>
+          <span className="font-medium text-stone-800">{nights}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="flex items-center gap-1.5 text-stone-500">
+            <Users className="h-3.5 w-3.5" /> Tamu
+          </span>
+          <span className="font-medium text-stone-800">{guests}</span>
+        </div>
+      </div>
+
+      {/* Jumlah Kamar */}
+      <div className="mb-3 rounded-xl bg-stone-50 p-3">
+        <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-stone-900">
+          Jumlah Kamar
+          <span className="text-xs font-normal text-stone-500">Maksimal 4</span>
+        </p>
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setRooms((v) => Math.max(1, v - 1))}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="text-lg font-bold text-amber-700">{rooms}</span>
+          <button
+            onClick={() => setRooms((v) => Math.min(4, v + 1))}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Extrabed */}
+      {maxExtrabed > 0 && (
+        <div className="mb-4 rounded-xl bg-stone-50 p-3">
+          <p className="mb-2 flex items-baseline justify-between text-sm font-semibold text-stone-900">
+            <span>
+              Extrabed{" "}
+              <span className="text-xs font-normal text-stone-500">(Maksimal {maxExtrabed})</span>
+            </span>
+            {extrabedRate > 0 && (
+              <span className="text-xs font-normal text-stone-500">+{idr(extrabedRate)}</span>
+            )}
+          </p>
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setExtrabed((v) => Math.max(0, v - 1))}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <span className="text-lg font-bold text-amber-700">{extrabed}</span>
+            <button
+              onClick={() => setExtrabed((v) => Math.min(maxExtrabed, v + 1))}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-amber-300 text-amber-700 transition hover:bg-amber-50"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Breakdown + total */}
+      <div className="mb-4 space-y-1 border-t border-stone-100 pt-4 text-sm">
+        <div className="flex justify-between text-stone-600">
+          <span>
+            {idr(rate)} × {nights} × {rooms}
+          </span>
+          <span>{idr(roomTotal)}</span>
+        </div>
+        {extrabed > 0 && (
+          <div className="flex justify-between text-stone-600">
+            <span>
+              Extrabed {idr(extrabedRate)} × {nights} × {extrabed}
+            </span>
+            <span>{idr(extrabedTotal)}</span>
+          </div>
+        )}
+        <div className="flex items-end justify-between pt-2">
+          <span className="text-stone-600">Total</span>
+          <span className="font-serif text-2xl font-bold text-amber-700">{idr(total)}</span>
+        </div>
+      </div>
+
+      <button
+        onClick={() => onConfirm(rooms, extrabed)}
+        className="w-full rounded-xl bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800"
+      >
+        Lanjutkan Pemesanan
+      </button>
+      <p className="mt-3 text-center text-[11px] text-stone-400">
+        Isi data tamu di langkah berikutnya.
+      </p>
+    </div>
+  );
+}
 
 function RoomCarousel({
   rooms,
