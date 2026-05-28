@@ -123,6 +123,8 @@ export interface HomepageConfig {
     enabled: boolean;
     heading: string;
     buttonLabel: string;
+    /** Optional logo displayed inside the date picker bar. */
+    logoUrl?: string;
     /** Heading font family. */
     fontFamily: "sans" | "serif" | "mono";
     /** Heading font size in pixels. */
@@ -258,6 +260,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     enabled: true,
     heading: "Cek Ketersediaan",
     buttonLabel: "Cek Ketersediaan",
+    logoUrl: "",
     fontFamily: "serif",
     fontSize: 18,
     fontStyle: "bold",

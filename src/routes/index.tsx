@@ -469,9 +469,9 @@ function PomahHome() {
                   aria-label={propertyName}
                   className="hidden shrink-0 items-center gap-2 border-r border-stone-200 pr-4 transition-opacity duration-500 md:flex"
                 >
-                  {logoUrl ? (
+                  {cfg.datePicker.logoUrl || logoUrl ? (
                     <img
-                      src={logoUrl}
+                      src={cfg.datePicker.logoUrl || logoUrl}
                       alt={propertyName}
                       className="h-16 w-auto object-contain"
                     />

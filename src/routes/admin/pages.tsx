@@ -1070,6 +1070,10 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Teks tombol">
         <Input value={dp.buttonLabel} onChange={(e) => set({ buttonLabel: e.target.value })} />
       </FieldRow>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium">Logo (opsional)</Label>
+        <ImageField value={dp.logoUrl ?? ""} onChange={(url) => set({ logoUrl: url })} />
+      </div>
 
       <FontStyleFields
         family={dp.fontFamily}
