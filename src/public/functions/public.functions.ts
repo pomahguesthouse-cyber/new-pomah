@@ -172,6 +172,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         adults: z.number().int().min(1).max(8),
         children: z.number().int().min(0).max(8),
         rooms: z.number().int().min(1).max(8).optional(),
+        extrabed: z.number().int().min(0).max(8).optional(),
         checkInTime: z.string().max(10).optional().or(z.literal("")),
         checkOutTime: z.string().max(10).optional().or(z.literal("")),
         paymentMethod: z.enum(["transfer", "onsite"]).optional(),
@@ -189,7 +190,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
 
     const { data: rt } = await supabasePublic
       .from("room_types")
-      .select("id, base_rate")
+      .select("id, base_rate, extrabed_rate")
       .eq("id", data.roomTypeId)
       .single();
     if (!rt) throw new Error("Room type not found");
@@ -213,7 +214,14 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
 
     const roomsCount = data.rooms ?? 1;
-    const total = Number(rt.base_rate) * nights * roomsCount;
+    const extrabedCount = data.extrabed ?? 0;
+    const extrabedRate = Number(rt.extrabed_rate ?? 0);
+    const total =
+      Number(rt.base_rate) * nights * roomsCount + extrabedRate * nights * extrabedCount;
+    const extrabedNote =
+      extrabedCount > 0 ? `Extrabed: ${extrabedCount}` : "";
+    const specialRequests =
+      [extrabedNote, data.specialRequests || ""].filter(Boolean).join(" | ") || null;
     const { data: booking, error: berr } = await db(supabaseAdmin)
       .from("bookings")
       .insert({
@@ -227,7 +235,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         total_amount: total,
         source: "direct",
         status: "pending",
-        special_requests: data.specialRequests || null,
+        special_requests: specialRequests,
         check_in_time: data.checkInTime || null,
         check_out_time: data.checkOutTime || null,
         payment_method: data.paymentMethod || null,
