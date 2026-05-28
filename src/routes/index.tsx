@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -620,38 +620,7 @@ function PomahHome() {
               Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
             </p>
           </div>
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {newsEvents.map((n) => (
-              <article
-                key={`${n.title}-${n.date}`}
-                className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl"
-              >
-                {n.image && (
-                  <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
-                    <img
-                      src={n.image}
-                      alt={n.title}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                )}
-                <div className="flex flex-1 flex-col p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {n.date}
-                    </span>
-                    <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
-                      {n.category}
-                    </span>
-                  </div>
-                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
-                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
-                </div>
-              </article>
-            ))}
-          </div>
+          <NewsEventSlider items={newsEvents} />
           <div className="mt-10 text-center">
             <Link
               to="/explore"
@@ -752,6 +721,191 @@ function ReviewSlider({ items }: { items: { text: string; author: string | null;
             onClick={() => setI((v) => (v + 1) % items.length)}
             aria-label="Berikutnya"
             className="rounded-full border border-stone-300 bg-white p-1.5 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* News & Event slider                                                  */
+/* ------------------------------------------------------------------ */
+
+type NewsEventItem = {
+  date: string;
+  category: string;
+  title: string;
+  excerpt: string;
+  image: string;
+};
+
+function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
+  const [cardsPerView, setCardsPerView] = useState(3);
+  useEffect(() => {
+    const update = () => {
+      const w = window.innerWidth;
+      setCardsPerView(w < 640 ? 1 : w < 1024 ? 2 : 3);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const maxIndex = Math.max(0, items.length - cardsPerView);
+  const isLoopable = items.length > cardsPerView;
+
+  // Clone the edges so the track can wrap seamlessly in both directions.
+  const extended = isLoopable
+    ? [...items.slice(-cardsPerView), ...items, ...items.slice(0, cardsPerView)]
+    : items;
+
+  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [isTransitioning, setIsTransitioning] = useState(true);
+
+  // Keep the index valid when cardsPerView changes on resize.
+  useEffect(() => {
+    setI(isLoopable ? cardsPerView : 0);
+  }, [cardsPerView, isLoopable]);
+
+  // Autoplay.
+  useEffect(() => {
+    if (!isLoopable) return;
+    const t = setInterval(() => {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [isLoopable]);
+
+  const handlePrev = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v - 1);
+    } else {
+      setI((v) => Math.max(0, v - 1));
+    }
+  };
+  const handleNext = () => {
+    if (isLoopable) {
+      setIsTransitioning(true);
+      setI((v) => v + 1);
+    } else {
+      setI((v) => Math.min(maxIndex, v + 1));
+    }
+  };
+
+  // After landing on a cloned edge, snap (without animation) to the real slide.
+  const handleTransitionEnd = () => {
+    if (!isLoopable) return;
+    if (i <= 0) {
+      setIsTransitioning(false);
+      setI(items.length);
+    } else if (i >= items.length + cardsPerView) {
+      setIsTransitioning(false);
+      setI(cardsPerView);
+    }
+  };
+
+  // Touch swipe.
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(dx) > 50) {
+      if (dx > 0) handleNext();
+      else handlePrev();
+    }
+    touchStartX.current = null;
+  };
+
+  if (items.length === 0) return null;
+
+  const activeDot = isLoopable
+    ? (((i - cardsPerView) % items.length) + items.length) % items.length
+    : i;
+  const totalDots = isLoopable ? items.length : maxIndex + 1;
+
+  return (
+    <div className="relative mt-12">
+      <div className="overflow-hidden" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <div
+          className="flex"
+          style={{
+            transform: `translateX(-${i * (100 / cardsPerView)}%)`,
+            transition: isTransitioning ? "transform 500ms ease-out" : "none",
+          }}
+          onTransitionEnd={handleTransitionEnd}
+        >
+          {extended.map((n, idx) => (
+            <div
+              key={`${n.title}-${n.date}-${idx}`}
+              className="shrink-0 px-3"
+              style={{ width: `${100 / cardsPerView}%` }}
+            >
+              <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
+                {n.image && (
+                  <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
+                    <img
+                      src={n.image}
+                      alt={n.title}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                      <CalendarDays className="h-3.5 w-3.5" />
+                      {n.date}
+                    </span>
+                    <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-teal-700">
+                      {n.category}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
+                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
+                </div>
+              </article>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {totalDots > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <button
+            onClick={handlePrev}
+            aria-label="Sebelumnya"
+            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex gap-1.5">
+            {Array.from({ length: totalDots }).map((_, d) => (
+              <button
+                key={d}
+                onClick={() => {
+                  setIsTransitioning(true);
+                  setI(isLoopable ? d + cardsPerView : d);
+                }}
+                aria-label={`Halaman ${d + 1}`}
+                className={`h-2 rounded-full transition-all ${
+                  d === activeDot ? "w-6 bg-teal-700" : "w-2 bg-stone-300"
+                }`}
+              />
+            ))}
+          </div>
+          <button
+            onClick={handleNext}
+            aria-label="Berikutnya"
+            className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
