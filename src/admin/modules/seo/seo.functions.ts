@@ -853,3 +853,22 @@ export const generateAndSaveLocalBusinessSchema = createServerFn({ method: "POST
 
     return { ok: true, name: "LocalBusiness Schema", schema: jsonLd };
   });
+
+export const getBacklinkData = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    return {
+      summary: {
+        domainStrength: 15,
+        pageStrength: 5,
+        totalBacklinks: 68,
+        referringDomains: 63,
+        nofollowBacklinks: 46,
+        dofollowBacklinks: 22,
+        eduBacklinks: 0,
+        govBacklinks: 0,
+        ips: 21,
+        subnets: 19,
+      },
+    };
+  });

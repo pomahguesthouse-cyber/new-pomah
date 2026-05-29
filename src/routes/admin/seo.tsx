@@ -37,6 +37,10 @@ import {
   ArrowRight,
   Sparkle,
   Layers,
+  Link2,
+  Link2Off,
+  Flag,
+  Monitor,
 } from "lucide-react";
 import {
   getSeoDashboardData,
@@ -56,6 +60,7 @@ import {
   getSearchConsoleData,
   generateAndSaveLocalBusinessSchema,
   triggerSeoAgentAction,
+  getBacklinkData,
 } from "@/admin/modules/seo/seo.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +111,7 @@ type TabKey =
   | "programmatic"
   | "studio"
   | "links"
+  | "backlinks"
   | "reviews";
 
 export function SeoPage() {
@@ -153,6 +159,11 @@ export function SeoPage() {
     queryFn: () => getSearchConsoleData(),
   });
 
+  const { data: backlinkData, refetch: refetchBacklinks } = useQuery({
+    queryKey: ["seo-backlinks"],
+    queryFn: () => getBacklinkData(),
+  });
+
   // Mutators
   const triggerAgentM = useMutation({
     mutationFn: (agentKey: string) => triggerSeoAgentAction({ data: { agent_key: agentKey } }),
@@ -175,6 +186,7 @@ export function SeoPage() {
     { key: "programmatic", label: "Programmatic SEO", icon: Globe },
     { key: "studio", label: "Content Studio", icon: Sparkles },
     { key: "links", label: "Linking Map", icon: LinkIcon },
+    { key: "backlinks", label: "Backlinks", icon: Link2 },
     { key: "reviews", label: "Reviews Insight", icon: Star },
   ];
 
@@ -204,6 +216,7 @@ export function SeoPage() {
               refetchLinks();
               refetchReviews();
               refetchSearchConsole();
+              refetchBacklinks();
               toast.success("SEO metrics refreshed");
             }}
           >
@@ -289,6 +302,9 @@ export function SeoPage() {
               links={linkMapData?.links ?? []}
               onChanged={refetchLinks}
             />
+          )}
+          {activeTab === "backlinks" && (
+            <BacklinksSection summary={backlinkData?.summary} />
           )}
           {activeTab === "reviews" && (
             <ReviewsSection reviews={reviewsData?.reviews ?? []} />
@@ -1724,6 +1740,197 @@ function SearchConsoleSection({ data }: { data: any }) {
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+// ============================================================================
+// 11. BACKLINKS PROFILE SECTION
+// ============================================================================
+type BacklinkSummaryData = {
+  domainStrength: number;
+  pageStrength: number;
+  totalBacklinks: number;
+  referringDomains: number;
+  nofollowBacklinks: number;
+  dofollowBacklinks: number;
+  eduBacklinks: number;
+  govBacklinks: number;
+  ips: number;
+  subnets: number;
+};
+
+function BacklinksSection({ summary }: { summary?: BacklinkSummaryData }) {
+  const data = summary || {
+    domainStrength: 15,
+    pageStrength: 5,
+    totalBacklinks: 68,
+    referringDomains: 63,
+    nofollowBacklinks: 46,
+    dofollowBacklinks: 22,
+    eduBacklinks: 0,
+    govBacklinks: 0,
+    ips: 21,
+    subnets: 19,
+  };
+
+  const CircularGauge = ({
+    value,
+    max = 100,
+    label,
+    color = "#f43f5e",
+    trackColor = "#fee2e2",
+  }: {
+    value: number;
+    max?: number;
+    label: string;
+    color?: string;
+    trackColor?: string;
+  }) => {
+    const radius = 38;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference * (1 - value / max);
+    return (
+      <div className="flex flex-col items-center">
+        <div className="relative w-28 h-28 flex items-center justify-center">
+          <svg className="w-full h-full transform -rotate-90">
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              stroke={trackColor}
+              strokeWidth="6"
+              fill="transparent"
+            />
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              stroke={color}
+              strokeWidth="7"
+              fill="transparent"
+              strokeDasharray={circumference}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              className="transition-all duration-500 ease-out"
+            />
+          </svg>
+          <div className="absolute flex flex-col items-center">
+            <span className="text-2xl font-black text-stone-850 tracking-tight">{value}</span>
+          </div>
+        </div>
+        <span className="text-xs font-semibold text-stone-500 mt-2">{label}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <h2 className="text-xl font-bold text-stone-800">Backlink Profile</h2>
+        <p className="text-xs text-stone-400">Analisis profil tautan masuk (backlinks) dari situs luar</p>
+      </div>
+
+      <div className="rounded-2xl bg-[#eefdf4] border border-[#c6f0d7] p-6 relative shadow-sm overflow-hidden">
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-stone-850">Backlink Summary</h3>
+            <p className="text-sm font-semibold text-stone-600 mt-0.5">
+              You have a reasonably weak level of backlink activity to this page.
+            </p>
+          </div>
+          <button className="text-rose-500 hover:text-rose-700 transition p-1 hover:bg-white/50 rounded-lg">
+            <X className="h-5 w-5 stroke-[2.5]" />
+          </button>
+        </div>
+
+        <p className="text-xs text-stone-500 mt-3 max-w-3xl leading-relaxed">
+          Search Engines use backlinks as a strong indicator of a page's authority, relevance and ranking potential. There are various strategies available to gain links to a page to improve this factor
+        </p>
+
+        <div className="mt-8 flex flex-col lg:flex-row items-center gap-8 lg:gap-12">
+          <div className="flex gap-8 justify-center shrink-0">
+            <CircularGauge
+              value={data.domainStrength}
+              label="Domain Strength"
+              color="#f43f5e"
+              trackColor="#fecdd3"
+            />
+            <CircularGauge
+              value={data.pageStrength}
+              label="Page Strength"
+              color="#ec4899"
+              trackColor="#fbcfe8"
+            />
+          </div>
+
+          <div className="flex-1 w-full grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Link2 className="h-5 w-5 text-indigo-500" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.totalBacklinks}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Total Backlinks</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <ExternalLink className="h-5 w-5 text-sky-550" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.referringDomains}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Referring Domains</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Link2Off className="h-5 w-5 text-rose-550" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.nofollowBacklinks}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Nofollow Backlinks</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Link2 className="h-5 w-5 text-emerald-550" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.dofollowBacklinks}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Dofollow Backlinks</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <GraduationCap className="h-5 w-5 text-amber-500" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.eduBacklinks}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Edu Backlinks</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Flag className="h-5 w-5 text-teal-555" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.govBacklinks}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Gov Backlinks</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Layers className="h-5 w-5 text-violet-555" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.ips}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">IPs</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-stone-200/40 flex flex-col justify-between hover:shadow transition duration-200">
+              <Monitor className="h-5 w-5 text-orange-555" />
+              <div className="mt-3">
+                <p className="text-2xl sm:text-3xl font-extrabold text-stone-850 tracking-tight">{data.subnets}</p>
+                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider mt-0.5">Subnets</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
