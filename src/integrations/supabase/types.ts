@@ -577,6 +577,9 @@ export type Database = {
           google_places_api_key: string | null
           google_search_console: string | null
           google_tag_manager_id: string | null
+          custom_google_rating: number | null
+          custom_google_reviews_total: number | null
+          custom_google_reviews_json: Json | null
           hero_image_url: string | null
           homepage_config: Json
           hotel_policy: string | null
@@ -615,6 +618,9 @@ export type Database = {
           google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
+          custom_google_rating?: number | null
+          custom_google_reviews_total?: number | null
+          custom_google_reviews_json?: Json | null
           hero_image_url?: string | null
           homepage_config?: Json
           hotel_policy?: string | null
@@ -653,6 +659,9 @@ export type Database = {
           google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
+          custom_google_rating?: number | null
+          custom_google_reviews_total?: number | null
+          custom_google_reviews_json?: Json | null
           hero_image_url?: string | null
           homepage_config?: Json
           hotel_policy?: string | null

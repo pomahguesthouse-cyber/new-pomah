@@ -184,6 +184,9 @@ const INTEGRATION_FIELDS = [
   "payment_account_number",
   "payment_account_holder",
   "hotel_policy",
+  "custom_google_rating",
+  "custom_google_reviews_total",
+  "custom_google_reviews_json",
 ] as const;
 
 /** Default hotel policy used until the property sets its own. */
@@ -220,6 +223,9 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       payment_account_number: (row.payment_account_number as string | null) ?? null,
       payment_account_holder: (row.payment_account_holder as string | null) ?? null,
       hotel_policy: (row.hotel_policy as string | null) ?? null,
+      custom_google_rating: row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null,
+      custom_google_reviews_total: row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined ? Number(row.custom_google_reviews_total) : null,
+      custom_google_reviews_json: row.custom_google_reviews_json ?? null,
     };
   });
 
@@ -243,6 +249,9 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         payment_account_number: z.string().max(100).nullable().optional(),
         payment_account_holder: z.string().max(120).nullable().optional(),
         hotel_policy: z.string().max(4000).nullable().optional(),
+        custom_google_rating: z.number().min(0).max(5).nullable().optional(),
+        custom_google_reviews_total: z.number().int().min(0).nullable().optional(),
+        custom_google_reviews_json: z.any().nullable().optional(),
       })
       .parse(d),
   )

@@ -24,6 +24,36 @@ const empty = (status: string): GoogleReviewsResult => ({
 export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
   const { data: prop } = await supabasePublic.rpc("get_google_reviews_config" as never);
   const row = ((Array.isArray(prop) ? prop[0] : prop) as Record<string, unknown> | null) ?? {};
+
+  const customRating = row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null;
+  const customTotal = row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined ? Number(row.custom_google_reviews_total) : null;
+  let customReviews: GoogleReview[] = [];
+  if (row.custom_google_reviews_json) {
+    try {
+      const parsed = typeof row.custom_google_reviews_json === "string"
+        ? JSON.parse(row.custom_google_reviews_json)
+        : row.custom_google_reviews_json;
+      if (Array.isArray(parsed)) {
+        customReviews = parsed.map((item: any) => ({
+          author: String(item.author || item.author_name || "Tamu"),
+          text: String(item.text || ""),
+          rating: Number(item.rating ?? 5),
+        }));
+      }
+    } catch (e) {
+      console.error("Error parsing custom google reviews JSON:", e);
+    }
+  }
+
+  if (customRating !== null) {
+    return {
+      rating: customRating,
+      total: customTotal,
+      reviews: customReviews,
+      status: "OK",
+    } satisfies GoogleReviewsResult;
+  }
+
   const placeId = (row.google_place_id as string | undefined)?.trim();
   const key = (
     (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY

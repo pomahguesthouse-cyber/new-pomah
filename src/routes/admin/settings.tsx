@@ -23,6 +23,7 @@ import {
   FileText,
   Users,
   Plus,
+  Star,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -775,6 +776,63 @@ function IntegrationTab() {
         value={data?.google_search_console ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, google_search_console: v })}
+      />
+
+      <div className="pt-4 border-t border-border mt-6 mb-2">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+          Kustom Ulasan & Rating Google (Alternatif Tanpa API Key)
+        </h3>
+        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+          Mengabaikan Google Places API sepenuhnya jika "Google Rating (Kustom)" di bawah ini diisi. Sangat berguna jika Anda ingin menulis/modifikasi ulasan sendiri tanpa bergantung ke Google Maps.
+        </p>
+      </div>
+
+      <TextSettingCard
+        icon={<Star className="h-4 w-4 text-amber-500" />}
+        label="Google Rating (Kustom)"
+        description="Rating ulasan kustom yang akan ditampilkan di web (rentang 0 - 5. contoh: 4.9)."
+        placeholder="contoh: 4.9"
+        value={(data as any)?.custom_google_rating?.toString() ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, custom_google_rating: v ? parseFloat(v) : null })}
+      />
+
+      <TextSettingCard
+        icon={<Users className="h-4 w-4" />}
+        label="Total Ulasan Google (Kustom)"
+        description="Jumlah total ulasan kustom yang ditampilkan di web."
+        placeholder="contoh: 84"
+        value={(data as any)?.custom_google_reviews_total?.toString() ?? null}
+        disabled={disabled}
+        onSave={(v) => id && mutation.mutate({ id, custom_google_reviews_total: v ? parseInt(v, 10) : null })}
+      />
+
+      <TextSettingCard
+        icon={<FileText className="h-4 w-4" />}
+        label="Daftar Ulasan JSON (Kustom)"
+        description="Array ulasan Google dalam format JSON. Maksimal 6 ulasan. Setiap ulasan membutuhkan format: { &quot;author&quot;: &quot;Nama&quot;, &quot;text&quot;: &quot;Review...&quot;, &quot;rating&quot;: 5 }."
+        placeholder={'[\n  {\n    "author": "Budi Santoso",\n    "text": "Sangat recommended bagi rombongan wisuda. Kamar bersih, parkiran luas muat bus.",\n    "rating": 5\n  }\n]'}
+        value={(data as any)?.custom_google_reviews_json ? (typeof (data as any).custom_google_reviews_json === "string" ? (data as any).custom_google_reviews_json : JSON.stringify((data as any).custom_google_reviews_json, null, 2)) : null}
+        multiline
+        disabled={disabled}
+        onSave={(v) => {
+          if (!id) return;
+          if (!v) {
+            mutation.mutate({ id, custom_google_reviews_json: null });
+            return;
+          }
+          try {
+            const parsed = JSON.parse(v);
+            if (!Array.isArray(parsed)) {
+              toast.error("Format harus berupa array JSON: [ { ... } ]");
+              return;
+            }
+            mutation.mutate({ id, custom_google_reviews_json: parsed });
+          } catch (e) {
+            toast.error("Format JSON tidak valid!");
+          }
+        }}
       />
 
       <TextSettingCard
