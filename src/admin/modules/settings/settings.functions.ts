@@ -184,9 +184,6 @@ const INTEGRATION_FIELDS = [
   "payment_account_number",
   "payment_account_holder",
   "hotel_policy",
-  "custom_google_rating",
-  "custom_google_reviews_total",
-  "custom_google_reviews_json",
 ] as const;
 
 /** Default hotel policy used until the property sets its own. */
@@ -223,9 +220,6 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       payment_account_number: (row.payment_account_number as string | null) ?? null,
       payment_account_holder: (row.payment_account_holder as string | null) ?? null,
       hotel_policy: (row.hotel_policy as string | null) ?? null,
-      custom_google_rating: row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null,
-      custom_google_reviews_total: row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined ? Number(row.custom_google_reviews_total) : null,
-      custom_google_reviews_json: row.custom_google_reviews_json ?? null,
     };
   });
 
@@ -249,9 +243,6 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         payment_account_number: z.string().max(100).nullable().optional(),
         payment_account_holder: z.string().max(120).nullable().optional(),
         hotel_policy: z.string().max(4000).nullable().optional(),
-        custom_google_rating: z.number().min(0).max(5).nullable().optional(),
-        custom_google_reviews_total: z.number().int().min(0).nullable().optional(),
-        custom_google_reviews_json: z.any().nullable().optional(),
       })
       .parse(d),
   )
@@ -263,6 +254,81 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
 
     const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
     if (error) throw error;
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Custom Google Reviews (editable, no Google Maps API)                */
+/* Kept separate so a missing migration on the custom_google_* columns */
+/* never breaks the main integration/credential reads.                  */
+/* ------------------------------------------------------------------ */
+
+const CUSTOM_GOOGLE_REVIEWS_FIELDS = [
+  "custom_google_rating",
+  "custom_google_reviews_total",
+  "custom_google_reviews_json",
+] as const;
+
+export const getCustomGoogleReviews = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: propRow } = await db(context.supabase)
+      .from("properties")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    const id = (propRow as Record<string, unknown> | null)?.id as string | undefined ?? null;
+    if (!id) {
+      return { id: null, custom_google_rating: null, custom_google_reviews_total: null, custom_google_reviews_json: null };
+    }
+    const { data, error } = await db(context.supabase)
+      .from("properties")
+      .select(`id, ${CUSTOM_GOOGLE_REVIEWS_FIELDS.join(", ")}`)
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      // Migration not yet applied — degrade gracefully
+      return { id, custom_google_rating: null, custom_google_reviews_total: null, custom_google_reviews_json: null };
+    }
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id,
+      custom_google_rating:
+        row.custom_google_rating !== null && row.custom_google_rating !== undefined
+          ? Number(row.custom_google_rating)
+          : null,
+      custom_google_reviews_total:
+        row.custom_google_reviews_total !== null && row.custom_google_reviews_total !== undefined
+          ? Number(row.custom_google_reviews_total)
+          : null,
+      custom_google_reviews_json: row.custom_google_reviews_json ?? null,
+    };
+  });
+
+export const updateCustomGoogleReviews = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        custom_google_rating: z.number().min(0).max(5).nullable().optional(),
+        custom_google_reviews_total: z.number().int().min(0).nullable().optional(),
+        custom_google_reviews_json: z.any().nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    for (const k of CUSTOM_GOOGLE_REVIEWS_FIELDS) {
+      if ((data as Record<string, unknown>)[k] !== undefined) patch[k] = (data as Record<string, unknown>)[k];
+    }
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    if (error) {
+      throw new Error(
+        "Gagal menyimpan Google Reviews kustom. Pastikan migration 20260529120000_add_custom_google_reviews.sql sudah dijalankan. Detail: " +
+          error.message,
+      );
+    }
     return { ok: true };
   });
 

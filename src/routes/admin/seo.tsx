@@ -63,8 +63,8 @@ import {
   getBacklinkData,
 } from "@/admin/modules/seo/seo.functions";
 import {
-  getIntegrationSettings,
-  updateIntegrationSettings,
+  getCustomGoogleReviews,
+  updateCustomGoogleReviews,
 } from "@/admin/modules/settings/settings.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1948,12 +1948,12 @@ function BacklinksSection({ summary }: { summary?: BacklinkSummaryData }) {
 type CustomReview = { author: string; text: string; rating: number };
 
 function GoogleReviewsSection() {
-  const getFn = useServerFn(getIntegrationSettings);
-  const updateFn = useServerFn(updateIntegrationSettings);
+  const getFn = useServerFn(getCustomGoogleReviews);
+  const updateFn = useServerFn(updateCustomGoogleReviews);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["integration-settings"],
+    queryKey: ["custom-google-reviews"],
     queryFn: () => getFn(),
   });
 
@@ -1996,7 +1996,7 @@ function GoogleReviewsSection() {
       custom_google_reviews_json?: any;
     }) => updateFn({ data: { id: id as string, ...patch } }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["integration-settings"] });
+      qc.invalidateQueries({ queryKey: ["custom-google-reviews"] });
       qc.invalidateQueries({ queryKey: ["google-reviews"] });
       qc.invalidateQueries({ queryKey: ["public-site"] });
       toast.success("Google Reviews tersimpan");
