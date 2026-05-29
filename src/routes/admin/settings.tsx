@@ -712,6 +712,9 @@ function IntegrationTab() {
       payment_account_number?: string | null;
       payment_account_holder?: string | null;
       hotel_policy?: string | null;
+      custom_google_rating?: number | null;
+      custom_google_reviews_total?: number | null;
+      custom_google_reviews_json?: any;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integration-settings"] });

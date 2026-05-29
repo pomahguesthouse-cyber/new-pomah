@@ -62,6 +62,10 @@ import {
   triggerSeoAgentAction,
   getBacklinkData,
 } from "@/admin/modules/seo/seo.functions";
+import {
+  getIntegrationSettings,
+  updateIntegrationSettings,
+} from "@/admin/modules/settings/settings.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -112,7 +116,8 @@ type TabKey =
   | "studio"
   | "links"
   | "backlinks"
-  | "reviews";
+  | "reviews"
+  | "google_reviews";
 
 export function SeoPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("search_console");
@@ -188,6 +193,7 @@ export function SeoPage() {
     { key: "links", label: "Linking Map", icon: LinkIcon },
     { key: "backlinks", label: "Backlinks", icon: Link2 },
     { key: "reviews", label: "Reviews Insight", icon: Star },
+    { key: "google_reviews", label: "Google Reviews", icon: MessagesSquare },
   ];
 
   return (
@@ -309,6 +315,7 @@ export function SeoPage() {
           {activeTab === "reviews" && (
             <ReviewsSection reviews={reviewsData?.reviews ?? []} />
           )}
+          {activeTab === "google_reviews" && <GoogleReviewsSection />}
         </main>
       </div>
     </div>
@@ -1931,6 +1938,443 @@ function BacklinksSection({ summary }: { summary?: BacklinkSummaryData }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   12. GOOGLE REVIEWS EDITOR SECTION (no Google Maps API needed)
+   ============================================================================ */
+type CustomReview = { author: string; text: string; rating: number };
+
+function GoogleReviewsSection() {
+  const getFn = useServerFn(getIntegrationSettings);
+  const updateFn = useServerFn(updateIntegrationSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["integration-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const id = data?.id ?? null;
+
+  const [rating, setRating] = useState<string>("");
+  const [total, setTotal] = useState<string>("");
+  const [reviews, setReviews] = useState<CustomReview[]>([]);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!data || hydrated) return;
+    setRating(data.custom_google_rating?.toString() ?? "");
+    setTotal(data.custom_google_reviews_total?.toString() ?? "");
+    const raw = data.custom_google_reviews_json;
+    let parsed: any = raw;
+    if (typeof raw === "string") {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = [];
+      }
+    }
+    if (Array.isArray(parsed)) {
+      setReviews(
+        parsed.map((r: any) => ({
+          author: String(r.author ?? r.author_name ?? "Tamu"),
+          text: String(r.text ?? ""),
+          rating: Math.max(1, Math.min(5, Number(r.rating ?? 5))),
+        })),
+      );
+    }
+    setHydrated(true);
+  }, [data, hydrated]);
+
+  const mutation = useMutation({
+    mutationFn: (patch: {
+      custom_google_rating?: number | null;
+      custom_google_reviews_total?: number | null;
+      custom_google_reviews_json?: any;
+    }) => updateFn({ data: { id: id as string, ...patch } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["integration-settings"] });
+      qc.invalidateQueries({ queryKey: ["google-reviews"] });
+      qc.invalidateQueries({ queryKey: ["public-site"] });
+      toast.success("Google Reviews tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  function handleSaveSummary() {
+    if (!id) return;
+    const r = rating.trim() === "" ? null : parseFloat(rating);
+    const t = total.trim() === "" ? null : parseInt(total, 10);
+    if (r !== null && (isNaN(r) || r < 0 || r > 5)) {
+      toast.error("Rating harus angka antara 0 dan 5");
+      return;
+    }
+    if (t !== null && (isNaN(t) || t < 0)) {
+      toast.error("Total ulasan harus angka positif");
+      return;
+    }
+    mutation.mutate({
+      custom_google_rating: r,
+      custom_google_reviews_total: t,
+    });
+  }
+
+  function handleSaveReviews() {
+    if (!id) return;
+    for (const rev of reviews) {
+      if (!rev.author.trim() || !rev.text.trim()) {
+        toast.error("Nama dan isi ulasan tidak boleh kosong");
+        return;
+      }
+    }
+    mutation.mutate({
+      custom_google_reviews_json: reviews.length ? reviews : null,
+    });
+  }
+
+  function addReview() {
+    setReviews((prev) => [...prev, { author: "", text: "", rating: 5 }]);
+  }
+
+  function updateReview(idx: number, patch: Partial<CustomReview>) {
+    setReviews((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
+  function removeReview(idx: number) {
+    setReviews((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function moveReview(idx: number, dir: -1 | 1) {
+    setReviews((prev) => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  }
+
+  function resetCustom() {
+    if (!id) return;
+    if (!confirm("Hapus semua data Google Reviews kustom? Setelah ini website akan kembali memakai Google Places API (jika dikonfigurasi).")) return;
+    setRating("");
+    setTotal("");
+    setReviews([]);
+    mutation.mutate({
+      custom_google_rating: null,
+      custom_google_reviews_total: null,
+      custom_google_reviews_json: null,
+    });
+  }
+
+  if (isLoading) {
+    return <div className="p-6 text-sm text-stone-400 font-mono">Loading Google Reviews settings...</div>;
+  }
+
+  const isActive = data?.custom_google_rating !== null && data?.custom_google_rating !== undefined;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-stone-800">Google Reviews (Editable)</h2>
+          <p className="text-xs text-stone-400 max-w-2xl mt-0.5">
+            Kelola rating, total ulasan, dan daftar ulasan Google yang tampil di website tanpa bergantung pada Google Maps / Places API. Jika rating di bawah ini diisi, sistem akan memakai data kustom ini dan mengabaikan API key Google.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 rounded-full ${
+              isActive ? "bg-emerald-500 animate-pulse" : "bg-stone-300"
+            }`}
+          />
+          <span className="text-xs font-mono font-bold uppercase text-stone-600">
+            {isActive ? "Custom Mode Aktif" : "Memakai Google API (jika dikonfigurasi)"}
+          </span>
+        </div>
+      </div>
+
+      {!id && (
+        <p className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+          Data properti belum ada — pengaturan belum bisa disimpan.
+        </p>
+      )}
+
+      {/* Summary card: rating + total */}
+      <Card className="p-6 border border-stone-200 bg-white space-y-5">
+        <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <h3 className="font-bold text-stone-800 text-sm">Ringkasan Rating & Jumlah Ulasan</h3>
+          </div>
+          <Button
+            size="sm"
+            className="h-8 bg-teal-700 hover:bg-teal-800 text-white"
+            disabled={!id || mutation.isPending}
+            onClick={handleSaveSummary}
+          >
+            <Save className="h-3.5 w-3.5 mr-1.5" /> Simpan
+          </Button>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">
+              Rating (0 - 5)
+            </Label>
+            <Input
+              type="number"
+              step="0.1"
+              min={0}
+              max={5}
+              value={rating}
+              onChange={(e) => setRating(e.target.value)}
+              placeholder="contoh: 4.9"
+              className="mt-1.5 text-sm font-mono"
+            />
+            <p className="mt-1 text-[11px] text-stone-400">
+              Kosongkan untuk menonaktifkan mode kustom dan memakai data Google Places API.
+            </p>
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">
+              Total Ulasan
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              value={total}
+              onChange={(e) => setTotal(e.target.value)}
+              placeholder="contoh: 84"
+              className="mt-1.5 text-sm font-mono"
+            />
+            <p className="mt-1 text-[11px] text-stone-400">
+              Jumlah total ulasan yang ditampilkan, contoh: "84 ulasan Google".
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Reviews list editor */}
+      <Card className="p-6 border border-stone-200 bg-white space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-2">
+            <MessagesSquare className="h-4 w-4 text-teal-700" />
+            <h3 className="font-bold text-stone-800 text-sm">Daftar Ulasan Kustom</h3>
+            <span className="text-[10px] font-mono text-stone-400 bg-stone-100 px-2 py-0.5 rounded">
+              {reviews.length} ulasan
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 bg-white"
+              onClick={addReview}
+              disabled={!id}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Tambah Ulasan
+            </Button>
+            <Button
+              size="sm"
+              className="h-8 bg-teal-700 hover:bg-teal-800 text-white"
+              disabled={!id || mutation.isPending}
+              onClick={handleSaveReviews}
+            >
+              <Save className="h-3.5 w-3.5 mr-1.5" /> Simpan Daftar
+            </Button>
+          </div>
+        </div>
+
+        {reviews.length === 0 ? (
+          <div className="text-center py-10 border border-dashed border-stone-200 rounded-xl">
+            <MessagesSquare className="h-8 w-8 text-stone-300 mx-auto mb-2" />
+            <p className="text-sm text-stone-500 font-medium">Belum ada ulasan kustom.</p>
+            <p className="text-xs text-stone-400 mt-1">
+              Klik <strong>Tambah Ulasan</strong> untuk membuat ulasan pertama.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((r, idx) => (
+              <div
+                key={idx}
+                className="p-4 rounded-xl border border-stone-200 bg-stone-50/50 space-y-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                    Ulasan #{idx + 1}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      disabled={idx === 0}
+                      onClick={() => moveReview(idx, -1)}
+                      title="Pindah ke atas"
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      disabled={idx === reviews.length - 1}
+                      onClick={() => moveReview(idx, 1)}
+                      title="Pindah ke bawah"
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 text-red-600 hover:bg-red-50"
+                      onClick={() => removeReview(idx)}
+                      title="Hapus ulasan"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <Label className="text-xs font-semibold text-stone-600">
+                      Nama Tamu
+                    </Label>
+                    <Input
+                      value={r.author}
+                      onChange={(e) => updateReview(idx, { author: e.target.value })}
+                      placeholder="contoh: Budi Santoso"
+                      className="mt-1 text-sm bg-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-stone-600">
+                      Rating
+                    </Label>
+                    <div className="mt-1 flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => updateReview(idx, { rating: n })}
+                          className="p-0.5"
+                          title={`${n} bintang`}
+                        >
+                          <Star
+                            className={`h-5 w-5 transition ${
+                              n <= r.rating
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-stone-300"
+                            }`}
+                          />
+                        </button>
+                      ))}
+                      <span className="ml-2 text-xs font-mono text-stone-500">
+                        {r.rating}/5
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs font-semibold text-stone-600">
+                    Isi Ulasan
+                  </Label>
+                  <Textarea
+                    rows={3}
+                    value={r.text}
+                    onChange={(e) => updateReview(idx, { text: e.target.value })}
+                    placeholder="Tulis isi ulasan tamu di sini..."
+                    className="mt-1 text-sm bg-white"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Live preview */}
+      {(rating || total || reviews.length > 0) && (
+        <Card className="p-6 border border-stone-200 bg-white space-y-4">
+          <div className="flex items-center gap-2 border-b border-stone-100 pb-3">
+            <Eye className="h-4 w-4 text-teal-700" />
+            <h3 className="font-bold text-stone-800 text-sm">Pratinjau</h3>
+          </div>
+          {(rating || total) && (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`h-4 w-4 ${
+                      i < Math.round(parseFloat(rating || "0"))
+                        ? "fill-amber-400 text-amber-400"
+                        : "text-stone-300"
+                    }`}
+                  />
+                ))}
+              </div>
+              <span className="font-bold text-stone-800">{rating || "—"}</span>
+              <span className="text-xs text-stone-500">
+                ({total || "0"} ulasan Google)
+              </span>
+            </div>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            {reviews.slice(0, 6).map((r, i) => (
+              <div
+                key={i}
+                className="p-3 rounded-lg border border-stone-100 bg-stone-50/50 text-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-stone-800">{r.author || "Tamu"}</span>
+                  <span className="flex items-center gap-0.5">
+                    {Array.from({ length: r.rating }).map((_, j) => (
+                      <Star key={j} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    ))}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-stone-600 italic line-clamp-3">
+                  "{r.text || "(belum diisi)"}"
+                </p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Reset / danger zone */}
+      {isActive && (
+        <Card className="p-5 border border-rose-100 bg-rose-50/50">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="font-semibold text-rose-800 text-sm flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Nonaktifkan Mode Kustom
+              </h4>
+              <p className="text-xs text-rose-700/80 mt-1 max-w-xl">
+                Hapus rating, total, dan daftar ulasan kustom. Website akan kembali memakai data dari Google Places API (jika API key & Place ID terisi di tab Integrasi).
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 bg-white border-rose-200 text-rose-700 hover:bg-rose-50"
+              disabled={!id || mutation.isPending}
+              onClick={resetCustom}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Reset Semua
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
