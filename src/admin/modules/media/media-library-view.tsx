@@ -710,14 +710,14 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
   };
 
   /** Renders a single folder row (with rename / delete / add-sub-folder buttons). */
-  const FolderRow = ({ folder, indent }: { folder: MediaFolder; indent: number }) => {
+  const renderFolderRow = (folder: MediaFolder, indent: number): React.ReactNode => {
     const count = counts.get(folder.id) ?? 0;
     const isActive = activeFolder === folder.id;
     const childFolders = folders.filter((f) => f.parent_id === folder.id);
 
     if (renamingId === folder.id) {
       return (
-        <div style={{ paddingLeft: `${indent * 16}px` }}
+        <div key={folder.id} style={{ paddingLeft: `${indent * 16}px` }}
           className="flex items-center gap-1 rounded-lg border border-input bg-background px-2 py-1">
           <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
           <input autoFocus value={renameDraft}
@@ -736,7 +736,7 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
     }
 
     return (
-      <>
+      <React.Fragment key={folder.id}>
         <div className="group/row flex items-center" style={{ paddingLeft: `${indent * 12}px` }}>
           <button type="button" onClick={() => onSelect(folder.id)}
             className={cn(
@@ -773,10 +773,8 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
           </div>
         </div>
         {/* Sub-folders rendered recursively */}
-        {childFolders.map((child) => (
-          <FolderRow key={child.id} folder={child} indent={indent + 1} />
-        ))}
-      </>
+        {childFolders.map((child) => renderFolderRow(child, indent + 1))}
+      </React.Fragment>
     );
   };
 
@@ -803,9 +801,7 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
       {folders.length > 0 && <div className="my-1 border-t border-border" />}
 
       {/* Nested folder tree */}
-      {rootFolders.map((f) => (
-        <FolderRow key={f.id} folder={f} indent={0} />
-      ))}
+      {rootFolders.map((f) => renderFolderRow(f, 0))}
 
       {/* Tanpa Folder (only shown when there are unassigned files) */}
       {noneCount > 0 && (
