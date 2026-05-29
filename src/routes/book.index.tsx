@@ -67,6 +67,8 @@ export const Route = createFileRoute("/book/")({
     const desc =
       bookingSeo.metaDescription ||
       "Booking kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.";
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/book`;
     return {
       meta: [
         { title },
@@ -74,6 +76,9 @@ export const Route = createFileRoute("/book/")({
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
         ...(bookingSeo.ogImageUrl ? [{ property: "og:image", content: bookingSeo.ogImageUrl }] : []),
+      ],
+      links: [
+        { rel: "canonical", href: canonicalUrl }
       ],
     };
   },

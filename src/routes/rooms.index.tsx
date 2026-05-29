@@ -9,20 +9,27 @@ export const Route = createFileRoute("/rooms/")({
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
     return getPublicSiteData();
   },
-  head: () => ({
-    meta: [
-      { title: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
-      {
-        name: "description",
-        content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang. Pesan sekarang secara langsung dengan harga terbaik.",
-      },
-      { property: "og:title", content: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
-      {
-        property: "og:description",
-        content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang.",
-      },
-    ],
-  }),
+  head: ({ loaderData }: any) => {
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms`;
+    return {
+      meta: [
+        { title: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
+        {
+          name: "description",
+          content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang. Pesan sekarang secara langsung dengan harga terbaik.",
+        },
+        { property: "og:title", content: "Pilihan Kamar & Tarif — Pomah Guesthouse Semarang" },
+        {
+          property: "og:description",
+          content: "Temukan berbagai tipe kamar bersih dan nyaman di Pomah Guesthouse Semarang.",
+        },
+      ],
+      links: [
+        { rel: "canonical", href: canonicalUrl }
+      ],
+    };
+  },
   component: PublicRooms,
 });
 

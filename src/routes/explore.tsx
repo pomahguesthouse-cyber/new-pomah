@@ -35,15 +35,22 @@ export const Route = createFileRoute("/explore")({
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
     return getPublicSiteData();
   },
-  head: () => ({
-    meta: [
-      { title: "Jelajahi Semarang — Destinasi Wisata & Kuliner" },
-      {
-        name: "description",
-        content: "Temukan destinasi wisata terkenal, kuliner terbaik, event seru, dan berita terbaru di Kota Semarang.",
-      },
-    ],
-  }),
+  head: ({ loaderData }: any) => {
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/explore`;
+    return {
+      meta: [
+        { title: "Jelajahi Semarang — Destinasi Wisata & Kuliner" },
+        {
+          name: "description",
+          content: "Temukan destinasi wisata terkenal, kuliner terbaik, event seru, dan berita terbaru di Kota Semarang.",
+        },
+      ],
+      links: [
+        { rel: "canonical", href: canonicalUrl }
+      ],
+    };
+  },
   component: ExploreSemarang,
 });
 

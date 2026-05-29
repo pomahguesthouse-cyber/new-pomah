@@ -62,6 +62,8 @@ export const Route = createFileRoute("/rooms/$slug")({
     const room = loaderData?.room;
     const name = room?.name ?? "Kamar";
     const desc = room?.description ?? "Kamar di Pomah Guesthouse Semarang";
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room?.slug || ""}`;
     return {
       meta: [
         { title: `${name} — Pomah Guesthouse Semarang` },
@@ -69,6 +71,9 @@ export const Route = createFileRoute("/rooms/$slug")({
         { property: "og:title", content: `${name} — Pomah Guesthouse Semarang` },
         { property: "og:description", content: desc },
         { property: "og:image", content: room?.hero_image_url || undefined },
+      ],
+      links: [
+        { rel: "canonical", href: canonicalUrl }
       ],
     };
   },

@@ -67,6 +67,8 @@ export const Route = createFileRoute("/")({
       seo.metaDescription ||
       "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
     const heroImage = cfg.hero.slides?.[0]?.imageUrl;
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
     return {
       meta: [
         { title },
@@ -75,9 +77,12 @@ export const Route = createFileRoute("/")({
         { property: "og:description", content: desc },
         ...(seo.ogImageUrl ? [{ property: "og:image", content: seo.ogImageUrl }] : []),
       ],
-      links: heroImage
-        ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" }]
-        : [],
+      links: [
+        { rel: "canonical", href: canonicalUrl },
+        ...(heroImage
+          ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" as const }]
+          : []),
+      ],
     };
   },
   component: PomahHome,

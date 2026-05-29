@@ -52,6 +52,8 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
+    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/lp/${p.slug || ""}`;
     return {
       meta: [
         { title: p.meta_title || p.title },
@@ -60,13 +62,17 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
         { property: "og:description", content: p.meta_description || "" },
         ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
       ],
+      links: [
+        { rel: "canonical", href: canonicalUrl }
+      ],
     };
   },
 
   loader: async ({ params }: any) => {
     const result = await getSeoLandingPageBySlug({ data: { slug: params.slug } });
     if (!result.page) throw notFound();
-    return result;
+    const siteData = await getPublicSiteData();
+    return { ...result, property: siteData?.property };
   },
 
   component: LandingPage,
