@@ -830,11 +830,18 @@ function PomahHome() {
                   )}
                   {(usingDateFilter || today) && (
                     <p className="mt-3 text-sm font-medium text-stone-600 md:text-base">
-                      {usingDateFilter
-                        ? `Ketersediaan kamar untuk: ${fmtDateID(checkIn)} – ${fmtDateID(
-                            checkOut,
-                          )} (${nightsBetween(checkIn, checkOut)} Malam)`
-                        : `Ketersediaan kamar hari ini, ${fmtFullDateID(today)}`}
+                      {usingDateFilter ? (
+                        <>
+                          Ketersediaan kamar untuk:{" "}
+                          <AnnotatedDate text={`${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`} />
+                          {` (${nightsBetween(checkIn, checkOut)} Malam)`}
+                        </>
+                      ) : (
+                        <>
+                          Ketersediaan kamar hari ini,{" "}
+                          <AnnotatedDate text={fmtFullDateID(today)} />
+                        </>
+                      )}
                     </p>
                   )}
                   {guests > totalNormalCapacity && totalNormalCapacity > 0 && wa && (
@@ -2167,12 +2174,28 @@ function RoomCarousel({
                       src={rt.hero_image_url}
                       alt={rt.name}
                       className="absolute inset-0 h-full w-full object-cover"
+                      onError={(e) => {
+                        // Image URL broken / 404 / forbidden — hide and show fallback
+                        const img = e.currentTarget as HTMLImageElement;
+                        img.style.display = "none";
+                        img.parentElement?.querySelector(".room-img-fallback")?.classList.remove("hidden");
+                      }}
                     />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-amber-600/50">
-                      Foto Kamar
-                    </div>
-                  )}
+                  ) : null}
+                  <div
+                    className={cn(
+                      "room-img-fallback absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70",
+                      rt.hero_image_url && "hidden",
+                    )}
+                  >
+                    <BedDouble className="h-8 w-8 opacity-60" />
+                    <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest">
+                      {rt.name || "Foto Kamar"}
+                    </span>
+                    <span className="font-mono text-[9px] uppercase tracking-widest opacity-60">
+                      Belum ada foto
+                    </span>
+                  </div>
                   {(rt as any).floor_info && (
                     <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
                       <MapPin className="h-3 w-3 text-amber-700" />
@@ -2314,6 +2337,53 @@ function RoomCarousel({
 /** Page Builder integration props passed down to selectable sections. */
 
 
+
+/**
+ * Wraps a date string with a relative container so a one-shot red-circle
+ * SVG (public/red-circle-animation.svg) can be drawn around it the first
+ * time the user scrolls it into view. Uses IntersectionObserver so the
+ * animation only fires once per page load.
+ */
+function AnnotatedDate({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [show, setShow] = useState(false);
+  const playedRef = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !playedRef.current) {
+            playedRef.current = true;
+            setShow(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { threshold: 0.6 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <span ref={ref} className="relative inline-block whitespace-nowrap font-semibold text-stone-900">
+      {text}
+      {show && (
+        <img
+          src="/red-circle-animation.svg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[140%] w-[130%] -translate-x-1/2 -translate-y-1/2 select-none"
+        />
+      )}
+    </span>
+  );
+}
 
 function SectionHeading({
   children,
