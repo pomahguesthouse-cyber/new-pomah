@@ -56,71 +56,123 @@ async function loadKeysFromDb(
   }
 }
 
+/**
+ * Curated authoritative sources for Semarang event extraction.
+ * Searched in addition to the open web; their snippets land at the
+ * TOP of the context shown to the LLM so it prefers their facts
+ * (dates, venue, jam operasional) over scraped travel blogs.
+ *
+ * PPID Kota Semarang = official Pemkot info portal (agenda, berita).
+ */
+const CURATED_EVENT_DOMAINS = ["ppid.semarangkota.go.id"];
+
+async function singleTavilySearch(
+  tavilyKey: string,
+  query: string,
+  includeDomains?: string[],
+  maxResults = 6,
+): Promise<SearchSnippet[]> {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: ctrl.signal,
+      body: JSON.stringify({
+        api_key: tavilyKey,
+        query,
+        search_depth: "advanced",
+        include_answer: false,
+        max_results: maxResults,
+        ...(includeDomains && includeDomains.length > 0 ? { include_domains: includeDomains } : {}),
+      }),
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as { results?: Array<{ title: string; url: string; content: string }> };
+    return (j.results ?? []).map((r) => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.content?.slice(0, 1500) ?? "",
+    }));
+  } catch (e) {
+    console.error("[article-gen] Tavily search failed:", e);
+    return [];
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+async function singleSerperSearch(
+  serperKey: string,
+  query: string,
+  siteFilter?: string,
+  num = 6,
+): Promise<SearchSnippet[]> {
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
+  try {
+    const q = siteFilter ? `${query} site:${siteFilter}` : query;
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": serperKey },
+      signal: ctrl.signal,
+      body: JSON.stringify({ q, num, gl: "id", hl: "id" }),
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as {
+      organic?: Array<{ title: string; link: string; snippet: string }>;
+    };
+    return (j.organic ?? []).slice(0, num).map((r) => ({
+      title: r.title,
+      url: r.link,
+      snippet: r.snippet?.slice(0, 600) ?? "",
+    }));
+  } catch (e) {
+    console.error("[article-gen] Serper search failed:", e);
+    return [];
+  } finally {
+    clearTimeout(to);
+  }
+}
+
+function dedupeByUrl(snippets: SearchSnippet[]): SearchSnippet[] {
+  const seen = new Set<string>();
+  const out: SearchSnippet[] = [];
+  for (const s of snippets) {
+    const key = s.url.split("#")[0];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 async function webSearch(
   query: string,
   dbKeys: { tavily: string | null; serper: string | null },
+  options: { curatedDomains?: string[] } = {},
 ): Promise<{ snippets: SearchSnippet[]; provider: string | null }> {
   const tavilyKey = dbKeys.tavily || process.env.TAVILY_API_KEY?.trim() || null;
   const serperKey = dbKeys.serper || process.env.SERPER_API_KEY?.trim() || null;
+  const curated = options.curatedDomains ?? [];
 
-  // 1. Tavily (LLM-optimised)
   if (tavilyKey) {
-    try {
-      const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
-      const res = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: ctrl.signal,
-        body: JSON.stringify({
-          api_key: tavilyKey,
-          query,
-          search_depth: "advanced", // richer per-result content (more chance dates appear in snippet)
-          include_answer: false,
-          max_results: 6,
-        }),
-      });
-      clearTimeout(to);
-      if (res.ok) {
-        const j = (await res.json()) as { results?: Array<{ title: string; url: string; content: string }> };
-        const snippets = (j.results ?? []).map((r) => ({
-          title: r.title,
-          url: r.url,
-          snippet: r.content?.slice(0, 1500) ?? "",
-        }));
-        return { snippets, provider: "tavily" };
-      }
-    } catch (e) {
-      console.error("[article-gen] Tavily failed:", e);
-    }
+    // Parallel: 1 general search + 1 search per curated domain.
+    const calls: Promise<SearchSnippet[]>[] = [singleTavilySearch(tavilyKey, query, undefined, 6)];
+    for (const d of curated) calls.push(singleTavilySearch(tavilyKey, query, [d], 3));
+    const [general, ...curatedResults] = await Promise.all(calls);
+    // Curated FIRST so LLM weights them more
+    const combined = dedupeByUrl([...curatedResults.flat(), ...general]);
+    if (combined.length > 0) return { snippets: combined, provider: "tavily" };
   }
 
-  // 2. Serper (Google search proxy)
   if (serperKey) {
-    try {
-      const ctrl = new AbortController();
-      const to = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
-      const res = await fetch("https://google.serper.dev/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-KEY": serperKey },
-        signal: ctrl.signal,
-        body: JSON.stringify({ q: query, num: 8, gl: "id", hl: "id" }),
-      });
-      clearTimeout(to);
-      if (res.ok) {
-        const j = (await res.json()) as {
-          organic?: Array<{ title: string; link: string; snippet: string }>;
-        };
-        const snippets = (j.organic ?? []).slice(0, 6).map((r) => ({
-          title: r.title,
-          url: r.link,
-          snippet: r.snippet?.slice(0, 600) ?? "",
-        }));
-        return { snippets, provider: "serper" };
-      }
-    } catch (e) {
-      console.error("[article-gen] Serper failed:", e);
-    }
+    const calls: Promise<SearchSnippet[]>[] = [singleSerperSearch(serperKey, query, undefined, 6)];
+    for (const d of curated) calls.push(singleSerperSearch(serperKey, query, d, 3));
+    const [general, ...curatedResults] = await Promise.all(calls);
+    const combined = dedupeByUrl([...curatedResults.flat(), ...general]);
+    if (combined.length > 0) return { snippets: combined, provider: "serper" };
   }
 
   return { snippets: [], provider: null };
@@ -280,7 +332,11 @@ export async function generateArticleCore(
   }
 
   const dbKeys = await loadKeysFromDb(client);
-  const { snippets, provider } = await webSearch(input.topic, dbKeys);
+  const { snippets, provider } = await webSearch(input.topic, dbKeys, {
+    // Bias event extraction toward Pemkot Semarang's official agenda/berita
+    // portal, in addition to the general web search.
+    curatedDomains: input.category === "event" ? CURATED_EVENT_DOMAINS : undefined,
+  });
   const searchContext =
     snippets.length > 0
       ? snippets
@@ -400,6 +456,7 @@ async function runEventExtraction(
     `4. Maks 8 event per response. Prioritaskan event mendatang (setelah ${today}).\n` +
     `5. Jika tanggal tidak pasti, isi null — JANGAN mengarang.\n` +
     `6. Selipkan halus rujukan akomodasi Pomah Guesthouse di description bila wajar (tidak wajib di setiap event).\n` +
+    `   • PRIORITAS SUMBER: jika hasil pencarian berisi URL ppid.semarangkota.go.id (PPID Kota Semarang — portal resmi Pemkot), gunakan data tanggal/lokasi DARI URL ITU sebagai prioritas utama (lebih kredibel dari blog/media). Tetap sebut sumber di tags atau description bila relevan.\n` +
     `7. WAJIB isi "event_date_label" untuk SETIAP event — gunakan tanggal yang singkat dan mudah dibaca dalam bahasa Indonesia, mis. "31 Mei 2026", "29–31 Mei 2026", "Tiap Hari", "Setiap Akhir Pekan", "Sepanjang Oktober 2026", "Setiap Jumat Malam". Field ini SELALU ada teksnya, BUKAN null.\n` +
     `   • Aturan penting: jika Anda MENYEBUT tanggal/periode di paragraphs (mis. "Berlangsung hingga 31 Mei 2026" atau "Setiap akhir pekan Jumat-Minggu"), Anda WAJIB juga menyalinnya ke event_date_label. Tidak boleh tanggal hanya muncul di paragraphs tapi event_date_label kosong.\n` +
     `   • Kalau hasil pencarian menyebut "Berlangsung hingga X" → label = "Hingga X". Kalau menyebut "Dimulai X" → label = "Mulai X". Kalau range → "X – Y".\n\n` +

@@ -1348,6 +1348,18 @@ function ContentStudioSection() {
             <span className="block mt-1 text-amber-700 font-medium">
               ⚡ Mode event: AI akan mengekstrak <strong>banyak event berbeda</strong> dari hasil
               pencarian dan menyimpannya satu per satu (mis. Festival Kuliner, Festival Kota Lama, dst).
+              <span className="block mt-0.5 text-stone-500 font-normal">
+                Sumber resmi <strong>PPID Kota Semarang</strong> (
+                <a
+                  href="https://ppid.semarangkota.go.id"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-teal-700"
+                >
+                  ppid.semarangkota.go.id
+                </a>
+                ) ikut diprioritaskan untuk akurasi tanggal & lokasi.
+              </span>
             </span>
           )}
         </p>
