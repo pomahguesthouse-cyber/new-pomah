@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
+import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import {
   MapPin,
@@ -218,6 +219,31 @@ function ExploreSemarang() {
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // AI-generated events (auto-removed when expired by the cron worker)
+  const { data: autoEventsData } = useQuery({
+    queryKey: ["public-active-events"],
+    queryFn: () => listActivePublicEvents(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const autoEvents = (autoEventsData?.events ?? []).map((e) => {
+    const startIso = e.event_start_date ?? e.event_end_date ?? "";
+    const dateStr = startIso
+      ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "";
+    return {
+      title: e.title,
+      date: dateStr,
+      location: e.event_location ?? "",
+      desc: e.description ?? "",
+      image: e.image_url ?? "",
+      label: "EVENT",
+    };
+  });
+
   // Combine events + news for the sidebar
   const sidebarItems = [
     ...config.events.map((ev) => ({
@@ -228,6 +254,15 @@ function ExploreSemarang() {
       desc: ev.desc,
       image: ev.image,
       label: ev.label || "EVENT",
+    })),
+    ...autoEvents.map((ev) => ({
+      type: "event" as const,
+      title: ev.title,
+      date: ev.date,
+      location: ev.location,
+      desc: ev.desc,
+      image: ev.image,
+      label: ev.label,
     })),
     ...config.news.map((nw) => ({
       type: "news" as const,
@@ -281,7 +316,7 @@ function ExploreSemarang() {
   const destScroll = useSliderTransform(filteredDestinations.length, true);
   const culScroll = useSliderTransform(filteredCulinary.length, true);
 
-  const filteredEvents = config.events.filter((e) => {
+  const filteredEvents = [...config.events, ...autoEvents].filter((e) => {
     const matchesSearch =
       searchQuery === "" ||
       e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -49,6 +49,7 @@ import {
   type HomeSectionKey,
 } from "@/admin/modules/homepage/homepage.config";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
+import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions";
 import { BookingDialog, DEFAULT_HOTEL_POLICY, type RoomRow } from "@/routes/rooms.$slug";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
@@ -227,7 +228,18 @@ function PomahHome() {
   const exploreCfg = mergeExploreConfig(
     (property as { explore_config?: unknown } | null | undefined)?.explore_config,
   );
+
+  // Auto-generated events from the AI scheduler (seo_generated_articles
+  // → active_public_events view). Falls back gracefully if migration not run.
+  const { data: autoEventsData } = useQuery({
+    queryKey: ["public-active-events"],
+    queryFn: () => listActivePublicEvents(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const autoEvents = autoEventsData?.events ?? [];
+
   const newsEvents = [
+    // 1. Manually-curated city-guide events
     ...exploreCfg.events.map((e) => ({
       date: e.date,
       category: e.label || "Event",
@@ -236,6 +248,28 @@ function PomahHome() {
       image: e.image,
       ts: parseIdDate(e.date),
     })),
+    // 2. AI-generated events (auto-removed when expired by the cron worker)
+    ...autoEvents.map((e) => {
+      const startIso = e.event_start_date ?? e.event_end_date ?? "";
+      const dateStr = startIso
+        ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })
+        : "";
+      return {
+        date: dateStr,
+        category: "Event",
+        title: e.title,
+        excerpt:
+          e.description ||
+          (e.event_location ? `${e.event_location}` : "Acara di Semarang"),
+        image: e.image_url || "",
+        ts: startIso ? new Date(startIso).getTime() : Date.now(),
+      };
+    }),
+    // 3. Manually-curated news
     ...exploreCfg.news.map((n) => ({
       date: n.date,
       category: n.label || "Berita",
@@ -246,7 +280,7 @@ function PomahHome() {
     })),
   ]
     .sort((a, b) => b.ts - a.ts) // newest first
-    .slice(0, 5);
+    .slice(0, 8);
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {

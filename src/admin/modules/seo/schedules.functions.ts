@@ -45,7 +45,10 @@ export type GeneratedArticleRow = {
   paragraphs: string[];
   tags: string[];
   sources: Array<{ title: string; url: string }>;
+  event_start_date: string | null;
   event_end_date: string | null;
+  event_location: string | null;
+  image_url: string | null;
   status: "active" | "expired" | "archived";
 };
 
@@ -262,4 +265,37 @@ export const deleteGeneratedArticle = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw error;
     return { ok: true };
+  });
+
+/* ─── Public getter for the city-guide event slider ───────────────────────── */
+
+export type PublicEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  event_start_date: string | null;
+  event_end_date: string | null;
+  event_location: string | null;
+  image_url: string | null;
+  tags: string[];
+};
+
+/**
+ * Public, no-auth getter for active (non-expired) event articles.
+ * Reads the `active_public_events` view so the SELECT cannot leak
+ * draft articles or other categories.
+ */
+export const listActivePublicEvents = createServerFn({ method: "GET" })
+  .handler(async () => {
+    // Use the anon client so this works on the public homepage / explore page
+    const { supabasePublic } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await (supabasePublic as any)
+      .from("active_public_events")
+      .select("id, title, description, event_start_date, event_end_date, event_location, image_url, tags")
+      .limit(20);
+    if (error) {
+      // View may not exist yet (migration not applied).
+      return { events: [] as PublicEvent[] };
+    }
+    return { events: (data ?? []) as PublicEvent[] };
   });

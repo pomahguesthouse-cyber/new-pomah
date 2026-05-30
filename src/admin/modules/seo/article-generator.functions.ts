@@ -162,10 +162,24 @@ export type GeneratedArticleCore = {
     paragraphs: string[];
     tags: string[];
     category: ArticleCategory;
-    event_end_date: string | null; // YYYY-MM-DD for category=event
+    // Event-specific structured fields (filled only when category=event)
+    event_start_date: string | null; // YYYY-MM-DD
+    event_end_date: string | null;   // YYYY-MM-DD
+    event_location: string | null;   // venue / address
+    image_url: string | null;        // header image
   };
   web_sources: Array<{ title: string; url: string }>;
   search_provider: string | null;
+};
+
+// Fallback images used when the AI cannot find one from search snippets.
+const FALLBACK_IMAGES: Record<ArticleCategory, string> = {
+  event:
+    "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=1200",
+  pariwisata:
+    "https://images.unsplash.com/photo-1549473889-14f410d83298?auto=format&fit=crop&q=80&w=1200",
+  destinasi:
+    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=1200",
 };
 
 /**
@@ -201,16 +215,24 @@ export async function generateArticleCore(
     "Tulis dalam Bahasa Indonesia yang baik, informatif, dan ramah pembaca. " +
     "WAJIB respon JSON valid tanpa fence markdown.";
 
-  const eventDateField =
+  const eventFields =
     input.category === "event"
-      ? `  "event_end_date": "YYYY-MM-DD atau null jika tidak ada tanggal pasti — TANGGAL TERAKHIR/PENUTUPAN event (bukan tanggal mulai). Hari ini ${today}",\n`
+      ? `  "event_start_date": "YYYY-MM-DD atau null — tanggal MULAI event. Hari ini ${today}",\n` +
+        `  "event_end_date":   "YYYY-MM-DD atau null — tanggal TERAKHIR/PENUTUPAN event. Sama dengan start_date jika 1 hari",\n` +
+        `  "event_location":   "nama venue + alamat singkat, mis. 'Lawang Sewu, Jl. Pemuda, Semarang'",\n` +
+        `  "image_url":        "URL gambar event jika muncul di hasil pencarian (https://...). null jika tidak ada",\n`
+      : "";
+
+  const eventTaskHint =
+    input.category === "event"
+      ? `\n\nKHUSUS EVENT: Ekstrak data terstruktur (tanggal mulai, tanggal selesai, lokasi venue, dan URL gambar) dari hasil pencarian. Paragraphs cukup ringkas — fokus pada deskripsi acara, tidak perlu daftar tips menginap panjang. Jika tidak yakin tanggal/lokasi, isi null daripada mengarang.\n`
       : "";
 
   const userMsg =
     `Tulis artikel SEO tentang: "${input.topic}"\n\n` +
     `Kategori: ${input.category}\n` +
     `Fokus konten: ${focus}\n\n` +
-    `Panduan struktur: ${structureHint}\n` +
+    `Panduan struktur: ${structureHint}${eventTaskHint}\n` +
     `Target panjang: ~${wordTarget} kata.\n\n` +
     `Konteks dari pencarian web:\n${searchContext}\n\n` +
     `Selipkan halus rujukan ke Pomah Guesthouse sebagai pilihan akomodasi di Semarang (TIDAK boleh berlebihan). ` +
@@ -221,7 +243,7 @@ export async function generateArticleCore(
     `  "meta_description": "120-160 char, menarik untuk di-klik dari hasil Google",\n` +
     `  "paragraphs": ["paragraf 1", "paragraf 2", ...],  // 4-8 item, boleh berisi tag <h2>, <ul>, <li>, <strong>\n` +
     `  "tags": ["tag1", "tag2", "tag3"],                  // 3-6 keyword relevan\n` +
-    eventDateField +
+    eventFields +
     `}`;
 
   const llmCtrl = new AbortController();
@@ -264,7 +286,10 @@ export async function generateArticleCore(
     meta_description?: string;
     paragraphs?: string[];
     tags?: string[];
+    event_start_date?: string | null;
     event_end_date?: string | null;
+    event_location?: string | null;
+    image_url?: string | null;
   };
   try {
     parsed = JSON.parse(cleaned);
@@ -279,13 +304,29 @@ export async function generateArticleCore(
     throw new Error("AI tidak menghasilkan paragraf. Coba topik yang lebih spesifik.");
   }
 
-  // Validate event_end_date — must be ISO date if present
+  const isoDate = (v: unknown): string | null => {
+    if (!v) return null;
+    const s = String(v).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s)) ? s : null;
+  };
+
+  const httpUrl = (v: unknown): string | null => {
+    if (!v) return null;
+    const s = String(v).trim();
+    return /^https?:\/\/\S+$/i.test(s) ? s : null;
+  };
+
+  let eventStart: string | null = null;
   let eventEnd: string | null = null;
-  if (input.category === "event" && parsed.event_end_date) {
-    const s = String(parsed.event_end_date).slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s))) {
-      eventEnd = s;
-    }
+  let eventLoc: string | null = null;
+  let imageUrl: string | null = null;
+  if (input.category === "event") {
+    eventStart = isoDate(parsed.event_start_date);
+    eventEnd = isoDate(parsed.event_end_date) ?? eventStart;
+    eventLoc = parsed.event_location ? String(parsed.event_location).slice(0, 300) : null;
+    imageUrl = httpUrl(parsed.image_url) ?? FALLBACK_IMAGES.event;
+  } else {
+    imageUrl = httpUrl(parsed.image_url) ?? FALLBACK_IMAGES[input.category];
   }
 
   return {
@@ -295,7 +336,10 @@ export async function generateArticleCore(
       paragraphs,
       tags: Array.isArray(parsed.tags) ? parsed.tags.map((t) => String(t)).slice(0, 8) : [],
       category: input.category,
+      event_start_date: eventStart,
       event_end_date: eventEnd,
+      event_location: eventLoc,
+      image_url: imageUrl,
     },
     web_sources: snippets.map((s) => ({ title: s.title, url: s.url })),
     search_provider: provider,
@@ -329,7 +373,10 @@ export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
           paragraphs: result.article.paragraphs,
           tags: result.article.tags,
           sources: result.web_sources,
+          event_start_date: result.article.event_start_date,
           event_end_date: result.article.event_end_date,
+          event_location: result.article.event_location,
+          image_url: result.article.image_url,
           status: "active",
         });
       } catch (e) {

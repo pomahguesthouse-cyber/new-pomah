@@ -91,7 +91,10 @@ async function runDueSchedule(
         paragraphs: result.article.paragraphs,
         tags: result.article.tags,
         sources: result.web_sources,
+        event_start_date: result.article.event_start_date,
         event_end_date: result.article.event_end_date,
+        event_location: result.article.event_location,
+        image_url: result.article.image_url,
         status: "active",
       })
       .select("id, title")
