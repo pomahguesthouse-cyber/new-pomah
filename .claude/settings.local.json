@@ -71,7 +71,8 @@
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log origin/main..HEAD --oneline)",
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log origin/claude/confident-wiles-8b551e..HEAD --oneline)",
       "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" log main..origin/claude/confident-wiles-8b551e --oneline)",
-      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" diff .claude/settings.local.json)"
+      "Bash(git -C \"C:\\\\Users\\\\LENOVO\\\\Documents\\\\GitHub\\\\new-pomah\\\\.claude\\\\worktrees\\\\confident-wiles-8b551e\" diff .claude/settings.local.json)",
+      "Bash(git revert *)"
     ]
   }
 }
