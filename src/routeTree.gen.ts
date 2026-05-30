@@ -40,6 +40,7 @@ import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
+import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -197,6 +198,12 @@ const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   path: '/api/cron/sync-explore',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronRunArticleSchedulesRoute =
+  ApiCronRunArticleSchedulesRouteImport.update({
+    id: '/api/cron/run-article-schedules',
+    path: '/api/cron/run-article-schedules',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
   id: '/api/cron/process-wa-queue',
   path: '/api/cron/process-wa-queue',
@@ -234,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
+  '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -267,6 +275,7 @@ export interface FileRoutesByTo {
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
+  '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -302,6 +311,7 @@ export interface FileRoutesById {
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
+  '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -338,6 +348,7 @@ export interface FileRouteTypes {
     | '/book/'
     | '/rooms/'
     | '/api/cron/process-wa-queue'
+    | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -371,6 +382,7 @@ export interface FileRouteTypes {
     | '/book'
     | '/rooms'
     | '/api/cron/process-wa-queue'
+    | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   id:
@@ -405,6 +417,7 @@ export interface FileRouteTypes {
     | '/book/'
     | '/rooms/'
     | '/api/cron/process-wa-queue'
+    | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
@@ -425,6 +438,7 @@ export interface RootRouteChildren {
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
+  ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRoute
 }
@@ -648,6 +662,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronSyncExploreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/run-article-schedules': {
+      id: '/api/cron/run-article-schedules'
+      path: '/api/cron/run-article-schedules'
+      fullPath: '/api/cron/run-article-schedules'
+      preLoaderRoute: typeof ApiCronRunArticleSchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/process-wa-queue': {
       id: '/api/cron/process-wa-queue'
       path: '/api/cron/process-wa-queue'
@@ -712,6 +733,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
+  ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   BookConfirmationIdRoute: BookConfirmationIdRoute,
 }

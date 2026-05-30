@@ -155,6 +155,153 @@ function categoryPrompt(category: ArticleCategory): { focus: string; structureHi
   }
 }
 
+export type GeneratedArticleCore = {
+  article: {
+    title: string;
+    meta_description: string;
+    paragraphs: string[];
+    tags: string[];
+    category: ArticleCategory;
+    event_end_date: string | null; // YYYY-MM-DD for category=event
+  };
+  web_sources: Array<{ title: string; url: string }>;
+  search_provider: string | null;
+};
+
+/**
+ * Reusable core: runs web search + LLM and returns a structured article.
+ * Used by both the manual UI handler and the cron worker.
+ */
+export async function generateArticleCore(
+  client: SupabaseClient,
+  input: { topic: string; category: ArticleCategory; word_count_target?: number },
+): Promise<GeneratedArticleCore> {
+  const apiKey = process.env.LOVABLE_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "LOVABLE_API_KEY belum di-set. Tambahkan di environment server agar fitur ini bisa memanggil AI.",
+    );
+  }
+
+  const dbKeys = await loadKeysFromDb(client);
+  const { snippets, provider } = await webSearch(input.topic, dbKeys);
+  const searchContext =
+    snippets.length > 0
+      ? snippets
+          .map((s, i) => `[${i + 1}] ${s.title}\nURL: ${s.url}\nRingkasan: ${s.snippet}`)
+          .join("\n\n")
+      : "(Tidak ada hasil pencarian web — jawab berdasarkan pengetahuan umum, sebutkan jika informasi mungkin perlu diverifikasi.)";
+
+  const { focus, structureHint } = categoryPrompt(input.category);
+  const wordTarget = input.word_count_target ?? 600;
+  const today = new Date().toISOString().slice(0, 10);
+
+  const systemMsg =
+    "Anda adalah penulis konten SEO untuk Pomah Guesthouse, sebuah guesthouse di Gunungpati, Semarang. " +
+    "Tulis dalam Bahasa Indonesia yang baik, informatif, dan ramah pembaca. " +
+    "WAJIB respon JSON valid tanpa fence markdown.";
+
+  const eventDateField =
+    input.category === "event"
+      ? `  "event_end_date": "YYYY-MM-DD atau null jika tidak ada tanggal pasti — TANGGAL TERAKHIR/PENUTUPAN event (bukan tanggal mulai). Hari ini ${today}",\n`
+      : "";
+
+  const userMsg =
+    `Tulis artikel SEO tentang: "${input.topic}"\n\n` +
+    `Kategori: ${input.category}\n` +
+    `Fokus konten: ${focus}\n\n` +
+    `Panduan struktur: ${structureHint}\n` +
+    `Target panjang: ~${wordTarget} kata.\n\n` +
+    `Konteks dari pencarian web:\n${searchContext}\n\n` +
+    `Selipkan halus rujukan ke Pomah Guesthouse sebagai pilihan akomodasi di Semarang (TIDAK boleh berlebihan). ` +
+    `Gunakan informasi dari hasil pencarian sebagai dasar fakta — jangan mengarang nama tempat/tanggal yang tidak ada.\n\n` +
+    `Kembalikan HANYA JSON dengan field:\n` +
+    `{\n` +
+    `  "title": "judul artikel, max 80 char, mengandung topik utama",\n` +
+    `  "meta_description": "120-160 char, menarik untuk di-klik dari hasil Google",\n` +
+    `  "paragraphs": ["paragraf 1", "paragraf 2", ...],  // 4-8 item, boleh berisi tag <h2>, <ul>, <li>, <strong>\n` +
+    `  "tags": ["tag1", "tag2", "tag3"],                  // 3-6 keyword relevan\n` +
+    eventDateField +
+    `}`;
+
+  const llmCtrl = new AbortController();
+  const llmTo = setTimeout(() => llmCtrl.abort(), LLM_TIMEOUT_MS);
+  let raw = "";
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      signal: llmCtrl.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemMsg },
+          { role: "user", content: userMsg },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`AI gateway error ${res.status}: ${txt}`);
+    }
+    const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    raw = j.choices?.[0]?.message?.content?.trim() ?? "";
+  } finally {
+    clearTimeout(llmTo);
+  }
+
+  const cleaned = raw
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  let parsed: {
+    title?: string;
+    meta_description?: string;
+    paragraphs?: string[];
+    tags?: string[];
+    event_end_date?: string | null;
+  };
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    throw new Error("AI mengembalikan format yang bukan JSON valid. Coba lagi.");
+  }
+
+  const paragraphs = Array.isArray(parsed.paragraphs)
+    ? parsed.paragraphs.map((p) => String(p)).filter((p) => p.trim().length > 0).slice(0, 12)
+    : [];
+  if (paragraphs.length === 0) {
+    throw new Error("AI tidak menghasilkan paragraf. Coba topik yang lebih spesifik.");
+  }
+
+  // Validate event_end_date — must be ISO date if present
+  let eventEnd: string | null = null;
+  if (input.category === "event" && parsed.event_end_date) {
+    const s = String(parsed.event_end_date).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(Date.parse(s))) {
+      eventEnd = s;
+    }
+  }
+
+  return {
+    article: {
+      title: (parsed.title ?? input.topic).toString().slice(0, 200),
+      meta_description: (parsed.meta_description ?? "").toString().slice(0, 200),
+      paragraphs,
+      tags: Array.isArray(parsed.tags) ? parsed.tags.map((t) => String(t)).slice(0, 8) : [],
+      category: input.category,
+      event_end_date: eventEnd,
+    },
+    web_sources: snippets.map((s) => ({ title: s.title, url: s.url })),
+    search_provider: provider,
+  };
+}
+
 export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -163,113 +310,31 @@ export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
         topic: z.string().min(3).max(300),
         category: z.enum(["pariwisata", "event", "destinasi"]),
         word_count_target: z.number().int().min(200).max(2000).optional(),
+        persist: z.boolean().optional(),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const apiKey = process.env.LOVABLE_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error(
-        "LOVABLE_API_KEY belum di-set. Tambahkan di environment server agar fitur ini bisa memanggil AI.",
-      );
-    }
+    const client = context.supabase as unknown as SupabaseClient;
+    const result = await generateArticleCore(client, data);
 
-    // 1. Web search (best-effort) — load keys from DB first, env as fallback
-    const dbKeys = await loadKeysFromDb(context.supabase as unknown as SupabaseClient);
-    const { snippets, provider } = await webSearch(data.topic, dbKeys);
-    const searchContext =
-      snippets.length > 0
-        ? snippets
-            .map(
-              (s, i) =>
-                `[${i + 1}] ${s.title}\nURL: ${s.url}\nRingkasan: ${s.snippet}`,
-            )
-            .join("\n\n")
-        : "(Tidak ada hasil pencarian web — jawab berdasarkan pengetahuan umum, sebutkan jika informasi mungkin perlu diverifikasi.)";
-
-    const { focus, structureHint } = categoryPrompt(data.category);
-    const wordTarget = data.word_count_target ?? 600;
-
-    const systemMsg =
-      "Anda adalah penulis konten SEO untuk Pomah Guesthouse, sebuah guesthouse di Gunungpati, Semarang. " +
-      "Tulis dalam Bahasa Indonesia yang baik, informatif, dan ramah pembaca. " +
-      "WAJIB respon JSON valid tanpa fence markdown.";
-
-    const userMsg =
-      `Tulis artikel SEO tentang: "${data.topic}"\n\n` +
-      `Kategori: ${data.category}\n` +
-      `Fokus konten: ${focus}\n\n` +
-      `Panduan struktur: ${structureHint}\n` +
-      `Target panjang: ~${wordTarget} kata.\n\n` +
-      `Konteks dari pencarian web:\n${searchContext}\n\n` +
-      `Selipkan halus rujukan ke Pomah Guesthouse sebagai pilihan akomodasi di Semarang (TIDAK boleh berlebihan). ` +
-      `Gunakan informasi dari hasil pencarian sebagai dasar fakta — jangan mengarang nama tempat/tanggal yang tidak ada.\n\n` +
-      `Kembalikan HANYA JSON dengan field:\n` +
-      `{\n` +
-      `  "title": "judul artikel, max 80 char, mengandung topik utama",\n` +
-      `  "meta_description": "120-160 char, menarik untuk di-klik dari hasil Google",\n` +
-      `  "paragraphs": [\"paragraf 1\", \"paragraf 2\", ...],  // 4-8 item, boleh berisi tag <h2>, <ul>, <li>, <strong>\n` +
-      `  "tags": [\"tag1\", \"tag2\", \"tag3\"]                  // 3-6 keyword relevan\n` +
-      `}`;
-
-    const llmCtrl = new AbortController();
-    const llmTo = setTimeout(() => llmCtrl.abort(), LLM_TIMEOUT_MS);
-    let raw = "";
-    try {
-      const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        signal: llmCtrl.signal,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemMsg },
-            { role: "user", content: userMsg },
-          ],
-        }),
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`AI gateway error ${res.status}: ${txt}`);
+    // Optionally persist to seo_generated_articles
+    if (data.persist !== false) {
+      try {
+        await (client as any).from("seo_generated_articles").insert({
+          category: result.article.category,
+          title: result.article.title,
+          topic: data.topic,
+          meta_description: result.article.meta_description,
+          paragraphs: result.article.paragraphs,
+          tags: result.article.tags,
+          sources: result.web_sources,
+          event_end_date: result.article.event_end_date,
+          status: "active",
+        });
+      } catch (e) {
+        console.warn("[article-gen] persist failed (migration belum jalan?):", e);
       }
-      const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-      raw = j.choices?.[0]?.message?.content?.trim() ?? "";
-    } finally {
-      clearTimeout(llmTo);
     }
-
-    const cleaned = raw
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-
-    let parsed: { title?: string; meta_description?: string; paragraphs?: string[]; tags?: string[] };
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      throw new Error("AI mengembalikan format yang bukan JSON valid. Coba lagi.");
-    }
-
-    const paragraphs = Array.isArray(parsed.paragraphs)
-      ? parsed.paragraphs.map((p) => String(p)).filter((p) => p.trim().length > 0).slice(0, 12)
-      : [];
-    if (paragraphs.length === 0) {
-      throw new Error("AI tidak menghasilkan paragraf. Coba topik yang lebih spesifik.");
-    }
-
-    return {
-      article: {
-        title: (parsed.title ?? data.topic).toString().slice(0, 200),
-        meta_description: (parsed.meta_description ?? "").toString().slice(0, 200),
-        paragraphs,
-        tags: Array.isArray(parsed.tags) ? parsed.tags.map((t) => String(t)).slice(0, 8) : [],
-        category: data.category,
-      },
-      web_sources: snippets.map((s) => ({ title: s.title, url: s.url })),
-      search_provider: provider,
-    };
+    return result;
   });
