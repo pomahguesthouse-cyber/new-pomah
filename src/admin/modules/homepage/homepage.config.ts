@@ -105,6 +105,7 @@ export interface HomepageConfig {
     accent: string;
     /** Horizontal alignment of the hero content. */
     textAlign: "left" | "center" | "right";
+    color?: string;
   };
   bookingHero: {
     slides: HeroSlide[];
@@ -118,6 +119,7 @@ export interface HomepageConfig {
     fontStyle: "normal" | "bold" | "italic";
     accent: string;
     textAlign: "left" | "center" | "right";
+    color?: string;
   };
   datePicker: {
     enabled: boolean;
@@ -133,13 +135,15 @@ export interface HomepageConfig {
     fontStyle: "normal" | "bold" | "italic";
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
+    color?: string;
   };
   badges: {
     heading: string;
     fontFamily: "sans" | "serif" | "mono";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
-    items: { iconName: string; title: string; desc: string }[];
+    color?: string;
+    items: { iconName: string; title: string; desc: string; iconUrl?: string }[];
   };
   story: {
     heading: string;
@@ -147,6 +151,14 @@ export interface HomepageConfig {
     fontFamily: "sans" | "serif" | "mono";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
+    color?: string;
+  };
+  reviews: {
+    heading: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+    color?: string;
   };
   roomCarousel: {
     heading: string;
@@ -161,6 +173,7 @@ export interface HomepageConfig {
     fontFamily: "sans" | "serif" | "mono";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
+    color?: string;
   };
   lokasi: {
     heading: string;
@@ -168,6 +181,33 @@ export interface HomepageConfig {
     /** Title of the "nearby places" card. */
     nearbyTitle: string;
     nearby: { name: string; type: string; distance: string; time: string }[];
+    fontFamily?: "sans" | "serif" | "mono";
+    fontSize?: number;
+    fontStyle?: "normal" | "bold" | "italic";
+    color?: string;
+  };
+  facilities: {
+    heading: string;
+    subheading: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+    color?: string;
+  };
+  news: {
+    heading: string;
+    subheading: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+    color?: string;
+  };
+  cta: {
+    heading: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+    color?: string;
   };
   /**
    * Render order of the homepage content sections (between the hero/date-picker
@@ -242,6 +282,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontStyle: "bold",
     accent: "",
     textAlign: "center",
+    color: "#ffffff",
   },
   bookingHero: {
     slides: [
@@ -262,6 +303,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontStyle: "bold",
     accent: "",
     textAlign: "center",
+    color: "#ffffff",
   },
   datePicker: {
     enabled: true,
@@ -272,12 +314,14 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontSize: 18,
     fontStyle: "bold",
     layer: 30,
+    color: "#7c4a21",
   },
   badges: {
     heading: "Mengapa Menginap di Pomah Guesthouse",
     fontFamily: "serif",
     fontSize: 32,
     fontStyle: "bold",
+    color: "#7c4a21",
     items: [
       { iconName: "Star", title: "Rating Google", desc: "76 ulasan" },
       { iconName: "BedDouble", title: "Kamar Bersih", desc: "Nyaman & terawat" },
@@ -289,12 +333,20 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   story: {
     heading: "Your Perfect Stay",
     paragraphs: [
-      "Kata Pomah dalam bahasa Jawa berarti Rumah. Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, Pomah Guesthouse memiliki filosofi yang mencerminkan kehangatan, kenyamanan dan standar pelayanan terbaik yang kami sajikan kepada tamu.",
+      "Kata Pomah dalam bahasa Jawa berarti Rumah. Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, Pomah Guesthouse memiliki filosofi yang mencerminkan kehangatan, nyaman dan standar pelayanan terbaik yang kami sajikan kepada tamu.",
       "Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.",
     ],
     fontFamily: "serif",
     fontSize: 32,
     fontStyle: "bold",
+    color: "#1c1917",
+  },
+  reviews: {
+    heading: "Google Rating & Ulasan",
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
+    color: "#1c1917",
   },
   roomCarousel: {
     heading: "Our Room",
@@ -308,6 +360,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontFamily: "serif",
     fontSize: 32,
     fontStyle: "bold",
+    color: "#7c4a21",
   },
   lokasi: {
     heading: "Lokasi Kami",
@@ -320,6 +373,33 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
       { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
       { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
     ],
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
+    color: "#7c4a21",
+  },
+  facilities: {
+    heading: "Facilities",
+    subheading: "Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.",
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
+    color: "#1c1917",
+  },
+  news: {
+    heading: "News & Event",
+    subheading: "Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.",
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
+    color: "#1c1917",
+  },
+  cta: {
+    heading: "Siap menginap di Pomah Guesthouse?",
+    fontFamily: "serif",
+    fontSize: 30,
+    fontStyle: "bold",
+    color: "#ffffff",
   },
   sectionOrder: [...DEFAULT_SECTION_ORDER],
   seo: {
@@ -378,8 +458,12 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     datePicker: { ...d.datePicker, ...c.datePicker },
     badges: { ...d.badges, ...c.badges },
     story: { ...d.story, ...c.story },
+    reviews: { ...d.reviews, ...c.reviews },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
     lokasi: { ...d.lokasi, ...c.lokasi },
+    facilities: { ...d.facilities, ...c.facilities },
+    news: { ...d.news, ...c.news },
+    cta: { ...d.cta, ...c.cta },
     sectionOrder: sanitizeSectionOrder(c.sectionOrder),
     seo: { ...d.seo, ...c.seo },
     bookingSeo: { ...d.bookingSeo, ...c.bookingSeo },

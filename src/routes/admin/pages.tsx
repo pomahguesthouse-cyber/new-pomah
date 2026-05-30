@@ -41,6 +41,8 @@ import {
   ChevronDown,
   ChevronRight,
   FileText,
+  MessageSquare,
+  Play,
 } from "lucide-react";
 // useQuery already imported above; useMutation available if needed
 import {
@@ -86,7 +88,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "badges" | "story" | "carousel" | "lokasi" | "order";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "badges" | "story" | "reviews" | "carousel" | "facilities" | "lokasi" | "news" | "cta" | "order";
 
 const SECTIONS: {
   key: SectionKey;
@@ -99,8 +101,12 @@ const SECTIONS: {
   { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
   { key: "badges",        label: "Ikon Fitur",    icon: Star               },
   { key: "story",         label: "Teks",          icon: Type               },
+  { key: "reviews",       label: "Google Rating", icon: MessageSquare      },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
+  { key: "facilities",    label: "Fasilitas",     icon: LayoutPanelTop     },
   { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
+  { key: "news",          label: "Berita",        icon: FileText           },
+  { key: "cta",           label: "CTA Banner",    icon: Play               },
   { key: "order",         label: "Urutan",        icon: ListOrdered        },
 ];
 
@@ -414,8 +420,16 @@ function HomepageBuilder() {
                   <BadgesTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "story" ? (
                   <StoryTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                ) : section === "reviews" ? (
+                  <ReviewsTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                ) : section === "facilities" ? (
+                  <FacilitiesTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "lokasi" ? (
                   <LokasiTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                ) : section === "news" ? (
+                  <NewsTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                ) : section === "cta" ? (
+                  <CtaTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "order" ? (
                   <OrderTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : (
@@ -1042,6 +1056,10 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
         onSizeChange={(v) => activeMode === "mobile" ? set({ fontSizeMobile: v }) : set({ fontSize: v })}
       />
 
+      <FieldRow label="Warna Judul">
+        <ColorField value={hero.color || "#ffffff"} onChange={(v) => set({ color: v })} />
+      </FieldRow>
+
       <LayerArrange value={hero.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
@@ -1090,6 +1108,10 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
         onSizeChange={(v) => set({ fontSize: v })}
       />
 
+      <FieldRow label="Warna Judul">
+        <ColorField value={dp.color || "#7c4a21"} onChange={(v) => set({ color: v })} />
+      </FieldRow>
+
       <LayerArrange value={dp.layer} onChange={(v) => set({ layer: v })} />
     </Section>
   );
@@ -1108,7 +1130,23 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
         <Input value={badges.heading} onChange={(e) => set({ heading: e.target.value })} />
       </FieldRow>
 
-      <div className="space-y-4 pt-2">
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={badges.fontFamily}
+          style={badges.fontStyle}
+          size={badges.fontSize}
+          minSize={16}
+          maxSize={48}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={badges.color || "#7c4a21"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
+      </div>
+
+      <div className="space-y-4 pt-2 border-t border-border mt-4">
         <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daftar Fitur</Label>
         {badges.items.map((item, i) => (
           <div key={i} className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
@@ -1146,8 +1184,22 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
                 <option value="Wifi">Wifi</option>
                 <option value="Coffee">Cafe (Coffee)</option>
                 <option value="Car">Parkir (Car)</option>
+                <option value="custom">Kustom dari Media Library</option>
               </select>
             </FieldRow>
+
+            {item.iconName === "custom" && (
+              <FieldRow label="Gambar Ikon (Media Library)">
+                <ImageField
+                  value={item.iconUrl || ""}
+                  onChange={(url) =>
+                    setItems(
+                      badges.items.map((x, j) => (j === i ? { ...x, iconUrl: url } : x))
+                    )
+                  }
+                />
+              </FieldRow>
+            )}
 
             <FieldRow label="Nama Fitur">
               <Input
@@ -1242,7 +1294,7 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           Tambah teks
         </Button>
       </div>
-      <div className="border-t border-border my-4 pt-4">
+      <div className="border-t border-border my-4 pt-4 space-y-4">
         <FontStyleFields
           family={story.fontFamily ?? "serif"}
           style={story.fontStyle ?? "bold"}
@@ -1253,6 +1305,9 @@ function StoryTab({ cfg, setCfg }: TabProps) {
           onStyleChange={(v) => set({ fontStyle: v })}
           onSizeChange={(v) => set({ fontSize: v })}
         />
+        <FieldRow label="Warna Judul">
+          <ColorField value={story.color || "#1c1917"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
       </div>
     </Section>
   );
@@ -1327,6 +1382,21 @@ function LokasiTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Judul section">
         <Input value={lok.heading} onChange={(e) => set({ heading: e.target.value })} />
       </FieldRow>
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={lok.fontFamily || "serif"}
+          style={lok.fontStyle || "bold"}
+          size={lok.fontSize || 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={lok.color || "#7c4a21"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
+      </div>
       <FieldRow label="Teks di bawah judul">
         <Textarea
           rows={2}
@@ -1355,16 +1425,18 @@ function LokasiTab({ cfg, setCfg }: TabProps) {
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <Input
-              placeholder="Nama (mis. Unnes Sekaran)"
-              value={n.name}
-              onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
-            />
-            <Input
-              placeholder="Kategori (mis. Universitas)"
-              value={n.type}
-              onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Nama lokasi"
+                value={n.name}
+                onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+              />
+              <Input
+                placeholder="Tipe (mis. Universitas)"
+                value={n.type}
+                onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)))}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <Input
                 placeholder="Jarak (mis. 8 km)"
@@ -1388,6 +1460,132 @@ function LokasiTab({ cfg, setCfg }: TabProps) {
           <Plus className="h-3.5 w-3.5" />
           Tambah lokasi
         </Button>
+      </div>
+    </Section>
+  );
+}
+
+function FacilitiesTab({ cfg, setCfg }: TabProps) {
+  const fac = cfg.facilities;
+  const set = (patch: Partial<HomepageConfig["facilities"]>) =>
+    setCfg((c) => ({ ...c, facilities: { ...c.facilities, ...patch } }));
+  return (
+    <Section title="Fasilitas" desc="Ubah judul dan teks penjelasan bagian fasilitas.">
+      <FieldRow label="Judul Section">
+        <Input value={fac.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <FieldRow label="Deskripsi">
+        <Textarea
+          rows={2}
+          value={fac.subheading}
+          onChange={(e) => set({ subheading: e.target.value })}
+        />
+      </FieldRow>
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={fac.fontFamily || "serif"}
+          style={fac.fontStyle || "bold"}
+          size={fac.fontSize || 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={fac.color || "#1c1917"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
+      </div>
+    </Section>
+  );
+}
+
+function NewsTab({ cfg, setCfg }: TabProps) {
+  const news = cfg.news;
+  const set = (patch: Partial<HomepageConfig["news"]>) =>
+    setCfg((c) => ({ ...c, news: { ...c.news, ...patch } }));
+  return (
+    <Section title="Berita & Acara" desc="Ubah judul dan teks penjelasan bagian Berita & Event.">
+      <FieldRow label="Judul Section">
+        <Input value={news.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <FieldRow label="Deskripsi">
+        <Textarea
+          rows={2}
+          value={news.subheading}
+          onChange={(e) => set({ subheading: e.target.value })}
+        />
+      </FieldRow>
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={news.fontFamily || "serif"}
+          style={news.fontStyle || "bold"}
+          size={news.fontSize || 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={news.color || "#1c1917"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
+      </div>
+    </Section>
+  );
+}
+
+function ReviewsTab({ cfg, setCfg }: TabProps) {
+  const rev = cfg.reviews;
+  const set = (patch: Partial<HomepageConfig["reviews"]>) =>
+    setCfg((c) => ({ ...c, reviews: { ...c.reviews, ...patch } }));
+  return (
+    <Section title="Google Rating & Ulasan" desc="Ubah judul dan gaya font bagian ulasan Google.">
+      <FieldRow label="Judul Section">
+        <Input value={rev.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={rev.fontFamily || "serif"}
+          style={rev.fontStyle || "bold"}
+          size={rev.fontSize || 32}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={rev.color || "#1c1917"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
+      </div>
+    </Section>
+  );
+}
+
+function CtaTab({ cfg, setCfg }: TabProps) {
+  const cta = cfg.cta;
+  const set = (patch: Partial<HomepageConfig["cta"]>) =>
+    setCfg((c) => ({ ...c, cta: { ...c.cta, ...patch } }));
+  return (
+    <Section title="CTA Banner" desc="Ubah judul banner ajakan bertindak (CTA).">
+      <FieldRow label="Judul Section">
+        <Input value={cta.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+      <div className="border-t border-border my-4 pt-4 space-y-4">
+        <FontStyleFields
+          family={cta.fontFamily || "serif"}
+          style={cta.fontStyle || "bold"}
+          size={cta.fontSize || 30}
+          minSize={16}
+          maxSize={72}
+          onFamilyChange={(v) => set({ fontFamily: v })}
+          onStyleChange={(v) => set({ fontStyle: v })}
+          onSizeChange={(v) => set({ fontSize: v })}
+        />
+        <FieldRow label="Warna Judul">
+          <ColorField value={cta.color || "#ffffff"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
       </div>
     </Section>
   );
@@ -1440,7 +1638,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
       <FieldRow label="Gambar latar belakang (opsional)">
         <ImageField value={rc.bgImageUrl ?? ""} onChange={(url) => set({ bgImageUrl: url })} />
       </FieldRow>
-      <div className="border-t border-border my-4 pt-4">
+      <div className="border-t border-border my-4 pt-4 space-y-4">
         <FontStyleFields
           family={rc.fontFamily ?? "serif"}
           style={rc.fontStyle ?? "bold"}
@@ -1451,6 +1649,9 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
           onStyleChange={(v) => set({ fontStyle: v })}
           onSizeChange={(v) => set({ fontSize: v })}
         />
+        <FieldRow label="Warna Judul">
+          <ColorField value={rc.color || "#7c4a21"} onChange={(v) => set({ color: v })} />
+        </FieldRow>
       </div>
       <LayerArrange value={rc.layer} onChange={(v) => set({ layer: v })} />
     </Section>

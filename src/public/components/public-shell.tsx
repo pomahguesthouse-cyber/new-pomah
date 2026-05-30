@@ -625,7 +625,7 @@ export function HeroSlider({
           }`}
         >
           <h1
-            className={`hero-heading max-w-3xl tracking-tight text-white drop-shadow ${
+            className={`hero-heading max-w-3xl tracking-tight drop-shadow ${
               hero.fontFamily === "mono"
                 ? "font-mono"
                 : hero.fontFamily === "sans"
@@ -640,6 +640,7 @@ export function HeroSlider({
                 lineHeight: 1.1,
                 fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
                 fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+                color: hero.color || "#ffffff",
               } as React.CSSProperties
             }
           >

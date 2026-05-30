@@ -493,7 +493,7 @@ function PomahHome() {
               <div className={stuck ? "md:min-w-0 md:flex-1" : ""}>
               {cfg.datePicker.heading && (
                 <p
-                  className={`mb-3 hidden text-center text-amber-700 md:block ${
+                  className={`mb-3 hidden text-center md:block ${
                     cfg.datePicker.fontFamily === "mono"
                       ? "font-mono"
                       : cfg.datePicker.fontFamily === "sans"
@@ -504,6 +504,7 @@ function PomahHome() {
                     fontSize: cfg.datePicker.fontSize,
                     fontStyle: cfg.datePicker.fontStyle === "italic" ? "italic" : "normal",
                     fontWeight: cfg.datePicker.fontStyle === "bold" ? 700 : 400,
+                    color: cfg.datePicker.color || "#7c4a21",
                   }}
                 >
                   {cfg.datePicker.heading}
@@ -648,6 +649,7 @@ function PomahHome() {
                     fontFamily={b.fontFamily}
                     fontSize={b.fontSize}
                     fontStyle={b.fontStyle}
+                    color={b.color}
                   >
                     {b.heading}
                   </SectionHeading>
@@ -671,11 +673,16 @@ function PomahHome() {
                       default: return Star;
                     }
                   })();
+                  const isCustom = item.iconName === "custom";
 
                   return (
                     <div key={idx} className="flex flex-col items-center text-center">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12">
-                        <IconComp className="h-4 w-4 md:h-5 md:w-5" />
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12 overflow-hidden">
+                        {isCustom && item.iconUrl ? (
+                          <img src={item.iconUrl} className="h-full w-full object-cover" alt="" />
+                        ) : (
+                          <IconComp className="h-4 w-4 md:h-5 md:w-5" />
+                        )}
                       </span>
                       <p className="mt-2 text-xs font-semibold text-stone-800 md:text-sm">{item.title}</p>
                       <p className="text-[10px] text-stone-400 md:text-xs">{item.desc}</p>
@@ -695,6 +702,7 @@ function PomahHome() {
                 fontFamily={cfg.story.fontFamily}
                 fontSize={cfg.story.fontSize}
                 fontStyle={cfg.story.fontStyle}
+                color={cfg.story.color}
               >
                 {cfg.story.heading}
               </SectionHeading>
@@ -708,36 +716,50 @@ function PomahHome() {
         );
       case "reviews":
         return (
-          <section className="mx-auto max-w-4xl px-6 py-16">
-            <div className="flex flex-col items-center">
-              <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
-                <span className="text-base font-bold">G</span> Google Rating
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <div className="flex gap-0.5">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <Star
-                      key={i}
-                      className={`h-5 w-5 ${
-                        i < Math.round(gRating)
-                          ? "fill-amber-400 text-amber-400"
-                          : "fill-stone-200 text-stone-200"
-                      }`}
-                    />
-                  ))}
+          <PbZone id="reviews" label="Google Rating" pb={pb}>
+            <section className="mx-auto max-w-4xl px-6 py-16">
+              {cfg.reviews.heading && (
+                <div className="mb-10">
+                  <SectionHeading
+                    fontFamily={cfg.reviews.fontFamily}
+                    fontSize={cfg.reviews.fontSize}
+                    fontStyle={cfg.reviews.fontStyle}
+                    color={cfg.reviews.color}
+                  >
+                    {cfg.reviews.heading}
+                  </SectionHeading>
                 </div>
-                <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
+              )}
+              <div className="flex flex-col items-center">
+                <p className="flex items-center gap-2 text-sm font-medium text-stone-600">
+                  <span className="text-base font-bold">G</span> Google Rating
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <Star
+                        key={i}
+                        className={`h-5 w-5 ${
+                          i < Math.round(gRating)
+                            ? "fill-amber-400 text-amber-400"
+                            : "fill-stone-200 text-stone-200"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-2xl font-bold text-stone-800">{gRating.toFixed(1)}</span>
+                </div>
+                <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
               </div>
-              <p className="mt-1 text-xs text-stone-400">Berdasarkan {gTotal} ulasan Google</p>
-            </div>
-            <ReviewSlider
-              items={
-                gReviews.length > 0
-                  ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
-                  : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
-              }
-            />
-          </section>
+              <ReviewSlider
+                items={
+                  gReviews.length > 0
+                    ? gReviews.map((rv: GoogleReview) => ({ text: rv.text, author: rv.author, isGoogle: true }))
+                    : REVIEWS.map((r) => ({ text: r, author: null, isGoogle: false }))
+                }
+              />
+            </section>
+          </PbZone>
         );
       case "rooms":
         return (
@@ -759,6 +781,7 @@ function PomahHome() {
                     fontFamily={cfg.roomCarousel.fontFamily}
                     fontSize={cfg.roomCarousel.fontSize}
                     fontStyle={cfg.roomCarousel.fontStyle}
+                    color={cfg.roomCarousel.color}
                   >
                     {cfg.roomCarousel.heading}
                   </SectionHeading>
@@ -845,44 +868,63 @@ function PomahHome() {
             </section>
           </PbZone>
         );
-      case "facilities":
+      case "facilities": {
+        const fac = cfg.facilities;
         return (
-          <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
-            <div className="text-center">
-              <SectionHeading>Facilities</SectionHeading>
-              <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
-                Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.
-              </p>
-            </div>
-            <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {FACILITIES.map((f) => (
-                <div
-                  key={f.title}
-                  className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
+          <PbZone id="facilities" label="Fasilitas" pb={pb}>
+            <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
+              <div className="text-center">
+                <SectionHeading
+                  fontFamily={fac.fontFamily}
+                  fontSize={fac.fontSize}
+                  fontStyle={fac.fontStyle}
+                  color={fac.color}
                 >
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
-                    <f.icon className="h-6 w-6" />
+                  {fac.heading}
+                </SectionHeading>
+                {fac.subheading && (
+                  <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+                    {fac.subheading}
+                  </p>
+                )}
+              </div>
+              <div className="mt-12 grid grid-cols-2 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {FACILITIES.map((f) => (
+                  <div
+                    key={f.title}
+                    className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm"
+                  >
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                      <f.icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
+                    <p className="mt-1 text-sm text-stone-500">{f.desc}</p>
                   </div>
-                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{f.title}</h3>
-                  <p className="mt-1 text-sm text-stone-500">{f.desc}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          </PbZone>
         );
-      case "lokasi":
+      }
+      case "lokasi": {
+        const lok = cfg.lokasi;
         return (
           <PbZone id="lokasi" label="Lokasi Kami" pb={pb}>
             <section id="lokasi" className="bg-[#f3ece0] py-20">
-          <div className="mx-auto max-w-6xl px-6">
-            <div className="text-center">
-              <h2 className="font-serif text-3xl font-bold tracking-tight text-amber-700 md:text-4xl">
-                {cfg.lokasi.heading}
-              </h2>
-              {cfg.lokasi.subheading && (
-                <p className="mt-3 text-sm text-stone-500">{cfg.lokasi.subheading}</p>
-              )}
-            </div>
+              <div className="mx-auto max-w-6xl px-6">
+                <div className="text-center">
+                  <SectionHeading
+                    fontFamily={lok.fontFamily}
+                    fontSize={lok.fontSize}
+                    fontStyle={lok.fontStyle}
+                    color={lok.color}
+                  >
+                    {lok.heading}
+                  </SectionHeading>
+                  {lok.subheading && (
+                    <p className="mt-3 text-sm text-stone-500">{lok.subheading}</p>
+                  )}
+                </div>
 
             <div className="mt-10 grid gap-6 lg:grid-cols-2">
               <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
@@ -930,59 +972,88 @@ function PomahHome() {
         </section>
           </PbZone>
         );
-      case "news":
+      case "news": {
+        const n = cfg.news;
         return newsEvents.length > 0 ? (
-          <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
-            <div className="text-center">
-              <SectionHeading>News &amp; Event</SectionHeading>
-              <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
-                Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.
-              </p>
-            </div>
-            <NewsEventSlider items={newsEvents} />
-            <div className="mt-10 text-center">
-              <Link
-                to="/explore"
-                className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
-              >
-                Lihat Selengkapnya di City Guide
-              </Link>
-            </div>
-          </section>
-        ) : null;
-      case "cta":
-        return (
-          <section className="mx-auto max-w-6xl px-6 pb-20">
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
-              <h2 className="font-serif text-2xl font-bold text-white md:text-3xl">
-                Siap menginap di {propertyName}?
-              </h2>
-              <p className="mx-auto mt-2 max-w-xl text-sm text-amber-100">
-                Booking mudah dan cepat. Tim kami siap menyambut Anda.
-              </p>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-                <Link
-                  to="/book"
-                  search={{}}
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+          <PbZone id="news" label="Berita" pb={pb}>
+            <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
+              <div className="text-center">
+                <SectionHeading
+                  fontFamily={n.fontFamily}
+                  fontSize={n.fontSize}
+                  fontStyle={n.fontStyle}
+                  color={n.color}
                 >
-                  <CalendarDays className="h-4 w-4" />
-                  Pesan kamar sekarang
-                </Link>
-                {wa && (
-                  <a
-                    href={`https://wa.me/${wa}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/40 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    <MessageCircle className="h-4 w-4" />
-                    Chat WhatsApp
-                  </a>
+                  {n.heading}
+                </SectionHeading>
+                {n.subheading && (
+                  <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
+                    {n.subheading}
+                  </p>
                 )}
               </div>
-            </div>
-          </section>
+              <NewsEventSlider items={newsEvents} />
+              <div className="mt-10 text-center">
+                <Link
+                  to="/explore"
+                  className="inline-flex items-center gap-2 rounded-full bg-amber-700 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-800"
+                >
+                  Lihat Selengkapnya di City Guide
+                </Link>
+              </div>
+            </section>
+          </PbZone>
+        ) : null;
+      }
+      case "cta":
+        return (
+          <PbZone id="cta" label="CTA Banner" pb={pb}>
+            <section className="mx-auto max-w-6xl px-6 pb-20">
+              <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
+                <h2
+                  className={`tracking-tight ${
+                    cfg.cta.fontFamily === "mono"
+                      ? "font-mono"
+                      : cfg.cta.fontFamily === "sans"
+                        ? "font-sans"
+                        : "font-serif"
+                  }`}
+                  style={{
+                    fontSize: cfg.cta.fontSize ? `${cfg.cta.fontSize}px` : undefined,
+                    fontStyle: cfg.cta.fontStyle === "italic" ? "italic" : "normal",
+                    fontWeight: cfg.cta.fontStyle === "bold" ? 700 : 400,
+                    color: cfg.cta.color || "#ffffff",
+                  }}
+                >
+                  {cfg.cta.heading || `Siap menginap di ${propertyName}?`}
+                </h2>
+                <p className="mx-auto mt-2 max-w-xl text-sm text-amber-100">
+                  Booking mudah dan cepat. Tim kami siap menyambut Anda.
+                </p>
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                  <Link
+                    to="/book"
+                    search={{}}
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-7 py-2.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-50"
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Pesan kamar sekarang
+                  </Link>
+                  {wa && (
+                    <a
+                      href={`https://wa.me/${wa}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/40 px-7 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Chat WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            </section>
+          </PbZone>
         );
       default:
         return null;
@@ -2205,6 +2276,7 @@ function SectionHeading({
   fontFamily,
   fontSize,
   fontStyle,
+  color,
 }: {
   children: React.ReactNode;
   noUnderline?: boolean;
@@ -2212,6 +2284,7 @@ function SectionHeading({
   fontFamily?: "sans" | "serif" | "mono";
   fontSize?: number;
   fontStyle?: "normal" | "bold" | "italic";
+  color?: string;
 }) {
   const fontClass =
     fontFamily === "mono"
@@ -2223,10 +2296,11 @@ function SectionHeading({
   return (
     <div className="flex flex-col items-center">
       <h2
-        className={`tracking-tight text-stone-800 ${fontClass} ${
+        className={`tracking-tight ${color ? "" : "text-stone-800"} ${fontClass} ${
           normalCase ? "" : "uppercase"
         } ${fontSize ? "" : "text-3xl font-bold md:text-4xl"}`}
         style={{
+          ...(color ? { color } : {}),
           ...(fontSize ? { fontSize: `${fontSize}px` } : {}),
           ...(fontStyle
             ? {
@@ -2238,7 +2312,7 @@ function SectionHeading({
       >
         {children}
       </h2>
-      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />}
+      {!noUnderline && <span className="mt-3 h-1 w-16 rounded-full" style={{ backgroundColor: color || "#d97706" }} />}
     </div>
   );
 }
