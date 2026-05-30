@@ -2817,7 +2817,6 @@ function GeneratedArticlesSlider({
   const delFn = useServerFn(deleteGeneratedArticle);
   const qc = useQueryClient();
   const [showExpired, setShowExpired] = useState(false);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const { data } = useQuery({
     queryKey: ["generated-articles", showExpired],
@@ -2833,8 +2832,11 @@ function GeneratedArticlesSlider({
     },
   });
 
-  const articles = data?.articles ?? [];
+  const all = data?.articles ?? [];
   const migrationMissing = data?.migration_missing;
+
+  const articles = all.filter((a) => a.category !== "event");
+  const events = all.filter((a) => a.category === "event");
 
   if (migrationMissing) {
     return (
@@ -2846,126 +2848,244 @@ function GeneratedArticlesSlider({
     );
   }
 
-  if (articles.length === 0) {
-    return null;
-  }
+  if (all.length === 0) return null;
 
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-end">
+        <Label className="text-[11px] text-stone-500 flex items-center gap-1.5">
+          <Switch
+            checked={showExpired}
+            onCheckedChange={setShowExpired}
+            className="scale-75"
+          />
+          Tampilkan expired
+        </Label>
+      </div>
+
+      {events.length > 0 && (
+        <EventCardSlider
+          events={events}
+          onPick={onPick}
+          onDelete={(id) => {
+            if (confirm("Hapus event ini?")) delM.mutate(id);
+          }}
+        />
+      )}
+
+      {articles.length > 0 && (
+        <ArticleCardSlider
+          articles={articles}
+          onPick={onPick}
+          onDelete={(id) => {
+            if (confirm("Hapus artikel ini?")) delM.mutate(id);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArticleCardSlider({
+  articles,
+  onPick,
+  onDelete,
+}: {
+  articles: GeneratedArticleRow[];
+  onPick: (a: GeneratedArticleRow) => void;
+  onDelete: (id: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const scroll = (dir: -1 | 1) => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
   };
-
   return (
     <Card className="p-5 border border-stone-200 bg-white">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-teal-700" />
-          <h3 className="font-bold text-stone-800 text-sm">Hasil Generate Terbaru</h3>
+          <h3 className="font-bold text-stone-800 text-sm">Artikel (Pariwisata & Destinasi)</h3>
           <span className="text-[10px] font-mono uppercase text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
             {articles.length}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-[11px] text-stone-500 flex items-center gap-1.5">
-            <Switch
-              checked={showExpired}
-              onCheckedChange={setShowExpired}
-              className="scale-75"
-            />
-            Tampilkan expired
-          </Label>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0 bg-white"
-            onClick={() => scroll(-1)}
-            title="Geser kiri"
-          >
-            ‹
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0 bg-white"
-            onClick={() => scroll(1)}
-            title="Geser kanan"
-          >
-            ›
-          </Button>
+          <Button size="sm" variant="outline" className="h-7 w-7 p-0 bg-white" onClick={() => scroll(-1)}>‹</Button>
+          <Button size="sm" variant="outline" className="h-7 w-7 p-0 bg-white" onClick={() => scroll(1)}>›</Button>
         </div>
       </div>
-
       <div
         ref={scrollRef}
         className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 scroll-smooth"
         style={{ scrollbarWidth: "thin" }}
       >
         {articles.map((a) => {
-          const isEvent = a.category === "event";
           const isExpired = a.status === "expired";
           return (
             <div
               key={a.id}
               className={`snap-start shrink-0 w-72 rounded-xl border p-4 flex flex-col transition cursor-pointer hover:shadow-md ${
-                isExpired
-                  ? "border-stone-200 bg-stone-50 opacity-70"
-                  : "border-stone-200 bg-white hover:border-teal-300"
+                isExpired ? "border-stone-200 bg-stone-50 opacity-70" : "border-stone-200 bg-white hover:border-teal-300"
               }`}
               onClick={() => onPick(a)}
             >
-              <div className="flex items-center justify-between gap-1">
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                    a.category === "pariwisata"
-                      ? "bg-teal-50 text-teal-700"
-                      : a.category === "event"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-sky-50 text-sky-700"
-                  }`}
-                >
-                  {a.category}
-                </span>
-                {isExpired && (
-                  <span className="text-[9px] font-bold uppercase text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                    Expired
-                  </span>
-                )}
-              </div>
+              <span
+                className={`self-start text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                  a.category === "pariwisata"
+                    ? "bg-teal-50 text-teal-700"
+                    : "bg-sky-50 text-sky-700"
+                }`}
+              >
+                {a.category}
+              </span>
               <h4 className="mt-2.5 font-bold text-stone-800 text-sm line-clamp-2 leading-snug">
                 {a.title}
               </h4>
               {a.meta_description && (
-                <p className="mt-1.5 text-xs text-stone-500 line-clamp-3 leading-relaxed">
-                  {a.meta_description}
-                </p>
+                <p className="mt-1.5 text-xs text-stone-500 line-clamp-3 leading-relaxed">{a.meta_description}</p>
               )}
               <div className="mt-auto pt-3 flex items-center justify-between text-[10px] text-stone-400">
                 <span className="font-mono">
-                  {new Date(a.created_at).toLocaleDateString("id-ID", {
-                    day: "numeric",
-                    month: "short",
-                    year: "2-digit",
-                  })}
+                  {new Date(a.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "2-digit" })}
                 </span>
-                {isEvent && a.event_end_date && (
-                  <span className="flex items-center gap-1 text-amber-700 font-semibold">
-                    <CalendarIcon className="h-3 w-3" />
-                    s/d {new Date(a.event_end_date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
-                  </span>
-                )}
                 <Button
                   size="sm"
                   variant="ghost"
                   className="h-6 w-6 p-0 text-rose-500 hover:bg-rose-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm("Hapus artikel ini?")) delM.mutate(a.id);
+                    onDelete(a.id);
                   }}
-                  title="Hapus"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function EventCardSlider({
+  events,
+  onPick,
+  onDelete,
+}: {
+  events: GeneratedArticleRow[];
+  onPick: (a: GeneratedArticleRow) => void;
+  onDelete: (id: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scroll = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+  const formatDate = (iso: string | null) =>
+    iso ? new Date(iso + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : null;
+
+  return (
+    <Card className="p-5 border border-amber-200 bg-gradient-to-br from-amber-50/40 to-white">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <CalendarIcon className="h-4 w-4 text-amber-700" />
+          <h3 className="font-bold text-stone-800 text-sm">Event Aktif</h3>
+          <span className="text-[10px] font-mono uppercase text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+            {events.length}
+          </span>
+          <span className="text-[10px] text-stone-400 hidden md:inline">
+            · otomatis tampil di slider Event di City Guide / homepage
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="h-7 w-7 p-0 bg-white" onClick={() => scroll(-1)}>‹</Button>
+          <Button size="sm" variant="outline" className="h-7 w-7 p-0 bg-white" onClick={() => scroll(1)}>›</Button>
+        </div>
+      </div>
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 scroll-smooth"
+        style={{ scrollbarWidth: "thin" }}
+      >
+        {events.map((e) => {
+          const isExpired = e.status === "expired";
+          const start = formatDate(e.event_start_date);
+          const end = formatDate(e.event_end_date);
+          const dateLabel =
+            start && end && start !== end
+              ? `${start} – ${end}`
+              : start || end || "Tanggal belum tentu";
+          return (
+            <div
+              key={e.id}
+              className={`snap-start shrink-0 w-80 rounded-xl border overflow-hidden flex flex-col transition cursor-pointer hover:shadow-lg bg-white ${
+                isExpired ? "border-stone-200 opacity-60" : "border-amber-200 hover:border-amber-400"
+              }`}
+              onClick={() => onPick(e)}
+            >
+              <div className="relative h-36 bg-stone-100">
+                {e.image_url ? (
+                  <img
+                    src={e.image_url}
+                    alt={e.title}
+                    className="h-full w-full object-cover"
+                    onError={(ev) => {
+                      (ev.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center text-stone-300">
+                    <CalendarIcon className="h-10 w-10" />
+                  </div>
+                )}
+                <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-white">
+                  Event
+                </span>
+                {isExpired && (
+                  <span className="absolute top-2 right-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-rose-600 text-white">
+                    Expired
+                  </span>
+                )}
+              </div>
+              <div className="p-4 flex-1 flex flex-col">
+                <h4 className="font-bold text-stone-800 text-sm line-clamp-2 leading-snug">{e.title}</h4>
+                <div className="mt-2 space-y-1 text-xs">
+                  <p className="flex items-center gap-1.5 text-amber-700 font-semibold">
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0" />
+                    {dateLabel}
+                  </p>
+                  {e.event_location && (
+                    <p className="flex items-start gap-1.5 text-stone-600">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{e.event_location}</span>
+                    </p>
+                  )}
+                </div>
+                {e.meta_description && (
+                  <p className="mt-2 text-xs text-stone-500 line-clamp-2 leading-relaxed">
+                    {e.meta_description}
+                  </p>
+                )}
+                <div className="mt-auto pt-3 flex items-center justify-between text-[10px] text-stone-400">
+                  <span className="font-mono">
+                    dibuat {new Date(e.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 text-rose-500 hover:bg-rose-50"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      onDelete(e.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           );
