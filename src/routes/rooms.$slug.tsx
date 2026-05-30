@@ -27,6 +27,7 @@ import {
   FileText,
   CreditCard,
   Building2,
+  MapPin,
 } from "lucide-react";
 import {
   getRoomTypeDetail,
@@ -88,6 +89,7 @@ export type RoomRow = {
   base_rate: number | string | null;
   capacity: number | null;
   bed_type: string | null;
+  floor_info: string | null;
   size_sqm: number | null;
   amenities: string[] | null;
   hero_image_url: string | null;
@@ -331,7 +333,7 @@ function RoomBookingPage() {
 
             <section className="mt-8">
               <h2 className="text-lg font-bold">Spesifikasi Kamar</h2>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <Spec
                   icon={<Users className="h-4 w-4" />}
                   label="Max Tamu"
@@ -347,6 +349,13 @@ function RoomBookingPage() {
                   label="Kamar Tersedia"
                   value={`${roomCount} rooms`}
                 />
+                {room.floor_info && (
+                  <Spec
+                    icon={<MapPin className="h-4 w-4" />}
+                    label="Lokasi"
+                    value={room.floor_info}
+                  />
+                )}
               </div>
             </section>
           </div>

@@ -58,6 +58,7 @@ export type ManagedRoomType = {
   slug?: string | null;
   description?: string | null;
   bed_type?: string | null;
+  floor_info?: string | null;
   size_sqm?: number | null;
   capacity?: number | null;
   extrabed_capacity?: number | null;
@@ -96,6 +97,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
   const [bedType, setBedType] = React.useState("");
+  const [floorInfo, setFloorInfo] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
   const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
   const [extrabedRate, setExtrabedRate] = React.useState(0);
@@ -168,6 +170,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug(roomType.slug ?? "");
       setSlugTouched(true);
       setBedType(roomType.bed_type ?? "");
+      setFloorInfo(roomType.floor_info ?? "");
       setCapacity(roomType.capacity ?? 2);
       setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
       setExtrabedRate(Number(roomType.extrabed_rate ?? 0));
@@ -189,6 +192,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug("");
       setSlugTouched(false);
       setBedType("");
+      setFloorInfo("");
       setCapacity(2);
       setExtrabedCapacity(0);
       setExtrabedRate(0);
@@ -209,6 +213,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         slug: slug.trim() || slugify(name),
         description: description.trim() || null,
         bed_type: bedType.trim() || null,
+        floor_info: floorInfo.trim() || null,
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
         capacity: Number(capacity) || 1,
         extrabed_capacity: Number(extrabedCapacity) || 0,
@@ -445,20 +450,34 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
 
           {tab === "features" && (
             <div className="grid gap-4">
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Tipe kasur</Label>
-                <select
-                  value={bedType}
-                  onChange={(e) => setBedType(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">—</option>
-                  {BED_TYPES.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Tipe kasur</Label>
+                  <select
+                    value={bedType}
+                    onChange={(e) => setBedType(e.target.value)}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">—</option>
+                    {BED_TYPES.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Lokasi / Lantai</Label>
+                  <Input
+                    value={floorInfo}
+                    placeholder="contoh: Lantai 2, atau Lantai 1 & 2"
+                    maxLength={120}
+                    onChange={(e) => setFloorInfo(e.target.value)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Teks bebas. Ditampilkan di kartu kamar publik (mis. "Lantai 2, dekat lift").
+                  </p>
+                </div>
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">Fasilitas</Label>
