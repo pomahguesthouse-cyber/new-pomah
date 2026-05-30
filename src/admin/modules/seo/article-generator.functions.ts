@@ -20,6 +20,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const ARTICLE_CATEGORIES = [
@@ -35,9 +36,32 @@ type SearchSnippet = { title: string; url: string; snippet: string };
 const SEARCH_TIMEOUT_MS = 15_000;
 const LLM_TIMEOUT_MS = 60_000;
 
-async function webSearch(query: string): Promise<{ snippets: SearchSnippet[]; provider: string | null }> {
-  const tavilyKey = process.env.TAVILY_API_KEY?.trim();
-  const serperKey = process.env.SERPER_API_KEY?.trim();
+async function loadKeysFromDb(
+  client: SupabaseClient,
+): Promise<{ tavily: string | null; serper: string | null }> {
+  try {
+    const { data, error } = await (client as any)
+      .from("properties")
+      .select("tavily_api_key, serper_api_key")
+      .limit(1)
+      .maybeSingle();
+    if (error) return { tavily: null, serper: null };
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      tavily: ((row.tavily_api_key as string | null) ?? null)?.trim() || null,
+      serper: ((row.serper_api_key as string | null) ?? null)?.trim() || null,
+    };
+  } catch {
+    return { tavily: null, serper: null };
+  }
+}
+
+async function webSearch(
+  query: string,
+  dbKeys: { tavily: string | null; serper: string | null },
+): Promise<{ snippets: SearchSnippet[]; provider: string | null }> {
+  const tavilyKey = dbKeys.tavily || process.env.TAVILY_API_KEY?.trim() || null;
+  const serperKey = dbKeys.serper || process.env.SERPER_API_KEY?.trim() || null;
 
   // 1. Tavily (LLM-optimised)
   if (tavilyKey) {
@@ -142,7 +166,7 @@ export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const apiKey = process.env.LOVABLE_API_KEY?.trim();
     if (!apiKey) {
       throw new Error(
@@ -150,8 +174,9 @@ export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
       );
     }
 
-    // 1. Web search (best-effort)
-    const { snippets, provider } = await webSearch(data.topic);
+    // 1. Web search (best-effort) — load keys from DB first, env as fallback
+    const dbKeys = await loadKeysFromDb(context.supabase as unknown as SupabaseClient);
+    const { snippets, provider } = await webSearch(data.topic, dbKeys);
     const searchContext =
       snippets.length > 0
         ? snippets

@@ -333,6 +333,65 @@ export const updateCustomGoogleReviews = createServerFn({ method: "POST" })
   });
 
 /* ------------------------------------------------------------------ */
+/* Web Search API keys (Tavily / Serper) — for AI Content Studio       */
+/* Isolated from main integration query so a missing migration on      */
+/* tavily_api_key/serper_api_key columns never breaks credential reads.*/
+/* ------------------------------------------------------------------ */
+
+export const getWebSearchApiSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data: propRow } = await db(context.supabase)
+      .from("properties")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    const id = ((propRow as Record<string, unknown> | null)?.id as string | undefined) ?? null;
+    if (!id) {
+      return { id: null, tavily_api_key: null, serper_api_key: null };
+    }
+    const { data, error } = await db(context.supabase)
+      .from("properties")
+      .select("id, tavily_api_key, serper_api_key")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      return { id, tavily_api_key: null, serper_api_key: null };
+    }
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id,
+      tavily_api_key: (row.tavily_api_key as string | null) ?? null,
+      serper_api_key: (row.serper_api_key as string | null) ?? null,
+    };
+  });
+
+export const updateWebSearchApiSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        tavily_api_key: z.string().max(500).nullable().optional(),
+        serper_api_key: z.string().max(500).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    if (data.tavily_api_key !== undefined) patch.tavily_api_key = data.tavily_api_key;
+    if (data.serper_api_key !== undefined) patch.serper_api_key = data.serper_api_key;
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    if (error) {
+      throw new Error(
+        "Gagal menyimpan API key. Pastikan migration 20260530140000_add_web_search_api_keys.sql sudah dijalankan. Detail: " +
+          error.message,
+      );
+    }
+    return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
 /* Property Managers                                                  */
 /* ------------------------------------------------------------------ */
 
