@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -73,6 +73,18 @@ import {
   ARTICLE_CATEGORIES,
   type ArticleCategory,
 } from "@/admin/modules/seo/article-generator.functions";
+import {
+  listSchedules,
+  createSchedule,
+  updateSchedule,
+  deleteSchedule,
+  listGeneratedArticles,
+  deleteGeneratedArticle,
+  type ScheduleRow,
+  type GeneratedArticleRow,
+  type Frequency,
+} from "@/admin/modules/seo/schedules.functions";
+import { Calendar as CalendarIcon, Clock, Power } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1387,6 +1399,20 @@ function ContentStudioSection() {
           </div>
         )}
       </Card>
+
+      <SchedulesManager />
+
+      <GeneratedArticlesSlider
+        onPick={(a) => {
+          setTitle(a.title);
+          setBlocks(a.paragraphs);
+          setMetaDescription(a.meta_description ?? "");
+          setTags(a.tags);
+          setSources(a.sources);
+          setSearchProvider(null);
+          toast.success(`"${a.title}" dimuat ke editor.`);
+        }}
+      />
 
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Editor Notion-style */}
@@ -2775,5 +2801,503 @@ function WebSearchApiSettingsCard() {
         </div>
       )}
     </Card>
+  );
+}
+
+
+/* ============================================================================
+   AI Content Studio — Generated articles card slider
+   ============================================================================ */
+function GeneratedArticlesSlider({
+  onPick,
+}: {
+  onPick: (a: GeneratedArticleRow) => void;
+}) {
+  const listFn = useServerFn(listGeneratedArticles);
+  const delFn = useServerFn(deleteGeneratedArticle);
+  const qc = useQueryClient();
+  const [showExpired, setShowExpired] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const { data } = useQuery({
+    queryKey: ["generated-articles", showExpired],
+    queryFn: () => listFn({ data: { limit: 30, include_expired: showExpired } }),
+    refetchInterval: 60_000,
+  });
+
+  const delM = useMutation({
+    mutationFn: (id: string) => delFn({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["generated-articles"] });
+      toast.success("Artikel dihapus");
+    },
+  });
+
+  const articles = data?.articles ?? [];
+  const migrationMissing = data?.migration_missing;
+
+  if (migrationMissing) {
+    return (
+      <Card className="p-4 border border-amber-200 bg-amber-50 text-xs text-amber-800">
+        <strong>Tabel seo_generated_articles belum ada.</strong> Jalankan{" "}
+        <code className="px-1 py-0.5 bg-amber-100 rounded font-mono">supabase db push</code> untuk
+        mengaktifkan slider hasil generate.
+      </Card>
+    );
+  }
+
+  if (articles.length === 0) {
+    return null;
+  }
+
+  const scroll = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  return (
+    <Card className="p-5 border border-stone-200 bg-white">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-teal-700" />
+          <h3 className="font-bold text-stone-800 text-sm">Hasil Generate Terbaru</h3>
+          <span className="text-[10px] font-mono uppercase text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+            {articles.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-[11px] text-stone-500 flex items-center gap-1.5">
+            <Switch
+              checked={showExpired}
+              onCheckedChange={setShowExpired}
+              className="scale-75"
+            />
+            Tampilkan expired
+          </Label>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 w-7 p-0 bg-white"
+            onClick={() => scroll(-1)}
+            title="Geser kiri"
+          >
+            ‹
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 w-7 p-0 bg-white"
+            onClick={() => scroll(1)}
+            title="Geser kanan"
+          >
+            ›
+          </Button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-1 px-1 scroll-smooth"
+        style={{ scrollbarWidth: "thin" }}
+      >
+        {articles.map((a) => {
+          const isEvent = a.category === "event";
+          const isExpired = a.status === "expired";
+          return (
+            <div
+              key={a.id}
+              className={`snap-start shrink-0 w-72 rounded-xl border p-4 flex flex-col transition cursor-pointer hover:shadow-md ${
+                isExpired
+                  ? "border-stone-200 bg-stone-50 opacity-70"
+                  : "border-stone-200 bg-white hover:border-teal-300"
+              }`}
+              onClick={() => onPick(a)}
+            >
+              <div className="flex items-center justify-between gap-1">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                    a.category === "pariwisata"
+                      ? "bg-teal-50 text-teal-700"
+                      : a.category === "event"
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-sky-50 text-sky-700"
+                  }`}
+                >
+                  {a.category}
+                </span>
+                {isExpired && (
+                  <span className="text-[9px] font-bold uppercase text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                    Expired
+                  </span>
+                )}
+              </div>
+              <h4 className="mt-2.5 font-bold text-stone-800 text-sm line-clamp-2 leading-snug">
+                {a.title}
+              </h4>
+              {a.meta_description && (
+                <p className="mt-1.5 text-xs text-stone-500 line-clamp-3 leading-relaxed">
+                  {a.meta_description}
+                </p>
+              )}
+              <div className="mt-auto pt-3 flex items-center justify-between text-[10px] text-stone-400">
+                <span className="font-mono">
+                  {new Date(a.created_at).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    year: "2-digit",
+                  })}
+                </span>
+                {isEvent && a.event_end_date && (
+                  <span className="flex items-center gap-1 text-amber-700 font-semibold">
+                    <CalendarIcon className="h-3 w-3" />
+                    s/d {new Date(a.event_end_date).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 text-rose-500 hover:bg-rose-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm("Hapus artikel ini?")) delM.mutate(a.id);
+                  }}
+                  title="Hapus"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+/* ============================================================================
+   AI Content Studio — Schedules manager
+   ============================================================================ */
+const DAYS_WIB = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function SchedulesManager() {
+  const listFn = useServerFn(listSchedules);
+  const createFn = useServerFn(createSchedule);
+  const updateFn = useServerFn(updateSchedule);
+  const deleteFn = useServerFn(deleteSchedule);
+  const qc = useQueryClient();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState({
+    topic: "",
+    category: "pariwisata" as ArticleCategory,
+    frequency: "daily" as Frequency,
+    hour: 9,
+    minute: 0,
+    day_of_week: 1,
+    day_of_month: 1,
+  });
+
+  const { data } = useQuery({
+    queryKey: ["seo-schedules"],
+    queryFn: () => listFn(),
+    refetchInterval: 30_000,
+  });
+
+  const createM = useMutation({
+    mutationFn: (v: typeof form) =>
+      createFn({
+        data: {
+          topic: v.topic,
+          category: v.category,
+          frequency: v.frequency,
+          hour: v.hour,
+          minute: v.minute,
+          day_of_week: v.frequency === "weekly" ? v.day_of_week : null,
+          day_of_month: v.frequency === "monthly" ? v.day_of_month : null,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Jadwal dibuat");
+      qc.invalidateQueries({ queryKey: ["seo-schedules"] });
+      setDialogOpen(false);
+      setForm({ ...form, topic: "" });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const toggleM = useMutation({
+    mutationFn: (v: { id: string; enabled: boolean }) =>
+      updateFn({ data: { id: v.id, enabled: v.enabled } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["seo-schedules"] }),
+  });
+
+  const delM = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Jadwal dihapus");
+      qc.invalidateQueries({ queryKey: ["seo-schedules"] });
+    },
+  });
+
+  const schedules = data?.schedules ?? [];
+
+  if (data?.migration_missing) {
+    return (
+      <Card className="p-4 border border-amber-200 bg-amber-50 text-xs text-amber-800">
+        <strong>Tabel jadwal belum ada.</strong> Jalankan{" "}
+        <code className="px-1 py-0.5 bg-amber-100 rounded font-mono">supabase db push</code> untuk
+        mengaktifkan fitur penjadwalan.
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="p-5 border border-stone-200 bg-white">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <Timer className="h-4 w-4 text-stone-500" />
+          <h3 className="font-bold text-stone-800 text-sm">Jadwal Generate Otomatis</h3>
+          <span className="text-[10px] font-mono uppercase text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+            {schedules.length} jadwal
+          </span>
+        </div>
+        <Button
+          size="sm"
+          className="h-8 bg-teal-700 hover:bg-teal-800 text-white"
+          onClick={() => setDialogOpen(true)}
+        >
+          <Plus className="h-3.5 w-3.5 mr-1.5" /> Buat Jadwal
+        </Button>
+      </div>
+
+      {schedules.length === 0 ? (
+        <p className="text-xs text-stone-400 italic text-center py-6">
+          Belum ada jadwal otomatis. Klik "Buat Jadwal" untuk men-generate artikel secara berkala.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {schedules.map((s) => (
+            <ScheduleRowItem
+              key={s.id}
+              s={s}
+              onToggle={(enabled) => toggleM.mutate({ id: s.id, enabled })}
+              onDelete={() => {
+                if (confirm(`Hapus jadwal "${s.topic}"?`)) delM.mutate(s.id);
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Buat Jadwal Generate Artikel</DialogTitle>
+            <DialogDescription>
+              Topik akan di-generate otomatis pada waktu yang ditentukan (WIB).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div>
+              <Label className="text-xs font-semibold">Topik / Pertanyaan</Label>
+              <Input
+                value={form.topic}
+                onChange={(e) => setForm({ ...form, topic: e.target.value })}
+                placeholder="contoh: event wisuda unnes bulan ini"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Kategori</Label>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => setForm({ ...form, category: v as ArticleCategory })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ARTICLE_CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Frekuensi</Label>
+                <Select
+                  value={form.frequency}
+                  onValueChange={(v) => setForm({ ...form, frequency: v as Frequency })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Setiap hari</SelectItem>
+                    <SelectItem value="weekly">Mingguan</SelectItem>
+                    <SelectItem value="monthly">Bulanan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {form.frequency === "weekly" && (
+              <div>
+                <Label className="text-xs font-semibold">Hari</Label>
+                <Select
+                  value={String(form.day_of_week)}
+                  onValueChange={(v) => setForm({ ...form, day_of_week: Number(v) })}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS_WIB.map((d, i) => (
+                      <SelectItem key={i} value={String(i)}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {form.frequency === "monthly" && (
+              <div>
+                <Label className="text-xs font-semibold">Tanggal (1-28)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={form.day_of_month}
+                  onChange={(e) =>
+                    setForm({ ...form, day_of_month: Math.max(1, Math.min(28, Number(e.target.value))) })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Jam (WIB, 0-23)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={form.hour}
+                  onChange={(e) =>
+                    setForm({ ...form, hour: Math.max(0, Math.min(23, Number(e.target.value))) })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Menit (0-59)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={59}
+                  value={form.minute}
+                  onChange={(e) =>
+                    setForm({ ...form, minute: Math.max(0, Math.min(59, Number(e.target.value))) })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+            </div>
+
+            <p className="text-[11px] text-stone-400">
+              Akan jalan pertama kali pada{" "}
+              <strong className="text-stone-600">
+                {form.frequency === "daily"
+                  ? `tiap hari pukul ${String(form.hour).padStart(2, "0")}:${String(form.minute).padStart(2, "0")} WIB`
+                  : form.frequency === "weekly"
+                  ? `setiap ${DAYS_WIB[form.day_of_week]} pukul ${String(form.hour).padStart(2, "0")}:${String(form.minute).padStart(2, "0")} WIB`
+                  : `tanggal ${form.day_of_month} tiap bulan, pukul ${String(form.hour).padStart(2, "0")}:${String(form.minute).padStart(2, "0")} WIB`}
+              </strong>
+              .
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              className="bg-teal-700 hover:bg-teal-800 text-white"
+              disabled={createM.isPending || !form.topic.trim()}
+              onClick={() => createM.mutate(form)}
+            >
+              {createM.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : (
+                <Check className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Simpan Jadwal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
+function ScheduleRowItem({
+  s,
+  onToggle,
+  onDelete,
+}: {
+  s: ScheduleRow;
+  onToggle: (enabled: boolean) => void;
+  onDelete: () => void;
+}) {
+  const cadence =
+    s.frequency === "daily"
+      ? "Setiap hari"
+      : s.frequency === "weekly"
+      ? `Tiap ${DAYS_WIB[s.day_of_week ?? 0]}`
+      : `Tanggal ${s.day_of_month ?? 1} tiap bulan`;
+  const timeStr = `${String(s.hour).padStart(2, "0")}:${String(s.minute).padStart(2, "0")} WIB`;
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-stone-100 bg-stone-50/50 hover:bg-stone-50">
+      <div
+        className={`shrink-0 h-2 w-2 rounded-full ${
+          s.enabled ? "bg-emerald-500" : "bg-stone-300"
+        }`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-sm text-stone-800 truncate">{s.topic}</p>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-50 text-teal-700">
+            {s.category}
+          </span>
+        </div>
+        <p className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2">
+          <Clock className="h-3 w-3 inline" />
+          {cadence} · {timeStr}
+          {s.next_run_at && (
+            <span className="text-stone-400 font-mono">
+              · next: {new Date(s.next_run_at).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}
+            </span>
+          )}
+        </p>
+        {s.last_error && (
+          <p className="text-[10px] text-rose-600 mt-1 truncate">Last error: {s.last_error}</p>
+        )}
+      </div>
+      <Switch checked={s.enabled} onCheckedChange={onToggle} />
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0 text-rose-500 hover:bg-rose-50"
+        onClick={onDelete}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
