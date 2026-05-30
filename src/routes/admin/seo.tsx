@@ -66,6 +66,11 @@ import {
   getCustomGoogleReviews,
   updateCustomGoogleReviews,
 } from "@/admin/modules/settings/settings.functions";
+import {
+  generateArticleFromWebSearch,
+  ARTICLE_CATEGORIES,
+  type ArticleCategory,
+} from "@/admin/modules/seo/article-generator.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1206,12 +1211,22 @@ function ProgrammaticSection({
    ============================================================================ */
 function ContentStudioSection() {
   const [title, setTitle] = useState("Penginapan Murah dekat Kampus UNNES Semarang");
-  const [blocks, setBlocks] = useState([
+  const [blocks, setBlocks] = useState<string[]>([
     "Pomah Guesthouse adalah penginapan bergaya butik yang berlokasi strategis di Gunungpati, Semarang. Sangat cocok untuk akomodasi wisuda, kunjungan keluarga, maupun kegiatan dinas.",
     "Dengan suasana asri khas pedesaan Semarang dan parkiran luas yang mampu menampung bus sedang, guesthouse ini menawarkan kenyamanan menginap yang istimewa dengan harga terjangkau.",
   ]);
   const [newBlock, setNewBlock] = useState("");
   const [isGeneratingArticle, setIsGeneratingArticle] = useState(false);
+  const [metaDescription, setMetaDescription] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [sources, setSources] = useState<Array<{ title: string; url: string }>>([]);
+  const [searchProvider, setSearchProvider] = useState<string | null>(null);
+
+  // Web search generator state
+  const [searchTopic, setSearchTopic] = useState("");
+  const [searchCategory, setSearchCategory] = useState<ArticleCategory>("pariwisata");
+
+  const genFn = useServerFn(generateArticleFromWebSearch);
 
   // Dynamic calculations
   const wordCount = (title + blocks.join(" ")).split(/\s+/).filter(Boolean).length;
@@ -1243,12 +1258,131 @@ function ContentStudioSection() {
     }, 1500);
   };
 
+  const generateMut = useMutation({
+    mutationFn: (v: { topic: string; category: ArticleCategory }) =>
+      genFn({ data: v }),
+    onSuccess: (res) => {
+      const a = res.article;
+      setTitle(a.title);
+      setBlocks(a.paragraphs);
+      setMetaDescription(a.meta_description);
+      setTags(a.tags);
+      setSources(res.web_sources);
+      setSearchProvider(res.search_provider);
+      if (res.web_sources.length > 0) {
+        toast.success(
+          `Artikel dibuat dari ${res.web_sources.length} sumber (${res.search_provider ?? "web"}).`,
+        );
+      } else {
+        toast.message(
+          "Artikel dibuat tanpa hasil pencarian web. Set TAVILY_API_KEY atau SERPER_API_KEY untuk hasil berbasis web search.",
+          { duration: 6000 },
+        );
+      }
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const handleGenerateFromWeb = () => {
+    if (!searchTopic.trim()) {
+      toast.error("Isi dulu topik artikel");
+      return;
+    }
+    generateMut.mutate({ topic: searchTopic.trim(), category: searchCategory });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-stone-800">AI Content Studio</h2>
         <p className="text-xs text-stone-400">Tulis dan optimalkan artikel Anda dibantu AI Editor Asisten</p>
       </div>
+
+      {/* Web Search Generator */}
+      <Card className="p-5 border border-teal-200 bg-gradient-to-br from-teal-50/60 to-white">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe className="h-4 w-4 text-teal-700" />
+          <h3 className="font-bold text-stone-800 text-sm">Generate Artikel dari Web Search</h3>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-teal-700 bg-teal-100 px-2 py-0.5 rounded">
+            AI + Live Search
+          </span>
+        </div>
+        <p className="text-xs text-stone-500 mb-4 leading-relaxed">
+          Masukkan topik dan pilih kategori. AI akan mencari sumber terbaru di internet, lalu
+          menyusun draf artikel yang siap diedit di bawah.
+        </p>
+        <div className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">Topik / Pertanyaan</Label>
+            <Input
+              value={searchTopic}
+              onChange={(e) => setSearchTopic(e.target.value)}
+              placeholder="contoh: festival kuliner semarang 2026, wisata kota lama, lawang sewu"
+              className="mt-1 text-sm bg-white"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !generateMut.isPending) handleGenerateFromWeb();
+              }}
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">Kategori</Label>
+            <Select
+              value={searchCategory}
+              onValueChange={(v) => setSearchCategory(v as ArticleCategory)}
+            >
+              <SelectTrigger className="mt-1 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ARTICLE_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button
+              className="h-10 w-full md:w-auto bg-teal-700 hover:bg-teal-800 text-white gap-1.5"
+              disabled={generateMut.isPending}
+              onClick={handleGenerateFromWeb}
+            >
+              {generateMut.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Mencari & menulis…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" /> Generate
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+        {sources.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-teal-100">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mb-2">
+              Sumber referensi ({searchProvider ?? "web"})
+            </p>
+            <ol className="space-y-1.5">
+              {sources.map((s, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  <span className="font-mono text-stone-400 shrink-0">[{i + 1}]</span>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 hover:underline truncate"
+                  >
+                    {s.title || s.url}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Editor Notion-style */}
@@ -1357,6 +1491,54 @@ function ContentStudioSection() {
               <span className="font-mono">{wordCount} kata</span>
             </div>
           </Card>
+
+          {(metaDescription || tags.length > 0) && (
+            <Card className="p-5 border border-stone-200 bg-white space-y-3">
+              <h3 className="font-bold text-stone-800 text-xs uppercase tracking-wider">
+                Meta untuk Publish
+              </h3>
+              {metaDescription && (
+                <div>
+                  <Label className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                    Meta Description
+                  </Label>
+                  <Textarea
+                    rows={3}
+                    value={metaDescription}
+                    onChange={(e) => setMetaDescription(e.target.value)}
+                    className="mt-1 text-xs"
+                  />
+                  <p className="text-[10px] text-stone-400 mt-1 font-mono">
+                    {metaDescription.length}/160
+                  </p>
+                </div>
+              )}
+              {tags.length > 0 && (
+                <div>
+                  <Label className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                    Tags
+                  </Label>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {tags.map((t, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 text-[11px] bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          className="text-teal-400 hover:text-rose-500"
+                          onClick={() => setTags(tags.filter((_, j) => j !== i))}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* AI content strategist suggestions */}
           <Card className="p-5 border border-stone-200 bg-white space-y-3">
