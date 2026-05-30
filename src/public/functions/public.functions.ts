@@ -143,7 +143,7 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
     supabasePublic
       .from("room_types")
       .select(
-        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, size_sqm, amenities, hero_image_url, rooms(id)",
+        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, rooms(id)",
       )
       .order("base_rate"),
   ]);

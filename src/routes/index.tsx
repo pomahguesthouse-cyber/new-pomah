@@ -372,6 +372,7 @@ function PomahHome() {
           base_rate: rt.base_rate,
           capacity: rt.capacity ?? null,
           bed_type: null,
+          floor_info: null,
           size_sqm: rt.size_sqm ?? null,
           amenities: null,
           hero_image_url: rt.hero_image_url ?? null,
@@ -2178,7 +2179,12 @@ function RoomCarousel({
                     <div>
                       <h3 className={`font-serif font-semibold text-stone-900 ${cartOpen ? "text-base" : "text-xl"}`}>{rt.name}</h3>
                       <p className={`mt-1 font-mono uppercase tracking-wider text-stone-400 ${cartOpen ? "text-[9px]" : "text-[11px]"}`}>
-                        {[rt.capacity && `${rt.capacity} TAMU`, rt.size_sqm && `${rt.size_sqm} M²`]
+                        {[
+                          rt.capacity && `${rt.capacity} TAMU`,
+                          rt.size_sqm && `${rt.size_sqm} M²`,
+                          (rt as any).bed_type,
+                          (rt as any).floor_info,
+                        ]
                            .filter(Boolean)
                            .join(" · ")}
                       </p>
@@ -2197,7 +2203,7 @@ function RoomCarousel({
                   )}
                   {rt.amenities && rt.amenities.length > 0 && (
                     <div className={`flex flex-wrap gap-x-2.5 gap-y-1 border-t border-stone-100 pt-2.5 text-stone-600 ${cartOpen ? "mt-1.5" : "mt-3.5"}`}>
-                      {rt.amenities.slice(0, cartOpen ? 2 : 4).map((amenity: string) => {
+                      {rt.amenities.map((amenity: string) => {
                         const icon = getAmenityIcon(amenity);
                         return (
                           <div key={amenity} className={`flex items-center gap-1 text-stone-600 ${cartOpen ? "text-[10px]" : "text-[11px]"}`}>
@@ -2206,11 +2212,6 @@ function RoomCarousel({
                           </div>
                         );
                       })}
-                      {rt.amenities.length > (cartOpen ? 2 : 4) && (
-                        <span className={`text-stone-400 font-medium ${cartOpen ? "text-[10px]" : "text-[11px]"}`}>
-                          +{rt.amenities.length - (cartOpen ? 2 : 4)}
-                        </span>
-                      )}
                     </div>
                   )}
                   {(() => {

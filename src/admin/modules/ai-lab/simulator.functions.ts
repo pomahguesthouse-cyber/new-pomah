@@ -41,7 +41,7 @@ async function buildEnv(): Promise<OrchestrationEnv> {
 
   const { data: rooms } = await (supabasePublic as any)
     .from("room_types")
-    .select("id, name, base_rate, capacity, bed_type, description, amenities, extrabed_capacity, extrabed_rate")
+    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate")
     .order("base_rate");
 
   // SOP + brosur (mirror production)

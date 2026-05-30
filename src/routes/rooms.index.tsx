@@ -111,6 +111,7 @@ function PublicRooms() {
                         rt.bed_type,
                         rt.capacity && `Maks. ${rt.capacity} tamu`,
                         rt.size_sqm && `${rt.size_sqm} m²`,
+                        (rt as any).floor_info,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
