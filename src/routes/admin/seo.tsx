@@ -65,13 +65,14 @@ import {
 import {
   getCustomGoogleReviews,
   updateCustomGoogleReviews,
+  getWebSearchApiSettings,
+  updateWebSearchApiSettings,
 } from "@/admin/modules/settings/settings.functions";
 import {
-  listHermesTasks,
-  deleteHermesTask,
-  getHermesTaskStats,
-  type HermesTask,
-} from "@/admin/modules/seo/hermes.functions";
+  generateArticleFromWebSearch,
+  ARTICLE_CATEGORIES,
+  type ArticleCategory,
+} from "@/admin/modules/seo/article-generator.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -123,8 +124,7 @@ type TabKey =
   | "links"
   | "backlinks"
   | "reviews"
-  | "google_reviews"
-  | "hermes";
+  | "google_reviews";
 
 export function SeoPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("search_console");
@@ -201,7 +201,6 @@ export function SeoPage() {
     { key: "backlinks", label: "Backlinks", icon: Link2 },
     { key: "reviews", label: "Reviews Insight", icon: Star },
     { key: "google_reviews", label: "Google Reviews", icon: MessagesSquare },
-    { key: "hermes", label: "Hermes Agent", icon: Bot },
   ];
 
   return (
@@ -324,7 +323,6 @@ export function SeoPage() {
             <ReviewsSection reviews={reviewsData?.reviews ?? []} />
           )}
           {activeTab === "google_reviews" && <GoogleReviewsSection />}
-          {activeTab === "hermes" && <HermesAgentSection />}
         </main>
       </div>
     </div>
@@ -1215,12 +1213,22 @@ function ProgrammaticSection({
    ============================================================================ */
 function ContentStudioSection() {
   const [title, setTitle] = useState("Penginapan Murah dekat Kampus UNNES Semarang");
-  const [blocks, setBlocks] = useState([
+  const [blocks, setBlocks] = useState<string[]>([
     "Pomah Guesthouse adalah penginapan bergaya butik yang berlokasi strategis di Gunungpati, Semarang. Sangat cocok untuk akomodasi wisuda, kunjungan keluarga, maupun kegiatan dinas.",
     "Dengan suasana asri khas pedesaan Semarang dan parkiran luas yang mampu menampung bus sedang, guesthouse ini menawarkan kenyamanan menginap yang istimewa dengan harga terjangkau.",
   ]);
   const [newBlock, setNewBlock] = useState("");
   const [isGeneratingArticle, setIsGeneratingArticle] = useState(false);
+  const [metaDescription, setMetaDescription] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [sources, setSources] = useState<Array<{ title: string; url: string }>>([]);
+  const [searchProvider, setSearchProvider] = useState<string | null>(null);
+
+  // Web search generator state
+  const [searchTopic, setSearchTopic] = useState("");
+  const [searchCategory, setSearchCategory] = useState<ArticleCategory>("pariwisata");
+
+  const genFn = useServerFn(generateArticleFromWebSearch);
 
   // Dynamic calculations
   const wordCount = (title + blocks.join(" ")).split(/\s+/).filter(Boolean).length;
@@ -1252,12 +1260,133 @@ function ContentStudioSection() {
     }, 1500);
   };
 
+  const generateMut = useMutation({
+    mutationFn: (v: { topic: string; category: ArticleCategory }) =>
+      genFn({ data: v }),
+    onSuccess: (res) => {
+      const a = res.article;
+      setTitle(a.title);
+      setBlocks(a.paragraphs);
+      setMetaDescription(a.meta_description);
+      setTags(a.tags);
+      setSources(res.web_sources);
+      setSearchProvider(res.search_provider);
+      if (res.web_sources.length > 0) {
+        toast.success(
+          `Artikel dibuat dari ${res.web_sources.length} sumber (${res.search_provider ?? "web"}).`,
+        );
+      } else {
+        toast.message(
+          "Artikel dibuat tanpa hasil pencarian web. Set TAVILY_API_KEY atau SERPER_API_KEY untuk hasil berbasis web search.",
+          { duration: 6000 },
+        );
+      }
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const handleGenerateFromWeb = () => {
+    if (!searchTopic.trim()) {
+      toast.error("Isi dulu topik artikel");
+      return;
+    }
+    generateMut.mutate({ topic: searchTopic.trim(), category: searchCategory });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-stone-800">AI Content Studio</h2>
         <p className="text-xs text-stone-400">Tulis dan optimalkan artikel Anda dibantu AI Editor Asisten</p>
       </div>
+
+      <WebSearchApiSettingsCard />
+
+      {/* Web Search Generator */}
+      <Card className="p-5 border border-teal-200 bg-gradient-to-br from-teal-50/60 to-white">
+        <div className="flex items-center gap-2 mb-3">
+          <Globe className="h-4 w-4 text-teal-700" />
+          <h3 className="font-bold text-stone-800 text-sm">Generate Artikel dari Web Search</h3>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-teal-700 bg-teal-100 px-2 py-0.5 rounded">
+            AI + Live Search
+          </span>
+        </div>
+        <p className="text-xs text-stone-500 mb-4 leading-relaxed">
+          Masukkan topik dan pilih kategori. AI akan mencari sumber terbaru di internet, lalu
+          menyusun draf artikel yang siap diedit di bawah.
+        </p>
+        <div className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">Topik / Pertanyaan</Label>
+            <Input
+              value={searchTopic}
+              onChange={(e) => setSearchTopic(e.target.value)}
+              placeholder="contoh: festival kuliner semarang 2026, wisata kota lama, lawang sewu"
+              className="mt-1 text-sm bg-white"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !generateMut.isPending) handleGenerateFromWeb();
+              }}
+            />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-stone-600">Kategori</Label>
+            <Select
+              value={searchCategory}
+              onValueChange={(v) => setSearchCategory(v as ArticleCategory)}
+            >
+              <SelectTrigger className="mt-1 bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ARTICLE_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button
+              className="h-10 w-full md:w-auto bg-teal-700 hover:bg-teal-800 text-white gap-1.5"
+              disabled={generateMut.isPending}
+              onClick={handleGenerateFromWeb}
+            >
+              {generateMut.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Mencari & menulis…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" /> Generate
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+        {sources.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-teal-100">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mb-2">
+              Sumber referensi ({searchProvider ?? "web"})
+            </p>
+            <ol className="space-y-1.5">
+              {sources.map((s, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  <span className="font-mono text-stone-400 shrink-0">[{i + 1}]</span>
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 hover:underline truncate"
+                  >
+                    {s.title || s.url}
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-4">
         {/* Editor Notion-style */}
@@ -1366,6 +1495,54 @@ function ContentStudioSection() {
               <span className="font-mono">{wordCount} kata</span>
             </div>
           </Card>
+
+          {(metaDescription || tags.length > 0) && (
+            <Card className="p-5 border border-stone-200 bg-white space-y-3">
+              <h3 className="font-bold text-stone-800 text-xs uppercase tracking-wider">
+                Meta untuk Publish
+              </h3>
+              {metaDescription && (
+                <div>
+                  <Label className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                    Meta Description
+                  </Label>
+                  <Textarea
+                    rows={3}
+                    value={metaDescription}
+                    onChange={(e) => setMetaDescription(e.target.value)}
+                    className="mt-1 text-xs"
+                  />
+                  <p className="text-[10px] text-stone-400 mt-1 font-mono">
+                    {metaDescription.length}/160
+                  </p>
+                </div>
+              )}
+              {tags.length > 0 && (
+                <div>
+                  <Label className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                    Tags
+                  </Label>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {tags.map((t, i) => (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 text-[11px] bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          className="text-teal-400 hover:text-rose-500"
+                          onClick={() => setTags(tags.filter((_, j) => j !== i))}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
 
           {/* AI content strategist suggestions */}
           <Card className="p-5 border border-stone-200 bg-white space-y-3">
@@ -2388,491 +2565,215 @@ function GoogleReviewsSection() {
   );
 }
 
+
 /* ============================================================================
-   13. HERMES AGENT FEED (Pola A — Telegram bridged)
+   AI Content Studio — Web Search API key settings card
    ============================================================================ */
-function HermesAgentSection() {
-  const listFn = useServerFn(listHermesTasks);
-  const deleteFn = useServerFn(deleteHermesTask);
-  const statsFn = useServerFn(getHermesTaskStats);
+function WebSearchApiSettingsCard() {
+  const getFn = useServerFn(getWebSearchApiSettings);
+  const updateFn = useServerFn(updateWebSearchApiSettings);
   const qc = useQueryClient();
 
-  const [filterType, setFilterType] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [setupOpen, setSetupOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<HermesTask | null>(null);
-
-  const { data: feed, refetch } = useQuery({
-    queryKey: ["hermes-tasks", filterType, filterStatus],
-    queryFn: () =>
-      listFn({
-        data: {
-          limit: 100,
-          ...(filterType !== "all" ? { task_type: filterType } : {}),
-          ...(filterStatus !== "all"
-            ? { status: filterStatus as "pending" | "in_progress" | "completed" | "failed" }
-            : {}),
-        },
-      }),
-    refetchInterval: 15_000,
+  const { data, isLoading } = useQuery({
+    queryKey: ["web-search-api-settings"],
+    queryFn: () => getFn(),
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["hermes-stats"],
-    queryFn: () => statsFn(),
-    refetchInterval: 30_000,
-  });
+  const [tavily, setTavily] = useState("");
+  const [serper, setSerper] = useState("");
+  const [showTavily, setShowTavily] = useState(false);
+  const [showSerper, setShowSerper] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
-  const delM = useMutation({
-    mutationFn: (id: string) => deleteFn({ data: { id } }),
+  useEffect(() => {
+    if (!data || hydrated) return;
+    setTavily(data.tavily_api_key ?? "");
+    setSerper(data.serper_api_key ?? "");
+    setHydrated(true);
+    // Auto-expand if neither key is set yet
+    if (!data.tavily_api_key && !data.serper_api_key) setCollapsed(false);
+  }, [data, hydrated]);
+
+  const mutation = useMutation({
+    mutationFn: (patch: { tavily_api_key?: string | null; serper_api_key?: string | null }) =>
+      updateFn({ data: { id: data!.id as string, ...patch } }),
     onSuccess: () => {
-      toast.success("Tugas dihapus");
-      qc.invalidateQueries({ queryKey: ["hermes-tasks"] });
-      qc.invalidateQueries({ queryKey: ["hermes-stats"] });
-      setSelectedTask(null);
+      qc.invalidateQueries({ queryKey: ["web-search-api-settings"] });
+      toast.success("API key tersimpan");
     },
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const tasks = feed?.tasks ?? [];
-  const taskTypes = Object.keys(stats?.by_type ?? {});
+  const id = data?.id ?? null;
+  const tavilySet = !!data?.tavily_api_key;
+  const serperSet = !!data?.serper_api_key;
+  const anySet = tavilySet || serperSet;
 
-  if (feed?.migration_missing) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-          <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
-            Tabel hermes_tasks belum ada
-          </h3>
-          <p className="mt-2 text-xs text-amber-800 leading-relaxed">
-            Jalankan migration{" "}
-            <code className="px-1.5 py-0.5 bg-amber-100 rounded font-mono">
-              supabase/migrations/20260530120000_create_hermes_tasks.sql
-            </code>{" "}
-            di Supabase Anda, lalu refresh halaman ini.
-          </p>
-          <p className="mt-2 text-xs text-amber-800">
-            Perintah cepat:{" "}
-            <code className="px-1.5 py-0.5 bg-amber-100 rounded font-mono">supabase db push</code>
-          </p>
-        </div>
-      </div>
-    );
+  function saveAll() {
+    if (!id) return;
+    mutation.mutate({
+      tavily_api_key: tavily.trim() || null,
+      serper_api_key: serper.trim() || null,
+    });
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-800">Hermes Agent Feed</h2>
-          <p className="text-xs text-stone-400 max-w-2xl mt-0.5">
-            Daftar tugas yang dikerjakan Hermes Agent di laptop Anda dan dikirim
-            ke sini lewat Telegram gateway. Anda tetap berinteraksi dengan
-            Hermes lewat aplikasi Telegram — halaman ini hanya menampilkan
-            hasilnya untuk diarsipkan ke knowledge base SEO.
-          </p>
-        </div>
+    <Card className="p-5 border border-stone-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5 bg-white"
-            onClick={() => setSetupOpen(true)}
+          <Search className="h-4 w-4 text-stone-500" />
+          <h3 className="font-bold text-stone-800 text-sm">Web Search API Keys</h3>
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+              anySet
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            }`}
           >
-            <Settings className="h-3.5 w-3.5" /> Cara Setup
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1.5 bg-white"
-            onClick={() => {
-              refetch();
-              qc.invalidateQueries({ queryKey: ["hermes-stats"] });
-              toast.success("Feed disinkronkan");
-            }}
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </Button>
+            {anySet ? "Aktif" : "Belum di-set"}
+          </span>
         </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs"
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          {collapsed ? "Ubah" : "Tutup"}
+          <ChevronRight
+            className={`h-3.5 w-3.5 ml-1 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          />
+        </Button>
       </div>
 
-      {/* Stats strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-4 border border-stone-200 bg-white">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
-            Total Tugas
-          </span>
-          <p className="mt-1 text-2xl font-bold text-stone-800">{stats?.total ?? 0}</p>
-        </Card>
-        <Card className="p-4 border border-stone-200 bg-white">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
-            Selesai
-          </span>
-          <p className="mt-1 text-2xl font-bold text-emerald-600">{stats?.completed ?? 0}</p>
-        </Card>
-        <Card className="p-4 border border-stone-200 bg-white">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
-            Gagal
-          </span>
-          <p className="mt-1 text-2xl font-bold text-rose-600">{stats?.failed ?? 0}</p>
-        </Card>
-        <Card className="p-4 border border-stone-200 bg-white">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
-            24 jam terakhir
-          </span>
-          <p className="mt-1 text-2xl font-bold text-teal-700">{stats?.last_24h ?? 0}</p>
-        </Card>
-      </div>
+      <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+        Dipakai oleh fitur <strong>"Generate dari Web Search"</strong> di bawah. Tavily dicoba
+        dulu, Serper jadi fallback. Kosongkan dua-duanya untuk pakai pengetahuan model tanpa
+        pencarian web.
+      </p>
 
-      {/* Filters */}
-      <Card className="p-4 border border-stone-200 bg-white">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Label className="text-xs font-semibold text-stone-500">Tipe:</Label>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="h-8 w-44 text-xs bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua tipe</SelectItem>
-                {taskTypes.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs font-semibold text-stone-500">Status:</Label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="h-8 w-40 text-xs bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua status</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="in_progress">In progress</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <span className="text-[11px] text-stone-400 font-mono ml-auto">
-            Auto-refresh 15 dtk
-          </span>
-        </div>
-      </Card>
-
-      {/* Feed */}
-      {tasks.length === 0 ? (
-        <Card className="p-10 border border-dashed border-stone-200 bg-white text-center">
-          <Bot className="h-10 w-10 text-stone-300 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-stone-600">Belum ada tugas dari Hermes</p>
-          <p className="text-xs text-stone-400 mt-1 max-w-md mx-auto">
-            Buka chat Telegram dengan Hermes Bot Anda dan kirim instruksi
-            (mis. "Tulis landing page untuk keyword 'guesthouse dekat unnes'").
-            Setelah Hermes selesai, hasilnya akan muncul di sini.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-4 h-8 bg-white"
-            onClick={() => setSetupOpen(true)}
-          >
-            <Settings className="h-3.5 w-3.5 mr-1.5" /> Cara setup Hermes
-          </Button>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {tasks.map((t) => (
-            <HermesTaskRow
-              key={t.id}
-              task={t}
-              onOpen={() => setSelectedTask(t)}
-              onDelete={() => {
-                if (confirm(`Hapus tugas "${t.title}"?`)) delM.mutate(t.id);
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Detail dialog */}
-      <Dialog open={!!selectedTask} onOpenChange={(o) => !o && setSelectedTask(null)}>
-        <DialogContent className="sm:max-w-[680px] max-h-[85vh] overflow-y-auto">
-          {selectedTask && (
+      {!collapsed && (
+        <div className="mt-4 space-y-4">
+          {isLoading ? (
+            <p className="text-xs text-stone-400 font-mono">Memuat…</p>
+          ) : !id ? (
+            <p className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+              Data properti belum ada — API key belum bisa disimpan. Atur properti dulu di
+              Settings.
+            </p>
+          ) : (
             <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-teal-700" />
-                  {selectedTask.title}
-                </DialogTitle>
-                <DialogDescription className="font-mono text-[11px]">
-                  {selectedTask.task_type} ·{" "}
-                  {new Date(selectedTask.created_at).toLocaleString("id-ID")} ·{" "}
-                  {selectedTask.source_username
-                    ? `@${selectedTask.source_username}`
-                    : selectedTask.source_chat_id || "—"}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4 py-2">
-                {selectedTask.prompt && (
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-stone-400">
-                      Instruksi
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-stone-600 flex items-center gap-1.5">
+                    Tavily API Key
+                    <span className="text-[10px] font-mono uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      Direkomendasikan
                     </span>
-                    <p className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-700 whitespace-pre-wrap">
-                      {selectedTask.prompt}
-                    </p>
-                  </div>
-                )}
-
-                {selectedTask.status === "failed" && selectedTask.error_message && (
-                  <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800">
-                    <span className="font-bold flex items-center gap-1.5">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Gagal
-                    </span>
-                    <p className="mt-1 whitespace-pre-wrap">{selectedTask.error_message}</p>
-                  </div>
-                )}
-
-                <div>
-                  <span className="text-[10px] font-mono uppercase text-stone-400">Output</span>
-                  <pre className="mt-1 p-3 rounded-lg bg-stone-900 text-stone-100 text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
-                    {selectedTask.output || "(kosong)"}
-                  </pre>
+                  </Label>
+                  <a
+                    href="https://tavily.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-teal-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    Dapatkan key <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
-
-                {Object.keys(selectedTask.metadata || {}).length > 0 && (
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-stone-400">
-                      Metadata
-                    </span>
-                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-[11px] font-mono overflow-x-auto">
-                      {JSON.stringify(selectedTask.metadata, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-
-              <DialogFooter>
-                {selectedTask.output && (
+                <div className="mt-1.5 flex gap-2">
+                  <Input
+                    type={showTavily ? "text" : "password"}
+                    value={tavily}
+                    onChange={(e) => setTavily(e.target.value)}
+                    placeholder="tvly-..."
+                    className="text-sm font-mono"
+                  />
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      navigator.clipboard.writeText(selectedTask.output ?? "");
-                      toast.success("Output disalin");
-                    }}
+                    className="h-9 px-2 bg-white shrink-0"
+                    onClick={() => setShowTavily((v) => !v)}
+                    type="button"
                   >
-                    Salin Output
+                    <Eye className="h-3.5 w-3.5" />
                   </Button>
-                )}
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Search API yang dioptimalkan untuk LLM. Gratis 1.000 search/bulan.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-stone-600">
+                    Serper API Key
+                    <span className="ml-1.5 text-[10px] font-mono uppercase text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
+                      Fallback
+                    </span>
+                  </Label>
+                  <a
+                    href="https://serper.dev"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-teal-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    Dapatkan key <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <Input
+                    type={showSerper ? "text" : "password"}
+                    value={serper}
+                    onChange={(e) => setSerper(e.target.value)}
+                    placeholder="serper-..."
+                    className="text-sm font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-2 bg-white shrink-0"
+                    onClick={() => setShowSerper((v) => !v)}
+                    type="button"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Google search proxy. Dipakai jika Tavily kosong atau gagal.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
                 <Button
                   size="sm"
-                  variant="outline"
-                  className="text-rose-600 hover:bg-rose-50 border-rose-200"
+                  variant="ghost"
+                  className="h-8"
                   onClick={() => {
-                    if (confirm("Hapus tugas ini?")) delM.mutate(selectedTask.id);
+                    setTavily(data?.tavily_api_key ?? "");
+                    setSerper(data?.serper_api_key ?? "");
                   }}
                 >
-                  <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Hapus
+                  Reset
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-teal-700 hover:bg-teal-800 text-white"
-                  onClick={() => setSelectedTask(null)}
+                  className="h-8 bg-teal-700 hover:bg-teal-800 text-white"
+                  disabled={mutation.isPending}
+                  onClick={saveAll}
                 >
-                  Tutup
+                  {mutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Simpan
                 </Button>
-              </DialogFooter>
+              </div>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Setup dialog */}
-      <Dialog open={setupOpen} onOpenChange={setSetupOpen}>
-        <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Setup Hermes → Telegram → Admin Feed</DialogTitle>
-            <DialogDescription>
-              Hermes berjalan di laptop Anda. Telegram jadi UI percakapan.
-              Hasil tugas ditulis ke tabel <code>hermes_tasks</code> Supabase
-              dengan service role key.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-3 space-y-5 text-sm">
-            <div>
-              <h4 className="font-semibold text-stone-800 mb-1.5">1. Migration database</h4>
-              <p className="text-xs text-stone-500 mb-2">
-                Jalankan migration di Supabase project Anda:
-              </p>
-              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
-                supabase db push
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-stone-800 mb-1.5">
-                2. Kredensial yang dibutuhkan Hermes
-              </h4>
-              <p className="text-xs text-stone-500 mb-2">
-                Di laptop, set env var berikut untuk script/runtime Hermes:
-              </p>
-              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
-{`SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<service_role_key>   # WAJIB service role, bukan anon
-TELEGRAM_BOT_TOKEN=<dari @BotFather>
-TELEGRAM_ALLOWED_CHAT_ID=<chat id Anda>`}
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-stone-800 mb-1.5">3. Skema insert dari Hermes</h4>
-              <p className="text-xs text-stone-500 mb-2">
-                Setiap selesai mengerjakan tugas Telegram, Hermes harus mem-POST ke endpoint
-                Supabase REST:
-              </p>
-              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
-{`POST {SUPABASE_URL}/rest/v1/hermes_tasks
-apikey: {SERVICE_ROLE_KEY}
-Authorization: Bearer {SERVICE_ROLE_KEY}
-Content-Type: application/json
-Prefer: return=minimal
-
-{
-  "task_type":   "landing_page",
-  "title":       "Landing page: guesthouse dekat UNNES",
-  "prompt":      "<isi pesan Telegram pengguna>",
-  "output":      "<jawaban Hermes>",
-  "status":      "completed",
-  "error_message": null,
-  "source_chat_id":   "123456789",
-  "source_username":  "faizal",
-  "source_message_id":"4421",
-  "metadata":    { "model": "hermes-3-llama-3.1-8b", "tokens": 1240 }
-}`}
-              </pre>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-stone-800 mb-1.5">4. Alur penggunaan</h4>
-              <ol className="list-decimal pl-5 text-xs text-stone-600 space-y-1.5">
-                <li>Buka Telegram → chat Hermes Bot.</li>
-                <li>
-                  Kirim instruksi natural, mis. <em>"Buat draf landing page untuk keyword
-                  'penginapan rombongan wisuda semarang'"</em>.
-                </li>
-                <li>
-                  Hermes balas di Telegram <strong>dan</strong> insert ke{" "}
-                  <code className="mx-1 px-1 bg-stone-100 rounded">hermes_tasks</code>.
-                </li>
-                <li>Halaman ini akan menampilkan tugas itu dalam ≤15 detik (auto-refresh).</li>
-              </ol>
-            </div>
-
-            <div className="p-3 rounded-lg bg-teal-50 border border-teal-200 text-xs text-teal-900">
-              <strong>Keamanan:</strong> service role key hanya disimpan di laptop Anda —
-              jangan commit ke git. Web app tidak butuh key ini karena hanya membaca lewat
-              session admin Supabase.
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              onClick={() => setSetupOpen(false)}
-              className="bg-teal-700 hover:bg-teal-800 text-white"
-            >
-              Mengerti
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function HermesTaskRow({
-  task,
-  onOpen,
-  onDelete,
-}: {
-  task: HermesTask;
-  onOpen: () => void;
-  onDelete: () => void;
-}) {
-  const statusColor: Record<string, string> = {
-    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    failed: "bg-rose-50 text-rose-700 border-rose-200",
-    in_progress: "bg-sky-50 text-sky-700 border-sky-200",
-    pending: "bg-amber-50 text-amber-700 border-amber-200",
-  };
-  return (
-    <Card
-      className="p-4 border border-stone-200 bg-white hover:shadow-sm transition cursor-pointer"
-      onClick={onOpen}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
-              {task.task_type}
-            </span>
-            <span
-              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
-                statusColor[task.status] ?? "bg-stone-100 text-stone-600 border-stone-200"
-              }`}
-            >
-              {task.status}
-            </span>
-            <span className="text-[10px] text-stone-400 font-mono">
-              {new Date(task.created_at).toLocaleString("id-ID")}
-            </span>
-          </div>
-          <h4 className="mt-2 font-semibold text-stone-800 text-sm truncate">{task.title}</h4>
-          {task.output && (
-            <p className="mt-1 text-xs text-stone-500 line-clamp-2 leading-relaxed">
-              {task.output}
-            </p>
-          )}
-          {task.source_username && (
-            <p className="mt-1.5 text-[10px] text-stone-400 font-mono">
-              dari @{task.source_username}
-            </p>
-          )}
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpen();
-            }}
-            title="Lihat detail"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            title="Hapus"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      )}
     </Card>
   );
 }
