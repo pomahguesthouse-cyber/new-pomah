@@ -175,6 +175,8 @@ export type GeneratedEvent = {
   tags: string[];
   event_start_date: string | null;
   event_end_date: string | null;
+  /** Free-text date for recurring / fuzzy events ("Setiap Akhir Pekan"). */
+  event_date_label: string | null;
   event_location: string | null;
   image_url: string | null;
 };
@@ -397,7 +399,8 @@ async function runEventExtraction(
     `3. Jangan duplikasi. Jangan menggabungkan banyak event ke 1 entri.\n` +
     `4. Maks 8 event per response. Prioritaskan event mendatang (setelah ${today}).\n` +
     `5. Jika tanggal tidak pasti, isi null — JANGAN mengarang.\n` +
-    `6. Selipkan halus rujukan akomodasi Pomah Guesthouse di description bila wajar (tidak wajib di setiap event).\n\n` +
+    `6. Selipkan halus rujukan akomodasi Pomah Guesthouse di description bila wajar (tidak wajib di setiap event).\n` +
+    `7. WAJIB isi "event_date_label" untuk SETIAP event — gunakan tanggal yang singkat dan mudah dibaca dalam bahasa Indonesia, mis. "31 Mei 2026", "29–31 Mei 2026", "Tiap Hari", "Setiap Akhir Pekan", "Sepanjang Oktober 2026", "Setiap Jumat Malam". Field ini SELALU ada teksnya, BUKAN null. Pakai info ini untuk tampilan slider walaupun event berulang / fuzzy.\n\n` +
     `Kembalikan HANYA JSON:\n` +
     `{\n` +
     `  "events": [\n` +
@@ -408,6 +411,7 @@ async function runEventExtraction(
     `      "tags":             ["tag1", "tag2"],\n` +
     `      "event_start_date": "YYYY-MM-DD atau null",\n` +
     `      "event_end_date":   "YYYY-MM-DD atau null (= start jika 1 hari)",\n` +
+    `      "event_date_label": "Label tanggal singkat & enak dibaca, WAJIB tidak null",\n` +
     `      "event_location":   "Nama venue + alamat",\n` +
     `      "image_url":        "https://... atau null"\n` +
     `    }\n` +
@@ -425,6 +429,13 @@ async function runEventExtraction(
     throw new Error("AI tidak mengembalikan array 'events'. Coba pencarian yang lebih spesifik.");
   }
 
+  const formatIso = (iso: string): string =>
+    new Date(iso + "T00:00:00").toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+
   const events: GeneratedEvent[] = [];
   for (const raw of parsed.events.slice(0, 8)) {
     const title = String(raw?.title ?? "").trim();
@@ -438,6 +449,18 @@ async function runEventExtraction(
     const loc = raw?.event_location ? String(raw.event_location).slice(0, 300) : null;
     const img = httpUrl(raw?.image_url) ?? FALLBACK_IMAGES.event;
     const tags = Array.isArray(raw?.tags) ? raw.tags.map((t: unknown) => String(t)).slice(0, 6) : [];
+
+    // Build event_date_label with strict fallback so the field is NEVER empty.
+    let dateLabel: string | null = raw?.event_date_label
+      ? String(raw.event_date_label).slice(0, 100).trim() || null
+      : null;
+    if (!dateLabel) {
+      if (start && end && start !== end) dateLabel = `${formatIso(start)} – ${formatIso(end)}`;
+      else if (start) dateLabel = formatIso(start);
+      else if (end) dateLabel = formatIso(end);
+      else dateLabel = "Tanggal menyusul";
+    }
+
     // Default body: if AI omitted paragraphs, derive at least one from description
     const finalParagraphs =
       paragraphs.length > 0 ? paragraphs : description ? [description] : ["Detail event akan diperbarui."];
@@ -448,6 +471,7 @@ async function runEventExtraction(
       tags,
       event_start_date: start,
       event_end_date: end,
+      event_date_label: dateLabel,
       event_location: loc,
       image_url: img,
     });
@@ -490,6 +514,7 @@ export const generateArticleFromWebSearch = createServerFn({ method: "POST" })
             sources: result.web_sources,
             event_start_date: e.event_start_date,
             event_end_date: e.event_end_date,
+            event_date_label: e.event_date_label,
             event_location: e.event_location,
             image_url: e.image_url,
             status: "active",

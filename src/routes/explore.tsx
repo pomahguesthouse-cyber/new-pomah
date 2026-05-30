@@ -227,13 +227,15 @@ function ExploreSemarang() {
   });
   const autoEvents = (autoEventsData?.events ?? []).map((e) => {
     const startIso = e.event_start_date ?? e.event_end_date ?? "";
-    const dateStr = startIso
+    const isoStr = startIso
       ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
           day: "numeric",
           month: "long",
           year: "numeric",
         })
       : "";
+    // AI-supplied label first (handles "Setiap Akhir Pekan" etc), then ISO.
+    const dateStr = e.event_date_label || isoStr || "Tanggal menyusul";
     return {
       title: e.title,
       date: dateStr,
