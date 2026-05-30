@@ -155,6 +155,18 @@ function fmtDateDashedID(iso: string): string {
   if (isNaN(d.getTime())) return iso;
   return `${d.getDate()}-${ID_MONTHS[d.getMonth()]}-${d.getFullYear()}`;
 }
+/** "2026-05-31" → "31 Mei 2026" — space-separated, for headline display. */
+function fmtDateSpacedID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+/** "2026-05-31" → "Minggu" — day-of-week in Bahasa Indonesia. */
+function fmtDayNameID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return "";
+  return ID_DAYS[d.getDay()];
+}
 /**
  * Parse a free-text Indonesian date ("05 Mei 2026", "10-12 September 2026")
  * into a sortable epoch (ms). Uses the START day of any range. Returns 0 when
@@ -820,37 +832,44 @@ function PomahHome() {
             >
               <div className="mx-auto max-w-7xl px-6">
                 <div className="text-center">
-                  <SectionHeading
-                    normalCase
-                    noUnderline
-                    fontFamily={cfg.roomCarousel.fontFamily}
-                    fontSize={cfg.roomCarousel.fontSize}
-                    fontStyle={cfg.roomCarousel.fontStyle}
-                    color={cfg.roomCarousel.color}
-                  >
-                    {cfg.roomCarousel.heading}
-                  </SectionHeading>
-                  {cfg.roomCarousel.subheading && (
-                    <p className="mx-auto mt-4 max-w-md text-sm text-stone-500">
-                      {cfg.roomCarousel.subheading}
-                    </p>
-                  )}
-                  {(usingDateFilter || today) && (
-                    <p className="mt-3 text-sm font-medium text-stone-600 md:text-base">
-                      {usingDateFilter ? (
-                        <>
-                          Ketersediaan kamar untuk:{" "}
-                          <AnnotatedDate
-                            text={`${fmtDateDashedID(checkIn)} – ${fmtDateDashedID(checkOut)}`}
+                  {(() => {
+                    // Adapt the configurable heading when the user has picked
+                    // a date range — swap "Hari Ini" → "Tanggal Pilihan Tamu"
+                    // so the heading stays consistent with the date below.
+                    const baseHeading = cfg.roomCarousel.heading || "Ketersediaan Kamar";
+                    const headingText = usingDateFilter
+                      ? baseHeading.replace(/hari ini/i, "Tanggal Pilihan Tamu")
+                      : baseHeading;
+                    return (
+                      <div className="flex flex-col items-center justify-center gap-x-3 md:flex-row md:flex-wrap">
+                        <SectionHeading
+                          normalCase
+                          noUnderline
+                          fontFamily={cfg.roomCarousel.fontFamily}
+                          fontSize={cfg.roomCarousel.fontSize}
+                          fontStyle={cfg.roomCarousel.fontStyle}
+                          color={cfg.roomCarousel.color}
+                        >
+                          {headingText}
+                        </SectionHeading>
+                        {usingDateFilter && checkIn && checkOut ? (
+                          <DateStack
+                            dayLine={`${fmtDayNameID(checkIn)} – ${fmtDayNameID(checkOut)}`}
+                            dateLine={`${fmtDateSpacedID(checkIn)} – ${fmtDateSpacedID(checkOut)}`}
+                            nightsLabel={`${nightsBetween(checkIn, checkOut)} Malam`}
                           />
-                          {` (${nightsBetween(checkIn, checkOut)} Malam)`}
-                        </>
-                      ) : (
-                        <>
-                          Ketersediaan kamar hari ini,{" "}
-                          <AnnotatedDate text={fmtDateDashedID(today)} />
-                        </>
-                      )}
+                        ) : today ? (
+                          <DateStack
+                            dayLine={fmtDayNameID(today)}
+                            dateLine={fmtDateSpacedID(today)}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })()}
+                  {cfg.roomCarousel.subheading && (
+                    <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
+                      {cfg.roomCarousel.subheading}
                     </p>
                   )}
                   {guests > totalNormalCapacity && totalNormalCapacity > 0 && wa && (
@@ -2357,25 +2376,38 @@ function RoomCarousel({
 
 
 /**
- * Wraps a date string with a relative container so a one-shot red-circle
- * SVG (public/red-circle-animation.svg) can be drawn around it the first
- * time the user scrolls it into view. Uses IntersectionObserver so the
- * animation only fires once per page load.
+ * Stacked date display next to the room-carousel heading:
+ *
+ *     Minggu                  ← small grey day name
+ *     31 Mei 2026             ← large bold date
+ *     〰️〰️〰️                ← red scribble underline drawn once on view
+ *
+ * The scribble SVG is fetched from the media library
+ * (red-underline-scribble.svg) so admins can replace it without code
+ * changes; falls back to /public/red-underline-scribble.svg.
+ *
+ * IntersectionObserver fires the animation exactly once per page load.
  */
-function AnnotatedDate({ text }: { text: string }) {
+function DateStack({
+  dayLine,
+  dateLine,
+  nightsLabel,
+}: {
+  dayLine: string;
+  dateLine: string;
+  nightsLabel?: string;
+}) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const [show, setShow] = useState(false);
   const playedRef = useRef(false);
 
-  // Resolve the SVG URL from the media library (sop_documents) — falls back
-  // to the bundled /public copy if the user hasn't uploaded one yet.
   const getAssetFn = useServerFn(getMediaAssetByName);
   const { data: assetData } = useQuery({
-    queryKey: ["media-asset", "red-circle-animation.svg"],
-    queryFn: () => getAssetFn({ data: { name: "red-circle-animation.svg" } }),
+    queryKey: ["media-asset", "red-underline-scribble.svg"],
+    queryFn: () => getAssetFn({ data: { name: "red-underline-scribble.svg" } }),
     staleTime: 10 * 60 * 1000,
   });
-  const svgUrl = assetData?.url || "/red-circle-animation.svg";
+  const svgUrl = assetData?.url || "/red-underline-scribble.svg";
 
   useEffect(() => {
     const el = ref.current;
@@ -2392,24 +2424,28 @@ function AnnotatedDate({ text }: { text: string }) {
           }
         }
       },
-      { threshold: 0.6 },
+      { threshold: 0.5 },
     );
     io.observe(el);
     return () => io.disconnect();
   }, []);
 
   return (
-    <span ref={ref} className="relative inline-block whitespace-nowrap font-semibold text-stone-900">
-      {text}
-      {show && (
-        <img
-          // Cache-bust per pageload so the animation actually replays on
-          // subsequent IntersectionObserver mounts (SVG SMIL caches state).
-          src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[260%] w-[180%] -translate-x-1/2 -translate-y-1/2 select-none"
-        />
+    <span className="inline-flex flex-col items-center leading-tight">
+      <span className="text-xs font-medium text-stone-400 md:text-sm">{dayLine}</span>
+      <span ref={ref} className="relative inline-block whitespace-nowrap text-2xl font-bold text-stone-900 md:text-3xl">
+        {dateLine}
+        {show && (
+          <img
+            src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute left-1/2 -bottom-2.5 w-[110%] -translate-x-1/2 select-none"
+          />
+        )}
+      </span>
+      {nightsLabel && (
+        <span className="mt-1 text-xs font-medium text-stone-500">({nightsLabel})</span>
       )}
     </span>
   );
