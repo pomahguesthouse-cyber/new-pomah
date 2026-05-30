@@ -65,6 +65,8 @@ import {
 import {
   getCustomGoogleReviews,
   updateCustomGoogleReviews,
+  getWebSearchApiSettings,
+  updateWebSearchApiSettings,
 } from "@/admin/modules/settings/settings.functions";
 import {
   generateArticleFromWebSearch,
@@ -1297,6 +1299,8 @@ function ContentStudioSection() {
         <h2 className="text-xl font-bold text-stone-800">AI Content Studio</h2>
         <p className="text-xs text-stone-400">Tulis dan optimalkan artikel Anda dibantu AI Editor Asisten</p>
       </div>
+
+      <WebSearchApiSettingsCard />
 
       {/* Web Search Generator */}
       <Card className="p-5 border border-teal-200 bg-gradient-to-br from-teal-50/60 to-white">
@@ -2558,5 +2562,218 @@ function GoogleReviewsSection() {
         </Card>
       )}
     </div>
+  );
+}
+
+
+/* ============================================================================
+   AI Content Studio — Web Search API key settings card
+   ============================================================================ */
+function WebSearchApiSettingsCard() {
+  const getFn = useServerFn(getWebSearchApiSettings);
+  const updateFn = useServerFn(updateWebSearchApiSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["web-search-api-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const [tavily, setTavily] = useState("");
+  const [serper, setSerper] = useState("");
+  const [showTavily, setShowTavily] = useState(false);
+  const [showSerper, setShowSerper] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+
+  useEffect(() => {
+    if (!data || hydrated) return;
+    setTavily(data.tavily_api_key ?? "");
+    setSerper(data.serper_api_key ?? "");
+    setHydrated(true);
+    // Auto-expand if neither key is set yet
+    if (!data.tavily_api_key && !data.serper_api_key) setCollapsed(false);
+  }, [data, hydrated]);
+
+  const mutation = useMutation({
+    mutationFn: (patch: { tavily_api_key?: string | null; serper_api_key?: string | null }) =>
+      updateFn({ data: { id: data!.id as string, ...patch } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["web-search-api-settings"] });
+      toast.success("API key tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const id = data?.id ?? null;
+  const tavilySet = !!data?.tavily_api_key;
+  const serperSet = !!data?.serper_api_key;
+  const anySet = tavilySet || serperSet;
+
+  function saveAll() {
+    if (!id) return;
+    mutation.mutate({
+      tavily_api_key: tavily.trim() || null,
+      serper_api_key: serper.trim() || null,
+    });
+  }
+
+  return (
+    <Card className="p-5 border border-stone-200 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-stone-500" />
+          <h3 className="font-bold text-stone-800 text-sm">Web Search API Keys</h3>
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+              anySet
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-amber-50 text-amber-700 border border-amber-200"
+            }`}
+          >
+            {anySet ? "Aktif" : "Belum di-set"}
+          </span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-xs"
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          {collapsed ? "Ubah" : "Tutup"}
+          <ChevronRight
+            className={`h-3.5 w-3.5 ml-1 transition-transform ${collapsed ? "" : "rotate-90"}`}
+          />
+        </Button>
+      </div>
+
+      <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+        Dipakai oleh fitur <strong>"Generate dari Web Search"</strong> di bawah. Tavily dicoba
+        dulu, Serper jadi fallback. Kosongkan dua-duanya untuk pakai pengetahuan model tanpa
+        pencarian web.
+      </p>
+
+      {!collapsed && (
+        <div className="mt-4 space-y-4">
+          {isLoading ? (
+            <p className="text-xs text-stone-400 font-mono">Memuat…</p>
+          ) : !id ? (
+            <p className="rounded-md border border-dashed border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+              Data properti belum ada — API key belum bisa disimpan. Atur properti dulu di
+              Settings.
+            </p>
+          ) : (
+            <>
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-stone-600 flex items-center gap-1.5">
+                    Tavily API Key
+                    <span className="text-[10px] font-mono uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      Direkomendasikan
+                    </span>
+                  </Label>
+                  <a
+                    href="https://tavily.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-teal-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    Dapatkan key <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <Input
+                    type={showTavily ? "text" : "password"}
+                    value={tavily}
+                    onChange={(e) => setTavily(e.target.value)}
+                    placeholder="tvly-..."
+                    className="text-sm font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-2 bg-white shrink-0"
+                    onClick={() => setShowTavily((v) => !v)}
+                    type="button"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Search API yang dioptimalkan untuk LLM. Gratis 1.000 search/bulan.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-stone-600">
+                    Serper API Key
+                    <span className="ml-1.5 text-[10px] font-mono uppercase text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
+                      Fallback
+                    </span>
+                  </Label>
+                  <a
+                    href="https://serper.dev"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] text-teal-600 hover:underline inline-flex items-center gap-1"
+                  >
+                    Dapatkan key <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <Input
+                    type={showSerper ? "text" : "password"}
+                    value={serper}
+                    onChange={(e) => setSerper(e.target.value)}
+                    placeholder="serper-..."
+                    className="text-sm font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-2 bg-white shrink-0"
+                    onClick={() => setShowSerper((v) => !v)}
+                    type="button"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Google search proxy. Dipakai jika Tavily kosong atau gagal.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8"
+                  onClick={() => {
+                    setTavily(data?.tavily_api_key ?? "");
+                    setSerper(data?.serper_api_key ?? "");
+                  }}
+                >
+                  Reset
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 bg-teal-700 hover:bg-teal-800 text-white"
+                  disabled={mutation.isPending}
+                  onClick={saveAll}
+                >
+                  {mutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Simpan
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
