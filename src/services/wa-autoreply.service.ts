@@ -102,7 +102,7 @@ export async function executeAutoreplyForPhone(
   const p = (prop ?? {}) as any;
   const { data: rooms } = await (supabasePublic as any)
     .from("room_types")
-    .select("id, name, base_rate, capacity, bed_type, description, amenities")
+    .select("id, name, base_rate, capacity, bed_type, description, amenities, extrabed_capacity, extrabed_rate")
     .order("base_rate");
 
   const aiCfgRaw = p.ai_lab_config as any;

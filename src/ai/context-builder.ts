@@ -18,6 +18,8 @@ export interface RoomTypeRow {
   bed_type:    string | null;
   description: string | null;
   amenities?:  string[] | null;
+  extrabed_capacity?: number | null;
+  extrabed_rate?:     number | null;
 }
 
 export interface PropertyRow {

@@ -20,8 +20,8 @@ export const frontOfficeAgent: AgentDefinition = {
     const { property, rooms, sopText, brosurFiles, today, bookingInProgress } = ctx;
 
     const roomLines = rooms.map((r) => {
-      const extrabedCap  = Number((r as any).extrabed_capacity ?? 0);
-      const extrabedRate = Number((r as any).extrabed_rate ?? 0);
+      const extrabedCap  = Number(r.extrabed_capacity ?? 0);
+      const extrabedRate = Number(r.extrabed_rate ?? 0);
       let extrabedInfo = "";
       if (extrabedCap > 0) {
         extrabedInfo = extrabedRate > 0
