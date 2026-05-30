@@ -972,6 +972,7 @@ function PomahHome() {
         </section>
           </PbZone>
         );
+      }
       case "news": {
         const n = cfg.news;
         return newsEvents.length > 0 ? (
