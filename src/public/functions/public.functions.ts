@@ -143,7 +143,7 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
     supabasePublic
       .from("room_types")
       .select(
-        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, rooms(id)",
+        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
       )
       .order("base_rate"),
   ]);
@@ -158,6 +158,26 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
 
   return { property, roomTypes };
 });
+
+/**
+ * Resolve a single uploaded media asset by its display name to a public URL.
+ * Used by the homepage to render the "red-circle-animation.svg" lasso from
+ * the media library instead of a bundled /public copy.
+ */
+export const getMediaAssetByName = createServerFn({ method: "GET" })
+  .inputValidator((d) => z.object({ name: z.string().min(1).max(255) }).parse(d))
+  .handler(async ({ data }) => {
+    const { data: row } = await supabaseAdmin
+      .from("sop_documents")
+      .select("file_path, storage_bucket")
+      .ilike("name", data.name)
+      .limit(1)
+      .maybeSingle();
+    if (!row || !row.file_path) return { url: null };
+    const bucket = (row.storage_bucket as string | null) || "sop-documents";
+    const url = supabaseAdmin.storage.from(bucket).getPublicUrl(row.file_path).data.publicUrl;
+    return { url };
+  });
 
 export const submitPublicBooking = createServerFn({ method: "POST" })
   .inputValidator((d) =>

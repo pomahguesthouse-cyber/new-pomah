@@ -41,6 +41,7 @@ import {
   getPublicSiteData,
   checkRoomTypeAvailability,
   submitCartBooking,
+  getMediaAssetByName,
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import {
@@ -147,6 +148,12 @@ function fmtDateID(iso: string): string {
 /** "2026-05-18" → "18/05/2026" (Full Date disamakan formatnya) */
 function fmtFullDateID(iso: string): string {
   return fmtDateID(iso);
+}
+/** "2026-05-31" → "31-Mei-2026" — dash-separated, Indonesian month names. */
+function fmtDateDashedID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getDate()}-${ID_MONTHS[d.getMonth()]}-${d.getFullYear()}`;
 }
 /**
  * Parse a free-text Indonesian date ("05 Mei 2026", "10-12 September 2026")
@@ -833,13 +840,15 @@ function PomahHome() {
                       {usingDateFilter ? (
                         <>
                           Ketersediaan kamar untuk:{" "}
-                          <AnnotatedDate text={`${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`} />
+                          <AnnotatedDate
+                            text={`${fmtDateDashedID(checkIn)} – ${fmtDateDashedID(checkOut)}`}
+                          />
                           {` (${nightsBetween(checkIn, checkOut)} Malam)`}
                         </>
                       ) : (
                         <>
                           Ketersediaan kamar hari ini,{" "}
-                          <AnnotatedDate text={fmtFullDateID(today)} />
+                          <AnnotatedDate text={fmtDateDashedID(today)} />
                         </>
                       )}
                     </p>
@@ -2169,23 +2178,32 @@ function RoomCarousel({
                       })()}
                     </div>
                   )}
-                  {rt.hero_image_url ? (
-                    <img
-                      src={rt.hero_image_url}
-                      alt={rt.name}
-                      className="absolute inset-0 h-full w-full object-cover"
-                      onError={(e) => {
-                        // Image URL broken / 404 / forbidden — hide and show fallback
-                        const img = e.currentTarget as HTMLImageElement;
-                        img.style.display = "none";
-                        img.parentElement?.querySelector(".room-img-fallback")?.classList.remove("hidden");
-                      }}
-                    />
-                  ) : null}
+                  {(() => {
+                    // Resolve best available cover: hero → first images[] → null.
+                    const cover =
+                      rt.hero_image_url ||
+                      ((rt as any).images && Array.isArray((rt as any).images) && (rt as any).images[0]) ||
+                      null;
+                    return cover ? (
+                      <img
+                        src={cover}
+                        alt={rt.name}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(e) => {
+                          // Image URL broken / 404 / forbidden — hide and show fallback
+                          const img = e.currentTarget as HTMLImageElement;
+                          img.style.display = "none";
+                          img.parentElement?.querySelector(".room-img-fallback")?.classList.remove("hidden");
+                        }}
+                      />
+                    ) : null;
+                  })()}
                   <div
                     className={cn(
                       "room-img-fallback absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70",
-                      rt.hero_image_url && "hidden",
+                      (rt.hero_image_url ||
+                        ((rt as any).images && (rt as any).images[0])) &&
+                        "hidden",
                     )}
                   >
                     <BedDouble className="h-8 w-8 opacity-60" />
@@ -2197,9 +2215,9 @@ function RoomCarousel({
                     </span>
                   </div>
                   {(rt as any).floor_info && (
-                    <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
-                      <MapPin className="h-3 w-3 text-amber-700" />
-                      {(rt as any).floor_info}
+                    <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700">Lantai</span>
+                      {String((rt as any).floor_info).replace(/^lantai\s*/i, "").trim() || (rt as any).floor_info}
                     </div>
                   )}
                 </div>
@@ -2349,6 +2367,16 @@ function AnnotatedDate({ text }: { text: string }) {
   const [show, setShow] = useState(false);
   const playedRef = useRef(false);
 
+  // Resolve the SVG URL from the media library (sop_documents) — falls back
+  // to the bundled /public copy if the user hasn't uploaded one yet.
+  const getAssetFn = useServerFn(getMediaAssetByName);
+  const { data: assetData } = useQuery({
+    queryKey: ["media-asset", "red-circle-animation.svg"],
+    queryFn: () => getAssetFn({ data: { name: "red-circle-animation.svg" } }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const svgUrl = assetData?.url || "/red-circle-animation.svg";
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -2375,10 +2403,12 @@ function AnnotatedDate({ text }: { text: string }) {
       {text}
       {show && (
         <img
-          src="/red-circle-animation.svg"
+          // Cache-bust per pageload so the animation actually replays on
+          // subsequent IntersectionObserver mounts (SVG SMIL caches state).
+          src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[140%] w-[130%] -translate-x-1/2 -translate-y-1/2 select-none"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[260%] w-[180%] -translate-x-1/2 -translate-y-1/2 select-none"
         />
       )}
     </span>
