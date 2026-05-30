@@ -1272,17 +1272,35 @@ function ContentStudioSection() {
     }, 1500);
   };
 
+  const qcStudio = useQueryClient();
   const generateMut = useMutation({
     mutationFn: (v: { topic: string; category: ArticleCategory }) =>
       genFn({ data: v }),
     onSuccess: (res) => {
+      setSources(res.web_sources);
+      setSearchProvider(res.search_provider);
+
+      if (res.mode === "events") {
+        // Event-batch: refresh slider, don't overwrite the editor
+        qcStudio.invalidateQueries({ queryKey: ["generated-articles"] });
+        qcStudio.invalidateQueries({ queryKey: ["public-active-events"] });
+        toast.success(
+          `${res.events.length} event diekstrak dari pencarian: ${res.events
+            .slice(0, 3)
+            .map((e) => e.title)
+            .join(", ")}${res.events.length > 3 ? ", …" : ""}`,
+          { duration: 7000 },
+        );
+        return;
+      }
+
+      // Article: populate editor as before
       const a = res.article;
       setTitle(a.title);
       setBlocks(a.paragraphs);
       setMetaDescription(a.meta_description);
       setTags(a.tags);
-      setSources(res.web_sources);
-      setSearchProvider(res.search_provider);
+      qcStudio.invalidateQueries({ queryKey: ["generated-articles"] });
       if (res.web_sources.length > 0) {
         toast.success(
           `Artikel dibuat dari ${res.web_sources.length} sumber (${res.search_provider ?? "web"}).`,
@@ -1326,6 +1344,12 @@ function ContentStudioSection() {
         <p className="text-xs text-stone-500 mb-4 leading-relaxed">
           Masukkan topik dan pilih kategori. AI akan mencari sumber terbaru di internet, lalu
           menyusun draf artikel yang siap diedit di bawah.
+          {searchCategory === "event" && (
+            <span className="block mt-1 text-amber-700 font-medium">
+              ⚡ Mode event: AI akan mengekstrak <strong>banyak event berbeda</strong> dari hasil
+              pencarian dan menyimpannya satu per satu (mis. Festival Kuliner, Festival Kota Lama, dst).
+            </span>
+          )}
         </p>
         <div className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
           <div>

@@ -74,31 +74,59 @@ async function notifyAdmins(
 async function runDueSchedule(
   client: SupabaseClient,
   row: DueRow,
-): Promise<{ ok: boolean; title?: string; error?: string }> {
+): Promise<{ ok: boolean; titles?: string[]; error?: string }> {
   try {
     const result = await generateArticleCore(client, {
       topic: row.topic,
       category: row.category,
     });
-    const { data: inserted } = await (client as any)
-      .from("seo_generated_articles")
-      .insert({
+
+    let insertedTitles: string[] = [];
+    if (result.mode === "events") {
+      const rows = result.events.map((e) => ({
         schedule_id: row.id,
-        category: result.article.category,
-        title: result.article.title,
+        category: "event" as const,
+        title: e.title,
         topic: row.topic,
-        meta_description: result.article.meta_description,
-        paragraphs: result.article.paragraphs,
-        tags: result.article.tags,
+        meta_description: e.description,
+        paragraphs: e.paragraphs,
+        tags: e.tags,
         sources: result.web_sources,
-        event_start_date: result.article.event_start_date,
-        event_end_date: result.article.event_end_date,
-        event_location: result.article.event_location,
-        image_url: result.article.image_url,
+        event_start_date: e.event_start_date,
+        event_end_date: e.event_end_date,
+        event_location: e.event_location,
+        image_url: e.image_url,
         status: "active",
-      })
-      .select("id, title")
-      .single();
+      }));
+      if (rows.length > 0) {
+        const { data: ins } = await (client as any)
+          .from("seo_generated_articles")
+          .insert(rows)
+          .select("title");
+        insertedTitles = (ins ?? []).map((r: any) => r.title);
+      }
+    } else {
+      const { data: inserted } = await (client as any)
+        .from("seo_generated_articles")
+        .insert({
+          schedule_id: row.id,
+          category: result.article.category,
+          title: result.article.title,
+          topic: row.topic,
+          meta_description: result.article.meta_description,
+          paragraphs: result.article.paragraphs,
+          tags: result.article.tags,
+          sources: result.web_sources,
+          event_start_date: result.article.event_start_date,
+          event_end_date: result.article.event_end_date,
+          event_location: result.article.event_location,
+          image_url: result.article.image_url,
+          status: "active",
+        })
+        .select("title")
+        .single();
+      if (inserted?.title) insertedTitles = [inserted.title];
+    }
 
     // Advance schedule
     const next = computeNextRunUTC({
@@ -117,7 +145,7 @@ async function runDueSchedule(
       })
       .eq("id", row.id);
 
-    return { ok: true, title: inserted?.title ?? result.article.title };
+    return { ok: true, titles: insertedTitles };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[article-cron] schedule ${row.id} failed:`, msg);
@@ -164,21 +192,19 @@ async function handle(_request: Request): Promise<Response> {
     );
   }
 
-  const results: Array<{ id: string; ok: boolean; title?: string; error?: string }> = [];
+  const results: Array<{ id: string; ok: boolean; titles?: string[]; error?: string }> = [];
   for (const r of (due ?? []) as DueRow[]) {
     const out = await runDueSchedule(client, r);
     results.push({ id: r.id, ...out });
   }
 
   // 3. WhatsApp notify for successful generations
-  const ok = results.filter((r) => r.ok);
-  if (ok.length > 0) {
-    const lines = ok
-      .map((r) => `• ${r.title}`)
-      .join("\n");
+  const allNewTitles = results.flatMap((r) => (r.ok ? r.titles ?? [] : []));
+  if (allNewTitles.length > 0) {
+    const lines = allNewTitles.map((t) => `• ${t}`).join("\n");
     await notifyAdmins(
       client,
-      `🤖 *Artikel SEO Baru* (${ok.length})\n\n${lines}\n\nCek di Admin → SEO → Content Studio.`,
+      `🤖 *Konten SEO Baru* (${allNewTitles.length})\n\n${lines}\n\nCek di Admin → SEO → Content Studio.`,
     );
   }
 
