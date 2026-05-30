@@ -637,22 +637,56 @@ function PomahHome() {
   /* ── Reorderable content sections (order controlled by cfg.sectionOrder) ── */
   function renderHomeSection(key: HomeSectionKey): React.ReactNode {
     switch (key) {
-      case "badges":
+      case "badges": {
+        const b = cfg.badges;
         return (
-          <section className="mx-auto max-w-5xl px-6 pt-16">
-            <div className="grid gap-2 md:gap-6" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
-              {FEATURE_BADGES.map((f) => (
-                <div key={f.title} className="flex flex-col items-center text-center">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12">
-                    <f.icon className="h-4 w-4 md:h-5 md:w-5" />
-                  </span>
-                  <p className="mt-2 text-xs font-semibold text-stone-800 md:text-sm">{f.title}</p>
-                  <p className="text-[10px] text-stone-400 md:text-xs">{f.desc}</p>
+          <PbZone id="badges" label="Ikon Fitur" pb={pb}>
+            <section className="mx-auto max-w-5xl px-6 pt-16 pb-8">
+              {b.heading && (
+                <div className="mb-10">
+                  <SectionHeading
+                    fontFamily={b.fontFamily}
+                    fontSize={b.fontSize}
+                    fontStyle={b.fontStyle}
+                  >
+                    {b.heading}
+                  </SectionHeading>
                 </div>
-              ))}
-            </div>
-          </section>
+              )}
+              <div
+                className="grid gap-2 md:gap-6"
+                style={{ gridTemplateColumns: `repeat(${b.items?.length || 1}, 1fr)` }}
+              >
+                {b.items?.map((item, idx) => {
+                  const IconComp = (() => {
+                    switch (item.iconName) {
+                      case "Star": return Star;
+                      case "BedDouble": return BedDouble;
+                      case "Users": return Users;
+                      case "MapPin": return MapPin;
+                      case "Headphones": return Headphones;
+                      case "Wifi": return Wifi;
+                      case "Coffee": return Coffee;
+                      case "Car": return Car;
+                      default: return Star;
+                    }
+                  })();
+
+                  return (
+                    <div key={idx} className="flex flex-col items-center text-center">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12">
+                        <IconComp className="h-4 w-4 md:h-5 md:w-5" />
+                      </span>
+                      <p className="mt-2 text-xs font-semibold text-stone-800 md:text-sm">{item.title}</p>
+                      <p className="text-[10px] text-stone-400 md:text-xs">{item.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </PbZone>
         );
+      }
       case "story":
         return (
           <PbZone id="story" label="Your Perfect Stay" pb={pb}>

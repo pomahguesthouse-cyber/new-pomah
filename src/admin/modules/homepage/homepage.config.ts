@@ -134,6 +134,13 @@ export interface HomepageConfig {
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
   };
+  badges: {
+    heading: string;
+    fontFamily: "sans" | "serif" | "mono";
+    fontSize: number;
+    fontStyle: "normal" | "bold" | "italic";
+    items: { iconName: string; title: string; desc: string }[];
+  };
   story: {
     heading: string;
     paragraphs: string[];
@@ -266,6 +273,19 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     fontStyle: "bold",
     layer: 30,
   },
+  badges: {
+    heading: "Mengapa Menginap di Pomah Guesthouse",
+    fontFamily: "serif",
+    fontSize: 32,
+    fontStyle: "bold",
+    items: [
+      { iconName: "Star", title: "Rating Google", desc: "76 ulasan" },
+      { iconName: "BedDouble", title: "Kamar Bersih", desc: "Nyaman & terawat" },
+      { iconName: "Users", title: "Cocok untuk", desc: "Keluarga" },
+      { iconName: "MapPin", title: "Lokasi Strategis", desc: "Dekat kampus & kota" },
+      { iconName: "Headphones", title: "Pelayanan Ramah", desc: "Siap membantu" },
+    ],
+  },
   story: {
     heading: "Your Perfect Stay",
     paragraphs: [
@@ -356,6 +376,7 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     hero: { ...d.hero, ...c.hero },
     bookingHero: { ...d.bookingHero, ...c.bookingHero },
     datePicker: { ...d.datePicker, ...c.datePicker },
+    badges: { ...d.badges, ...c.badges },
     story: { ...d.story, ...c.story },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
     lokasi: { ...d.lokasi, ...c.lokasi },

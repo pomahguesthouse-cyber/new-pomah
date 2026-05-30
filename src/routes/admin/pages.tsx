@@ -34,6 +34,7 @@ import {
   Globe,
   Check,
   X,
+  Star,
   ExternalLink,
   Settings2,
   Home,
@@ -85,7 +86,7 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "story" | "carousel" | "lokasi" | "order";
+type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "badges" | "story" | "carousel" | "lokasi" | "order";
 
 const SECTIONS: {
   key: SectionKey;
@@ -96,6 +97,7 @@ const SECTIONS: {
   { key: "hero",          label: "Hero Slider",   icon: GalleryHorizontal  },
   { key: "bookingHero",   label: "Booking Hero",  icon: GalleryHorizontal  },
   { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
+  { key: "badges",        label: "Ikon Fitur",    icon: Star               },
   { key: "story",         label: "Teks",          icon: Type               },
   { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
   { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
@@ -408,6 +410,8 @@ function HomepageBuilder() {
                   <HeroTab cfg={cfg} setCfg={setCfg} isBooking activeMode={activeMode} />
                 ) : section === "datepicker" ? (
                   <DatePickerTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                ) : section === "badges" ? (
+                  <BadgesTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "story" ? (
                   <StoryTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
                 ) : section === "lokasi" ? (
@@ -1087,6 +1091,102 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
       />
 
       <LayerArrange value={dp.layer} onChange={(v) => set({ layer: v })} />
+    </Section>
+  );
+}
+
+function BadgesTab({ cfg, setCfg }: TabProps) {
+  const badges = cfg.badges;
+  const set = (patch: Partial<HomepageConfig["badges"]>) =>
+    setCfg((c) => ({ ...c, badges: { ...c.badges, ...patch } }));
+
+  const setItems = (items: HomepageConfig["badges"]["items"]) => set({ items });
+
+  return (
+    <Section title="Ikon Fitur" desc="Judul dan daftar ikon fitur (trust badges).">
+      <FieldRow label="Judul Section">
+        <Input value={badges.heading} onChange={(e) => set({ heading: e.target.value })} />
+      </FieldRow>
+
+      <div className="space-y-4 pt-2">
+        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Daftar Fitur</Label>
+        {badges.items.map((item, i) => (
+          <div key={i} className="space-y-2 rounded-lg border border-border p-3 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                Fitur {String(i + 1).padStart(2, "0")}
+              </span>
+              {badges.items.length > 1 && (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 text-destructive"
+                  onClick={() => setItems(badges.items.filter((_, x) => x !== i))}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+            
+            <FieldRow label="Pilih Ikon">
+              <select
+                className="w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={item.iconName}
+                onChange={(e) =>
+                  setItems(
+                    badges.items.map((x, j) => (j === i ? { ...x, iconName: e.target.value } : x))
+                  )
+                }
+              >
+                <option value="Star">Bintang (Star)</option>
+                <option value="BedDouble">Kamar Tidur (BedDouble)</option>
+                <option value="Users">Keluarga/Grup (Users)</option>
+                <option value="MapPin">Peta (MapPin)</option>
+                <option value="Headphones">Layanan Pelanggan (Headphones)</option>
+                <option value="Wifi">Wifi</option>
+                <option value="Coffee">Cafe (Coffee)</option>
+                <option value="Car">Parkir (Car)</option>
+              </select>
+            </FieldRow>
+
+            <FieldRow label="Nama Fitur">
+              <Input
+                value={item.title}
+                onChange={(e) =>
+                  setItems(
+                    badges.items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x))
+                  )
+                }
+              />
+            </FieldRow>
+
+            <FieldRow label="Deskripsi">
+              <Input
+                value={item.desc}
+                onChange={(e) =>
+                  setItems(
+                    badges.items.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x))
+                  )
+                }
+              />
+            </FieldRow>
+          </div>
+        ))}
+
+        {badges.items.length < 10 && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full gap-1.5"
+            onClick={() =>
+              setItems([...badges.items, { iconName: "Star", title: "Fitur Baru", desc: "Deskripsi singkat" }])
+            }
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Tambah Fitur
+          </Button>
+        )}
+      </div>
     </Section>
   );
 }
