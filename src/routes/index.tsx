@@ -251,13 +251,16 @@ function PomahHome() {
     // 2. AI-generated events (auto-removed when expired by the cron worker)
     ...autoEvents.map((e) => {
       const startIso = e.event_start_date ?? e.event_end_date ?? "";
-      const dateStr = startIso
+      const isoDateStr = startIso
         ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
             day: "numeric",
             month: "long",
             year: "numeric",
           })
         : "";
+      // Prefer the AI-provided label (handles recurring/fuzzy dates like
+      // "Setiap Akhir Pekan") and fall back to formatted ISO range.
+      const dateStr = e.event_date_label || isoDateStr || "Tanggal menyusul";
       return {
         date: dateStr,
         category: "Event",

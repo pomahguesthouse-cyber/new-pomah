@@ -3011,6 +3011,13 @@ function EventCardSlider({
   };
   const formatDate = (iso: string | null) =>
     iso ? new Date(iso + "T00:00:00").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : null;
+  const formatEventDate = (e: GeneratedArticleRow) => {
+    if (e.event_date_label) return e.event_date_label;
+    const start = formatDate(e.event_start_date);
+    const end = formatDate(e.event_end_date);
+    if (start && end && start !== end) return `${start} – ${end}`;
+    return start || end || "Tanggal menyusul";
+  };
 
   return (
     <Card className="p-5 border border-amber-200 bg-gradient-to-br from-amber-50/40 to-white">
@@ -3037,12 +3044,7 @@ function EventCardSlider({
       >
         {events.map((e) => {
           const isExpired = e.status === "expired";
-          const start = formatDate(e.event_start_date);
-          const end = formatDate(e.event_end_date);
-          const dateLabel =
-            start && end && start !== end
-              ? `${start} – ${end}`
-              : start || end || "Tanggal belum tentu";
+          const dateLabel = formatEventDate(e);
           return (
             <div
               key={e.id}

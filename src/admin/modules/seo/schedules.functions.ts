@@ -47,6 +47,7 @@ export type GeneratedArticleRow = {
   sources: Array<{ title: string; url: string }>;
   event_start_date: string | null;
   event_end_date: string | null;
+  event_date_label: string | null;
   event_location: string | null;
   image_url: string | null;
   status: "active" | "expired" | "archived";
@@ -275,6 +276,7 @@ export type PublicEvent = {
   description: string | null;
   event_start_date: string | null;
   event_end_date: string | null;
+  event_date_label: string | null;
   event_location: string | null;
   image_url: string | null;
   tags: string[];
@@ -291,7 +293,9 @@ export const listActivePublicEvents = createServerFn({ method: "GET" })
     const { supabasePublic } = await import("@/integrations/supabase/client.server");
     const { data, error } = await (supabasePublic as any)
       .from("active_public_events")
-      .select("id, title, description, event_start_date, event_end_date, event_location, image_url, tags")
+      .select(
+        "id, title, description, event_start_date, event_end_date, event_date_label, event_location, image_url, tags",
+      )
       .limit(20);
     if (error) {
       // View may not exist yet (migration not applied).

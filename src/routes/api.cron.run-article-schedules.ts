@@ -94,6 +94,7 @@ async function runDueSchedule(
         sources: result.web_sources,
         event_start_date: e.event_start_date,
         event_end_date: e.event_end_date,
+        event_date_label: e.event_date_label,
         event_location: e.event_location,
         image_url: e.image_url,
         status: "active",

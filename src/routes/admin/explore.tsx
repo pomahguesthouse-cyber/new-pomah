@@ -942,9 +942,10 @@ function AdminExplorePage() {
                   const startStr = fmt(ev.event_start_date);
                   const endStr = fmt(ev.event_end_date);
                   const dateLabel =
-                    startStr && endStr && startStr !== endStr
+                    ev.event_date_label ||
+                    (startStr && endStr && startStr !== endStr
                       ? `${startStr} – ${endStr}`
-                      : startStr || endStr || "—";
+                      : startStr || endStr || "Tanggal menyusul");
 
                   return (
                     <div key={ev.id} className="flex gap-4 items-start group">
