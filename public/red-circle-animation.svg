@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round">
+  <!--
+    Animated hand-drawn red circle that lassoes its container.
+    Pen drawing simulated via stroke-dasharray. fill="freeze" means
+    the final state is held after animation completes — so the loop
+    runs exactly ONCE no matter how many times the SVG renders.
+  -->
+  <ellipse cx="120" cy="40" rx="112" ry="34" stroke-dasharray="500" stroke-dashoffset="500">
+    <animate
+      attributeName="stroke-dashoffset"
+      from="500"
+      to="0"
+      dur="0.9s"
+      begin="0.1s"
+      fill="freeze"
+      calcMode="spline"
+      keySplines="0.45 0 0.25 1"
+    />
+  </ellipse>
+</svg>
