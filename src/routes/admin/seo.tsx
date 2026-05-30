@@ -66,6 +66,12 @@ import {
   getCustomGoogleReviews,
   updateCustomGoogleReviews,
 } from "@/admin/modules/settings/settings.functions";
+import {
+  listHermesTasks,
+  deleteHermesTask,
+  getHermesTaskStats,
+  type HermesTask,
+} from "@/admin/modules/seo/hermes.functions";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -117,7 +123,8 @@ type TabKey =
   | "links"
   | "backlinks"
   | "reviews"
-  | "google_reviews";
+  | "google_reviews"
+  | "hermes";
 
 export function SeoPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("search_console");
@@ -194,6 +201,7 @@ export function SeoPage() {
     { key: "backlinks", label: "Backlinks", icon: Link2 },
     { key: "reviews", label: "Reviews Insight", icon: Star },
     { key: "google_reviews", label: "Google Reviews", icon: MessagesSquare },
+    { key: "hermes", label: "Hermes Agent", icon: Bot },
   ];
 
   return (
@@ -316,6 +324,7 @@ export function SeoPage() {
             <ReviewsSection reviews={reviewsData?.reviews ?? []} />
           )}
           {activeTab === "google_reviews" && <GoogleReviewsSection />}
+          {activeTab === "hermes" && <HermesAgentSection />}
         </main>
       </div>
     </div>
@@ -2376,5 +2385,494 @@ function GoogleReviewsSection() {
         </Card>
       )}
     </div>
+  );
+}
+
+/* ============================================================================
+   13. HERMES AGENT FEED (Pola A — Telegram bridged)
+   ============================================================================ */
+function HermesAgentSection() {
+  const listFn = useServerFn(listHermesTasks);
+  const deleteFn = useServerFn(deleteHermesTask);
+  const statsFn = useServerFn(getHermesTaskStats);
+  const qc = useQueryClient();
+
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<HermesTask | null>(null);
+
+  const { data: feed, refetch } = useQuery({
+    queryKey: ["hermes-tasks", filterType, filterStatus],
+    queryFn: () =>
+      listFn({
+        data: {
+          limit: 100,
+          ...(filterType !== "all" ? { task_type: filterType } : {}),
+          ...(filterStatus !== "all"
+            ? { status: filterStatus as "pending" | "in_progress" | "completed" | "failed" }
+            : {}),
+        },
+      }),
+    refetchInterval: 15_000,
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["hermes-stats"],
+    queryFn: () => statsFn(),
+    refetchInterval: 30_000,
+  });
+
+  const delM = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Tugas dihapus");
+      qc.invalidateQueries({ queryKey: ["hermes-tasks"] });
+      qc.invalidateQueries({ queryKey: ["hermes-stats"] });
+      setSelectedTask(null);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const tasks = feed?.tasks ?? [];
+  const taskTypes = Object.keys(stats?.by_type ?? {});
+
+  if (feed?.migration_missing) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <h3 className="font-bold text-amber-900 text-sm flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            Tabel hermes_tasks belum ada
+          </h3>
+          <p className="mt-2 text-xs text-amber-800 leading-relaxed">
+            Jalankan migration{" "}
+            <code className="px-1.5 py-0.5 bg-amber-100 rounded font-mono">
+              supabase/migrations/20260530120000_create_hermes_tasks.sql
+            </code>{" "}
+            di Supabase Anda, lalu refresh halaman ini.
+          </p>
+          <p className="mt-2 text-xs text-amber-800">
+            Perintah cepat:{" "}
+            <code className="px-1.5 py-0.5 bg-amber-100 rounded font-mono">supabase db push</code>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-stone-800">Hermes Agent Feed</h2>
+          <p className="text-xs text-stone-400 max-w-2xl mt-0.5">
+            Daftar tugas yang dikerjakan Hermes Agent di laptop Anda dan dikirim
+            ke sini lewat Telegram gateway. Anda tetap berinteraksi dengan
+            Hermes lewat aplikasi Telegram — halaman ini hanya menampilkan
+            hasilnya untuk diarsipkan ke knowledge base SEO.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 bg-white"
+            onClick={() => setSetupOpen(true)}
+          >
+            <Settings className="h-3.5 w-3.5" /> Cara Setup
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 bg-white"
+            onClick={() => {
+              refetch();
+              qc.invalidateQueries({ queryKey: ["hermes-stats"] });
+              toast.success("Feed disinkronkan");
+            }}
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="p-4 border border-stone-200 bg-white">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+            Total Tugas
+          </span>
+          <p className="mt-1 text-2xl font-bold text-stone-800">{stats?.total ?? 0}</p>
+        </Card>
+        <Card className="p-4 border border-stone-200 bg-white">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+            Selesai
+          </span>
+          <p className="mt-1 text-2xl font-bold text-emerald-600">{stats?.completed ?? 0}</p>
+        </Card>
+        <Card className="p-4 border border-stone-200 bg-white">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+            Gagal
+          </span>
+          <p className="mt-1 text-2xl font-bold text-rose-600">{stats?.failed ?? 0}</p>
+        </Card>
+        <Card className="p-4 border border-stone-200 bg-white">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+            24 jam terakhir
+          </span>
+          <p className="mt-1 text-2xl font-bold text-teal-700">{stats?.last_24h ?? 0}</p>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card className="p-4 border border-stone-200 bg-white">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-semibold text-stone-500">Tipe:</Label>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="h-8 w-44 text-xs bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua tipe</SelectItem>
+                {taskTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs font-semibold text-stone-500">Status:</Label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-8 w-40 text-xs bg-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua status</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="in_progress">In progress</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <span className="text-[11px] text-stone-400 font-mono ml-auto">
+            Auto-refresh 15 dtk
+          </span>
+        </div>
+      </Card>
+
+      {/* Feed */}
+      {tasks.length === 0 ? (
+        <Card className="p-10 border border-dashed border-stone-200 bg-white text-center">
+          <Bot className="h-10 w-10 text-stone-300 mx-auto mb-3" />
+          <p className="text-sm font-semibold text-stone-600">Belum ada tugas dari Hermes</p>
+          <p className="text-xs text-stone-400 mt-1 max-w-md mx-auto">
+            Buka chat Telegram dengan Hermes Bot Anda dan kirim instruksi
+            (mis. "Tulis landing page untuk keyword 'guesthouse dekat unnes'").
+            Setelah Hermes selesai, hasilnya akan muncul di sini.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-4 h-8 bg-white"
+            onClick={() => setSetupOpen(true)}
+          >
+            <Settings className="h-3.5 w-3.5 mr-1.5" /> Cara setup Hermes
+          </Button>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {tasks.map((t) => (
+            <HermesTaskRow
+              key={t.id}
+              task={t}
+              onOpen={() => setSelectedTask(t)}
+              onDelete={() => {
+                if (confirm(`Hapus tugas "${t.title}"?`)) delM.mutate(t.id);
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Detail dialog */}
+      <Dialog open={!!selectedTask} onOpenChange={(o) => !o && setSelectedTask(null)}>
+        <DialogContent className="sm:max-w-[680px] max-h-[85vh] overflow-y-auto">
+          {selectedTask && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-teal-700" />
+                  {selectedTask.title}
+                </DialogTitle>
+                <DialogDescription className="font-mono text-[11px]">
+                  {selectedTask.task_type} ·{" "}
+                  {new Date(selectedTask.created_at).toLocaleString("id-ID")} ·{" "}
+                  {selectedTask.source_username
+                    ? `@${selectedTask.source_username}`
+                    : selectedTask.source_chat_id || "—"}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                {selectedTask.prompt && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-stone-400">
+                      Instruksi
+                    </span>
+                    <p className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-700 whitespace-pre-wrap">
+                      {selectedTask.prompt}
+                    </p>
+                  </div>
+                )}
+
+                {selectedTask.status === "failed" && selectedTask.error_message && (
+                  <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Gagal
+                    </span>
+                    <p className="mt-1 whitespace-pre-wrap">{selectedTask.error_message}</p>
+                  </div>
+                )}
+
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-stone-400">Output</span>
+                  <pre className="mt-1 p-3 rounded-lg bg-stone-900 text-stone-100 text-xs font-mono whitespace-pre-wrap max-h-96 overflow-y-auto">
+                    {selectedTask.output || "(kosong)"}
+                  </pre>
+                </div>
+
+                {Object.keys(selectedTask.metadata || {}).length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-stone-400">
+                      Metadata
+                    </span>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-[11px] font-mono overflow-x-auto">
+                      {JSON.stringify(selectedTask.metadata, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                {selectedTask.output && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedTask.output ?? "");
+                      toast.success("Output disalin");
+                    }}
+                  >
+                    Salin Output
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-rose-600 hover:bg-rose-50 border-rose-200"
+                  onClick={() => {
+                    if (confirm("Hapus tugas ini?")) delM.mutate(selectedTask.id);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Hapus
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-teal-700 hover:bg-teal-800 text-white"
+                  onClick={() => setSelectedTask(null)}
+                >
+                  Tutup
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Setup dialog */}
+      <Dialog open={setupOpen} onOpenChange={setSetupOpen}>
+        <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Setup Hermes → Telegram → Admin Feed</DialogTitle>
+            <DialogDescription>
+              Hermes berjalan di laptop Anda. Telegram jadi UI percakapan.
+              Hasil tugas ditulis ke tabel <code>hermes_tasks</code> Supabase
+              dengan service role key.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-3 space-y-5 text-sm">
+            <div>
+              <h4 className="font-semibold text-stone-800 mb-1.5">1. Migration database</h4>
+              <p className="text-xs text-stone-500 mb-2">
+                Jalankan migration di Supabase project Anda:
+              </p>
+              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
+                supabase db push
+              </pre>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-stone-800 mb-1.5">
+                2. Kredensial yang dibutuhkan Hermes
+              </h4>
+              <p className="text-xs text-stone-500 mb-2">
+                Di laptop, set env var berikut untuk script/runtime Hermes:
+              </p>
+              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
+{`SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role_key>   # WAJIB service role, bukan anon
+TELEGRAM_BOT_TOKEN=<dari @BotFather>
+TELEGRAM_ALLOWED_CHAT_ID=<chat id Anda>`}
+              </pre>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-stone-800 mb-1.5">3. Skema insert dari Hermes</h4>
+              <p className="text-xs text-stone-500 mb-2">
+                Setiap selesai mengerjakan tugas Telegram, Hermes harus mem-POST ke endpoint
+                Supabase REST:
+              </p>
+              <pre className="bg-stone-900 text-emerald-400 p-3 rounded-lg text-[11px] font-mono overflow-x-auto">
+{`POST {SUPABASE_URL}/rest/v1/hermes_tasks
+apikey: {SERVICE_ROLE_KEY}
+Authorization: Bearer {SERVICE_ROLE_KEY}
+Content-Type: application/json
+Prefer: return=minimal
+
+{
+  "task_type":   "landing_page",
+  "title":       "Landing page: guesthouse dekat UNNES",
+  "prompt":      "<isi pesan Telegram pengguna>",
+  "output":      "<jawaban Hermes>",
+  "status":      "completed",
+  "error_message": null,
+  "source_chat_id":   "123456789",
+  "source_username":  "faizal",
+  "source_message_id":"4421",
+  "metadata":    { "model": "hermes-3-llama-3.1-8b", "tokens": 1240 }
+}`}
+              </pre>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-stone-800 mb-1.5">4. Alur penggunaan</h4>
+              <ol className="list-decimal pl-5 text-xs text-stone-600 space-y-1.5">
+                <li>Buka Telegram → chat Hermes Bot.</li>
+                <li>
+                  Kirim instruksi natural, mis. <em>"Buat draf landing page untuk keyword
+                  'penginapan rombongan wisuda semarang'"</em>.
+                </li>
+                <li>
+                  Hermes balas di Telegram <strong>dan</strong> insert ke{" "}
+                  <code className="mx-1 px-1 bg-stone-100 rounded">hermes_tasks</code>.
+                </li>
+                <li>Halaman ini akan menampilkan tugas itu dalam ≤15 detik (auto-refresh).</li>
+              </ol>
+            </div>
+
+            <div className="p-3 rounded-lg bg-teal-50 border border-teal-200 text-xs text-teal-900">
+              <strong>Keamanan:</strong> service role key hanya disimpan di laptop Anda —
+              jangan commit ke git. Web app tidak butuh key ini karena hanya membaca lewat
+              session admin Supabase.
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => setSetupOpen(false)}
+              className="bg-teal-700 hover:bg-teal-800 text-white"
+            >
+              Mengerti
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function HermesTaskRow({
+  task,
+  onOpen,
+  onDelete,
+}: {
+  task: HermesTask;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const statusColor: Record<string, string> = {
+    completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    failed: "bg-rose-50 text-rose-700 border-rose-200",
+    in_progress: "bg-sky-50 text-sky-700 border-sky-200",
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
+  };
+  return (
+    <Card
+      className="p-4 border border-stone-200 bg-white hover:shadow-sm transition cursor-pointer"
+      onClick={onOpen}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+              {task.task_type}
+            </span>
+            <span
+              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                statusColor[task.status] ?? "bg-stone-100 text-stone-600 border-stone-200"
+              }`}
+            >
+              {task.status}
+            </span>
+            <span className="text-[10px] text-stone-400 font-mono">
+              {new Date(task.created_at).toLocaleString("id-ID")}
+            </span>
+          </div>
+          <h4 className="mt-2 font-semibold text-stone-800 text-sm truncate">{task.title}</h4>
+          {task.output && (
+            <p className="mt-1 text-xs text-stone-500 line-clamp-2 leading-relaxed">
+              {task.output}
+            </p>
+          )}
+          {task.source_username && (
+            <p className="mt-1.5 text-[10px] text-stone-400 font-mono">
+              dari @{task.source_username}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpen();
+            }}
+            title="Lihat detail"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            title="Hapus"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
