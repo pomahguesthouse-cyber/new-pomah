@@ -75,7 +75,7 @@ async function webSearch(
         body: JSON.stringify({
           api_key: tavilyKey,
           query,
-          search_depth: "basic",
+          search_depth: "advanced", // richer per-result content (more chance dates appear in snippet)
           include_answer: false,
           max_results: 6,
         }),
@@ -86,7 +86,7 @@ async function webSearch(
         const snippets = (j.results ?? []).map((r) => ({
           title: r.title,
           url: r.url,
-          snippet: r.content?.slice(0, 600) ?? "",
+          snippet: r.content?.slice(0, 1500) ?? "",
         }));
         return { snippets, provider: "tavily" };
       }
@@ -400,7 +400,9 @@ async function runEventExtraction(
     `4. Maks 8 event per response. Prioritaskan event mendatang (setelah ${today}).\n` +
     `5. Jika tanggal tidak pasti, isi null — JANGAN mengarang.\n` +
     `6. Selipkan halus rujukan akomodasi Pomah Guesthouse di description bila wajar (tidak wajib di setiap event).\n` +
-    `7. WAJIB isi "event_date_label" untuk SETIAP event — gunakan tanggal yang singkat dan mudah dibaca dalam bahasa Indonesia, mis. "31 Mei 2026", "29–31 Mei 2026", "Tiap Hari", "Setiap Akhir Pekan", "Sepanjang Oktober 2026", "Setiap Jumat Malam". Field ini SELALU ada teksnya, BUKAN null. Pakai info ini untuk tampilan slider walaupun event berulang / fuzzy.\n\n` +
+    `7. WAJIB isi "event_date_label" untuk SETIAP event — gunakan tanggal yang singkat dan mudah dibaca dalam bahasa Indonesia, mis. "31 Mei 2026", "29–31 Mei 2026", "Tiap Hari", "Setiap Akhir Pekan", "Sepanjang Oktober 2026", "Setiap Jumat Malam". Field ini SELALU ada teksnya, BUKAN null.\n` +
+    `   • Aturan penting: jika Anda MENYEBUT tanggal/periode di paragraphs (mis. "Berlangsung hingga 31 Mei 2026" atau "Setiap akhir pekan Jumat-Minggu"), Anda WAJIB juga menyalinnya ke event_date_label. Tidak boleh tanggal hanya muncul di paragraphs tapi event_date_label kosong.\n` +
+    `   • Kalau hasil pencarian menyebut "Berlangsung hingga X" → label = "Hingga X". Kalau menyebut "Dimulai X" → label = "Mulai X". Kalau range → "X – Y".\n\n` +
     `Kembalikan HANYA JSON:\n` +
     `{\n` +
     `  "events": [\n` +
@@ -436,6 +438,43 @@ async function runEventExtraction(
       year: "numeric",
     });
 
+  /**
+   * Last-resort fallback: scan generated paragraphs for a date phrase.
+   * Catches the common failure mode where the LLM wrote the date in the
+   * article body ("Berlangsung hingga 31 Mei 2026") but forgot to fill
+   * the structured event_date_label field.
+   */
+  const INDO_MONTHS =
+    "(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)";
+  const dateRangeRe = new RegExp(
+    `\\b(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})\\s+${INDO_MONTHS}(?:\\s+(\\d{4}))?`,
+    "i",
+  );
+  const singleDateRe = new RegExp(
+    `\\b(\\d{1,2})\\s+${INDO_MONTHS}(?:\\s+(\\d{4}))?`,
+    "i",
+  );
+  const recurringRe =
+    /\b(Setiap|Tiap)\s+(Hari|Minggu|Bulan|Akhir Pekan|Weekend|Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu|Jum'?at(?:[\s-]*(?:Minggu|Sabtu))?)\b[^.,;\n]*/i;
+  const hinggaRe = new RegExp(`Hingga\\s+(\\d{1,2}\\s+${INDO_MONTHS}(?:\\s+\\d{4})?)`, "i");
+  const sepanjangRe = new RegExp(`Sepanjang\\s+${INDO_MONTHS}(?:\\s+\\d{4})?`, "i");
+
+  function extractDateFromText(text: string): string | null {
+    if (!text) return null;
+    const cleaned = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const m1 = cleaned.match(dateRangeRe);
+    if (m1) return `${m1[1]}–${m1[2]} ${m1[3]}${m1[4] ? " " + m1[4] : ""}`;
+    const m2 = cleaned.match(hinggaRe);
+    if (m2) return `Hingga ${m2[1]}`;
+    const m3 = cleaned.match(sepanjangRe);
+    if (m3) return m3[0];
+    const m4 = cleaned.match(recurringRe);
+    if (m4) return m4[0].trim().slice(0, 60);
+    const m5 = cleaned.match(singleDateRe);
+    if (m5) return `${m5[1]} ${m5[2]}${m5[3] ? " " + m5[3] : ""}`;
+    return null;
+  }
+
   const events: GeneratedEvent[] = [];
   for (const raw of parsed.events.slice(0, 8)) {
     const title = String(raw?.title ?? "").trim();
@@ -450,7 +489,7 @@ async function runEventExtraction(
     const img = httpUrl(raw?.image_url) ?? FALLBACK_IMAGES.event;
     const tags = Array.isArray(raw?.tags) ? raw.tags.map((t: unknown) => String(t)).slice(0, 6) : [];
 
-    // Build event_date_label with strict fallback so the field is NEVER empty.
+    // Build event_date_label with multi-layer fallback so it's NEVER empty.
     let dateLabel: string | null = raw?.event_date_label
       ? String(raw.event_date_label).slice(0, 100).trim() || null
       : null;
@@ -458,8 +497,15 @@ async function runEventExtraction(
       if (start && end && start !== end) dateLabel = `${formatIso(start)} – ${formatIso(end)}`;
       else if (start) dateLabel = formatIso(start);
       else if (end) dateLabel = formatIso(end);
-      else dateLabel = "Tanggal menyusul";
     }
+    // Last resort: scan the paragraphs (and description) for a date phrase
+    // — covers the case where the LLM mentioned the date in body text
+    // but forgot to set event_date_label.
+    if (!dateLabel) {
+      const haystack = [description, ...paragraphs].join(" ");
+      dateLabel = extractDateFromText(haystack);
+    }
+    if (!dateLabel) dateLabel = "Tanggal menyusul";
 
     // Default body: if AI omitted paragraphs, derive at least one from description
     const finalParagraphs =
