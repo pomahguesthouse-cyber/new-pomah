@@ -12,8 +12,11 @@
 ALTER TABLE public.seo_generated_articles
   ADD COLUMN IF NOT EXISTS event_date_label TEXT;
 
--- Refresh the public view so the new field is exposed too.
-CREATE OR REPLACE VIEW public.active_public_events AS
+-- Refresh the public view so the new field is exposed too. Must DROP
+-- first because Postgres' CREATE OR REPLACE VIEW only allows APPENDING
+-- columns — we're inserting event_date_label in the middle of the list.
+DROP VIEW IF EXISTS public.active_public_events;
+CREATE VIEW public.active_public_events AS
 SELECT
   id,
   title,
