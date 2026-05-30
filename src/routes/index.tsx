@@ -1075,7 +1075,9 @@ function PomahHome() {
 /* Review slider                                                        */
 /* ------------------------------------------------------------------ */
 
-function ReviewSlider({ items }: { items: { text: string; author: string | null; isGoogle?: boolean }[] }) {
+type ReviewSliderItem = { text: string; author: string | null; isGoogle?: boolean };
+
+function ReviewSlider({ items }: { items: ReviewSliderItem[] }) {
   const [i, setI] = useState(0);
   useEffect(() => {
     if (items.length < 2) return;
