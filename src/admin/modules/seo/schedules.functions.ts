@@ -14,6 +14,73 @@ function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
 }
 
+/* ─── Display-time date label recovery ────────────────────────────────────── */
+/**
+ * Scans Bahasa-Indonesia text for a date phrase. Used at read-time so
+ * existing rows whose event_date_label is NULL still display a usable
+ * date in the slider — without needing to regenerate or backfill.
+ */
+const INDO_MONTHS_RE =
+  "(Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)";
+const DATE_RANGE = new RegExp(
+  `\\b(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})\\s+${INDO_MONTHS_RE}(?:\\s+(\\d{4}))?`,
+  "i",
+);
+const SINGLE_DATE = new RegExp(`\\b(\\d{1,2})\\s+${INDO_MONTHS_RE}(?:\\s+(\\d{4}))?`, "i");
+const RECURRING =
+  /\b(Setiap|Tiap)\s+(Hari|Minggu|Bulan|Akhir Pekan|Weekend|Senin|Selasa|Rabu|Kamis|Jumat|Sabtu|Minggu|Jum'?at(?:[\s-]*(?:Minggu|Sabtu))?)\b[^.,;\n]*/i;
+const HINGGA = new RegExp(`Hingga\\s+(\\d{1,2}\\s+${INDO_MONTHS_RE}(?:\\s+\\d{4})?)`, "i");
+const SEPANJANG = new RegExp(`Sepanjang\\s+${INDO_MONTHS_RE}(?:\\s+\\d{4})?`, "i");
+
+export function extractDateFromText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const cleaned = String(text).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  const m1 = cleaned.match(DATE_RANGE);
+  if (m1) return `${m1[1]}–${m1[2]} ${m1[3]}${m1[4] ? " " + m1[4] : ""}`;
+  const m2 = cleaned.match(HINGGA);
+  if (m2) return `Hingga ${m2[1]}`;
+  const m3 = cleaned.match(SEPANJANG);
+  if (m3) return m3[0];
+  const m4 = cleaned.match(RECURRING);
+  if (m4) return m4[0].trim().slice(0, 60);
+  const m5 = cleaned.match(SINGLE_DATE);
+  if (m5) return `${m5[1]} ${m5[2]}${m5[3] ? " " + m5[3] : ""}`;
+  return null;
+}
+
+/** Pick the best date label for display — works for both fresh and legacy rows. */
+export function resolveEventDateLabel(row: {
+  event_date_label?: string | null;
+  event_start_date?: string | null;
+  event_end_date?: string | null;
+  meta_description?: string | null;
+  description?: string | null;
+  paragraphs?: string[] | null;
+}): string {
+  if (row.event_date_label && row.event_date_label.trim()) return row.event_date_label.trim();
+
+  const fmt = (iso: string) =>
+    new Date(iso + "T00:00:00").toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  if (row.event_start_date && row.event_end_date && row.event_start_date !== row.event_end_date) {
+    return `${fmt(row.event_start_date)} – ${fmt(row.event_end_date)}`;
+  }
+  if (row.event_start_date) return fmt(row.event_start_date);
+  if (row.event_end_date) return fmt(row.event_end_date);
+
+  const haystack = [
+    row.meta_description,
+    row.description,
+    ...(Array.isArray(row.paragraphs) ? row.paragraphs : []),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return extractDateFromText(haystack) ?? "Tanggal menyusul";
+}
+
 export type Frequency = "daily" | "weekly" | "monthly";
 export type ArticleCategory = "pariwisata" | "event" | "destinasi";
 
@@ -252,7 +319,12 @@ export const listGeneratedArticles = createServerFn({ method: "POST" })
       result.migration_missing = true;
       return result;
     }
-    result.articles = (rows ?? []) as GeneratedArticleRow[];
+    // Backfill event_date_label at read-time for legacy rows that have null.
+    result.articles = ((rows ?? []) as GeneratedArticleRow[]).map((r) => {
+      if (r.category !== "event") return r;
+      if (r.event_date_label && r.event_date_label.trim()) return r;
+      return { ...r, event_date_label: resolveEventDateLabel(r) };
+    });
     return result;
   });
 
@@ -301,5 +373,10 @@ export const listActivePublicEvents = createServerFn({ method: "GET" })
       // View may not exist yet (migration not applied).
       return { events: [] as PublicEvent[] };
     }
-    return { events: (data ?? []) as PublicEvent[] };
+    // Backfill event_date_label at read-time for legacy rows.
+    const events = ((data ?? []) as PublicEvent[]).map((r) => {
+      if (r.event_date_label && r.event_date_label.trim()) return r;
+      return { ...r, event_date_label: resolveEventDateLabel(r) };
+    });
+    return { events };
   });
