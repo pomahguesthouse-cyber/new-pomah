@@ -286,6 +286,54 @@ export const renameMediaFolder = createServerFn({ method: "POST" })
   });
 
 /**
+ * Re-parent a folder via drag-and-drop in the media-library sidebar.
+ *
+ * parentId = null → move to root.
+ * Refuses if the new parent would create a cycle (target = self or
+ * any of self's descendants), which would otherwise orphan the
+ * subtree and break the recursive folder query.
+ */
+export const moveMediaFolder = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        parentId: z.string().uuid().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    if (data.parentId === data.id) {
+      throw new Error("Tidak bisa memindahkan folder ke dalam dirinya sendiri.");
+    }
+    // Cycle check: walk up from the proposed parent and refuse if we
+    // hit the folder we're moving.
+    if (data.parentId) {
+      const { data: all, error: e1 } = await db(context.supabase)
+        .from("media_folders")
+        .select("id, parent_id");
+      if (e1) throw e1;
+      const byId = new Map((all ?? []).map((f: any) => [f.id as string, (f.parent_id as string | null) ?? null]));
+      let cursor: string | null = data.parentId;
+      let hops = 0;
+      while (cursor && hops < 50) {
+        if (cursor === data.id) {
+          throw new Error("Tidak bisa memindahkan folder ke salah satu sub-foldernya.");
+        }
+        cursor = byId.get(cursor) ?? null;
+        hops++;
+      }
+    }
+    const { error } = await db(context.supabase)
+      .from("media_folders")
+      .update({ parent_id: data.parentId })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/**
  * Delete a media folder.
  * The FK on media_folders.parent_id (ON DELETE CASCADE) removes sub-folders.
  * The FK on sop_documents.folder_id (ON DELETE SET NULL) unassigns files.
