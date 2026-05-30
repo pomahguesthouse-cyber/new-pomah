@@ -318,7 +318,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Kapasitas (tamu)</Label>
                   <Input
@@ -348,6 +348,15 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                     onChange={(e) =>
                       setSizeSqm(e.target.value === "" ? "" : Number(e.target.value))
                     }
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs">Lokasi / Lantai</Label>
+                  <Input
+                    value={floorInfo}
+                    placeholder="mis. Lantai 2"
+                    maxLength={120}
+                    onChange={(e) => setFloorInfo(e.target.value)}
                   />
                 </div>
               </div>
@@ -450,34 +459,20 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
 
           {tab === "features" && (
             <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-1.5">
-                  <Label className="text-xs">Tipe kasur</Label>
-                  <select
-                    value={bedType}
-                    onChange={(e) => setBedType(e.target.value)}
-                    className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">—</option>
-                    {BED_TYPES.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs">Lokasi / Lantai</Label>
-                  <Input
-                    value={floorInfo}
-                    placeholder="contoh: Lantai 2, atau Lantai 1 & 2"
-                    maxLength={120}
-                    onChange={(e) => setFloorInfo(e.target.value)}
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    Teks bebas. Ditampilkan di kartu kamar publik (mis. "Lantai 2, dekat lift").
-                  </p>
-                </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Tipe kasur</Label>
+                <select
+                  value={bedType}
+                  onChange={(e) => setBedType(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">—</option>
+                  {BED_TYPES.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">Fasilitas</Label>

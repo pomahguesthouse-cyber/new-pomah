@@ -36,6 +36,7 @@ import {
   createMediaFolder,
   renameMediaFolder,
   deleteMediaFolder,
+  moveMediaFolder,
   type SopDocument,
   type MediaFolder,
 } from "@/admin/modules/ai-lab/sop.functions";
@@ -662,10 +663,52 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
 }) {
   const renameFn = useServerFn(renameMediaFolder);
   const deleteFn = useServerFn(deleteMediaFolder);
+  const moveFolderFn = useServerFn(moveMediaFolder);
 
   const [createParentId,   setCreateParentId]   = React.useState<string | null>(null);
   const [createParentName, setCreateParentName] = React.useState<string | null>(null);
   const [createOpen,       setCreateOpen]       = React.useState(false);
+
+  /* ── Drag & drop folder re-parenting ────────────────────────── */
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = React.useState<string | null>(null);
+
+  /** True if `targetId` is `sourceId` or any descendant — invalid drop target. */
+  const isDescendantOrSelf = React.useCallback(
+    (sourceId: string, targetId: string): boolean => {
+      if (sourceId === targetId) return true;
+      const queue = [sourceId];
+      const visited = new Set<string>();
+      while (queue.length) {
+        const cur = queue.shift()!;
+        if (visited.has(cur)) continue;
+        visited.add(cur);
+        for (const f of folders) {
+          if (f.parent_id === cur) {
+            if (f.id === targetId) return true;
+            queue.push(f.id);
+          }
+        }
+      }
+      return false;
+    },
+    [folders],
+  );
+
+  const handleMoveFolder = async (sourceId: string, newParentId: string | null) => {
+    try {
+      await moveFolderFn({ data: { id: sourceId, parentId: newParentId } });
+      const movedName = folders.find((f) => f.id === sourceId)?.name ?? "Folder";
+      const targetName =
+        newParentId === null
+          ? "root"
+          : folders.find((f) => f.id === newParentId)?.name ?? "folder";
+      toast.success(`"${movedName}" dipindahkan ke ${targetName}`);
+      onRefresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
   const [renamingId,       setRenamingId]       = React.useState<string | null>(null);
   const [renameDraft,      setRenameDraft]      = React.useState("");
 
@@ -735,12 +778,57 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
       );
     }
 
+    const isDropTarget = dropTargetId === folder.id;
+    const isBeingDragged = draggingId === folder.id;
+
     return (
       <React.Fragment key={folder.id}>
-        <div className="group/row flex items-center" style={{ paddingLeft: `${indent * 12}px` }}>
+        <div
+          className={cn(
+            "group/row flex items-center rounded-lg transition",
+            isDropTarget && "bg-teal-100/60 ring-2 ring-teal-400 ring-inset",
+            isBeingDragged && "opacity-40",
+          )}
+          style={{ paddingLeft: `${indent * 12}px` }}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("application/x-media-folder-id", folder.id);
+            setDraggingId(folder.id);
+          }}
+          onDragEnd={() => {
+            setDraggingId(null);
+            setDropTargetId(null);
+          }}
+          onDragOver={(e) => {
+            const src = draggingId;
+            if (!src || src === folder.id) return;
+            if (isDescendantOrSelf(src, folder.id)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (dropTargetId !== folder.id) setDropTargetId(folder.id);
+          }}
+          onDragLeave={(e) => {
+            // Only clear if leaving the row entirely
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            if (dropTargetId === folder.id) setDropTargetId(null);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const src = e.dataTransfer.getData("application/x-media-folder-id");
+            setDropTargetId(null);
+            setDraggingId(null);
+            if (!src || src === folder.id) return;
+            if (isDescendantOrSelf(src, folder.id)) {
+              toast.error("Tidak bisa memindahkan folder ke sub-foldernya sendiri.");
+              return;
+            }
+            void handleMoveFolder(src, folder.id);
+          }}
+        >
           <button type="button" onClick={() => onSelect(folder.id)}
             className={cn(
-              "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
+              "flex flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition cursor-grab active:cursor-grabbing",
               isActive
                 ? "bg-teal-50 font-medium text-teal-800"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -778,19 +866,49 @@ function FolderSidebar({ folders, counts, activeFolder, onSelect, onRefresh }: {
     );
   };
 
+  const ROOT_DROP_ID = "__root__";
+  const isRootDrop = dropTargetId === ROOT_DROP_ID;
+
   return (
     <aside className="flex w-52 shrink-0 flex-col gap-0.5">
-      {/* Static entries */}
-      <button type="button" onClick={() => onSelect(ALL_FILES)}
+      {/* Static entries — also a drop target to move a folder to root */}
+      <button
+        type="button"
+        onClick={() => onSelect(ALL_FILES)}
+        onDragOver={(e) => {
+          if (!draggingId) return;
+          // Only show root indicator if the dragged folder isn't already root
+          const dragged = folders.find((f) => f.id === draggingId);
+          if (!dragged || dragged.parent_id === null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dropTargetId !== ROOT_DROP_ID) setDropTargetId(ROOT_DROP_ID);
+        }}
+        onDragLeave={() => {
+          if (dropTargetId === ROOT_DROP_ID) setDropTargetId(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const src = e.dataTransfer.getData("application/x-media-folder-id");
+          setDropTargetId(null);
+          setDraggingId(null);
+          if (!src) return;
+          const dragged = folders.find((f) => f.id === src);
+          if (!dragged || dragged.parent_id === null) return;
+          void handleMoveFolder(src, null);
+        }}
         className={cn(
           "flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition",
           activeFolder === ALL_FILES
             ? "bg-teal-50 font-medium text-teal-800"
             : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+          isRootDrop && "bg-teal-100/60 ring-2 ring-teal-400 ring-inset",
         )}>
         <Images className="h-4 w-4 shrink-0" />
-        <span className="flex-1">Semua File</span>
-        {totalCount > 0 && (
+        <span className="flex-1">
+          {isRootDrop ? "Lepas di sini → root" : "Semua File"}
+        </span>
+        {!isRootDrop && totalCount > 0 && (
           <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
             activeFolder === ALL_FILES ? "bg-teal-200 text-teal-900" : "bg-muted text-muted-foreground")}>
             {totalCount}
