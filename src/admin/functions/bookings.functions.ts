@@ -460,7 +460,7 @@ export const listRoomTypes = createServerFn({ method: "GET" })
     const { data, error } = await db(context.supabase)
       .from("room_types")
       .select(
-        "id, name, slug, description, bed_type, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images",
+        "id, name, slug, description, bed_type, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images",
       )
       .order("name");
     if (error) throw error;
@@ -533,6 +533,7 @@ const roomTypeFieldsSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug hanya boleh huruf kecil, angka, dan tanda hubung"),
   description: z.string().max(2000).nullable().optional(),
   bed_type: z.string().max(60).nullable().optional(),
+  floor_info: z.string().max(120).nullable().optional(),
   size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
   capacity: z.number().int().min(1).max(20),
   extrabed_capacity: z.number().int().min(0).max(10).default(0),
@@ -550,6 +551,7 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     slug: d.slug,
     description: d.description ?? null,
     bed_type: d.bed_type ?? null,
+    floor_info: d.floor_info ?? null,
     size_sqm: d.size_sqm ?? null,
     capacity: d.capacity,
     extrabed_capacity: d.extrabed_capacity,
