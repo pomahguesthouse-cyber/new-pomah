@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { MapPin } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/rooms/")({
   loader: async () => {
@@ -87,23 +87,40 @@ function PublicRooms() {
             >
               {/* Image */}
               <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
-                {rt.hero_image_url ? (
-                  <img
-                    src={rt.hero_image_url}
-                    alt={rt.name}
-                    className="h-full w-full object-cover transition group-hover:scale-[1.03]"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
-                      Foto Kamar
-                    </p>
-                  </div>
-                )}
+                {(() => {
+                  const cover =
+                    rt.hero_image_url ||
+                    ((rt as any).images && Array.isArray((rt as any).images) && (rt as any).images[0]) ||
+                    null;
+                  return cover ? (
+                    <img
+                      src={cover}
+                      alt={rt.name}
+                      className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        img.style.display = "none";
+                        (img.nextElementSibling as HTMLElement | null)?.classList.remove("hidden");
+                      }}
+                    />
+                  ) : null;
+                })()}
+                <div
+                  className={cn(
+                    "flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-50 to-stone-100",
+                    (rt.hero_image_url ||
+                      ((rt as any).images && (rt as any).images[0])) &&
+                      "hidden",
+                  )}
+                >
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-amber-700/60">
+                    {rt.name || "Foto Kamar"}
+                  </p>
+                </div>
                 {(rt as any).floor_info && (
-                  <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm">
-                    <MapPin className="h-3 w-3 text-amber-700" />
-                    {(rt as any).floor_info}
+                  <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700">Lantai</span>
+                    {String((rt as any).floor_info).replace(/^lantai\s*/i, "").trim() || (rt as any).floor_info}
                   </div>
                 )}
               </div>
