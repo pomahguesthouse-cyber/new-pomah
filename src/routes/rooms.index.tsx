@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { MapPin } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 
@@ -85,7 +86,7 @@ function PublicRooms() {
               className="group flex flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white transition hover:shadow-xl"
             >
               {/* Image */}
-              <div className="aspect-[4/3] overflow-hidden bg-stone-100">
+              <div className="relative aspect-[4/3] overflow-hidden bg-stone-100">
                 {rt.hero_image_url ? (
                   <img
                     src={rt.hero_image_url}
@@ -97,6 +98,12 @@ function PublicRooms() {
                     <p className="font-mono text-[10px] uppercase tracking-widest text-stone-400">
                       Foto Kamar
                     </p>
+                  </div>
+                )}
+                {(rt as any).floor_info && (
+                  <div className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm">
+                    <MapPin className="h-3 w-3 text-amber-700" />
+                    {(rt as any).floor_info}
                   </div>
                 )}
               </div>
@@ -111,7 +118,6 @@ function PublicRooms() {
                         rt.bed_type,
                         rt.capacity && `Maks. ${rt.capacity} tamu`,
                         rt.size_sqm && `${rt.size_sqm} m²`,
-                        (rt as any).floor_info,
                       ]
                         .filter(Boolean)
                         .join(" · ")}

@@ -2173,6 +2173,12 @@ function RoomCarousel({
                       Foto Kamar
                     </div>
                   )}
+                  {(rt as any).floor_info && (
+                    <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
+                      <MapPin className="h-3 w-3 text-amber-700" />
+                      {(rt as any).floor_info}
+                    </div>
+                  )}
                 </div>
                 <div className={cartOpen ? "p-3" : "p-6"}>
                   <div className="flex items-start justify-between gap-3">
@@ -2183,7 +2189,6 @@ function RoomCarousel({
                           rt.capacity && `${rt.capacity} TAMU`,
                           rt.size_sqm && `${rt.size_sqm} M²`,
                           (rt as any).bed_type,
-                          (rt as any).floor_info,
                         ]
                            .filter(Boolean)
                            .join(" · ")}
