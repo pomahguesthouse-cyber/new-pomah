@@ -53,7 +53,9 @@ import { cn } from "@/lib/utils";
 /* Constants & types                                                    */
 /* ------------------------------------------------------------------ */
 
-const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif"];
+const IMAGE_EXTS = ["jpg", "jpeg", "png", "webp", "gif", "svg"];
+/** Image extensions that should NOT be sent through the WebP converter. */
+const NON_RASTER_IMAGE_EXTS = new Set(["svg", "gif"]);
 const VIDEO_EXTS = ["mp4", "webm", "mov", "avi", "ogg"];
 const DOC_EXTS   = ["pdf"];
 const ALL_ALLOWED = [...IMAGE_EXTS, ...VIDEO_EXTS, ...DOC_EXTS];
@@ -1157,11 +1159,13 @@ export function MediaLibraryView() {
   }, [registerAsset, folders, defaultUploadFolderId]);
 
   /* ---- Upload ---- */
-  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = "";
-    if (!files.length) return;
-    const valid = files.filter((f) => {
+  const processFiles = async (incoming: File[]) => {
+    if (!incoming.length) return;
+    if (total > 0) {
+      toast.error("Upload sebelumnya masih berjalan.");
+      return;
+    }
+    const valid = incoming.filter((f) => {
       const ext = (f.name.split(".").pop() ?? "").toLowerCase();
       if (!ALL_ALLOWED.includes(ext)) { toast.error(`Format tidak didukung: ${f.name}`); return false; }
       if (f.size > 50 * 1024 * 1024) { toast.error(`Maks 50 MB: ${f.name}`); return false; }
@@ -1172,7 +1176,13 @@ export function MediaLibraryView() {
     let ok = 0;
     for (const rawFile of valid) {
       try {
-        const file = rawFile.type.startsWith("image/") ? await convertToWebP(rawFile) : rawFile;
+        const rawExt = (rawFile.name.split(".").pop() ?? "").toLowerCase();
+        // SVGs and GIFs would break or lose animation through canvas-based WebP
+        // conversion, so they're uploaded as-is. Other rasters are compressed.
+        const file =
+          rawFile.type.startsWith("image/") && !NON_RASTER_IMAGE_EXTS.has(rawExt)
+            ? await convertToWebP(rawFile)
+            : rawFile;
         const ext  = (file.name.split(".").pop() ?? "bin").toLowerCase();
         const base = rawFile.name.replace(/\.[^.]+$/, "");
 
@@ -1218,6 +1228,42 @@ export function MediaLibraryView() {
     }
   };
 
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    await processFiles(files);
+  };
+
+  /* ---- File drop-zone state (drag a file from desktop onto the grid) ---- */
+  const [isFileDragOver, setIsFileDragOver] = React.useState(false);
+  const dragCounterRef = React.useRef(0);
+
+  const onPageDragEnter = (e: React.DragEvent) => {
+    // Only react to file drags (not internal folder drag)
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current += 1;
+    setIsFileDragOver(true);
+  };
+  const onPageDragLeave = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setIsFileDragOver(false);
+  };
+  const onPageDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const onPageDrop = async (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes("Files")) return;
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsFileDragOver(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (!files.length) return;
+    await processFiles(files);
+  };
+
   /* ---- Breadcrumb label ---- */
   const breadcrumbLabel = (() => {
     if (activeFolder === ALL_FILES) return "Semua File";
@@ -1232,7 +1278,24 @@ export function MediaLibraryView() {
 
   /* ---- Render ---- */
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="relative min-h-screen bg-background"
+      onDragEnter={onPageDragEnter}
+      onDragLeave={onPageDragLeave}
+      onDragOver={onPageDragOver}
+      onDrop={(e) => void onPageDrop(e)}
+    >
+      {isFileDragOver && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-teal-900/40 backdrop-blur-sm">
+          <div className="rounded-2xl border-4 border-dashed border-white bg-teal-700/95 px-10 py-8 text-center text-white shadow-2xl">
+            <Upload className="mx-auto mb-3 h-10 w-10" />
+            <p className="text-xl font-bold">Lepas file di sini</p>
+            <p className="mt-1 text-sm opacity-90">
+              JPG · PNG · WebP · GIF · SVG · MP4 · WebM · PDF · maks 50 MB
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-[1400px] px-6 py-8">
 
         {/* Header */}

@@ -31,6 +31,7 @@ export const frontOfficeAgent: AgentDefinition = {
       return (
         `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
         `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
+        `${(r as any).floor_info ? `, Lokasi: ${(r as any).floor_info}` : ""}` +
         `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
         `${r.description ? `, Deskripsi: ${r.description}` : ""}` +
         extrabedInfo
