@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 24" fill="none" stroke="#ef4444" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+  <!--
+    Hand-drawn squiggle/scribble underline drawn left-to-right.
+    stroke-dasharray + dashoffset turn the path into a pen stroke;
+    fill="freeze" holds the final state so the animation plays
+    exactly once per mount.
+  -->
+  <path
+    d="M6 14 C 30 6, 60 22, 90 12 S 150 4, 180 16 S 240 22, 270 10 S 310 18, 314 14"
+    stroke-dasharray="420"
+    stroke-dashoffset="420"
+  >
+    <animate
+      attributeName="stroke-dashoffset"
+      from="420"
+      to="0"
+      dur="1s"
+      begin="0.1s"
+      fill="freeze"
+      calcMode="spline"
+      keySplines="0.42 0 0.2 1"
+    />
+  </path>
+</svg>
