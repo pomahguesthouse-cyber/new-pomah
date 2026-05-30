@@ -23,7 +23,21 @@ import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explo
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
 import { syncExploreFromAI } from "@/admin/modules/explore/ai-agent.functions";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2, Calendar as CalendarIcon } from "lucide-react";
+import {
+  listActivePublicEvents,
+  deleteGeneratedArticle,
+} from "@/admin/modules/seo/schedules.functions";
+import { generateArticleFromWebSearch } from "@/admin/modules/seo/article-generator.functions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 function getDisplayImageUrl(url: string | undefined | null) {
   if (!url) return "";
@@ -118,6 +132,46 @@ function AdminExplorePage() {
   
   // State for Auto-Fill inputs
   const [autoFillQuery, setAutoFillQuery] = useState<{ [key: string]: string }>({});
+
+  /* ─── AI auto-generated events (seo_generated_articles) ───────────────── */
+  const listEventsFn = useServerFn(listActivePublicEvents);
+  const deleteEventFn = useServerFn(deleteGeneratedArticle);
+  const generateEventFn = useServerFn(generateArticleFromWebSearch);
+
+  const { data: autoEventsData } = useQuery({
+    queryKey: ["public-active-events"],
+    queryFn: () => listEventsFn(),
+    refetchInterval: 60_000,
+  });
+  const autoEvents = autoEventsData?.events ?? [];
+
+  const deleteEventMut = useMutation({
+    mutationFn: (id: string) => deleteEventFn({ data: { id } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["public-active-events"] });
+      qc.invalidateQueries({ queryKey: ["generated-articles"] });
+      toast.success("Event dihapus");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const [genDialogOpen, setGenDialogOpen] = useState(false);
+  const [genTopic, setGenTopic] = useState("event semarang minggu ini");
+  const generateEventMut = useMutation({
+    mutationFn: (topic: string) =>
+      generateEventFn({ data: { topic, category: "event" } }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["public-active-events"] });
+      qc.invalidateQueries({ queryKey: ["generated-articles"] });
+      if (res.mode === "events") {
+        toast.success(`${res.events.length} event berhasil ditarik`);
+      } else {
+        toast.success("Konten berhasil dibuat");
+      }
+      setGenDialogOpen(false);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
 
   // Sync state on load
   if (data && !config && !isLoading) {
@@ -830,162 +884,131 @@ function AdminExplorePage() {
         {/* Events & News Container */}
         <div className="grid lg:grid-cols-2 gap-8">
           
-          {/* Event Mendatang */}
+          {/* Event Mendatang — auto-generated (seo_generated_articles) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between border-b border-stone-200 pb-2">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-bold text-stone-900">Event Mendatang</h2>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
+                <span className="text-[10px] text-stone-400 font-mono bg-stone-100 px-1.5 py-0.5 rounded">
+                  AI · {autoEvents.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
                   className="h-6 text-[10px] px-2 gap-1 text-emerald-700 hover:text-emerald-800"
-                  disabled={syncAIMutation.isPending}
-                  onClick={() => syncAIMutation.mutate()}
+                  disabled={generateEventMut.isPending}
+                  onClick={() => setGenDialogOpen(true)}
                 >
-                  <Sparkles className="h-3 w-3" />
-                  {syncAIMutation.isPending ? "Sedang Menarik AI..." : "Tarik Data via AI"}
+                  {generateEventMut.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  {generateEventMut.isPending ? "Menarik..." : "Tarik Data via AI"}
                 </Button>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() => {
-                  setConfig({
-                    ...config,
-                    events: [...config.events, { title: "Event Baru", date: "", location: "", desc: "", image: "" }],
-                  });
-                  setEditingItem({ type: "event", index: config.events.length });
-                }}
+                onClick={() => setGenDialogOpen(true)}
+                title="Tarik event baru via AI"
               >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-            
+
+            <p className="text-[10px] text-stone-400 leading-snug">
+              Daftar event di sini di-generate otomatis oleh AI scheduler (Content Studio). Event
+              expired hilang sendiri setelah tanggal berakhir.
+            </p>
+
             <div className="space-y-3">
-              {config.events.map((ev, i) => (
-                <div key={i} className="flex gap-4 items-start group">
-                  <div 
-                    className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 cursor-pointer relative"
-                    onClick={() => setPickerState({ open: true, target: { type: "event", index: i } })}
-                  >
-                    {ev.image ? (
-                      <img src={getDisplayImageUrl(ev.image)} alt={ev.title} onError={(e) => handleImageError(e, "event")} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
-                    )}
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Pencil className="h-3 w-3 text-white" />
-                    </div>
-                  </div>
-                  
-                  <div className="flex-1 space-y-1.5 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      {isEditing("event", i) ? (
-                        <div className="flex gap-1.5 w-full">
-                          <Input 
-                            className="h-6 flex-1 text-xs font-bold text-stone-900 px-1.5 py-0"
-                            placeholder="Judul Event"
-                            value={ev.title}
-                            onChange={(e) => {
-                              const newEv = [...config.events];
-                              newEv[i].title = e.target.value;
-                              setConfig({ ...config, events: newEv });
-                            }}
+              {autoEvents.length === 0 ? (
+                <div className="text-center py-8 border border-dashed border-stone-200 rounded text-[11px] text-stone-400">
+                  Belum ada event. Klik <strong>Tarik Data via AI</strong> atau buat jadwal di
+                  Content Studio.
+                </div>
+              ) : (
+                autoEvents.map((ev) => {
+                  const fmt = (iso: string | null) =>
+                    iso
+                      ? new Date(iso + "T00:00:00").toLocaleDateString("id-ID", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })
+                      : "";
+                  const startStr = fmt(ev.event_start_date);
+                  const endStr = fmt(ev.event_end_date);
+                  const dateLabel =
+                    startStr && endStr && startStr !== endStr
+                      ? `${startStr} – ${endStr}`
+                      : startStr || endStr || "—";
+
+                  return (
+                    <div key={ev.id} className="flex gap-4 items-start group">
+                      <div className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 relative">
+                        {ev.image_url ? (
+                          <img
+                            src={ev.image_url}
+                            alt={ev.title}
+                            onError={(e) => handleImageError(e, "event")}
+                            className="w-full h-full object-cover"
                           />
-                          <Input 
-                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
-                            placeholder="Label (e.g. EVENT)"
-                            value={ev.label || ""}
-                            onChange={(e) => {
-                              const newEv = [...config.events];
-                              newEv[i].label = e.target.value;
-                              setConfig({ ...config, events: newEv });
-                            }}
-                          />
-                          <Input 
-                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
-                            placeholder="Tanggal"
-                            value={ev.date}
-                            onChange={(e) => {
-                              const newEv = [...config.events];
-                              newEv[i].date = e.target.value;
-                              setConfig({ ...config, events: newEv });
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-stone-300">
+                            <CalendarIcon className="h-5 w-5" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-1.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className="text-[8px] font-bold bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded border border-emerald-100 shrink-0">
-                              {ev.label || "EVENT"}
+                              EVENT
                             </span>
-                            <h3 className="text-xs font-bold text-stone-900 truncate">{ev.title}</h3>
+                            <h3 className="text-xs font-bold text-stone-900 truncate">
+                              {ev.title}
+                            </h3>
                           </div>
-                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{ev.date}</span>
-                        </>
-                      )}
-                    </div>
-                    
-                    {isEditing("event", i) ? (
-                      <div className="flex items-center gap-1 text-[10px] text-stone-400 px-1">
-                        <MapPin className="h-3 w-3 text-stone-450 shrink-0" />
-                        <Input 
-                          className="h-5 flex-1 text-[10px] px-1 py-0"
-                          placeholder="Lokasi"
-                          value={ev.location}
-                          onChange={(e) => {
-                            const newEv = [...config.events];
-                            newEv[i].location = e.target.value;
-                            setConfig({ ...config, events: newEv });
-                          }}
-                        />
+                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0 font-mono">
+                            {dateLabel}
+                          </span>
+                        </div>
+
+                        {ev.event_location && (
+                          <p className="text-[10px] text-stone-500 flex items-center gap-1 truncate">
+                            <MapPin className="h-3 w-3 text-stone-400 shrink-0" />
+                            <span className="truncate">{ev.event_location}</span>
+                          </p>
+                        )}
+
+                        <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
+                          {ev.description || "Tidak ada deskripsi."}
+                        </p>
                       </div>
-                    ) : (
-                      <p className="text-[10px] text-stone-500 flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-stone-400 shrink-0" /> {ev.location}
-                      </p>
-                    )}
-                    
-                    {isEditing("event", i) ? (
-                      <Textarea 
-                        className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
-                        placeholder="Deskripsi..."
-                        value={ev.desc}
-                        onChange={(e) => {
-                          const newEv = [...config.events];
-                          newEv[i].desc = e.target.value;
-                          setConfig({ ...config, events: newEv });
-                        }}
-                      />
-                    ) : (
-                      <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
-                        {ev.desc || "Tidak ada deskripsi."}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {isEditing("event", i) ? (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
-                        <Check className="h-3 w-3" />
-                      </Button>
-                    ) : (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "event", index: i })}>
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    )}
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => setConfig({ ...config, events: config.events.filter((_, idx) => idx !== i) })}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+
+                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => {
+                            if (confirm(`Hapus event "${ev.title}"?`)) {
+                              deleteEventMut.mutate(ev.id);
+                            }
+                          }}
+                          title="Hapus event"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -1152,7 +1175,61 @@ function AdminExplorePage() {
       
       {/* Right Sidebar (AI Assistant) */}
       <AiSidebar />
-      
+
+      {/* Generate-event dialog */}
+      <Dialog open={genDialogOpen} onOpenChange={setGenDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-700" />
+              Tarik Event via AI
+            </DialogTitle>
+            <DialogDescription>
+              AI akan mencari event di internet, mengekstrak yang berbeda-beda
+              (judul, tanggal, lokasi, gambar), dan menyimpannya satu per satu.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-3 space-y-3">
+            <div>
+              <Label className="text-xs font-semibold">Topik / Pertanyaan Pencarian</Label>
+              <Input
+                value={genTopic}
+                onChange={(e) => setGenTopic(e.target.value)}
+                placeholder="contoh: festival semarang 2026, event akhir pekan kota lama"
+                className="mt-1 text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !generateEventMut.isPending && genTopic.trim()) {
+                    generateEventMut.mutate(genTopic.trim());
+                  }
+                }}
+              />
+              <p className="text-[10px] text-stone-400 mt-1">
+                Semakin luas topik, semakin banyak event berbeda yang ditemukan.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGenDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={generateEventMut.isPending || !genTopic.trim()}
+              onClick={() => generateEventMut.mutate(genTopic.trim())}
+            >
+              {generateEventMut.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Menarik...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Tarik Sekarang
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
