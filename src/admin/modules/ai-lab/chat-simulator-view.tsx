@@ -570,15 +570,35 @@ export function ChatSimulatorView() {
 
         {/* Saved training list */}
         <Card className="flex min-h-0 flex-col p-4">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5" /> Training tersimpan
             </p>
-            {savedTraining.length > 0 && (
-              <span className="text-[10px] font-medium text-muted-foreground">
-                {savedTraining.length} item
-              </span>
-            )}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => handleExport("json")}
+                title="Ekspor JSON"
+              >
+                <Download className="mr-1 h-3 w-3" /> JSON
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => handleExport("csv")}
+                title="Ekspor CSV"
+              >
+                <Download className="mr-1 h-3 w-3" /> CSV
+              </Button>
+              {savedTraining.length > 0 && (
+                <span className="ml-1 text-[10px] font-medium text-muted-foreground">
+                  {savedTraining.length}
+                </span>
+              )}
+            </div>
           </div>
 
           {trainingQuery.isLoading ? (
@@ -615,13 +635,22 @@ export function ChatSimulatorView() {
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleDeleteTraining(log.id)}
-                        className="shrink-0 rounded p-1 text-stone-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                        title="Hapus training"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-1 opacity-0 transition group-hover:opacity-100">
+                        <button
+                          onClick={() => openEditTraining(log)}
+                          className="rounded p-1 text-stone-400 transition hover:bg-teal-50 hover:text-teal-700"
+                          title="Edit training"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTraining(log.id)}
+                          className="rounded p-1 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
+                          title="Hapus training"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -630,6 +659,67 @@ export function ChatSimulatorView() {
           )}
         </Card>
       </div>
+
+      {/* Dialog Edit Training */}
+      <Dialog
+        open={editTrainingId !== null}
+        onOpenChange={(open) => !open && setEditTrainingId(null)}
+      >
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-teal-600" />
+              Edit Training Data
+            </DialogTitle>
+            <DialogDescription>
+              Perbarui pesan tamu atau respons ideal. Perubahan akan langsung
+              di-embed ulang dan dipakai chatbot.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Pesan tamu</Label>
+              <Textarea
+                value={editUserMsg}
+                onChange={(e) => setEditUserMsg(e.target.value)}
+                className="min-h-[70px] text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Respons ideal AI</Label>
+              <Textarea
+                value={editAiResp}
+                onChange={(e) => setEditAiResp(e.target.value)}
+                className="min-h-[120px] text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditTrainingId(null)}
+              disabled={savingEdit}
+            >
+              Batal
+            </Button>
+            <Button
+              className="bg-teal-700 hover:bg-teal-800 text-white"
+              onClick={handleSaveEditTraining}
+              disabled={savingEdit}
+            >
+              {savingEdit ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
+                </>
+              ) : (
+                <>
+                  <Check className="mr-1.5 h-4 w-4" /> Simpan perubahan
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog Konfirmasi Simpan Training */}
       <Dialog open={saveConfirmOpen} onOpenChange={(open) => !open && setSaveConfirmOpen(false)}>
