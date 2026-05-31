@@ -25,6 +25,7 @@ import {
   cleanReplyBody,
   isBrosurDoc,
 } from "@/services/reply-postprocess";
+import { runOcrAndMatch } from "@/services/payment-proof.service";
 
 // ─── Shared environment builder ────────────────────────────────────────────────
 
@@ -104,6 +105,13 @@ const TurnInput = z.object({
   transcript: z.array(z.object({ direction: z.enum(["in", "out"]), body: z.string() })).default([]),
   message: z.string().min(1),
   origin: z.string().optional(),
+  /**
+   * Optional payment-proof image. Either a data URL (data:image/...;base64,...)
+   * or a public HTTPS URL the Vision LLM can fetch. When present the simulator
+   * runs OCR + booking match before orchestration and injects the result so
+   * `get_payment_proof_result` returns it synchronously.
+   */
+  imageDataUrl: z.string().optional(),
 });
 
 export const simulateChatTurn = createServerFn({ method: "POST" })
@@ -139,6 +147,24 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     const messages = transcript.slice(sessionStart).slice(-20);
     const lastMessage = data.message;
 
+    // Payment-proof OCR: if the admin attached an image, run Vision OCR +
+    // booking match BEFORE orchestration and inject the result into the
+    // tool context. The Finance Agent's get_payment_proof_result tool will
+    // read it synchronously instead of waiting on the production webhook
+    // pipeline (which doesn't exist in the simulator).
+    let ocrResult: Awaited<ReturnType<typeof runOcrAndMatch>> | undefined;
+    if (data.imageDataUrl) {
+      try {
+        ocrResult = await runOcrAndMatch(
+          supabaseAdmin as any,
+          data.imageDataUrl,
+          data.phone,
+        );
+      } catch (e) {
+        console.warn("[simulator] OCR failed:", e);
+      }
+    }
+
     const today = todayWIB();
     const t0 = Date.now();
     const orch = await runMultiAgentOrchestration({
@@ -160,6 +186,12 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
         property: env.property,
         today,
         origin: data.origin,
+        recentOcrResult: ocrResult
+          ? {
+              ocr:   ocrResult.ocr as unknown as Record<string, unknown>,
+              match: ocrResult.match as unknown as Record<string, unknown>,
+            }
+          : undefined,
       },
       llmConfig: { apiKey: env.apiKey, baseUrl: env.baseUrl, model: env.model },
     });
@@ -182,6 +214,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       ok: true as const,
       reply: displayReply,
       attachment,
+      ocrResult: ocrResult ?? null,
       status: orch.status,
       toolsUsed: orch.toolsUsed,
       agentKey: orch.agentKey,

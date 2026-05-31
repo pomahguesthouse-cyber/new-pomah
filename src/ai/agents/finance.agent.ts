@@ -33,6 +33,18 @@ const FINANCE_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_payment_proof_result",
+      description:
+        "Ambil hasil OCR bukti transfer terbaru yang dikirim tamu (nominal, bank pengirim, " +
+        "dan status pencocokan dengan booking yang pending). " +
+        "WAJIB dipanggil setiap kali tamu mengirim foto/screenshot bukti transfer, atau " +
+        "saat tamu menanyakan status verifikasi bukti yang baru dikirim.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
 ];
 
 export const financeAgent: AgentDefinition = {
@@ -77,12 +89,24 @@ export const financeAgent: AgentDefinition = {
         "\n2. Panggil tool `get_payment_info` untuk mendapatkan detail booking dan rekening." +
         "\n3. Sajikan informasi dengan jelas: total tagihan, rekening tujuan, cara konfirmasi.",
 
-      "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer, " +
-        "sistem akan otomatis memproses dan memverifikasi gambar tersebut menggunakan OCR. " +
-        "Sampaikan kepada tamu: 'Terima kasih Kak, bukti transfer sudah kami terima " +
-        "dan sedang dalam proses verifikasi. Tim kami akan mengonfirmasi " +
-        "dalam waktu maksimal 1×24 jam.' " +
-        "Jangan meminta tamu mengirim ulang bukti transfer kecuali diminta staf.",
+      "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer " +
+        "(atau bertanya apakah bukti sudah diterima), WAJIB panggil tool " +
+        "`get_payment_proof_result` lebih dulu untuk membaca hasil OCR. " +
+        "Susun balasan berdasarkan field `match.status`:\n" +
+        "- 'matched': konfirmasi spesifik — sebutkan nominal yang terbaca, bank pengirim, " +
+        "  dan kode booking. Contoh: 'Terima kasih Kak, transfer Rp 450.000 dari BCA " +
+        "  sudah cocok dengan booking PMH-XXXXXX. Tim kami akan finalisasi maksimal 1×24 jam.'\n" +
+        "- 'unmatched' (nominal beda dari tagihan): sebutkan selisihnya dengan halus, " +
+        "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain.\n" +
+        "- 'ambiguous' (beberapa booking cocok / nominal tidak terbaca): minta tamu " +
+        "  sebutkan kode booking-nya.\n" +
+        "- 'no_pending_booking': info bahwa belum ada booking pending — tanyakan kode booking " +
+        "  atau nama agar bisa ditelusuri.\n" +
+        "- 'pending' / 'no_proof' / error apa pun: balas generik 'Bukti transfer sedang " +
+        "  kami verifikasi, konfirmasi dalam maksimal 1×24 jam.'\n" +
+        "Jangan meminta tamu mengirim ulang bukti transfer kecuali OCR gagal terbaca total " +
+        "(semua field null). Jangan menjanjikan pelunasan / room confirmed — tim Finance " +
+        "tetap yang verifikasi akhir.",
 
       "REFUND: Jelaskan bahwa proses refund memerlukan verifikasi dan akan diproses " +
         "oleh tim Finance — tidak dapat langsung dilakukan via WhatsApp. " +

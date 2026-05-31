@@ -348,6 +348,37 @@ export async function analyzePaymentProof(
 }
 
 /**
+ * Run Vision OCR + booking match WITHOUT writing to whatsapp_messages.metadata.
+ * Used by the AI Lab simulator so admins can test the OCR flow against a real
+ * image without leaving artefacts in the WA message table.
+ */
+export async function runOcrAndMatch(
+  db:       Db,
+  imageUrl: string,
+  phone:    string,
+): Promise<PaymentProofResult> {
+  const llmConfig = await resolveLlmConfig(db);
+  if (!llmConfig) {
+    return {
+      ok: false,
+      ocr: {
+        bank_pengirim: null, bank_tujuan: null, nominal: null,
+        tanggal: null, nama_pengirim: null, nomor_referensi: null,
+        raw_text: "",
+      },
+      match: {
+        status: "no_pending_booking",
+        booking_code: null, booking_amount: null, amount_diff: null,
+      },
+      error: "LLM not configured",
+    };
+  }
+  const ocr = await callVisionLlm(llmConfig, imageUrl);
+  const match = await findMatchingBooking(db, phone, ocr.nominal);
+  return { ok: true, ocr, match };
+}
+
+/**
  * Format nominal as Indonesian Rupiah string.
  */
 export function formatRupiahOcr(value: number | null | undefined): string {

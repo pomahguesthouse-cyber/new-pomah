@@ -149,6 +149,7 @@ export const TOOL_LABELS: Record<string, string> = {
   request_housekeeping_service: "Housekeeping",
   report_maintenance_issue:     "Maintenance",
   get_payment_info:             "Finance",
+  get_payment_proof_result:     "Finance - OCR Bukti Transfer",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",
