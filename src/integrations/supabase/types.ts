@@ -577,9 +577,6 @@ export type Database = {
           google_places_api_key: string | null
           google_search_console: string | null
           google_tag_manager_id: string | null
-          custom_google_rating: number | null
-          custom_google_reviews_total: number | null
-          custom_google_reviews_json: Json | null
           hero_image_url: string | null
           homepage_config: Json
           hotel_policy: string | null
@@ -592,8 +589,10 @@ export type Database = {
           payment_bank_name: string | null
           phone: string | null
           public_domain: string | null
+          serper_api_key: string | null
           smart_delay_config: Json | null
           tagline: string | null
+          tavily_api_key: string | null
           timezone: string
           updated_at: string
           whatsapp_number: string | null
@@ -618,9 +617,6 @@ export type Database = {
           google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
-          custom_google_rating?: number | null
-          custom_google_reviews_total?: number | null
-          custom_google_reviews_json?: Json | null
           hero_image_url?: string | null
           homepage_config?: Json
           hotel_policy?: string | null
@@ -633,8 +629,10 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          serper_api_key?: string | null
           smart_delay_config?: Json | null
           tagline?: string | null
+          tavily_api_key?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
@@ -659,9 +657,6 @@ export type Database = {
           google_places_api_key?: string | null
           google_search_console?: string | null
           google_tag_manager_id?: string | null
-          custom_google_rating?: number | null
-          custom_google_reviews_total?: number | null
-          custom_google_reviews_json?: Json | null
           hero_image_url?: string | null
           homepage_config?: Json
           hotel_policy?: string | null
@@ -674,8 +669,10 @@ export type Database = {
           payment_bank_name?: string | null
           phone?: string | null
           public_domain?: string | null
+          serper_api_key?: string | null
           smart_delay_config?: Json | null
           tagline?: string | null
+          tavily_api_key?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
@@ -727,6 +724,7 @@ export type Database = {
           description: string | null
           extrabed_capacity: number
           extrabed_rate: number
+          floor_info: string | null
           hero_image_url: string | null
           id: string
           images: string[]
@@ -744,6 +742,7 @@ export type Database = {
           description?: string | null
           extrabed_capacity?: number
           extrabed_rate?: number
+          floor_info?: string | null
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -761,6 +760,7 @@ export type Database = {
           description?: string | null
           extrabed_capacity?: number
           extrabed_rate?: number
+          floor_info?: string | null
           hero_image_url?: string | null
           id?: string
           images?: string[]
@@ -904,6 +904,57 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_article_schedules: {
+        Row: {
+          category: string
+          created_at: string
+          day_of_month: number | null
+          day_of_week: number | null
+          enabled: boolean
+          frequency: string
+          hour: number
+          id: string
+          last_error: string | null
+          last_run_at: string | null
+          minute: number
+          next_run_at: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          frequency: string
+          hour: number
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          minute?: number
+          next_run_at: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          day_of_month?: number | null
+          day_of_week?: number | null
+          enabled?: boolean
+          frequency?: string
+          hour?: number
+          id?: string
+          last_error?: string | null
+          last_run_at?: string | null
+          minute?: number
+          next_run_at?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       seo_content_tasks: {
         Row: {
           content: string | null
@@ -981,6 +1032,71 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      seo_generated_articles: {
+        Row: {
+          category: string
+          created_at: string
+          event_date_label: string | null
+          event_end_date: string | null
+          event_location: string | null
+          event_start_date: string | null
+          id: string
+          image_url: string | null
+          meta_description: string | null
+          paragraphs: Json
+          schedule_id: string | null
+          sources: Json
+          status: string
+          tags: Json
+          title: string
+          topic: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          event_date_label?: string | null
+          event_end_date?: string | null
+          event_location?: string | null
+          event_start_date?: string | null
+          id?: string
+          image_url?: string | null
+          meta_description?: string | null
+          paragraphs?: Json
+          schedule_id?: string | null
+          sources?: Json
+          status?: string
+          tags?: Json
+          title: string
+          topic?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          event_date_label?: string | null
+          event_end_date?: string | null
+          event_location?: string | null
+          event_start_date?: string | null
+          id?: string
+          image_url?: string | null
+          meta_description?: string | null
+          paragraphs?: Json
+          schedule_id?: string | null
+          sources?: Json
+          status?: string
+          tags?: Json
+          title?: string
+          topic?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seo_generated_articles_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "seo_article_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       seo_generated_pages: {
         Row: {
@@ -1531,6 +1647,20 @@ export type Database = {
             foreignKeyName: "wa_message_queue_message_id_fkey"
             columns: ["message_id"]
             isOneToOne: false
+            referencedRelation: "ai_routing_audit"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_message_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_review"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_message_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
             referencedRelation: "whatsapp_messages"
             referencedColumns: ["id"]
           },
@@ -1578,6 +1708,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "wa_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_audit"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_processing_queue_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_review"
+            referencedColumns: ["message_id"]
+          },
           {
             foreignKeyName: "wa_processing_queue_message_id_fkey"
             columns: ["message_id"]
@@ -1695,6 +1839,109 @@ export type Database = {
       }
     }
     Views: {
+      active_public_events: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          event_date_label: string | null
+          event_end_date: string | null
+          event_location: string | null
+          event_start_date: string | null
+          id: string | null
+          image_url: string | null
+          sources: Json | null
+          tags: Json | null
+          title: string | null
+          topic: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          event_date_label?: string | null
+          event_end_date?: string | null
+          event_location?: string | null
+          event_start_date?: string | null
+          id?: string | null
+          image_url?: string | null
+          sources?: Json | null
+          tags?: Json | null
+          title?: string | null
+          topic?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          event_date_label?: string | null
+          event_end_date?: string | null
+          event_location?: string | null
+          event_start_date?: string | null
+          id?: string | null
+          image_url?: string | null
+          sources?: Json | null
+          tags?: Json | null
+          title?: string | null
+          topic?: string | null
+        }
+        Relationships: []
+      }
+      ai_routing_audit: {
+        Row: {
+          agent_key: string | null
+          escalated: boolean | null
+          intent: string | null
+          is_fallback: boolean | null
+          message_id: string | null
+          phone: string | null
+          reply_body: string | null
+          routing_confidence: number | null
+          sent_at: string | null
+          thread_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_routing_intent_stats: {
+        Row: {
+          agent_key: string | null
+          avg_confidence: number | null
+          escalated_count: number | null
+          fallback_count: number | null
+          intent: string | null
+          low_confidence_count: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
+      ai_routing_review: {
+        Row: {
+          agent_key: string | null
+          escalated: boolean | null
+          intent: string | null
+          is_fallback: boolean | null
+          message_id: string | null
+          phone: string | null
+          reply_body: string | null
+          routing_confidence: number | null
+          sent_at: string | null
+          thread_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       wa_queue_stats: {
         Row: {
           avg_delay_ms: number | null
@@ -1833,6 +2080,17 @@ export type Database = {
           claimed: boolean
           last_message_body: string
           message_count: number
+        }[]
+      }
+      wa_queue_claim_next: {
+        Args: { p_worker_id: string }
+        Returns: {
+          attempt: number
+          entry_id: string
+          last_message_body: string
+          message_count: number
+          phone: string
+          thread_id: string
         }[]
       }
       wa_queue_claim_retry: {

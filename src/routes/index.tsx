@@ -222,7 +222,7 @@ function PomahHome() {
   const rooms = data?.roomTypes ?? [];
 
   // Total normal capacity = sum of (capacity + extrabed_capacity) × total_physical_rooms per room type
-  const totalNormalCapacity = rooms.reduce((sum, rt) => {
+  const totalNormalCapacity = (rooms as RoomType[]).reduce((sum: number, rt: RoomType) => {
     const cap = Number(rt.capacity ?? 0);
     const ebCap = Number(rt.extrabed_capacity ?? 0);
     const physRooms = Number(rt.total_physical_rooms ?? 0);
@@ -547,7 +547,7 @@ function PomahHome() {
                 >
                   {cfg.datePicker.logoUrl || logoUrl ? (
                     <img
-                      src={cfg.datePicker.logoUrl || logoUrl}
+                      src={cfg.datePicker.logoUrl || logoUrl || undefined}
                       alt={propertyName}
                       className="h-16 w-auto object-contain"
                     />
@@ -1480,6 +1480,7 @@ type RoomType = {
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
   total_physical_rooms?: number | null;
+  amenities?: string[] | null;
 };
 
 /** One picked room in the homepage booking cart. */
