@@ -60,7 +60,7 @@ import { cn } from "@/lib/utils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type Direction = "in" | "out";
+type Direction = "in" | "out" | "system";
 interface TranscriptMsg {
   direction: Direction;
   body: string;
@@ -123,7 +123,8 @@ export function ChatSimulatorView() {
   const origin = typeof window !== "undefined" ? window.location.origin : undefined;
 
   async function sendOne(message: string, history: TranscriptMsg[]) {
-    const res: any = await runTurn({ data: { phone, message, transcript: history, origin } });
+    const cleanHistory = history.filter((m) => m.direction === "in" || m.direction === "out");
+    const res: any = await runTurn({ data: { phone, message, transcript: cleanHistory, origin } });
     if (!res?.ok) {
       throw new Error(res?.error || "Gagal menjalankan simulasi");
     }
@@ -152,11 +153,23 @@ export function ChatSimulatorView() {
     try {
       const { reply, meta } = await sendOne(message, history);
       setLastMeta(meta);
+
+      const systemMessages: TranscriptMsg[] = [];
+      if (meta.toolsUsed && meta.toolsUsed.length > 0) {
+        meta.toolsUsed.forEach((tool) => {
+          systemMessages.push({
+            direction: "system",
+            body: `🔧 Tool: ${tool}`,
+          });
+        });
+      }
+
       if (reply) {
-        setTranscript([...withUser, { direction: "out", body: reply }]);
+        setTranscript([...withUser, ...systemMessages, { direction: "out", body: reply }]);
       } else {
         setTranscript([
           ...withUser,
+          ...systemMessages,
           { direction: "out", body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` },
         ]);
       }
@@ -188,7 +201,8 @@ export function ChatSimulatorView() {
     setSaveTitle("");
     setTitleLoading(true);
     try {
-      const res = await runSuggestTitle({ data: { transcript } });
+      const cleanTranscript = transcript.filter((m) => m.direction === "in" || m.direction === "out");
+      const res = await runSuggestTitle({ data: { transcript: cleanTranscript } });
       setSaveTitle(res?.title ?? "");
     } catch {
       setSaveTitle("");
@@ -203,13 +217,14 @@ export function ChatSimulatorView() {
       toast.error("Judul tidak boleh kosong");
       return;
     }
-    if (transcript.length < 2) {
+    const cleanTranscript = transcript.filter((m) => m.direction === "in" || m.direction === "out");
+    if (cleanTranscript.length < 2) {
       toast.error("Percakapan terlalu pendek untuk disimpan");
       return;
     }
     setSavingTraining(true);
     try {
-      const res: any = await runSaveTraining({ data: { title, transcript } });
+      const res: any = await runSaveTraining({ data: { title, transcript: cleanTranscript } });
       if (res?.ok) {
         toast.success("Percakapan disimpan sebagai training");
         setSaveConfirmOpen(false);
@@ -582,6 +597,16 @@ export function ChatSimulatorView() {
               </div>
             ) : (
               transcript.map((m, i) => {
+                if (m.direction === "system") {
+                  return (
+                    <div key={i} className="flex justify-center my-1.5">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-200/60 border border-stone-300 px-3 py-0.5 text-[10px] font-semibold text-stone-500 shadow-sm font-mono uppercase tracking-wider">
+                        {m.body}
+                      </span>
+                    </div>
+                  );
+                }
+
                 const isEdited = editedIndices[i] !== undefined;
                 const isEditing = editingIdx === i;
 
@@ -900,26 +925,28 @@ export function ChatSimulatorView() {
             <div className="overflow-hidden rounded-lg border bg-stone-50">
               <div className="flex justify-between border-b bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-600">
                 <span>Preview percakapan</span>
-                <span>{transcript.length} pesan</span>
+                <span>{transcript.filter((m) => m.direction === "in" || m.direction === "out").length} pesan</span>
               </div>
               <div className="max-h-[260px] space-y-2 overflow-y-auto p-3">
-                {transcript.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
-                  >
+                {transcript
+                  .filter((m) => m.direction === "in" || m.direction === "out")
+                  .map((m, idx) => (
                     <div
-                      className={cn(
-                        "max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs shadow-sm",
-                        m.direction === "in"
-                          ? "rounded-br-sm bg-emerald-600 text-white"
-                          : "rounded-bl-sm bg-white text-stone-800 border",
-                      )}
+                      key={idx}
+                      className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
                     >
-                      <span className="block whitespace-pre-wrap break-words">{m.body}</span>
+                      <div
+                        className={cn(
+                          "max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs shadow-sm",
+                          m.direction === "in"
+                            ? "rounded-br-sm bg-emerald-600 text-white"
+                            : "rounded-bl-sm bg-white text-stone-800 border",
+                        )}
+                      >
+                        <span className="block whitespace-pre-wrap break-words">{m.body}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>
