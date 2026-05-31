@@ -36,6 +36,27 @@ const FINANCE_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "send_invoice",
+      description:
+        "Ambil detail invoice tamu (booking, total, rekening pembayaran, link invoice). " +
+        "WAJIB dipakai setiap kali perlu mengirimkan invoice ke tamu: setelah booking baru " +
+        "selesai dibuat, atau bila tamu meminta invoice/link bayar lagi.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: {
+            type: "string",
+            description:
+              "Kode booking (mis. PMH-XXXXXX). Wajib diisi bila diketahui — lebih akurat " +
+              "daripada menebak dari nomor HP.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_payment_proof_result",
       description:
         "Ambil hasil OCR bukti transfer terbaru yang dikirim tamu (nominal, bank pengirim, " +
@@ -43,6 +64,44 @@ const FINANCE_TOOLS: ToolDefinition[] = [
         "WAJIB dipanggil setiap kali tamu mengirim foto/screenshot bukti transfer, atau " +
         "saat tamu menanyakan status verifikasi bukti yang baru dikirim.",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "cc_payment_proof_to_admin",
+      description:
+        "Teruskan (CC) bukti transfer terbaru ke super admin sebagai jejak audit. " +
+        "WAJIB dipanggil SEKALI setiap kali tamu mengirim bukti transfer, terlepas dari hasil " +
+        "OCR (matched / unmatched / ambiguous). Aman dipanggil walau webhook produksi sudah " +
+        "mengirim — di-dedupe per messageId.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_payment_status",
+      description:
+        "Update status pembayaran booking (unpaid → paid / partial) di database, supaya " +
+        "invoice yang di-download tamu menampilkan cap LUNAS. WAJIB dipanggil HANYA setelah " +
+        "get_payment_proof_result mengembalikan match.status='matched' (cocok) — JANGAN dipanggil " +
+        "untuk unmatched / ambiguous / no_pending_booking.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: {
+            type: "string",
+            description: "Kode booking (mis. PMH-XXXXXX) yang ada di hasil get_payment_proof_result.match.booking_code.",
+          },
+          new_status: {
+            type: "string",
+            enum: ["paid", "partial"],
+            description: "'paid' bila full match, 'partial' bila hanya cocok sebagian (jarang).",
+          },
+        },
+        required: ["reference_code", "new_status"],
+      },
     },
   },
 ];
@@ -89,24 +148,42 @@ export const financeAgent: AgentDefinition = {
         "\n2. Panggil tool `get_payment_info` untuk mendapatkan detail booking dan rekening." +
         "\n3. Sajikan informasi dengan jelas: total tagihan, rekening tujuan, cara konfirmasi.",
 
+      "PENGIRIMAN INVOICE: Setelah booking baru selesai dibuat (sistem akan otomatis " +
+        "meminta Anda mengirimkan invoice), atau bila tamu minta invoice lagi:\n" +
+        "1. Panggil tool `send_invoice` dengan reference_code (kalau tahu) — bukan get_payment_info.\n" +
+        "2. Susun pesan ramah berisi:\n" +
+        "   - Kode booking, tipe kamar, check-in/out, total tagihan\n" +
+        "   - Rekening pembayaran (bank, no rekening, atas nama)\n" +
+        "   - Link invoice (`invoice_url` dari hasil tool) supaya tamu bisa lihat & unduh PDF\n" +
+        "   - Instruksi singkat: kirim bukti transfer ke chat ini setelah bayar\n" +
+        "3. JANGAN ulangi nama tamu di pembuka (state machine sudah menyebutnya tepat sebelum jawaban Anda).\n" +
+        "4. JANGAN minta data ulang. Semua detail sudah di hasil tool.",
+
       "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer " +
-        "(atau bertanya apakah bukti sudah diterima), WAJIB panggil tool " +
-        "`get_payment_proof_result` lebih dulu untuk membaca hasil OCR. " +
-        "Susun balasan berdasarkan field `match.status`:\n" +
-        "- 'matched': konfirmasi spesifik — sebutkan nominal yang terbaca, bank pengirim, " +
-        "  dan kode booking. Contoh: 'Terima kasih Kak, transfer Rp 200.000 dari BCA " +
-        "  sudah cocok dengan booking PMH-XXXXXX. Tim kami akan finalisasi maksimal 1×24 jam.'\n" +
+        "(atau bertanya apakah bukti sudah diterima), WAJIB jalankan urutan ini:\n" +
+        "  Step 1. Panggil `get_payment_proof_result` untuk membaca hasil OCR.\n" +
+        "  Step 2. Panggil `cc_payment_proof_to_admin` SEKALI untuk meneruskan bukti " +
+        "       ke super admin (jejak audit). WAJIB terlepas dari match.status.\n" +
+        "  Step 3. Susun balasan ke tamu berdasarkan field `match.status` di Step 1.\n\n" +
+        "Aturan balasan per match.status:\n" +
+        "- 'matched' (cocok): \n" +
+        "    a. Panggil tool `update_payment_status` dengan reference_code = match.booking_code " +
+        "       dan new_status = 'paid' untuk update status invoice menjadi LUNAS.\n" +
+        "    b. Balas tamu dengan format: 'Terima kasih Kak, transfer Rp X dari Bank Y sudah cocok " +
+        "       dengan booking PMH-XXXXXX. Status invoice Anda telah kami update menjadi LUNAS. " +
+        "       Silakan download ulang invoice di link berikut: [invoice_url dari hasil " +
+        "       update_payment_status]'\n" +
         "- 'unmatched' (nominal beda dari tagihan): sebutkan selisihnya dengan halus, " +
-        "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain.\n" +
+        "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain. " +
+        "  JANGAN panggil update_payment_status.\n" +
         "- 'ambiguous' (beberapa booking cocok / nominal tidak terbaca): minta tamu " +
-        "  sebutkan kode booking-nya.\n" +
+        "  sebutkan kode booking-nya. JANGAN panggil update_payment_status.\n" +
         "- 'no_pending_booking': info bahwa belum ada booking pending — tanyakan kode booking " +
         "  atau nama agar bisa ditelusuri.\n" +
         "- 'pending' / 'no_proof' / error apa pun: balas generik 'Bukti transfer sedang " +
         "  kami verifikasi, konfirmasi dalam maksimal 1×24 jam.'\n" +
         "Jangan meminta tamu mengirim ulang bukti transfer kecuali OCR gagal terbaca total " +
-        "(semua field null). Jangan menjanjikan pelunasan / room confirmed — tim Finance " +
-        "tetap yang verifikasi akhir.",
+        "(semua field null).",
 
       "ATURAN PENTING SAAT MEMBACA HASIL OCR:\n" +
         "1. Nama pengirim sering BERBEDA dari nama booking — wajar (transfer dari suami/" +

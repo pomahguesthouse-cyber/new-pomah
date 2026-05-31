@@ -14,6 +14,9 @@ import { requestHousekeepingService }     from "./housekeeping/request-service.t
 import { reportMaintenanceIssue }         from "./maintenance/report-issue.tool";
 import { getPaymentInfo }                 from "./finance/get-payment-info.tool";
 import { getPaymentProofResult }          from "./finance/get-payment-proof-result.tool";
+import { sendInvoice }                    from "./finance/send-invoice.tool";
+import { updatePaymentStatus }            from "./finance/update-payment-status.tool";
+import { ccPaymentProofToAdmin }          from "./finance/cc-payment-proof-to-admin.tool";
 import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
@@ -30,6 +33,9 @@ const HANDLERS: Record<string, ToolHandler> = {
   report_maintenance_issue:      reportMaintenanceIssue,
   get_payment_info:              getPaymentInfo,
   get_payment_proof_result:      getPaymentProofResult,
+  send_invoice:                  sendInvoice,
+  update_payment_status:         updatePaymentStatus,
+  cc_payment_proof_to_admin:     ccPaymentProofToAdmin,
   get_bookings:                  getBookings,
   update_booking_status:         updateBookingStatus,
   change_booking_room:           changeBookingRoom,
