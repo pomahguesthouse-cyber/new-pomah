@@ -28,6 +28,7 @@ import {
   Search,
   Trash2,
   BookOpen,
+  Download,
 } from "lucide-react";
 import {
   simulateChatTurn,
