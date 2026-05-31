@@ -357,12 +357,15 @@ export async function processBookingState(
   }
   
   if (state === "PAYMENT_PENDING") {
-    // Awaiting payment proof
-    if (/\b(sudah|lunas|bayar|bukti|transfer)\b/i.test(message)) {
-      await updateBookingState(supabase, phone, "COMPLETED", context);
-      return { handled: true, reply: "Terima kasih! Pembayaran Kakak akan segera diverifikasi oleh tim kami. Kami akan mengabari Kakak secepatnya setelah verifikasi berhasil." };
-    }
-    return { handled: true, reply: "Silakan selesaikan pembayaran ke rekening yang telah diinstruksikan sebelumnya, lalu kirimkan bukti transfer atau ketik 'Sudah bayar' di sini." };
+    // Pre-Finance-Agent ownership, this state auto-flipped to COMPLETED on
+    // any "bayar/sudah/transfer" keyword which bypassed OCR + status update.
+    // Now the Finance Agent owns the post-booking flow: hand the turn over
+    // so it can run get_payment_proof_result → update_payment_status →
+    // craft the LUNAS notification (or ask for clarification when the OCR
+    // didn't match). State stays at PAYMENT_PENDING until the agent is
+    // confident; the 15-minute auto-reset still applies if the guest goes
+    // silent.
+    return { handled: false };
   }
 
   if (state === "COMPLETED") {

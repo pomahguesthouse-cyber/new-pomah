@@ -66,6 +66,32 @@ const FINANCE_TOOLS: ToolDefinition[] = [
       parameters: { type: "object", properties: {} },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "update_payment_status",
+      description:
+        "Update status pembayaran booking (unpaid → paid / partial) di database, supaya " +
+        "invoice yang di-download tamu menampilkan cap LUNAS. WAJIB dipanggil HANYA setelah " +
+        "get_payment_proof_result mengembalikan match.status='matched' (cocok) — JANGAN dipanggil " +
+        "untuk unmatched / ambiguous / no_pending_booking.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: {
+            type: "string",
+            description: "Kode booking (mis. PMH-XXXXXX) yang ada di hasil get_payment_proof_result.match.booking_code.",
+          },
+          new_status: {
+            type: "string",
+            enum: ["paid", "partial"],
+            description: "'paid' bila full match, 'partial' bila hanya cocok sebagian (jarang).",
+          },
+        },
+        required: ["reference_code", "new_status"],
+      },
+    },
+  },
 ];
 
 export const financeAgent: AgentDefinition = {
@@ -125,20 +151,24 @@ export const financeAgent: AgentDefinition = {
         "(atau bertanya apakah bukti sudah diterima), WAJIB panggil tool " +
         "`get_payment_proof_result` lebih dulu untuk membaca hasil OCR. " +
         "Susun balasan berdasarkan field `match.status`:\n" +
-        "- 'matched': konfirmasi spesifik — sebutkan nominal yang terbaca, bank pengirim, " +
-        "  dan kode booking. Contoh: 'Terima kasih Kak, transfer Rp 200.000 dari BCA " +
-        "  sudah cocok dengan booking PMH-XXXXXX. Tim kami akan finalisasi maksimal 1×24 jam.'\n" +
+        "- 'matched' (cocok): \n" +
+        "    1. Panggil tool `update_payment_status` dengan reference_code = match.booking_code " +
+        "       dan new_status = 'paid' untuk update status invoice menjadi LUNAS.\n" +
+        "    2. Balas tamu dengan format: 'Terima kasih Kak, transfer Rp X dari Bank Y sudah cocok " +
+        "       dengan booking PMH-XXXXXX. Status invoice Anda telah kami update menjadi LUNAS. " +
+        "       Silakan download ulang invoice di link berikut: [invoice_url dari hasil " +
+        "       update_payment_status]'\n" +
         "- 'unmatched' (nominal beda dari tagihan): sebutkan selisihnya dengan halus, " +
-        "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain.\n" +
+        "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain. " +
+        "  JANGAN panggil update_payment_status.\n" +
         "- 'ambiguous' (beberapa booking cocok / nominal tidak terbaca): minta tamu " +
-        "  sebutkan kode booking-nya.\n" +
+        "  sebutkan kode booking-nya. JANGAN panggil update_payment_status.\n" +
         "- 'no_pending_booking': info bahwa belum ada booking pending — tanyakan kode booking " +
         "  atau nama agar bisa ditelusuri.\n" +
         "- 'pending' / 'no_proof' / error apa pun: balas generik 'Bukti transfer sedang " +
         "  kami verifikasi, konfirmasi dalam maksimal 1×24 jam.'\n" +
         "Jangan meminta tamu mengirim ulang bukti transfer kecuali OCR gagal terbaca total " +
-        "(semua field null). Jangan menjanjikan pelunasan / room confirmed — tim Finance " +
-        "tetap yang verifikasi akhir.",
+        "(semua field null).",
 
       "ATURAN PENTING SAAT MEMBACA HASIL OCR:\n" +
         "1. Nama pengirim sering BERBEDA dari nama booking — wajar (transfer dari suami/" +
