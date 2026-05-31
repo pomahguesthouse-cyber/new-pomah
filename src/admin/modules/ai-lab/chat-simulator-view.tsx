@@ -409,7 +409,7 @@ export function ChatSimulatorView() {
   }, [editTrainingId]);
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
+    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_480px]">
       {/* ── Left: chat ─────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-3">
         <Card className="flex items-center gap-3 p-3">
