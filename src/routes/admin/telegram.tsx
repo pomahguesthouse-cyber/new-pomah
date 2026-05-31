@@ -23,9 +23,12 @@ import {
   generateTelegramLinkToken,
   unlinkTelegram,
   setupTelegramWebhook,
+  getTelegramWebhookDiagnostics,
+  sendTelegramTestMessage,
+  resetTelegramWebhook,
 } from "@/admin/functions/telegram.functions";
 import { toast } from "sonner";
-import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle, Activity, Zap } from "lucide-react";
 
 export const Route = createFileRoute("/admin/telegram")({
   component: TelegramPage,
@@ -36,11 +39,18 @@ function TelegramPage() {
   const genFn = useServerFn(generateTelegramLinkToken);
   const unlinkFn = useServerFn(unlinkTelegram);
   const setupFn = useServerFn(setupTelegramWebhook);
+  const diagFn = useServerFn(getTelegramWebhookDiagnostics);
+  const testFn = useServerFn(sendTelegramTestMessage);
+  const resetWebhookFn = useServerFn(resetTelegramWebhook);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["telegram-status"],
     queryFn: () => listFn(),
+  });
+  const { data: diag, refetch: refetchDiag } = useQuery({
+    queryKey: ["telegram-diagnostics"],
+    queryFn: () => diagFn(),
   });
   const [generatedLink, setGeneratedLink] = useState<{ id: string; link: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -51,8 +61,32 @@ function TelegramPage() {
       const res: any = await setupFn({ data: { origin } });
       toast.success(`Webhook diset: ${res.webhook_url} (bot @${res.bot_username})`);
       qc.invalidateQueries({ queryKey: ["telegram-status"] });
+      qc.invalidateQueries({ queryKey: ["telegram-diagnostics"] });
     } catch (e: any) {
       toast.error(e.message ?? "Setup gagal");
+    }
+  }
+
+  async function handleSendTest(id: string) {
+    setBusyId(id);
+    try {
+      await testFn({ data: { managerId: id } });
+      toast.success("Test message terkirim. Cek Telegram Anda.");
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleResetWebhook() {
+    if (!window.confirm("Hapus webhook + pending updates? Setelah ini klik 'Setup webhook' lagi.")) return;
+    try {
+      await resetWebhookFn();
+      toast.success("Webhook dihapus");
+      refetchDiag();
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal");
     }
   }
 
@@ -118,6 +152,52 @@ function TelegramPage() {
         )}
       </Card>
 
+      {/* Diagnostics panel */}
+      {data?.botConfigured && diag?.ok && (
+        <Card className="p-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Activity className="h-4 w-4 text-indigo-600" /> Diagnostik Webhook
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1 gap-x-4 text-xs">
+            <div><span className="text-muted-foreground">Bot dari getMe:</span> {diag.bot_username ? <code>@{diag.bot_username}</code> : <span className="text-red-600">{diag.me_error ?? "—"}</span>}</div>
+            <div><span className="text-muted-foreground">Bot username di DB:</span> {diag.bot_username_in_db ? <code>@{diag.bot_username_in_db}</code> : <span className="text-amber-700">belum</span>}</div>
+            <div><span className="text-muted-foreground">Webhook secret di DB:</span> {diag.secret_set_in_db ? "✅ ada" : <span className="text-amber-700">belum</span>}</div>
+            <div><span className="text-muted-foreground">Webhook URL:</span> {diag.webhook?.url ? <code className="break-all">{diag.webhook.url}</code> : <span className="text-red-600">BELUM DI-SET</span>}</div>
+            <div><span className="text-muted-foreground">Pending updates:</span> {diag.webhook?.pending_update_count ?? 0}</div>
+            <div><span className="text-muted-foreground">Allowed updates:</span> {diag.webhook?.allowed_updates?.join(", ") ?? "—"}</div>
+            {diag.webhook?.last_error_message && (
+              <div className="col-span-full text-red-700">
+                <span className="text-muted-foreground">Last error:</span> {diag.webhook.last_error_message}
+                {diag.webhook.last_error_date && (
+                  <span className="ml-1 text-muted-foreground">
+                    ({new Date(diag.webhook.last_error_date * 1000).toLocaleString("id-ID")})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" variant="outline" className="h-7" onClick={() => refetchDiag()}>
+              <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-red-700" onClick={handleResetWebhook}>
+              <Trash2 className="h-3 w-3 mr-1" /> Hapus webhook
+            </Button>
+          </div>
+          {!diag.webhook?.url && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              Webhook URL kosong. Pesan ke bot tidak akan diterima sistem. Klik <b>Setup webhook</b> di atas.
+            </div>
+          )}
+          {diag.webhook?.url && data.botConfigured && !diag.webhook.url.includes(window.location.host) && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+              Webhook URL <code>{diag.webhook.url}</code> menunjuk ke host lain (bukan {window.location.host}).
+              Bila ini bukan endpoint aktif Anda, klik <b>Setup webhook</b> untuk redirect ke domain ini.
+            </div>
+          )}
+        </Card>
+      )}
+
       <Card className="p-4 space-y-3">
         <div className="text-sm font-semibold">Per-Manager Linking</div>
         {isLoading ? (
@@ -157,15 +237,27 @@ function TelegramPage() {
                     </td>
                     <td className="text-right space-x-1">
                       {linked ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7"
-                          onClick={() => handleUnlink(m.id)}
-                          disabled={busyId === m.id}
-                        >
-                          <Trash2 className="h-3 w-3 mr-1" /> Putuskan
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7"
+                            onClick={() => handleSendTest(m.id)}
+                            disabled={busyId === m.id}
+                            title="Kirim pesan test ke chat Telegram manager"
+                          >
+                            <Zap className="h-3 w-3 mr-1" /> Test
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7"
+                            onClick={() => handleUnlink(m.id)}
+                            disabled={busyId === m.id}
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" /> Putuskan
+                          </Button>
+                        </>
                       ) : (
                         <Button
                           size="sm"

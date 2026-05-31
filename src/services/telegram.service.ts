@@ -151,6 +151,26 @@ export async function getMe(token: string): Promise<TgResult<{ id: number; usern
   return call(token, "getMe", {});
 }
 
+export interface WebhookInfo {
+  url: string;
+  has_custom_certificate: boolean;
+  pending_update_count: number;
+  ip_address?: string;
+  last_error_date?: number;
+  last_error_message?: string;
+  last_synchronization_error_date?: number;
+  max_connections?: number;
+  allowed_updates?: string[];
+}
+
+export async function getWebhookInfo(token: string): Promise<TgResult<WebhookInfo>> {
+  return call<WebhookInfo>(token, "getWebhookInfo", {});
+}
+
+export async function deleteWebhook(token: string): Promise<TgResult> {
+  return call(token, "deleteWebhook", { drop_pending_updates: true });
+}
+
 /** Resolve a Telegram-hosted file_id to a public-ish URL the OCR pipeline can fetch. */
 export async function getFileUrl(
   token: string,
