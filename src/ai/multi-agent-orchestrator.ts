@@ -331,18 +331,27 @@ export async function runMultiAgentOrchestration(
   let trainingBlock: string | undefined;
   if (!input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
     try {
-      trainingExamples = await retrieveTrainingExamples(
-        input.toolCtx.supabaseAdmin,
-        lastUserMsg,
-        input.llmConfig,
-        { matchCount: 3, minSimilarity: 0.78 },
+      const { readTrainingRagConfig } = await import(
+        "@/admin/modules/ai-lab/ai-lab.functions"
       );
-      if (trainingExamples.length > 0) {
-        trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
-        console.info(
-          `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
-            `(top sim ${trainingExamples[0].similarity.toFixed(2)})`,
+      const ragCfg = await readTrainingRagConfig(input.toolCtx.supabaseAdmin);
+      if (ragCfg.enabled) {
+        trainingExamples = await retrieveTrainingExamples(
+          input.toolCtx.supabaseAdmin,
+          lastUserMsg,
+          input.llmConfig,
+          { matchCount: ragCfg.matchCount, minSimilarity: ragCfg.minSimilarity },
         );
+        if (trainingExamples.length > 0) {
+          trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
+          console.info(
+            `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
+              `(top sim ${trainingExamples[0].similarity.toFixed(2)}, ` +
+              `k=${ragCfg.matchCount}, min=${ragCfg.minSimilarity})`,
+          );
+        }
+      } else {
+        console.info("[MultiAgent] Training RAG disabled by config");
       }
     } catch (e) {
       console.warn("[MultiAgent] Training RAG failed (non-fatal):", e);
