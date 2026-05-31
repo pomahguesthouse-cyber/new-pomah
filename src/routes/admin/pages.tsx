@@ -908,10 +908,22 @@ function SectionLayoutControls({
             </button>
           )}
         </div>
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+          <input
+            type="checkbox"
+            checked={layout.uppercase === true}
+            onChange={(e) => update({ uppercase: e.target.checked ? true : undefined })}
+            className="h-4 w-4 cursor-pointer accent-teal-700"
+          />
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            CAPSLOCK
+          </span>
+        </label>
         {(layout.textAlign ||
           layout.paddingTop != null ||
           layout.paddingBottom != null ||
-          layout.backgroundColor) && (
+          layout.backgroundColor ||
+          layout.uppercase) && (
           <button
             type="button"
             onClick={() =>

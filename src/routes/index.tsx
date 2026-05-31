@@ -721,6 +721,7 @@ function PomahHome() {
                     fontSize={b.fontSize}
                     fontStyle={b.fontStyle}
                     color={b.color}
+                    uppercase={cfg.sectionLayouts?.badges?.uppercase}
                   >
                     {b.heading}
                   </SectionHeading>
@@ -774,6 +775,7 @@ function PomahHome() {
                 fontSize={cfg.story.fontSize}
                 fontStyle={cfg.story.fontStyle}
                 color={cfg.story.color}
+                uppercase={cfg.sectionLayouts?.story?.uppercase}
               >
                 {cfg.story.heading}
               </SectionHeading>
@@ -796,6 +798,7 @@ function PomahHome() {
                     fontSize={cfg.reviews.fontSize}
                     fontStyle={cfg.reviews.fontStyle}
                     color={cfg.reviews.color}
+                    uppercase={cfg.sectionLayouts?.reviews?.uppercase}
                   >
                     {cfg.reviews.heading}
                   </SectionHeading>
@@ -866,6 +869,7 @@ function PomahHome() {
                         <SectionHeading
                           normalCase
                           noUnderline
+                          uppercase={cfg.sectionLayouts?.carousel?.uppercase}
                           fontFamily={cfg.roomCarousel.fontFamily}
                           fontSize={cfg.roomCarousel.fontSize}
                           fontStyle={cfg.roomCarousel.fontStyle}
@@ -970,6 +974,7 @@ function PomahHome() {
                   fontSize={fac.fontSize}
                   fontStyle={fac.fontStyle}
                   color={fac.color}
+                  uppercase={cfg.sectionLayouts?.facilities?.uppercase}
                 >
                   {fac.heading}
                 </SectionHeading>
@@ -1009,6 +1014,7 @@ function PomahHome() {
                     fontSize={lok.fontSize}
                     fontStyle={lok.fontStyle}
                     color={lok.color}
+                    uppercase={cfg.sectionLayouts?.lokasi?.uppercase}
                   >
                     {lok.heading}
                   </SectionHeading>
@@ -1075,6 +1081,7 @@ function PomahHome() {
                   fontSize={n.fontSize}
                   fontStyle={n.fontStyle}
                   color={n.color}
+                  uppercase={cfg.sectionLayouts?.news?.uppercase}
                 >
                   {n.heading}
                 </SectionHeading>
@@ -2522,7 +2529,8 @@ function DateStack({
 function SectionHeading({
   children,
   noUnderline,
-  normalCase,
+  normalCase, // legacy prop, retained for back-compat (no-op now)
+  uppercase,  // explicit opt-in to CAPS styling
   fontFamily,
   fontSize,
   fontStyle,
@@ -2531,11 +2539,13 @@ function SectionHeading({
   children: React.ReactNode;
   noUnderline?: boolean;
   normalCase?: boolean;
+  uppercase?: boolean;
   fontFamily?: "sans" | "serif" | "mono" | "brother-signature";
   fontSize?: number;
   fontStyle?: "normal" | "bold" | "italic";
   color?: string;
 }) {
+  void normalCase; // suppress unused-var warning; semantics now default-on
   const fontClass =
     fontFamily === "mono"
       ? "font-mono"
@@ -2549,7 +2559,7 @@ function SectionHeading({
     <div className="flex flex-col items-center">
       <h2
         className={`tracking-tight ${color ? "" : "text-stone-800"} ${fontClass} ${
-          normalCase ? "" : "uppercase"
+          uppercase ? "uppercase" : ""
         } ${fontSize ? "" : "text-3xl font-bold md:text-4xl"}`}
         style={{
           ...(color ? { color } : {}),
