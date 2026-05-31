@@ -105,4 +105,8 @@ export interface MultiAgentResult {
   routingConfidence:  number;
   escalated:          boolean;
   error?:             string;
+  /** Jumlah contoh training (RAG dari ai_conversation_logs) yang dipakai */
+  trainingExamplesUsed?: number;
+  /** ID contoh training yang dipakai — berguna untuk debug di UI */
+  trainingExampleIds?:   string[];
 }

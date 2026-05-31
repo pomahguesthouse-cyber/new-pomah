@@ -17,6 +17,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { getBookingState, updateBookingState } from "@/ai/state-machine/booking-machine";
+import { embedTrainingExample } from "@/ai/training-rag.service";
 import { todayWIB } from "@/lib/date";
 
 // ─── Shared environment builder ────────────────────────────────────────────────
@@ -153,6 +154,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       bookingState: stateAfter.state,
       bookingContext: stateAfter.context,
       elapsedMs,
+      trainingExamplesUsed: orch.trainingExamplesUsed ?? 0,
+      trainingExampleIds: orch.trainingExampleIds ?? [],
     };
   });
 
@@ -207,8 +210,31 @@ export const saveSimulationAsTraining = createServerFn({ method: "POST" })
       return { ok: true, savedCount: 0 };
     }
 
-    const { error } = await context.supabase.from("ai_conversation_logs").insert(rows);
+    const { data: inserted, error } = await context.supabase
+      .from("ai_conversation_logs")
+      .insert(rows)
+      .select("id");
     if (error) throw error;
+
+    // Embed setiap contoh yang baru disimpan agar langsung bisa diretrieve
+    // oleh chatbot di percakapan berikutnya. Embedding berjalan best-effort —
+    // kegagalan tidak menggagalkan penyimpanan training.
+    try {
+      const env = await buildEnv();
+      if (env.apiKey) {
+        const llmConfig = { apiKey: env.apiKey, baseUrl: env.baseUrl, model: env.model };
+        await Promise.all(
+          (inserted ?? []).map((row) =>
+            embedTrainingExample(supabaseAdmin, row.id, llmConfig).catch((e) => {
+              console.warn("[saveSimulationAsTraining] embed failed:", e);
+            }),
+          ),
+        );
+      }
+    } catch (e) {
+      console.warn("[saveSimulationAsTraining] embedding pass failed:", e);
+    }
+
 
     return { ok: true, savedCount: rows.length };
   });

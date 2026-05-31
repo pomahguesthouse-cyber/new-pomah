@@ -24,6 +24,11 @@ import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
+import {
+  retrieveTrainingExamples,
+  formatTrainingExamplesForPrompt,
+  type TrainingExample,
+} from "./training-rag.service";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -96,6 +101,8 @@ async function runAgent(
   maxTurns:         number,
   onAskAgent?:      (agentKey: AgentKey, question: string) => Promise<string>,
   signal?:          AbortSignal,
+  /** Blok few-shot dari training simulator (opsional, sudah diformat) */
+  trainingExamplesBlock?: string,
 ): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
   const toolsUsed = new Set<string>();
 
@@ -106,9 +113,15 @@ async function runAgent(
   while (trimmed.length && trimmed[trimmed.length - 1].direction !== "in") trimmed.pop();
   const history = trimmed.length ? trimmed : conversationMsgs;
 
-  // Build message array: agent system prompt + conversation history
+  // Build message array: agent system prompt (+ optional training examples
+  // as a second system message) + conversation history. Examples are kept
+  // in a SEPARATE system message so they don't bloat the agent's base prompt
+  // and are clearly labelled as guidance, not as part of the persona.
   const messages: AiMessage[] = [
     { role: "system", content: agent.buildSystemPrompt(agentCtx) },
+    ...(trainingExamplesBlock
+      ? [{ role: "system" as const, content: trainingExamplesBlock }]
+      : []),
     ...history.map((m) => ({
       role:    (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
       content: m.body,
@@ -311,7 +324,30 @@ export async function runMultiAgentOrchestration(
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
-  // 5. Route to agent
+  // 4b. Retrieve training examples (RAG di ai_conversation_logs).
+  //     Skip saat tamu sedang di tengah pengisian data booking — di sana
+  //     jawaban harus mengikuti state machine, bukan few-shot.
+  let trainingExamples: TrainingExample[] = [];
+  let trainingBlock: string | undefined;
+  if (!input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
+    try {
+      trainingExamples = await retrieveTrainingExamples(
+        input.toolCtx.supabaseAdmin,
+        lastUserMsg,
+        input.llmConfig,
+        { matchCount: 3, minSimilarity: 0.78 },
+      );
+      if (trainingExamples.length > 0) {
+        trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
+        console.info(
+          `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
+            `(top sim ${trainingExamples[0].similarity.toFixed(2)})`,
+        );
+      }
+    } catch (e) {
+      console.warn("[MultiAgent] Training RAG failed (non-fatal):", e);
+    }
+  }
 
   // 5. Route to agent
   const routing = routeToAgent(classified);
@@ -344,6 +380,7 @@ export async function runMultiAgentOrchestration(
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
           undefined, // no nested delegation
           input.signal,
+          trainingBlock,
         );
 
         return result.reply
@@ -361,6 +398,7 @@ export async function runMultiAgentOrchestration(
     maxTurns,
     onAskAgent,
     input.signal,
+    trainingBlock,
   );
 
   // 6. If primary agent failed, fall back to Front Office
@@ -376,29 +414,34 @@ export async function runMultiAgentOrchestration(
       maxTurns,
       undefined,
       input.signal,
+      trainingBlock,
     );
 
     return {
-      status:            foResult.reply ? "reply" : "error",
-      reply:             foResult.reply,
-      toolsUsed:         foResult.toolsUsed,
-      agentKey:          "front-office",
-      intent:            classified.category,
-      routingConfidence: routing.confidence,
-      escalated:         routing.escalated,
-      error:             foResult.error,
+      status:               foResult.reply ? "reply" : "error",
+      reply:                foResult.reply,
+      toolsUsed:            foResult.toolsUsed,
+      agentKey:             "front-office",
+      intent:               classified.category,
+      routingConfidence:    routing.confidence,
+      escalated:            routing.escalated,
+      error:                foResult.error,
+      trainingExamplesUsed: trainingExamples.length,
+      trainingExampleIds:   trainingExamples.map((ex) => ex.id),
     };
   }
 
   return {
-    status:            agentResult.reply ? "reply" : "error",
-    reply:             agentResult.reply,
-    toolsUsed:         agentResult.toolsUsed,
-    agentKey:          routing.agentKey,
-    intent:            classified.category,
-    routingConfidence: routing.confidence,
-    escalated:         routing.escalated,
-    error:             agentResult.error,
+    status:               agentResult.reply ? "reply" : "error",
+    reply:                agentResult.reply,
+    toolsUsed:            agentResult.toolsUsed,
+    agentKey:             routing.agentKey,
+    intent:               classified.category,
+    routingConfidence:    routing.confidence,
+    escalated:            routing.escalated,
+    error:                agentResult.error,
+    trainingExamplesUsed: trainingExamples.length,
+    trainingExampleIds:   trainingExamples.map((ex) => ex.id),
   };
 }
 

@@ -2,10 +2,45 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { embedTrainingExample } from "@/ai/training-rag.service";
 
 /** Untyped client view — `source` column isn't in the generated types. */
 function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
+}
+
+/**
+ * Best-effort re-embedding setelah admin mengubah rating/correction sebuah
+ * contoh. Mengambil konfigurasi LLM dari tabel `properties` agar konsisten
+ * dengan pipeline lain. Tidak menggagalkan request bila gagal.
+ */
+async function reembedTrainingExampleAsync(logId: string): Promise<void> {
+  try {
+    const { data: prop } = await supabaseAdmin
+      .from("properties")
+      .select("ai_api_key, ai_base_url, ai_model")
+      .limit(1)
+      .maybeSingle();
+    const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
+    const explicitKey = p.ai_api_key?.trim();
+    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
+    const useLovable = !explicitKey && !!lovableKey;
+    const apiKey = explicitKey || lovableKey || null;
+    if (!apiKey) return;
+    const baseUrl = useLovable
+      ? "https://ai.gateway.lovable.dev/v1"
+      : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    const cfgModel = p.ai_model?.trim();
+    const model = useLovable
+      ? cfgModel?.includes("/")
+        ? cfgModel
+        : "google/gemini-2.5-flash"
+      : cfgModel || "gpt-4o-mini";
+    await embedTrainingExample(supabaseAdmin, logId, { apiKey, baseUrl, model });
+  } catch (e) {
+    console.warn("[training.reembed] failed:", e);
+  }
 }
 
 export const listConversationLogs = createServerFn({ method: "GET" })

@@ -19,6 +19,9 @@ export type Database = {
           ai_response: string
           correction: string | null
           created_at: string
+          effective_answer: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
           id: string
           metadata: Json | null
           rating: string | null
@@ -31,6 +34,9 @@ export type Database = {
           ai_response: string
           correction?: string | null
           created_at?: string
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           id?: string
           metadata?: Json | null
           rating?: string | null
@@ -43,6 +49,9 @@ export type Database = {
           ai_response?: string
           correction?: string | null
           created_at?: string
+          effective_answer?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           id?: string
           metadata?: Json | null
           rating?: string | null
@@ -2030,6 +2039,19 @@ export type Database = {
           id: string
           similarity: number
           source_url: string
+        }[]
+      }
+      match_training_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          effective_answer: string
+          id: string
+          similarity: number
+          user_message: string
         }[]
       }
       receive_whatsapp_message: {
