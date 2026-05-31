@@ -47,9 +47,26 @@ export interface ToolConfig {
   note: string;
 }
 
+/** Pengaturan retrieval contoh training (RAG) untuk chatbot. */
+export interface TrainingRagConfig {
+  /** Aktifkan injeksi few-shot dari ai_conversation_logs ke system prompt. */
+  enabled: boolean;
+  /** Jumlah contoh top-K yang ditarik per pertanyaan tamu (1–10). */
+  matchCount: number;
+  /** Ambang minimum cosine similarity (0–1). Lebih tinggi = lebih ketat. */
+  minSimilarity: number;
+}
+
+export const TRAINING_RAG_DEFAULTS: TrainingRagConfig = {
+  enabled: true,
+  matchCount: 3,
+  minSimilarity: 0.78,
+};
+
 export interface AiLabConfig {
   agents: Record<string, AgentConfig>;
   tools: Record<string, ToolConfig>;
+  trainingRag: TrainingRagConfig;
 }
 
 /** Default persona prompt for each specialized agent. */
