@@ -172,6 +172,7 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
 
 const INTEGRATION_FIELDS = [
   "fonnte_token",
+  "telegram_bot_token",
   "google_place_id",
   "google_places_api_key",
   "google_analytics_id",
@@ -208,6 +209,7 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
     return {
       id: (row.id as string | undefined) ?? null,
       fonnte_token: (row.fonnte_token as string | null) ?? null,
+      telegram_bot_token: (row.telegram_bot_token as string | null) ?? null,
       google_place_id: (row.google_place_id as string | null) ?? null,
       google_places_api_key: (row.google_places_api_key as string | null) ?? null,
       google_analytics_id: (row.google_analytics_id as string | null) ?? null,
@@ -231,6 +233,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
       .object({
         id: z.string().uuid(),
         fonnte_token: z.string().max(100).nullable().optional(),
+        telegram_bot_token: z.string().max(200).nullable().optional(),
         google_place_id: z.string().max(300).nullable().optional(),
         google_places_api_key: z.string().max(500).nullable().optional(),
         google_analytics_id: z.string().max(100).nullable().optional(),
