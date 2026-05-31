@@ -31,6 +31,9 @@ import {
   Plus,
   Sparkles,
   Paperclip,
+  PlayCircle,
+  StopCircle,
+  ChevronRight,
 } from "lucide-react";
 import {
   simulateChatTurn,
@@ -105,6 +108,17 @@ export function ChatSimulatorView() {
   /** Payment-proof image attached to the next outgoing message (sim only). */
   const [attachedImage, setAttachedImage] = useState<{ dataUrl: string; name: string } | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Pre-scripted demo runner. demoStep = index of the NEXT step to run
+   * (so after a turn finishes, the user clicks "Lanjut" to fire the
+   * step at demoStep). -1 means the demo is not active.
+   */
+  const [demoStep, setDemoStep] = useState<number>(-1);
+  // We keep a ref alongside the state so the async runner can read the
+  // latest transcript without stale closure issues.
+  const transcriptRef = useRef<TranscriptMsg[]>([]);
+  transcriptRef.current = transcript;
 
   // Inline correction on bot bubbles
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -290,10 +304,99 @@ export function ChatSimulatorView() {
       setLastMeta(null);
       setEditedIndices({});
       setEditingIdx(null);
+      setDemoStep(-1);
       toast.success("Percakapan & state booking direset");
     } catch (e: any) {
       toast.error(e.message ?? "Gagal reset");
     }
+  }
+
+  // ── Pre-scripted booking demo ───────────────────────────────────────────
+  // Drives the bot through: greeting → room inquiry → pricing → booking
+  // initiation → name → email → phone → confirmation → invoice. The last
+  // step lands in PAYMENT_PENDING; the state machine returns the invoice
+  // + bank details. Test Finance Agent separately by attaching a real
+  // bukti transfer image after the demo finishes.
+  const DEMO_SCRIPT: Array<{ label: string; message: string }> = [
+    { label: "Sapaan",              message: "Halo, selamat siang" },
+    { label: "Tanya kamar Deluxe",  message: "Saya mau tanya kamar Deluxe" },
+    { label: "Tanya harga (ikuti konteks)", message: "Berapa harganya?" },
+    { label: "Mulai booking",       message: "Saya mau booking kamar Deluxe untuk check-in besok, 2 malam, 2 orang dewasa" },
+    { label: "Beri nama",           message: "Budi Santoso" },
+    { label: "Konfirmasi nama",     message: "ya" },
+    { label: "Beri email",          message: "budi.test@example.com" },
+    { label: "Konfirmasi nomor",    message: "ya" },
+    { label: "Konfirmasi booking → invoice", message: "ya lanjut" },
+  ];
+
+  async function runDemoStep(stepIdx: number) {
+    if (stepIdx >= DEMO_SCRIPT.length) {
+      setDemoStep(-1);
+      toast.success("Demo booking selesai");
+      return;
+    }
+    const step = DEMO_SCRIPT[stepIdx];
+    const history = transcriptRef.current;
+    const userBubble: TranscriptMsg = { direction: "in", body: step.message };
+    setTranscript([...history, userBubble]);
+    scrollToBottom();
+    setSending(true);
+    try {
+      const { reply, meta, attachment } = await sendOne(step.message, history);
+      setLastMeta(meta);
+
+      const updatedUser: TranscriptMsg = { ...userBubble, intent: meta.intent };
+      const systemMessages: TranscriptMsg[] = (meta.toolsUsed ?? []).map((tool) => ({
+        direction: "system" as const,
+        body: `🔧 Tool: ${tool}`,
+      }));
+      const newTranscript: TranscriptMsg[] = [
+        ...history,
+        updatedUser,
+        ...systemMessages,
+        ...(reply
+          ? [{ direction: "out" as const, body: reply, attachment }]
+          : [{ direction: "out" as const, body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` }]),
+      ];
+      setTranscript(newTranscript);
+      setDemoStep(stepIdx + 1);
+      scrollToBottom();
+    } catch (e: any) {
+      toast.error(`Step ${stepIdx + 1} gagal: ${e.message ?? e}`);
+      setDemoStep(-1);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function startDemo() {
+    const warn = window.confirm(
+      "Simulasi akan:\n" +
+      "• Reset state booking untuk nomor ini\n" +
+      "• MEMBUAT booking & invoice NYATA di database\n" +
+      "• Mengirim notifikasi (jika dikonfigurasi)\n\n" +
+      "Pastikan nomor di atas adalah nomor UJI, bukan nomor tamu nyata.\n\n" +
+      "Lanjutkan?",
+    );
+    if (!warn) return;
+    try {
+      await runReset({ data: { phone } });
+      setTranscript([]);
+      setLastMeta(null);
+      setEditedIndices({});
+      setEditingIdx(null);
+      setDemoStep(0);
+      // Kick off step 0 immediately so the user sees activity.
+      await runDemoStep(0);
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal memulai demo");
+      setDemoStep(-1);
+    }
+  }
+
+  function stopDemo() {
+    setDemoStep(-1);
+    toast.info("Demo dihentikan");
   }
 
   // ── Save full conversation as training ──────────────────────────────────
@@ -723,6 +826,16 @@ export function ChatSimulatorView() {
               <MessagesSquare className="mr-1 h-3.5 w-3.5" />
               Impor Chat WA
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startDemo}
+              disabled={sending || demoStep !== -1}
+              title="Jalankan skenario booking lengkap step-by-step"
+            >
+              <PlayCircle className="mr-1 h-3.5 w-3.5" />
+              Demo Booking
+            </Button>
             <Button variant="outline" size="sm" onClick={handleReset} disabled={sending}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               Reset
@@ -903,6 +1016,69 @@ export function ChatSimulatorView() {
               </div>
             )}
           </div>
+
+          {/* Demo stepper banner */}
+          {demoStep >= 0 && (
+            <div className="border-t border-indigo-200 bg-indigo-50 px-3 py-2 flex items-center gap-3">
+              <PlayCircle className="h-4 w-4 text-indigo-600 shrink-0" />
+              <div className="flex-1 min-w-0 text-xs">
+                <div className="font-semibold text-indigo-900">
+                  Demo {demoStep < DEMO_SCRIPT.length
+                    ? `${demoStep + 1}/${DEMO_SCRIPT.length}`
+                    : `${DEMO_SCRIPT.length}/${DEMO_SCRIPT.length}`}
+                  {demoStep < DEMO_SCRIPT.length && (
+                    <span className="ml-2 font-normal text-indigo-700/80">
+                      Berikutnya: <span className="font-medium">{DEMO_SCRIPT[demoStep].label}</span>
+                    </span>
+                  )}
+                </div>
+                {demoStep < DEMO_SCRIPT.length && (
+                  <div className="text-indigo-700/70 truncate italic">
+                    "{DEMO_SCRIPT[demoStep].message}"
+                  </div>
+                )}
+                {demoStep >= DEMO_SCRIPT.length && (
+                  <div className="text-indigo-700/70">
+                    Selesai — booking dibuat. Lampirkan bukti transfer untuk uji Finance Agent.
+                  </div>
+                )}
+              </div>
+              {demoStep < DEMO_SCRIPT.length ? (
+                <Button
+                  size="sm"
+                  className="h-7 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  onClick={() => runDemoStep(demoStep)}
+                  disabled={sending}
+                >
+                  {sending ? (
+                    <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ChevronRight className="mr-1 h-3.5 w-3.5" />
+                  )}
+                  Lanjut
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-indigo-300 text-indigo-700"
+                  onClick={() => setDemoStep(-1)}
+                >
+                  Tutup
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-indigo-700 hover:bg-indigo-100"
+                onClick={stopDemo}
+                disabled={sending}
+                title="Hentikan demo (state booking tidak di-reset)"
+              >
+                <StopCircle className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
 
           {/* Composer */}
           <div className="border-t border-border bg-card">
