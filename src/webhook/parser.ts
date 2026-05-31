@@ -34,27 +34,25 @@ export async function parseFonnteBody(
   const name    = body.name    ?? body.pushname ?? sender;
   const fonnteId = body.id ?? body.message_id;
   const device  = body.device;
+  const attachmentUrl = body.url ?? (body as any).filepath ?? (body as any).file;
+  const attachmentName = body.filename;
 
-  if (!sender || !message) return null;
+  if (!sender || (!message && !attachmentUrl)) return null;
 
-  // For outgoing messages from Fonnte, the recipient is usually in 'target', 'receiver', 'penerima', or 'to'
   const target = (body as any).target ?? (body as any).receiver ?? (body as any).penerima ?? (body as any).to;
-
-  // Fonnte might not send `device` for native outgoing messages.
-  // If `target` is present and different from sender, it strongly indicates an outgoing message payload.
   const isOutgoing = (!!device && sender === device) || (!!target && target !== sender);
-  
-  // For incoming messages, the sender is the customer
   const customerPhone = isOutgoing ? (target ?? sender) : sender;
 
   return {
     sender,
-    message,
+    message: message ?? "",
     name:       name ?? sender,
     fonnteId,
     device,
     isOutgoing,
     customerPhone,
-    rawBody: body, // Include raw body for debugging
+    attachmentUrl: attachmentUrl || undefined,
+    attachmentName: attachmentName || undefined,
+    rawBody: body,
   };
 }
