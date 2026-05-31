@@ -74,6 +74,16 @@ export type AutoreplyOutcome =
  * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
  */
+// ── Session / summary tuning knobs ─────────────────────────────────────────
+/** Gap (ms) between two consecutive messages that marks a new session boundary. */
+const SESSION_GAP_MS = 15 * 60 * 1000;
+/** Minimum interval between two summary regenerations for the same thread. */
+const SUMMARY_REGEN_COOLDOWN_MS = 10 * 60 * 1000;
+/** Hard cap on persisted summary length (chars). Prevents prompt bloat. */
+const SUMMARY_MAX_CHARS = 1000;
+/** Below this many messages, summarizing is pointless — skip. */
+const SUMMARY_MIN_MESSAGES = 3;
+
 async function generateSessionSummary(
   history: Array<{ direction: string; body: string; sent_at?: string }>,
   existingSummary: string | null | undefined,
@@ -85,7 +95,7 @@ async function generateSessionSummary(
 
   const prompt = `Berikut adalah riwayat obrolan sebelumnya antara tamu dan bot di Pomah Guesthouse:\n\n${historyText}\n\n` +
     (existingSummary ? `Ringkasan dari sesi sebelumnya:\n${existingSummary}\n\n` : "") +
-    `Buat ringkasan (resume) singkat, padat, dan jelas dari riwayat di atas dalam Bahasa Indonesia (maksimal 2-3 kalimat). ` +
+    `Buat ringkasan (resume) singkat, padat, dan jelas dari riwayat di atas dalam Bahasa Indonesia (maksimal 2-3 kalimat, total < 800 karakter). ` +
     `Fokus pada detail penting seperti nama tamu (jika disebut), tipe kamar yang ditanyakan/dipesan, keluhan, atau status terakhir (misal: sukses booking, batal, atau pending). ` +
     `Langsung berikan hasil ringkasannya secara polos tanpa kata pengantar atau tanda kutip.`;
 
@@ -122,13 +132,34 @@ async function updateThreadSummary(
   threadId: string,
   summary: string,
 ): Promise<void> {
+  const capped = summary.length > SUMMARY_MAX_CHARS
+    ? summary.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd() + "…"
+    : summary;
   const { error } = await client
     .from("whatsapp_threads")
-    .update({ chat_summary: summary })
+    .update({ chat_summary: capped, chat_summary_updated_at: new Date().toISOString() })
     .eq("id", threadId);
   if (error) {
     console.error(`[SessionSummarizer] Database update failed:`, error.message);
   }
+}
+
+/**
+ * Detect the index of the first message in the current session: the message
+ * right after the most recent inter-message gap larger than SESSION_GAP_MS.
+ * Returns 0 if no such gap exists (everything is one session).
+ */
+function findSessionStartIndex(
+  messages: Array<{ sent_at?: string }>,
+): number {
+  for (let i = messages.length - 1; i > 0; i--) {
+    const cur = messages[i];
+    const prev = messages[i - 1];
+    if (!cur.sent_at || !prev.sent_at) continue;
+    const diffMs = new Date(cur.sent_at).getTime() - new Date(prev.sent_at).getTime();
+    if (diffMs > SESSION_GAP_MS) return i;
+  }
+  return 0;
 }
 
 export async function executeAutoreplyForPhone(
@@ -214,49 +245,15 @@ export async function executeAutoreplyForPhone(
       : "google/gemini-2.5-flash"
     : cfgModel || "gpt-4o-mini";
 
-  let chatSummary = c.chat_summary || "";
+  const chatSummary = c.chat_summary || "";
+  const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
   const messages = c.messages ?? [];
 
-  // 1. Detect if a new session started due to an idle gap (> 5 minutes)
-  if (messages.length >= 2) {
-    const newestMsg = messages[messages.length - 1];
-    const secondNewestMsg = messages[messages.length - 2];
-    if (newestMsg.sent_at && secondNewestMsg.sent_at) {
-      const diffMs = new Date(newestMsg.sent_at).getTime() - new Date(secondNewestMsg.sent_at).getTime();
-      const idleMinutes = diffMs / (1000 * 60);
-      if (idleMinutes > 5) {
-        console.info(`[SessionSummarizer] Idle gap detected (${idleMinutes.toFixed(1)} mins) — summarizing previous session for ${phone}`);
-        const previousHistory = messages.slice(0, -1);
-        if (previousHistory.length > 0) {
-          const generatedSummary = await generateSessionSummary(
-            previousHistory,
-            chatSummary,
-            { apiKey, baseUrl, model }
-          );
-          if (generatedSummary) {
-            await updateThreadSummary(supabaseAdmin, c.thread_id, generatedSummary);
-            chatSummary = generatedSummary;
-          }
-        }
-      }
-    }
-  }
-
-  // 2. Scan backwards to find the start of the current session (after the last gap > 5 minutes)
-  let sessionStartIndex = 0;
-  for (let i = messages.length - 1; i > 0; i--) {
-    const current = messages[i];
-    const prev = messages[i - 1];
-    if (current.sent_at && prev.sent_at) {
-      const diffMs = new Date(current.sent_at).getTime() - new Date(prev.sent_at).getTime();
-      if (diffMs > 5 * 60 * 1000) {
-        sessionStartIndex = i;
-        break;
-      }
-    }
-  }
-
-  // 3. Filter history to include only messages from the current active session
+  // Single source of truth for "where does the current session start?"
+  // — used both to trim history sent to the agent AND to decide whether
+  // a fresh summary of the PREVIOUS session is warranted.
+  const sessionStartIndex = findSessionStartIndex(messages);
+  const previousSession = messages.slice(0, sessionStartIndex);
   const currentSessionMessages = messages.slice(sessionStartIndex);
   const rollingMessages = currentSessionMessages.slice(-20);
 
@@ -403,8 +400,51 @@ export async function executeAutoreplyForPhone(
     toolsUsed: orchResult?.toolsUsed ?? [],
   }).catch((e) => console.warn(e));
 
+  // Background summarizer: run AFTER the reply is sent so it never adds
+  // latency to the user-visible turn. Guards:
+  //   - session boundary actually detected (previousSession non-empty)
+  //   - enough messages to be worth summarizing
+  //   - cooldown elapsed since last regen (rate limit)
+  //   - guest not currently mid-booking (those messages aren't a "wrap-up")
+  if (
+    previousSession.length >= SUMMARY_MIN_MESSAGES &&
+    !cooldownActive(chatSummaryUpdatedAt)
+  ) {
+    void (async () => {
+      try {
+        const { data: bs } = await (supabaseAdmin as any).rpc(
+          "get_active_booking_state",
+          { p_phone: phone },
+        );
+        if (bs && bs.state && bs.state !== "IDLE") {
+          console.info(`[SessionSummarizer] Skip — booking flow active (${bs.state})`);
+          return;
+        }
+        const summary = await generateSessionSummary(
+          previousSession,
+          chatSummary,
+          { apiKey, baseUrl, model },
+        );
+        if (summary) {
+          await updateThreadSummary(supabaseAdmin, c.thread_id, summary);
+          console.info(
+            `[SessionSummarizer] Updated for ${phone.slice(-6)} (${summary.length} chars)`,
+          );
+        }
+      } catch (e) {
+        console.warn("[SessionSummarizer] Background run failed:", e);
+      }
+    })();
+  }
+
   console.log(`[Autoreply] ✓ Sent to ${phone.slice(-6)}`);
   return "ok";
+}
+
+function cooldownActive(updatedAt: string | null | undefined): boolean {
+  if (!updatedAt) return false;
+  const ageMs = Date.now() - new Date(updatedAt).getTime();
+  return ageMs < SUMMARY_REGEN_COOLDOWN_MS;
 }
 
 // Outcomes that must NOT be retried — they are config/permanent, so retrying

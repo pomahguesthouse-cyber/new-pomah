@@ -123,6 +123,22 @@ function extractSlots(text: string): PartialSlots {
   return slots;
 }
 
+/**
+ * Best-effort extract of an EntityRef from a chat summary string.
+ *
+ * Used to seed lastEntity when the per-phone state has been reset (new
+ * session, topic timeout) but a summary of the prior session is still
+ * available. Lets the first turn of a new session inherit "we were
+ * talking about room X" without needing the user to repeat it.
+ */
+export function seedEntityFromSummary(
+  summary: string | null | undefined,
+  rooms: RoomTypeRow[],
+): EntityRef | undefined {
+  if (!summary) return undefined;
+  return extractRoomEntity(summary, rooms);
+}
+
 // ─── Main resolver ───────────────────────────────────────────────────────────
 
 export function resolveContext(
