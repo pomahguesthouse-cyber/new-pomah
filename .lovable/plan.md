@@ -1,71 +1,73 @@
-# Plan: Training per-percakapan + tombol edit/hapus
+## Manager Agent — Notification & Escalation System
 
-## Tujuan
-1. Setiap kali admin klik "Simpan Training", seluruh transcript percakapan disimpan sebagai **satu entri** (bukan banyak baris per pasangan), dilengkapi **judul** yang disarankan otomatis dan bisa diedit.
-2. Tombol **edit** dan **hapus** di kartu "Training tersimpan" selalu terlihat (sekarang tersembunyi sampai dihover).
+Tujuan: Manager Agent menerima event operasional penting (booking baru, bukti transfer, komplain tamu) lewat WhatsApp secara otomatis, dengan retry, logging, dan halaman tindak lanjut untuk komplain.
 
-## Perubahan
+### Catatan keputusan
 
-### 1. Skema database (migration)
-Tambah kolom ke `ai_conversation_logs`:
-- `title text` — judul percakapan (nullable, hanya diisi untuk entri tipe percakapan).
-- `transcript jsonb` — array `{direction:'in'|'out', body:string}` untuk percakapan utuh. Nullable agar baris lama tetap valid.
+- **Reuse tabel `property_managers`** yang sudah ada (kolom `name`, `phone`, `role` di mana `role ∈ super_admin | booking_manager | viewer`). Cukup tambah kolom `is_active`. Tidak membuat tabel `manager_contacts` baru karena akan duplikat.
+- **Super admin** = `property_managers` dengan `role='super_admin' AND is_active=true` (tidak menambah kolom `super_admin_phone` di `properties`).
+- Pengiriman pakai layanan Fonnte yang sudah ada (`src/services/whatsapp.service.ts` + `properties.fonnte_token`).
 
-Bersihkan data lama (sesuai pilihan user):
-- `DELETE FROM ai_conversation_logs WHERE source = 'simulator'`.
+### 1. Database migration
 
-Tidak perlu mengubah `embedding`, `effective_answer`, atau function `match_training_examples` — kolom `user_message` & `ai_response` tetap diisi (sebagai ringkasan flat) supaya RAG pipeline existing tidak break.
+Satu migration menambah/membuat:
 
-### 2. Server functions (`simulator.functions.ts`)
+- `ALTER TABLE property_managers ADD COLUMN is_active boolean NOT NULL DEFAULT true`.
+- `CREATE TABLE notification_logs` — kolom domain: `event_type` (`new_booking | payment_proof | complaint`), `recipient_phone`, `recipient_role`, `message`, `attachment_url`, `status` (`pending | sent | failed`), `attempts`, `error`, `dedupe_key` (unik, untuk anti-duplikat), `sent_at`. + GRANT + RLS staff-only.
+- `CREATE TABLE guest_complaints` — `guest_name`, `phone`, `thread_id`, `booking_id` (nullable), `category`, `message`, `confidence`, `status` (`OPEN | IN_PROGRESS | RESOLVED | CLOSED` default `OPEN`), `assigned_to`, `resolved_at`, `notes`. + GRANT + RLS staff-only + trigger `set_updated_at`.
 
-**`saveSimulationAsTraining`** — ubah input + perilaku:
-- Input baru: `{ title: string (max 120), transcript: TranscriptMsg[] }` (bukan lagi `pairs[]`).
-- Validasi: minimal 1 pesan `in` dan 1 pesan `out`.
-- Insert **satu** row:
-  - `title` = judul dari admin.
-  - `transcript` = array transcript utuh.
-  - `user_message` = pesan tamu pertama (untuk kompatibilitas + retrieval).
-  - `ai_response` = gabungan jawaban bot (join `\n\n`) — dipakai sebagai `effective_answer` untuk embedding.
-  - `source = 'simulator'`, `rating = 'good'`, `used = true`.
-- Embed seperti sebelumnya (best-effort).
+### 2. Notifier service
 
-**`updateSimulatorTraining`** — perluas input:
-- Tambah field `title?: string` dan `transcript?: TranscriptMsg[]`.
-- Saat transcript diupdate, regenerate `user_message` (pesan tamu pertama) & `ai_response` (gabungan jawaban bot) lalu re-embed.
+File baru `src/services/manager-notifier.service.ts`:
 
-**`listSimulatorTraining`** — tambahkan `title` & `transcript` ke select.
+- `notifyNewBooking(bookingId)` — ambil booking + guest + room_type, render template "🏨 NEW BOOKING ALERT", kirim ke semua manager aktif (semua role).
+- `notifyPaymentProof({ threadId, guestName, bookingCode, imageUrl })` — render "💳 PAYMENT PROOF RECEIVED", kirim ke `super_admin` saja, sertakan `fileUrl` ke `sendWhatsAppMessage`. `dedupe_key = "payment_proof:" + messageId` untuk cegah duplikat.
+- `notifyComplaint({ complaintId })` — render "🚨 GUEST COMPLAINT DETECTED", kirim ke semua manager aktif.
+- Helper `sendWithRetry(recipient, message, fileUrl?, dedupeKey)` — insert row `notification_logs` (status=pending), retry 3× dengan backoff (1s, 2s, 4s), update status `sent/failed`. Idempoten via `dedupe_key` unik.
+- Semua handler dipanggil **fire-and-forget** (`void notifier(...).catch(log)`) dari titik pemicu, jadi tidak memblokir alur utama.
 
-**`exportSimulatorTraining`** — tambahkan `title` & `transcript` ke select.
+### 3. Pemicu (triggers)
 
-**Baru: `suggestTrainingTitle`** — server function kecil:
-- Input: `{ transcript: TranscriptMsg[] }`.
-- Panggil LLM (pakai `buildEnv` yang sudah ada) dengan prompt singkat: "Beri judul ≤60 karakter dalam Bahasa Indonesia untuk percakapan berikut, hanya kembalikan judul tanpa tanda kutip."
-- Fallback bila LLM gagal: ambil 60 karakter pertama dari pesan tamu pertama.
+- **Website booking** — `src/public/functions/public.functions.ts` setelah booking insert sukses → panggil `notifyNewBooking(id)`.
+- **WhatsApp AI booking** — `src/tools/booking.tool.ts` `createBooking` (juga menangani booking lewat state machine) setelah `bookings.insert(...).select()` sukses → panggil notifier (source: `direct/whatsapp`).
+- **Admin booking** — `src/admin/functions/calendar.functions.ts` di handler create booking → panggil notifier (source: `admin`).
+- **OTA import** — hook yang sama bila ada path import; jika belum ada, tinggalkan TODO terdokumentasi (di luar scope minimal).
+- **Payment proof** — di `src/routes/api.fonnte.ts` / `src/webhook/parser.ts`, deteksi inbound message dengan `attachment/image url` (Fonnte field `url`/`media`). Bila ada: simpan ke `whatsapp_messages` seperti biasa, lalu fire-and-forget `notifyPaymentProof` dengan `guestName` dari thread + booking aktif (kalau ada `bookings` terbaru untuk phone tsb).
+- **Complaint** — di `src/ai/multi-agent-orchestrator.ts` setelah intent classification: bila intent ∈ {`complaint`, `maintenance`, `service_issue`, `noise`, `cleanliness`, `urgent`} **dan** confidence > 0.7 → `INSERT INTO guest_complaints (status=OPEN, ...)` + fire-and-forget `notifyComplaint(id)`. Kategori intent dipetakan ke `category`. (Intent-classifier diperluas: tambah keyword/intent untuk noise, cleanliness, maintenance, urgent jika belum.)
 
-### 3. UI `chat-simulator-view.tsx`
+### 4. UI admin — halaman Komplain
 
-**Dialog "Simpan Training"** (sekarang menampilkan list pasangan):
-- Ganti jadi form satu percakapan:
-  - Field **Judul** di atas, otomatis terisi via `suggestTrainingTitle` saat dialog dibuka (loading state kecil), bisa diedit admin.
-  - Preview transcript utuh (urut, gelembung tamu kanan / bot kiri) — read-only, scrollable.
-  - Tombol "Simpan Training" memanggil `saveSimulationAsTraining({ title, transcript })`.
+- Route baru `src/routes/admin/complaints.tsx` + modul `src/admin/modules/complaints/`.
+  - `complaints.functions.ts`: `listComplaints`, `updateComplaintStatus({id, status, notes?})`, `assignComplaint`.
+  - `complaints-view.tsx`: tabel komplain (filter status), detail drawer, tombol ubah status (OPEN → IN_PROGRESS → RESOLVED → CLOSED), kolom catatan, link ke thread WhatsApp & booking.
+- Tambah link sidebar di `src/admin/layout` (tempat menu admin yang sudah ada).
+- Halaman log notifikasi opsional: tab di Settings → "Notifikasi Manager" yang menampilkan `notification_logs` (read-only) untuk audit. (Bisa fase 2 — sebut sebagai opsional.)
 
-**Kartu "Training tersimpan"**:
-- Tiap item menampilkan: **judul** (bold), tanggal kecil, preview 1-2 baris pesan tamu pertama, badge jumlah turn (mis. "6 pesan").
-- Klik item → buka dialog detail/edit (lihat di bawah).
-- **Tombol edit & hapus selalu terlihat** (hilangkan `opacity-0 group-hover:opacity-100`, ganti dengan styling tombol biasa di kanan).
+### 5. Template pesan
 
-**Dialog Edit Training** — rombak:
-- Field **Judul** (input).
-- List transcript editable: tiap pesan bisa diedit isinya (textarea kecil per turn), bisa hapus turn, bisa tambah turn baru (tombol "+ Tamu" / "+ Bot").
-- Tombol Simpan → panggil `updateSimulatorTraining({ id, title, transcript })`.
+Template literal di notifier mengikuti format yang diminta user (NEW BOOKING ALERT, PAYMENT PROOF RECEIVED, GUEST COMPLAINT DETECTED) dengan placeholder yang diisi dari DB. Format datetime: DD/MM/YYYY (sesuai workspace standard).
 
-### 4. Hal yang TIDAK diubah
-- Pipeline RAG retrieval (`retrieveTrainingExamples` & `match_training_examples`) tetap apa adanya — karena `user_message` + `ai_response` masih diisi.
-- Halaman konfigurasi RAG, smart-delay, SOP — tidak disentuh.
-- Booking state machine — tidak disentuh.
+### 6. Validasi
 
-## Catatan teknis
-- `transcript` jsonb divalidasi via Zod di server.
-- Judul auto-suggest pakai model yang sama dengan orchestrator (`env.model`), prompt pendek supaya murah.
-- Export JSON akan menyertakan `title` & `transcript`; CSV menambahkan kolom `title` (transcript tetap hanya di JSON karena terlalu nested untuk CSV).
+- Setelah migration: cek lint Supabase.
+- Manual: buat booking via website → cek WhatsApp manager + row di `notification_logs`. Kirim gambar via WhatsApp ke nomor Fonnte → cek super admin menerima. Kirim pesan keluhan → cek halaman Complaints muncul + manager dapat notif.
+
+### File yang akan dibuat / diubah
+
+Create:
+- `supabase/migrations/{ts}_manager_notifications.sql`
+- `src/services/manager-notifier.service.ts`
+- `src/admin/modules/complaints/complaints.functions.ts`
+- `src/admin/modules/complaints/complaints-view.tsx`
+- `src/routes/admin/complaints.tsx`
+
+Edit:
+- `src/public/functions/public.functions.ts` (hook booking)
+- `src/tools/booking.tool.ts` (hook booking)
+- `src/admin/functions/calendar.functions.ts` (hook booking)
+- `src/routes/api.fonnte.ts` dan/atau `src/webhook/parser.ts` (hook payment proof)
+- `src/ai/multi-agent-orchestrator.ts` (hook complaint)
+- `src/ai/router/intent-classifier.ts` (perluas intent komplain bila perlu)
+- Sidebar admin layout (tambah menu Komplain)
+
+Tidak menyentuh: alur RAG, simulator, smart-delay, booking state machine logic.
