@@ -222,7 +222,7 @@ function PomahHome() {
   const rooms = data?.roomTypes ?? [];
 
   // Total normal capacity = sum of (capacity + extrabed_capacity) × total_physical_rooms per room type
-  const totalNormalCapacity = rooms.reduce((sum, rt) => {
+  const totalNormalCapacity = (rooms as RoomType[]).reduce((sum: number, rt: RoomType) => {
     const cap = Number(rt.capacity ?? 0);
     const ebCap = Number(rt.extrabed_capacity ?? 0);
     const physRooms = Number(rt.total_physical_rooms ?? 0);
