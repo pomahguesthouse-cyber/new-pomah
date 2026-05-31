@@ -343,6 +343,57 @@ export type Database = {
         }
         Relationships: []
       }
+      guest_complaints: {
+        Row: {
+          assigned_to: string | null
+          booking_id: string | null
+          category: string
+          confidence: number | null
+          created_at: string
+          guest_name: string | null
+          id: string
+          message: string
+          notes: string | null
+          phone: string
+          resolved_at: string | null
+          status: string
+          thread_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          booking_id?: string | null
+          category: string
+          confidence?: number | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          message: string
+          notes?: string | null
+          phone: string
+          resolved_at?: string | null
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          booking_id?: string | null
+          category?: string
+          confidence?: number | null
+          created_at?: string
+          guest_name?: string | null
+          id?: string
+          message?: string
+          notes?: string | null
+          phone?: string
+          resolved_at?: string | null
+          status?: string
+          thread_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       guests: {
         Row: {
           country: string | null
@@ -547,6 +598,54 @@ export type Database = {
           },
         ]
       }
+      notification_logs: {
+        Row: {
+          attachment_url: string | null
+          attempts: number
+          created_at: string
+          dedupe_key: string | null
+          error: string | null
+          event_type: string
+          id: string
+          message: string
+          recipient_phone: string
+          recipient_role: string | null
+          related_id: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string | null
+          error?: string | null
+          event_type: string
+          id?: string
+          message: string
+          recipient_phone: string
+          recipient_role?: string | null
+          related_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attachment_url?: string | null
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string | null
+          error?: string | null
+          event_type?: string
+          id?: string
+          message?: string
+          recipient_phone?: string
+          recipient_role?: string | null
+          related_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -698,6 +797,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_active: boolean
           name: string
           phone: string
           property_id: string
@@ -706,6 +806,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_active?: boolean
           name: string
           phone: string
           property_id: string
@@ -714,6 +815,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_active?: boolean
           name?: string
           phone?: string
           property_id?: string
