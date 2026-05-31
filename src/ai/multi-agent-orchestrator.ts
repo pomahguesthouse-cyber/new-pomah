@@ -438,7 +438,11 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
-          { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions },
+          { 
+            ...input.agentCtx, 
+            customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions,
+            managerName:        input.aiLabConfig?.agents?.[subKey]?.managerName,
+          },
           input.toolCtx,
           input.llmConfig,
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
@@ -456,7 +460,11 @@ export async function runMultiAgentOrchestration(
   const agentResult = await runAgent(
     agent,
     input.messages,
-    { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions },
+    { 
+      ...input.agentCtx, 
+      customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions,
+      managerName:        input.aiLabConfig?.agents?.[routing.agentKey]?.managerName,
+    },
     input.toolCtx,
     input.llmConfig,
     maxTurns,
@@ -472,7 +480,11 @@ export async function runMultiAgentOrchestration(
     const foResult = await runAgent(
       foAgent,
       input.messages,
-      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions },
+      { 
+        ...input.agentCtx, 
+        customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions,
+        managerName:        input.aiLabConfig?.agents?.["front-office"]?.managerName,
+      },
       input.toolCtx,
       input.llmConfig,
       maxTurns,

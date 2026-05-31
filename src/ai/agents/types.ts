@@ -56,6 +56,8 @@ export interface AgentContext {
   lastMessage?: string;
   /** The instructions configured in the AI Lab Dashboard for this agent */
   customInstructions?: string;
+  /** The name of the manager assigned to this agent */
+  managerName?: string;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

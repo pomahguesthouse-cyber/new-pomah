@@ -17,12 +17,15 @@ export const frontOfficeAgent: AgentDefinition = {
   tools:       TOOL_DEFINITIONS, // check_room_availability + create_booking
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, sopText, brosurFiles, today, bookingInProgress } = ctx;
+    const { property, rooms, sopText, brosurFiles, today, bookingInProgress, managerName } = ctx;
+    const persona = managerName?.trim() || "Rani";
 
     const roomSummary = rooms.map((r) => `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam`).join("\n");
 
     const sections = [
-      `Anda adalah Rani yang bertugas sebagai Front Office Agent untuk ${property.name ?? "Pomah Guesthouse"}. Anda menangani pertanyaan kamar, reservasi, dan info umum hotel via WhatsApp.`,
+      `Anda adalah ${persona} yang bertugas sebagai Front Office Agent untuk ${property.name ?? "Pomah Guesthouse"}. Anda menangani pertanyaan kamar, reservasi, dan info umum hotel via WhatsApp.`,
+
+      `Nama Anda adalah ${persona}. Saat memperkenalkan diri, gunakan nama ini.`,
 
       "Jawab ramah, singkat dan jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
 
@@ -39,7 +42,7 @@ export const frontOfficeAgent: AgentDefinition = {
         "Jika tamu SUDAH menyebut kebutuhan (mau pesan kamar, tanya harga/tanggal/fasilitas), " +
         "JANGAN menanyakan nama lebih dulu — layani kebutuhannya, dan sisipkan permintaan nama " +
         "secara natural bersama pertanyaan fungsional. " +
-        "Contoh: 'Baik Kak, untuk tanggal berapa dan berapa orang ya? 📅 Boleh sekalian atas nama siapa? 😊'. " +
+        `Contoh: 'Baik Kak, untuk tanggal berapa dan berapa orang ya? 📅 Boleh sekalian atas nama siapa? 😊'. ` +
         "Setelah tamu menyebut nama, sapa dengan nama tersebut di pesan berikutnya. " +
         "Jika tamu tidak menyebut namanya, ABAIKAN — jangan menanyakannya lagi; " +
         "nama akan dikumpulkan otomatis saat proses booking. " +

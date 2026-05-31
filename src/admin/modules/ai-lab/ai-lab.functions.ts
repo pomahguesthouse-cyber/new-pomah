@@ -29,6 +29,27 @@ export const TOOL_KEYS = [
   "faq-memory",
 ] as const;
 
+/** Division (short) display names for each agent key. */
+export const AGENT_DIVISION_NAMES: Record<string, string> = {
+  "front-office":  "Front Office",
+  "pricing":       "Pricing",
+  "customer-care": "Customer Care",
+  "maintenance":   "Maintenance",
+  "finance":       "Finance",
+  "manager":       "Manager",
+};
+
+/**
+ * Build the badge label shown in Simulator and WhatsApp admin.
+ * Format: "Front Office ➜ Rani" when managerName is set,
+ *         "Front Office" otherwise.
+ */
+export function formatAgentBadge(key: string, agents: Record<string, AgentConfig>): string {
+  const division = AGENT_DIVISION_NAMES[key] ?? key;
+  const name     = agents?.[key]?.managerName?.trim();
+  return name ? `${division} ➜ ${name}` : division;
+}
+
 /** Settings for one specialized AI agent. */
 export interface AgentConfig {
   /** Whether the agent participates in conversations. */
@@ -37,6 +58,8 @@ export interface AgentConfig {
   autoReply: boolean;
   /** Persona / behaviour instructions for this agent. */
   instructions: string;
+  /** Name of the person responsible / persona name for this agent (e.g. "Rani"). */
+  managerName?: string;
 }
 
 /** Settings for one knowledge source / tool. */
@@ -187,9 +210,10 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
   for (const k of AGENT_KEYS) {
     const a = c.agents?.[k];
     agents[k] = {
-      enabled: a?.enabled ?? true,
-      autoReply: a?.autoReply ?? false,
+      enabled:     a?.enabled     ?? true,
+      autoReply:   a?.autoReply   ?? false,
       instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
+      managerName: a?.managerName ?? "",
     };
   }
   const tools: Record<string, ToolConfig> = {};

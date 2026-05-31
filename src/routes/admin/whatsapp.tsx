@@ -46,6 +46,7 @@ import {
   updateChatSummary,
   summarizeThread,
 } from "@/admin/functions/whatsapp.functions";
+import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -165,6 +166,8 @@ export function WhatsAppPage() {
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
+  const { data: aiLabConfig } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => getAiLabConfig() });
+  
   const threads = threadsData?.threads ?? [];
   useRealtimeInvalidate(
     "admin-wa-stream",
@@ -277,7 +280,6 @@ export function WhatsAppPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  // Takeover = set ai_auto=false (human takes over), Return = ai_auto=true (AI resumes)
   const takeoverMut = useMutation({
     mutationFn: (takeover: boolean) =>
       aiModeFn({ data: { threadId: current!, aiAuto: !takeover } }),
@@ -297,26 +299,6 @@ export function WhatsAppPage() {
     mutationFn: (p: { id: string; pinned: boolean }) =>
       pinFn({ data: { threadId: p.id, pinned: p.pinned } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wa-threads"] }),
-  });
-
-
-
-  const aiModeMut = useMutation({
-    mutationFn: (aiAuto: boolean) => aiModeFn({ data: { threadId: current!, aiAuto } }),
-    onSuccess: (_, aiAuto) => {
-      toast.success(aiAuto ? "AI kembali menangani percakapan" : "Mode Human aktif — AI dihentikan");
-      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-      qc.invalidateQueries({ queryKey: ["wa-threads"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  const simulateMut = useMutation({
-    mutationFn: (body: string) => simulateFn({ data: { threadId: current!, body } }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
-      qc.invalidateQueries({ queryKey: ["wa-threads"] });
-    },
   });
 
   const deleteMut = useMutation({
@@ -520,7 +502,6 @@ export function WhatsAppPage() {
                   onClick={() => {
                     const t = thread.thread;
                     if (!t) return;
-                    // takeover=true when AI currently auto (ai_auto !== false)
                     const currentlyAi = (t as any).ai_auto !== false;
                     takeoverMut.mutate(currentlyAi);
                   }}
@@ -565,10 +546,9 @@ export function WhatsAppPage() {
             </header>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#efeae2] px-6 py-4 dark:bg-[#0b141a] relative">
-              {/* Optional WhatsApp doodle pattern background overlay can be placed here */}
               <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
               <div className="relative z-10">
-                <MessageStream messages={thread.messages} />
+                <MessageStream messages={thread.messages} aiLabConfig={aiLabConfig} />
               </div>
             </div>
 
@@ -900,7 +880,22 @@ function Row({
   );
 }
 
-function MessageBadges({ m }: { m: any }) {
+const AGENT_LABELS: Record<string, string> = {
+  "front-office": "Front Office Agent",
+  "pricing": "Pricing Agent",
+  "customer-care": "Customer Care Agent",
+  "maintenance": "Maintenance Agent",
+  "finance": "Finance Agent",
+  "manager": "Manager Agent",
+};
+
+function MessageBadges({ 
+  m,
+  aiLabConfig
+}: { 
+  m: any;
+  aiLabConfig?: AiLabConfig;
+}) {
   const meta = m.metadata as Record<string, unknown> | null | undefined;
   const isOut = m.direction === "out";
 
@@ -916,7 +911,14 @@ function MessageBadges({ m }: { m: any }) {
     );
   }
 
-  const agent = meta?.agent as string | undefined;
+  const rawAgent = meta?.agent as string | undefined;
+  const agentKey = meta?.agent_key as string | undefined;
+  
+  let agent = rawAgent;
+  if (!agent && agentKey) {
+    agent = aiLabConfig?.agents ? formatAgentBadge(agentKey, aiLabConfig.agents) : (AGENT_LABELS[agentKey] || agentKey);
+  }
+  
   const isFallback = meta?.is_fallback as boolean | undefined;
   const tools = Array.isArray(meta?.tools_used) ? (meta.tools_used as string[]) : [];
   

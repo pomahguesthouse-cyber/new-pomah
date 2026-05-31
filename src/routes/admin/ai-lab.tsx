@@ -45,6 +45,8 @@ import {
   mergeAiLabConfig,
   AGENT_DEFAULTS,
   TOOL_DEFAULTS,
+  AGENT_DIVISION_NAMES,
+  formatAgentBadge,
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { WhatsAppPage } from "@/routes/admin/whatsapp";
@@ -61,6 +63,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -388,7 +391,12 @@ function DashboardView() {
                     <a.icon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{a.name}</p>
+                    <p className="font-medium">{AGENT_DIVISION_NAMES[a.key] ?? a.name}</p>
+                    {cfg.agents[a.key]?.managerName && (
+                      <p className="mt-0.5 text-[10px] font-medium text-teal-600">
+                        Manager: {cfg.agents[a.key].managerName}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
                     <p className="mt-1 text-[10px] text-muted-foreground">
                       {ac?.autoReply ? "Balas otomatis" : "Perlu persetujuan"}
@@ -535,6 +543,26 @@ function ConfigDialog({
                 }
               />
             </Row>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nama Penanggung Jawab</Label>
+              <Input
+                placeholder="Mis. Rani, Joko, Santi…"
+                value={cfg.agents[edit.key]?.managerName ?? ""}
+                onChange={(e) =>
+                  setCfg((c) => ({
+                    ...c,
+                    agents: {
+                      ...c.agents,
+                      [edit.key]: { ...c.agents[edit.key], managerName: e.target.value },
+                    },
+                  }))
+                }
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Nama ini ditampilkan di Simulator &amp; chat WhatsApp sebagai label agent,
+                contoh: <span className="font-mono">{formatAgentBadge(edit.key, cfg.agents)}</span>.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold">Instruksi / persona</Label>

@@ -41,6 +41,7 @@ import {
   exportSimulatorTraining,
   suggestTrainingTitle,
 } from "./simulator.functions";
+import { getAiLabConfig, formatAgentBadge } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { listThreads, getThread } from "@/admin/functions/whatsapp.functions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -91,6 +92,7 @@ export function ChatSimulatorView() {
   const runExportTraining = useServerFn(exportSimulatorTraining);
   const runSuggestTitle = useServerFn(suggestTrainingTitle);
   const qc = useQueryClient();
+  const { data: aiLabConfig } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => getAiLabConfig() });
 
   const [phone, setPhone] = useState("6281234567899");
   const [transcript, setTranscript] = useState<TranscriptMsg[]>([]);
@@ -808,6 +810,11 @@ export function ChatSimulatorView() {
                           {isEdited && (
                             <span className="mt-1 flex items-center justify-end gap-1 text-[9px] font-semibold text-teal-600 uppercase tracking-wider">
                               <Pencil className="h-2 w-2" /> Diedit
+                            </span>
+                          )}
+                          {m.direction === "out" && m.agentKey && !isEditing && (
+                            <span className="mt-1.5 flex items-center justify-end gap-1 text-[9px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider bg-sky-100/50 dark:bg-sky-900/50 w-fit ml-auto px-1.5 py-0.5 rounded border border-sky-500/20 font-mono select-none">
+                              Agent: {aiLabConfig?.agents ? formatAgentBadge(m.agentKey, aiLabConfig.agents) : m.agentKey}
                             </span>
                           )}
                         </>
