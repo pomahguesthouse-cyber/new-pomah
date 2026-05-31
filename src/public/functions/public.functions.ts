@@ -1137,6 +1137,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal menyimpan detail kamar: ${brErr.message}`,
         });
 
+      // Notif manager (fire-and-forget).
+      void import("@/services/manager-notifier.service")
+        .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
+        .catch((err) => console.warn("[webchatTool] notifyNewBooking gagal:", err));
+
       return JSON.stringify({
         ok: true,
         reference_code: booking.reference_code,
