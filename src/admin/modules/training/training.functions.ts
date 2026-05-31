@@ -77,9 +77,18 @@ export const rateConversationLog = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("ai_conversation_logs")
-      .update({ rating: data.rating, correction: data.correction ?? null })
+      .update({
+        rating: data.rating,
+        correction: data.correction ?? null,
+        // Hanya contoh "good" yang dipakai chatbot sebagai dasar jawaban
+        used: data.rating === "good",
+      })
       .eq("id", data.id);
     if (error) throw error;
+    // Re-embed best-effort agar perubahan rating/correction langsung berdampak
+    if (data.rating === "good") {
+      await reembedTrainingExampleAsync(data.id);
+    }
     return { ok: true };
   });
 
@@ -100,13 +109,20 @@ export const saveTrainingExample = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase.from("ai_conversation_logs").insert({
-      user_message: data.userMessage,
-      ai_response: data.aiResponse,
-      used: data.accepted,
-      rating: data.accepted ? "good" : "bad",
-    });
+    const { data: inserted, error } = await context.supabase
+      .from("ai_conversation_logs")
+      .insert({
+        user_message: data.userMessage,
+        ai_response: data.aiResponse,
+        used: data.accepted,
+        rating: data.accepted ? "good" : "bad",
+      })
+      .select("id")
+      .maybeSingle();
     if (error) throw error;
+    if (data.accepted && inserted?.id) {
+      await reembedTrainingExampleAsync(inserted.id);
+    }
     return { ok: true };
   });
 
