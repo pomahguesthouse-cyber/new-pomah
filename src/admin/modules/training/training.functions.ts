@@ -204,6 +204,9 @@ export const updateConversationLog = createServerFn({ method: "POST" })
       })
       .eq("id", data.id);
     if (error) throw error;
+    if (data.rating === "good") {
+      await reembedTrainingExampleAsync(data.id);
+    }
     return { ok: true };
   });
 
@@ -217,3 +220,37 @@ export const exportTrainingData = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false });
     return { rows: data ?? [] };
   });
+
+/**
+ * Backfill embedding untuk semua contoh `good + used` yang belum diindeks.
+ * Aman dijalankan berulang kali — hanya memproses baris dengan
+ * `embedding IS NULL`. Berhenti setelah `maxRows` agar request tidak timeout.
+ */
+export const backfillTrainingEmbeddings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ maxRows: z.number().int().min(1).max(200).default(50) }).parse(d ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { data: rows, error } = await supabaseAdmin
+      .from("ai_conversation_logs")
+      .select("id")
+      .eq("rating", "good")
+      .eq("used", true)
+      .is("embedding", null)
+      .limit(data.maxRows);
+    if (error) throw error;
+    let ok = 0;
+    let failed = 0;
+    for (const row of rows ?? []) {
+      try {
+        await reembedTrainingExampleAsync(row.id);
+        ok++;
+      } catch {
+        failed++;
+      }
+    }
+    return { processed: rows?.length ?? 0, ok, failed };
+  });
+
+export const setWebchatTrainingReembed = setWebchatTraining;
