@@ -2476,7 +2476,7 @@ function DateStack({
   const isRange = !!(toIso && toIso !== fromIso);
 
   return (
-    <span ref={ref} className="relative inline-flex items-center gap-3 px-4 py-2">
+    <span ref={ref} className="relative inline-flex items-center gap-3 px-6 py-4">
       <DayDateBlock iso={fromIso} accent="pink" />
       {isRange && (
         <>
@@ -2499,7 +2499,9 @@ function DateStack({
           src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[220%] w-[125%] -translate-x-1/2 -translate-y-1/2 select-none"
+          // SVG has preserveAspectRatio="none", so it stretches to fill the
+          // wrapper box exactly — guarantees the lasso encloses every label.
+          className="pointer-events-none absolute inset-0 h-full w-full select-none"
         />
       )}
     </span>

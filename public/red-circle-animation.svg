@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" fill="none" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" preserveAspectRatio="none" fill="none" stroke="#ef4444" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round">
   <!--
     Hand-drawn lasso ellipse, more pronounced bulge on the LEFT side.
     Starts at the top-left, sweeps DOWN-LEFT (deep curve), across the
@@ -15,6 +15,7 @@
        C 108 24, 155 18, 175 18"
     stroke-dasharray="1200"
     stroke-dashoffset="1200"
+    vector-effect="non-scaling-stroke"
   >
     <animate
       attributeName="stroke-dashoffset"
