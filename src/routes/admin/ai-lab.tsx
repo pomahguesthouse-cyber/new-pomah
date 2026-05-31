@@ -43,6 +43,8 @@ import {
   getAiLabConfig,
   updateAiLabConfig,
   mergeAiLabConfig,
+  AGENT_DEFAULTS,
+  TOOL_DEFAULTS,
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { WhatsAppPage } from "@/routes/admin/whatsapp";
@@ -501,7 +503,7 @@ function ConfigDialog({
 
   return (
     <Dialog open={!!edit} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="sm:max-w-[720px] md:max-w-[800px] w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Konfigurasi — {label}</DialogTitle>
           <DialogDescription>
@@ -534,9 +536,30 @@ function ConfigDialog({
               />
             </Row>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Instruksi / persona</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Instruksi / persona</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-xs text-teal-600 hover:text-teal-800 animate-pulse-once"
+                  onClick={() => {
+                    setCfg((c) => ({
+                      ...c,
+                      agents: {
+                        ...c.agents,
+                        [edit.key]: {
+                          ...c.agents[edit.key],
+                          instructions: AGENT_DEFAULTS[edit.key] ?? "",
+                        },
+                      },
+                    }));
+                  }}
+                >
+                  Isi Nilai Default
+                </Button>
+              </div>
               <Textarea
-                rows={5}
+                rows={15}
                 placeholder="Contoh: Ramah, gunakan sapaan 'kak', jawab singkat dan jelas…"
                 value={cfg.agents[edit.key]?.instructions ?? ""}
                 onChange={(e) =>
@@ -567,9 +590,30 @@ function ConfigDialog({
               />
             </Row>
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Catatan / konfigurasi sumber</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Catatan / konfigurasi sumber</Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="h-auto p-0 text-xs text-teal-600 hover:text-teal-800"
+                  onClick={() => {
+                    setCfg((c) => ({
+                      ...c,
+                      tools: {
+                        ...c.tools,
+                        [edit.key]: {
+                          ...c.tools[edit.key],
+                          note: TOOL_DEFAULTS[edit.key] ?? "",
+                        },
+                      },
+                    }));
+                  }}
+                >
+                  Isi Nilai Default
+                </Button>
+              </div>
               <Textarea
-                rows={5}
+                rows={8}
                 placeholder="Endpoint, kredensial, atau catatan sumber data…"
                 value={cfg.tools[edit.key]?.note ?? ""}
                 onChange={(e) =>
