@@ -184,7 +184,21 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
       note: t?.note?.trim() ? t.note : (TOOL_DEFAULTS[k] ?? ""),
     };
   }
-  return { agents, tools };
+  const rag = c.trainingRag ?? {};
+  const matchCount = Number(rag.matchCount);
+  const minSimilarity = Number(rag.minSimilarity);
+  const trainingRag: TrainingRagConfig = {
+    enabled: rag.enabled ?? TRAINING_RAG_DEFAULTS.enabled,
+    matchCount:
+      Number.isFinite(matchCount) && matchCount >= 1 && matchCount <= 10
+        ? Math.round(matchCount)
+        : TRAINING_RAG_DEFAULTS.matchCount,
+    minSimilarity:
+      Number.isFinite(minSimilarity) && minSimilarity >= 0 && minSimilarity <= 1
+        ? minSimilarity
+        : TRAINING_RAG_DEFAULTS.minSimilarity,
+  };
+  return { agents, tools, trainingRag };
 }
 
 /** Read the AI LAB configuration from the first property row. */
