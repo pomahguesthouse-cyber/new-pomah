@@ -163,16 +163,41 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
  * Resolve a single uploaded media asset by its display name to a public URL.
  * Used by the homepage to render the "red-circle-animation.svg" lasso from
  * the media library instead of a bundled /public copy.
+ *
+ * Optional `folder` narrows the lookup to a specific media-library folder
+ * (e.g. "icon") so the same filename in a different folder is ignored.
+ * Matched case-insensitively against media_folders.name.
  */
 export const getMediaAssetByName = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ name: z.string().min(1).max(255) }).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({
+        name: z.string().min(1).max(255),
+        folder: z.string().min(1).max(120).optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
-    const { data: row } = await supabaseAdmin
+    let folderId: string | null = null;
+    if (data.folder) {
+      const { data: folderRow } = await supabaseAdmin
+        .from("media_folders")
+        .select("id")
+        .ilike("name", data.folder)
+        .limit(1)
+        .maybeSingle();
+      if (!folderRow) return { url: null };
+      folderId = (folderRow as { id: string }).id;
+    }
+
+    let q = supabaseAdmin
       .from("sop_documents")
       .select("file_path, storage_bucket")
       .ilike("name", data.name)
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    if (folderId) q = q.eq("folder_id", folderId);
+
+    const { data: row } = await q.maybeSingle();
     if (!row || !row.file_path) return { url: null };
     const bucket = (row.storage_bucket as string | null) || "sop-documents";
     const url = supabaseAdmin.storage.from(bucket).getPublicUrl(row.file_path).data.publicUrl;
