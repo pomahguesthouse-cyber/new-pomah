@@ -60,6 +60,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
+      { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
     ],
