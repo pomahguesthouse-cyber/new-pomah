@@ -158,7 +158,7 @@ function ExampleDialog({ open, initial, onClose, onSaved }: ExampleDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
+      <DialogContent className="sm:max-w-[900px] lg:max-w-[1100px]">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? "Edit Contoh Percakapan" : "Tambah Contoh Percakapan"}
