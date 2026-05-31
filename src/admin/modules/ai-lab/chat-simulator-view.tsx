@@ -35,6 +35,8 @@ import {
   saveSimulationAsTraining,
   listSimulatorTraining,
   deleteSimulatorTraining,
+  updateSimulatorTraining,
+  exportSimulatorTraining,
 } from "./simulator.functions";
 import { listThreads, getThread } from "@/admin/functions/whatsapp.functions";
 import { ScrollArea } from "@/components/ui/scroll-area";
