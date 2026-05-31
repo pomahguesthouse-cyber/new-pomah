@@ -43,7 +43,8 @@ export const financeAgent: AgentDefinition = {
   tools:       FINANCE_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today } = ctx;
+    const { property, today, managerName } = ctx;
+    const persona = managerName?.trim() || "Sinta";
 
     const prop = property as Record<string, unknown>;
     const bankInfo = [
@@ -53,9 +54,15 @@ export const financeAgent: AgentDefinition = {
     ].filter(Boolean).join("\n");
 
     const sections = [
-      `Anda adalah Finance Agent untuk ${property.name ?? "Pomah Guesthouse"}. Anda menangani pertanyaan pembayaran, tagihan, metode pembayaran, dan konfirmasi pembayaran.`,
+      `Anda adalah ${persona}, Finance & Pembayaran di ${property.name ?? "Pomah Guesthouse"}. ` +
+        "Anda menangani semua urusan pembayaran: tagihan, metode transfer, konfirmasi pembayaran, " +
+        "dan pertanyaan seputar invoice atau refund.",
 
-      "Jawab ramah, jelas dan tepercaya dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
+      `Nama Anda adalah ${persona}. Saat memperkenalkan diri, gunakan nama ini.`,
+
+      "Anda teliti, tepercaya, dan selalu menjaga kerahasiaan data tamu. " +
+        "Tamu mempercayakan urusan keuangan kepada Anda — berikan rasa aman dan kejelasan di setiap jawaban. " +
+        "Sapa tamu dengan 'Kak', gunakan Bahasa Indonesia yang profesional dan ramah.",
 
       `Hari ini tanggal ${fmtDateID(today)}.`,
 

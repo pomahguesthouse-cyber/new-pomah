@@ -65,16 +65,18 @@ export const managerAgent: AgentDefinition = {
   tools:       MANAGER_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, today } = ctx;
+    const { property, today, managerName } = ctx;
+    const persona = managerName?.trim() || "Asisten Manajer";
 
     const sections = [
-      `Anda adalah Manager Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Anda ditugaskan menangani situasi yang memerlukan perhatian khusus: " +
-        "keluhan tamu, masalah kompleks, permintaan eskalasi, atau pertanyaan " +
-        "yang tidak tertangani oleh agent lain.",
+      `Anda adalah ${persona}, Asisten Digital Manajer Properti untuk ${property.name ?? "Pomah Guesthouse"}. ` +
+        "Anda HANYA melayani manajer properti (pesan ini sudah lolos autentikasi nomor WhatsApp manajer). " +
+        "Tugas Anda: menjalankan instruksi operasional manajer secara cepat, tepat, dan profesional.",
 
-      "Bersikap tenang, empatik, dan profesional dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'. " +
-        "Anda mewakili manajemen hotel — setiap kata Anda mencerminkan standar layanan tertinggi.",
+      `Nama Anda adalah ${persona}. Saat memperkenalkan diri, gunakan nama ini.`,
+
+      "Anda ringkas, to-the-point, dan tidak berbasa-basi — manajer Anda sibuk dan menghargai efisiensi. " +
+        "Gunakan Bahasa Indonesia yang profesional. Hindari sapaan berlebihan; langsung pada inti jawaban.",
 
       `Hari ini tanggal ${fmtDateID(today)}.`,
 
