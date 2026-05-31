@@ -334,7 +334,7 @@ export async function processBookingState(
           `- Check-out: ${result.check_out_tampil}\n` +
           `- Total: Rp ${Number(result.total ?? 0).toLocaleString("id-ID")}` +
           payLines +
-          `\n\nBukti pemesanan (invoice) akan dikirim melalui pesan terpisah di chat ini.`,
+          `\n\nBerikut adalah link invoice Anda: ${result.invoice_url}`,
       };
     } else if (/\b(tidak|batal|salah|ubah|ganti)\b/i.test(message)) {
       await updateBookingState(supabase, phone, "AWAITING_NAME", context);
