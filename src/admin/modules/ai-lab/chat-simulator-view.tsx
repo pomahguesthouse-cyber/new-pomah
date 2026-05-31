@@ -206,12 +206,96 @@ export function ChatSimulatorView() {
   const savedTraining: any[] = trainingQuery.data?.logs ?? [];
 
   async function handleDeleteTraining(id: string) {
+    if (!confirm("Hapus training data ini? Tindakan tidak bisa dibatalkan.")) return;
     try {
       await runDeleteTraining({ data: { id } });
       qc.invalidateQueries({ queryKey: ["simulator-training"] });
       toast.success("Training data dihapus");
     } catch (e: any) {
       toast.error(e.message ?? "Gagal menghapus");
+    }
+  }
+
+  // ── Edit saved training ───────────────────────────────────────────────────
+  const [editTrainingId, setEditTrainingId] = useState<string | null>(null);
+  const [editUserMsg, setEditUserMsg] = useState("");
+  const [editAiResp, setEditAiResp] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  function openEditTraining(log: any) {
+    setEditTrainingId(log.id);
+    setEditUserMsg(log.user_message ?? "");
+    setEditAiResp(log.ai_response ?? "");
+  }
+
+  async function handleSaveEditTraining() {
+    if (!editTrainingId) return;
+    const u = editUserMsg.trim();
+    const a = editAiResp.trim();
+    if (!u || !a) {
+      toast.error("Pesan tamu & respons tidak boleh kosong");
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await runUpdateTraining({
+        data: { id: editTrainingId, userMessage: u, aiResponse: a },
+      });
+      qc.invalidateQueries({ queryKey: ["simulator-training"] });
+      toast.success("Training data diperbarui");
+      setEditTrainingId(null);
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal memperbarui");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // ── Export training ───────────────────────────────────────────────────────
+  function downloadFile(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function toCsv(rows: any[]): string {
+    const headers = ["id", "user_message", "ai_response", "correction", "rating", "used", "created_at"];
+    const escape = (v: unknown) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines = [headers.join(",")];
+    for (const r of rows) lines.push(headers.map((h) => escape(r[h])).join(","));
+    return lines.join("\n");
+  }
+
+  async function handleExport(format: "json" | "csv") {
+    try {
+      const res: any = await runExportTraining();
+      const rows: any[] = res?.rows ?? [];
+      if (!rows.length) {
+        toast.info("Belum ada training data untuk diekspor");
+        return;
+      }
+      const ts = new Date().toISOString().slice(0, 10);
+      if (format === "json") {
+        downloadFile(
+          `training-simulator-${ts}.json`,
+          JSON.stringify(rows, null, 2),
+          "application/json",
+        );
+      } else {
+        downloadFile(`training-simulator-${ts}.csv`, toCsv(rows), "text/csv");
+      }
+      toast.success(`Mengekspor ${rows.length} baris (${format.toUpperCase()})`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal mengekspor");
     }
   }
 
