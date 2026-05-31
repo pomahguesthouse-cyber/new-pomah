@@ -131,19 +131,33 @@ export const Route = createFileRoute("/api/fonnte")({
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
         // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
-        // teruskan ke super admin sebagai bukti transfer untuk diverifikasi.
+        // → jalankan Vision OCR untuk ekstrak data, lalu teruskan ke super admin.
         if (attachmentUrl) {
-          void import("@/services/manager-notifier.service")
-            .then(({ notifyPaymentProof }) =>
-              notifyPaymentProof(supabaseAdmin as any, {
+          void (async () => {
+            try {
+              // 1. Vision OCR — ekstrak data transfer
+              const { analyzePaymentProof } = await import("@/services/payment-proof.service");
+              const ocrResult = await analyzePaymentProof(
+                supabaseAdmin as any,
+                attachmentUrl,
+                customerPhone,
+                messageId,
+              );
+
+              // 2. Kirim notifikasi ke super admin (dengan data OCR)
+              const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
+              await notifyPaymentProof(supabaseAdmin as any, {
                 threadId: null,
                 phone: customerPhone,
                 guestName: name,
                 imageUrl: attachmentUrl,
                 messageId,
-              }),
-            )
-            .catch((err) => console.warn("[Webhook] notifyPaymentProof gagal:", err));
+                ocrResult,
+              });
+            } catch (err) {
+              console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
+            }
+          })();
         }
 
         // ── 6. Load thread/context to see if auto reply is enabled/configured ──

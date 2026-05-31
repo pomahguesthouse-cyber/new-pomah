@@ -239,8 +239,10 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 }
 
 /* ------------------------------------------------------------------ */
-/* 2. Payment Proof                                                   */
+/* 2. Payment Proof (with optional Vision OCR enrichment)             */
 /* ------------------------------------------------------------------ */
+
+import type { PaymentProofResult } from "./payment-proof.service";
 
 export interface PaymentProofInput {
   threadId: string | null;
@@ -248,6 +250,23 @@ export interface PaymentProofInput {
   guestName: string | null;
   imageUrl: string;
   messageId: string;
+  /** Hasil analisis Vision OCR (opsional — jika undefined, kirim notif sederhana) */
+  ocrResult?: PaymentProofResult;
+}
+
+function matchStatusEmoji(status: string): string {
+  switch (status) {
+    case "matched":            return "✅ COCOK";
+    case "unmatched":          return "❌ TIDAK COCOK";
+    case "ambiguous":          return "⚠️ PERLU DICEK";
+    case "no_pending_booking": return "ℹ️ TIDAK ADA BOOKING PENDING";
+    default:                   return "❓ " + status;
+  }
+}
+
+function fmtRp(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return "Rp " + value.toLocaleString("id-ID");
 }
 
 export async function notifyPaymentProof(
@@ -255,8 +274,8 @@ export async function notifyPaymentProof(
   input: PaymentProofInput,
 ): Promise<void> {
   try {
-    // Cari booking aktif terbaru untuk phone tsb (best effort).
-    let bookingCode: string | null = null;
+    // Cari booking aktif terbaru untuk phone tsb (best effort) jika belum ada dari OCR
+    let bookingCode: string | null = input.ocrResult?.match.booking_code ?? null;
     let bookingId: string | null = null;
     if (input.phone) {
       const { data: guest } = await db
@@ -275,18 +294,55 @@ export async function notifyPaymentProof(
           .limit(1)
           .maybeSingle();
         if (bk) {
-          bookingCode = (bk as any).reference_code ?? null;
+          bookingCode = bookingCode ?? (bk as any).reference_code ?? null;
           bookingId = (bk as any).id ?? null;
         }
       }
     }
 
-    const message =
-      "💳 PAYMENT PROOF RECEIVED\n\n" +
-      `Guest: ${input.guestName ?? input.phone}\n` +
-      `Booking Code: ${bookingCode ?? "-"}\n\n` +
-      "A payment proof has been uploaded and requires verification.\n\n" +
-      `Attached:\n${input.imageUrl}`;
+    // ── Build notification message ──
+    const ocr = input.ocrResult?.ocr;
+    const match = input.ocrResult?.match;
+
+    let message: string;
+
+    if (ocr && input.ocrResult?.ok) {
+      // Enriched notification with OCR data
+      const ocrLines = [
+        ocr.bank_pengirim   ? `  Bank Pengirim: ${ocr.bank_pengirim}`   : null,
+        ocr.bank_tujuan     ? `  Bank Tujuan: ${ocr.bank_tujuan}`       : null,
+        ocr.nominal != null ? `  Nominal: ${fmtRp(ocr.nominal)}`        : null,
+        ocr.tanggal         ? `  Tanggal: ${ocr.tanggal}`               : null,
+        ocr.nama_pengirim   ? `  Nama Pengirim: ${ocr.nama_pengirim}`   : null,
+        ocr.nomor_referensi ? `  No. Referensi: ${ocr.nomor_referensi}` : null,
+      ].filter(Boolean).join("\n");
+
+      const matchLines = match
+        ? [
+            `  Status: ${matchStatusEmoji(match.status)}`,
+            match.booking_code   ? `  Kode Booking: ${match.booking_code}`       : null,
+            match.booking_amount != null ? `  Total Tagihan: ${fmtRp(match.booking_amount)}` : null,
+            match.amount_diff != null    ? `  Selisih: ${fmtRp(match.amount_diff)}`          : null,
+          ].filter(Boolean).join("\n")
+        : "  Status: ℹ️ Belum dicocokkan";
+
+      message =
+        "💳 BUKTI TRANSFER DITERIMA\n\n" +
+        `Tamu: ${input.guestName ?? input.phone}\n` +
+        `Telepon: ${input.phone}\n\n` +
+        `📋 Hasil OCR:\n${ocrLines || "  (tidak ada data terekstrak)"}\n\n` +
+        `🔍 Pencocokan Booking:\n${matchLines}\n\n` +
+        "Silakan verifikasi dan konfirmasi di Dashboard.";
+    } else {
+      // Fallback: simple notification (OCR gagal atau tidak tersedia)
+      message =
+        "💳 BUKTI TRANSFER DITERIMA\n\n" +
+        `Tamu: ${input.guestName ?? input.phone}\n` +
+        `Kode Booking: ${bookingCode ?? "-"}\n\n` +
+        "Bukti transfer telah dikirim dan memerlukan verifikasi manual.\n" +
+        (input.ocrResult?.error ? `\n⚠️ OCR gagal: ${input.ocrResult.error}\n` : "") +
+        `\nLampiran:\n${input.imageUrl}`;
+    }
 
     const token = await getFonnteToken(db);
     if (!token) return;
