@@ -1,57 +1,71 @@
-# Plan: Training simulator dipakai chatbot
+# Plan: Training per-percakapan + tombol edit/hapus
 
 ## Tujuan
-Setiap pasangan `user_message → ai_response` (atau `correction` bila admin mengedit) yang disimpan dari simulator dengan `rating="good"` harus ikut diretrieve saat chatbot menyusun jawaban, sehingga koreksi admin benar-benar memengaruhi perilaku bot.
+1. Setiap kali admin klik "Simpan Training", seluruh transcript percakapan disimpan sebagai **satu entri** (bukan banyak baris per pasangan), dilengkapi **judul** yang disarankan otomatis dan bisa diedit.
+2. Tombol **edit** dan **hapus** di kartu "Training tersimpan" selalu terlihat (sekarang tersembunyi sampai dihover).
 
-## Pendekatan
-Pakai **RAG di atas `ai_conversation_logs`** — sejalan dengan infrastruktur `sop_chunks` + pgvector yang sudah ada. Tidak fine-tuning, tidak ganti model. Contoh yang sudah diembed di-retrieve top-K dan diinjeksi ke system prompt agent sebagai "Contoh jawaban yang disetujui admin".
-
-## Langkah
+## Perubahan
 
 ### 1. Skema database (migration)
-- Tambah kolom `embedding vector(3072)` ke `ai_conversation_logs`.
-- Tambah kolom `effective_answer text generated always as (coalesce(correction, ai_response)) stored` — jawaban final yang dipakai (koreksi menang atas jawaban asli).
-- Index HNSW `vector_cosine_ops` pada `embedding`.
-- Function `match_training_examples(query_embedding vector(3072), match_count int, min_similarity float)` yang hanya mengembalikan baris dengan `rating='good'` dan `used=true`.
-- GRANT execute ke `authenticated` dan `service_role`.
+Tambah kolom ke `ai_conversation_logs`:
+- `title text` — judul percakapan (nullable, hanya diisi untuk entri tipe percakapan).
+- `transcript jsonb` — array `{direction:'in'|'out', body:string}` untuk percakapan utuh. Nullable agar baris lama tetap valid.
 
-### 2. Embedding pipeline (server-side)
-- Helper baru `src/ai/training-rag.service.ts`:
-  - `embedTrainingExample(logId)` — panggil Lovable AI `google/gemini-embedding-001` atas teks `"User: ... \nAssistant: <effective_answer>"`, simpan ke kolom `embedding`.
-  - `retrieveTrainingExamples(query, k=3, minSim=0.78)` — embed pesan tamu, panggil `match_training_examples`, return top-K.
-- Trigger embedding di dua titik:
-  - `saveSimulationAsTraining` (di `simulator.functions.ts`) — setelah insert, embed baris yang baru.
-  - `setTrainingRating` / `updateTrainingExample` (di `training.functions.ts`) — re-embed bila `correction` atau `ai_response` berubah, atau bila status berubah jadi `good`.
-- Backfill: server function admin-only `backfillTrainingEmbeddings` (batch 20) untuk meng-embed baris lama.
+Bersihkan data lama (sesuai pilihan user):
+- `DELETE FROM ai_conversation_logs WHERE source = 'simulator'`.
 
-### 3. Integrasi ke orchestrator
-- Di `src/ai/multi-agent-orchestrator.ts` (atau context-builder yang dipakai agent jawaban umum), sebelum panggil LLM:
-  - Ambil pesan terakhir user.
-  - Panggil `retrieveTrainingExamples` (skip bila < min_similarity).
-  - Inject blok ke system prompt:
-    ```
-    Contoh jawaban yang sudah disetujui admin (pakai sebagai panduan gaya & isi):
-    Q: ...
-    A: ...
-    ```
-  - Batasi total ≤ ~1500 token agar tidak menggeser sopText.
-- Pakai retrieval ini hanya untuk agent percakapan umum / FAQ. **Skip** untuk booking state machine (jawaban di sana harus deterministik dari state).
+Tidak perlu mengubah `embedding`, `effective_answer`, atau function `match_training_examples` — kolom `user_message` & `ai_response` tetap diisi (sebagai ringkasan flat) supaya RAG pipeline existing tidak break.
 
-### 4. UI feedback di AI Lab
-- Di `chat-simulator-view.tsx`, tampilkan badge kecil di balon jawaban bot: "Pakai N contoh training" bila retrieval aktif, dengan tooltip berisi ID contoh yang dipakai (untuk debugging).
-- Tambah indikator status embedding di halaman `/admin/training` (kolom: "Indexed" / "Pending").
+### 2. Server functions (`simulator.functions.ts`)
 
-### 5. Verifikasi
-- Simulasikan: simpan koreksi di simulator → reset percakapan → kirim pertanyaan serupa → cek jawaban mengikuti koreksi.
-- Cek log `toolsUsed` / response agent menyertakan ID contoh yang di-retrieve.
+**`saveSimulationAsTraining`** — ubah input + perilaku:
+- Input baru: `{ title: string (max 120), transcript: TranscriptMsg[] }` (bukan lagi `pairs[]`).
+- Validasi: minimal 1 pesan `in` dan 1 pesan `out`.
+- Insert **satu** row:
+  - `title` = judul dari admin.
+  - `transcript` = array transcript utuh.
+  - `user_message` = pesan tamu pertama (untuk kompatibilitas + retrieval).
+  - `ai_response` = gabungan jawaban bot (join `\n\n`) — dipakai sebagai `effective_answer` untuk embedding.
+  - `source = 'simulator'`, `rating = 'good'`, `used = true`.
+- Embed seperti sebelumnya (best-effort).
+
+**`updateSimulatorTraining`** — perluas input:
+- Tambah field `title?: string` dan `transcript?: TranscriptMsg[]`.
+- Saat transcript diupdate, regenerate `user_message` (pesan tamu pertama) & `ai_response` (gabungan jawaban bot) lalu re-embed.
+
+**`listSimulatorTraining`** — tambahkan `title` & `transcript` ke select.
+
+**`exportSimulatorTraining`** — tambahkan `title` & `transcript` ke select.
+
+**Baru: `suggestTrainingTitle`** — server function kecil:
+- Input: `{ transcript: TranscriptMsg[] }`.
+- Panggil LLM (pakai `buildEnv` yang sudah ada) dengan prompt singkat: "Beri judul ≤60 karakter dalam Bahasa Indonesia untuk percakapan berikut, hanya kembalikan judul tanpa tanda kutip."
+- Fallback bila LLM gagal: ambil 60 karakter pertama dari pesan tamu pertama.
+
+### 3. UI `chat-simulator-view.tsx`
+
+**Dialog "Simpan Training"** (sekarang menampilkan list pasangan):
+- Ganti jadi form satu percakapan:
+  - Field **Judul** di atas, otomatis terisi via `suggestTrainingTitle` saat dialog dibuka (loading state kecil), bisa diedit admin.
+  - Preview transcript utuh (urut, gelembung tamu kanan / bot kiri) — read-only, scrollable.
+  - Tombol "Simpan Training" memanggil `saveSimulationAsTraining({ title, transcript })`.
+
+**Kartu "Training tersimpan"**:
+- Tiap item menampilkan: **judul** (bold), tanggal kecil, preview 1-2 baris pesan tamu pertama, badge jumlah turn (mis. "6 pesan").
+- Klik item → buka dialog detail/edit (lihat di bawah).
+- **Tombol edit & hapus selalu terlihat** (hilangkan `opacity-0 group-hover:opacity-100`, ganti dengan styling tombol biasa di kanan).
+
+**Dialog Edit Training** — rombak:
+- Field **Judul** (input).
+- List transcript editable: tiap pesan bisa diedit isinya (textarea kecil per turn), bisa hapus turn, bisa tambah turn baru (tombol "+ Tamu" / "+ Bot").
+- Tombol Simpan → panggil `updateSimulatorTraining({ id, title, transcript })`.
+
+### 4. Hal yang TIDAK diubah
+- Pipeline RAG retrieval (`retrieveTrainingExamples` & `match_training_examples`) tetap apa adanya — karena `user_message` + `ai_response` masih diisi.
+- Halaman konfigurasi RAG, smart-delay, SOP — tidak disentuh.
+- Booking state machine — tidak disentuh.
 
 ## Catatan teknis
-- Model embedding: `google/gemini-embedding-001` (3072 dim) — sama family dengan yang sudah ada di proyek, simpel disetujui.
-- Dimensi harus konsisten dengan `sop_chunks` bila ingin pakai satu function; sebaiknya tetap pisah tabel agar bisa filter `rating='good'` tanpa polusi SOP.
-- Token budget: kirim ringkasan `effective_answer` (truncate ke ~600 char per contoh) supaya prompt tidak meledak.
-- Privasi: `user_message` dari WhatsApp bisa berisi PII; pastikan retrieval hanya jalan server-side dan tidak dikirim ke klien selain ID.
-
-## Yang tidak dikerjakan di plan ini
-- Tidak fine-tuning model.
-- Tidak mengubah cara `sop_documents` / `sop_chunks` di-retrieve.
-- Tidak mengubah booking state machine.
+- `transcript` jsonb divalidasi via Zod di server.
+- Judul auto-suggest pakai model yang sama dengan orchestrator (`env.model`), prompt pendek supaya murah.
+- Export JSON akan menyertakan `title` & `transcript`; CSV menambahkan kolom `title` (transcript tetap hanya di JSON karena terlalu nested untuk CSV).

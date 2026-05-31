@@ -27,6 +27,8 @@ export type Database = {
           rating: string | null
           source: string | null
           thread_id: string | null
+          title: string | null
+          transcript: Json | null
           used: boolean
           user_message: string | null
         }
@@ -42,6 +44,8 @@ export type Database = {
           rating?: string | null
           source?: string | null
           thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
           used?: boolean
           user_message?: string | null
         }
@@ -57,6 +61,8 @@ export type Database = {
           rating?: string | null
           source?: string | null
           thread_id?: string | null
+          title?: string | null
+          transcript?: Json | null
           used?: boolean
           user_message?: string | null
         }
