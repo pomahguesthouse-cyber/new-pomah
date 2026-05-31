@@ -2445,8 +2445,9 @@ function DateStack({
 
   const getAssetFn = useServerFn(getMediaAssetByName);
   const { data: assetData } = useQuery({
-    queryKey: ["media-asset", "red-circle-animation.svg"],
-    queryFn: () => getAssetFn({ data: { name: "red-circle-animation.svg" } }),
+    queryKey: ["media-asset", "icon", "red-circle-animation.svg"],
+    queryFn: () =>
+      getAssetFn({ data: { name: "red-circle-animation.svg", folder: "icon" } }),
     staleTime: 10 * 60 * 1000,
   });
   const svgUrl = assetData?.url || "/red-circle-animation.svg";
