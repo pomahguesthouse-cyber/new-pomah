@@ -50,6 +50,7 @@ import { TrainingView } from "@/admin/modules/ai-lab/training-view";
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings";
 import { ChatSimulatorView } from "@/admin/modules/ai-lab/chat-simulator-view";
+import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-settings";
 import { SeoPage } from "@/routes/admin/seo";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -140,13 +141,14 @@ const DECISION_HIERARCHY = [
   },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training" | "smart-delay" | "seo";
+type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training" | "training-rag" | "smart-delay" | "seo";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
   { key: "simulator",    label: "Simulator Bot",   icon: Bot },
   { key: "sop",          label: "Knowledge & SOP", icon: BookOpen },
   { key: "training",     label: "Training",        icon: GraduationCap },
+  { key: "training-rag", label: "RAG Settings",    icon: Sparkles },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
   { key: "seo",          label: "SEO",             icon: Search },
 ];
@@ -224,6 +226,10 @@ function AiLab() {
           ) : view === "seo" ? (
             <div className="flex-1 overflow-y-auto">
               <SeoPage />
+            </div>
+          ) : view === "training-rag" ? (
+            <div className="flex-1 overflow-y-auto">
+              <TrainingRagSettings />
             </div>
           ) : (
             <TrainingView />

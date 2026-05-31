@@ -47,9 +47,26 @@ export interface ToolConfig {
   note: string;
 }
 
+/** Pengaturan retrieval contoh training (RAG) untuk chatbot. */
+export interface TrainingRagConfig {
+  /** Aktifkan injeksi few-shot dari ai_conversation_logs ke system prompt. */
+  enabled: boolean;
+  /** Jumlah contoh top-K yang ditarik per pertanyaan tamu (1–10). */
+  matchCount: number;
+  /** Ambang minimum cosine similarity (0–1). Lebih tinggi = lebih ketat. */
+  minSimilarity: number;
+}
+
+export const TRAINING_RAG_DEFAULTS: TrainingRagConfig = {
+  enabled: true,
+  matchCount: 3,
+  minSimilarity: 0.78,
+};
+
 export interface AiLabConfig {
   agents: Record<string, AgentConfig>;
   tools: Record<string, ToolConfig>;
+  trainingRag: TrainingRagConfig;
 }
 
 /** Default persona prompt for each specialized agent. */
@@ -167,7 +184,21 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
       note: t?.note?.trim() ? t.note : (TOOL_DEFAULTS[k] ?? ""),
     };
   }
-  return { agents, tools };
+  const rag = (c.trainingRag ?? {}) as Partial<TrainingRagConfig>;
+  const matchCount = Number(rag.matchCount);
+  const minSimilarity = Number(rag.minSimilarity);
+  const trainingRag: TrainingRagConfig = {
+    enabled: rag.enabled ?? TRAINING_RAG_DEFAULTS.enabled,
+    matchCount:
+      Number.isFinite(matchCount) && matchCount >= 1 && matchCount <= 10
+        ? Math.round(matchCount)
+        : TRAINING_RAG_DEFAULTS.matchCount,
+    minSimilarity:
+      Number.isFinite(minSimilarity) && minSimilarity >= 0 && minSimilarity <= 1
+        ? minSimilarity
+        : TRAINING_RAG_DEFAULTS.minSimilarity,
+  };
+  return { agents, tools, trainingRag };
 }
 
 /** Read the AI LAB configuration from the first property row. */
@@ -200,3 +231,23 @@ export const updateAiLabConfig = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+/**
+ * Helper non-serverFn: baca pengaturan RAG dari properti pertama. Dipakai
+ * oleh orchestrator yang berjalan di server tanpa konteks autentikasi user.
+ */
+export async function readTrainingRagConfig(
+  client: SupabaseClient,
+): Promise<TrainingRagConfig> {
+  try {
+    const { data } = await client
+      .from("properties")
+      .select("ai_lab_config")
+      .limit(1)
+      .maybeSingle();
+    const cfg = mergeAiLabConfig((data as { ai_lab_config?: unknown } | null)?.ai_lab_config);
+    return cfg.trainingRag;
+  } catch {
+    return TRAINING_RAG_DEFAULTS;
+  }
+}
