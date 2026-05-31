@@ -19,6 +19,9 @@ export type SectionLayout = {
   paddingTop?: number;
   /** Bottom padding in pixels. */
   paddingBottom?: number;
+  /** Background colour as CSS string (hex, rgb, rgba, or named).
+   *  Sits behind the section content via the PbZone wrapper. */
+  backgroundColor?: string;
 };
 
 /** Reorderable homepage content sections (between hero/date-picker and footer). */
@@ -504,6 +507,13 @@ function sanitizeSectionLayouts(raw: unknown): HomepageConfig["sectionLayouts"] 
     }
     if (typeof v.paddingBottom === "number" && v.paddingBottom >= 0 && v.paddingBottom <= 1000) {
       layout.paddingBottom = v.paddingBottom;
+    }
+    if (typeof v.backgroundColor === "string") {
+      const s = v.backgroundColor.trim();
+      // Accept #abc, #abcdef, rgb(...), rgba(...), hsl(...), hsla(...), and named colours.
+      if (s && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|[a-zA-Z]+)$/.test(s)) {
+        layout.backgroundColor = s;
+      }
     }
     if (Object.keys(layout).length > 0) out[key] = layout;
   }
