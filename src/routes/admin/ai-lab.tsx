@@ -14,7 +14,7 @@ import {
   ArrowRight,
   LayoutDashboard,
   MessageCircle,
-  GraduationCap,
+  
   Sparkles,
   Bot,
   Send,
