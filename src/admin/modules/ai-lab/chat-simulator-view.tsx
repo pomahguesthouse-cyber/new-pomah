@@ -606,6 +606,14 @@ export function ChatSimulatorView() {
                 label="Waktu"
                 value={lastMeta.elapsedMs != null ? `${lastMeta.elapsedMs} ms` : undefined}
               />
+              <MetaRow
+                label="Training dipakai"
+                value={
+                  lastMeta.trainingExamplesUsed != null
+                    ? `${lastMeta.trainingExamplesUsed} contoh`
+                    : "—"
+                }
+              />
               {lastMeta.error && <p className="text-xs text-red-600">Error: {lastMeta.error}</p>}
             </div>
           ) : (
