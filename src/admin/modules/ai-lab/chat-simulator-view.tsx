@@ -168,7 +168,6 @@ export function ChatSimulatorView() {
       await runReset({ data: { phone } });
       setTranscript([]);
       setLastMeta(null);
-      setResults([]);
       setEditedIndices({});
       setEditingIdx(null);
       toast.success("Percakapan & state booking direset");
