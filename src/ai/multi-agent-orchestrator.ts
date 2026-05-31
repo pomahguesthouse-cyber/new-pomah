@@ -117,8 +117,14 @@ async function runAgent(
   // as a second system message) + conversation history. Examples are kept
   // in a SEPARATE system message so they don't bloat the agent's base prompt
   // and are clearly labelled as guidance, not as part of the persona.
+  let systemPrompt = agent.buildSystemPrompt(agentCtx);
+  if (agentCtx.chatSummary) {
+    systemPrompt += `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
+      `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
+  }
+
   const messages: AiMessage[] = [
-    { role: "system", content: agent.buildSystemPrompt(agentCtx) },
+    { role: "system", content: systemPrompt },
     ...(trainingExamplesBlock
       ? [{ role: "system" as const, content: trainingExamplesBlock }]
       : []),

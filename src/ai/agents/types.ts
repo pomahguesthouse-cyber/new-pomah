@@ -42,6 +42,8 @@ export interface AgentContext {
   /** Brochure/image files stored in the Brosur tab — name + public URL */
   brosurFiles?: { name: string; url: string }[];
   today:    string;
+  /** Summary of the previous chat session (idle > 5 min) */
+  chatSummary?: string;
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   chatPhone?: string;
   /**

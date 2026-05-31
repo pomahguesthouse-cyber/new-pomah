@@ -1918,6 +1918,7 @@ export type Database = {
           ai_analysis: Json | null
           ai_auto: boolean
           assigned_to: string | null
+          chat_summary: string | null
           created_at: string
           display_name: string | null
           guest_id: string | null
@@ -1936,6 +1937,7 @@ export type Database = {
           ai_analysis?: Json | null
           ai_auto?: boolean
           assigned_to?: string | null
+          chat_summary?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
@@ -1954,6 +1956,7 @@ export type Database = {
           ai_analysis?: Json | null
           ai_auto?: boolean
           assigned_to?: string | null
+          chat_summary?: string | null
           created_at?: string
           display_name?: string | null
           guest_id?: string | null

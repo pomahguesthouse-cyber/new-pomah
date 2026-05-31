@@ -376,7 +376,8 @@ export const Route = createFileRoute("/api/fonnte")({
                 thread_id:          string;
                 auto_reply_enabled: boolean;
                 fonnte_token:       string;
-                messages:           Array<{ direction: string; body: string }>;
+                chat_summary?:      string | null;
+                messages:           Array<{ direction: string; body: string; sent_at?: string }>;
               };
               result.auto_reply_enabled = c.auto_reply_enabled;
               result.message_count      = c.messages?.length ?? 0;
@@ -413,7 +414,22 @@ export const Route = createFileRoute("/api/fonnte")({
                   const today    = todayWIB();
                   const roomList = (rooms ?? []) as any[];
 
-                  const rollingMessages = (c.messages ?? []).slice(-20);
+                  // Find the start of the current session (after the last gap > 5 minutes)
+                  let sessionStartIndex = 0;
+                  const msgs = c.messages ?? [];
+                  for (let i = msgs.length - 1; i > 0; i--) {
+                    const current = msgs[i];
+                    const prev = msgs[i - 1];
+                    if (current.sent_at && prev.sent_at) {
+                      const diffMs = new Date(current.sent_at).getTime() - new Date(prev.sent_at).getTime();
+                      if (diffMs > 5 * 60 * 1000) {
+                        sessionStartIndex = i;
+                        break;
+                      }
+                    }
+                  }
+                  const currentSessionMessages = msgs.slice(sessionStartIndex);
+                  const rollingMessages = currentSessionMessages.slice(-20);
 
                   // Optionally mirror production by loading SOP text + brosur files.
                   let sopText = "";
@@ -463,6 +479,7 @@ export const Route = createFileRoute("/api/fonnte")({
                       rooms:    roomList,
                       sopText:  "",
                       today,
+                      chatSummary: c.chat_summary || "",
                     },
                     toolCtx: {
                       supabasePublic: supabasePublic as any,

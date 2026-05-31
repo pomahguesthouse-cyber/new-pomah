@@ -74,6 +74,63 @@ export type AutoreplyOutcome =
  * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
  */
+async function generateSessionSummary(
+  history: Array<{ direction: string; body: string; sent_at?: string }>,
+  existingSummary: string | null | undefined,
+  config: { apiKey: string; baseUrl: string; model: string },
+): Promise<string | null> {
+  const historyText = history
+    .map((m) => `${m.direction === "in" ? "Tamu" : "Bot"}: ${m.body}`)
+    .join("\n");
+
+  const prompt = `Berikut adalah riwayat obrolan sebelumnya antara tamu dan bot di Pomah Guesthouse:\n\n${historyText}\n\n` +
+    (existingSummary ? `Ringkasan dari sesi sebelumnya:\n${existingSummary}\n\n` : "") +
+    `Buat ringkasan (resume) singkat, padat, dan jelas dari riwayat di atas dalam Bahasa Indonesia (maksimal 2-3 kalimat). ` +
+    `Fokus pada detail penting seperti nama tamu (jika disebut), tipe kamar yang ditanyakan/dipesan, keluhan, atau status terakhir (misal: sukses booking, batal, atau pending). ` +
+    `Langsung berikan hasil ringkasannya secara polos tanpa kata pengantar atau tanda kutip.`;
+
+  try {
+    const res = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        temperature: 0.3,
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error(`[SessionSummarizer] LLM error:`, res.status, await res.text());
+      return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() ?? null;
+  } catch (e) {
+    console.error(`[SessionSummarizer] Failed to generate summary:`, e);
+    return null;
+  }
+}
+
+async function updateThreadSummary(
+  client: any,
+  threadId: string,
+  summary: string,
+): Promise<void> {
+  const { error } = await client
+    .from("whatsapp_threads")
+    .update({ chat_summary: summary })
+    .eq("id", threadId);
+  if (error) {
+    console.error(`[SessionSummarizer] Database update failed:`, error.message);
+  }
+}
+
 export async function executeAutoreplyForPhone(
   phone: string,
   origin: string,
@@ -157,7 +214,52 @@ export async function executeAutoreplyForPhone(
       : "google/gemini-2.5-flash"
     : cfgModel || "gpt-4o-mini";
 
-  const rollingMessages = (c.messages ?? []).slice(-20);
+  let chatSummary = c.chat_summary || "";
+  const messages = c.messages ?? [];
+
+  // 1. Detect if a new session started due to an idle gap (> 5 minutes)
+  if (messages.length >= 2) {
+    const newestMsg = messages[messages.length - 1];
+    const secondNewestMsg = messages[messages.length - 2];
+    if (newestMsg.sent_at && secondNewestMsg.sent_at) {
+      const diffMs = new Date(newestMsg.sent_at).getTime() - new Date(secondNewestMsg.sent_at).getTime();
+      const idleMinutes = diffMs / (1000 * 60);
+      if (idleMinutes > 5) {
+        console.info(`[SessionSummarizer] Idle gap detected (${idleMinutes.toFixed(1)} mins) — summarizing previous session for ${phone}`);
+        const previousHistory = messages.slice(0, -1);
+        if (previousHistory.length > 0) {
+          const generatedSummary = await generateSessionSummary(
+            previousHistory,
+            chatSummary,
+            { apiKey, baseUrl, model }
+          );
+          if (generatedSummary) {
+            await updateThreadSummary(supabaseAdmin, c.thread_id, generatedSummary);
+            chatSummary = generatedSummary;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Scan backwards to find the start of the current session (after the last gap > 5 minutes)
+  let sessionStartIndex = 0;
+  for (let i = messages.length - 1; i > 0; i--) {
+    const current = messages[i];
+    const prev = messages[i - 1];
+    if (current.sent_at && prev.sent_at) {
+      const diffMs = new Date(current.sent_at).getTime() - new Date(prev.sent_at).getTime();
+      if (diffMs > 5 * 60 * 1000) {
+        sessionStartIndex = i;
+        break;
+      }
+    }
+  }
+
+  // 3. Filter history to include only messages from the current active session
+  const currentSessionMessages = messages.slice(sessionStartIndex);
+  const rollingMessages = currentSessionMessages.slice(-20);
+
   const lastMessage =
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")
       ?.body ?? "";
@@ -182,6 +284,7 @@ export async function executeAutoreplyForPhone(
           brosurFiles,
           today: todayWIB(),
           lastMessage,
+          chatSummary,
         },
         toolCtx: {
           supabasePublic: supabasePublic as any,
