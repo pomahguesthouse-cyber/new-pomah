@@ -101,6 +101,8 @@ async function runAgent(
   maxTurns:         number,
   onAskAgent?:      (agentKey: AgentKey, question: string) => Promise<string>,
   signal?:          AbortSignal,
+  /** Blok few-shot dari training simulator (opsional, sudah diformat) */
+  trainingExamplesBlock?: string,
 ): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
   const toolsUsed = new Set<string>();
 
@@ -111,9 +113,15 @@ async function runAgent(
   while (trimmed.length && trimmed[trimmed.length - 1].direction !== "in") trimmed.pop();
   const history = trimmed.length ? trimmed : conversationMsgs;
 
-  // Build message array: agent system prompt + conversation history
+  // Build message array: agent system prompt (+ optional training examples
+  // as a second system message) + conversation history. Examples are kept
+  // in a SEPARATE system message so they don't bloat the agent's base prompt
+  // and are clearly labelled as guidance, not as part of the persona.
   const messages: AiMessage[] = [
     { role: "system", content: agent.buildSystemPrompt(agentCtx) },
+    ...(trainingExamplesBlock
+      ? [{ role: "system" as const, content: trainingExamplesBlock }]
+      : []),
     ...history.map((m) => ({
       role:    (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
       content: m.body,
