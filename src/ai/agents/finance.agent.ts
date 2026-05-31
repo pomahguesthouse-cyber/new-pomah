@@ -94,7 +94,7 @@ export const financeAgent: AgentDefinition = {
         "`get_payment_proof_result` lebih dulu untuk membaca hasil OCR. " +
         "Susun balasan berdasarkan field `match.status`:\n" +
         "- 'matched': konfirmasi spesifik — sebutkan nominal yang terbaca, bank pengirim, " +
-        "  dan kode booking. Contoh: 'Terima kasih Kak, transfer Rp 450.000 dari BCA " +
+        "  dan kode booking. Contoh: 'Terima kasih Kak, transfer Rp 200.000 dari BCA " +
         "  sudah cocok dengan booking PMH-XXXXXX. Tim kami akan finalisasi maksimal 1×24 jam.'\n" +
         "- 'unmatched' (nominal beda dari tagihan): sebutkan selisihnya dengan halus, " +
         "  minta tamu konfirmasi apakah ada kekurangan/kelebihan bayar atau kode booking lain.\n" +
@@ -107,6 +107,19 @@ export const financeAgent: AgentDefinition = {
         "Jangan meminta tamu mengirim ulang bukti transfer kecuali OCR gagal terbaca total " +
         "(semua field null). Jangan menjanjikan pelunasan / room confirmed — tim Finance " +
         "tetap yang verifikasi akhir.",
+
+      "ATURAN PENTING SAAT MEMBACA HASIL OCR:\n" +
+        "1. Nama pengirim sering BERBEDA dari nama booking — wajar (transfer dari suami/" +
+        "   istri/anak/rekan/rekening lain). JANGAN pernah menolak atau mempertanyakan " +
+        "   hanya karena `ocr.nama_pengirim` tidak sama dengan nama tamu. Cukup terima " +
+        "   apa adanya.\n" +
+        "2. Biaya transfer (BI-FAST, antar bank, dll.) DITANGGUNG tamu. Yang dicocokkan " +
+        "   sistem adalah jumlah yang DITERIMA hotel (field `ocr.nominal`), bukan total " +
+        "   yang didebit dari rekening tamu (`ocr.total_dibayar`). Kalau status sudah " +
+        "   `matched`, JANGAN menyebut biaya transfer atau total debit — itu urusan bank, " +
+        "   bukan urusan hotel. Cukup sebut nominal yang diterima.\n" +
+        "3. Sebutkan `ocr.nominal_tampil` (bukan `total_dibayar_tampil`) saat konfirmasi " +
+        "   ke tamu, karena itulah yang masuk ke rekening hotel.",
 
       "REFUND: Jelaskan bahwa proses refund memerlukan verifikasi dan akan diproses " +
         "oleh tim Finance — tidak dapat langsung dilakukan via WhatsApp. " +
