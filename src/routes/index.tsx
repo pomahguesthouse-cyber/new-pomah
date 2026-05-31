@@ -1480,6 +1480,7 @@ type RoomType = {
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
   total_physical_rooms?: number | null;
+  amenities?: string[] | null;
 };
 
 /** One picked room in the homepage booking cart. */
