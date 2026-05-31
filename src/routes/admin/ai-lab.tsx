@@ -82,22 +82,97 @@ const AGENTS = [
     key: "front-office",
     name: "Front Office Agent",
     icon: Building2,
+    color: "bg-amber-100 text-amber-700",
     desc: "Reservasi, check-in, info tamu",
+    personaDefault: "Rani",
+    personaHint: "Nama yang digunakan bot saat menyapa tamu (default: Rani)",
+    role: "Resepsionis & Reservasi",
+    roleDesc: "Menangani salam pembuka, cek ketersediaan kamar, proses booking, dan pertanyaan umum tamu via WhatsApp.",
+    tips: [
+      "Persona ramah & antusias — seperti resepsionis hotel berbintang",
+      "Bisa instruksikan gaya bahasa, cara menyapa, dan emoji favorit",
+      "Instruksi custom akan menggantikan prompt default seluruhnya",
+    ],
   },
-  { key: "pricing", name: "Pricing Agent", icon: DollarSign, desc: "Tarif dinamis & promo" },
+  {
+    key: "pricing",
+    name: "Pricing Agent",
+    icon: DollarSign,
+    color: "bg-emerald-100 text-emerald-700",
+    desc: "Tarif dinamis & promo",
+    personaDefault: "Hana",
+    personaHint: "Nama persona agen harga (default: Hana)",
+    role: "Pricing Specialist",
+    roleDesc: "Menjawab pertanyaan harga, menampilkan tarif live dari database, info diskon dan paket menginap.",
+    tips: [
+      "Persona informatif & ahli angka — jelas menjelaskan biaya per malam",
+      "Selalu mengambil tarif real-time, tidak pernah menebak harga",
+      "Bisa instruksikan cara format tampilan harga atau tambahkan narasi promo",
+    ],
+  },
   {
     key: "customer-care",
     name: "Customer Care Agent",
     icon: BedDouble,
-    desc: "Status & kesiapan kamar",
+    color: "bg-sky-100 text-sky-700",
+    desc: "Layanan kamar tamu menginap",
+    personaDefault: "Dewi",
+    personaHint: "Nama persona customer care (default: Dewi)",
+    role: "In-house Guest Services",
+    roleDesc: "Menangani permintaan layanan dari tamu yang sedang menginap: handuk, kebersihan kamar, extra pillow, dll.",
+    tips: [
+      "Persona hangat & penuh perhatian — tamu menginap adalah prioritas",
+      "Mencatat semua permintaan housekeeping ke sistem secara real-time",
+      "Bisa instruksikan estimasi waktu penanganan atau kata-kata empati khas",
+    ],
   },
-  { key: "maintenance", name: "Maintenance Agent", icon: Wrench, desc: "Perbaikan & fasilitas" },
-  { key: "finance", name: "Finance Agent", icon: Calculator, desc: "Pembayaran & tagihan" },
+  {
+    key: "maintenance",
+    name: "Maintenance Agent",
+    icon: Wrench,
+    color: "bg-orange-100 text-orange-700",
+    desc: "Perbaikan & fasilitas",
+    personaDefault: "Budi",
+    personaHint: "Nama persona teknisi maintenance (default: Budi)",
+    role: "Teknisi & Fasilitas",
+    roleDesc: "Menerima laporan kerusakan atau masalah fasilitas, mencatat prioritas, dan memastikan penanganan cepat.",
+    tips: [
+      "Persona tenang & berorientasi solusi — tamu frustrasi butuh kepastian",
+      "Otomatis mengklasifikasikan prioritas: Critical, High, Medium, Low",
+      "Bisa instruksikan SLA respons atau prosedur darurat spesifik properti",
+    ],
+  },
+  {
+    key: "finance",
+    name: "Finance Agent",
+    icon: Calculator,
+    color: "bg-violet-100 text-violet-700",
+    desc: "Pembayaran & tagihan",
+    personaDefault: "Sinta",
+    personaHint: "Nama persona petugas keuangan (default: Sinta)",
+    role: "Finance & Pembayaran",
+    roleDesc: "Menangani pertanyaan tagihan, info rekening transfer, konfirmasi pembayaran, dan pertanyaan refund.",
+    tips: [
+      "Persona teliti & tepercaya — tamu mempercayakan urusan keuangan",
+      "Tidak pernah meminta data sensitif (PIN, CVV, password) lewat chat",
+      "Bisa instruksikan info rekening khusus atau SOP konfirmasi transfer",
+    ],
+  },
   {
     key: "manager",
     name: "Manager Agent",
     icon: UserCog,
-    desc: "Khusus menangani percakapan manager",
+    color: "bg-rose-100 text-rose-700",
+    desc: "Asisten pribadi manajer properti",
+    personaDefault: "Asisten Manajer",
+    personaHint: "Nama asisten digital manajer (default: Asisten Manajer)",
+    role: "Executive Assistant",
+    roleDesc: "Hanya melayani manajer properti. Menjalankan instruksi operasional: cek booking, ubah status, pindah kamar.",
+    tips: [
+      "Persona ringkas & efisien — manajer sibuk, tidak suka basa-basi",
+      "Akses eksklusif: hanya merespons nomor WhatsApp manajer yang terdaftar",
+      "Bisa instruksikan format laporan atau prioritas informasi yang diinginkan",
+    ],
   },
 ];
 
@@ -387,14 +462,14 @@ function DashboardView() {
                   onClick={() => setEdit({ type: "agent", key: a.key })}
                   className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${a.color}`}>
                     <a.icon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{AGENT_DIVISION_NAMES[a.key] ?? a.name}</p>
                     {cfg.agents[a.key]?.managerName && (
                       <p className="mt-0.5 text-[10px] font-medium text-teal-600">
-                        Manager: {cfg.agents[a.key].managerName}
+                        Persona: {cfg.agents[a.key].managerName}
                       </p>
                     )}
                     <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>
@@ -418,6 +493,7 @@ function DashboardView() {
               );
             })}
           </div>
+
         </section>
 
         {/* Knowledge & tools */}
@@ -507,46 +583,64 @@ function ConfigDialog({
 }) {
   const agent = edit?.type === "agent" ? AGENTS.find((a) => a.key === edit.key) : null;
   const tool = edit?.type === "tool" ? TOOLS.find((t) => t.key === edit.key) : null;
-  const label = agent?.name ?? tool?.name ?? "";
+  const label = agent ? `${agent.role ?? agent.name}` : (tool?.name ?? "");
 
   return (
     <Dialog open={!!edit} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[720px] md:max-w-[800px] w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Konfigurasi — {label}</DialogTitle>
-          <DialogDescription>
-            {agent ? "Atur perilaku agent AI ini." : "Atur akses dan catatan sumber data ini."}
-          </DialogDescription>
+          {agent && (
+            <div className="flex items-center gap-3 mb-1">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${agent.color}`}>
+                <agent.icon className="h-5 w-5" />
+              </span>
+              <div>
+                <DialogTitle>{label}</DialogTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">{agent.roleDesc}</p>
+              </div>
+            </div>
+          )}
+          {tool && (
+            <DialogTitle>Konfigurasi — {label}</DialogTitle>
+          )}
+          {!agent && tool && (
+            <DialogDescription>Atur akses dan catatan sumber data ini.</DialogDescription>
+          )}
         </DialogHeader>
 
         {agent && edit && (
-          <div className="space-y-3">
-            <Row title="Aktif" desc="Agent ikut menangani percakapan.">
-              <Switch
-                checked={cfg.agents[edit.key]?.enabled ?? false}
-                onCheckedChange={(v) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], enabled: v } },
-                  }))
-                }
-              />
-            </Row>
-            <Row title="Balas otomatis" desc="Jika mati, balasan menunggu persetujuan staf.">
-              <Switch
-                checked={cfg.agents[edit.key]?.autoReply ?? false}
-                onCheckedChange={(v) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], autoReply: v } },
-                  }))
-                }
-              />
-            </Row>
+          <div className="space-y-4">
+            {/* Active + Auto-reply toggles */}
+            <div className="space-y-2">
+              <Row title="Aktif" desc="Agent ikut menangani percakapan.">
+                <Switch
+                  checked={cfg.agents[edit.key]?.enabled ?? false}
+                  onCheckedChange={(v) =>
+                    setCfg((c) => ({
+                      ...c,
+                      agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], enabled: v } },
+                    }))
+                  }
+                />
+              </Row>
+              <Row title="Balas otomatis" desc="Jika mati, balasan menunggu persetujuan staf.">
+                <Switch
+                  checked={cfg.agents[edit.key]?.autoReply ?? false}
+                  onCheckedChange={(v) =>
+                    setCfg((c) => ({
+                      ...c,
+                      agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], autoReply: v } },
+                    }))
+                  }
+                />
+              </Row>
+            </div>
+
+            {/* Persona name */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Nama Penanggung Jawab</Label>
+              <Label className="text-xs font-semibold">Nama Persona</Label>
               <Input
-                placeholder="Mis. Rani, Joko, Santi…"
+                placeholder={`Mis. ${agent.personaDefault}…`}
                 value={cfg.agents[edit.key]?.managerName ?? ""}
                 onChange={(e) =>
                   setCfg((c) => ({
@@ -559,17 +653,21 @@ function ConfigDialog({
                 }
               />
               <p className="text-[11px] text-muted-foreground">
-                Nama ini ditampilkan di Simulator &amp; chat WhatsApp sebagai label agent,
-                contoh: <span className="font-mono">{formatAgentBadge(edit.key, cfg.agents)}</span>.
+                {agent.personaHint}. Ditampilkan sebagai:{" "}
+                <span className="font-mono font-medium text-teal-700">
+                  {formatAgentBadge(edit.key, cfg.agents)}
+                </span>
               </p>
             </div>
+
+            {/* Instructions */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">Instruksi / persona</Label>
+                <Label className="text-xs font-semibold">Instruksi / Persona Kustom</Label>
                 <Button
                   type="button"
                   variant="link"
-                  className="h-auto p-0 text-xs text-teal-600 hover:text-teal-800 animate-pulse-once"
+                  className="h-auto p-0 text-xs text-teal-600 hover:text-teal-800"
                   onClick={() => {
                     setCfg((c) => ({
                       ...c,
@@ -583,12 +681,12 @@ function ConfigDialog({
                     }));
                   }}
                 >
-                  Isi Nilai Default
+                  Reset ke Default
                 </Button>
               </div>
               <Textarea
-                rows={15}
-                placeholder="Contoh: Ramah, gunakan sapaan 'kak', jawab singkat dan jelas…"
+                rows={14}
+                placeholder={`Instruksi khusus untuk ${agent.role}. Contoh: gunakan bahasa formal, sapa tamu dengan nama, sebutkan promo akhir pekan…`}
                 value={cfg.agents[edit.key]?.instructions ?? ""}
                 onChange={(e) =>
                   setCfg((c) => ({
@@ -600,6 +698,28 @@ function ConfigDialog({
                   }))
                 }
               />
+            </div>
+
+            {/* Per-agent tips */}
+            <div className={`rounded-lg border p-3.5 ${
+              agent.key === "front-office" ? "border-amber-200 bg-amber-50" :
+              agent.key === "pricing"      ? "border-emerald-200 bg-emerald-50" :
+              agent.key === "customer-care"? "border-sky-200 bg-sky-50" :
+              agent.key === "maintenance"  ? "border-orange-200 bg-orange-50" :
+              agent.key === "finance"      ? "border-violet-200 bg-violet-50" :
+                                             "border-rose-200 bg-rose-50"
+            }`}>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Tentang divisi ini
+              </p>
+              <ul className="space-y-1">
+                {agent.tips.map((tip) => (
+                  <li key={tip} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                    <span className="mt-0.5 shrink-0">•</span>
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         )}
