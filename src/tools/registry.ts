@@ -122,6 +122,23 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_room_specifications",
+      description:
+        "Mendapatkan spesifikasi kamar statis (seperti deskripsi, fasilitas/amenities, lokasi lantai, kapasitas tamu, tipe tempat tidur, kapasitas extra bed, dan tarif extra bed) dari database untuk tipe kamar tertentu atau semua tipe kamar.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: {
+            type: "string",
+            description: "Nama tipe kamar (misal: 'Deluxe', 'Grand Deluxe'). Kosongkan untuk mendapatkan semua kamar.",
+          },
+        },
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -135,4 +152,5 @@ export const TOOL_LABELS: Record<string, string> = {
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",
+  get_room_specifications:      "Room Specifications",
 };

@@ -19,24 +19,7 @@ export const frontOfficeAgent: AgentDefinition = {
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, rooms, sopText, brosurFiles, today, bookingInProgress } = ctx;
 
-    const roomLines = rooms.map((r) => {
-      const extrabedCap  = Number(r.extrabed_capacity ?? 0);
-      const extrabedRate = Number(r.extrabed_rate ?? 0);
-      let extrabedInfo = "";
-      if (extrabedCap > 0) {
-        extrabedInfo = extrabedRate > 0
-          ? `, extra bed tersedia maks ${extrabedCap} (Rp ${extrabedRate.toLocaleString("id-ID")}/bed/malam)`
-          : `, extra bed tersedia maks ${extrabedCap} (gratis)`;
-      }
-      return (
-        `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
-        `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
-        `${(r as any).floor_info ? `, Lokasi: ${(r as any).floor_info}` : ""}` +
-        `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
-        `${r.description ? `, Deskripsi: ${r.description}` : ""}` +
-        extrabedInfo
-      );
-    });
+    const roomSummary = rooms.map((r) => `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam`).join("\n");
 
     const sections = [
       `Anda adalah Front Office Agent untuk ${property.name ?? "Pomah Guesthouse"}. ` +
@@ -68,13 +51,13 @@ export const frontOfficeAgent: AgentDefinition = {
       "FORMAT TANGGAL: tampilkan selalu dalam format Indonesia, contoh '19 Mei 2026'. " +
         "JANGAN tampilkan format YYYY-MM-DD kepada tamu.",
 
-      "FASILITAS & DETAIL KAMAR: JANGAN PERNAH mengarang fasilitas kamar yang tidak tertera di data kamar atau SOP. " +
-        "Jika tamu menanyakan fasilitas tertentu (seperti TV, kulkas, bathtub, air panas, dll.) untuk tipe kamar tertentu, " +
-        "nyatakan dengan jujur bahwa fasilitas tersebut tidak tersedia bila tidak tertulis di data kamar/SOP. " +
-        "Sebagai contoh nyata: tipe kamar Deluxe TIDAK memiliki TV karena tidak tercantum dalam fasilitasnya.",
+      "FASILITAS, LOKASI LANTAI, DESKRIPSI & DETAIL FISIK KAMAR: Anda memiliki tool `get_room_specifications`. " +
+        "Setiap kali tamu menanyakan detail spesifikasi kamar seperti lokasi lantai, fasilitas yang tersedia (AC, TV, air panas, bathtub, dll.), " +
+        "deskripsi lengkap, kapasitas tamu default, atau kapasitas & tarif extra bed, Anda WAJIB memanggil tool `get_room_specifications` " +
+        "terlebih dahulu untuk mendapatkan data nyata dari database. JANGAN PERNAH menebak atau mengarang detail fisik kamar.",
 
-      roomLines.length
-        ? `Data kamar (tarif, kapasitas & fasilitas — jangan mengarang):\n${roomLines.join("\n")}`
+      roomSummary
+        ? `Daftar tipe kamar yang tersedia di properti:\n${roomSummary}`
         : "",
 
       "PERTANYAAN KAMAR UMUM (belum sebut tanggal): Jika tamu bertanya soal kamar secara umum " +
@@ -103,11 +86,10 @@ export const frontOfficeAgent: AgentDefinition = {
         "Tutup dengan ajakan memilih kamar untuk lanjut booking.",
 
       "EXTRA BED & ADD-ONS: " +
-        "Jika jumlah tamu yang disebutkan MELEBIHI kapasitas default kamar yang dipilih, " +
-        "dan kamar itu punya extra bed tersedia, WAJIB tawarkan extra bed. " +
-        "Hitung ulang total harga: (tarif kamar + harga extra bed x jumlah extra bed) x jumlah malam. " +
-        "Contoh: Deluxe Rp 300.000/malam kapasitas 2, tamu 3 orang, extra bed Rp 100.000/malam, 2 malam " +
-        "= (300.000 + 100.000) x 2 = Rp 800.000. " +
+        "Jika jumlah tamu yang disebutkan melebihi kapasitas default kamar yang dipilih (panggil `get_room_specifications` " +
+        "untuk mengetahui kapasitas default kamar), dan kamar itu memiliki extra bed yang tersedia, WAJIB tawarkan extra bed. " +
+        "Hitung ulang total harga secara akurat dengan memanggil `get_room_specifications` untuk mengetahui tarif " +
+        "dan kapasitas maksimum extra bed kamar tersebut: total harga = (tarif kamar + tarif extra bed x jumlah extra bed) x jumlah malam. " +
         "Jika extra bed tidak tersedia atau sudah penuh, beritahu tamu dengan jelas. " +
         "Jangan tawarkan extra bed jika tamu masih dalam kapasitas default.",
 

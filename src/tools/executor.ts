@@ -16,6 +16,7 @@ import { getPaymentInfo }                 from "./finance/get-payment-info.tool"
 import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
+import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   get_bookings:                  getBookings,
   update_booking_status:         updateBookingStatus,
   change_booking_room:           changeBookingRoom,
+  get_room_specifications:       getRoomSpecifications,
 };
 
 // ─── Executor ─────────────────────────────────────────────────────────────────
