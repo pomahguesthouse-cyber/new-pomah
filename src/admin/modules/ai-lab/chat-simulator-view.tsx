@@ -64,6 +64,7 @@ type Direction = "in" | "out" | "system";
 interface TranscriptMsg {
   direction: Direction;
   body: string;
+  intent?: string;
 }
 interface TurnMeta {
   agentKey?: string;
@@ -159,7 +160,9 @@ export function ChatSimulatorView() {
   const origin = typeof window !== "undefined" ? window.location.origin : undefined;
 
   async function sendOne(message: string, history: TranscriptMsg[]) {
-    const cleanHistory = history.filter((m) => m.direction === "in" || m.direction === "out");
+    const cleanHistory = history
+      .filter((m) => m.direction === "in" || m.direction === "out")
+      .map((m) => ({ direction: m.direction, body: m.body }));
     const res: any = await runTurn({ data: { phone, message, transcript: cleanHistory, origin } });
     if (!res?.ok) {
       throw new Error(res?.error || "Gagal menjalankan simulasi");
@@ -200,11 +203,19 @@ export function ChatSimulatorView() {
         });
       }
 
+      const updatedWithUser = [...withUser];
+      if (updatedWithUser.length > 0 && updatedWithUser[updatedWithUser.length - 1].direction === "in") {
+        updatedWithUser[updatedWithUser.length - 1] = {
+          ...updatedWithUser[updatedWithUser.length - 1],
+          intent: meta.intent,
+        };
+      }
+
       if (reply) {
-        setTranscript([...withUser, ...systemMessages, { direction: "out", body: reply }]);
+        setTranscript([...updatedWithUser, ...systemMessages, { direction: "out", body: reply }]);
       } else {
         setTranscript([
-          ...withUser,
+          ...updatedWithUser,
           ...systemMessages,
           { direction: "out", body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` },
         ]);
@@ -237,7 +248,9 @@ export function ChatSimulatorView() {
     setSaveTitle("");
     setTitleLoading(true);
     try {
-      const cleanTranscript = transcript.filter((m) => m.direction === "in" || m.direction === "out");
+      const cleanTranscript = transcript
+        .filter((m) => m.direction === "in" || m.direction === "out")
+        .map((m) => ({ direction: m.direction, body: m.body }));
       const res = await runSuggestTitle({ data: { transcript: cleanTranscript } });
       setSaveTitle(res?.title ?? "");
     } catch {
@@ -253,7 +266,9 @@ export function ChatSimulatorView() {
       toast.error("Judul tidak boleh kosong");
       return;
     }
-    const cleanTranscript = transcript.filter((m) => m.direction === "in" || m.direction === "out");
+    const cleanTranscript = transcript
+      .filter((m) => m.direction === "in" || m.direction === "out")
+      .map((m) => ({ direction: m.direction, body: m.body }));
     if (cleanTranscript.length < 2) {
       toast.error("Percakapan terlalu pendek untuk disimpan");
       return;
@@ -432,6 +447,7 @@ export function ChatSimulatorView() {
         .map((m) => ({
           direction: m.direction === "in" ? "in" : "out",
           body: m.body as string,
+          intent: m.metadata?.intent,
         }));
       setTranscript(imported);
       setPhone(thread.phone ?? phone);
@@ -772,6 +788,11 @@ export function ChatSimulatorView() {
                       ) : (
                         <>
                           <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                          {m.direction === "in" && m.intent && (
+                            <span className="mt-1.5 flex items-center justify-end gap-1 text-[9px] font-bold text-emerald-100 uppercase tracking-wider bg-emerald-700/50 w-fit ml-auto px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono select-none">
+                              Intent: {m.intent}
+                            </span>
+                          )}
                           {m.direction === "out" && !isEditing && (
                             <button
                               onClick={() => {
