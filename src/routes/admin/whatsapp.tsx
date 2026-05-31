@@ -43,7 +43,7 @@ import {
   classifyIntent,
   deleteThread,
   setTrainingExample,
-  
+  updateChatSummary,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
@@ -158,6 +158,7 @@ export function WhatsAppPage() {
   const classifyFn = useServerFn(classifyIntent);
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
+  const updateSummaryFn = useServerFn(updateChatSummary);
   
   const qc = useQueryClient();
 
@@ -246,6 +247,17 @@ export function WhatsAppPage() {
     mutationFn: (value: boolean) =>
       trainingFn({ data: { threadId: current!, value } }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const updateSummaryMut = useMutation({
+    mutationFn: (summary: string) =>
+      updateSummaryFn({ data: { threadId: current!, summary } }),
+    onSuccess: () => {
+      toast.success("Ringkasan obrolan diperbarui");
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
@@ -727,10 +739,10 @@ export function WhatsAppPage() {
 
               <Separator />
 
-              <ConvProperties
-                thread={thread.thread as Record<string, unknown>}
-                onAnalyze={() => classifyMut.mutate()}
-                analyzing={classifyMut.isPending}
+              <WhatsappSummary
+                thread={thread.thread}
+                onSaveSummary={(summary) => updateSummaryMut.mutate(summary)}
+                savingSummary={updateSummaryMut.isPending}
                 onToggleTraining={(v) => trainingMut.mutate(v)}
                 togglingTraining={trainingMut.isPending}
               />
@@ -746,198 +758,91 @@ export function WhatsAppPage() {
   );
 }
 
-const BASE_ESCALATION = ["AI Orchestrator", "Agent", "Tool", "Response Composer"];
-
-function ConvProperties({
+function WhatsappSummary({
   thread,
-  onAnalyze,
-  analyzing,
+  onSaveSummary,
+  savingSummary,
   onToggleTraining,
   togglingTraining,
 }: {
-  thread: Record<string, unknown>;
-  onAnalyze: () => void;
-  analyzing: boolean;
+  thread: Record<string, any>;
+  onSaveSummary: (summary: string) => void;
+  savingSummary: boolean;
   onToggleTraining: (v: boolean) => void;
   togglingTraining: boolean;
 }) {
-  const analysis = thread.ai_analysis as Record<string, unknown> | null | undefined;
-  const isTraining = !!(thread.is_training_example as boolean | null | undefined);
+  const [summary, setSummary] = useState(thread.chat_summary || "");
+  const isTraining = !!thread.is_training_example;
 
-  const intentLabel = analysis
-    ? String(analysis.intent_label ?? "")
-    : thread.intent
-      ? String(thread.intent).replace(/_/g, " ")
-      : null;
+  useEffect(() => {
+    setSummary(thread.chat_summary || "");
+  }, [thread.chat_summary, thread.id]);
 
-  const agent = analysis ? String(analysis.agent ?? "Front Office Agent") : null;
-  const confidence = analysis ? Number(analysis.confidence ?? 0) : null;
-  const toolsUsed = Array.isArray(analysis?.tools_used)
-    ? (analysis.tools_used as string[])
-    : [];
-
-  // Build escalation steps from live data.
-  const escalationSteps = BASE_ESCALATION.map((_, i) => {
-    if (i === 0) return { label: "AI Orchestrator", active: false };
-    if (i === 1) return { label: agent ?? "Front Office Agent", active: !!agent };
-    if (i === 2) return {
-      label: toolsUsed.length ? toolsUsed.join(" + ") : "Tanpa tool",
-      active: toolsUsed.length > 0,
-    };
-    return { label: "Response Composer", active: false };
-  });
+  const hasChanged = summary !== (thread.chat_summary || "");
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            Properti Percakapan
-          </p>
-          {analysis && (
-            <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-primary">
-              DATA LLM
-            </span>
+    <div className="space-y-4">
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          WhatsApp Summary
+        </p>
+        <div className="mt-2 space-y-2">
+          <Textarea
+            placeholder="Belum ada ringkasan obrolan. Chatbot akan merangkum otomatis setelah obrolan idle 5 menit, atau Anda dapat menulis ringkasan manual di sini..."
+            rows={5}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            className="resize-none text-xs leading-relaxed"
+          />
+          {hasChanged && (
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="h-7 text-xs px-3"
+                disabled={savingSummary}
+                onClick={() => onSaveSummary(summary)}
+              >
+                {savingSummary ? "Menyimpan..." : "Simpan Ringkasan"}
+              </Button>
+            </div>
           )}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 px-2 text-[10px]"
-          disabled={analyzing}
-          onClick={onAnalyze}
-          title="Jalankan analisis AI"
-        >
-          <RefreshCw className={cn("mr-1 h-3 w-3", analyzing && "animate-spin")} />
-          {analyzing ? "..." : analysis ? "Refresh" : "Analisis"}
-        </Button>
       </div>
 
-      {intentLabel ? (
-        <div className="mt-3 space-y-4">
-          {/* Intent */}
+      <Separator />
+
+      {/* Training toggle */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-              <Tag className="h-3 w-3" /> Intent
+            <p className="flex items-center gap-1.5 text-xs font-semibold">
+              <GraduationCap className="h-3.5 w-3.5 text-primary" />
+              Jadikan bahan training
             </p>
-            <span className="mt-1.5 inline-block rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              {intentLabel}
-            </span>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Bila aktif, percakapan ini dipakai sebagai contoh dasar jawaban AI.
+            </p>
           </div>
-
-          {/* Agent */}
-          {agent && (
-            <div>
-              <p className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                <Bot className="h-3 w-3" /> Agent Yang Bekerja
-              </p>
-              <p className="mt-1 text-sm font-semibold">{agent}</p>
-            </div>
-          )}
-
-          {/* Escalation path */}
-          {agent && (
-            <div>
-              <p className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                <GitMerge className="h-3 w-3" /> Jalur Eskalasi
-              </p>
-              <ol className="mt-1.5 space-y-1">
-                {escalationSteps.map((s, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs">
-                    <span
-                      className={cn(
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
-                        s.active
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className={s.active ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                      {s.label}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-
-          {/* Tools */}
-          <div>
-            <p className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-              <Wrench className="h-3 w-3" /> Tool Yang Dipanggil
-            </p>
-            {toolsUsed.length > 0 ? (
-              <div className="mt-1.5 flex flex-wrap gap-1">
-                {toolsUsed.map((t) => (
-                  <span
-                    key={t}
-                    className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">Tidak ada tool dipanggil</p>
+          <button
+            disabled={togglingTraining}
+            onClick={() => onToggleTraining(!isTraining)}
+            className={cn(
+              "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none",
+              isTraining ? "bg-primary" : "bg-muted",
+              togglingTraining && "opacity-50",
             )}
-          </div>
-
-          {/* Confidence */}
-          {confidence !== null && (
-            <div>
-              <p className="flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
-                <span>Confidence</span>
-                <span className="font-bold text-foreground">{Math.round(confidence * 100)}%</span>
-              </p>
-              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${Math.round(confidence * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Training toggle */}
-          <div className="rounded-lg border border-border bg-card p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold">
-                  <GraduationCap className="h-3.5 w-3.5 text-primary" />
-                  Jadikan bahan training
-                </p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  Bila aktif, percakapan ini dipakai sebagai contoh dasar jawaban AI.
-                </p>
-              </div>
-              <button
-                disabled={togglingTraining}
-                onClick={() => onToggleTraining(!isTraining)}
-                className={cn(
-                  "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none",
-                  isTraining ? "bg-primary" : "bg-muted",
-                  togglingTraining && "opacity-50",
-                )}
-                role="switch"
-                aria-checked={isTraining}
-              >
-                <span
-                  className={cn(
-                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform",
-                    isTraining ? "translate-x-4" : "translate-x-0",
-                  )}
-                />
-              </button>
-            </div>
-          </div>
+            role="switch"
+            aria-checked={isTraining}
+          >
+            <span
+              className={cn(
+                "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform",
+                isTraining ? "translate-x-4" : "translate-x-0",
+              )}
+            />
+          </button>
         </div>
-      ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Klik "Analisis" untuk melihat intent, agent, dan confidence percakapan ini.
-        </p>
-      )}
+      </div>
     </div>
   );
 }

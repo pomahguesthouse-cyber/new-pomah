@@ -407,3 +407,18 @@ export const toggleOverrideAutoReply = createServerFn({ method: "POST" })
       .eq("id", data.threadId);
     return { ok: true };
   });
+
+export const updateChatSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ threadId: z.string().uuid(), summary: z.string() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("whatsapp_threads")
+      .update({ chat_summary: data.summary } as any)
+      .eq("id", data.threadId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
