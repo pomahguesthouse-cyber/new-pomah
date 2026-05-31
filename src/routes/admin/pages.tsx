@@ -874,7 +874,43 @@ function SectionLayoutControls({
           />
           <span className="text-[10px] text-muted-foreground">px</span>
         </div>
-        {(layout.textAlign || layout.paddingTop != null || layout.paddingBottom != null) && (
+        <div className="flex items-center gap-1.5">
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Background
+          </label>
+          <input
+            type="color"
+            value={layout.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(layout.backgroundColor)
+              ? layout.backgroundColor
+              : "#ffffff"}
+            onChange={(e) => update({ backgroundColor: e.target.value })}
+            className="h-8 w-8 cursor-pointer rounded-md border border-input bg-background p-0.5"
+            title="Pilih warna"
+          />
+          <input
+            type="text"
+            value={layout.backgroundColor ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              update({ backgroundColor: e.target.value.trim() || undefined })
+            }
+            className="h-8 w-24 rounded-md border border-input bg-background px-2 text-xs font-mono"
+          />
+          {layout.backgroundColor && (
+            <button
+              type="button"
+              onClick={() => update({ backgroundColor: undefined })}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+              title="Hapus warna"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        {(layout.textAlign ||
+          layout.paddingTop != null ||
+          layout.paddingBottom != null ||
+          layout.backgroundColor) && (
           <button
             type="button"
             onClick={() =>

@@ -310,6 +310,7 @@ export function PbZone({
     textAlign?: "left" | "center" | "right";
     paddingTop?: number;
     paddingBottom?: number;
+    backgroundColor?: string;
   };
 }) {
   const style: React.CSSProperties | undefined = layout
@@ -319,6 +320,7 @@ export function PbZone({
           ? { paddingBottom: `${layout.paddingBottom}px` }
           : {}),
         ...(layout.textAlign ? { textAlign: layout.textAlign } : {}),
+        ...(layout.backgroundColor ? { backgroundColor: layout.backgroundColor } : {}),
       }
     : undefined;
   if (!pb.isBuilder) {
