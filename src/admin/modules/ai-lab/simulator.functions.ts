@@ -154,6 +154,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       bookingState: stateAfter.state,
       bookingContext: stateAfter.context,
       elapsedMs,
+      trainingExamplesUsed: orch.trainingExamplesUsed ?? 0,
+      trainingExampleIds: orch.trainingExampleIds ?? [],
     };
   });
 
