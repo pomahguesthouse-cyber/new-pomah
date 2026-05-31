@@ -1,11 +1,8 @@
 /**
  * Chatbot Simulator — AI Lab view.
  *
- * Two modes that share one server function (`simulateChatTurn`):
- *  1. Interactive: type messages, see the bot reply through the real
- *     orchestration pipeline (classifier → agent → tools → state machine).
- *  2. Scenario runner: auto-play predefined conversation scripts and show a
- *     transcript with heuristic pass/fail per step.
+ * Interactive mode: type messages, see the bot reply through the real
+ * orchestration pipeline (classifier → agent → tools → state machine).
  *
  * End-to-end: runs against a sandbox test phone and writes real data
  * (booking state, and create_booking creates real records). Use a test number.
