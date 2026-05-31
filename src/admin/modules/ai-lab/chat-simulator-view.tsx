@@ -71,8 +71,6 @@ interface TurnMeta {
   trainingExamplesUsed?: number;
 }
 
-
-
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export function ChatSimulatorView() {
@@ -90,7 +88,6 @@ export function ChatSimulatorView() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [lastMeta, setLastMeta] = useState<TurnMeta | null>(null);
-
 
   // Response modification states
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -261,48 +258,6 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Scenario runner ─────────────────────────────────────────────────────────
-  async function handleRunScenario() {
-    if (running) return;
-    const scenario = SCENARIOS.find((s) => s.key === activeScenario);
-    if (!scenario) return;
-    setRunning(true);
-    setResults([]);
-    setTranscript([]);
-    setLastMeta(null);
-    try {
-      // Fresh start
-      await runReset({ data: { phone } });
-      let history: TranscriptMsg[] = [];
-      const stepResults: StepResult[] = [];
-      for (const step of scenario.steps) {
-        const withUser = [...history, { direction: "in" as const, body: step.send }];
-        setTranscript(withUser);
-        scrollToBottom();
-        const { reply, meta } = await sendOne(step.send, history);
-        const next = reply ? [...withUser, { direction: "out" as const, body: reply }] : withUser;
-        setTranscript(next);
-        setLastMeta(meta);
-        history = next;
-        const checks = evaluateChecks(step, reply, meta);
-        const passed = checks.every((c) => c.ok);
-        stepResults.push({ step, reply, meta, passed, checks });
-        setResults([...stepResults]);
-        scrollToBottom();
-      }
-      const allPass = stepResults.every((r) => r.passed);
-      if (allPass) toast.success(`Skenario "${scenario.name}" lulus`);
-      else toast.warning(`Skenario "${scenario.name}" ada langkah gagal`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Skenario gagal dijalankan");
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const busy = sending || running;
-  const passCount = results.filter((r) => r.passed).length;
-
   return (
     <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
       {/* ── Left: chat ─────────────────────────────────────────────────────── */}
@@ -334,7 +289,7 @@ export function ChatSimulatorView() {
                 size="sm"
                 className="bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-sm transition-colors"
                 onClick={() => setSaveConfirmOpen(true)}
-                disabled={busy}
+                disabled={sending}
               >
                 <GraduationCap className="mr-1.5 h-3.5 w-3.5" />
                 Simpan Training
@@ -344,12 +299,12 @@ export function ChatSimulatorView() {
               variant="outline"
               size="sm"
               onClick={() => setImportOpen(true)}
-              disabled={busy}
+              disabled={sending}
             >
               <MessagesSquare className="mr-1 h-3.5 w-3.5" />
               Impor Chat WA
             </Button>
-            <Button variant="outline" size="sm" onClick={handleReset} disabled={busy}>
+            <Button variant="outline" size="sm" onClick={handleReset} disabled={sending}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
               Reset
             </Button>
@@ -361,7 +316,7 @@ export function ChatSimulatorView() {
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto bg-stone-50 p-4">
             {transcript.length === 0 ? (
               <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
-                Mulai mengetik atau jalankan skenario otomatis di kanan.
+                Mulai mengetik untuk menguji chatbot.
               </div>
             ) : (
               transcript.map((m, i) => {
@@ -455,7 +410,7 @@ export function ChatSimulatorView() {
                 );
               })
             )}
-            {busy && (
+            {sending && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-2 rounded-2xl rounded-bl-sm bg-white px-3.5 py-2 text-sm text-muted-foreground shadow-sm">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> mengetik…
@@ -476,9 +431,9 @@ export function ChatSimulatorView() {
                 }
               }}
               placeholder="Ketik pesan sebagai tamu…"
-              disabled={busy}
+              disabled={sending}
             />
-            <Button onClick={handleSend} disabled={busy || !input.trim()}>
+            <Button onClick={handleSend} disabled={sending || !input.trim()}>
               {sending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -489,7 +444,7 @@ export function ChatSimulatorView() {
         </Card>
       </div>
 
-      {/* ── Right: meta + scenario runner ──────────────────────────────────── */}
+      {/* ── Right: meta + saved training ──────────────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
         {/* Last turn meta */}
         <Card className="p-4">
@@ -521,92 +476,6 @@ export function ChatSimulatorView() {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Belum ada giliran.</p>
-          )}
-        </Card>
-
-        {/* Scenario runner */}
-        <Card className="flex min-h-0 flex-1 flex-col p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            <Play className="h-3.5 w-3.5" /> Runner skenario otomatis
-          </p>
-
-          <div className="space-y-2">
-            {SCENARIOS.map((s) => (
-              <button
-                key={s.key}
-                onClick={() => setActiveScenario(s.key)}
-                disabled={busy}
-                className={cn(
-                  "w-full rounded-lg border p-2.5 text-left transition",
-                  activeScenario === s.key
-                    ? "border-teal-500 bg-teal-50"
-                    : "border-border hover:bg-muted",
-                )}
-              >
-                <p className="text-sm font-medium">{s.name}</p>
-                <p className="text-xs text-muted-foreground">{s.desc}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {s.steps.length} langkah
-                </p>
-              </button>
-            ))}
-          </div>
-
-          <Button className="mt-3" onClick={handleRunScenario} disabled={busy}>
-            {running ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menjalankan…
-              </>
-            ) : (
-              <>
-                <Play className="mr-1.5 h-4 w-4" /> Jalankan skenario
-              </>
-            )}
-          </Button>
-
-          {/* Results */}
-          {results.length > 0 && (
-            <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
-              <p className="mb-2 text-xs font-semibold">
-                Hasil: {passCount}/{results.length} langkah lulus
-              </p>
-              <ol className="space-y-2">
-                {results.map((r, i) => (
-                  <li key={i} className="rounded-lg border border-border p-2 text-xs">
-                    <div className="flex items-start gap-1.5">
-                      {r.checks.length === 0 ? (
-                        <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-stone-400" />
-                      ) : r.passed ? (
-                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                      ) : (
-                        <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-1 font-medium">
-                          <User className="h-3 w-3" /> {r.step.send}
-                        </p>
-                        {r.checks.map((c, j) => (
-                          <p
-                            key={j}
-                            className={cn(
-                              "flex items-center gap-1",
-                              c.ok ? "text-emerald-700" : "text-red-700",
-                            )}
-                          >
-                            {c.ok ? "✓" : "✗"} {c.label}
-                          </p>
-                        ))}
-                        {r.meta.toolsUsed && r.meta.toolsUsed.length > 0 && (
-                          <p className="mt-0.5 flex items-center gap-1 text-muted-foreground">
-                            <Wrench className="h-3 w-3" /> {r.meta.toolsUsed.join(", ")}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
           )}
         </Card>
 
