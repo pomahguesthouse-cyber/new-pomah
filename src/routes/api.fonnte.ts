@@ -55,8 +55,9 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         const { sender, message, name, fonnteId, isOutgoing, customerPhone, rawBody } = event;
+        const attachmentUrl = (event as any).attachmentUrl as string | undefined;
         const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
-        console.log("[Webhook]", { sender, customerPhone, isOutgoing, msg: message.slice(0, 60), rawBodyKeys: Object.keys(rawBody) });
+        console.log("[Webhook]", { sender, customerPhone, isOutgoing, hasAttachment: !!attachmentUrl, msg: message.slice(0, 60), rawBodyKeys: Object.keys(rawBody) });
 
         // ── 3. Handle outgoing (Fonnte webhooks our own sends + native phone sends) ──
         if (isOutgoing) {
@@ -126,8 +127,24 @@ export const Route = createFileRoute("/api/fonnte")({
         // Intent badge (fire-and-forget — non-critical)
         void saveMessageMetadata(supabaseAdmin, {
           messageId,
-          metadata: { intent_label: classifyMessageIntent(message) },
+          metadata: { intent_label: classifyMessageIntent(message), attachment_url: attachmentUrl ?? null },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
+
+        // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
+        // teruskan ke super admin sebagai bukti transfer untuk diverifikasi.
+        if (attachmentUrl) {
+          void import("@/services/manager-notifier.service")
+            .then(({ notifyPaymentProof }) =>
+              notifyPaymentProof(supabaseAdmin as any, {
+                threadId: null,
+                phone: customerPhone,
+                guestName: name,
+                imageUrl: attachmentUrl,
+                messageId,
+              }),
+            )
+            .catch((err) => console.warn("[Webhook] notifyPaymentProof gagal:", err));
+        }
 
         // ── 6. Load thread/context to see if auto reply is enabled/configured ──
         const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(

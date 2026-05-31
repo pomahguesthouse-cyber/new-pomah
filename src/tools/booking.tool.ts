@@ -281,6 +281,18 @@ export const createBooking: ToolHandler = async (
   if (waitUntil) waitUntil(sendInvoice());
   else await sendInvoice();
 
+  // Notifikasi manager (fire-and-forget, tidak memblokir balasan AI).
+  const notifyManager = async () => {
+    try {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(ctx.supabaseAdmin as any, booking.id);
+    } catch (e) {
+      console.error(`[create_booking] notifyNewBooking gagal untuk ${booking.id}:`, e);
+    }
+  };
+  if (waitUntil) waitUntil(notifyManager());
+  else void notifyManager();
+
   // ── Return success payload ─────────────────────────────────────────────────
   return JSON.stringify({
     ok:               true,

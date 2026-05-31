@@ -336,6 +336,11 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       console.error("[submitPublicBooking] Notification trigger error:", notificationErr);
     }
 
+    // Notif manager (fire-and-forget).
+    void import("@/services/manager-notifier.service")
+      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
+      .catch((err) => console.warn("[submitPublicBooking] notifyNewBooking gagal:", err));
+
     return {
       id: booking.id,
       reference_code: booking.reference_code,
@@ -481,6 +486,11 @@ export const submitCartBooking = createServerFn({ method: "POST" })
     } catch (notificationErr) {
       console.error("[submitCartBooking] Notification trigger error:", notificationErr);
     }
+
+    // Notif manager (fire-and-forget).
+    void import("@/services/manager-notifier.service")
+      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
+      .catch((err) => console.warn("[submitCartBooking] notifyNewBooking gagal:", err));
 
     return {
       id: booking.id,
@@ -1126,6 +1136,11 @@ export const chatWithAI = createServerFn({ method: "POST" })
           ok: false,
           error: `Gagal menyimpan detail kamar: ${brErr.message}`,
         });
+
+      // Notif manager (fire-and-forget).
+      void import("@/services/manager-notifier.service")
+        .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
+        .catch((err) => console.warn("[webchatTool] notifyNewBooking gagal:", err));
 
       return JSON.stringify({
         ok: true,

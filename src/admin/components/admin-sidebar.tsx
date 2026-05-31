@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Images,
   Compass,
+  AlertTriangle,
 } from "lucide-react";
 
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
@@ -57,6 +58,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     label: "Guests & Comms",
     items: [
       { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
+      { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
     ],

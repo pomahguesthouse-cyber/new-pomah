@@ -110,6 +110,13 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       }).catch((err) =>
         console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
       );
+
+      // Beritahu manager (fire-and-forget).
+      void import("@/services/manager-notifier.service")
+        .then(({ notifyNewBooking }) => notifyNewBooking(supabase, booking.id))
+        .catch((err) =>
+          console.warn("[createBookingFromAdmin] notifyNewBooking gagal (non-fatal):", err),
+        );
     }
 
     return { ok: true };
