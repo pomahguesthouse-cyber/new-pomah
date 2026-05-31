@@ -40,9 +40,13 @@ import {
   Home,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   FileText,
   MessageSquare,
   Play,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from "lucide-react";
 // useQuery already imported above; useMutation available if needed
 import {
@@ -387,24 +391,14 @@ function HomepageBuilder() {
                   <Settings2 className="h-3.5 w-3.5" /> SEO
                 </Button>
               </div>
-              <div className="flex gap-1 border-b border-border p-2">
-                {visibleSections.map((s) => (
-                  <button
-                    key={s.key}
-                    onClick={() => setSection(s.key)}
-                    title={s.label}
-                    className={cn(
-                      "flex flex-1 flex-col items-center gap-1 rounded-md py-2 transition",
-                      section === s.key
-                        ? "bg-teal-50 text-teal-900"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <s.icon className="h-4 w-4" />
-                    <span className="text-[8px] font-medium uppercase tracking-wide">{s.label}</span>
-                  </button>
-                ))}
-              </div>
+              <SectionSlider
+                sections={visibleSections}
+                active={section}
+                onSelect={(k) => setSection(k)}
+              />
+              {sectionSupportsLayout(section) && (
+                <SectionLayoutControls section={section} cfg={cfg} setCfg={setCfg} />
+              )}
               <div className="flex-1 overflow-y-auto">
                 {isLoading ? (
                   <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
@@ -695,6 +689,207 @@ function ImageField({
         onPick={(url) => { onChange(url); setPickerOpen(false); }}
         onClose={() => setPickerOpen(false)}
       />
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Section navigator (horizontal scroll/slider, no longer stacks)      */
+/* ================================================================== */
+
+function SectionSlider({
+  sections,
+  active,
+  onSelect,
+}: {
+  sections: { key: SectionKey; label: string; icon: React.ComponentType<{ className?: string }> }[];
+  active: SectionKey;
+  onSelect: (k: SectionKey) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scroll = (dir: -1 | 1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * (el.clientWidth * 0.8), behavior: "smooth" });
+  };
+
+  // Keep the active tab visible after a programmatic change.
+  useEffect(() => {
+    const el = scrollRef.current?.querySelector<HTMLButtonElement>(
+      `button[data-section="${active}"]`,
+    );
+    el?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+  }, [active]);
+
+  return (
+    <div className="relative flex items-center border-b border-border bg-background">
+      <button
+        type="button"
+        aria-label="Geser kiri"
+        onClick={() => scroll(-1)}
+        className="z-10 flex h-9 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <div
+        ref={scrollRef}
+        className="flex flex-1 gap-1 overflow-x-auto scroll-smooth py-2"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+      >
+        <style>{`.pb-section-row::-webkit-scrollbar { display: none; }`}</style>
+        {sections.map((s) => (
+          <button
+            key={s.key}
+            data-section={s.key}
+            onClick={() => onSelect(s.key)}
+            title={s.label}
+            className={cn(
+              "shrink-0 flex w-[64px] flex-col items-center gap-1 rounded-md py-2 px-1 transition",
+              active === s.key
+                ? "bg-teal-50 text-teal-900"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <s.icon className="h-4 w-4" />
+            <span className="text-[8px] font-medium uppercase tracking-wide leading-tight text-center">
+              {s.label}
+            </span>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        aria-label="Geser kanan"
+        onClick={() => scroll(1)}
+        className="z-10 flex h-9 w-7 items-center justify-center text-muted-foreground hover:text-foreground"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Per-section layout controls (text-align + paddings)                 */
+/* ================================================================== */
+
+/** Sections that get the inline layout controls panel. Excludes "order"
+ *  (it's the section-order editor, not a content section). */
+function sectionSupportsLayout(key: SectionKey): boolean {
+  return key !== "order";
+}
+
+function SectionLayoutControls({
+  section,
+  cfg,
+  setCfg,
+}: {
+  section: SectionKey;
+  cfg: HomepageConfig;
+  setCfg: React.Dispatch<React.SetStateAction<HomepageConfig>>;
+}) {
+  const id = section as string;
+  const layout = (cfg.sectionLayouts ?? {})[id] ?? {};
+  const update = (patch: Partial<NonNullable<HomepageConfig["sectionLayouts"]>[string]>) => {
+    setCfg((c) => ({
+      ...c,
+      sectionLayouts: {
+        ...(c.sectionLayouts ?? {}),
+        [id]: { ...((c.sectionLayouts ?? {})[id] ?? {}), ...patch },
+      },
+    }));
+  };
+
+  const Align = ({
+    val,
+    icon: Icon,
+    label,
+  }: {
+    val: "left" | "center" | "right";
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+  }) => (
+    <button
+      type="button"
+      title={label}
+      onClick={() => update({ textAlign: val })}
+      className={cn(
+        "flex h-8 w-8 items-center justify-center rounded-md border transition",
+        layout.textAlign === val
+          ? "border-teal-600 bg-teal-50 text-teal-800"
+          : "border-border text-muted-foreground hover:bg-muted",
+      )}
+    >
+      <Icon className="h-4 w-4" />
+    </button>
+  );
+
+  return (
+    <div className="border-b border-border bg-muted/30 px-3 py-2">
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-2 text-xs">
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Align
+          </span>
+          <Align val="left" icon={AlignLeft} label="Kiri" />
+          <Align val="center" icon={AlignCenter} label="Tengah" />
+          <Align val="right" icon={AlignRight} label="Kanan" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Padding atas
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={400}
+            value={layout.paddingTop ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              update({
+                paddingTop: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)),
+              })
+            }
+            className="h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
+          />
+          <span className="text-[10px] text-muted-foreground">px</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Padding bawah
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={400}
+            value={layout.paddingBottom ?? ""}
+            placeholder="auto"
+            onChange={(e) =>
+              update({
+                paddingBottom:
+                  e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)),
+              })
+            }
+            className="h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
+          />
+          <span className="text-[10px] text-muted-foreground">px</span>
+        </div>
+        {(layout.textAlign || layout.paddingTop != null || layout.paddingBottom != null) && (
+          <button
+            type="button"
+            onClick={() =>
+              setCfg((c) => {
+                const next = { ...(c.sectionLayouts ?? {}) };
+                delete next[id];
+                return { ...c, sectionLayouts: next };
+              })
+            }
+            className="ml-auto text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Reset
+          </button>
+        )}
+      </div>
     </div>
   );
 }
