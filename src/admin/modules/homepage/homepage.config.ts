@@ -22,6 +22,9 @@ export type SectionLayout = {
   /** Background colour as CSS string (hex, rgb, rgba, or named).
    *  Sits behind the section content via the PbZone wrapper. */
   backgroundColor?: string;
+  /** When true, the section heading is rendered ALL CAPS.
+   *  When false/undefined, the heading is rendered as typed (default). */
+  uppercase?: boolean;
 };
 
 /** Reorderable homepage content sections (between hero/date-picker and footer). */
@@ -514,6 +517,9 @@ function sanitizeSectionLayouts(raw: unknown): HomepageConfig["sectionLayouts"] 
       if (s && /^(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|hsla?\([^)]+\)|[a-zA-Z]+)$/.test(s)) {
         layout.backgroundColor = s;
       }
+    }
+    if (typeof v.uppercase === "boolean") {
+      layout.uppercase = v.uppercase;
     }
     if (Object.keys(layout).length > 0) out[key] = layout;
   }
