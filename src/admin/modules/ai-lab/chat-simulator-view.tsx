@@ -409,9 +409,121 @@ export function ChatSimulatorView() {
   }, [editTrainingId]);
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
+    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_480px]">
       {/* ── Left: chat ─────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-3">
+      {editTrainingId !== null ? (
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-teal-600" />
+              <div>
+                <p className="text-sm font-semibold leading-tight">Edit Percakapan Training</p>
+                <p className="text-xs text-muted-foreground">
+                  Ubah judul dan isi tiap pesan. Perubahan akan di-embed ulang.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditTrainingId(null)}
+              disabled={savingEdit}
+            >
+              <X className="mr-1 h-3.5 w-3.5" /> Tutup
+            </Button>
+          </div>
+          <div className="flex-1 space-y-4 overflow-y-auto bg-stone-50 p-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Judul percakapan</Label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                maxLength={120}
+                placeholder="Mis. Tanya harga kamar deluxe untuk akhir pekan"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Transcript ({editTranscript.length} pesan)</Label>
+              <div className="space-y-2">
+                {editTranscript.map((m, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      "rounded-md border p-2",
+                      m.direction === "in"
+                        ? "border-emerald-200 bg-emerald-50/40"
+                        : "border-teal-200 bg-teal-50/40",
+                    )}
+                  >
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                        {m.direction === "in" ? "Tamu" : "Bot"}
+                      </span>
+                      <button
+                        onClick={() => removeEditTurn(i)}
+                        className="rounded p-0.5 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                        title="Hapus pesan"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <Textarea
+                      value={m.body}
+                      onChange={(e) => updateEditTurn(i, e.target.value)}
+                      className="min-h-[60px] text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => addEditTurn("in")}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> Pesan tamu
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => addEditTurn("out")}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> Balasan bot
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-border bg-card p-3">
+            <Button
+              variant="outline"
+              onClick={() => setEditTrainingId(null)}
+              disabled={savingEdit}
+            >
+              Batal
+            </Button>
+            <Button
+              className="bg-teal-700 hover:bg-teal-800 text-white"
+              onClick={handleSaveEditTraining}
+              disabled={savingEdit}
+            >
+              {savingEdit ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
+                </>
+              ) : (
+                <>
+                  <Check className="mr-1.5 h-4 w-4" /> Simpan perubahan
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <>
+
         <Card className="flex items-center gap-3 p-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-teal-700">
             <Bot className="h-5 w-5" />
@@ -592,7 +704,10 @@ export function ChatSimulatorView() {
             </Button>
           </div>
         </Card>
+        </>
+      )}
       </div>
+
 
       {/* ── Right: meta + saved training ──────────────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
@@ -688,44 +803,53 @@ export function ChatSimulatorView() {
                     : "";
 
                   return (
-                    <li key={log.id} className="rounded-lg border border-border p-2.5 text-xs">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <p className="truncate text-sm font-semibold text-stone-800">
-                            {log.title || "(Tanpa judul)"}
-                          </p>
-                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                            <span>{dateStr}</span>
-                            {turnCount > 0 && (
-                              <>
-                                <span>•</span>
-                                <span>{turnCount} pesan</span>
-                              </>
-                            )}
-                          </div>
-                          <p className="flex items-start gap-1 text-stone-600">
-                            <User className="mt-0.5 h-3 w-3 shrink-0" />
-                            <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
-                          </p>
+                    <li
+                      key={log.id}
+                      className={cn(
+                        "rounded-lg border p-2.5 text-xs transition",
+                        editTrainingId === log.id
+                          ? "border-teal-400 bg-teal-50/40"
+                          : "border-border",
+                      )}
+                    >
+                      <div className="space-y-1">
+                        <p className="truncate text-sm font-semibold text-stone-800">
+                          {log.title || "(Tanpa judul)"}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span>{dateStr}</span>
+                          {turnCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>{turnCount} pesan</span>
+                            </>
+                          )}
                         </div>
-                        <div className="flex shrink-0 flex-col gap-1">
-                          <button
-                            onClick={() => openEditTraining(log)}
-                            className="rounded p-1.5 text-stone-500 transition hover:bg-teal-50 hover:text-teal-700 border border-transparent hover:border-teal-200"
-                            title="Edit training"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTraining(log.id)}
-                            className="rounded p-1.5 text-stone-500 transition hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-200"
-                            title="Hapus training"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        <p className="flex items-start gap-1 text-stone-600">
+                          <User className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
+                        </p>
+                      </div>
+                      <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-border/60 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => openEditTraining(log)}
+                        >
+                          <Pencil className="mr-1 h-3 w-3" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleDeleteTraining(log.id)}
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" /> Hapus
+                        </Button>
                       </div>
                     </li>
+
                   );
                 })}
               </ul>
@@ -734,113 +858,8 @@ export function ChatSimulatorView() {
         </Card>
       </div>
 
-      {/* Dialog Edit Training */}
-      <Dialog
-        open={editTrainingId !== null}
-        onOpenChange={(open) => !open && setEditTrainingId(null)}
-      >
-        <DialogContent className="sm:max-w-[640px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="h-5 w-5 text-teal-600" />
-              Edit Percakapan Training
-            </DialogTitle>
-            <DialogDescription>
-              Ubah judul dan isi tiap pesan. Perubahan akan di-embed ulang dan langsung
-              dipakai chatbot.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Judul percakapan</Label>
-              <Input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                maxLength={120}
-                placeholder="Mis. Tanya harga kamar deluxe untuk akhir pekan"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Transcript ({editTranscript.length} pesan)</Label>
-              <ScrollArea className="max-h-[320px] rounded-md border p-2">
-                <div className="space-y-2 pr-2">
-                  {editTranscript.map((m, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "rounded-md border p-2",
-                        m.direction === "in"
-                          ? "border-emerald-200 bg-emerald-50/40"
-                          : "border-teal-200 bg-teal-50/40",
-                      )}
-                    >
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                          {m.direction === "in" ? "Tamu" : "Bot"}
-                        </span>
-                        <button
-                          onClick={() => removeEditTurn(i)}
-                          className="rounded p-0.5 text-stone-400 hover:bg-red-50 hover:text-red-600"
-                          title="Hapus pesan"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <Textarea
-                        value={m.body}
-                        onChange={(e) => updateEditTurn(i, e.target.value)}
-                        className="min-h-[60px] text-xs"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => addEditTurn("in")}
-                >
-                  <Plus className="mr-1 h-3 w-3" /> Pesan tamu
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => addEditTurn("out")}
-                >
-                  <Plus className="mr-1 h-3 w-3" /> Balasan bot
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditTrainingId(null)}
-              disabled={savingEdit}
-            >
-              Batal
-            </Button>
-            <Button
-              className="bg-teal-700 hover:bg-teal-800 text-white"
-              onClick={handleSaveEditTraining}
-              disabled={savingEdit}
-            >
-              {savingEdit ? (
-                <>
-                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
-                </>
-              ) : (
-                <>
-                  <Check className="mr-1.5 h-4 w-4" /> Simpan perubahan
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+
 
       {/* Dialog Konfirmasi Simpan Training */}
       <Dialog open={saveConfirmOpen} onOpenChange={(open) => !open && setSaveConfirmOpen(false)}>
