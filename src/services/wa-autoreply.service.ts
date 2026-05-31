@@ -19,6 +19,13 @@ import {
   queueFail,
   queueHeartbeat,
 } from "@/services/queue.service";
+import {
+  SESSION_GAP_MS,
+  findSessionStartIndex,
+  isBrosurDoc,
+  pickAttachment,
+  cleanReplyBody,
+} from "@/services/reply-postprocess";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -31,30 +38,6 @@ interface SopCache {
 }
 let globalSopCache: SopCache | null = null;
 const SOP_CACHE_TTL_MS = 10 * 60 * 1000;
-
-/**
- * A sendable brochure is a file uploaded via the Brosur tab into the dedicated
- * public `brosur` bucket. This deliberately excludes Media Library assets
- * (room photos, banners) which share doc_category='brosur' but live in the
- * `room-images` bucket and must NOT be sent as brochures.
- */
-function isBrosurDoc(d: any) {
-  const bucket = (d.storage_bucket as string | undefined)?.trim().toLowerCase() || "";
-  return bucket === "brosur";
-}
-
-/** Detect if the guest is requesting brochure / images / photos. */
-const BROCHURE_REQUEST_PATTERNS = [
-  /\b(brosur|brochure|katalog|catalogue|catalog)(?:nya)?\b/i,
-  /\b(gambar|foto|photo|picture|image)(?:nya)?\b.*\b(kamar|hotel|room|tipe|type|penginapan)(?:nya)?\b/i,
-  /\b(kamar|room|tipe|type)(?:nya)?\b.*\b(gambar|foto|photo|picture|image)(?:nya)?\b/i,
-  /\b(lihat|minta|kirim|kirimin|kasih|tunjuk(?:kan|in)?|ada|boleh|bisa)\b.*\b(gambar|foto|brosur|brochure)(?:nya)?\b/i,
-  /\b(gambar|foto|brosur)(?:nya)?\b.*\b(lihat|minta|kirim|dong|ya|kak|nya)\b/i,
-];
-
-function isBrochureRequest(text: string): boolean {
-  return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
-}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -74,15 +57,16 @@ export type AutoreplyOutcome =
  * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
  */
-// ── Session / summary tuning knobs ─────────────────────────────────────────
-/** Gap (ms) between two consecutive messages that marks a new session boundary. */
-const SESSION_GAP_MS = 15 * 60 * 1000;
+// ── Summarizer tuning knobs ─────────────────────────────────────────────────
 /** Minimum interval between two summary regenerations for the same thread. */
 const SUMMARY_REGEN_COOLDOWN_MS = 10 * 60 * 1000;
 /** Hard cap on persisted summary length (chars). Prevents prompt bloat. */
 const SUMMARY_MAX_CHARS = 1000;
 /** Below this many messages, summarizing is pointless — skip. */
 const SUMMARY_MIN_MESSAGES = 3;
+// (SESSION_GAP_MS / findSessionStartIndex now live in reply-postprocess.ts
+//  so the AI Lab simulator can share the same windowing logic.)
+void SESSION_GAP_MS;
 
 async function generateSessionSummary(
   history: Array<{ direction: string; body: string; sent_at?: string }>,
@@ -142,24 +126,6 @@ async function updateThreadSummary(
   if (error) {
     console.error(`[SessionSummarizer] Database update failed:`, error.message);
   }
-}
-
-/**
- * Detect the index of the first message in the current session: the message
- * right after the most recent inter-message gap larger than SESSION_GAP_MS.
- * Returns 0 if no such gap exists (everything is one session).
- */
-function findSessionStartIndex(
-  messages: Array<{ sent_at?: string }>,
-): number {
-  for (let i = messages.length - 1; i > 0; i--) {
-    const cur = messages[i];
-    const prev = messages[i - 1];
-    if (!cur.sent_at || !prev.sent_at) continue;
-    const diffMs = new Date(cur.sent_at).getTime() - new Date(prev.sent_at).getTime();
-    if (diffMs > SESSION_GAP_MS) return i;
-  }
-  return 0;
 }
 
 export async function executeAutoreplyForPhone(
@@ -305,56 +271,23 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  let finalReply = reply ?? FALLBACK_MESSAGE;
+  const rawReply = reply ?? FALLBACK_MESSAGE;
   const isFallback = !reply;
   let attachUrl: string | undefined;
   let attachName: string | undefined;
 
-  // Proactively attach the PDF brochure when the guest asks for brosur/gambar/foto
-  if (!isFallback && brosurFiles.length > 0 && isBrochureRequest(lastMessage)) {
-    // Prefer a PDF brochure, but fall back to any brochure file (e.g. JPG/PNG).
-    const brosur =
-      brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url)) ?? brosurFiles[0];
-    if (brosur) {
-      attachUrl = brosur.url;
-      attachName = brosur.name;
-      console.info(`[Autoreply] Brochure request detected — attaching ${brosur.name}`);
+  if (!isFallback) {
+    const picked = pickAttachment(lastMessage, rawReply, brosurFiles);
+    attachUrl = picked.url;
+    attachName = picked.name;
+    if (picked.url) {
+      console.info(`[Autoreply] Attachment selected: ${picked.name}`);
     }
   }
 
-  // Fallback: if LLM mentioned a brosur file name in its reply, attach it
-  if (!attachUrl && !isFallback && brosurFiles.length > 0) {
-    for (const f of brosurFiles) {
-      const baseName = f.name.replace(/\.[a-z0-9]+$/i, "");
-      const lowered = finalReply.toLowerCase();
-      if (
-        lowered.includes(f.name.toLowerCase()) ||
-        lowered.includes(baseName.toLowerCase())
-      ) {
-        attachUrl = f.url;
-        attachName = f.name;
-        break;
-      }
-    }
-  }
-
-  // If no brochure was attached, check if the LLM provided a PDF URL directly (e.g. invoice)
-  if (!attachUrl) {
-    const pdfMatch = finalReply.match(/(https?:\/\/[^\s]+?\.pdf)/i);
-    if (pdfMatch) {
-      attachUrl = pdfMatch[1];
-      attachName = "Invoice.pdf";
-      // Remove the raw URL from the text body to keep the message clean
-      finalReply = finalReply.replace(pdfMatch[1], "").trim();
-    }
-  }
-
-  // Strip any bare image URLs the model included so WhatsApp doesn't render a photo.
-  finalReply = finalReply
-    .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Strip any inline PDF URL that became the attachment + bare image URLs.
+  const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
+  let finalReply = cleanReplyBody(rawReply, pdfToStrip);
 
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,

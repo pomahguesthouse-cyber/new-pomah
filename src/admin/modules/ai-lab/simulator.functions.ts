@@ -19,6 +19,12 @@ import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { getBookingState, updateBookingState } from "@/ai/state-machine/booking-machine";
 import { embedTrainingExample } from "@/ai/training-rag.service";
 import { todayWIB } from "@/lib/date";
+import {
+  findSessionStartIndex,
+  pickAttachment,
+  cleanReplyBody,
+  isBrosurDoc,
+} from "@/services/reply-postprocess";
 
 // ─── Shared environment builder ────────────────────────────────────────────────
 
@@ -56,11 +62,7 @@ async function buildEnv(): Promise<OrchestrationEnv> {
   const supaUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
   const parts: string[] = [];
   for (const d of docs ?? []) {
-    // Sendable brochures live only in the dedicated public `brosur` bucket
-    // (uploaded via the Brosur tab) — not Media Library assets.
-    const isBrosur =
-      ((d.storage_bucket as string | undefined)?.trim().toLowerCase() || "") === "brosur";
-    if (isBrosur) {
+    if (isBrosurDoc(d)) {
       if (d.file_path) {
         const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
         brosurFiles.push({
@@ -113,7 +115,29 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       return { ok: false as const, error: "AI API key belum dikonfigurasi." };
     }
 
-    const messages = [...data.transcript.slice(-19), { direction: "in", body: data.message }];
+    // Mirror the production WA path: fetch the persisted chat summary so the
+    // simulator runs with the same session-carryover context the real bot
+    // would see for this phone number. Missing thread → empty summary.
+    let chatSummary = "";
+    try {
+      const { data: thread } = await (supabaseAdmin as any)
+        .from("whatsapp_threads")
+        .select("chat_summary")
+        .eq("phone", data.phone)
+        .maybeSingle();
+      chatSummary = thread?.chat_summary ?? "";
+    } catch (e) {
+      console.warn("[simulator] chat_summary fetch failed (non-fatal):", e);
+    }
+
+    // Session windowing: production trims history at a >15-min gap. The
+    // simulator transcript has no sent_at, so this is a no-op here (returns
+    // 0), but using the same helper keeps the code paths identical and lets
+    // future "import from real thread" scenarios share the trim.
+    const transcript = [...data.transcript, { direction: "in", body: data.message }];
+    const sessionStart = findSessionStartIndex(transcript as Array<{ sent_at?: string }>);
+    const messages = transcript.slice(sessionStart).slice(-20);
+    const lastMessage = data.message;
 
     const today = todayWIB();
     const t0 = Date.now();
@@ -126,6 +150,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
         sopText: env.sopText,
         brosurFiles: env.brosurFiles,
         today,
+        lastMessage,
+        chatSummary,
       },
       toolCtx: {
         supabasePublic: supabasePublic as any,
@@ -141,9 +167,21 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     const elapsedMs = Date.now() - t0;
     const stateAfter = await getBookingState(supabasePublic as any, data.phone);
 
+    // Mirror the post-processing the WA worker runs before sending: pick a
+    // brochure / invoice attachment and strip raw URLs from the reply body.
+    let displayReply = orch.reply;
+    let attachment: { url?: string; name?: string } | undefined;
+    if (orch.reply) {
+      const picked = pickAttachment(lastMessage, orch.reply, env.brosurFiles);
+      const pdfToStrip = picked.url && /\.pdf(\?|$)/i.test(picked.url) ? picked.url : undefined;
+      displayReply = cleanReplyBody(orch.reply, pdfToStrip);
+      if (picked.url) attachment = { url: picked.url, name: picked.name };
+    }
+
     return {
       ok: true as const,
-      reply: orch.reply,
+      reply: displayReply,
+      attachment,
       status: orch.status,
       toolsUsed: orch.toolsUsed,
       agentKey: orch.agentKey,
@@ -154,6 +192,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       bookingState: stateAfter.state,
       bookingContext: stateAfter.context,
       elapsedMs,
+      chatSummaryUsed: !!chatSummary,
       trainingExamplesUsed: orch.trainingExamplesUsed ?? 0,
       trainingExampleIds: orch.trainingExampleIds ?? [],
     };
