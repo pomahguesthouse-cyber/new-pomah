@@ -17,6 +17,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
 import { sendWhatsAppMessage } from "./whatsapp.service";
+import {
+  sendMessage as tgSendMessage,
+  sendPhoto   as tgSendPhoto,
+  type ReplyMarkup,
+} from "./telegram.service";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -25,6 +30,27 @@ interface ManagerContact {
   name: string;
   phone: string;
   role: string;
+  telegram_chat_id: string | null;
+}
+
+type Channel = "wa" | "telegram";
+
+interface PropertyTokens {
+  fonnteToken:   string | null;
+  telegramToken: string | null;
+}
+
+async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
+  const { data } = await db
+    .from("properties")
+    .select("fonnte_token, telegram_bot_token")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return {
+    fonnteToken:   (data?.fonnte_token       as string | null) ?? null,
+    telegramToken: (data?.telegram_bot_token as string | null) ?? null,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -44,7 +70,7 @@ async function getFonnteToken(db: Db): Promise<string | null> {
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {
   let query = db
     .from("property_managers")
-    .select("id, name, phone, role")
+    .select("id, name, phone, role, telegram_chat_id")
     .eq("is_active", true);
   if (role) query = query.eq("role", role);
   const { data, error } = await query;
@@ -62,19 +88,27 @@ interface SendOptions {
   fileUrl?: string;
   dedupeKey: string;
   relatedId?: string | null;
+  /** Channel this delivery targets — affects log row + dedupe scoping. */
+  channel: Channel;
+  /** Optional inline keyboard (Telegram-only; ignored for WA). */
+  replyMarkup?: ReplyMarkup;
 }
 
 /**
- * Kirim pesan WhatsApp ke satu manager dengan retry sampai 3 kali
- * (backoff 1s/2s/4s). Idempotensi via `dedupe_key` unik pada
- * `notification_logs`.
+ * Kirim pesan ke satu manager via satu channel (wa atau telegram), dengan
+ * retry 3x backoff. `notification_logs` di-dedupe per (channel, dedupe_key)
+ * sehingga dua channel untuk event yang sama berjalan independen — hanya
+ * memblokir kalau channel + key persis sama (mis. webhook + agent untuk
+ * payment proof yang sama).
  */
-async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Promise<void> {
-  // Cegah duplikat: jika dedupe_key sudah ada dengan status sent, skip.
+async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptions): Promise<void> {
+  // Cegah duplikat per channel: jika (channel, dedupe_key) sudah ada
+  // dengan status sent, skip.
   const { data: existing } = await db
     .from("notification_logs")
     .select("id, status")
     .eq("dedupe_key", opts.dedupeKey)
+    .eq("channel", opts.channel)
     .maybeSingle();
 
   if (existing && (existing as any).status === "sent") {
@@ -89,7 +123,9 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
       .from("notification_logs")
       .insert({
         event_type: opts.eventType,
-        recipient_phone: opts.recipient.phone,
+        recipient_phone: opts.channel === "telegram"
+          ? opts.recipient.telegram_chat_id ?? opts.recipient.phone
+          : opts.recipient.phone,
         recipient_role: opts.recipient.role,
         message: opts.message,
         attachment_url: opts.fileUrl ?? null,
@@ -97,6 +133,7 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
         attempts: 0,
         dedupe_key: opts.dedupeKey,
         related_id: opts.relatedId ?? null,
+        channel: opts.channel,
       })
       .select("id")
       .single();
@@ -106,6 +143,7 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
         .from("notification_logs")
         .select("id")
         .eq("dedupe_key", opts.dedupeKey)
+        .eq("channel", opts.channel)
         .maybeSingle();
       logId = (again as any)?.id ?? null;
       if (!logId) {
@@ -124,12 +162,7 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
     if (delays[attempt - 1] > 0) {
       await new Promise((r) => setTimeout(r, delays[attempt - 1]));
     }
-    const result = await sendWhatsAppMessage(
-      fonnteToken,
-      opts.recipient.phone,
-      opts.message,
-      opts.fileUrl,
-    );
+    const result = await dispatchByChannel(opts, fonnteToken);
 
     if (result.ok) {
       await db
@@ -141,12 +174,12 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
           error: null,
         })
         .eq("id", logId);
-      console.info(`[ManagerNotifier] Terkirim ke ${opts.recipient.phone} (attempt ${attempt})`);
+      console.info(`[ManagerNotifier] Terkirim ke ${opts.recipient.name} via ${opts.channel} (attempt ${attempt})`);
       return;
     }
     lastError = result.error ?? "unknown error";
     console.warn(
-      `[ManagerNotifier] Gagal kirim ke ${opts.recipient.phone} (attempt ${attempt}): ${lastError}`,
+      `[ManagerNotifier] Gagal kirim ke ${opts.recipient.name} via ${opts.channel} (attempt ${attempt}): ${lastError}`,
     );
   }
 
@@ -154,6 +187,86 @@ async function sendWithRetry(db: Db, fonnteToken: string, opts: SendOptions): Pr
     .from("notification_logs")
     .update({ status: "failed", attempts: 3, error: lastError })
     .eq("id", logId);
+}
+
+async function dispatchByChannel(
+  opts: SendOptions,
+  fonnteToken: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (opts.channel === "wa") {
+    if (!fonnteToken) return { ok: false, error: "no fonnte token" };
+    const r = await sendWhatsAppMessage(fonnteToken, opts.recipient.phone, opts.message, opts.fileUrl);
+    return { ok: r.ok, error: r.error ?? undefined };
+  }
+  // telegram
+  const tgToken = await getTelegramTokenCached();
+  if (!tgToken) return { ok: false, error: "no telegram token" };
+  if (!opts.recipient.telegram_chat_id) return { ok: false, error: "no telegram chat_id" };
+  const sendOpts = opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {};
+  if (opts.fileUrl) {
+    return tgSendPhoto(tgToken, opts.recipient.telegram_chat_id, opts.fileUrl, opts.message, sendOpts);
+  }
+  return tgSendMessage(tgToken, opts.recipient.telegram_chat_id, opts.message, sendOpts);
+}
+
+// Per-invocation cache so a notif that fans out to N managers doesn't
+// re-query the properties row N times.
+let cachedTelegramToken: { value: string | null; at: number } | null = null;
+const TG_TOKEN_TTL_MS = 60_000;
+async function getTelegramTokenCached(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedTelegramToken && now - cachedTelegramToken.at < TG_TOKEN_TTL_MS) {
+    return cachedTelegramToken.value;
+  }
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const tokens = await getPropertyTokens(supabaseAdmin as any);
+  cachedTelegramToken = { value: tokens.telegramToken, at: now };
+  return tokens.telegramToken;
+}
+
+/**
+ * High-level fan-out: send the same notification to every active manager
+ * via every channel they have configured (WA + Telegram in parallel).
+ * `dedupeKey` should be unique per (event, manager) — the channel suffix
+ * is added internally so the two channels for one manager don't collide.
+ */
+async function fanOut(
+  db: Db,
+  fonnteToken: string | null,
+  managers: ManagerContact[],
+  base: Omit<SendOptions, "channel" | "recipient" | "dedupeKey"> & {
+    dedupeKeyFor: (m: ManagerContact) => string;
+    telegramOnly?: Partial<Pick<SendOptions, "replyMarkup" | "fileUrl" | "message">>;
+  },
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  for (const m of managers) {
+    const baseDedup = base.dedupeKeyFor(m);
+    if (m.phone) {
+      tasks.push(sendWithRetry(db, fonnteToken, {
+        eventType: base.eventType,
+        message:   base.message,
+        fileUrl:   base.fileUrl,
+        relatedId: base.relatedId,
+        recipient: m,
+        channel:   "wa",
+        dedupeKey: baseDedup,
+      }));
+    }
+    if (m.telegram_chat_id) {
+      tasks.push(sendWithRetry(db, fonnteToken, {
+        eventType: base.eventType,
+        message:   base.telegramOnly?.message ?? base.message,
+        fileUrl:   base.telegramOnly?.fileUrl ?? base.fileUrl,
+        relatedId: base.relatedId,
+        recipient: m,
+        channel:   "telegram",
+        dedupeKey: baseDedup,
+        replyMarkup: base.telegramOnly?.replyMarkup,
+      }));
+    }
+  }
+  await Promise.all(tasks);
 }
 
 function formatRupiah(value: number | string | null | undefined): string {
@@ -210,29 +323,19 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
       `Booking Code:\n${b.reference_code ?? b.id}\n\n` +
       "Please review in Manager Dashboard.";
 
-    const token = await getFonnteToken(db);
-    if (!token) {
-      console.warn("[ManagerNotifier] Fonnte token tidak terkonfigurasi");
-      return;
-    }
-
+    const { fonnteToken } = await getPropertyTokens(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) {
       console.info("[ManagerNotifier] Belum ada manager aktif");
       return;
     }
 
-    await Promise.all(
-      managers.map((m) =>
-        sendWithRetry(db, token, {
-          eventType: "new_booking",
-          recipient: m,
-          message,
-          dedupeKey: `new_booking:${b.id}:${m.id}`,
-          relatedId: b.id,
-        }),
-      ),
-    );
+    await fanOut(db, fonnteToken, managers, {
+      eventType: "new_booking",
+      message,
+      relatedId: b.id,
+      dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyNewBooking error:", e);
   }
@@ -344,27 +447,32 @@ export async function notifyPaymentProof(
         `\nLampiran:\n${input.imageUrl}`;
     }
 
-    const token = await getFonnteToken(db);
-    if (!token) return;
-
+    const { fonnteToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] Tidak ada super admin aktif untuk payment proof");
       return;
     }
 
-    await Promise.all(
-      superAdmins.map((m) =>
-        sendWithRetry(db, token, {
-          eventType: "payment_proof",
-          recipient: m,
-          message,
-          fileUrl: input.imageUrl,
-          dedupeKey: `payment_proof:${input.messageId}:${m.id}`,
-          relatedId: bookingId,
-        }),
-      ),
-    );
+    // Telegram gets inline approve/reject buttons when we know the booking
+    // code. WA can't render inline buttons, so it gets text + image only.
+    const tgMarkup = bookingCode
+      ? {
+          inline_keyboard: [[
+            { text: "✅ Mark Paid",  callback_data: `mark_paid:${bookingCode}` },
+            { text: "❌ Reject",     callback_data: `reject_proof:${bookingCode}` },
+          ]],
+        }
+      : undefined;
+
+    await fanOut(db, fonnteToken, superAdmins, {
+      eventType: "payment_proof",
+      message,
+      fileUrl: input.imageUrl,
+      relatedId: bookingId,
+      dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
+      telegramOnly: tgMarkup ? { replyMarkup: tgMarkup } : undefined,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyPaymentProof error:", e);
   }
@@ -397,23 +505,16 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
       `Time:\n${new Date(c.created_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}\n\n` +
       "Please follow up immediately.";
 
-    const token = await getFonnteToken(db);
-    if (!token) return;
-
+    const { fonnteToken } = await getPropertyTokens(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
-    await Promise.all(
-      managers.map((m) =>
-        sendWithRetry(db, token, {
-          eventType: "complaint",
-          recipient: m,
-          message,
-          dedupeKey: `complaint:${c.id}:${m.id}`,
-          relatedId: c.id,
-        }),
-      ),
-    );
+    await fanOut(db, fonnteToken, managers, {
+      eventType: "complaint",
+      message,
+      relatedId: c.id,
+      dedupeKeyFor: (m) => `complaint:${c.id}:${m.id}`,
+    });
   } catch (e) {
     console.error("[ManagerNotifier] notifyComplaint error:", e);
   }
