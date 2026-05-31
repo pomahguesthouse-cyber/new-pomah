@@ -227,6 +227,10 @@ function AiLab() {
             <div className="flex-1 overflow-y-auto">
               <SeoPage />
             </div>
+          ) : view === "training-rag" ? (
+            <div className="flex-1 overflow-y-auto">
+              <TrainingRagSettings />
+            </div>
           ) : (
             <TrainingView />
           )}
