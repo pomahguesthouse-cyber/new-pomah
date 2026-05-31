@@ -527,14 +527,16 @@ function PomahHome() {
               below has pinned. Observed by the stuck IntersectionObserver. */}
           <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:-mt-12 md:block" />
           <div
-            className={`fixed inset-x-0 bottom-0 px-3 pb-3 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
+            className={`fixed inset-x-0 bottom-0 px-0 pb-0 transition-all duration-500 ease-out md:sticky md:bottom-auto md:left-auto md:right-auto md:top-0 md:mx-auto md:-mt-12 md:pb-0 ${
               stuck ? "md:max-w-full md:px-10" : "md:max-w-4xl md:px-6"
             }`}
             style={{ zIndex: 60 }}
           >
             <div
               className={`border border-stone-200 bg-white px-3 py-2 shadow-xl md:px-8 md:py-4 ${
-                stuck ? "rounded-b-2xl md:flex md:items-center md:gap-4" : "rounded-2xl"
+                stuck
+                  ? "md:rounded-b-2xl md:flex md:items-center md:gap-4"
+                  : "rounded-t-2xl md:rounded-2xl md:rounded-b-2xl"
               }`}
             >
               {stuck && (
@@ -667,7 +669,11 @@ function PomahHome() {
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Hubungi via WhatsApp"
-          className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600"
+          // z-[70] so it floats ABOVE the bottom-pinned date picker (z-60).
+          // On mobile the picker hugs bottom-0 — lift the button above it
+          // with bottom-24, then restore bottom-5 on md+ where the picker
+          // sits at the top.
+          className="fixed bottom-24 right-4 z-[70] flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600 md:bottom-5 md:right-5"
         >
           <MessageCircle className="h-7 w-7" />
         </a>
