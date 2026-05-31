@@ -151,3 +151,26 @@
     letter-spacing: -0.015em;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Custom display font: "Brother Signature"                            */
+/* ------------------------------------------------------------------ */
+/* Drop the font file at /public/fonts/brother-signature.woff2 (and    */
+/* optionally .woff). The page-builder font picker exposes this        */
+/* family as "Brother Signature"; until the file is uploaded the       */
+/* browser falls back through the listed cursive families.             */
+@font-face {
+  font-family: "Brother Signature";
+  src:
+    url("/fonts/brother-signature.woff2") format("woff2"),
+    url("/fonts/brother-signature.woff")  format("woff");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.font-brother-signature {
+  font-family: "Brother Signature", "Brush Script MT", "Lucida Handwriting", cursive;
+  /* Signature fonts usually look better with slight extra spacing. */
+  letter-spacing: 0.01em;
+}

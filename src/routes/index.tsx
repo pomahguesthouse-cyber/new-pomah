@@ -567,7 +567,9 @@ function PomahHome() {
                       ? "font-mono"
                       : cfg.datePicker.fontFamily === "sans"
                         ? "font-sans"
-                        : "font-serif"
+                        : cfg.datePicker.fontFamily === "brother-signature"
+                          ? "font-brother-signature"
+                          : "font-serif"
                   }`}
                   style={{
                     fontSize: cfg.datePicker.fontSize,
@@ -1106,7 +1108,9 @@ function PomahHome() {
                       ? "font-mono"
                       : cfg.cta.fontFamily === "sans"
                         ? "font-sans"
-                        : "font-serif"
+                        : cfg.cta.fontFamily === "brother-signature"
+                          ? "font-brother-signature"
+                          : "font-serif"
                   }`}
                   style={{
                     fontSize: cfg.cta.fontSize ? `${cfg.cta.fontSize}px` : undefined,
@@ -2527,7 +2531,7 @@ function SectionHeading({
   children: React.ReactNode;
   noUnderline?: boolean;
   normalCase?: boolean;
-  fontFamily?: "sans" | "serif" | "mono";
+  fontFamily?: "sans" | "serif" | "mono" | "brother-signature";
   fontSize?: number;
   fontStyle?: "normal" | "bold" | "italic";
   color?: string;
@@ -2537,7 +2541,9 @@ function SectionHeading({
       ? "font-mono"
       : fontFamily === "sans"
         ? "font-sans"
-        : "font-serif";
+        : fontFamily === "brother-signature"
+          ? "font-brother-signature"
+          : "font-serif";
 
   return (
     <div className="flex flex-col items-center">
