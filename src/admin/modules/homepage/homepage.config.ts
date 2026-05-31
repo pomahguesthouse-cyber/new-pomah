@@ -12,6 +12,15 @@ export interface NavLink {
   href: string;
 }
 
+/** Per-section layout overrides — set from Page Builder, optional everywhere. */
+export type SectionLayout = {
+  textAlign?: "left" | "center" | "right";
+  /** Top padding in pixels — applied to the section's <PbZone> wrapper. */
+  paddingTop?: number;
+  /** Bottom padding in pixels. */
+  paddingBottom?: number;
+};
+
 /** Reorderable homepage content sections (between hero/date-picker and footer). */
 export type HomeSectionKey =
   | "badges"
@@ -215,6 +224,14 @@ export interface HomepageConfig {
    * ignored; missing known keys simply aren't rendered.
    */
   sectionOrder: HomeSectionKey[];
+  /**
+   * Per-section layout overrides edited from the Page Builder.
+   * Keys are section identifiers used in the builder navigation; they
+   * match PbZone `id`s in the homepage renderer (mostly HomeSectionKey,
+   * plus a few extras like "header", "hero", "datepicker", "carousel").
+   * Missing keys = inherit defaults (no override).
+   */
+  sectionLayouts?: Partial<Record<string, SectionLayout>>;
   /** SEO settings for the home page (edited in Page Builder → Page Settings). */
   seo: {
     metaTitle: string;

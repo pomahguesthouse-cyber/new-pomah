@@ -292,19 +292,39 @@ export function PublicFooter({
 
 export type Pb = { isBuilder: boolean; sel: string | null; onSelect: (key: string) => void };
 
-/** Wraps a homepage section so it is click-to-select inside the builder. */
+/** Wraps a homepage section so it is click-to-select inside the builder.
+ *  `layout` (optional) applies admin-edited paddingTop / paddingBottom /
+ *  textAlign overrides — honoured in both builder and production. */
 export function PbZone({
   id,
   label,
   pb,
   children,
+  layout,
 }: {
   id: string;
   label: string;
   pb: Pb;
   children: React.ReactNode;
+  layout?: {
+    textAlign?: "left" | "center" | "right";
+    paddingTop?: number;
+    paddingBottom?: number;
+  };
 }) {
-  if (!pb.isBuilder) return <>{children}</>;
+  const style: React.CSSProperties | undefined = layout
+    ? {
+        ...(typeof layout.paddingTop === "number" ? { paddingTop: `${layout.paddingTop}px` } : {}),
+        ...(typeof layout.paddingBottom === "number"
+          ? { paddingBottom: `${layout.paddingBottom}px` }
+          : {}),
+        ...(layout.textAlign ? { textAlign: layout.textAlign } : {}),
+      }
+    : undefined;
+  if (!pb.isBuilder) {
+    if (!style) return <>{children}</>;
+    return <div style={style}>{children}</div>;
+  }
   const active = pb.sel === id;
   return (
     <div
@@ -313,6 +333,7 @@ export function PbZone({
         e.stopPropagation();
         pb.onSelect(id);
       }}
+      style={style}
       className={`relative ${
         active
           ? "outline outline-2 -outline-offset-2 outline-orange-500"

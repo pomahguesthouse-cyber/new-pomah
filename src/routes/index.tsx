@@ -488,7 +488,7 @@ function PomahHome() {
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
-      <PbZone id="hero" label="Hero Slider" pb={pb}>
+      <PbZone id="hero" label="Hero Slider" pb={pb} layout={cfg.sectionLayouts?.hero}>
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
@@ -522,7 +522,7 @@ function PomahHome() {
 
       {/* ── DATE PICKER WIDGET ── */}
       {cfg.datePicker.enabled && (
-        <PbZone id="datepicker" label="Date Picker" pb={pb}>
+        <PbZone id="datepicker" label="Date Picker" pb={pb} layout={cfg.sectionLayouts?.datepicker}>
           {/* Sentinel — when this leaves the viewport from the top, the picker
               below has pinned. Observed by the stuck IntersectionObserver. */}
           <div ref={stuckSentinelRef} aria-hidden className="hidden h-px md:-mt-12 md:block" />
@@ -710,7 +710,7 @@ function PomahHome() {
       case "badges": {
         const b = cfg.badges;
         return (
-          <PbZone id="badges" label="Ikon Fitur" pb={pb}>
+          <PbZone id="badges" label="Ikon Fitur" pb={pb} layout={cfg.sectionLayouts?.badges}>
             <section className="mx-auto max-w-5xl px-6 pt-16 pb-8">
               {b.heading && (
                 <div className="mb-10">
@@ -765,7 +765,7 @@ function PomahHome() {
       }
       case "story":
         return (
-          <PbZone id="story" label="Your Perfect Stay" pb={pb}>
+          <PbZone id="story" label="Your Perfect Stay" pb={pb} layout={cfg.sectionLayouts?.story}>
             <section className="mx-auto max-w-4xl px-6 py-20 text-center">
               <SectionHeading
                 fontFamily={cfg.story.fontFamily}
@@ -785,7 +785,7 @@ function PomahHome() {
         );
       case "reviews":
         return (
-          <PbZone id="reviews" label="Google Rating" pb={pb}>
+          <PbZone id="reviews" label="Google Rating" pb={pb} layout={cfg.sectionLayouts?.reviews}>
             <section className="mx-auto max-w-4xl px-6 py-16">
               {cfg.reviews.heading && (
                 <div className="mb-10">
@@ -832,7 +832,7 @@ function PomahHome() {
         );
       case "rooms":
         return (
-          <PbZone id="carousel" label="Our Room" pb={pb}>
+          <PbZone id="carousel" label="Our Room" pb={pb} layout={cfg.sectionLayouts?.carousel}>
             <section
               id="our-room"
               className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
@@ -953,7 +953,7 @@ function PomahHome() {
       case "facilities": {
         const fac = cfg.facilities;
         return (
-          <PbZone id="facilities" label="Fasilitas" pb={pb}>
+          <PbZone id="facilities" label="Fasilitas" pb={pb} layout={cfg.sectionLayouts?.facilities}>
             <section id="facilities" className="mx-auto max-w-6xl px-6 py-20">
               <div className="text-center">
                 <SectionHeading
@@ -991,7 +991,7 @@ function PomahHome() {
       case "lokasi": {
         const lok = cfg.lokasi;
         return (
-          <PbZone id="lokasi" label="Lokasi Kami" pb={pb}>
+          <PbZone id="lokasi" label="Lokasi Kami" pb={pb} layout={cfg.sectionLayouts?.lokasi}>
             <section id="lokasi" className="bg-[#f3ece0] py-20">
               <div className="mx-auto max-w-6xl px-6">
                 <div className="text-center">
@@ -1058,7 +1058,7 @@ function PomahHome() {
       case "news": {
         const n = cfg.news;
         return newsEvents.length > 0 ? (
-          <PbZone id="news" label="Berita" pb={pb}>
+          <PbZone id="news" label="Berita" pb={pb} layout={cfg.sectionLayouts?.news}>
             <section id="news-event" className="mx-auto max-w-6xl px-6 py-20">
               <div className="text-center">
                 <SectionHeading
@@ -1090,7 +1090,7 @@ function PomahHome() {
       }
       case "cta":
         return (
-          <PbZone id="cta" label="CTA Banner" pb={pb}>
+          <PbZone id="cta" label="CTA Banner" pb={pb} layout={cfg.sectionLayouts?.cta}>
             <section className="mx-auto max-w-6xl px-6 pb-20">
               <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-900 to-amber-700 px-8 py-12 text-center shadow-lg">
                 <h2
