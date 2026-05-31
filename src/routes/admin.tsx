@@ -6,11 +6,12 @@ export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [{ name: "robots", content: "noindex, nofollow" }],
   }),
-  beforeLoad: async () => {
-    if (typeof window === "undefined") return;
-    const { data } = await supabase.auth.getSession();
-    if (!data.session?.user) {
-      throw redirect({ to: "/login" });
+  beforeLoad: async ({ location }) => {
+    // Gunakan getUser() agar session direvalidasi ke Auth server (lihat tanstack-supabase-integration).
+    // Jangan skip SSR — biarkan redirect terjadi sebelum komponen render & memanggil server fn.
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
+      throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
   component: AdminLayout,
