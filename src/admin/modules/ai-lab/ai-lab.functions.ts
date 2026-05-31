@@ -231,3 +231,23 @@ export const updateAiLabConfig = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+/**
+ * Helper non-serverFn: baca pengaturan RAG dari properti pertama. Dipakai
+ * oleh orchestrator yang berjalan di server tanpa konteks autentikasi user.
+ */
+export async function readTrainingRagConfig(
+  client: SupabaseClient,
+): Promise<TrainingRagConfig> {
+  try {
+    const { data } = await client
+      .from("properties")
+      .select("ai_lab_config")
+      .limit(1)
+      .maybeSingle();
+    const cfg = mergeAiLabConfig((data as { ai_lab_config?: unknown } | null)?.ai_lab_config);
+    return cfg.trainingRag;
+  } catch {
+    return TRAINING_RAG_DEFAULTS;
+  }
+}
