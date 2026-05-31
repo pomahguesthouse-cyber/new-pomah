@@ -414,29 +414,34 @@ export async function runMultiAgentOrchestration(
       maxTurns,
       undefined,
       input.signal,
+      trainingBlock,
     );
 
     return {
-      status:            foResult.reply ? "reply" : "error",
-      reply:             foResult.reply,
-      toolsUsed:         foResult.toolsUsed,
-      agentKey:          "front-office",
-      intent:            classified.category,
-      routingConfidence: routing.confidence,
-      escalated:         routing.escalated,
-      error:             foResult.error,
+      status:               foResult.reply ? "reply" : "error",
+      reply:                foResult.reply,
+      toolsUsed:            foResult.toolsUsed,
+      agentKey:             "front-office",
+      intent:               classified.category,
+      routingConfidence:    routing.confidence,
+      escalated:            routing.escalated,
+      error:                foResult.error,
+      trainingExamplesUsed: trainingExamples.length,
+      trainingExampleIds:   trainingExamples.map((ex) => ex.id),
     };
   }
 
   return {
-    status:            agentResult.reply ? "reply" : "error",
-    reply:             agentResult.reply,
-    toolsUsed:         agentResult.toolsUsed,
-    agentKey:          routing.agentKey,
-    intent:            classified.category,
-    routingConfidence: routing.confidence,
-    escalated:         routing.escalated,
-    error:             agentResult.error,
+    status:               agentResult.reply ? "reply" : "error",
+    reply:                agentResult.reply,
+    toolsUsed:            agentResult.toolsUsed,
+    agentKey:             routing.agentKey,
+    intent:               classified.category,
+    routingConfidence:    routing.confidence,
+    escalated:            routing.escalated,
+    error:                agentResult.error,
+    trainingExamplesUsed: trainingExamples.length,
+    trainingExampleIds:   trainingExamples.map((ex) => ex.id),
   };
 }
 
