@@ -37,6 +37,7 @@ export const pricingAgent: AgentDefinition = {
     
     prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
     prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
+    prompt = prompt.replace(/\{\{TODAY_RAW\}\}/g, today);
     
     const roomDataText = roomLines.length
       ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`

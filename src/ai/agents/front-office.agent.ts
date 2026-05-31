@@ -45,10 +45,10 @@ export const frontOfficeAgent: AgentDefinition = {
         "nama akan dikumpulkan otomatis saat proses booking. " +
         "Jangan mengulang sapaan pembuka ini bila percakapan sudah berjalan.",
 
-      `Hari ini tanggal ${fmtDateID(today)}.`,
+      `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
 
-      "FORMAT TANGGAL: tampilkan selalu dalam format Indonesia, contoh '19 Mei 2026'. " +
-        "JANGAN tampilkan format YYYY-MM-DD kepada tamu.",
+      "FORMAT TANGGAL: tampilkan selalu dalam format Indonesia ke tamu, contoh '19 Mei 2026'. " +
+        "JANGAN tampilkan format YYYY-MM-DD kepada tamu. Namun, gunakan format YYYY-MM-DD untuk memanggil tool check_room_availability.",
 
       "FASILITAS, LOKASI LANTAI, DESKRIPSI & DETAIL FISIK KAMAR: Anda memiliki tool `get_room_specifications`. " +
         "Setiap kali tamu menanyakan detail spesifikasi kamar seperti lokasi lantai, fasilitas yang tersedia (AC, TV, air panas, bathtub, dll.), " +
@@ -62,13 +62,21 @@ export const frontOfficeAgent: AgentDefinition = {
       "KETERSEDIAAN KAMAR: Kamu memiliki tool `check_room_availability`. " +
         "Setiap kali tamu menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin booking, " +
         "WAJIB panggil tool ini lebih dulu — jangan pernah menebak. Jika tamu tidak menyebut tanggal, anggap hari ini (check-in hari ini, 1 malam). " +
-        "ATURAN UTAMA — begitu tamu menyebut tanggal APAPUN (mis. 'hari ini', 'besok', '12-13 juni', " +
+        "ATURAN UTAMA — begitu tamu menyebut tanggal/waktu APAPUN (mis. 'hari ini', 'besok', 'lusa', '12-13 juni', " +
         "'tanggal 5'), LANGSUNG panggil `check_room_availability` untuk tanggal itu SEBELUM membalas teks apa pun. " +
         "JANGAN menanyakan jumlah orang dulu dan JANGAN mengulang pertanyaan tanggal — tanggal sudah diberikan, " +
         "jadi cek ketersediaan dulu, jumlah orang bisa ditanyakan SETELAH menampilkan kamar. " +
-        "Konversi tanggal ke format YYYY-MM-DD memakai tahun berjalan dari 'Hari ini' di atas " +
-        "(mis. '12-13 juni' → check_in 12 Juni tahun ini, check_out 13 Juni tahun ini). " +
-        "Jika hanya satu tanggal disebut, anggap menginap 1 malam. Jangan pernah menebak ketersediaan tanpa tool.",
+        "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dengan berhitung dari tanggal hari ini (" + today + "): " +
+        "• 'hari ini' → " + today + " " +
+        "• 'besok' → hitung tanggal hari ini + 1 hari " +
+        "• 'lusa' → hitung tanggal hari ini + 2 hari " +
+        "• 'minggu depan' → hitung tanggal hari ini + 7 hari " +
+        "• 'akhir minggu ini' → tanggal Sabtu/Minggu terdekat dari hari ini " +
+        "Lakukan perhitungan kalender secara akurat (perhatikan batas akhir bulan). " +
+        "Konversi tanggal spesifik ke format YYYY-MM-DD memakai tahun berjalan dari 'Hari ini' di atas " +
+        "(mis. '12-13 juni' → check_in YYYY-06-12, check_out YYYY-06-13). " +
+        "Jika hanya satu tanggal disebut, anggap menginap 1 malam (check-out adalah check-in + 1 hari). " +
+        "Jangan pernah menebak ketersediaan tanpa tool.",
 
       "Saat menyampaikan hasil ketersediaan: awali dengan 'Ketersediaan kamar untuk <tanggal>'. " +
         "Tiap tipe kamar satu baris — gunakan ✅ bila tersedia atau ❌ bila penuh, " +
