@@ -31,6 +31,7 @@ import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
 import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
+import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
 import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
@@ -154,6 +155,11 @@ const AdminPagesRoute = AdminPagesRouteImport.update({
   path: '/pages',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminMediaRoute = AdminMediaRouteImport.update({
   id: '/media',
   path: '/media',
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
@@ -267,6 +274,7 @@ export interface FileRoutesByTo {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
@@ -304,6 +312,7 @@ export interface FileRoutesById {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/admin/rooms': typeof AdminRoomsRoute
@@ -342,6 +351,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/explore'
     | '/admin/media'
+    | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
     | '/admin/rooms'
@@ -377,6 +387,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/explore'
     | '/admin/media'
+    | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
     | '/admin/rooms'
@@ -413,6 +424,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/explore'
     | '/admin/media'
+    | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
     | '/admin/rooms'
@@ -611,6 +623,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPagesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/notifications': {
+      id: '/admin/notifications'
+      path: '/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AdminNotificationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/media': {
       id: '/admin/media'
       path: '/media'
@@ -707,6 +726,7 @@ interface AdminRouteChildren {
   AdminComplaintsRoute: typeof AdminComplaintsRoute
   AdminExploreRoute: typeof AdminExploreRoute
   AdminMediaRoute: typeof AdminMediaRoute
+  AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPagesRoute: typeof AdminPagesRoute
   AdminPricingRoute: typeof AdminPricingRoute
   AdminRoomsRoute: typeof AdminRoomsRoute
@@ -726,6 +746,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminComplaintsRoute: AdminComplaintsRoute,
   AdminExploreRoute: AdminExploreRoute,
   AdminMediaRoute: AdminMediaRoute,
+  AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPagesRoute: AdminPagesRoute,
   AdminPricingRoute: AdminPricingRoute,
   AdminRoomsRoute: AdminRoomsRoute,

@@ -37,8 +37,10 @@ import {
   getPropertyManagers,
   addPropertyManager,
   updatePropertyManagerRole,
+  togglePropertyManagerActive,
   deletePropertyManager,
 } from "@/admin/modules/settings/settings.functions";
+import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -956,6 +958,7 @@ function ManagerTab() {
   const getFn = useServerFn(getPropertyManagers);
   const addFn = useServerFn(addPropertyManager);
   const updateFn = useServerFn(updatePropertyManagerRole);
+  const toggleActiveFn = useServerFn(togglePropertyManagerActive);
   const deleteFn = useServerFn(deletePropertyManager);
   
   const getPropFn = useServerFn(getPropertySettings);
@@ -1000,6 +1003,14 @@ function ManagerTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["property-managers"] });
       toast.success("Manager berhasil dihapus");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const toggleActiveMut = useMutation({
+    mutationFn: (v: { id: string; is_active: boolean }) => toggleActiveFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -1108,6 +1119,13 @@ function ManagerTab() {
                 <div className="text-sm text-muted-foreground">{m.phone}</div>
               </div>
               <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2" title="Aktif menerima notifikasi">
+                  <Switch
+                    checked={m.is_active ?? true}
+                    onCheckedChange={(checked) => toggleActiveMut.mutate({ id: m.id, is_active: checked })}
+                  />
+                  <span className="text-xs text-muted-foreground">{m.is_active ?? true ? "Aktif" : "Nonaktif"}</span>
+                </div>
                 <Select 
                   value={m.role} 
                   onValueChange={(v: any) => updateMut.mutate({ id: m.id, role: v })}

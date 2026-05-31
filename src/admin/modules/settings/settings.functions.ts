@@ -400,7 +400,7 @@ export const getPropertyManagers = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await db(context.supabase)
       .from("property_managers")
-      .select("id, property_id, name, phone, role, created_at")
+      .select("id, property_id, name, phone, role, is_active, created_at")
       .order("created_at", { ascending: true });
     if (error) throw error;
     return data ?? [];
@@ -443,6 +443,20 @@ export const updatePropertyManagerRole = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const togglePropertyManagerActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), is_active: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("property_managers")
+      .update({ is_active: data.is_active })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const deletePropertyManager = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.string().uuid().parse(d))
@@ -450,4 +464,20 @@ export const deletePropertyManager = createServerFn({ method: "POST" })
     const { error } = await db(context.supabase).from("property_managers").delete().eq("id", id);
     if (error) throw error;
     return { ok: true };
+  });
+
+/* ------------------------------------------------------------------ */
+/* Notification Logs                                                  */
+/* ------------------------------------------------------------------ */
+
+export const getNotificationLogs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await db(context.supabase)
+      .from("notification_logs")
+      .select("id, event_type, recipient_phone, recipient_role, message, attachment_url, status, attempts, error, sent_at, created_at, related_id")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return data ?? [];
   });
