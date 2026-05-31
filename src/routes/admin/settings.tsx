@@ -958,6 +958,7 @@ function ManagerTab() {
   const getFn = useServerFn(getPropertyManagers);
   const addFn = useServerFn(addPropertyManager);
   const updateFn = useServerFn(updatePropertyManagerRole);
+  const toggleActiveFn = useServerFn(togglePropertyManagerActive);
   const deleteFn = useServerFn(deletePropertyManager);
   
   const getPropFn = useServerFn(getPropertySettings);
