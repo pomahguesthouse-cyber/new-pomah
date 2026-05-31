@@ -74,6 +74,7 @@ interface TurnMeta {
   elapsedMs?: number;
   status?: string;
   error?: string | null;
+  trainingExamplesUsed?: number;
 }
 
 interface ScenarioStep {
