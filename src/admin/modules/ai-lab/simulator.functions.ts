@@ -210,8 +210,31 @@ export const saveSimulationAsTraining = createServerFn({ method: "POST" })
       return { ok: true, savedCount: 0 };
     }
 
-    const { error } = await context.supabase.from("ai_conversation_logs").insert(rows);
+    const { data: inserted, error } = await context.supabase
+      .from("ai_conversation_logs")
+      .insert(rows)
+      .select("id");
     if (error) throw error;
+
+    // Embed setiap contoh yang baru disimpan agar langsung bisa diretrieve
+    // oleh chatbot di percakapan berikutnya. Embedding berjalan best-effort —
+    // kegagalan tidak menggagalkan penyimpanan training.
+    try {
+      const env = await buildEnv();
+      if (env.apiKey) {
+        const llmConfig = { apiKey: env.apiKey, baseUrl: env.baseUrl, model: env.model };
+        await Promise.all(
+          (inserted ?? []).map((row) =>
+            embedTrainingExample(supabaseAdmin, row.id, llmConfig).catch((e) => {
+              console.warn("[saveSimulationAsTraining] embed failed:", e);
+            }),
+          ),
+        );
+      }
+    } catch (e) {
+      console.warn("[saveSimulationAsTraining] embedding pass failed:", e);
+    }
+
 
     return { ok: true, savedCount: rows.length };
   });
