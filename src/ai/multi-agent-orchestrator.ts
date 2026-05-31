@@ -24,6 +24,11 @@ import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
+import {
+  retrieveTrainingExamples,
+  formatTrainingExamplesForPrompt,
+  type TrainingExample,
+} from "./training-rag.service";
 
 const DEFAULT_MAX_TURNS = 5;
 
