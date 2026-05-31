@@ -8,7 +8,7 @@
  * (booking state, and create_booking creates real records). Use a test number.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -18,7 +18,6 @@ import {
   RotateCcw,
   Loader2,
   User,
-  Wrench,
   Activity,
   Pencil,
   Check,
@@ -29,6 +28,8 @@ import {
   Trash2,
   BookOpen,
   Download,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import {
   simulateChatTurn,
@@ -38,6 +39,7 @@ import {
   deleteSimulatorTraining,
   updateSimulatorTraining,
   exportSimulatorTraining,
+  suggestTrainingTitle,
 } from "./simulator.functions";
 import { listThreads, getThread } from "@/admin/functions/whatsapp.functions";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -74,7 +76,7 @@ interface TurnMeta {
   trainingExamplesUsed?: number;
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────────
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export function ChatSimulatorView() {
   const runTurn = useServerFn(simulateChatTurn);
@@ -86,6 +88,7 @@ export function ChatSimulatorView() {
   const runDeleteTraining = useServerFn(deleteSimulatorTraining);
   const runUpdateTraining = useServerFn(updateSimulatorTraining);
   const runExportTraining = useServerFn(exportSimulatorTraining);
+  const runSuggestTitle = useServerFn(suggestTrainingTitle);
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState("6281234567899");
@@ -94,14 +97,16 @@ export function ChatSimulatorView() {
   const [sending, setSending] = useState(false);
   const [lastMeta, setLastMeta] = useState<TurnMeta | null>(null);
 
-  // Response modification states
+  // Inline correction on bot bubbles
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editingText, setEditingText] = useState("");
-  const [editedIndices, setEditedIndices] = useState<Record<number, string>>({}); // index -> original text
+  const [editedIndices, setEditedIndices] = useState<Record<number, string>>({});
 
-  // Save training states
+  // Save training dialog state
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [savingTraining, setSavingTraining] = useState(false);
+  const [saveTitle, setSaveTitle] = useState("");
+  const [titleLoading, setTitleLoading] = useState(false);
 
   // Import WhatsApp conversation states
   const [importOpen, setImportOpen] = useState(false);
@@ -135,7 +140,6 @@ export function ChatSimulatorView() {
     return { reply: res.reply as string | null, meta };
   }
 
-  // ── Interactive send ──────────────────────────────────────────────────────────
   async function handleSend() {
     const message = input.trim();
     if (!message || sending) return;
@@ -159,7 +163,7 @@ export function ChatSimulatorView() {
       scrollToBottom();
     } catch (e: any) {
       toast.error(e.message ?? "Error");
-      setTranscript(history); // roll back the optimistic user bubble
+      setTranscript(history);
     } finally {
       setSending(false);
     }
@@ -178,14 +182,36 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Save simulation as training ───────────────────────────────────────────
-  async function handleSaveTraining(pairs: any[]) {
-    if (savingTraining || pairs.length === 0) return;
+  // ── Save full conversation as training ──────────────────────────────────
+  async function openSaveDialog() {
+    setSaveConfirmOpen(true);
+    setSaveTitle("");
+    setTitleLoading(true);
+    try {
+      const res = await runSuggestTitle({ data: { transcript } });
+      setSaveTitle(res?.title ?? "");
+    } catch {
+      setSaveTitle("");
+    } finally {
+      setTitleLoading(false);
+    }
+  }
+
+  async function handleSaveTraining() {
+    const title = saveTitle.trim();
+    if (!title) {
+      toast.error("Judul tidak boleh kosong");
+      return;
+    }
+    if (transcript.length < 2) {
+      toast.error("Percakapan terlalu pendek untuk disimpan");
+      return;
+    }
     setSavingTraining(true);
     try {
-      const res = await runSaveTraining({ data: { pairs } });
-      if (res.ok) {
-        toast.success(`Berhasil menyimpan ${res.savedCount} pasangan percakapan ke training data.`);
+      const res: any = await runSaveTraining({ data: { title, transcript } });
+      if (res?.ok) {
+        toast.success("Percakapan disimpan sebagai training");
         setSaveConfirmOpen(false);
         qc.invalidateQueries({ queryKey: ["simulator-training"] });
       } else {
@@ -198,7 +224,7 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Saved training list ───────────────────────────────────────────────────
+  // ── Saved training list ─────────────────────────────────────────────────
   const trainingQuery = useQuery({
     queryKey: ["simulator-training"],
     queryFn: () => runListTraining(),
@@ -216,30 +242,57 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Edit saved training ───────────────────────────────────────────────────
+  // ── Edit saved training (judul + transcript) ────────────────────────────
   const [editTrainingId, setEditTrainingId] = useState<string | null>(null);
-  const [editUserMsg, setEditUserMsg] = useState("");
-  const [editAiResp, setEditAiResp] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editTranscript, setEditTranscript] = useState<TranscriptMsg[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
   function openEditTraining(log: any) {
     setEditTrainingId(log.id);
-    setEditUserMsg(log.user_message ?? "");
-    setEditAiResp(log.ai_response ?? "");
+    setEditTitle(log.title ?? "");
+    const t: TranscriptMsg[] = Array.isArray(log.transcript) ? log.transcript : [];
+    if (t.length > 0) {
+      setEditTranscript(t);
+    } else {
+      // Fallback untuk baris tanpa transcript: rekonstruksi dari user_message + ai_response
+      setEditTranscript([
+        { direction: "in", body: log.user_message ?? "" },
+        { direction: "out", body: log.ai_response ?? "" },
+      ]);
+    }
+  }
+
+  function updateEditTurn(idx: number, body: string) {
+    setEditTranscript((prev) => prev.map((m, i) => (i === idx ? { ...m, body } : m)));
+  }
+
+  function removeEditTurn(idx: number) {
+    setEditTranscript((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function addEditTurn(direction: Direction) {
+    setEditTranscript((prev) => [...prev, { direction, body: "" }]);
   }
 
   async function handleSaveEditTraining() {
     if (!editTrainingId) return;
-    const u = editUserMsg.trim();
-    const a = editAiResp.trim();
-    if (!u || !a) {
-      toast.error("Pesan tamu & respons tidak boleh kosong");
+    const title = editTitle.trim();
+    const cleaned = editTranscript
+      .map((m) => ({ ...m, body: m.body.trim() }))
+      .filter((m) => m.body.length > 0);
+    if (!title) {
+      toast.error("Judul tidak boleh kosong");
+      return;
+    }
+    if (cleaned.length < 2 || !cleaned.some((m) => m.direction === "in") || !cleaned.some((m) => m.direction === "out")) {
+      toast.error("Minimal 1 pesan tamu dan 1 balasan bot");
       return;
     }
     setSavingEdit(true);
     try {
       await runUpdateTraining({
-        data: { id: editTrainingId, userMessage: u, aiResponse: a },
+        data: { id: editTrainingId, title, transcript: cleaned },
       });
       qc.invalidateQueries({ queryKey: ["simulator-training"] });
       toast.success("Training data diperbarui");
@@ -251,7 +304,7 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Export training ───────────────────────────────────────────────────────
+  // ── Export training ─────────────────────────────────────────────────────
   function downloadFile(filename: string, content: string, mime: string) {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -265,7 +318,7 @@ export function ChatSimulatorView() {
   }
 
   function toCsv(rows: any[]): string {
-    const headers = ["id", "user_message", "ai_response", "correction", "rating", "used", "created_at"];
+    const headers = ["id", "title", "user_message", "ai_response", "correction", "rating", "used", "created_at"];
     const escape = (v: unknown) => {
       const s = v == null ? "" : String(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -299,7 +352,7 @@ export function ChatSimulatorView() {
     }
   }
 
-  // ── Import WhatsApp conversation ──────────────────────────────────────────
+  // ── Import WhatsApp conversation ────────────────────────────────────────
   const threadsQuery = useQuery({
     queryKey: ["wa-threads"],
     queryFn: () => runListThreads(),
@@ -347,6 +400,14 @@ export function ChatSimulatorView() {
     }
   }
 
+  // Reset edit dialog when closed
+  useEffect(() => {
+    if (editTrainingId === null) {
+      setEditTitle("");
+      setEditTranscript([]);
+    }
+  }, [editTrainingId]);
+
   return (
     <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_360px]">
       {/* ── Left: chat ─────────────────────────────────────────────────────── */}
@@ -372,12 +433,12 @@ export function ChatSimulatorView() {
               className="h-8 w-40 font-mono text-xs"
               placeholder="628xxxxxxxxxx"
             />
-            {transcript.length > 0 && (
+            {transcript.length >= 2 && (
               <Button
                 variant="default"
                 size="sm"
                 className="bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-sm transition-colors"
-                onClick={() => setSaveConfirmOpen(true)}
+                onClick={openSaveDialog}
                 disabled={sending}
               >
                 <GraduationCap className="mr-1.5 h-3.5 w-3.5" />
@@ -424,9 +485,9 @@ export function ChatSimulatorView() {
                           ? "rounded-br-sm bg-emerald-600 text-white"
                           : cn(
                               "rounded-bl-sm bg-white text-stone-800 border border-transparent",
-                              isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40"
+                              isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40",
                             ),
-                        !isEditing && m.direction === "out" && "pr-8"
+                        !isEditing && m.direction === "out" && "pr-8",
                       )}
                     >
                       {isEditing ? (
@@ -610,50 +671,63 @@ export function ChatSimulatorView() {
               Belum ada training tersimpan dari simulator.
             </p>
           ) : (
-            <ScrollArea className="max-h-[320px]">
+            <ScrollArea className="max-h-[420px]">
               <ul className="space-y-2 pr-2">
-                {savedTraining.map((log) => (
-                  <li
-                    key={log.id}
-                    className="group rounded-lg border border-border p-2.5 text-xs"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p className="flex items-center gap-1 font-medium text-stone-700">
-                          <User className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{log.user_message}</span>
-                        </p>
-                        <p className="flex items-start gap-1 text-stone-600">
-                          <Bot className="mt-0.5 h-3 w-3 shrink-0 text-teal-600" />
-                          <span className="line-clamp-3 whitespace-pre-wrap">
-                            {log.ai_response}
-                          </span>
-                        </p>
-                        {log.correction && (
-                          <span className="inline-flex items-center gap-1 rounded bg-teal-100 px-1 text-[8px] font-semibold uppercase tracking-wider text-teal-800">
-                            <Pencil className="h-2 w-2" /> Dikoreksi
-                          </span>
-                        )}
+                {savedTraining.map((log) => {
+                  const turns: TranscriptMsg[] = Array.isArray(log.transcript)
+                    ? log.transcript
+                    : [];
+                  const turnCount = turns.length;
+                  const preview = (log.user_message ?? "").slice(0, 120);
+                  const dateStr = log.created_at
+                    ? new Date(log.created_at).toLocaleDateString("id-ID", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "";
+
+                  return (
+                    <li key={log.id} className="rounded-lg border border-border p-2.5 text-xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="truncate text-sm font-semibold text-stone-800">
+                            {log.title || "(Tanpa judul)"}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                            <span>{dateStr}</span>
+                            {turnCount > 0 && (
+                              <>
+                                <span>•</span>
+                                <span>{turnCount} pesan</span>
+                              </>
+                            )}
+                          </div>
+                          <p className="flex items-start gap-1 text-stone-600">
+                            <User className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-1">
+                          <button
+                            onClick={() => openEditTraining(log)}
+                            className="rounded p-1.5 text-stone-500 transition hover:bg-teal-50 hover:text-teal-700 border border-transparent hover:border-teal-200"
+                            title="Edit training"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTraining(log.id)}
+                            className="rounded p-1.5 text-stone-500 transition hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-200"
+                            title="Hapus training"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 flex-col gap-1 opacity-0 transition group-hover:opacity-100">
-                        <button
-                          onClick={() => openEditTraining(log)}
-                          className="rounded p-1 text-stone-400 transition hover:bg-teal-50 hover:text-teal-700"
-                          title="Edit training"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTraining(log.id)}
-                          className="rounded p-1 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
-                          title="Hapus training"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </ScrollArea>
           )}
@@ -665,33 +739,80 @@ export function ChatSimulatorView() {
         open={editTrainingId !== null}
         onOpenChange={(open) => !open && setEditTrainingId(null)}
       >
-        <DialogContent className="sm:max-w-[560px]">
+        <DialogContent className="sm:max-w-[640px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-5 w-5 text-teal-600" />
-              Edit Training Data
+              Edit Percakapan Training
             </DialogTitle>
             <DialogDescription>
-              Perbarui pesan tamu atau respons ideal. Perubahan akan langsung
-              di-embed ulang dan dipakai chatbot.
+              Ubah judul dan isi tiap pesan. Perubahan akan di-embed ulang dan langsung
+              dipakai chatbot.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs">Pesan tamu</Label>
-              <Textarea
-                value={editUserMsg}
-                onChange={(e) => setEditUserMsg(e.target.value)}
-                className="min-h-[70px] text-sm"
+              <Label className="text-xs">Judul percakapan</Label>
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                maxLength={120}
+                placeholder="Mis. Tanya harga kamar deluxe untuk akhir pekan"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Respons ideal AI</Label>
-              <Textarea
-                value={editAiResp}
-                onChange={(e) => setEditAiResp(e.target.value)}
-                className="min-h-[120px] text-sm"
-              />
+              <Label className="text-xs">Transcript ({editTranscript.length} pesan)</Label>
+              <ScrollArea className="max-h-[320px] rounded-md border p-2">
+                <div className="space-y-2 pr-2">
+                  {editTranscript.map((m, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "rounded-md border p-2",
+                        m.direction === "in"
+                          ? "border-emerald-200 bg-emerald-50/40"
+                          : "border-teal-200 bg-teal-50/40",
+                      )}
+                    >
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                          {m.direction === "in" ? "Tamu" : "Bot"}
+                        </span>
+                        <button
+                          onClick={() => removeEditTurn(i)}
+                          className="rounded p-0.5 text-stone-400 hover:bg-red-50 hover:text-red-600"
+                          title="Hapus pesan"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <Textarea
+                        value={m.body}
+                        onChange={(e) => updateEditTurn(i, e.target.value)}
+                        className="min-h-[60px] text-xs"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => addEditTurn("in")}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> Pesan tamu
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => addEditTurn("out")}
+                >
+                  <Plus className="mr-1 h-3 w-3" /> Balasan bot
+                </Button>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -730,108 +851,84 @@ export function ChatSimulatorView() {
               Simpan sebagai Training Data
             </DialogTitle>
             <DialogDescription>
-              Simpan pasangan percakapan dari simulasi ini sebagai data latih chatbot.
-              Setiap pasangan akan ditandai dengan rating <strong>Baik</strong> agar digunakan chatbot sebagai panduan merespon di masa depan.
+              Seluruh percakapan akan disimpan sebagai satu entri training dengan judul di
+              bawah. Chatbot akan memakainya sebagai panduan jawaban di masa depan.
             </DialogDescription>
           </DialogHeader>
 
-          {(() => {
-            const pairs: Array<{
-              userMessage: string;
-              aiResponse: string;
-              wasEdited: boolean;
-              originalResponse?: string | null;
-            }> = [];
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-1 text-xs">
+                Judul percakapan
+                {titleLoading && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+                    <Sparkles className="h-3 w-3" /> Menyarankan…
+                  </span>
+                )}
+              </Label>
+              <Input
+                value={saveTitle}
+                onChange={(e) => setSaveTitle(e.target.value)}
+                maxLength={120}
+                disabled={titleLoading || savingTraining}
+                placeholder="Mis. Tanya harga kamar untuk akhir pekan"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Disarankan otomatis — silakan ubah jika perlu (maks. 120 karakter).
+              </p>
+            </div>
 
-            for (let i = 0; i < transcript.length; i++) {
-              const msg = transcript[i];
-              if (msg.direction === "out") {
-                let priorUserMsg = "";
-                for (let j = i - 1; j >= 0; j--) {
-                  if (transcript[j].direction === "in") {
-                    priorUserMsg = transcript[j].body;
-                    break;
-                  }
-                }
-
-                if (priorUserMsg && msg.body) {
-                  const wasEdited = editedIndices[i] !== undefined;
-                  pairs.push({
-                    userMessage: priorUserMsg,
-                    aiResponse: msg.body,
-                    wasEdited,
-                    originalResponse: wasEdited ? editedIndices[i] : null,
-                  });
-                }
-              }
-            }
-
-            if (pairs.length === 0) {
-              return (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  Tidak ada pasangan pesan (tamu & respons bot) yang lengkap untuk disimpan.
-                </div>
-              );
-            }
-
-            return (
-              <>
-                <div className="my-2 border rounded-lg overflow-hidden bg-stone-50">
-                  <div className="px-3 py-2 border-b bg-stone-100 flex justify-between text-xs font-semibold text-stone-600">
-                    <span>Preview Training Data</span>
-                    <span>{pairs.length} pasangan</span>
-                  </div>
-                  <div className="max-h-[250px] overflow-y-auto p-3 space-y-3">
-                    {pairs.map((p, idx) => (
-                      <div key={idx} className="bg-white border rounded-md p-2.5 text-xs space-y-1.5 shadow-sm">
-                        <div className="space-y-0.5">
-                          <span className="font-semibold text-stone-400 uppercase tracking-wider text-[9px] block">Tamu</span>
-                          <p className="text-stone-700 font-medium">{p.userMessage}</p>
-                        </div>
-                        <div className="border-t pt-1.5 space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-teal-600 uppercase tracking-wider text-[9px] block">Respons Ideal AI</span>
-                            {p.wasEdited && (
-                              <span className="bg-teal-100 text-teal-800 text-[8px] font-semibold px-1 rounded uppercase tracking-wider scale-90 origin-right">
-                                Diedit
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-stone-800 whitespace-pre-wrap">{p.aiResponse}</p>
-                          {p.wasEdited && (
-                            <p className="text-[10px] text-stone-400 mt-1 line-through italic">
-                              Semula: {p.originalResponse}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <DialogFooter className="mt-4">
-                  <Button variant="outline" onClick={() => setSaveConfirmOpen(false)} disabled={savingTraining}>
-                    Batal
-                  </Button>
-                  <Button
-                    className="bg-teal-700 hover:bg-teal-800 text-white"
-                    disabled={savingTraining}
-                    onClick={() => handleSaveTraining(pairs)}
+            <div className="overflow-hidden rounded-lg border bg-stone-50">
+              <div className="flex justify-between border-b bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-600">
+                <span>Preview percakapan</span>
+                <span>{transcript.length} pesan</span>
+              </div>
+              <div className="max-h-[260px] space-y-2 overflow-y-auto p-3">
+                {transcript.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={cn("flex", m.direction === "in" ? "justify-end" : "justify-start")}
                   >
-                    {savingTraining ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
-                      </>
-                    ) : (
-                      <>
-                        <GraduationCap className="mr-1.5 h-4 w-4" /> Simpan Training
-                      </>
-                    )}
-                  </Button>
-                </DialogFooter>
-              </>
-            );
-          })()}
+                    <div
+                      className={cn(
+                        "max-w-[80%] rounded-lg px-2.5 py-1.5 text-xs shadow-sm",
+                        m.direction === "in"
+                          ? "rounded-br-sm bg-emerald-600 text-white"
+                          : "rounded-bl-sm bg-white text-stone-800 border",
+                      )}
+                    >
+                      <span className="block whitespace-pre-wrap break-words">{m.body}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setSaveConfirmOpen(false)}
+              disabled={savingTraining}
+            >
+              Batal
+            </Button>
+            <Button
+              className="bg-teal-700 hover:bg-teal-800 text-white"
+              disabled={savingTraining || titleLoading || !saveTitle.trim()}
+              onClick={handleSaveTraining}
+            >
+              {savingTraining ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Menyimpan…
+                </>
+              ) : (
+                <>
+                  <GraduationCap className="mr-1.5 h-4 w-4" /> Simpan Training
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
