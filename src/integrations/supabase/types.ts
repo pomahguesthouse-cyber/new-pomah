@@ -68,6 +68,30 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_intent_rules: {
+        Row: {
+          category: string
+          created_at: string | null
+          id: string
+          patterns: string[]
+          weight: number
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          id?: string
+          patterns: string[]
+          weight?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          id?: string
+          patterns?: string[]
+          weight?: number
+        }
+        Relationships: []
+      }
       ai_suggestions: {
         Row: {
           action_payload: Json | null

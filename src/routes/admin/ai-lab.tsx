@@ -52,6 +52,7 @@ import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings"
 import { ChatSimulatorView } from "@/admin/modules/ai-lab/chat-simulator-view";
 import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-settings";
 import { SeoPage } from "@/routes/admin/seo";
+import { IntentRulesView } from "@/admin/modules/ai-lab/intent-rules-view";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,7 +142,7 @@ const DECISION_HIERARCHY = [
   },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training-rag" | "smart-delay" | "seo";
+type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training-rag" | "smart-delay" | "seo" | "intent-rules";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
@@ -150,6 +151,7 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?
   { key: "training-rag", label: "RAG Settings",    icon: Sparkles },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
   { key: "seo",          label: "SEO",             icon: Search },
+  { key: "intent-rules", label: "Aturan Intent",    icon: Network },
 ];
 
 type EditTarget = { type: "agent" | "tool"; key: string } | null;
@@ -226,6 +228,8 @@ function AiLab() {
             <div className="flex-1 overflow-y-auto">
               <SeoPage />
             </div>
+          ) : view === "intent-rules" ? (
+            <IntentRulesView />
           ) : (
             <div className="flex-1 overflow-y-auto">
               <TrainingRagSettings />

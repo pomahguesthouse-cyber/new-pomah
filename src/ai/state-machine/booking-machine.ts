@@ -188,7 +188,7 @@ export async function processBookingState(
   // relevant reply (the state auto-resets after 15 min if truly abandoned).
   if (isDataEntryState(state) && !isExpectedAnswer(state, message)) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
-    const interruptByIntent   = INTERRUPT_INTENTS.has(classifyIntent(message).category);
+    const interruptByIntent   = INTERRUPT_INTENTS.has((await classifyIntent(message, supabase)).category);
     if (interruptByQuestion || interruptByIntent) {
       console.info(`[BookingState] Interruption during ${state} — preserving state, deferring to LLM`);
       return { handled: false };

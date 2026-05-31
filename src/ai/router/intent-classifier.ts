@@ -13,6 +13,7 @@
 
 import type { IntentCategory }   from "@/ai/agents/types";
 import type { ClassifiedIntent }  from "./types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // ─── Rule definitions ─────────────────────────────────────────────────────────
 
@@ -117,7 +118,24 @@ const RULES: IntentRule[] = [
   },
 ];
 
-// ─── Classifier ───────────────────────────────────────────────────────────────
+interface DBIntentRule {
+  category: string;
+  patterns: string[];
+  weight: number;
+}
+
+interface CachedRules {
+  rules: IntentRule[];
+  expiresAt: number;
+}
+
+let cachedDbRules: CachedRules | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Expose clear cache helper for admin editor
+export function clearIntentRulesCache(): void {
+  cachedDbRules = null;
+}
 
 /**
  * Classify the intent of a user message.
@@ -125,11 +143,70 @@ const RULES: IntentRule[] = [
  * Returns the top-scoring IntentCategory with a normalised confidence (0–1).
  * "general" is the default when no rules match with meaningful weight.
  */
-export function classifyIntent(text: string): ClassifiedIntent {
+export async function classifyIntent(
+  text: string,
+  supabase?: SupabaseClient
+): Promise<ClassifiedIntent> {
+  let activeRules = RULES;
+
+  if (supabase) {
+    const now = Date.now();
+    if (cachedDbRules && cachedDbRules.expiresAt > now) {
+      activeRules = cachedDbRules.rules;
+    } else {
+      try {
+        const { data, error } = await supabase
+          .from("ai_intent_rules")
+          .select("category, patterns, weight")
+          .order("weight", { ascending: false });
+
+        if (error) {
+          console.warn("[classifyIntent] Failed to fetch rules from database, using static fallback:", error.message);
+        } else if (data && data.length > 0) {
+          const parsedRules: IntentRule[] = [];
+          for (const row of data as DBIntentRule[]) {
+            const patterns: RegExp[] = [];
+            for (const pStr of row.patterns) {
+              try {
+                let cleanPattern = pStr;
+                let flags = "i";
+                if (pStr.startsWith("/") && pStr.lastIndexOf("/") > 0) {
+                  const lastSlash = pStr.lastIndexOf("/");
+                  cleanPattern = pStr.slice(1, lastSlash);
+                  const parsedFlags = pStr.slice(lastSlash + 1);
+                  if (parsedFlags.includes("i") || parsedFlags === "") {
+                    flags = parsedFlags;
+                  }
+                }
+                patterns.push(new RegExp(cleanPattern, flags));
+              } catch (e: any) {
+                console.warn(`[classifyIntent] Invalid pattern ignored: "${pStr}" in category "${row.category}":`, e.message);
+              }
+            }
+            parsedRules.push({
+              category: row.category as IntentCategory,
+              patterns,
+              weight: row.weight,
+            });
+          }
+          cachedDbRules = {
+            rules: parsedRules,
+            expiresAt: now + CACHE_TTL,
+          };
+          activeRules = parsedRules;
+        } else {
+          console.log("[classifyIntent] No rules found in database, using static fallback.");
+        }
+      } catch (e: any) {
+        console.warn("[classifyIntent] Error fetching rules:", e.message);
+      }
+    }
+  }
+
   const scores = new Map<IntentCategory, number>();
   const matched = new Map<IntentCategory, string[]>();
 
-  for (const rule of RULES) {
+  for (const rule of activeRules) {
     for (const pattern of rule.patterns) {
       const hit = text.match(pattern);
       if (hit) {
