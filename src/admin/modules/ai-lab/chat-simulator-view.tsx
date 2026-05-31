@@ -114,6 +114,42 @@ export function ChatSimulatorView() {
   const [importingId, setImportingId] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeEditorRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertFormatToTextarea(
+    text: string,
+    setText: (val: string) => void,
+    textareaEl: HTMLTextAreaElement | null,
+    type: "bold" | "italic" | "strike"
+  ) {
+    if (!textareaEl) return;
+    const start = textareaEl.selectionStart;
+    const end = textareaEl.selectionEnd;
+    const selected = text.substring(start, end);
+
+    let prefix = "";
+    let suffix = "";
+    if (type === "bold") {
+      prefix = "*";
+      suffix = "*";
+    } else if (type === "italic") {
+      prefix = "_";
+      suffix = "_";
+    } else if (type === "strike") {
+      prefix = "~";
+      suffix = "~";
+    }
+
+    const formatted = prefix + selected + suffix;
+    const newText = text.substring(0, start) + formatted + text.substring(end);
+    setText(newText);
+
+    setTimeout(() => {
+      textareaEl.focus();
+      textareaEl.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }, 0);
+  }
+
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -483,7 +519,43 @@ export function ChatSimulatorView() {
                         <X className="h-3 w-3" />
                       </button>
                     </div>
+                    <div className="flex gap-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`edit-textarea-${i}`) as HTMLTextAreaElement;
+                          insertFormatToTextarea(m.body, (val) => updateEditTurn(i, val), el, "bold");
+                        }}
+                        className="h-5 w-5 inline-flex items-center justify-center text-[10px] font-bold hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                        title="Tebal (Bold) - *"
+                      >
+                        B
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`edit-textarea-${i}`) as HTMLTextAreaElement;
+                          insertFormatToTextarea(m.body, (val) => updateEditTurn(i, val), el, "italic");
+                        }}
+                        className="h-5 w-5 inline-flex items-center justify-center text-[10px] italic hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                        title="Miring (Italic) - _"
+                      >
+                        I
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById(`edit-textarea-${i}`) as HTMLTextAreaElement;
+                          insertFormatToTextarea(m.body, (val) => updateEditTurn(i, val), el, "strike");
+                        }}
+                        className="h-5 w-5 inline-flex items-center justify-center text-[10px] line-through hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                        title="Coret (Strikethrough) - ~"
+                      >
+                        S
+                      </button>
+                    </div>
                     <Textarea
+                      id={`edit-textarea-${i}`}
                       value={m.body}
                       onChange={(e) => updateEditTurn(i, e.target.value)}
                       className="min-h-[60px] text-xs"
@@ -629,7 +701,34 @@ export function ChatSimulatorView() {
                     >
                       {isEditing ? (
                         <div className="space-y-2 min-w-[200px] sm:min-w-[300px]">
+                          <div className="flex gap-1.5 p-1 rounded bg-stone-100 border border-stone-200 w-fit">
+                            <button
+                              type="button"
+                              onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "bold")}
+                              className="h-6 w-6 inline-flex items-center justify-center text-xs font-bold hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              title="Tebal (Bold) - *"
+                            >
+                              B
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "italic")}
+                              className="h-6 w-6 inline-flex items-center justify-center text-xs italic hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              title="Miring (Italic) - _"
+                            >
+                              I
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "strike")}
+                              className="h-6 w-6 inline-flex items-center justify-center text-xs line-through hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              title="Coret (Strikethrough) - ~"
+                            >
+                              S
+                            </button>
+                          </div>
                           <Textarea
+                            ref={activeEditorRef}
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
                             className="text-xs p-2 min-h-[85px] bg-white text-stone-800 border border-stone-300 focus-visible:ring-teal-500"
