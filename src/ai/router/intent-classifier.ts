@@ -92,6 +92,8 @@ const RULES: IntentRule[] = [
       /\b(ada kamar|kamar (ada|kosong|tersedia)|masih ada kamar|kamar masih)\b/i,
       /\b(tersedia|ketersediaan|available|availability)\b/i,
       /\b(cek kamar|lihat kamar|kamar untuk)\b/i,
+      /\b(masih ada|ada kosong|ada yang kosong|masih tersedia)\b/i,
+      /\btanggal\b.*\b(masih|ada|kosong)\b/i,
     ],
   },
 

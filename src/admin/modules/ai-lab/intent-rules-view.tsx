@@ -120,10 +120,12 @@ export function IntentRulesView() {
     setSaving(true);
     try {
       await saveRuleFn({
-        id: editingRule.id,
-        category: editingRule.category,
-        patterns: editingRule.patterns,
-        weight: editingRule.weight,
+        data: {
+          id: editingRule.id,
+          category: editingRule.category,
+          patterns: editingRule.patterns,
+          weight: editingRule.weight,
+        }
       });
       toast.success(editingRule.id ? "Aturan berhasil diperbarui" : "Aturan berhasil dibuat");
       qc.invalidateQueries({ queryKey: ["ai-intent-rules"] });
@@ -139,11 +141,13 @@ export function IntentRulesView() {
     if (!confirm(`Apakah Anda yakin ingin menghapus aturan intent untuk kategori "${name}"?`)) return;
     try {
       await saveRuleFn({
-        id,
-        category: "",
-        patterns: [],
-        weight: 0,
-        delete: true,
+        data: {
+          id,
+          category: "",
+          patterns: [],
+          weight: 0,
+          delete: true,
+        }
       });
       toast.success("Aturan berhasil dihapus");
       qc.invalidateQueries({ queryKey: ["ai-intent-rules"] });
