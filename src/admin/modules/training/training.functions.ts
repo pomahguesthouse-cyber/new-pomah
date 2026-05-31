@@ -252,5 +252,3 @@ export const backfillTrainingEmbeddings = createServerFn({ method: "POST" })
     }
     return { processed: rows?.length ?? 0, ok, failed };
   });
-
-export const setWebchatTrainingReembed = setWebchatTraining;
