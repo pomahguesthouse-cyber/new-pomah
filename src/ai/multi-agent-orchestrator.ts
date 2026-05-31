@@ -307,11 +307,42 @@ export async function runMultiAgentOrchestration(
     );
 
     if (stateResult.handled && stateResult.reply) {
+      let combinedReply = stateResult.reply;
+      const toolsUsed: string[] = ["booking_state_machine"];
+
+      // Hand invoice delivery to the Finance Agent in the same turn so the
+      // guest sees one combined message: state-machine ack + agent-crafted
+      // invoice details. Best-effort — if the agent fails, the ack still
+      // ships and the guest can ask again later.
+      if (stateResult.followUp === "send_invoice") {
+        const refCode = stateResult.followUpRef ?? "";
+        const synthesized = refCode
+          ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking dengan kode ${refCode}.`
+          : "Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.";
+        const financeAgent = getAgent("finance");
+        const financeResult = await runAgent(
+          financeAgent,
+          [{ direction: "in", body: synthesized }],
+          { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["finance"]?.instructions },
+          input.toolCtx,
+          input.llmConfig,
+          Math.max(2, (input.maxTurns ?? DEFAULT_MAX_TURNS) - 1),
+          undefined,
+          input.signal,
+        );
+        if (financeResult.reply) {
+          combinedReply = `${stateResult.reply}\n\n${financeResult.reply}`;
+          for (const t of financeResult.toolsUsed) toolsUsed.push(t);
+        } else {
+          console.warn("[MultiAgent] Finance follow-up failed:", financeResult.error);
+        }
+      }
+
       return {
         status:            "reply",
-        reply:             stateResult.reply,
-        toolsUsed:         ["booking_state_machine"],
-        agentKey:          "front-office",
+        reply:             combinedReply,
+        toolsUsed,
+        agentKey:          stateResult.followUp === "send_invoice" ? "finance" : "front-office",
         intent:            "general",
         routingConfidence: 1.0,
         escalated:         false,

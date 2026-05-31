@@ -150,6 +150,7 @@ export const TOOL_LABELS: Record<string, string> = {
   report_maintenance_issue:     "Maintenance",
   get_payment_info:             "Finance",
   get_payment_proof_result:     "Finance - OCR Bukti Transfer",
+  send_invoice:                 "Finance - Kirim Invoice",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",

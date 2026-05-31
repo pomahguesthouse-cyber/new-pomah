@@ -36,6 +36,27 @@ const FINANCE_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "send_invoice",
+      description:
+        "Ambil detail invoice tamu (booking, total, rekening pembayaran, link invoice). " +
+        "WAJIB dipakai setiap kali perlu mengirimkan invoice ke tamu: setelah booking baru " +
+        "selesai dibuat, atau bila tamu meminta invoice/link bayar lagi.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: {
+            type: "string",
+            description:
+              "Kode booking (mis. PMH-XXXXXX). Wajib diisi bila diketahui — lebih akurat " +
+              "daripada menebak dari nomor HP.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_payment_proof_result",
       description:
         "Ambil hasil OCR bukti transfer terbaru yang dikirim tamu (nominal, bank pengirim, " +
@@ -88,6 +109,17 @@ export const financeAgent: AgentDefinition = {
         "\n1. Tanya kode booking atau gunakan nomor HP tamu untuk mencari booking." +
         "\n2. Panggil tool `get_payment_info` untuk mendapatkan detail booking dan rekening." +
         "\n3. Sajikan informasi dengan jelas: total tagihan, rekening tujuan, cara konfirmasi.",
+
+      "PENGIRIMAN INVOICE: Setelah booking baru selesai dibuat (sistem akan otomatis " +
+        "meminta Anda mengirimkan invoice), atau bila tamu minta invoice lagi:\n" +
+        "1. Panggil tool `send_invoice` dengan reference_code (kalau tahu) — bukan get_payment_info.\n" +
+        "2. Susun pesan ramah berisi:\n" +
+        "   - Kode booking, tipe kamar, check-in/out, total tagihan\n" +
+        "   - Rekening pembayaran (bank, no rekening, atas nama)\n" +
+        "   - Link invoice (`invoice_url` dari hasil tool) supaya tamu bisa lihat & unduh PDF\n" +
+        "   - Instruksi singkat: kirim bukti transfer ke chat ini setelah bayar\n" +
+        "3. JANGAN ulangi nama tamu di pembuka (state machine sudah menyebutnya tepat sebelum jawaban Anda).\n" +
+        "4. JANGAN minta data ulang. Semua detail sudah di hasil tool.",
 
       "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer " +
         "(atau bertanya apakah bukti sudah diterima), WAJIB panggil tool " +

@@ -47,6 +47,15 @@ export interface StateRecord {
 export interface StateMachineResult {
   handled: boolean;
   reply?: string;
+  /**
+   * Optional follow-up action for the orchestrator to perform AFTER the
+   * state machine reply. Used to hand invoice delivery off to the Finance
+   * Agent in the same turn so the guest sees one combined message:
+   * state-machine ack + agent-crafted invoice details.
+   */
+  followUp?: "send_invoice";
+  /** Reference code of the booking the follow-up should reference. */
+  followUpRef?: string;
 }
 
 const CANCELLATION_PATTERNS = /\b(batal|cancel|nggak jadi|ga jadi|tidak jadi|berhenti)\b/i;
@@ -327,22 +336,17 @@ export async function processBookingState(
       context.bookingCode = result.reference_code;
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
 
-      const pay = result.pembayaran ?? {};
-      const payLines = pay.bank && pay.no_rekening
-        ? `\n\nSilakan lakukan pembayaran transfer ke:\n- Bank: ${pay.bank}\n- No. Rekening: ${pay.no_rekening}\n- Atas Nama: ${pay.atas_nama ?? "-"}\n\nSetelah transfer, kirim bukti pembayaran atau ketik "Sudah bayar".`
-        : "\n\nStaf kami akan mengirimkan detail rekening pembayaran sesaat lagi.";
-
+      // Short ack only — the Finance Agent owns invoice delivery and will
+      // append the bank details + invoice link as the second half of this
+      // turn's reply (orchestrator stitches the two together).
       return {
         handled: true,
         reply:
-          `Terima kasih Kak ${context.guestName}! Pemesanan berhasil dibuat.\n\n` +
-          `- Kode Booking: ${result.reference_code}\n` +
-          `- Kamar: ${result.room_type}\n` +
-          `- Check-in: ${result.check_in_tampil}\n` +
-          `- Check-out: ${result.check_out_tampil}\n` +
-          `- Total: Rp ${Number(result.total ?? 0).toLocaleString("id-ID")}` +
-          payLines +
-          `\n\nBerikut adalah link invoice Anda: ${result.invoice_url}`,
+          `Terima kasih Kak ${context.guestName}! Pemesanan berhasil dibuat ` +
+          `dengan kode ${result.reference_code}. ` +
+          `Berikut detail invoice dan pembayarannya:`,
+        followUp: "send_invoice",
+        followUpRef: result.reference_code,
       };
     } else if (/\b(tidak|batal|salah|ubah|ganti)\b/i.test(message)) {
       await updateBookingState(supabase, phone, "AWAITING_NAME", context);
