@@ -22,6 +22,8 @@ interface OcrShape {
   bank_pengirim:    string | null;
   bank_tujuan:      string | null;
   nominal:          number | null;
+  biaya_admin:      number | null;
+  total_dibayar:    number | null;
   tanggal:          string | null;
   nama_pengirim:    string | null;
   nomor_referensi:  string | null;
@@ -41,6 +43,10 @@ function shape(ocr: OcrShape, match: MatchShape) {
     ocr: {
       nominal:           ocr.nominal,
       nominal_tampil:    formatRupiahOcr(ocr.nominal),
+      biaya_admin:       ocr.biaya_admin,
+      biaya_admin_tampil: ocr.biaya_admin != null ? formatRupiahOcr(ocr.biaya_admin) : null,
+      total_dibayar:     ocr.total_dibayar,
+      total_dibayar_tampil: ocr.total_dibayar != null ? formatRupiahOcr(ocr.total_dibayar) : null,
       bank_pengirim:     ocr.bank_pengirim,
       bank_tujuan:       ocr.bank_tujuan,
       tanggal:           ocr.tanggal,
