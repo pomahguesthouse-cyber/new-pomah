@@ -688,44 +688,53 @@ export function ChatSimulatorView() {
                     : "";
 
                   return (
-                    <li key={log.id} className="rounded-lg border border-border p-2.5 text-xs">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <p className="truncate text-sm font-semibold text-stone-800">
-                            {log.title || "(Tanpa judul)"}
-                          </p>
-                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                            <span>{dateStr}</span>
-                            {turnCount > 0 && (
-                              <>
-                                <span>•</span>
-                                <span>{turnCount} pesan</span>
-                              </>
-                            )}
-                          </div>
-                          <p className="flex items-start gap-1 text-stone-600">
-                            <User className="mt-0.5 h-3 w-3 shrink-0" />
-                            <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
-                          </p>
+                    <li
+                      key={log.id}
+                      className={cn(
+                        "rounded-lg border p-2.5 text-xs transition",
+                        editTrainingId === log.id
+                          ? "border-teal-400 bg-teal-50/40"
+                          : "border-border",
+                      )}
+                    >
+                      <div className="space-y-1">
+                        <p className="truncate text-sm font-semibold text-stone-800">
+                          {log.title || "(Tanpa judul)"}
+                        </p>
+                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span>{dateStr}</span>
+                          {turnCount > 0 && (
+                            <>
+                              <span>•</span>
+                              <span>{turnCount} pesan</span>
+                            </>
+                          )}
                         </div>
-                        <div className="flex shrink-0 flex-col gap-1">
-                          <button
-                            onClick={() => openEditTraining(log)}
-                            className="rounded p-1.5 text-stone-500 transition hover:bg-teal-50 hover:text-teal-700 border border-transparent hover:border-teal-200"
-                            title="Edit training"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTraining(log.id)}
-                            className="rounded p-1.5 text-stone-500 transition hover:bg-red-50 hover:text-red-600 border border-transparent hover:border-red-200"
-                            title="Hapus training"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        <p className="flex items-start gap-1 text-stone-600">
+                          <User className="mt-0.5 h-3 w-3 shrink-0" />
+                          <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
+                        </p>
+                      </div>
+                      <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-border/60 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => openEditTraining(log)}
+                        >
+                          <Pencil className="mr-1 h-3 w-3" /> Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => handleDeleteTraining(log.id)}
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" /> Hapus
+                        </Button>
                       </div>
                     </li>
+
                   );
                 })}
               </ul>
