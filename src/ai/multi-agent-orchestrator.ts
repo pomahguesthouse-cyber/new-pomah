@@ -24,7 +24,7 @@ import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
-import { resolveContext } from "./router/context-resolver";
+import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
 import { rewriteQuery }   from "./router/query-rewriter";
 import {
   retrieveTrainingExamples,
@@ -328,11 +328,17 @@ export async function runMultiAgentOrchestration(
   // 4. Context resolver + query rewriter (deterministic; no LLM).
   //    Lets short follow-ups like "kalau deluxe" inherit the prior topic/entity
   //    so the classifier sees a self-contained query instead of guessing.
+  //    If per-phone state was reset (new session / topic timeout) but a chat
+  //    summary survives, seed lastEntity from it so the first turn of the
+  //    new session still has continuity.
+  const seededEntity = stateRecord.last_entity
+    ? stateRecord.last_entity
+    : (seedEntityFromSummary(input.agentCtx.chatSummary, input.toolCtx.rooms) as Record<string, unknown> | undefined);
   const resolved = resolveContext(
     lastUserMsg,
     {
       lastTopic:  stateRecord.last_topic,
-      lastEntity: stateRecord.last_entity,
+      lastEntity: seededEntity ?? null,
       slots:      stateRecord.slots,
     },
     input.toolCtx.rooms,
