@@ -75,30 +75,6 @@ interface TurnMeta {
 }
 
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function evaluateChecks(
-  step: ScenarioStep,
-  reply: string | null,
-  meta: TurnMeta,
-): { label: string; ok: boolean }[] {
-  const checks: { label: string; ok: boolean }[] = [];
-  if (step.expectTool) {
-    const ok = (meta.toolsUsed ?? []).some((t) =>
-      t.toLowerCase().includes(step.expectTool!.toLowerCase()),
-    );
-    checks.push({ label: `Tool: ${step.expectTool}`, ok });
-  }
-  if (step.expectReply) {
-    const ok = !!reply && reply.toLowerCase().includes(step.expectReply.toLowerCase());
-    checks.push({ label: `Balasan memuat: "${step.expectReply}"`, ok });
-  }
-  if (step.expectState) {
-    const ok = meta.bookingState === step.expectState;
-    checks.push({ label: `State: ${step.expectState} (≡ ${meta.bookingState ?? "?"})`, ok });
-  }
-  return checks;
-}
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
