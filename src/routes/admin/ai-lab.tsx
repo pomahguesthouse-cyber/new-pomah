@@ -50,6 +50,7 @@ import { TrainingView } from "@/admin/modules/ai-lab/training-view";
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings";
 import { ChatSimulatorView } from "@/admin/modules/ai-lab/chat-simulator-view";
+import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-settings";
 import { SeoPage } from "@/routes/admin/seo";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
