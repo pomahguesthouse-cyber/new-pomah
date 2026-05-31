@@ -125,6 +125,30 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "reply_to_guest",
+      description:
+        "Kirim pesan WhatsApp ke tamu yang sudah punya thread. Dipakai oleh Manager Agent " +
+        "saat manajer minta meneruskan balasan kustom ke tamu via Telegram. " +
+        "Refuse kalau tamu belum pernah inisiasi chat.",
+      parameters: {
+        type: "object",
+        properties: {
+          guest_phone: {
+            type: "string",
+            description: "Nomor HP tamu (format apa saja: 0812, 6281, +6281 — akan dinormalkan).",
+          },
+          message: {
+            type: "string",
+            description: "Isi pesan yang akan dikirim ke tamu via WhatsApp.",
+          },
+        },
+        required: ["guest_phone", "message"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_room_specifications",
       description:
         "Mendapatkan spesifikasi kamar statis (seperti deskripsi, fasilitas/amenities, lokasi lantai, kapasitas tamu, tipe tempat tidur, kapasitas extra bed, dan tarif extra bed) dari database untuk tipe kamar tertentu atau semua tipe kamar.",
@@ -156,5 +180,6 @@ export const TOOL_LABELS: Record<string, string> = {
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",
+  reply_to_guest:               "Manager - Reply to Guest",
   get_room_specifications:      "Room Specifications",
 };

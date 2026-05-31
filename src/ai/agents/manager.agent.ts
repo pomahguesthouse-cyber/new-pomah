@@ -52,8 +52,8 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  ...TOOL_DEFINITIONS.filter((t) => 
-    ["get_bookings", "update_booking_status", "change_booking_room"].includes(t.function.name)
+  ...TOOL_DEFINITIONS.filter((t) =>
+    ["get_bookings", "update_booking_status", "change_booking_room", "reply_to_guest"].includes(t.function.name)
   ),
 ];
 
@@ -86,6 +86,10 @@ export const managerAgent: AgentDefinition = {
         "\n3. Gali akar masalah — tanyakan detail bila perlu." +
         "\n4. Tawarkan solusi konkret atau eskalasi ke tim terkait." +
         "\n5. Pastikan tamu merasa didengar dan dihargai.",
+
+      "MERELAY BALASAN KE TAMU: Bila manajer minta 'balas tamu 0812...', 'kirim pesan ke " +
+        "tamu', atau sejenisnya, gunakan tool `reply_to_guest` dengan guest_phone + message. " +
+        "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
 
       "DELEGASI KE AGENT SPESIALIS: Anda memiliki tool `ask_agent`. " +
         "Gunakan ini saat tamu memiliki pertanyaan yang lebih baik dijawab oleh agent spesialis. " +

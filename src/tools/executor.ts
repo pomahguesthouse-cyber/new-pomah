@@ -20,6 +20,7 @@ import { ccPaymentProofToAdmin }          from "./finance/cc-payment-proof-to-ad
 import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
+import { replyToGuest }                   from "./manager/reply-to-guest.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
@@ -39,6 +40,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   get_bookings:                  getBookings,
   update_booking_status:         updateBookingStatus,
   change_booking_room:           changeBookingRoom,
+  reply_to_guest:                replyToGuest,
   get_room_specifications:       getRoomSpecifications,
 };
 
