@@ -94,10 +94,6 @@ export function ChatSimulatorView() {
   const [sending, setSending] = useState(false);
   const [lastMeta, setLastMeta] = useState<TurnMeta | null>(null);
 
-  // Scenario runner state
-  const [activeScenario, setActiveScenario] = useState<string>(SCENARIOS[0].key);
-  const [running, setRunning] = useState(false);
-  const [results, setResults] = useState<StepResult[]>([]);
 
   // Response modification states
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
