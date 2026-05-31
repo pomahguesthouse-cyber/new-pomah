@@ -44,6 +44,7 @@ import {
   deleteThread,
   setTrainingExample,
   updateChatSummary,
+  summarizeThread,
 } from "@/admin/functions/whatsapp.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Button } from "@/components/ui/button";
@@ -159,6 +160,7 @@ export function WhatsAppPage() {
   const deleteFn = useServerFn(deleteThread);
   const trainingFn = useServerFn(setTrainingExample);
   const updateSummaryFn = useServerFn(updateChatSummary);
+  const summarizeFn = useServerFn(summarizeThread);
   
   const qc = useQueryClient();
 
@@ -258,6 +260,17 @@ export function WhatsAppPage() {
       updateSummaryFn({ data: { threadId: current!, summary } }),
     onSuccess: () => {
       toast.success("Ringkasan obrolan diperbarui");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const summarizeMut = useMutation({
+    mutationFn: () =>
+      summarizeFn({ data: { threadId: current! } }),
+    onSuccess: () => {
+      toast.success("Ringkasan obrolan berhasil dibuat!");
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
@@ -743,6 +756,8 @@ export function WhatsAppPage() {
                 thread={thread.thread}
                 onSaveSummary={(summary) => updateSummaryMut.mutate(summary)}
                 savingSummary={updateSummaryMut.isPending}
+                onSummarize={() => summarizeMut.mutate()}
+                summarizing={summarizeMut.isPending}
                 onToggleTraining={(v) => trainingMut.mutate(v)}
                 togglingTraining={trainingMut.isPending}
               />
@@ -762,12 +777,16 @@ function WhatsappSummary({
   thread,
   onSaveSummary,
   savingSummary,
+  onSummarize,
+  summarizing,
   onToggleTraining,
   togglingTraining,
 }: {
   thread: Record<string, any>;
   onSaveSummary: (summary: string) => void;
   savingSummary: boolean;
+  onSummarize: () => void;
+  summarizing: boolean;
   onToggleTraining: (v: boolean) => void;
   togglingTraining: boolean;
 }) {
@@ -783,9 +802,22 @@ function WhatsappSummary({
   return (
     <div className="space-y-4">
       <div>
-        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-          WhatsApp Summary
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            WhatsApp Summary
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-[10px] text-primary hover:text-primary/80"
+            disabled={summarizing}
+            onClick={onSummarize}
+            title="Buat ringkasan percakapan otomatis menggunakan AI"
+          >
+            <Sparkles className={cn("mr-1 h-3 w-3", summarizing && "animate-spin")} />
+            {summarizing ? "Membuat..." : "Create Summary"}
+          </Button>
+        </div>
         <div className="mt-2 space-y-2">
           <Textarea
             placeholder="Belum ada ringkasan obrolan. Chatbot akan merangkum otomatis setelah obrolan idle 5 menit, atau Anda dapat menulis ringkasan manual di sini..."

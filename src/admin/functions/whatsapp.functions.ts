@@ -253,7 +253,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
       .select("direction, body")
       .eq("thread_id", data.threadId)
       .order("sent_at", { ascending: true })
-      .limit(40);
+      .limit(45);
     const transcript = (messages ?? [])
       .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
@@ -261,11 +261,20 @@ export const summarizeThread = createServerFn({ method: "POST" })
       {
         role: "system",
         content:
-          "Summarize this hotel guest conversation in 3 short bullet points. Focus on: 1) what the guest needs, 2) what was promised by the host (if anything), 3) the next action for staff. Keep each bullet under 14 words. Use plain text bullets starting with '• '.",
+          "Buat ringkasan (resume) singkat, padat, dan jelas dari riwayat obrolan hotel berikut dalam Bahasa Indonesia (maksimal 2-3 kalimat). " +
+          "Fokus pada detail penting seperti nama tamu (jika disebut), tipe kamar yang ditanyakan/dipesan, keluhan, atau status terakhir (misal: sukses booking, batal, atau pending). " +
+          "Langsung berikan hasil ringkasannya secara polos tanpa kata pengantar atau tanda kutip.",
       },
       { role: "user", content: transcript },
     ]);
-    return { summary: summary ?? "No summary available." };
+    const finalSummary = summary ?? "Belum ada ringkasan obrolan.";
+    
+    await context.supabase
+      .from("whatsapp_threads")
+      .update({ chat_summary: finalSummary } as any)
+      .eq("id", data.threadId);
+
+    return { summary: finalSummary };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
