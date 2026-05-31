@@ -184,7 +184,7 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
       note: t?.note?.trim() ? t.note : (TOOL_DEFAULTS[k] ?? ""),
     };
   }
-  const rag = c.trainingRag ?? {};
+  const rag = (c.trainingRag ?? {}) as Partial<TrainingRagConfig>;
   const matchCount = Number(rag.matchCount);
   const minSimilarity = Number(rag.minSimilarity);
   const trainingRag: TrainingRagConfig = {
