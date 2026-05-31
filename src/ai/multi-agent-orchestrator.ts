@@ -324,6 +324,55 @@ export async function runMultiAgentOrchestration(
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
+  // 4a. Eskalasi komplain: jika intent komplain/maintenance dgn confidence > 0.7,
+  //     buat record di guest_complaints + notif manager (fire-and-forget).
+  const complaintCategories: string[] = ["complaint", "maintenance"];
+  if (
+    complaintCategories.includes(classified.category) &&
+    classified.confidence > 0.7 &&
+    lastUserMsg.trim().length > 0
+  ) {
+    void (async () => {
+      try {
+        const db: any = input.toolCtx.supabaseAdmin;
+        const { data: existing } = await db
+          .from("guest_complaints")
+          .select("id")
+          .eq("phone", input.phone)
+          .in("status", ["OPEN", "IN_PROGRESS"])
+          .limit(1)
+          .maybeSingle();
+        if (existing?.id) return; // sudah ada komplain aktif untuk nomor ini
+
+        const { data: thread } = await db
+          .from("whatsapp_threads")
+          .select("id, display_name")
+          .eq("phone", input.phone)
+          .maybeSingle();
+
+        const { data: inserted } = await db
+          .from("guest_complaints")
+          .insert({
+            guest_name: thread?.display_name ?? null,
+            phone: input.phone,
+            thread_id: thread?.id ?? null,
+            category: classified.category,
+            message: lastUserMsg,
+            confidence: classified.confidence,
+            status: "OPEN",
+          })
+          .select("id")
+          .single();
+        if (inserted?.id) {
+          const { notifyComplaint } = await import("@/services/manager-notifier.service");
+          await notifyComplaint(db, inserted.id);
+        }
+      } catch (e) {
+        console.warn("[MultiAgent] Eskalasi komplain gagal:", e);
+      }
+    })();
+  }
+
   // 4b. Retrieve training examples (RAG di ai_conversation_logs).
   //     Skip saat tamu sedang di tengah pengisian data booking — di sana
   //     jawaban harus mengikuti state machine, bukan few-shot.
