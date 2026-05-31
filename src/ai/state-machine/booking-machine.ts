@@ -36,6 +36,12 @@ export interface StateRecord {
   state: BookingState;
   context: BookingContext;
   updated_at: string;
+  /** Last conversational topic outside the booking flow (e.g. "room_facilities"). */
+  last_topic?: string | null;
+  /** Entity the topic was about, e.g. { kind: "room", label: "Deluxe" }. */
+  last_entity?: Record<string, unknown> | null;
+  /** Partial slot data the user has mentioned (dates, guests, etc.). */
+  slots?: Record<string, unknown>;
 }
 
 export interface StateMachineResult {
@@ -74,9 +80,11 @@ Apakah data di atas sudah benar dan Kakak ingin melanjutkan untuk proses Booking
 export async function getBookingState(supabase: SupabaseClient, phone: string): Promise<StateRecord> {
   const { data, error } = await supabase.rpc("get_active_booking_state", { p_phone: phone });
   if (error || !data) {
-    return { phone, state: "IDLE", context: {}, updated_at: new Date().toISOString() };
+    return { phone, state: "IDLE", context: {}, updated_at: new Date().toISOString(), slots: {} };
   }
-  return data as StateRecord;
+  const rec = data as StateRecord;
+  if (!rec.slots) rec.slots = {};
+  return rec;
 }
 
 export async function updateBookingState(

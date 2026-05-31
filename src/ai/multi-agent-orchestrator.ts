@@ -24,6 +24,8 @@ import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
+import { resolveContext } from "./router/context-resolver";
+import { rewriteQuery }   from "./router/query-rewriter";
 import {
   retrieveTrainingExamples,
   formatTrainingExamplesForPrompt,
@@ -323,8 +325,29 @@ export async function runMultiAgentOrchestration(
     }
   }
 
-  // 4. Classify intent
-  const classified = await classifyIntent(lastUserMsg, input.toolCtx.supabaseAdmin, input.llmConfig);
+  // 4. Context resolver + query rewriter (deterministic; no LLM).
+  //    Lets short follow-ups like "kalau deluxe" inherit the prior topic/entity
+  //    so the classifier sees a self-contained query instead of guessing.
+  const resolved = resolveContext(
+    lastUserMsg,
+    {
+      lastTopic:  stateRecord.last_topic,
+      lastEntity: stateRecord.last_entity,
+      slots:      stateRecord.slots,
+    },
+    input.toolCtx.rooms,
+  );
+  const rewrite = rewriteQuery(lastUserMsg, resolved);
+  if (rewrite.rewritten_applied) {
+    console.info(
+      `[MultiAgent] Resolver: topic=${resolved.topic} entity=${resolved.entity?.label ?? "-"} ` +
+      `| rewrite: "${rewrite.original}" → "${rewrite.rewritten}" | reasons: ${resolved.reasons.join("; ")}`,
+    );
+  }
+
+  // 5. Classify intent — use the rewritten query when one was produced.
+  const queryForClassifier = rewrite.rewritten_applied ? rewrite.rewritten : lastUserMsg;
+  const classified = await classifyIntent(queryForClassifier, input.toolCtx.supabaseAdmin, input.llmConfig);
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
@@ -472,6 +495,21 @@ export async function runMultiAgentOrchestration(
     input.signal,
     trainingBlock,
   );
+
+  // Persist topic/entity/slots so the NEXT turn can resolve short follow-ups.
+  // Fire-and-forget — failure here must not break the reply path.
+  if (resolved.topic || resolved.entity || Object.keys(resolved.slots).length) {
+    void input.toolCtx.supabasePublic
+      .rpc("update_conversation_topic", {
+        p_phone:       input.phone,
+        p_last_topic:  resolved.topic ?? null,
+        p_last_entity: resolved.entity ?? null,
+        p_slots:       resolved.slots ?? {},
+      })
+      .then(({ error }: { error: unknown }) => {
+        if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
+      });
+  }
 
   // 6. If primary agent failed, fall back to Front Office
   if (!agentResult.reply && routing.agentKey !== "front-office") {
