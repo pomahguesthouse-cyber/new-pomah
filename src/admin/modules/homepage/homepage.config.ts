@@ -482,7 +482,30 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     news: { ...d.news, ...c.news },
     cta: { ...d.cta, ...c.cta },
     sectionOrder: sanitizeSectionOrder(c.sectionOrder),
+    sectionLayouts: sanitizeSectionLayouts(c.sectionLayouts),
     seo: { ...d.seo, ...c.seo },
     bookingSeo: { ...d.bookingSeo, ...c.bookingSeo },
   };
+}
+
+/** Coerce stored sectionLayouts blob into a clean Partial<Record<string, SectionLayout>>. */
+function sanitizeSectionLayouts(raw: unknown): HomepageConfig["sectionLayouts"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: NonNullable<HomepageConfig["sectionLayouts"]> = {};
+  for (const [key, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!val || typeof val !== "object") continue;
+    const v = val as Record<string, unknown>;
+    const layout: SectionLayout = {};
+    if (v.textAlign === "left" || v.textAlign === "center" || v.textAlign === "right") {
+      layout.textAlign = v.textAlign;
+    }
+    if (typeof v.paddingTop === "number" && v.paddingTop >= 0 && v.paddingTop <= 1000) {
+      layout.paddingTop = v.paddingTop;
+    }
+    if (typeof v.paddingBottom === "number" && v.paddingBottom >= 0 && v.paddingBottom <= 1000) {
+      layout.paddingBottom = v.paddingBottom;
+    }
+    if (Object.keys(layout).length > 0) out[key] = layout;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
