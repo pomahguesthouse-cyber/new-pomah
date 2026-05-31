@@ -41,6 +41,7 @@ import {
   getPublicSiteData,
   checkRoomTypeAvailability,
   submitCartBooking,
+  getMediaAssetByName,
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import {
@@ -165,6 +166,18 @@ function fmtDayNameID(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (isNaN(d.getTime())) return "";
   return ID_DAYS[d.getDay()];
+}
+/** "2026-05-31" → "31 Mei" — day + month, no year. */
+function fmtDayMonthID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${ID_MONTHS[d.getMonth()]}`;
+}
+/** "2026-05-31" → "2026" — year only. */
+function fmtYearID(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return "";
+  return String(d.getFullYear());
 }
 /**
  * Parse a free-text Indonesian date ("05 Mei 2026", "10-12 September 2026")
@@ -2386,30 +2399,40 @@ function RoomCarousel({
  *      └────────┘   │     └────────┘   │   │ 1 │ Malam
  *      31 Mei 2026  │     1 Juni 2026  │   └───┘
  */
-function dayBadgeClass(dayName: string): string {
-  const weekend = /^(Sabtu|Minggu)$/i.test(dayName);
-  return weekend
-    ? "bg-amber-500 text-white"
-    : "bg-sky-300 text-sky-950";
-}
-
-function DayDateBlock({ iso }: { iso: string }) {
-  const day = fmtDayNameID(iso);
-  const date = fmtDateSpacedID(iso);
+/**
+ * Single date column in the carousel header:
+ *
+ *      Minggu        ← small grey day name
+ *      31 Mei        ← big bold day + month (pink for check-in, dark for check-out)
+ *       2026         ← smaller grey year
+ *
+ * `accent="pink"` highlights the check-in / today date.
+ */
+function DayDateBlock({ iso, accent }: { iso: string; accent?: "pink" | "dark" }) {
   return (
-    <span className="inline-flex flex-col items-center leading-tight">
-      <span
-        className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide shadow-sm md:text-xs ${dayBadgeClass(day)}`}
-      >
-        {day}
+    <span className="inline-flex flex-col items-center leading-none">
+      <span className="text-[10px] font-medium text-stone-500 md:text-xs">
+        {fmtDayNameID(iso)}
       </span>
-      <span className="mt-1 whitespace-nowrap text-base font-bold text-stone-900 md:text-lg">
-        {date}
+      <span
+        className={`mt-1 whitespace-nowrap text-xl font-bold md:text-2xl ${
+          accent === "pink" ? "text-pink-600" : "text-stone-900"
+        }`}
+      >
+        {fmtDayMonthID(iso)}
+      </span>
+      <span className="mt-0.5 text-[10px] font-medium text-stone-400 md:text-xs">
+        {fmtYearID(iso)}
       </span>
     </span>
   );
 }
 
+/**
+ * Date stack wrapped by a one-shot red-circle SVG annotation
+ * (red-circle-animation.svg from the media library, with /public fallback).
+ * IntersectionObserver fires the animation exactly once per page load.
+ */
 function DateStack({
   fromIso,
   toIso,
@@ -2419,30 +2442,67 @@ function DateStack({
   toIso?: string | null;
   nights?: number;
 }) {
-  // Single-date mode (no range)
-  if (!toIso || toIso === fromIso) {
-    return (
-      <span className="inline-flex items-center">
-        <DayDateBlock iso={fromIso} />
-      </span>
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [show, setShow] = useState(false);
+  const playedRef = useRef(false);
+
+  const getAssetFn = useServerFn(getMediaAssetByName);
+  const { data: assetData } = useQuery({
+    queryKey: ["media-asset", "red-circle-animation.svg"],
+    queryFn: () => getAssetFn({ data: { name: "red-circle-animation.svg" } }),
+    staleTime: 10 * 60 * 1000,
+  });
+  const svgUrl = assetData?.url || "/red-circle-animation.svg";
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && !playedRef.current) {
+            playedRef.current = true;
+            setShow(true);
+            io.disconnect();
+            break;
+          }
+        }
+      },
+      { threshold: 0.5 },
     );
-  }
-  // Range mode
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const isRange = !!(toIso && toIso !== fromIso);
+
   return (
-    <span className="inline-flex items-center gap-3">
-      <DayDateBlock iso={fromIso} />
-      <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
-      <DayDateBlock iso={toIso} />
-      {typeof nights === "number" && nights > 0 && (
+    <span ref={ref} className="relative inline-flex items-center gap-3 px-4 py-2">
+      <DayDateBlock iso={fromIso} accent="pink" />
+      {isRange && (
         <>
           <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md bg-stone-200 px-2 text-sm font-bold text-stone-800 shadow-inner">
-              {nights}
-            </span>
-            <span className="text-xs font-medium text-stone-500">Malam</span>
-          </span>
+          <DayDateBlock iso={toIso!} accent="dark" />
+          {typeof nights === "number" && nights > 0 && (
+            <>
+              <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
+              <span className="inline-flex items-center gap-1.5">
+                <span className="text-xl font-bold text-stone-800 md:text-2xl">{nights}</span>
+                <span className="text-[10px] font-medium text-stone-400 md:text-xs">Malam</span>
+              </span>
+            </>
+          )}
         </>
+      )}
+      {show && (
+        <img
+          // Hash suffix forces a fresh decode so SMIL replays per mount.
+          src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[180%] w-[115%] -translate-x-1/2 -translate-y-1/2 select-none"
+        />
       )}
     </span>
   );
