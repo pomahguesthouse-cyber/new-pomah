@@ -547,7 +547,7 @@ function PomahHome() {
                 >
                   {cfg.datePicker.logoUrl || logoUrl ? (
                     <img
-                      src={cfg.datePicker.logoUrl || logoUrl}
+                      src={cfg.datePicker.logoUrl || logoUrl || undefined}
                       alt={propertyName}
                       className="h-16 w-auto object-contain"
                     />
