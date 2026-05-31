@@ -2412,13 +2412,13 @@ function DayDateBlock({ iso, accent }: { iso: string; accent?: "pink" | "dark" }
   const colour = accent === "pink" ? "text-pink-600" : "text-stone-900";
   return (
     <span className="inline-flex flex-col leading-none">
-      <span className={`self-start text-sm font-semibold md:text-base ${colour}`}>
+      <span className={`self-start text-xs font-semibold md:text-sm ${colour}`}>
         {fmtDayNameID(iso)}
       </span>
-      <span className={`mt-0.5 whitespace-nowrap text-2xl font-bold md:text-3xl ${colour}`}>
+      <span className={`mt-0.5 whitespace-nowrap text-lg font-bold md:text-xl ${colour}`}>
         {fmtDayMonthID(iso)}
       </span>
-      <span className="-mt-1 self-end text-[10px] font-medium text-stone-400 md:text-xs">
+      <span className="-mt-0.5 self-end text-[9px] font-medium text-stone-400 md:text-[10px]">
         {fmtYearID(iso)}
       </span>
     </span>
@@ -2476,18 +2476,18 @@ function DateStack({
   const isRange = !!(toIso && toIso !== fromIso);
 
   return (
-    <span ref={ref} className="relative inline-flex items-center gap-3 px-4 py-2">
+    <span ref={ref} className="relative inline-flex items-center gap-2.5 px-5 py-3">
       <DayDateBlock iso={fromIso} accent="pink" />
       {isRange && (
         <>
-          <span aria-hidden="true" className="h-12 w-px bg-stone-300" />
+          <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
           <DayDateBlock iso={toIso!} accent="dark" />
           {typeof nights === "number" && nights > 0 && (
             <>
-              <span aria-hidden="true" className="h-12 w-px bg-stone-300" />
+              <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
               <span className="inline-flex items-baseline gap-1.5">
-                <span className="text-2xl font-bold text-stone-800 md:text-3xl">{nights}</span>
-                <span className="text-[10px] font-medium text-stone-400 md:text-xs">Malam</span>
+                <span className="text-lg font-bold text-stone-800 md:text-xl">{nights}</span>
+                <span className="text-[9px] font-medium text-stone-400 md:text-[10px]">Malam</span>
               </span>
             </>
           )}
@@ -2499,7 +2499,9 @@ function DateStack({
           src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[220%] w-[125%] -translate-x-1/2 -translate-y-1/2 select-none"
+          // SVG has preserveAspectRatio="none", so it stretches to fill the
+          // wrapper box exactly — guarantees the lasso encloses every label.
+          className="pointer-events-none absolute inset-0 h-full w-full select-none"
         />
       )}
     </span>
