@@ -265,3 +265,56 @@ export const deleteSimulatorTraining = createServerFn({ method: "POST" })
     if (error) throw error;
     return { ok: true };
   });
+
+/** Update an existing simulator training example, then re-embed. */
+export const updateSimulatorTraining = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        userMessage: z.string().min(1).max(4000),
+        aiResponse: z.string().min(1).max(8000),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase
+      .from("ai_conversation_logs")
+      .update({
+        user_message: data.userMessage,
+        ai_response: data.aiResponse,
+        rating: "good",
+        used: true,
+      })
+      .eq("id", data.id);
+    if (error) throw error;
+
+    // Re-embed best-effort agar perubahan langsung dipakai chatbot
+    try {
+      const env = await buildEnv();
+      if (env.apiKey) {
+        await embedTrainingExample(supabaseAdmin, data.id, {
+          apiKey: env.apiKey,
+          baseUrl: env.baseUrl,
+          model: env.model,
+        });
+      }
+    } catch (e) {
+      console.warn("[updateSimulatorTraining] re-embed failed:", e);
+    }
+    return { ok: true };
+  });
+
+/** Export all simulator training examples (full rows for JSON/CSV download). */
+export const exportSimulatorTraining = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("ai_conversation_logs")
+      .select("id, user_message, ai_response, correction, rating, used, created_at")
+      .eq("source", "simulator")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return { rows: data ?? [] };
+  });
