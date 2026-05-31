@@ -157,9 +157,15 @@ function AuthSync() {
   const qc = useQueryClient();
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
-      // TOKEN_REFRESHED fires every hour on auto-refresh — skip it to prevent
-      // spurious page reloads. Only re-validate on meaningful session changes.
+      // TOKEN_REFRESHED fires every jam pada auto-refresh — skip agar tidak reload.
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
+      // Saat sign-out: kosongkan cache & arahkan ke /login. JANGAN invalidate
+      // (akan memicu refetch serverFn tanpa token -> 401 blank screen).
+      if (event === "SIGNED_OUT") {
+        qc.clear();
+        router.navigate({ to: "/login" });
+        return;
+      }
       router.invalidate();
       qc.invalidateQueries();
     });
