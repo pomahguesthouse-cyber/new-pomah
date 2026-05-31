@@ -37,8 +37,10 @@ import {
   getPropertyManagers,
   addPropertyManager,
   updatePropertyManagerRole,
+  togglePropertyManagerActive,
   deletePropertyManager,
 } from "@/admin/modules/settings/settings.functions";
+import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
