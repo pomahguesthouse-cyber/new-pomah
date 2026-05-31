@@ -16,6 +16,7 @@ import {
   Images,
   Compass,
   AlertTriangle,
+  Bell,
 } from "lucide-react";
 
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
