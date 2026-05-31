@@ -84,6 +84,8 @@ export function ChatSimulatorView() {
   const runGetThread = useServerFn(getThread);
   const runListTraining = useServerFn(listSimulatorTraining);
   const runDeleteTraining = useServerFn(deleteSimulatorTraining);
+  const runUpdateTraining = useServerFn(updateSimulatorTraining);
+  const runExportTraining = useServerFn(exportSimulatorTraining);
   const qc = useQueryClient();
 
   const [phone, setPhone] = useState("6281234567899");
