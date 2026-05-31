@@ -2400,28 +2400,25 @@ function RoomCarousel({
  *      31 Mei 2026  │     1 Juni 2026  │   └───┘
  */
 /**
- * Single date column in the carousel header:
+ * Single date column in the carousel header. Layout:
  *
- *      Minggu        ← small grey day name
- *      31 Mei        ← big bold day + month (pink for check-in, dark for check-out)
- *       2026         ← smaller grey year
+ *      Minggu                ← day name top-LEFT, same colour as date
+ *      31 Mei                ← big bold day + month (pink check-in / dark check-out)
+ *              2026          ← year bottom-RIGHT, small grey
  *
  * `accent="pink"` highlights the check-in / today date.
  */
 function DayDateBlock({ iso, accent }: { iso: string; accent?: "pink" | "dark" }) {
+  const colour = accent === "pink" ? "text-pink-600" : "text-stone-900";
   return (
-    <span className="inline-flex flex-col items-center leading-none">
-      <span className="text-[10px] font-medium text-stone-500 md:text-xs">
+    <span className="inline-flex flex-col leading-none">
+      <span className={`self-start text-sm font-semibold md:text-base ${colour}`}>
         {fmtDayNameID(iso)}
       </span>
-      <span
-        className={`mt-1 whitespace-nowrap text-xl font-bold md:text-2xl ${
-          accent === "pink" ? "text-pink-600" : "text-stone-900"
-        }`}
-      >
+      <span className={`mt-0.5 whitespace-nowrap text-2xl font-bold md:text-3xl ${colour}`}>
         {fmtDayMonthID(iso)}
       </span>
-      <span className="mt-0.5 text-[10px] font-medium text-stone-400 md:text-xs">
+      <span className="-mt-1 self-end text-[10px] font-medium text-stone-400 md:text-xs">
         {fmtYearID(iso)}
       </span>
     </span>
@@ -2482,13 +2479,13 @@ function DateStack({
       <DayDateBlock iso={fromIso} accent="pink" />
       {isRange && (
         <>
-          <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
+          <span aria-hidden="true" className="h-12 w-px bg-stone-300" />
           <DayDateBlock iso={toIso!} accent="dark" />
           {typeof nights === "number" && nights > 0 && (
             <>
-              <span aria-hidden="true" className="h-10 w-px bg-stone-300" />
-              <span className="inline-flex items-center gap-1.5">
-                <span className="text-xl font-bold text-stone-800 md:text-2xl">{nights}</span>
+              <span aria-hidden="true" className="h-12 w-px bg-stone-300" />
+              <span className="inline-flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold text-stone-800 md:text-3xl">{nights}</span>
                 <span className="text-[10px] font-medium text-stone-400 md:text-xs">Malam</span>
               </span>
             </>
@@ -2501,7 +2498,7 @@ function DateStack({
           src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[180%] w-[115%] -translate-x-1/2 -translate-y-1/2 select-none"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-[220%] w-[125%] -translate-x-1/2 -translate-y-1/2 select-none"
         />
       )}
     </span>
