@@ -318,7 +318,7 @@ export async function runMultiAgentOrchestration(
   }
 
   // 4. Classify intent
-  const classified = await classifyIntent(lastUserMsg, input.toolCtx.supabaseAdmin);
+  const classified = await classifyIntent(lastUserMsg, input.toolCtx.supabaseAdmin, input.llmConfig);
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,

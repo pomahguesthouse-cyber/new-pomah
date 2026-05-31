@@ -52,7 +52,7 @@ INSERT INTO public.ai_intent_rules (category, patterns, weight) VALUES
   ('availability_check', ARRAY[
     '\b(ada kamar|kamar (ada|kosong|tersedia)|masih ada kamar|kamar masih)\b',
     '\b(tersedia|ketersediaan|available|availability)\b',
-    '\b(cek kamar|lihat kamar|kamar untuk)\b',
+    '\b(cek kamar)\b',
     '\b(masih ada|ada kosong|ada yang kosong|masih tersedia)\b',
     '\btanggal\b.*\b(masih|ada|kosong)\b'
   ], 6),
@@ -60,7 +60,8 @@ INSERT INTO public.ai_intent_rules (category, patterns, weight) VALUES
     '\b(pesan|booking|reservasi|book|reserve|mau (pesan|booking|menginap|nginap))\b',
     '\b(check[ -]?in|check[ -]?out|checkin|checkout)\b',
     '\b(menginap|nginap|mau (malam|tidur) di|ingin menginap)\b',
-    '\b(untuk (berapa malam|tanggal|besok|lusa|akhir pekan|weekend|malam ini))\b'
+    '\b(untuk (berapa malam|tanggal|besok|lusa|akhir pekan|weekend|malam ini))\b',
+    '\b(lihat kamar|kamar untuk)\b'
   ], 5),
   ('greeting', ARRAY[
     '^(halo|hai|hi|hey|hello|hei|assalam|selamat (pagi|siang|sore|malam)|pagi|siang|sore|malam)\b',

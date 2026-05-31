@@ -91,7 +91,7 @@ const RULES: IntentRule[] = [
     patterns: [
       /\b(ada kamar|kamar (ada|kosong|tersedia)|masih ada kamar|kamar masih)\b/i,
       /\b(tersedia|ketersediaan|available|availability)\b/i,
-      /\b(cek kamar|lihat kamar|kamar untuk)\b/i,
+      /\b(cek kamar)\b/i,
       /\b(masih ada|ada kosong|ada yang kosong|masih tersedia)\b/i,
       /\btanggal\b.*\b(masih|ada|kosong)\b/i,
     ],
@@ -106,6 +106,7 @@ const RULES: IntentRule[] = [
       /\b(check[ -]?in|check[ -]?out|checkin|checkout)\b/i,
       /\b(menginap|nginap|mau (malam|tidur) di|ingin menginap)\b/i,
       /\b(untuk (berapa malam|tanggal|besok|lusa|akhir pekan|weekend|malam ini))\b/i,
+      /\b(lihat kamar|kamar untuk)\b/i,
     ],
   },
 
@@ -147,7 +148,8 @@ export function clearIntentRulesCache(): void {
  */
 export async function classifyIntent(
   text: string,
-  supabase?: SupabaseClient
+  supabase?: SupabaseClient,
+  llmConfig?: { apiKey: string; baseUrl: string; model: string }
 ): Promise<ClassifiedIntent> {
   let activeRules = RULES;
 
@@ -220,10 +222,6 @@ export async function classifyIntent(
     }
   }
 
-  if (scores.size === 0) {
-    return { category: "general", confidence: 0.4, matchedTerms: [] };
-  }
-
   // Pick highest score
   let best:      IntentCategory = "general";
   let bestScore  = 0;
@@ -240,9 +238,89 @@ export async function classifyIntent(
   // Normalise confidence: ratio of best score to total (capped at 0.95)
   const confidence = Math.min(0.95, bestScore / Math.max(totalScore, 1));
 
-  return {
-    category:     best,
-    confidence,
-    matchedTerms: matched.get(best) ?? [],
+  const ruleResult = {
+    category:     scores.size === 0 ? ("general" as IntentCategory) : best,
+    confidence:   scores.size === 0 ? 0.4 : confidence,
+    matchedTerms: scores.size === 0 ? [] : (matched.get(best) ?? []),
   };
+
+  // Trigger LLM Fallback if ambiguous or general and llmConfig is present
+  const isAmbiguous = ruleResult.category === "general" || ruleResult.confidence < 0.70;
+  if (isAmbiguous && llmConfig?.apiKey) {
+    try {
+      const res = await fetch(`${llmConfig.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${llmConfig.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: llmConfig.model,
+          temperature: 0,
+          max_tokens: 80,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Anda adalah asisten pengklasifikasi intent percakapan tamu hotel. " +
+                "Klasifikasikan pesan tamu ke salah satu kategori intent berikut:\n" +
+                "- greeting (salam, halo)\n" +
+                "- booking_inquiry (tanya kamar, cara pesan, mau booking)\n" +
+                "- availability_check (ketersediaan/ada kamar kosong atau tidak)\n" +
+                "- pricing_inquiry (tanya harga, tarif, diskon, promo)\n" +
+                "- customer-care (layanan kamar, minta handuk/bantal/bersih kamar)\n" +
+                "- maintenance (kerusakan fasilitas: AC mati, kran bocor, wifi lambat)\n" +
+                "- payment (metode transfer, bukti bayar, tagihan, invoice)\n" +
+                "- complaint (keluhan tamu, pelayanan buruk, kecewa)\n" +
+                "- general (pertanyaan umum/lain-lain)\n\n" +
+                "Balas HANYA dengan objek JSON tanpa penjelasan lain, contoh format:\n" +
+                "{\"category\": \"booking_inquiry\", \"confidence\": 0.95}"
+            },
+            {
+              role: "user",
+              content: `Pesan tamu: "${text}"`
+            }
+          ]
+        }),
+      });
+
+      if (res.ok) {
+        const rawBody = await res.text();
+        const json = JSON.parse(rawBody);
+        const content = json.choices?.[0]?.message?.content ?? "";
+        const match = content.match(/\{[\s\S]*\}/);
+        if (match) {
+          const parsed = JSON.parse(match[0]);
+          if (parsed.category && typeof parsed.confidence === "number") {
+            const category = parsed.category.toLowerCase().trim();
+            const VALID_CATEGORIES: IntentCategory[] = [
+              "greeting",
+              "booking_inquiry",
+              "availability_check",
+              "pricing_inquiry",
+              "customer-care",
+              "maintenance",
+              "payment",
+              "complaint",
+              "general"
+            ];
+            if (VALID_CATEGORIES.includes(category as IntentCategory)) {
+              console.info(`[classifyIntent] LLM Fallback Success: mapped "${text}" to "${category}" (confidence: ${parsed.confidence})`);
+              return {
+                category: category as IntentCategory,
+                confidence: Math.max(0, Math.min(0.95, parsed.confidence)),
+                matchedTerms: ["llm-fallback"]
+              };
+            }
+          }
+        }
+      } else {
+        console.warn("[classifyIntent] LLM Fallback HTTP status error:", res.status);
+      }
+    } catch (e: any) {
+      console.warn("[classifyIntent] LLM Fallback failure, using rule-based result:", e.message);
+    }
+  }
+
+  return ruleResult;
 }
