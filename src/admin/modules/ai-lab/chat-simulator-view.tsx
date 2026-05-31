@@ -223,6 +223,7 @@ export function ChatSimulatorView() {
       elapsedMs: res.elapsedMs,
       status: res.status,
       error: res.error,
+      trainingExamplesUsed: res.trainingExamplesUsed,
     };
     return { reply: res.reply as string | null, meta };
   }
