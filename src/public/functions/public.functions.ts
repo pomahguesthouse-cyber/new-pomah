@@ -178,29 +178,46 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    let folderId: string | null = null;
+    // 1. Resolve folder IDs that match the requested folder name. Use a
+    //    LIKE-with-wildcards so "icon" matches "Icon", "ICON", "Icons", etc.
+    let folderIds: string[] = [];
     if (data.folder) {
-      const { data: folderRow } = await supabaseAdmin
+      const { data: folderRows } = await supabaseAdmin
         .from("media_folders")
-        .select("id")
-        .ilike("name", data.folder)
-        .limit(1)
-        .maybeSingle();
-      if (!folderRow) return { url: null };
-      folderId = (folderRow as { id: string }).id;
+        .select("id, name")
+        .ilike("name", `%${data.folder}%`);
+      folderIds = (folderRows ?? []).map((r: any) => r.id as string);
     }
 
-    let q = supabaseAdmin
-      .from("sop_documents")
-      .select("file_path, storage_bucket")
-      .ilike("name", data.name)
-      .limit(1);
-    if (folderId) q = q.eq("folder_id", folderId);
+    // 2. Look up the file. Try exact name first; if that fails, fall back
+    //    to a stem-only match so capitalisation / extra spaces don't matter.
+    //    If a folder filter is requested but no matching folder exists OR
+    //    the file isn't found inside, drop the folder filter as a last
+    //    resort so the asset still loads (matches the user's intent of
+    //    "use the file" without breaking on a folder typo).
+    const tryFetch = async (nameMatch: string, useFolder: boolean) => {
+      let q = supabaseAdmin
+        .from("sop_documents")
+        .select("file_path, storage_bucket, name, folder_id")
+        .ilike("name", nameMatch)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (useFolder && folderIds.length > 0) q = q.in("folder_id", folderIds);
+      const { data: r } = await q.maybeSingle();
+      return r ?? null;
+    };
 
-    const { data: row } = await q.maybeSingle();
-    if (!row || !row.file_path) return { url: null };
-    const bucket = (row.storage_bucket as string | null) || "sop-documents";
-    const url = supabaseAdmin.storage.from(bucket).getPublicUrl(row.file_path).data.publicUrl;
+    let row =
+      (await tryFetch(data.name, true)) ||
+      (await tryFetch(`%${data.name.replace(/\.[^.]+$/, "")}%`, true)) ||
+      (await tryFetch(data.name, false)) ||
+      (await tryFetch(`%${data.name.replace(/\.[^.]+$/, "")}%`, false));
+
+    if (!row || !(row as any).file_path) return { url: null };
+    const bucket = ((row as any).storage_bucket as string | null) || "sop-documents";
+    const url = supabaseAdmin.storage
+      .from(bucket)
+      .getPublicUrl((row as any).file_path).data.publicUrl;
     return { url };
   });
 
