@@ -74,6 +74,7 @@ interface TurnMeta {
   elapsedMs?: number;
   status?: string;
   error?: string | null;
+  trainingExamplesUsed?: number;
 }
 
 interface ScenarioStep {
@@ -222,6 +223,7 @@ export function ChatSimulatorView() {
       elapsedMs: res.elapsedMs,
       status: res.status,
       error: res.error,
+      trainingExamplesUsed: res.trainingExamplesUsed,
     };
     return { reply: res.reply as string | null, meta };
   }
@@ -603,6 +605,14 @@ export function ChatSimulatorView() {
               <MetaRow
                 label="Waktu"
                 value={lastMeta.elapsedMs != null ? `${lastMeta.elapsedMs} ms` : undefined}
+              />
+              <MetaRow
+                label="Training dipakai"
+                value={
+                  lastMeta.trainingExamplesUsed != null
+                    ? `${lastMeta.trainingExamplesUsed} contoh`
+                    : "—"
+                }
               />
               {lastMeta.error && <p className="text-xs text-red-600">Error: {lastMeta.error}</p>}
             </div>
