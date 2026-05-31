@@ -246,7 +246,6 @@ export function ChatSimulatorView() {
       setTranscript(imported);
       setPhone(thread.phone ?? phone);
       setLastMeta(null);
-      setResults([]);
       setEditedIndices({});
       setEditingIdx(null);
       setImportOpen(false);
