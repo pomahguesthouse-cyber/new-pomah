@@ -180,63 +180,73 @@ export const resetSimulation = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ─── Helpers transcript ─────────────────────────────────────────────────────
+
+const TranscriptMsgSchema = z.object({
+  direction: z.enum(["in", "out"]),
+  body: z.string().min(1).max(8000),
+});
+type TranscriptMsg = z.infer<typeof TranscriptMsgSchema>;
+
+function firstUserMessage(transcript: TranscriptMsg[]): string {
+  return transcript.find((m) => m.direction === "in")?.body ?? "";
+}
+
+function joinedBotResponses(transcript: TranscriptMsg[]): string {
+  return transcript
+    .filter((m) => m.direction === "out")
+    .map((m) => m.body)
+    .join("\n\n");
+}
+
+// ─── saveSimulationAsTraining (mode percakapan utuh) ────────────────────────
+
 export const saveSimulationAsTraining = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z
       .object({
-        pairs: z.array(
-          z.object({
-            userMessage: z.string().min(1).max(4000),
-            aiResponse: z.string().min(1).max(8000),
-            wasEdited: z.boolean(),
-            originalResponse: z.string().nullable().optional(),
-          })
-        ),
+        title: z.string().trim().min(1).max(120),
+        transcript: z.array(TranscriptMsgSchema).min(2),
       })
-      .parse(d)
+      .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const rows = data.pairs.map((p) => ({
-      user_message: p.userMessage,
-      ai_response: p.aiResponse,
-      rating: "good" as const,
-      used: true,
-      source: "simulator",
-      correction: p.wasEdited ? p.originalResponse : null,
-    }));
-
-    if (rows.length === 0) {
-      return { ok: true, savedCount: 0 };
+    const userMsg = firstUserMessage(data.transcript);
+    const aiResp = joinedBotResponses(data.transcript);
+    if (!userMsg || !aiResp) {
+      throw new Error("Transcript harus berisi minimal 1 pesan tamu dan 1 balasan bot");
     }
 
     const { data: inserted, error } = await context.supabase
       .from("ai_conversation_logs")
-      .insert(rows)
-      .select("id");
+      .insert({
+        title: data.title,
+        transcript: data.transcript,
+        user_message: userMsg,
+        ai_response: aiResp,
+        rating: "good" as const,
+        used: true,
+        source: "simulator",
+      })
+      .select("id")
+      .single();
     if (error) throw error;
 
-    // Embed setiap contoh yang baru disimpan agar langsung bisa diretrieve
-    // oleh chatbot di percakapan berikutnya. Embedding berjalan best-effort —
-    // kegagalan tidak menggagalkan penyimpanan training.
     try {
       const env = await buildEnv();
-      if (env.apiKey) {
-        const llmConfig = { apiKey: env.apiKey, baseUrl: env.baseUrl, model: env.model };
-        await Promise.all(
-          (inserted ?? []).map((row) =>
-            embedTrainingExample(supabaseAdmin, row.id, llmConfig).catch((e) => {
-              console.warn("[saveSimulationAsTraining] embed failed:", e);
-            }),
-          ),
-        );
+      if (env.apiKey && inserted?.id) {
+        await embedTrainingExample(supabaseAdmin, inserted.id, {
+          apiKey: env.apiKey,
+          baseUrl: env.baseUrl,
+          model: env.model,
+        });
       }
     } catch (e) {
-      console.warn("[saveSimulationAsTraining] embedding pass failed:", e);
+      console.warn("[saveSimulationAsTraining] embedding gagal:", e);
     }
 
-
-    return { ok: true, savedCount: rows.length };
+    return { ok: true, id: inserted?.id ?? null };
   });
 
 /** List training examples saved from the simulator, newest first. */
@@ -245,7 +255,7 @@ export const listSimulatorTraining = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("ai_conversation_logs")
-      .select("id, user_message, ai_response, correction, created_at")
+      .select("id, title, transcript, user_message, ai_response, correction, created_at")
       .eq("source", "simulator")
       .order("created_at", { ascending: false })
       .limit(200);
@@ -266,31 +276,38 @@ export const deleteSimulatorTraining = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Update an existing simulator training example, then re-embed. */
+/** Update title + transcript training, lalu re-embed. */
 export const updateSimulatorTraining = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z
       .object({
         id: z.string().uuid(),
-        userMessage: z.string().min(1).max(4000),
-        aiResponse: z.string().min(1).max(8000),
+        title: z.string().trim().min(1).max(120),
+        transcript: z.array(TranscriptMsgSchema).min(2),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const userMsg = firstUserMessage(data.transcript);
+    const aiResp = joinedBotResponses(data.transcript);
+    if (!userMsg || !aiResp) {
+      throw new Error("Transcript harus berisi minimal 1 pesan tamu dan 1 balasan bot");
+    }
+
     const { error } = await context.supabase
       .from("ai_conversation_logs")
       .update({
-        user_message: data.userMessage,
-        ai_response: data.aiResponse,
+        title: data.title,
+        transcript: data.transcript,
+        user_message: userMsg,
+        ai_response: aiResp,
         rating: "good",
         used: true,
       })
       .eq("id", data.id);
     if (error) throw error;
 
-    // Re-embed best-effort agar perubahan langsung dipakai chatbot
     try {
       const env = await buildEnv();
       if (env.apiKey) {
@@ -301,7 +318,7 @@ export const updateSimulatorTraining = createServerFn({ method: "POST" })
         });
       }
     } catch (e) {
-      console.warn("[updateSimulatorTraining] re-embed failed:", e);
+      console.warn("[updateSimulatorTraining] re-embed gagal:", e);
     }
     return { ok: true };
   });
@@ -312,9 +329,66 @@ export const exportSimulatorTraining = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("ai_conversation_logs")
-      .select("id, user_message, ai_response, correction, rating, used, created_at")
+      .select(
+        "id, title, transcript, user_message, ai_response, correction, rating, used, created_at",
+      )
       .eq("source", "simulator")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return { rows: data ?? [] };
   });
+
+// ─── suggestTrainingTitle ───────────────────────────────────────────────────
+
+/** Sarankan judul singkat (Bahasa Indonesia, ≤60 char) untuk transcript. */
+export const suggestTrainingTitle = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ transcript: z.array(TranscriptMsgSchema).min(1) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const fallback = (firstUserMessage(data.transcript) || "Percakapan training")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 60);
+
+    try {
+      const env = await buildEnv();
+      if (!env.apiKey) return { title: fallback };
+
+      const conv = data.transcript
+        .slice(0, 12)
+        .map((m) => `${m.direction === "in" ? "Tamu" : "Bot"}: ${m.body.slice(0, 300)}`)
+        .join("\n");
+
+      const res = await fetch(`${env.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: env.model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Beri judul singkat (maksimum 60 karakter) dalam Bahasa Indonesia yang merangkum topik percakapan berikut. Hanya kembalikan teks judul, tanpa tanda kutip, tanpa awalan.",
+            },
+            { role: "user", content: conv },
+          ],
+          temperature: 0.3,
+          max_tokens: 40,
+        }),
+      });
+      if (!res.ok) return { title: fallback };
+      const json: any = await res.json();
+      const raw: string = json?.choices?.[0]?.message?.content ?? "";
+      const cleaned = raw.replace(/^["'\s]+|["'\s]+$/g, "").slice(0, 80);
+      return { title: cleaned || fallback };
+    } catch (e) {
+      console.warn("[suggestTrainingTitle] gagal:", e);
+      return { title: fallback };
+    }
+  });
+
