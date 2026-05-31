@@ -1119,6 +1119,13 @@ function ManagerTab() {
                 <div className="text-sm text-muted-foreground">{m.phone}</div>
               </div>
               <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2" title="Aktif menerima notifikasi">
+                  <Switch
+                    checked={m.is_active ?? true}
+                    onCheckedChange={(checked) => toggleActiveMut.mutate({ id: m.id, is_active: checked })}
+                  />
+                  <span className="text-xs text-muted-foreground">{m.is_active ?? true ? "Aktif" : "Nonaktif"}</span>
+                </div>
                 <Select 
                   value={m.role} 
                   onValueChange={(v: any) => updateMut.mutate({ id: m.id, role: v })}
