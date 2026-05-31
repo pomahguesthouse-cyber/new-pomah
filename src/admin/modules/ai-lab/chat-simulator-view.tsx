@@ -704,7 +704,10 @@ export function ChatSimulatorView() {
             </Button>
           </div>
         </Card>
+        </>
+      )}
       </div>
+
 
       {/* ── Right: meta + saved training ──────────────────────────────────── */}
       <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
