@@ -1007,6 +1007,14 @@ function ManagerTab() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const toggleActiveMut = useMutation({
+    mutationFn: (v: { id: string; is_active: boolean }) => toggleActiveFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const handleAdd = () => {
     if (!property?.id) return toast.error("Data properti tidak ditemukan");
     if (!phone || !name) return toast.error("Nomor dan Nama harus diisi");
