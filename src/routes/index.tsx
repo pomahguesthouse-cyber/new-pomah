@@ -838,7 +838,14 @@ function PomahHome() {
               className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
               style={{
                 zIndex: cfg.roomCarousel.layer,
-                backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
+                // Newest wins: the per-section override from the Page Builder
+                // takes precedence over the legacy roomCarousel.bgColor field,
+                // which falls back to the historic default. Avoids the
+                // "double background" effect when both were set.
+                backgroundColor:
+                  cfg.sectionLayouts?.carousel?.backgroundColor ||
+                  cfg.roomCarousel.bgColor ||
+                  "#f3ece0",
                 backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
               }}
             >
