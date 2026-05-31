@@ -102,6 +102,9 @@ export function ChatSimulatorView() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [lastMeta, setLastMeta] = useState<TurnMeta | null>(null);
+  /** Payment-proof image attached to the next outgoing message (sim only). */
+  const [attachedImage, setAttachedImage] = useState<{ dataUrl: string; name: string } | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Inline correction on bot bubbles
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -164,11 +167,17 @@ export function ChatSimulatorView() {
 
   const origin = typeof window !== "undefined" ? window.location.origin : undefined;
 
-  async function sendOne(message: string, history: TranscriptMsg[]) {
+  async function sendOne(
+    message: string,
+    history: TranscriptMsg[],
+    imageDataUrl?: string,
+  ) {
     const cleanHistory = history
       .filter((m) => m.direction === "in" || m.direction === "out")
       .map((m) => ({ direction: m.direction, body: m.body }));
-    const res: any = await runTurn({ data: { phone, message, transcript: cleanHistory, origin } });
+    const res: any = await runTurn({
+      data: { phone, message, transcript: cleanHistory, origin, imageDataUrl },
+    });
     if (!res?.ok) {
       throw new Error(res?.error || "Gagal menjalankan simulasi");
     }
@@ -183,23 +192,58 @@ export function ChatSimulatorView() {
       trainingExamplesUsed: res.trainingExamplesUsed,
     };
     const attachment = res.attachment as { url: string; name?: string } | undefined;
-    return { reply: res.reply as string | null, meta, attachment };
+    const ocrResult = res.ocrResult as
+      | { ocr: Record<string, any>; match: Record<string, any> }
+      | null
+      | undefined;
+    return { reply: res.reply as string | null, meta, attachment, ocrResult };
   }
 
   async function handleSend() {
-    const message = input.trim();
+    const message = input.trim() || (attachedImage ? "Saya kirim bukti transfer Kak" : "");
     if (!message || sending) return;
+    const imgPayload = attachedImage;
     setInput("");
+    setAttachedImage(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
     const history = transcript;
-    const withUser = [...history, { direction: "in" as const, body: message }];
+    const userBubble: TranscriptMsg = {
+      direction: "in",
+      body: message,
+      attachment: imgPayload ? { url: imgPayload.dataUrl, name: imgPayload.name } : undefined,
+    };
+    const withUser = [...history, userBubble];
     setTranscript(withUser);
     scrollToBottom();
     setSending(true);
     try {
-      const { reply, meta, attachment } = await sendOne(message, history);
+      const { reply, meta, attachment, ocrResult } = await sendOne(
+        message,
+        history,
+        imgPayload?.dataUrl,
+      );
       setLastMeta(meta);
 
       const systemMessages: TranscriptMsg[] = [];
+      if (ocrResult) {
+        const o = ocrResult.ocr;
+        const m = ocrResult.match;
+        const nominal = o.nominal != null ? `Rp ${Number(o.nominal).toLocaleString("id-ID")}` : "-";
+        const bank = o.bank_pengirim ?? "-";
+        const matchLabel = m.status === "matched"
+          ? `cocok dengan ${m.booking_code}`
+          : m.status === "unmatched"
+          ? `tidak cocok (booking ${m.booking_code}, selisih ${m.amount_diff})`
+          : m.status === "ambiguous"
+          ? `ambigu (booking ${m.booking_code})`
+          : m.status === "no_pending_booking"
+          ? "tidak ada booking pending"
+          : m.status;
+        systemMessages.push({
+          direction: "system",
+          body: `📸 OCR: ${nominal} via ${bank} — ${matchLabel}`,
+        });
+      }
       if (meta.toolsUsed && meta.toolsUsed.length > 0) {
         meta.toolsUsed.forEach((tool) => {
           systemMessages.push({
@@ -797,6 +841,13 @@ export function ChatSimulatorView() {
                         </div>
                       ) : (
                         <>
+                          {m.direction === "in" && m.attachment?.url?.startsWith("data:image") && (
+                            <img
+                              src={m.attachment.url}
+                              alt="Bukti transfer"
+                              className="mb-2 max-h-40 rounded-md border border-emerald-700/40 object-contain bg-white/10"
+                            />
+                          )}
                           <div className="whitespace-pre-wrap break-words">{m.body}</div>
                           {m.direction === "out" && m.attachment && (
                             <a
@@ -854,26 +905,86 @@ export function ChatSimulatorView() {
           </div>
 
           {/* Composer */}
-          <div className="flex items-center gap-2 border-t border-border bg-card p-3">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Ketik pesan sebagai tamu…"
-              disabled={sending}
-            />
-            <Button onClick={handleSend} disabled={sending || !input.trim()}>
-              {sending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+          <div className="border-t border-border bg-card">
+            {attachedImage && (
+              <div className="flex items-center gap-2 px-3 pt-3">
+                <div className="relative inline-flex items-start gap-2 rounded-md border border-emerald-300 bg-emerald-50 p-1.5 pr-2">
+                  <img
+                    src={attachedImage.dataUrl}
+                    alt="preview"
+                    className="h-12 w-12 rounded object-cover border border-emerald-200"
+                  />
+                  <div className="flex flex-col text-[11px]">
+                    <span className="font-medium text-emerald-900 truncate max-w-[180px]">
+                      {attachedImage.name}
+                    </span>
+                    <span className="text-emerald-700/70">Akan dijalankan OCR + match booking</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachedImage(null);
+                      if (imageInputRef.current) imageInputRef.current.value = "";
+                    }}
+                    className="ml-1 self-start rounded p-0.5 text-emerald-700 hover:bg-emerald-100"
+                    title="Hapus lampiran"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-2 p-3">
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 4 * 1024 * 1024) {
+                    toast.error("Maksimum 4 MB");
+                    e.target.value = "";
+                    return;
+                  }
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    setAttachedImage({ dataUrl: String(reader.result), name: file.name });
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={sending}
+                title="Lampirkan bukti transfer (PNG/JPG)"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder={attachedImage ? "Tambahkan pesan (opsional)…" : "Ketik pesan sebagai tamu…"}
+                disabled={sending}
+              />
+              <Button onClick={handleSend} disabled={sending || (!input.trim() && !attachedImage)}>
+                {sending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         </Card>
         </>

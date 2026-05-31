@@ -34,6 +34,17 @@ export interface ToolContext {
    * message, preventing duplicate bookings.
    */
   idempotencyKey?: string;
+  /**
+   * Pre-computed OCR/match result for a payment proof attached to the current
+   * turn. Used by the simulator to bypass DB writes; the production webhook
+   * stores the same shape in whatsapp_messages.metadata.ocr_result so the
+   * `get_payment_proof_result` tool can fall back to a DB read when this
+   * field is absent.
+   */
+  recentOcrResult?: {
+    ocr:   Record<string, unknown>;
+    match: Record<string, unknown>;
+  };
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */
