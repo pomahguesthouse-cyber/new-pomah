@@ -141,13 +141,14 @@ const DECISION_HIERARCHY = [
   },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training" | "smart-delay" | "seo";
+type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training" | "training-rag" | "smart-delay" | "seo";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
   { key: "simulator",    label: "Simulator Bot",   icon: Bot },
   { key: "sop",          label: "Knowledge & SOP", icon: BookOpen },
   { key: "training",     label: "Training",        icon: GraduationCap },
+  { key: "training-rag", label: "RAG Settings",    icon: Sparkles },
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
   { key: "seo",          label: "SEO",             icon: Search },
 ];
