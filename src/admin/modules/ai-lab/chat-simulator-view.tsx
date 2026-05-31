@@ -30,6 +30,7 @@ import {
   Download,
   Plus,
   Sparkles,
+  Paperclip,
 } from "lucide-react";
 import {
   simulateChatTurn,
@@ -66,6 +67,8 @@ interface TranscriptMsg {
   direction: Direction;
   body: string;
   intent?: string;
+  /** Attachment the WA worker would send alongside this reply (brochure/invoice). */
+  attachment?: { url: string; name?: string };
 }
 interface TurnMeta {
   agentKey?: string;
@@ -179,7 +182,8 @@ export function ChatSimulatorView() {
       error: res.error,
       trainingExamplesUsed: res.trainingExamplesUsed,
     };
-    return { reply: res.reply as string | null, meta };
+    const attachment = res.attachment as { url: string; name?: string } | undefined;
+    return { reply: res.reply as string | null, meta, attachment };
   }
 
   async function handleSend() {
@@ -192,7 +196,7 @@ export function ChatSimulatorView() {
     scrollToBottom();
     setSending(true);
     try {
-      const { reply, meta } = await sendOne(message, history);
+      const { reply, meta, attachment } = await sendOne(message, history);
       setLastMeta(meta);
 
       const systemMessages: TranscriptMsg[] = [];
@@ -214,7 +218,11 @@ export function ChatSimulatorView() {
       }
 
       if (reply) {
-        setTranscript([...updatedWithUser, ...systemMessages, { direction: "out", body: reply }]);
+        setTranscript([
+          ...updatedWithUser,
+          ...systemMessages,
+          { direction: "out", body: reply, attachment },
+        ]);
       } else {
         setTranscript([
           ...updatedWithUser,
@@ -790,6 +798,18 @@ export function ChatSimulatorView() {
                       ) : (
                         <>
                           <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                          {m.direction === "out" && m.attachment && (
+                            <a
+                              href={m.attachment.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-amber-50 border border-amber-300 px-2 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100 transition"
+                              title="WA akan melampirkan file ini"
+                            >
+                              <Paperclip className="h-3 w-3" />
+                              {m.attachment.name ?? "Lampiran"}
+                            </a>
+                          )}
                           {m.direction === "in" && m.intent && (
                             <span className="mt-1.5 flex items-center justify-end gap-1 text-[9px] font-bold text-emerald-100 uppercase tracking-wider bg-emerald-700/50 w-fit ml-auto px-1.5 py-0.5 rounded border border-emerald-500/20 font-mono select-none">
                               Intent: {m.intent}
