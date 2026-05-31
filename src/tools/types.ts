@@ -45,6 +45,18 @@ export interface ToolContext {
     ocr:   Record<string, unknown>;
     match: Record<string, unknown>;
   };
+  /**
+   * Raw image URL/data URL of the payment-proof attached this turn. Used by
+   * `cc_payment_proof_to_admin` so it can include the image in the super-admin
+   * notification without re-querying the DB (sim has no message row).
+   */
+  recentPaymentProofImageUrl?: string;
+  /**
+   * True when running inside the AI Lab simulator. Lets tools with real-world
+   * side effects (sending WA messages to admins, etc.) safely no-op so admins
+   * can exercise the agent flow without spamming production recipients.
+   */
+  isSimulator?: boolean;
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */

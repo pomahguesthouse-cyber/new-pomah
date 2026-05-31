@@ -186,6 +186,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
         property: env.property,
         today,
         origin: data.origin,
+        isSimulator: true,
+        recentPaymentProofImageUrl: data.imageDataUrl,
         recentOcrResult: ocrResult
           ? {
               ocr:   ocrResult.ocr as unknown as Record<string, unknown>,

@@ -69,6 +69,18 @@ const FINANCE_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "cc_payment_proof_to_admin",
+      description:
+        "Teruskan (CC) bukti transfer terbaru ke super admin sebagai jejak audit. " +
+        "WAJIB dipanggil SEKALI setiap kali tamu mengirim bukti transfer, terlepas dari hasil " +
+        "OCR (matched / unmatched / ambiguous). Aman dipanggil walau webhook produksi sudah " +
+        "mengirim — di-dedupe per messageId.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "update_payment_status",
       description:
         "Update status pembayaran booking (unpaid → paid / partial) di database, supaya " +
@@ -148,13 +160,16 @@ export const financeAgent: AgentDefinition = {
         "4. JANGAN minta data ulang. Semua detail sudah di hasil tool.",
 
       "KONFIRMASI TRANSFER: Jika tamu mengirim foto/screenshot bukti transfer " +
-        "(atau bertanya apakah bukti sudah diterima), WAJIB panggil tool " +
-        "`get_payment_proof_result` lebih dulu untuk membaca hasil OCR. " +
-        "Susun balasan berdasarkan field `match.status`:\n" +
+        "(atau bertanya apakah bukti sudah diterima), WAJIB jalankan urutan ini:\n" +
+        "  Step 1. Panggil `get_payment_proof_result` untuk membaca hasil OCR.\n" +
+        "  Step 2. Panggil `cc_payment_proof_to_admin` SEKALI untuk meneruskan bukti " +
+        "       ke super admin (jejak audit). WAJIB terlepas dari match.status.\n" +
+        "  Step 3. Susun balasan ke tamu berdasarkan field `match.status` di Step 1.\n\n" +
+        "Aturan balasan per match.status:\n" +
         "- 'matched' (cocok): \n" +
-        "    1. Panggil tool `update_payment_status` dengan reference_code = match.booking_code " +
+        "    a. Panggil tool `update_payment_status` dengan reference_code = match.booking_code " +
         "       dan new_status = 'paid' untuk update status invoice menjadi LUNAS.\n" +
-        "    2. Balas tamu dengan format: 'Terima kasih Kak, transfer Rp X dari Bank Y sudah cocok " +
+        "    b. Balas tamu dengan format: 'Terima kasih Kak, transfer Rp X dari Bank Y sudah cocok " +
         "       dengan booking PMH-XXXXXX. Status invoice Anda telah kami update menjadi LUNAS. " +
         "       Silakan download ulang invoice di link berikut: [invoice_url dari hasil " +
         "       update_payment_status]'\n" +

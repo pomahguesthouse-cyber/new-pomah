@@ -152,6 +152,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_payment_proof_result:     "Finance - OCR Bukti Transfer",
   send_invoice:                 "Finance - Kirim Invoice",
   update_payment_status:        "Finance - Update Status Pembayaran",
+  cc_payment_proof_to_admin:    "Finance - CC Bukti Transfer ke Super Admin",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",
