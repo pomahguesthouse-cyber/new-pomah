@@ -487,6 +487,11 @@ export const submitCartBooking = createServerFn({ method: "POST" })
       console.error("[submitCartBooking] Notification trigger error:", notificationErr);
     }
 
+    // Notif manager (fire-and-forget).
+    void import("@/services/manager-notifier.service")
+      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
+      .catch((err) => console.warn("[submitCartBooking] notifyNewBooking gagal:", err));
+
     return {
       id: booking.id,
       reference_code: booking.reference_code,
