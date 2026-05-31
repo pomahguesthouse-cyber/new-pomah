@@ -247,39 +247,34 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Send the invoice notification (link to the confirmation page) ────────────
-  // We don't render a PDF server-side (unreliable on Cloudflare Workers); the
-  // guest gets a WhatsApp message with the confirmation-page link, which renders
-  // the invoice client-side. We hand it to the Worker's `waitUntil` — the same
-  // background mechanism the webhook and public-booking paths use — so it runs
-  // independently of the AI reply turn. Best-effort: booking success never
-  // depends on it.
-  const sendInvoice = async () => {
+  // ── Upsert the invoice record (no WhatsApp send) ────────────────────────────
+  // The Finance Agent now owns the in-chat invoice delivery via the
+  // `send_invoice` tool, so this call passes skipWhatsApp:true. We still need
+  // it to keep the `invoices` table in sync (admin reporting, snapshot,
+  // future email channel) — only the duplicate WA message is suppressed.
+  const upsertInvoiceRecord = async () => {
     try {
       const { generateAndSendInvoiceNotification } = await import(
         "@/services/invoice-notification.service"
       );
       const res = await generateAndSendInvoiceNotification({
-        supabase:  ctx.supabaseAdmin as any,
-        bookingId: booking.id,
-        origin:    ctx.origin,
+        supabase:     ctx.supabaseAdmin as any,
+        bookingId:    booking.id,
+        origin:       ctx.origin,
+        skipWhatsApp: true,
       });
       if (!res.ok) {
-        console.error(`[create_booking] invoice generation failed for ${booking.id}: ${res.error}`);
-      } else if (!res.wa_sent) {
-        console.warn(`[create_booking] invoice PDF generated but WhatsApp not sent for ${booking.id}`);
-      } else {
-        console.log(`[create_booking] invoice PDF sent for ${booking.id}`);
+        console.error(`[create_booking] invoice record upsert failed for ${booking.id}: ${res.error}`);
       }
     } catch (e) {
-      console.error(`[create_booking] invoice PDF send threw for ${booking.id}:`, e);
+      console.error(`[create_booking] invoice record upsert threw for ${booking.id}:`, e);
     }
   };
 
   const { getWaitUntil } = await import("@/lib/cf-context");
   const waitUntil = getWaitUntil();
-  if (waitUntil) waitUntil(sendInvoice());
-  else await sendInvoice();
+  if (waitUntil) waitUntil(upsertInvoiceRecord());
+  else await upsertInvoiceRecord();
 
   // Notifikasi manager (fire-and-forget, tidak memblokir balasan AI).
   const notifyManager = async () => {
