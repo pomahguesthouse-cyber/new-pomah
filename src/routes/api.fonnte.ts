@@ -55,8 +55,9 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         const { sender, message, name, fonnteId, isOutgoing, customerPhone, rawBody } = event;
+        const attachmentUrl = (event as any).attachmentUrl as string | undefined;
         const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
-        console.log("[Webhook]", { sender, customerPhone, isOutgoing, msg: message.slice(0, 60), rawBodyKeys: Object.keys(rawBody) });
+        console.log("[Webhook]", { sender, customerPhone, isOutgoing, hasAttachment: !!attachmentUrl, msg: message.slice(0, 60), rawBodyKeys: Object.keys(rawBody) });
 
         // ── 3. Handle outgoing (Fonnte webhooks our own sends + native phone sends) ──
         if (isOutgoing) {
