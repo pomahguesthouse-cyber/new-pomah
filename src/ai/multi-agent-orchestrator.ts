@@ -324,7 +324,30 @@ export async function runMultiAgentOrchestration(
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
-  // 5. Route to agent
+  // 4b. Retrieve training examples (RAG di ai_conversation_logs).
+  //     Skip saat tamu sedang di tengah pengisian data booking — di sana
+  //     jawaban harus mengikuti state machine, bukan few-shot.
+  let trainingExamples: TrainingExample[] = [];
+  let trainingBlock: string | undefined;
+  if (!input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
+    try {
+      trainingExamples = await retrieveTrainingExamples(
+        input.toolCtx.supabaseAdmin,
+        lastUserMsg,
+        input.llmConfig,
+        { matchCount: 3, minSimilarity: 0.78 },
+      );
+      if (trainingExamples.length > 0) {
+        trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
+        console.info(
+          `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
+            `(top sim ${trainingExamples[0].similarity.toFixed(2)})`,
+        );
+      }
+    } catch (e) {
+      console.warn("[MultiAgent] Training RAG failed (non-fatal):", e);
+    }
+  }
 
   // 5. Route to agent
   const routing = routeToAgent(classified);
@@ -357,6 +380,7 @@ export async function runMultiAgentOrchestration(
           Math.max(2, maxTurns - 2), // sub-agents get fewer turns
           undefined, // no nested delegation
           input.signal,
+          trainingBlock,
         );
 
         return result.reply
@@ -374,6 +398,7 @@ export async function runMultiAgentOrchestration(
     maxTurns,
     onAskAgent,
     input.signal,
+    trainingBlock,
   );
 
   // 6. If primary agent failed, fall back to Front Office
