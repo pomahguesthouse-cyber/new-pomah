@@ -17,6 +17,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { getBookingState, updateBookingState } from "@/ai/state-machine/booking-machine";
+import { embedTrainingExample } from "@/ai/training-rag.service";
 import { todayWIB } from "@/lib/date";
 
 // ─── Shared environment builder ────────────────────────────────────────────────
