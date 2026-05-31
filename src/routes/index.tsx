@@ -567,7 +567,9 @@ function PomahHome() {
                       ? "font-mono"
                       : cfg.datePicker.fontFamily === "sans"
                         ? "font-sans"
-                        : "font-serif"
+                        : cfg.datePicker.fontFamily === "brother-signature"
+                          ? "font-brother-signature"
+                          : "font-serif"
                   }`}
                   style={{
                     fontSize: cfg.datePicker.fontSize,
@@ -838,7 +840,14 @@ function PomahHome() {
               className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
               style={{
                 zIndex: cfg.roomCarousel.layer,
-                backgroundColor: cfg.roomCarousel.bgColor || "#f3ece0",
+                // Newest wins: the per-section override from the Page Builder
+                // takes precedence over the legacy roomCarousel.bgColor field,
+                // which falls back to the historic default. Avoids the
+                // "double background" effect when both were set.
+                backgroundColor:
+                  cfg.sectionLayouts?.carousel?.backgroundColor ||
+                  cfg.roomCarousel.bgColor ||
+                  "#f3ece0",
                 backgroundImage: cfg.roomCarousel.bgImageUrl ? `url(${cfg.roomCarousel.bgImageUrl})` : undefined,
               }}
             >
@@ -1099,7 +1108,9 @@ function PomahHome() {
                       ? "font-mono"
                       : cfg.cta.fontFamily === "sans"
                         ? "font-sans"
-                        : "font-serif"
+                        : cfg.cta.fontFamily === "brother-signature"
+                          ? "font-brother-signature"
+                          : "font-serif"
                   }`}
                   style={{
                     fontSize: cfg.cta.fontSize ? `${cfg.cta.fontSize}px` : undefined,
@@ -2520,7 +2531,7 @@ function SectionHeading({
   children: React.ReactNode;
   noUnderline?: boolean;
   normalCase?: boolean;
-  fontFamily?: "sans" | "serif" | "mono";
+  fontFamily?: "sans" | "serif" | "mono" | "brother-signature";
   fontSize?: number;
   fontStyle?: "normal" | "bold" | "italic";
   color?: string;
@@ -2530,7 +2541,9 @@ function SectionHeading({
       ? "font-mono"
       : fontFamily === "sans"
         ? "font-sans"
-        : "font-serif";
+        : fontFamily === "brother-signature"
+          ? "font-brother-signature"
+          : "font-serif";
 
   return (
     <div className="flex flex-col items-center">

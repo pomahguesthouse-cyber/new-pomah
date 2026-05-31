@@ -535,12 +535,12 @@ function FontStyleFields({
   onStyleChange,
   onSizeChange,
 }: {
-  family: "sans" | "serif" | "mono";
+  family: "sans" | "serif" | "mono" | "brother-signature";
   style: "normal" | "bold" | "italic";
   size: number;
   minSize?: number;
   maxSize?: number;
-  onFamilyChange: (f: "sans" | "serif" | "mono") => void;
+  onFamilyChange: (f: "sans" | "serif" | "mono" | "brother-signature") => void;
   onStyleChange: (s: "normal" | "bold" | "italic") => void;
   onSizeChange: (s: number) => void;
 }) {
@@ -556,6 +556,7 @@ function FontStyleFields({
           <option value="sans">Sans-serif</option>
           <option value="serif">Serif</option>
           <option value="mono">Monospace</option>
+          <option value="brother-signature">Brother Signature ✍️</option>
         </select>
         <select
           value={style}

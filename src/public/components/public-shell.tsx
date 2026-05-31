@@ -313,6 +313,11 @@ export function PbZone({
     backgroundColor?: string;
   };
 }) {
+  // NOTE: backgroundColor is intentionally NOT applied here on the wrapper —
+  // sections render their own background, and applying it on the wrapper too
+  // produced a visible double-paint when the user changed colours. The
+  // section render reads `cfg.sectionLayouts?.<id>?.backgroundColor` itself
+  // so the new colour wins as a single source of truth.
   const style: React.CSSProperties | undefined = layout
     ? {
         ...(typeof layout.paddingTop === "number" ? { paddingTop: `${layout.paddingTop}px` } : {}),
@@ -320,7 +325,6 @@ export function PbZone({
           ? { paddingBottom: `${layout.paddingBottom}px` }
           : {}),
         ...(layout.textAlign ? { textAlign: layout.textAlign } : {}),
-        ...(layout.backgroundColor ? { backgroundColor: layout.backgroundColor } : {}),
       }
     : undefined;
   if (!pb.isBuilder) {

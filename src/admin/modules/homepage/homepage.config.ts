@@ -106,7 +106,7 @@ export interface HomepageConfig {
     /** Stacking order (CSS z-index) of the section. */
     layer: number;
     /** Heading font family (tipe). */
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     /** Heading font size in pixels (Desktop). */
     fontSize: number;
     /** Heading font size in pixels (Mobile). */
@@ -125,7 +125,7 @@ export interface HomepageConfig {
     height: number;
     transition: "fade" | "slide" | "zoom" | "none";
     layer: number;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontSizeMobile?: number;
     fontStyle: "normal" | "bold" | "italic";
@@ -140,7 +140,7 @@ export interface HomepageConfig {
     /** Optional logo displayed inside the date picker bar. */
     logoUrl?: string;
     /** Heading font family. */
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     /** Heading font size in pixels. */
     fontSize: number;
     /** Heading font style. */
@@ -151,7 +151,7 @@ export interface HomepageConfig {
   };
   badges: {
     heading: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
@@ -160,14 +160,14 @@ export interface HomepageConfig {
   story: {
     heading: string;
     paragraphs: string[];
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
   };
   reviews: {
     heading: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
@@ -182,7 +182,7 @@ export interface HomepageConfig {
     layer: number;
     bgColor?: string;
     bgImageUrl?: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
@@ -193,7 +193,7 @@ export interface HomepageConfig {
     /** Title of the "nearby places" card. */
     nearbyTitle: string;
     nearby: { name: string; type: string; distance: string; time: string }[];
-    fontFamily?: "sans" | "serif" | "mono";
+    fontFamily?: "sans" | "serif" | "mono" | "brother-signature";
     fontSize?: number;
     fontStyle?: "normal" | "bold" | "italic";
     color?: string;
@@ -201,7 +201,7 @@ export interface HomepageConfig {
   facilities: {
     heading: string;
     subheading: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
@@ -209,14 +209,14 @@ export interface HomepageConfig {
   news: {
     heading: string;
     subheading: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
   };
   cta: {
     heading: string;
-    fontFamily: "sans" | "serif" | "mono";
+    fontFamily: "sans" | "serif" | "mono" | "brother-signature";
     fontSize: number;
     fontStyle: "normal" | "bold" | "italic";
     color?: string;
