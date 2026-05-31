@@ -74,67 +74,6 @@ interface TurnMeta {
   trainingExamplesUsed?: number;
 }
 
-interface ScenarioStep {
-  send: string;
-  expectTool?: string;
-  expectReply?: string;
-  expectState?: string;
-}
-interface Scenario {
-  key: string;
-  name: string;
-  desc: string;
-  steps: ScenarioStep[];
-}
-
-interface StepResult {
-  step: ScenarioStep;
-  reply: string | null;
-  meta: TurnMeta;
-  passed: boolean;
-  checks: { label: string; ok: boolean }[];
-}
-
-// ─── Predefined scenarios ─────────────────────────────────────────────────────
-
-const SCENARIOS: Scenario[] = [
-  {
-    key: "happy-path",
-    name: "Booking — alur lengkap",
-    desc: "Sapaan → cek kamar → pilih → konfirmasi nama & nomor → buat booking.",
-    steps: [
-      { send: "halo" },
-      { send: "mau pesan kamar deluxe hari ini", expectTool: "Room Availability" },
-      { send: "2 orang", expectTool: "Booking Flow", expectState: "CONFIRMING_NAME" },
-      { send: "ya", expectState: "AWAITING_EMAIL" },
-      { send: "test.simulasi@example.com", expectState: "CONFIRMING_PHONE" },
-      { send: "ya", expectState: "CONFIRMING_BOOKING" },
-      { send: "ya", expectTool: "Booking Engine", expectReply: "Kode Booking" },
-    ],
-  },
-  {
-    key: "interrupt",
-    name: "Interupsi di tengah pengisian data",
-    desc: "Tamu bertanya hal lain saat mengisi data — progres tidak hilang.",
-    steps: [
-      { send: "mau pesan kamar deluxe hari ini", expectTool: "Room Availability" },
-      { send: "2 orang", expectState: "CONFIRMING_NAME" },
-      { send: "ya", expectState: "AWAITING_EMAIL" },
-      { send: "fasilitas kamar deluxe apa saja?", expectState: "AWAITING_EMAIL" },
-      { send: "test.simulasi@example.com", expectState: "CONFIRMING_PHONE" },
-    ],
-  },
-  {
-    key: "cancel",
-    name: "Pembatalan",
-    desc: "Tamu membatalkan di tengah proses booking.",
-    steps: [
-      { send: "mau pesan kamar deluxe hari ini" },
-      { send: "2 orang", expectState: "CONFIRMING_NAME" },
-      { send: "batal", expectReply: "dibatalkan", expectState: "IDLE" },
-    ],
-  },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
