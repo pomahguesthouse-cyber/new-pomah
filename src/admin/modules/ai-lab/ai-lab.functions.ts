@@ -60,6 +60,8 @@ export interface AgentConfig {
   instructions: string;
   /** Name of the person responsible / persona name for this agent (e.g. "Rani"). */
   managerName?: string;
+  /** Public URL to an avatar photo for this agent (stored in `room-images` bucket). */
+  avatarUrl?: string;
 }
 
 /** Settings for one knowledge source / tool. */
@@ -217,6 +219,7 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
       autoReply:   a?.autoReply   ?? false,
       instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
       managerName: a?.managerName ?? "",
+      avatarUrl:   a?.avatarUrl   ?? "",
     };
   }
   const tools: Record<string, ToolConfig> = {};
