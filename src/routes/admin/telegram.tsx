@@ -26,9 +26,12 @@ import {
   getTelegramWebhookDiagnostics,
   sendTelegramTestMessage,
   resetTelegramWebhook,
+  listAgentChannels,
+  upsertAgentChannel,
+  deleteAgentChannel,
 } from "@/admin/functions/telegram.functions";
 import { toast } from "sonner";
-import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle, Activity, Zap } from "lucide-react";
+import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle, Activity, Zap, Users, Plus } from "lucide-react";
 
 export const Route = createFileRoute("/admin/telegram")({
   component: TelegramPage,
@@ -42,6 +45,9 @@ function TelegramPage() {
   const diagFn = useServerFn(getTelegramWebhookDiagnostics);
   const testFn = useServerFn(sendTelegramTestMessage);
   const resetWebhookFn = useServerFn(resetTelegramWebhook);
+  const listChFn = useServerFn(listAgentChannels);
+  const upsertChFn = useServerFn(upsertAgentChannel);
+  const deleteChFn = useServerFn(deleteAgentChannel);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -52,6 +58,30 @@ function TelegramPage() {
     queryKey: ["telegram-diagnostics"],
     queryFn: () => diagFn(),
   });
+  const { data: channelsData } = useQuery({
+    queryKey: ["telegram-agent-channels"],
+    queryFn: () => listChFn(),
+  });
+
+  const [newChannelChatId, setNewChannelChatId] = useState("");
+  const [newChannelAgent, setNewChannelAgent] = useState<string>("front-office");
+  const [newChannelLabel, setNewChannelLabel] = useState("");
+
+  async function handleAddChannel() {
+    try {
+      await upsertChFn({ data: { chat_id: newChannelChatId.trim(), agent_key: newChannelAgent as any, label: newChannelLabel.trim() || undefined } });
+      setNewChannelChatId(""); setNewChannelLabel("");
+      qc.invalidateQueries({ queryKey: ["telegram-agent-channels"] });
+      toast.success("Channel ditambahkan");
+    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
+  async function handleDeleteChannel(id: string) {
+    if (!window.confirm("Hapus channel ini?")) return;
+    try {
+      await deleteChFn({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["telegram-agent-channels"] });
+    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
   const [generatedLink, setGeneratedLink] = useState<{ id: string; link: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -273,6 +303,82 @@ function TelegramPage() {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-semibold flex items-center gap-1.5">
+          <Users className="h-4 w-4 text-sky-600" /> Channel per Agent (Group)
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Ikat satu Telegram group ke satu agent (Front Office, Pricing, Customer Care, Finance,
+          Content, Manager). Notifikasi event yang relevan akan mendarat di group itu, dan pesan
+          di group akan dijawab langsung oleh agent tersebut.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          <strong>Cara mendapatkan chat_id group:</strong> tambahkan bot ke group → kirim
+          <code className="mx-1 px-1 bg-stone-100 rounded">/start agent &lt;agent_key&gt;</code> di group itu →
+          bot akan otomatis terdaftar. Atau isi manual di form di bawah.
+        </p>
+        <div className="flex flex-wrap gap-2 items-center bg-stone-50 p-2 rounded border">
+          <select
+            className="h-9 rounded-md border bg-background px-2 text-sm"
+            value={newChannelAgent}
+            onChange={(e) => setNewChannelAgent(e.target.value)}
+          >
+            <option value="front-office">Front Office</option>
+            <option value="pricing">Pricing</option>
+            <option value="customer-care">Customer Care</option>
+            <option value="finance">Finance</option>
+            <option value="content">Content Manager</option>
+            <option value="manager">Manager</option>
+          </select>
+          <input
+            className="h-9 rounded-md border bg-background px-2 text-sm w-44"
+            placeholder="chat_id (mis. -100123…)"
+            value={newChannelChatId}
+            onChange={(e) => setNewChannelChatId(e.target.value)}
+          />
+          <input
+            className="h-9 rounded-md border bg-background px-2 text-sm flex-1 min-w-[150px]"
+            placeholder="Label (opsional)"
+            value={newChannelLabel}
+            onChange={(e) => setNewChannelLabel(e.target.value)}
+          />
+          <Button size="sm" onClick={handleAddChannel} disabled={!newChannelChatId.trim()}>
+            <Plus className="h-3 w-3 mr-1" /> Tambah
+          </Button>
+        </div>
+        {(channelsData?.channels ?? []).length === 0 ? (
+          <div className="text-xs text-muted-foreground">Belum ada channel terdaftar.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground border-b">
+              <tr>
+                <th className="text-left py-2">Agent</th>
+                <th className="text-left">Chat ID</th>
+                <th className="text-left">Label</th>
+                <th className="text-left">Type</th>
+                <th className="text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {channelsData!.channels.map((c: any) => (
+                <tr key={c.id} className="border-b last:border-0">
+                  <td className="py-1.5"><Badge variant="outline" className="text-[10px]">{c.agent_key}</Badge></td>
+                  <td><code className="text-xs">{c.chat_id}</code></td>
+                  <td>{c.label ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className="text-xs text-muted-foreground">{c.chat_type ?? "—"}</td>
+                  <td className="text-right">
+                    <Button size="sm" variant="ghost" className="h-7 text-red-600"
+                      onClick={() => handleDeleteChannel(c.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

@@ -74,6 +74,55 @@ export const sendTelegramTestMessage = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/* ---------------- Agent channels (group bindings) ---------------- */
+
+const AGENT_KEYS = ["front-office", "pricing", "customer-care", "finance", "content", "manager"] as const;
+
+export const listAgentChannels = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("telegram_agent_channels")
+      .select("id, chat_id, agent_key, chat_type, label, is_active, created_at")
+      .order("agent_key");
+    if (error) throw new Error(error.message);
+    return { channels: data ?? [] };
+  });
+
+export const upsertAgentChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      chat_id:   z.string().min(1).max(40),
+      agent_key: z.enum(AGENT_KEYS),
+      label:     z.string().max(120).optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { error } = await (supabaseAdmin as any)
+      .from("telegram_agent_channels")
+      .upsert({
+        chat_id:   data.chat_id,
+        agent_key: data.agent_key,
+        label:     data.label ?? null,
+        is_active: true,
+      }, { onConflict: "chat_id" });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const deleteAgentChannel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { error } = await (supabaseAdmin as any)
+      .from("telegram_agent_channels")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 export const resetTelegramWebhook = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
