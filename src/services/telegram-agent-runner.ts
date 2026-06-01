@@ -24,28 +24,49 @@ interface RunArgs {
   agentCtx:    AgentContext;
   toolCtx:     ToolContext;
   llmConfig:   AiClientConfig;
+  /**
+   * Prior conversation turns for this (chat, thread, agent), oldest
+   * first, WITHOUT the system prompt. Caller is responsible for
+   * trimming. Empty / undefined = cold start.
+   */
+  history?:    AiMessage[];
+}
+
+export interface AgentRunResult {
+  /** Reply text to forward to Telegram. ⚠️-prefixed on error. */
+  reply: string;
+  /**
+   * Messages produced THIS turn (user message + assistant chain +
+   * tool results). Empty when the run failed before producing a
+   * usable assistant reply — caller should not persist in that case.
+   */
+  turn: AiMessage[];
 }
 
 /**
- * Returns the agent's natural-language reply, or a SHORT human-readable
- * error string starting with "⚠️" when something blocks it (HTTP, max
- * turns, repeated tool failures). Never returns null any more — the
- * Telegram caller appends the string verbatim so the admin sees what
- * actually went wrong instead of a generic "(agent tidak menghasilkan
- * balasan)".
+ * Returns `{ reply, turn }`. `reply` is the agent's natural-language
+ * reply, or a SHORT human-readable error string starting with "⚠️" when
+ * something blocks it (HTTP, max turns, repeated tool failures). `turn`
+ * holds the new messages exchanged in this run so the caller can
+ * append them to persisted history (only when the run actually
+ * produced an assistant reply — empty on error).
  */
-export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
-  const { agentDef, messageText, agentCtx, toolCtx, llmConfig } = args;
+export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunResult> {
+  const { agentDef, messageText, agentCtx, toolCtx, llmConfig, history } = args;
+
+  const userMsg: AiMessage = { role: "user", content: messageText };
+  const turn: AiMessage[] = [userMsg];
 
   const messages: AiMessage[] = [
     { role: "system", content: agentDef.buildSystemPrompt(agentCtx) },
-    { role: "user",   content: messageText },
+    ...(history ?? []),
+    userMsg,
   ];
 
   const toolTrail: string[] = []; // for error summarising
   let lastToolError: string | null = null;
 
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
+  for (let turnNo = 0; turnNo < MAX_TURNS; turnNo++) {
     let json: LlmResponse | null = null;
     try {
       const res = await fetch(`${llmConfig.baseUrl}/chat/completions`, {
@@ -66,12 +87,15 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
       if (!res.ok) {
         const body = await res.text();
         console.error(`[TgAgentRunner][${agentDef.key}] HTTP ${res.status}`, body);
-        return `⚠️ LLM error ${res.status}. ${truncate(body, 200)}`;
+        return { reply: `⚠️ LLM error ${res.status}. ${truncate(body, 200)}`, turn: [] };
       }
       json = (await res.json()) as LlmResponse;
     } catch (e) {
       console.error(`[TgAgentRunner][${agentDef.key}] fetch error:`, e);
-      return `⚠️ Tidak bisa menghubungi LLM: ${e instanceof Error ? e.message : String(e)}`;
+      return {
+        reply: `⚠️ Tidak bisa menghubungi LLM: ${e instanceof Error ? e.message : String(e)}`,
+        turn:  [],
+      };
     }
 
     const assistantMsg = json.choices?.[0]?.message;
@@ -79,17 +103,35 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
 
     if (toolCalls.length === 0) {
       const text = (assistantMsg?.content ?? "").trim();
-      if (text) return text;
+      if (text) {
+        turn.push({ role: "assistant", content: text });
+        return { reply: text, turn };
+      }
       // Empty completion — surface what we know so admin can debug.
-      if (lastToolError) return `⚠️ Agent berhenti tanpa balasan. Tool terakhir gagal: ${lastToolError}`;
-      if (toolTrail.length > 0) return `⚠️ Agent berhenti tanpa balasan setelah tool: ${toolTrail.join(" → ")}`;
-      return "⚠️ Agent tidak menghasilkan balasan (LLM mengembalikan content kosong).";
+      if (lastToolError) {
+        return {
+          reply: `⚠️ Agent berhenti tanpa balasan. Tool terakhir gagal: ${lastToolError}`,
+          turn:  [],
+        };
+      }
+      if (toolTrail.length > 0) {
+        return {
+          reply: `⚠️ Agent berhenti tanpa balasan setelah tool: ${toolTrail.join(" → ")}`,
+          turn:  [],
+        };
+      }
+      return {
+        reply: "⚠️ Agent tidak menghasilkan balasan (LLM mengembalikan content kosong).",
+        turn:  [],
+      };
     }
 
-    messages.push(assistantMsg as AiMessage);
+    const assistantTurn = assistantMsg as AiMessage;
+    messages.push(assistantTurn);
+    turn.push(assistantTurn);
     for (const tc of toolCalls) {
       const name = tc.function?.name ?? "";
-      console.info(`[TgAgentRunner][${agentDef.key}] turn ${turn + 1}: ${name}`);
+      console.info(`[TgAgentRunner][${agentDef.key}] turn ${turnNo + 1}: ${name}`);
       const { output } = await executeTool(
         name,
         tc.function?.arguments ?? "{}",
@@ -105,14 +147,20 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
           lastToolError = null;
         }
       } catch { /* non-JSON output, ignore */ }
-      messages.push({ role: "tool", tool_call_id: tc.id, content: output });
+      const toolMsg: AiMessage = { role: "tool", tool_call_id: tc.id, content: output };
+      messages.push(toolMsg);
+      turn.push(toolMsg);
     }
   }
 
   console.warn(`[TgAgentRunner][${agentDef.key}] max turns reached after: ${toolTrail.join(" → ")}`);
-  return `⚠️ Pekerjaan terlalu panjang (lebih dari ${MAX_TURNS} langkah). ` +
-    `Tool yang sudah dijalankan: ${toolTrail.join(" → ") || "(none)"}. ` +
-    `Coba minta task yang lebih spesifik / dipecah.`;
+  return {
+    reply:
+      `⚠️ Pekerjaan terlalu panjang (lebih dari ${MAX_TURNS} langkah). ` +
+      `Tool yang sudah dijalankan: ${toolTrail.join(" → ") || "(none)"}. ` +
+      `Coba minta task yang lebih spesifik / dipecah.`,
+    turn: [],
+  };
 }
 
 function truncate(s: string, n: number): string {
