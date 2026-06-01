@@ -21,11 +21,13 @@ import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
+import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
+import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
@@ -34,13 +36,15 @@ import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
+import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
 import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
+import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/competitor-prices'
 import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
-import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
+import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
@@ -105,6 +109,11 @@ const LpSlugRoute = LpSlugRouteImport.update({
   path: '/lp/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTelegramRoute = ApiTelegramRouteImport.update({
+  id: '/api/telegram',
+  path: '/api/telegram',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
   id: '/api/queue-worker',
   path: '/api/queue-worker',
@@ -128,6 +137,11 @@ const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
 const AdminTrainingRoute = AdminTrainingRouteImport.update({
   id: '/training',
   path: '/training',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTelegramRoute = AdminTelegramRouteImport.update({
+  id: '/telegram',
+  path: '/telegram',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -170,9 +184,19 @@ const AdminExploreRoute = AdminExploreRouteImport.update({
   path: '/explore',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
+  id: '/content-manager',
+  path: '/content-manager',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminComplaintsRoute = AdminComplaintsRouteImport.update({
   id: '/complaints',
   path: '/complaints',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCompetitorPricesRoute = AdminCompetitorPricesRouteImport.update({
+  id: '/competitor-prices',
+  path: '/competitor-prices',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminCalendarRoute = AdminCalendarRouteImport.update({
@@ -195,15 +219,15 @@ const AdminAiLabRoute = AdminAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminAiRoute = AdminAiRouteImport.update({
-  id: '/ai',
-  path: '/ai',
-  getParentRoute: () => AdminRoute,
-} as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   id: '/book/confirmation/$id',
   path: '/book/confirmation/$id',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramAgentKeyRoute = ApiTelegramAgentKeyRouteImport.update({
+  id: '/$agentKey',
+  path: '/$agentKey',
+  getParentRoute: () => ApiTelegramRoute,
 } as any)
 const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   id: '/api/cron/sync-explore',
@@ -230,12 +254,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -244,11 +269,13 @@ export interface FileRoutesByFullPath {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
+  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -257,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesByTo {
@@ -266,12 +294,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -280,11 +309,13 @@ export interface FileRoutesByTo {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
+  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -293,6 +324,7 @@ export interface FileRoutesByTo {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRoutesById {
@@ -304,12 +336,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/admin/ai': typeof AdminAiRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
@@ -318,11 +351,13 @@ export interface FileRoutesById {
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
+  '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -331,6 +366,7 @@ export interface FileRoutesById {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
 export interface FileRouteTypes {
@@ -343,12 +379,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/robots.txt'
     | '/sitemap.xml'
-    | '/admin/ai'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/media'
     | '/admin/notifications'
@@ -357,11 +394,13 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
+    | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
+    | '/api/telegram'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -370,6 +409,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -379,12 +419,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/robots.txt'
     | '/sitemap.xml'
-    | '/admin/ai'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/media'
     | '/admin/notifications'
@@ -393,11 +434,13 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
+    | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
+    | '/api/telegram'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin'
@@ -406,6 +449,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   id:
     | '__root__'
@@ -416,12 +460,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/robots.txt'
     | '/sitemap.xml'
-    | '/admin/ai'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/media'
     | '/admin/notifications'
@@ -430,11 +475,13 @@ export interface FileRouteTypes {
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
+    | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
+    | '/api/telegram'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -443,6 +490,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
 }
@@ -457,6 +505,7 @@ export interface RootRouteChildren {
   ApiFonnteRoute: typeof ApiFonnteRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
+  ApiTelegramRoute: typeof ApiTelegramRouteWithChildren
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
@@ -553,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LpSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/telegram': {
+      id: '/api/telegram'
+      path: '/api/telegram'
+      fullPath: '/api/telegram'
+      preLoaderRoute: typeof ApiTelegramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/queue-worker': {
       id: '/api/queue-worker'
       path: '/api/queue-worker'
@@ -586,6 +642,13 @@ declare module '@tanstack/react-router' {
       path: '/training'
       fullPath: '/admin/training'
       preLoaderRoute: typeof AdminTrainingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/telegram': {
+      id: '/admin/telegram'
+      path: '/telegram'
+      fullPath: '/admin/telegram'
+      preLoaderRoute: typeof AdminTelegramRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -644,11 +707,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminExploreRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/content-manager': {
+      id: '/admin/content-manager'
+      path: '/content-manager'
+      fullPath: '/admin/content-manager'
+      preLoaderRoute: typeof AdminContentManagerRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/complaints': {
       id: '/admin/complaints'
       path: '/complaints'
       fullPath: '/admin/complaints'
       preLoaderRoute: typeof AdminComplaintsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/competitor-prices': {
+      id: '/admin/competitor-prices'
+      path: '/competitor-prices'
+      fullPath: '/admin/competitor-prices'
+      preLoaderRoute: typeof AdminCompetitorPricesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/calendar': {
@@ -679,19 +756,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAiLabRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/ai': {
-      id: '/admin/ai'
-      path: '/ai'
-      fullPath: '/admin/ai'
-      preLoaderRoute: typeof AdminAiRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
       path: '/book/confirmation/$id'
       fullPath: '/book/confirmation/$id'
       preLoaderRoute: typeof BookConfirmationIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/$agentKey': {
+      id: '/api/telegram/$agentKey'
+      path: '/$agentKey'
+      fullPath: '/api/telegram/$agentKey'
+      preLoaderRoute: typeof ApiTelegramAgentKeyRouteImport
+      parentRoute: typeof ApiTelegramRoute
     }
     '/api/cron/sync-explore': {
       id: '/api/cron/sync-explore'
@@ -718,12 +795,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
-  AdminAiRoute: typeof AdminAiRoute
   AdminAiLabRoute: typeof AdminAiLabRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCalendarRoute: typeof AdminCalendarRoute
+  AdminCompetitorPricesRoute: typeof AdminCompetitorPricesRoute
   AdminComplaintsRoute: typeof AdminComplaintsRoute
+  AdminContentManagerRoute: typeof AdminContentManagerRoute
   AdminExploreRoute: typeof AdminExploreRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
@@ -732,18 +810,20 @@ interface AdminRouteChildren {
   AdminRoomsRoute: typeof AdminRoomsRoute
   AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminTelegramRoute: typeof AdminTelegramRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
-  AdminAiRoute: AdminAiRoute,
   AdminAiLabRoute: AdminAiLabRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCalendarRoute: AdminCalendarRoute,
+  AdminCompetitorPricesRoute: AdminCompetitorPricesRoute,
   AdminComplaintsRoute: AdminComplaintsRoute,
+  AdminContentManagerRoute: AdminContentManagerRoute,
   AdminExploreRoute: AdminExploreRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
@@ -752,12 +832,25 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminRoomsRoute: AdminRoomsRoute,
   AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminTelegramRoute: AdminTelegramRoute,
   AdminTrainingRoute: AdminTrainingRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ApiTelegramRouteChildren {
+  ApiTelegramAgentKeyRoute: typeof ApiTelegramAgentKeyRoute
+}
+
+const ApiTelegramRouteChildren: ApiTelegramRouteChildren = {
+  ApiTelegramAgentKeyRoute: ApiTelegramAgentKeyRoute,
+}
+
+const ApiTelegramRouteWithChildren = ApiTelegramRoute._addFileChildren(
+  ApiTelegramRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -770,6 +863,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiFonnteRoute: ApiFonnteRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
+  ApiTelegramRoute: ApiTelegramRouteWithChildren,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
@@ -782,3 +876,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
