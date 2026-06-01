@@ -122,6 +122,25 @@ const CONTENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "generate_explore_image",
+      description:
+        "Generate gambar ilustrasi (cover) untuk SATU entri City Guide memakai AI image, " +
+        "lalu simpan URL-nya ke kolom image_url entri itu. Pakai setelah `upsert_explore_item` " +
+        "saat entri belum punya gambar, atau saat manajer minta dibuatkan gambar untuk event/destinasi/kuliner tertentu. " +
+        "Tidak akan menimpa gambar yang sudah ada kecuali overwrite=true.",
+      parameters: {
+        type: "object",
+        properties: {
+          id:              { type: "string", description: "UUID entri (paling akurat)." },
+          title:           { type: "string", description: "Judul entri jika tidak tahu id." },
+          overwrite:       { type: "boolean", description: "true untuk regenerate walau entri sudah punya image_url." },
+        },
+      },
+    },
+  },
 ];
 
 export const contentAgent: AgentDefinition = {
@@ -156,7 +175,9 @@ export const contentAgent: AgentDefinition = {
         "\n3. Pilih 2-5 snippet TERBAIK (relevansi tinggi, sumber resmi/jurnal kredibel, tidak duplikat dari step 1)." +
         "\n4. Untuk setiap pick: panggil `upsert_explore_item` dengan title, category, description (paraphrase), " +
         "   date_text (wajib untuk event — ekstrak dari snippet), location_text, dan publish=false." +
-        "\n5. Ringkas hasil kerja Anda di balasan akhir ke manajer: berapa item baru, kategori apa.",
+        "\n5. SETELAH upsert berhasil dan entri belum punya image_url, panggil `generate_explore_image` " +
+        "   dengan id entri (dari hasil upsert) agar kartu City Guide tidak kosong." +
+        "\n6. Ringkas hasil kerja Anda di balasan akhir ke manajer: berapa item baru, kategori apa, berapa gambar di-generate.",
 
       "ATURAN PENTING:" +
         "\n- JANGAN copy-paste mentah dari snippet — selalu paraphrase original." +

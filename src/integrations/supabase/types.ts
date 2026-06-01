@@ -319,6 +319,54 @@ export type Database = {
           },
         ]
       }
+      competitor_prices: {
+        Row: {
+          city: string
+          created_at: string
+          currency: string
+          fetched_at: string
+          hotel_name: string
+          id: string
+          notes: string | null
+          price_max: number | null
+          price_min: number | null
+          room_type: string | null
+          source_provider: string | null
+          source_url: string | null
+          star_rating: number | null
+        }
+        Insert: {
+          city?: string
+          created_at?: string
+          currency?: string
+          fetched_at?: string
+          hotel_name: string
+          id?: string
+          notes?: string | null
+          price_max?: number | null
+          price_min?: number | null
+          room_type?: string | null
+          source_provider?: string | null
+          source_url?: string | null
+          star_rating?: number | null
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          currency?: string
+          fetched_at?: string
+          hotel_name?: string
+          id?: string
+          notes?: string | null
+          price_max?: number | null
+          price_min?: number | null
+          room_type?: string | null
+          source_provider?: string | null
+          source_url?: string | null
+          star_rating?: number | null
+        }
+        Relationships: []
+      }
       explore_items: {
         Row: {
           badge: string | null
@@ -626,6 +674,7 @@ export type Database = {
         Row: {
           attachment_url: string | null
           attempts: number
+          channel: string
           created_at: string
           dedupe_key: string | null
           error: string | null
@@ -641,6 +690,7 @@ export type Database = {
         Insert: {
           attachment_url?: string | null
           attempts?: number
+          channel?: string
           created_at?: string
           dedupe_key?: string | null
           error?: string | null
@@ -656,6 +706,7 @@ export type Database = {
         Update: {
           attachment_url?: string | null
           attempts?: number
+          channel?: string
           created_at?: string
           dedupe_key?: string | null
           error?: string | null
@@ -731,6 +782,9 @@ export type Database = {
           smart_delay_config: Json | null
           tagline: string | null
           tavily_api_key: string | null
+          telegram_bot_token: string | null
+          telegram_bot_username: string | null
+          telegram_webhook_secret: string | null
           timezone: string
           updated_at: string
           whatsapp_number: string | null
@@ -771,6 +825,9 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           tavily_api_key?: string | null
+          telegram_bot_token?: string | null
+          telegram_bot_username?: string | null
+          telegram_webhook_secret?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
@@ -811,6 +868,9 @@ export type Database = {
           smart_delay_config?: Json | null
           tagline?: string | null
           tavily_api_key?: string | null
+          telegram_bot_token?: string | null
+          telegram_bot_username?: string | null
+          telegram_webhook_secret?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
@@ -826,6 +886,10 @@ export type Database = {
           phone: string
           property_id: string
           role: string
+          telegram_chat_id: string | null
+          telegram_link_token: string | null
+          telegram_linked_at: string | null
+          telegram_token_expires_at: string | null
         }
         Insert: {
           created_at?: string
@@ -835,6 +899,10 @@ export type Database = {
           phone: string
           property_id: string
           role: string
+          telegram_chat_id?: string | null
+          telegram_link_token?: string | null
+          telegram_linked_at?: string | null
+          telegram_token_expires_at?: string | null
         }
         Update: {
           created_at?: string
@@ -844,6 +912,10 @@ export type Database = {
           phone?: string
           property_id?: string
           role?: string
+          telegram_chat_id?: string | null
+          telegram_link_token?: string | null
+          telegram_linked_at?: string | null
+          telegram_token_expires_at?: string | null
         }
         Relationships: [
           {
@@ -1618,6 +1690,99 @@ export type Database = {
           },
         ]
       }
+      telegram_agent_bots: {
+        Row: {
+          agent_key: string
+          bot_token: string
+          bot_username: string | null
+          is_active: boolean
+          updated_at: string
+          webhook_secret: string | null
+          webhook_set_at: string | null
+        }
+        Insert: {
+          agent_key: string
+          bot_token: string
+          bot_username?: string | null
+          is_active?: boolean
+          updated_at?: string
+          webhook_secret?: string | null
+          webhook_set_at?: string | null
+        }
+        Update: {
+          agent_key?: string
+          bot_token?: string
+          bot_username?: string | null
+          is_active?: boolean
+          updated_at?: string
+          webhook_secret?: string | null
+          webhook_set_at?: string | null
+        }
+        Relationships: []
+      }
+      telegram_agent_channels: {
+        Row: {
+          agent_key: string
+          chat_id: string
+          chat_type: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string | null
+          message_thread_id: string | null
+        }
+        Insert: {
+          agent_key: string
+          chat_id: string
+          chat_type?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          message_thread_id?: string | null
+        }
+        Update: {
+          agent_key?: string
+          chat_id?: string
+          chat_type?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          message_thread_id?: string | null
+        }
+        Relationships: []
+      }
+      telegram_agent_conversations: {
+        Row: {
+          agent_key: string
+          chat_id: string
+          created_at: string
+          id: string
+          message_thread_id: string | null
+          messages: Json
+          updated_at: string
+        }
+        Insert: {
+          agent_key: string
+          chat_id: string
+          created_at?: string
+          id?: string
+          message_thread_id?: string | null
+          messages?: Json
+          updated_at?: string
+        }
+        Update: {
+          agent_key?: string
+          chat_id?: string
+          created_at?: string
+          id?: string
+          message_thread_id?: string | null
+          messages?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1642,20 +1807,32 @@ export type Database = {
       wa_booking_states: {
         Row: {
           context: Json
+          last_entity: Json | null
+          last_topic: string | null
           phone: string
+          slots: Json
           state: string
+          topic_updated_at: string | null
           updated_at: string
         }
         Insert: {
           context?: Json
+          last_entity?: Json | null
+          last_topic?: string | null
           phone: string
+          slots?: Json
           state?: string
+          topic_updated_at?: string | null
           updated_at?: string
         }
         Update: {
           context?: Json
+          last_entity?: Json | null
+          last_topic?: string | null
           phone?: string
+          slots?: Json
           state?: string
+          topic_updated_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -2224,6 +2401,15 @@ export type Database = {
       }
       update_booking_state: {
         Args: { p_context: Json; p_phone: string; p_state: string }
+        Returns: undefined
+      }
+      update_conversation_topic: {
+        Args: {
+          p_last_entity: Json
+          p_last_topic: string
+          p_phone: string
+          p_slots: Json
+        }
         Returns: undefined
       }
       update_thread_autoreply_meta: {
