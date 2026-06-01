@@ -370,7 +370,7 @@ export type Database = {
       explore_items: {
         Row: {
           badge: string | null
-          category: Database["public"]["Enums"]["explore_category"]
+          category: string
           created_at: string
           date_text: string | null
           description: string | null
@@ -385,7 +385,7 @@ export type Database = {
         }
         Insert: {
           badge?: string | null
-          category: Database["public"]["Enums"]["explore_category"]
+          category: string
           created_at?: string
           date_text?: string | null
           description?: string | null
@@ -400,7 +400,7 @@ export type Database = {
         }
         Update: {
           badge?: string | null
-          category?: Database["public"]["Enums"]["explore_category"]
+          category?: string
           created_at?: string
           date_text?: string | null
           description?: string | null
@@ -2490,7 +2490,6 @@ export type Database = {
         | "checked_in"
         | "checked_out"
         | "cancelled"
-      explore_category: "destination" | "culinary" | "event" | "news"
       message_direction: "in" | "out"
       payment_status: "unpaid" | "partial" | "paid"
       room_status: "clean" | "dirty" | "maintenance" | "out_of_order"
@@ -2632,7 +2631,6 @@ export const Constants = {
         "checked_out",
         "cancelled",
       ],
-      explore_category: ["destination", "culinary", "event", "news"],
       message_direction: ["in", "out"],
       payment_status: ["unpaid", "partial", "paid"],
       room_status: ["clean", "dirty", "maintenance", "out_of_order"],
