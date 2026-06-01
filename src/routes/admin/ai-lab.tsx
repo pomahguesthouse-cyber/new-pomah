@@ -473,7 +473,11 @@ function DashboardView() {
                     <img
                       src={ac.avatarUrl}
                       alt={ac.managerName || a.name}
-                      className="h-20 w-16 shrink-0 rounded-lg object-cover"
+                      className="h-24 w-20 shrink-0 rounded-lg object-cover"
+                      onError={(e) => {
+                        console.warn("[AiLab] avatar failed to load:", ac.avatarUrl);
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
                     />
                   ) : (
                     <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${a.color}`}>
@@ -864,14 +868,19 @@ function AgentAvatarUploader({
       const path = `agent-avatars/${agentKey}-${Date.now()}.${ext}`;
       const { error } = await supabase.storage
         .from("room-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (error) throw error;
+        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+      if (error) {
+        console.error("[AiLab] avatar upload error:", error);
+        toast.error(`Gagal upload: ${error.message}`);
+        return;
+      }
       const url = supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl;
+      console.info("[AiLab] avatar uploaded:", url);
       onChange(url);
-      toast.success("Foto avatar diunggah.");
+      toast.success("Foto avatar diunggah. Klik Simpan untuk menyimpan perubahan.");
     } catch (e) {
-      console.error(e);
-      toast.error("Gagal mengunggah foto.");
+      console.error("[AiLab] avatar upload exception:", e);
+      toast.error(`Gagal mengunggah foto: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -886,10 +895,11 @@ function AgentAvatarUploader({
           <img
             src={avatarUrl}
             alt="Avatar"
-            className="h-16 w-16 shrink-0 rounded-lg border border-border object-cover"
+            className="h-24 w-20 shrink-0 rounded-lg border border-border object-cover"
+            onError={() => console.warn("[AiLab] dialog avatar failed to load:", avatarUrl)}
           />
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-[10px] text-muted-foreground">
+          <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-[10px] text-muted-foreground">
             Belum ada
           </div>
         )}
