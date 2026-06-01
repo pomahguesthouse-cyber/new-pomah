@@ -551,14 +551,25 @@ export async function runMultiAgentOrchestration(
   );
 
   // Persist topic/entity/slots so the NEXT turn can resolve short follow-ups.
+  // Merge tanggal terbaru (jika tool availability/start-booking dipanggil) ke
+  // slots agar turn berikutnya tetap memakai tanggal yang sama.
+  const finalSlots: Record<string, unknown> = { ...(resolved.slots ?? {}) };
+  if (input.toolCtx.lastDates) {
+    finalSlots.checkIn  = input.toolCtx.lastDates.checkIn;
+    finalSlots.checkOut = input.toolCtx.lastDates.checkOut;
+  } else if (priorCheckIn && priorCheckOut) {
+    // Pertahankan tanggal sebelumnya kalau tool tanggal tidak dipanggil di turn ini.
+    finalSlots.checkIn  = priorCheckIn;
+    finalSlots.checkOut = priorCheckOut;
+  }
   // Fire-and-forget — failure here must not break the reply path.
-  if (resolved.topic || resolved.entity || Object.keys(resolved.slots).length) {
+  if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
     void input.toolCtx.supabasePublic
       .rpc("update_conversation_topic", {
         p_phone:       input.phone,
         p_last_topic:  resolved.topic ?? null,
         p_last_entity: resolved.entity ?? null,
-        p_slots:       resolved.slots ?? {},
+        p_slots:       finalSlots,
       })
       .then(({ error }: { error: unknown }) => {
         if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
