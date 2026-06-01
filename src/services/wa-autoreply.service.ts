@@ -41,6 +41,35 @@ const SOP_CACHE_TTL_MS = 10 * 60 * 1000;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Normalize an Indonesian phone to digits-only with 62 prefix. */
+function normalizePhone(raw: string): string {
+  let p = String(raw).replace(/\D/g, "");
+  if (p.startsWith("0")) p = "62" + p.slice(1);
+  return p;
+}
+
+/**
+ * Resolve an active property manager by their WhatsApp phone.
+ * Returns the manager row, or null if the sender is a guest.
+ * Tolerant to phone-format differences (with/without 62, leading 0, spaces).
+ */
+async function resolveManagerByPhone(
+  phone: string,
+): Promise<{ id: string; name: string; role: string; phone: string } | null> {
+  const needle = normalizePhone(phone);
+  if (!needle) return null;
+  const { data } = await (supabaseAdmin as any)
+    .from("property_managers")
+    .select("id, name, role, phone")
+    .eq("is_active", true);
+  for (const m of (data ?? []) as Array<{ id: string; name: string; role: string; phone: string | null }>) {
+    if (m.phone && normalizePhone(m.phone) === needle) {
+      return m as any;
+    }
+  }
+  return null;
+}
+
 export type AutoreplyOutcome =
   | "ok"
   | "skipped_config"
@@ -215,6 +244,14 @@ export async function executeAutoreplyForPhone(
   const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
   const messages = c.messages ?? [];
 
+  // If the sender's WhatsApp number is registered as an active property
+  // manager, run in managerial mode — same routing/tone/tool gating as the
+  // per-agent Telegram bots. Falls through to guest mode for everyone else.
+  const manager = await resolveManagerByPhone(phone);
+  if (manager) {
+    console.info(`[Autoreply] Managerial WA flow — ${manager.name} (${manager.role})`);
+  }
+
   // Single source of truth for "where does the current session start?"
   // — used both to trim history sent to the agent AND to decide whether
   // a fresh summary of the PREVIOUS session is warranted.
@@ -239,6 +276,7 @@ export async function executeAutoreplyForPhone(
     try {
       orchResult = await runMultiAgentOrchestration({
         phone,
+        isManager: !!manager,
         messages: rollingMessages,
         agentCtx: {
           property: p,
@@ -248,6 +286,8 @@ export async function executeAutoreplyForPhone(
           today: todayWIB(),
           lastMessage,
           chatSummary,
+          managerName: manager?.name,
+          mode: manager ? "managerial" : undefined,
         },
         toolCtx: {
           supabasePublic: supabasePublic as any,
