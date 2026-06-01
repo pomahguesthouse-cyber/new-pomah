@@ -175,6 +175,28 @@ function TelegramPage() {
           <b> Setup webhook</b>. Tambahkan semua bot ke satu Telegram group — anggota akan melihat
           tiap agent sebagai "speaker" terpisah.
         </p>
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-1">
+          <div className="font-semibold">⚠️ Sebelum bot bisa baca pesan biasa di group:</div>
+          <ol className="list-decimal ml-5 space-y-0.5">
+            <li>
+              Di <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="underline">@BotFather</a>
+              {" "}→ <code>/mybots</code> → pilih bot → <b>Bot Settings</b> → <b>Group Privacy</b> → <b>Turn OFF</b>.
+              Ulangi untuk SEMUA bot.
+            </li>
+            <li>
+              Kick bot dari group lalu add ulang (perubahan privacy hanya berlaku setelah re-join).
+            </li>
+            <li>
+              Di group, kirim <code>/start</code> dari bot manapun (Telegram akan
+              menampilkan pilihan bot). Tiap bot otomatis terdaftar ke agent-nya.
+            </li>
+            <li>
+              Setelah terdaftar: ajak bicara dengan <b>mention</b> (
+              <code>@rania_pomah_bot selamat pagi</code>) atau{" "}
+              <b>reply ke pesan bot</b>. Bot lain tetap diam — anti-spam.
+            </li>
+          </ol>
+        </div>
         <div className="space-y-2">
           {AGENT_LIST.map((a) => {
             const bot = botsByKey.get(a.key);
