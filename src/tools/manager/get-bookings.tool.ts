@@ -7,12 +7,19 @@ export const getBookings: ToolHandler = async (
   const status = typeof args.status === "string" ? args.status : null;
   const date = typeof args.date === "string" ? args.date : null;
   const limit = typeof args.limit === "number" ? args.limit : 10;
+  // "recent"  → urut booking yang paling baru dibuat dulu (default; ini yang
+  //             dimaksud manajer saat bilang "5 booking terakhir").
+  // "upcoming"→ urut tanggal check-in mendekat ke depan; cocok untuk
+  //             "siapa check-in besok?" / "jadwal minggu ini".
+  const sortRaw = typeof args.sort === "string" ? args.sort.toLowerCase() : "recent";
+  const sort: "recent" | "upcoming" = sortRaw === "upcoming" ? "upcoming" : "recent";
 
   let query = (ctx.supabaseAdmin as any)
     .from("bookings")
     .select(`
       id,
       reference_code,
+      created_at,
       check_in,
       check_out,
       status,
@@ -23,8 +30,13 @@ export const getBookings: ToolHandler = async (
         rooms ( number )
       )
     `)
-    .order("check_in", { ascending: true })
     .limit(limit);
+
+  if (sort === "upcoming") {
+    query = query.order("check_in", { ascending: true });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
 
   if (status) {
     query = query.eq("status", status);
@@ -43,6 +55,7 @@ export const getBookings: ToolHandler = async (
   const results = (data ?? []).map((b: any) => ({
     id: b.id,
     ref: b.reference_code,
+    created_at: b.created_at,
     check_in: b.check_in,
     check_out: b.check_out,
     status: b.status,
