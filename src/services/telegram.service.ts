@@ -35,6 +35,8 @@ interface SendOpts {
   parse_mode?: "MarkdownV2" | "HTML";
   reply_markup?: ReplyMarkup;
   disable_web_page_preview?: boolean;
+  /** Telegram Topic ID — for supergroups with Topics enabled. */
+  message_thread_id?: number | string;
 }
 
 async function call<T = any>(

@@ -64,13 +64,19 @@ function TelegramPage() {
   });
 
   const [newChannelChatId, setNewChannelChatId] = useState("");
+  const [newChannelThread, setNewChannelThread] = useState("");
   const [newChannelAgent, setNewChannelAgent] = useState<string>("front-office");
   const [newChannelLabel, setNewChannelLabel] = useState("");
 
   async function handleAddChannel() {
     try {
-      await upsertChFn({ data: { chat_id: newChannelChatId.trim(), agent_key: newChannelAgent as any, label: newChannelLabel.trim() || undefined } });
-      setNewChannelChatId(""); setNewChannelLabel("");
+      await upsertChFn({ data: {
+        chat_id: newChannelChatId.trim(),
+        agent_key: newChannelAgent as any,
+        label: newChannelLabel.trim() || undefined,
+        message_thread_id: newChannelThread.trim() || undefined,
+      }});
+      setNewChannelChatId(""); setNewChannelLabel(""); setNewChannelThread("");
       qc.invalidateQueries({ queryKey: ["telegram-agent-channels"] });
       toast.success("Channel ditambahkan");
     } catch (e: any) { toast.error(e.message ?? "Gagal"); }
@@ -313,14 +319,23 @@ function TelegramPage() {
           <Users className="h-4 w-4 text-sky-600" /> Channel per Agent (Group)
         </div>
         <p className="text-xs text-muted-foreground">
-          Ikat satu Telegram group ke satu agent (Front Office, Pricing, Customer Care, Finance,
-          Content, Manager). Notifikasi event yang relevan akan mendarat di group itu, dan pesan
-          di group akan dijawab langsung oleh agent tersebut.
+          Dua mode binding yang didukung:
         </p>
+        <ul className="text-xs text-muted-foreground list-disc ml-5 space-y-1">
+          <li>
+            <strong>Per-Group</strong>: 1 Telegram group ↔ 1 agent. Sederhana — chat_id saja.
+          </li>
+          <li>
+            <strong>Per-Topic (supergroup dengan Topics)</strong>: 1 supergroup, banyak topic
+            (thread), tiap topic ↔ 1 agent. Isi chat_id <em>+</em> message_thread_id.
+            Hotel jadi punya satu &quot;command center&quot; tunggal dengan kompartemen rapi per role.
+          </li>
+        </ul>
         <p className="text-xs text-muted-foreground">
-          <strong>Cara mendapatkan chat_id group:</strong> tambahkan bot ke group → kirim
-          <code className="mx-1 px-1 bg-stone-100 rounded">/start agent &lt;agent_key&gt;</code> di group itu →
-          bot akan otomatis terdaftar. Atau isi manual di form di bawah.
+          <strong>Cara cepat (recommended):</strong> tambahkan bot ke group/topic → kirim
+          <code className="mx-1 px-1 bg-stone-100 rounded">/start agent &lt;agent_key&gt;</code>
+          di tempat itu (root group atau dalam topic). Bot auto-detect topic dan register
+          dengan thread_id yang benar. Atau isi manual di form di bawah.
         </p>
         <div className="flex flex-wrap gap-2 items-center bg-stone-50 p-2 rounded border">
           <select
@@ -336,13 +351,20 @@ function TelegramPage() {
             <option value="manager">Manager</option>
           </select>
           <input
-            className="h-9 rounded-md border bg-background px-2 text-sm w-44"
-            placeholder="chat_id (mis. -100123…)"
+            className="h-9 rounded-md border bg-background px-2 text-sm w-40"
+            placeholder="chat_id (-100123…)"
             value={newChannelChatId}
             onChange={(e) => setNewChannelChatId(e.target.value)}
           />
           <input
-            className="h-9 rounded-md border bg-background px-2 text-sm flex-1 min-w-[150px]"
+            className="h-9 rounded-md border bg-background px-2 text-sm w-32"
+            placeholder="thread_id (opt)"
+            value={newChannelThread}
+            onChange={(e) => setNewChannelThread(e.target.value)}
+            title="Untuk Topics: ID topic di supergroup. Kosongkan untuk bind ke seluruh group."
+          />
+          <input
+            className="h-9 rounded-md border bg-background px-2 text-sm flex-1 min-w-[120px]"
             placeholder="Label (opsional)"
             value={newChannelLabel}
             onChange={(e) => setNewChannelLabel(e.target.value)}
@@ -359,6 +381,7 @@ function TelegramPage() {
               <tr>
                 <th className="text-left py-2">Agent</th>
                 <th className="text-left">Chat ID</th>
+                <th className="text-left">Topic</th>
                 <th className="text-left">Label</th>
                 <th className="text-left">Type</th>
                 <th className="text-right">Aksi</th>
@@ -369,6 +392,11 @@ function TelegramPage() {
                 <tr key={c.id} className="border-b last:border-0">
                   <td className="py-1.5"><Badge variant="outline" className="text-[10px]">{c.agent_key}</Badge></td>
                   <td><code className="text-xs">{c.chat_id}</code></td>
+                  <td>
+                    {c.message_thread_id
+                      ? <code className="text-xs bg-violet-50 text-violet-700 px-1 rounded">#{c.message_thread_id}</code>
+                      : <span className="text-xs text-muted-foreground">whole group</span>}
+                  </td>
                   <td>{c.label ?? <span className="text-muted-foreground">—</span>}</td>
                   <td className="text-xs text-muted-foreground">{c.chat_type ?? "—"}</td>
                   <td className="text-right">

@@ -55,23 +55,39 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
   const text: string = (msg.text ?? msg.caption ?? "").trim();
 
   // ── Group/supergroup messages → route to the agent bound to this chat
-  //     (telegram_agent_channels). The agent runs with isManager=true so
-  //     it bypasses guest-routing and gets full tool access.
+  //     OR to a specific topic (forum thread) within it. The agent runs
+  //     with isManager=true so it bypasses guest-routing.
   if (chatType === "group" || chatType === "supergroup" || chatType === "channel") {
+    const threadId: string | null =
+      msg.is_topic_message && msg.message_thread_id != null
+        ? String(msg.message_thread_id)
+        : null;
+
     // Allow /start to seed channel registration (admin types
-    // "/start agent <agent_key>" inside the group).
+    // "/start agent <agent_key>" inside the group or topic).
     if (text.startsWith("/start")) {
       const parts = text.split(/\s+/);
       if (parts[1] === "agent" && parts[2]) {
-        await handleAgentChannelRegister({ ...args, chatId, chatType, agentKey: parts[2], groupTitle: msg.chat?.title });
+        await handleAgentChannelRegister({
+          ...args,
+          chatId,
+          chatType,
+          agentKey:  parts[2],
+          groupTitle: msg.chat?.title,
+          threadId,
+        });
         return;
       }
       await sendMessage(botToken, chatId,
-        "Bot terdaftar di grup ini. Admin perlu mengikat grup ini ke agent tertentu via " +
-        "Admin → Telegram, ATAU ketik: /start agent <agent_key> (mis. front-office, finance, content, manager, customer-care, pricing).");
+        "Untuk mengikat tempat ini ke agent, ketik: /start agent <agent_key> " +
+        "(mis. front-office, finance, content, manager, customer-care, pricing).\n\n" +
+        (threadId
+          ? `Anda di topic ${threadId} — agent akan terikat ke topic ini saja.`
+          : "Anda di main chat — agent akan terikat ke seluruh grup."),
+        { message_thread_id: threadId ?? undefined } as any);
       return;
     }
-    await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType });
+    await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType, threadId });
     return;
   }
 
@@ -276,46 +292,81 @@ async function handleAgentChannelRegister(args: HandlerArgs & {
   chatType:   string;
   agentKey:   string;
   groupTitle: string | undefined;
+  threadId:   string | null;
 }): Promise<void> {
-  const { botToken, chatId, chatType, agentKey, groupTitle } = args;
+  const { botToken, chatId, chatType, agentKey, groupTitle, threadId } = args;
   const key = agentKey.toLowerCase();
+  const replyOpts = { message_thread_id: threadId ?? undefined } as any;
   if (!ALLOWED_AGENT_KEYS.has(key)) {
     await sendMessage(botToken, chatId,
-      `❌ Agent "${agentKey}" tidak dikenal. Pilihan: ${[...ALLOWED_AGENT_KEYS].join(", ")}.`);
+      `❌ Agent "${agentKey}" tidak dikenal. Pilihan: ${[...ALLOWED_AGENT_KEYS].join(", ")}.`,
+      replyOpts);
     return;
   }
-  const { error } = await (supabaseAdmin as any)
+  // Composite key lookup: same chat + same thread (or both NULL) → overwrite.
+  const { data: existing } = await (supabaseAdmin as any)
     .from("telegram_agent_channels")
-    .upsert({
-      chat_id:   chatId,
-      agent_key: key,
-      chat_type: chatType,
-      label:     groupTitle ?? null,
-      is_active: true,
-    }, { onConflict: "chat_id" });
+    .select("id")
+    .eq("chat_id", chatId)
+    .is("message_thread_id", threadId)
+    .maybeSingle();
+
+  const payload = {
+    chat_id:           chatId,
+    agent_key:         key,
+    chat_type:         chatType,
+    label:             groupTitle ?? null,
+    message_thread_id: threadId,
+    is_active:         true,
+  };
+
+  const op = existing?.id
+    ? (supabaseAdmin as any).from("telegram_agent_channels").update(payload).eq("id", existing.id)
+    : (supabaseAdmin as any).from("telegram_agent_channels").insert(payload);
+  const { error } = await op;
   if (error) {
-    await sendMessage(botToken, chatId, `❌ Gagal register: ${error.message}`);
+    await sendMessage(botToken, chatId, `❌ Gagal register: ${error.message}`, replyOpts);
     return;
   }
   await sendMessage(botToken, chatId,
-    `✅ Grup ini ter-bind ke agent "${key}". Semua notif untuk agent ini akan masuk ke sini, ` +
-    `dan pesan di grup ini akan dijawab langsung oleh agent tersebut.`);
+    `✅ ${threadId ? `Topic ini` : `Grup ini`} ter-bind ke agent "${key}". ` +
+    `Notif yang relevan akan masuk ke ${threadId ? "topic" : "grup"} ini, dan pesan di sini akan dijawab oleh agent tersebut.`,
+    replyOpts);
 }
 
 async function handleAgentChannelMessage(args: HandlerArgs & {
   chatId:   string;
   message:  any;
   chatType: string;
+  threadId: string | null;
 }): Promise<void> {
-  const { botToken, chatId, message } = args;
+  const { botToken, chatId, message, threadId } = args;
+  const replyOpts = { message_thread_id: threadId ?? undefined } as any;
 
-  // Lookup mapping.
-  const { data: mapping } = await (supabaseAdmin as any)
-    .from("telegram_agent_channels")
-    .select("agent_key, label")
-    .eq("chat_id", chatId)
-    .eq("is_active", true)
-    .maybeSingle();
+  // Lookup precedence: exact (chat + thread) match first, fall back to
+  // chat-wide binding (thread_id IS NULL) — supports both topic-aware
+  // supergroups and legacy whole-group bindings.
+  let mapping: { agent_key: string; label: string | null } | null = null;
+  if (threadId != null) {
+    const { data } = await (supabaseAdmin as any)
+      .from("telegram_agent_channels")
+      .select("agent_key, label")
+      .eq("chat_id", chatId)
+      .eq("message_thread_id", threadId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data) mapping = data as any;
+  }
+  if (!mapping) {
+    const { data } = await (supabaseAdmin as any)
+      .from("telegram_agent_channels")
+      .select("agent_key, label")
+      .eq("chat_id", chatId)
+      .is("message_thread_id", null)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data) mapping = data as any;
+  }
 
   if (!mapping?.agent_key) {
     // Bot is silent in unregistered groups so it doesn't spam.
@@ -381,7 +432,7 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
     llmConfig: { apiKey, baseUrl, model },
   });
 
-  await sendMessage(botToken, chatId, reply || "(agent tidak menghasilkan balasan)");
+  await sendMessage(botToken, chatId, reply || "(agent tidak menghasilkan balasan)", replyOpts);
 }
 
 async function resolveManagerByChatId(chatId: string): Promise<ManagerRow | null> {
