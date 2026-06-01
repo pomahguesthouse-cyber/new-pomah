@@ -498,7 +498,10 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
     llmConfig: { apiKey, baseUrl, model },
   });
 
-  await sendMessage(botToken, chatId, reply || "(agent tidak menghasilkan balasan)", replyOpts);
+  // runAgentInGroupChannel now always returns a non-empty string
+  // (either the agent reply or a ⚠️-prefixed diagnostic), so a bare
+  // pass-through is enough.
+  await sendMessage(botToken, chatId, reply, replyOpts);
 }
 
 // ─── Bot identity + mention gating ─────────────────────────────────────────
