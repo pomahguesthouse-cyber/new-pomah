@@ -50,8 +50,11 @@ function TelegramPage() {
   const testFn = useServerFn(sendTelegramTestMessage);
   const resetWebhookFn = useServerFn(resetTelegramWebhook);
   const listChFn = useServerFn(listAgentChannels);
-  const upsertChFn = useServerFn(upsertAgentChannel);
   const deleteChFn = useServerFn(deleteAgentChannel);
+  // upsertAgentChannel still exposed in server fns (kept for API extensibility),
+  // but the manual add form is removed — channels are populated automatically
+  // when an agent bot is /start'd in a Telegram group/topic.
+  void upsertAgentChannel;
   const listBotsFn = useServerFn(listAgentBots);
   const saveBotFn = useServerFn(saveAgentBotToken);
   const setupBotFn = useServerFn(setupAgentBotWebhook);
@@ -75,24 +78,6 @@ function TelegramPage() {
     queryFn: () => listBotsFn(),
   });
 
-  const [newChannelChatId, setNewChannelChatId] = useState("");
-  const [newChannelThread, setNewChannelThread] = useState("");
-  const [newChannelAgent, setNewChannelAgent] = useState<string>("front-office");
-  const [newChannelLabel, setNewChannelLabel] = useState("");
-
-  async function handleAddChannel() {
-    try {
-      await upsertChFn({ data: {
-        chat_id: newChannelChatId.trim(),
-        agent_key: newChannelAgent as any,
-        label: newChannelLabel.trim() || undefined,
-        message_thread_id: newChannelThread.trim() || undefined,
-      }});
-      setNewChannelChatId(""); setNewChannelLabel(""); setNewChannelThread("");
-      qc.invalidateQueries({ queryKey: ["telegram-agent-channels"] });
-      toast.success("Channel ditambahkan");
-    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
-  }
   async function handleDeleteChannel(id: string) {
     if (!window.confirm("Hapus channel ini?")) return;
     try {
@@ -430,64 +415,21 @@ function TelegramPage() {
       </Card>
 
       <Card className="p-4 space-y-3">
-        <div className="text-sm font-semibold flex items-center gap-1.5">
-          <Users className="h-4 w-4 text-sky-600" /> Channel per Agent (Group)
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-semibold flex items-center gap-1.5">
+            <Users className="h-4 w-4 text-sky-600" /> Channel per Agent (Group / Topic)
+            <Badge variant="outline" className="ml-2 text-[10px] border-emerald-300 text-emerald-700">
+              Auto-managed
+            </Badge>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Dua mode binding yang didukung:
-        </p>
-        <ul className="text-xs text-muted-foreground list-disc ml-5 space-y-1">
-          <li>
-            <strong>Per-Group</strong>: 1 Telegram group ↔ 1 agent. Sederhana — chat_id saja.
-          </li>
-          <li>
-            <strong>Per-Topic (supergroup dengan Topics)</strong>: 1 supergroup, banyak topic
-            (thread), tiap topic ↔ 1 agent. Isi chat_id <em>+</em> message_thread_id.
-            Hotel jadi punya satu &quot;command center&quot; tunggal dengan kompartemen rapi per role.
-          </li>
-        </ul>
-        <p className="text-xs text-muted-foreground">
-          <strong>Cara cepat (recommended):</strong> tambahkan bot ke group/topic → kirim
+          Daftar group / topic Telegram tempat tiap agent kirim notifikasi (booking, bukti
+          transfer, komplain). Diisi otomatis ketika bot agent di-add ke group dan diaktifkan
+          dengan{" "}
           <code className="mx-1 px-1 bg-stone-100 rounded">/start agent &lt;agent_key&gt;</code>
-          di tempat itu (root group atau dalam topic). Bot auto-detect topic dan register
-          dengan thread_id yang benar. Atau isi manual di form di bawah.
+          di group atau topic itu. Hapus row untuk unbind.
         </p>
-        <div className="flex flex-wrap gap-2 items-center bg-stone-50 p-2 rounded border">
-          <select
-            className="h-9 rounded-md border bg-background px-2 text-sm"
-            value={newChannelAgent}
-            onChange={(e) => setNewChannelAgent(e.target.value)}
-          >
-            <option value="front-office">Front Office</option>
-            <option value="pricing">Pricing</option>
-            <option value="customer-care">Customer Care</option>
-            <option value="finance">Finance</option>
-            <option value="content">Content Manager</option>
-            <option value="manager">Manager</option>
-          </select>
-          <input
-            className="h-9 rounded-md border bg-background px-2 text-sm w-40"
-            placeholder="chat_id (-100123…)"
-            value={newChannelChatId}
-            onChange={(e) => setNewChannelChatId(e.target.value)}
-          />
-          <input
-            className="h-9 rounded-md border bg-background px-2 text-sm w-32"
-            placeholder="thread_id (opt)"
-            value={newChannelThread}
-            onChange={(e) => setNewChannelThread(e.target.value)}
-            title="Untuk Topics: ID topic di supergroup. Kosongkan untuk bind ke seluruh group."
-          />
-          <input
-            className="h-9 rounded-md border bg-background px-2 text-sm flex-1 min-w-[120px]"
-            placeholder="Label (opsional)"
-            value={newChannelLabel}
-            onChange={(e) => setNewChannelLabel(e.target.value)}
-          />
-          <Button size="sm" onClick={handleAddChannel} disabled={!newChannelChatId.trim()}>
-            <Plus className="h-3 w-3 mr-1" /> Tambah
-          </Button>
-        </div>
         {(channelsData?.channels ?? []).length === 0 ? (
           <div className="text-xs text-muted-foreground">Belum ada channel terdaftar.</div>
         ) : (
