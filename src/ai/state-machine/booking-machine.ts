@@ -66,6 +66,34 @@ const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 const USE_THIS_PATTERN = /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|pake ini|betul|benar|oke|ok|sip|setuju|lanjut)\b/i;
 const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
 
+/**
+ * Looks-like-a-person-name heuristic. The state machine previously took
+ * literally any non-confirm reply as "the new name" — so when a guest in
+ * CONFIRMING_NAME typed "205/206 aja kak biar sebelahan" (actually a room
+ * preference, not a name), it stored that whole sentence as guestName.
+ *
+ * Reject candidates that:
+ *   - Contain digits, slashes, or @ (room numbers, emails, phone fragments).
+ *   - Contain typical request/filler words ("aja", "biar", "buat", "tolong",
+ *     "kalo", "yang", etc.).
+ *   - Have more than 5 whitespace-separated tokens (real names rarely do).
+ *   - End with "?" (it's a question, not a name).
+ */
+const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|kak|kakak|mba|mbak|mas|pak|bu|nya|kamar|room|wifi|ac|sarapan|breakfast)\b/i;
+
+function looksLikePersonName(candidate: string): boolean {
+  const t = candidate.trim();
+  if (t.length < 2 || t.length > 80) return false;
+  if (/[\d/@]/.test(t)) return false;          // numbers, slashes, @ → not a name
+  if (t.endsWith("?")) return false;
+  if (NON_NAME_TOKENS.test(t)) return false;
+  const tokens = t.split(/\s+/);
+  if (tokens.length > 5) return false;          // names rarely > 5 tokens
+  // Must contain at least one alphabetic word of length ≥ 2.
+  if (!tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w))) return false;
+  return true;
+}
+
 /** Display a raw WA phone (e.g. "628123...") in a friendly local format. */
 function formatPhoneDisplay(raw: string): string {
   const digits = raw.replace(/[^0-9]/g, "");
@@ -221,6 +249,16 @@ export async function processBookingState(
     if (name.length < 2) {
       return { handled: true, reply: "Maaf, nama yang dimasukkan terlalu singkat. Silakan masukkan nama lengkap Kakak:" };
     }
+    if (!looksLikePersonName(name)) {
+      // Looks like the guest typed a question or a room preference instead.
+      // Don't store the garbage as guestName — re-prompt instead.
+      return {
+        handled: true,
+        reply:
+          "Sepertinya itu belum berupa nama. Mohon ketikkan nama lengkap " +
+          "yang akan dipakai pada pemesanan ya, Kak (contoh: 'Budi Santoso').",
+      };
+    }
     // Record as a candidate name and confirm before locking it in for the booking.
     context.guestName = name;
     await updateBookingState(supabase, phone, "CONFIRMING_NAME", context);
@@ -249,6 +287,16 @@ export async function processBookingState(
     const newName = trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, "").trim();
     if (newName.length < 2) {
       return { handled: true, reply: 'Mohon balas "Ya" untuk memakai nama sebelumnya, atau ketik nama lengkap yang ingin Kakak gunakan:' };
+    }
+    if (!looksLikePersonName(newName)) {
+      // Guest sent something like "205/206 aja kak biar sebelahan" — a room
+      // preference, not a name. Don't overwrite guestName with that.
+      return {
+        handled: true,
+        reply:
+          `Sepertinya pesan tadi bukan nama. Balas "Ya" untuk memakai nama ` +
+          `"${context.guestName}", atau ketik nama lengkap baru yang ingin Kakak gunakan.`,
+      };
     }
     context.guestName = newName;
     await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
