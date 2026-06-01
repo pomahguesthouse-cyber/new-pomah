@@ -14,6 +14,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { todayWIB } from "@/lib/date";
+import { generateExploreImage } from "@/tools/content/generate-explore-image.tool";
 
 async function resolveLlm() {
   const { data: p } = await (supabaseAdmin as any)
