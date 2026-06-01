@@ -20,6 +20,7 @@
 import { createFileRoute }     from "@tanstack/react-router";
 import { supabaseAdmin }       from "@/integrations/supabase/client.server";
 import { handleTelegramUpdate } from "@/services/telegram-router";
+import { getWaitUntil }         from "@/lib/cf-context";
 
 interface TgProperty {
   id: string;
@@ -65,13 +66,31 @@ export const Route = createFileRoute("/api/telegram")({
           return new Response("bad json", { status: 400 });
         }
 
-        // Fire-and-forget so Telegram gets fast 200. Internal handler logs
-        // any failure; Telegram itself does not retry on 200.
-        void handleTelegramUpdate({
+        const updateKind =
+          update.callback_query ? "callback_query" :
+          update.message?.text ? "text" :
+          update.message?.photo ? "photo" :
+          update.message?.document ? "document" :
+          "other";
+        console.info(`[TelegramWebhook] update received (${updateKind})`);
+
+        // Cloudflare Workers will kill any async work after the response
+        // returns UNLESS we register it via ctx.waitUntil — otherwise our
+        // bot stays silent even though Telegram thinks delivery succeeded
+        // (pending_update_count stays at 0). Fall back to awaiting in
+        // non-Worker runtimes (local dev, tests).
+        const task = handleTelegramUpdate({
           update,
           botToken:   property.telegram_bot_token,
           propertyId: property.id,
         }).catch((e) => console.error("[TelegramWebhook] handler error:", e));
+
+        const waitUntil = getWaitUntil();
+        if (waitUntil) {
+          waitUntil(task);
+        } else {
+          await task;
+        }
 
         return new Response("ok", { status: 200 });
       },
