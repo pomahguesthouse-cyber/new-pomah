@@ -57,6 +57,13 @@ export interface ToolContext {
    * can exercise the agent flow without spamming production recipients.
    */
   isSimulator?: boolean;
+  /**
+   * Mutable scratchpad — tools (mis. `check_room_availability`, `start_booking_details`)
+   * mengisi tanggal menginap yang terakhir mereka pakai/sepakati. Orchestrator
+   * memersistkan ini ke slots agar turn berikutnya tetap memakai tanggal
+   * yang sama meski tamu tidak mengulang menyebut.
+   */
+  lastDates?: { checkIn: string; checkOut: string };
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */

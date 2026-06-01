@@ -72,6 +72,8 @@ export const startBookingDetails: ToolHandler = async (
     children,
   };
 
+  ctx.lastDates = { checkIn, checkOut };
+
   let state: BookingState;
   let message: string;
 
