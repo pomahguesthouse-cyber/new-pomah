@@ -382,6 +382,15 @@ export async function runMultiAgentOrchestration(
     },
     input.toolCtx.rooms,
   );
+
+  // Seed agreedDates dari slots tersimpan agar diinject ke system prompt.
+  const priorSlots = (stateRecord.slots ?? {}) as Record<string, unknown>;
+  const priorCheckIn  = typeof priorSlots.checkIn  === "string" ? priorSlots.checkIn  : undefined;
+  const priorCheckOut = typeof priorSlots.checkOut === "string" ? priorSlots.checkOut : undefined;
+  if (priorCheckIn && priorCheckOut) {
+    input.agentCtx.agreedDates = { checkIn: priorCheckIn, checkOut: priorCheckOut };
+  }
+
   const rewrite = rewriteQuery(lastUserMsg, resolved);
   if (rewrite.rewritten_applied) {
     console.info(
