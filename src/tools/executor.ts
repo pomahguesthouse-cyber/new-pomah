@@ -24,6 +24,7 @@ import { replyToGuest }                   from "./manager/reply-to-guest.tool";
 import { discoverSemarangContent }        from "./content/discover-semarang-content.tool";
 import { upsertExploreItem }              from "./content/upsert-explore-item.tool";
 import { listExploreItems }               from "./content/list-explore-items.tool";
+import { publishExploreItem, publishExploreItemsByCategory } from "./content/publish-explore-item.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
@@ -48,6 +49,8 @@ const HANDLERS: Record<string, ToolHandler> = {
   discover_semarang_content:     discoverSemarangContent,
   upsert_explore_item:           upsertExploreItem,
   list_explore_items:            listExploreItems,
+  publish_explore_item:          publishExploreItem,
+  publish_explore_items_by_category: publishExploreItemsByCategory,
   scrape_competitor_prices:      scrapeCompetitorPrices,
   get_room_specifications:       getRoomSpecifications,
 };
