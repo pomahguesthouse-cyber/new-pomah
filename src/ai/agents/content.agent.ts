@@ -66,6 +66,41 @@ const CONTENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "publish_explore_item",
+      description:
+        "Tandai SATU entri City Guide sebagai published (atau unpublished). " +
+        "Pakai ini saat manajer minta 'publish saja' — TIDAK perlu pass title/category. " +
+        "Cukup id (dari list_explore_items) atau title_substring.",
+      parameters: {
+        type: "object",
+        properties: {
+          id:              { type: "string", description: "UUID entri (paling akurat)." },
+          title_substring: { type: "string", description: "Sebagian judul jika tidak tahu id." },
+          publish:         { type: "boolean", description: "true (default) atau false untuk unpublish." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "publish_explore_items_by_category",
+      description:
+        "Publish (atau unpublish) SEMUA entri draft/published dari kategori tertentu. " +
+        "Pakai untuk task 'publish semua event' / 'publish semua kuliner draft'.",
+      parameters: {
+        type: "object",
+        properties: {
+          category: { type: "string", enum: ["event", "destinasi", "kuliner", "tips"], description: "Kategori target." },
+          publish:  { type: "boolean", description: "true (default) untuk publish drafts, false untuk unpublish semua published." },
+        },
+        required: ["category"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "upsert_explore_item",
       description:
         "Tulis/update satu entri City Guide. Default is_published=false agar admin review dulu. " +
@@ -128,6 +163,13 @@ export const contentAgent: AgentDefinition = {
         "\n- JANGAN publish (publish=true) tanpa instruksi eksplisit manajer. Default draft → admin review." +
         "\n- Untuk kategori 'event': WAJIB ada date_text. Bila tidak terdeteksi tanggal pasti, skip item itu." +
         "\n- Hindari spekulasi: jika info kurang lengkap, skip jangan dibuat-buat.",
+
+      "PUBLISH FLOW (saat manajer minta 'publish' / 'tayangkan'):" +
+        "\n- 'publish semua event' / 'tayangkan kuliner' (massal per kategori) → SATU panggilan " +
+        "  `publish_explore_items_by_category`." +
+        "\n- Publish satu entri spesifik → `publish_explore_item` dengan title_substring atau id." +
+        "\n- JANGAN pakai `upsert_explore_item` untuk SEKEDAR publish — itu wajib title+category dan " +
+        "  akan gagal kalau Anda lupa salah satu.",
 
       "Bila manajer memberi instruksi spesifik (mis. 'cari event bulan depan saja'), patuhi prioritas itu.",
     ];

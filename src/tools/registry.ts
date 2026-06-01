@@ -184,6 +184,8 @@ export const TOOL_LABELS: Record<string, string> = {
   discover_semarang_content:    "Content - Cari Konten Semarang",
   upsert_explore_item:          "Content - Tulis Entri City Guide",
   list_explore_items:           "Content - List Entri",
+  publish_explore_item:         "Content - Publish Entri",
+  publish_explore_items_by_category: "Content - Publish Massal per Kategori",
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   get_room_specifications:      "Room Specifications",
 };
