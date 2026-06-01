@@ -8,6 +8,7 @@
 import { fmtDateID, greetingWIB, clockWIB } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
+import { managerialModeOverlay } from "./managerial-mode";
 
 export const frontOfficeAgent: AgentDefinition = {
   key:         "front-office",
@@ -141,6 +142,7 @@ export const frontOfficeAgent: AgentDefinition = {
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
     ];
 
+    sections.push(managerialModeOverlay(ctx, "front-office"));
     return sections.filter(Boolean).join("\n\n");
   },
 };

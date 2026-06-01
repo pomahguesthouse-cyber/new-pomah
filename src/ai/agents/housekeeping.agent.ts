@@ -11,6 +11,7 @@
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
+import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
 
 const HOUSEKEEPING_TOOLS: ToolDefinition[] = [
@@ -145,6 +146,7 @@ export const housekeepingAgent: AgentDefinition = {
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
     ];
 
+    sections.push(managerialModeOverlay(ctx, "customer-care"));
     return sections.filter(Boolean).join("\n\n");
   },
 };

@@ -8,6 +8,7 @@
 import { fmtDateID } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
+import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
 
 // Pricing agent: availability (rates come from it) + competitor scraping
@@ -114,6 +115,7 @@ export const pricingAgent: AgentDefinition = {
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
     ];
 
+    sections.push(managerialModeOverlay(ctx, "pricing"));
     return sections.filter(Boolean).join("\n\n");
   },
 };

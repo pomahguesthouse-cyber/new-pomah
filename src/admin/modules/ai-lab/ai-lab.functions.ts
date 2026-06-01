@@ -34,8 +34,8 @@ export const AGENT_DIVISION_NAMES: Record<string, string> = {
   "front-office":  "Front Office",
   "pricing":       "Pricing",
   "customer-care": "Customer Care",
-  "maintenance":   "Maintenance",
   "finance":       "Finance",
+  "content":       "Content",
   "manager":       "Manager",
 };
 

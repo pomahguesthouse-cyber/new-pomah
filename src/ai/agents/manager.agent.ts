@@ -12,6 +12,7 @@
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
+import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 
@@ -108,6 +109,7 @@ export const managerAgent: AgentDefinition = {
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
     ];
 
+    sections.push(managerialModeOverlay(ctx, "manager"));
     return sections.filter(Boolean).join("\n\n");
   },
 };
