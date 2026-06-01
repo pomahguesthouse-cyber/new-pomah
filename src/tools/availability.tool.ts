@@ -23,6 +23,10 @@ export const checkRoomAvailability: ToolHandler = async (
   let   checkOut = isDateString(args.check_out) ? args.check_out : nextDay(checkIn);
   if (checkOut <= checkIn) checkOut = nextDay(checkIn);
 
+  // Catat tanggal yang dipakai supaya orchestrator bisa menyimpannya ke slots
+  // — turn berikutnya tidak akan kehilangan konteks tanggal.
+  ctx.lastDates = { checkIn: checkIn as string, checkOut: checkOut as string };
+
   const { data: rows } = await (ctx.supabasePublic as any).rpc(
     "room_type_availability_detail",
     { p_check_in: checkIn, p_check_out: checkOut },
