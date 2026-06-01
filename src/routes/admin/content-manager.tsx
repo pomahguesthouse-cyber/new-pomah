@@ -49,7 +49,7 @@ function ContentManagerPage() {
     queryFn: () => listFn(),
   });
 
-  const [category, setCategory] = useState<typeof CATEGORIES[number]["value"]>"event");
+  const [category, setCategory] = useState<typeof CATEGORIES[number]["value"]>("event");
   const [extra, setExtra] = useState("");
   const [running, setRunning] = useState(false);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
