@@ -638,20 +638,33 @@ function isMessageAddressedToBot(msg: any, myUsername: string | null): boolean {
   if (!myUsername) return false;
   const text: string = (msg.text ?? msg.caption ?? "");
   const lowerText = text.toLowerCase();
-  if (lowerText.includes(`@${myUsername.toLowerCase()}`)) return true;
+  const lowerUser = myUsername.toLowerCase();
+  if (lowerText.includes(`@${lowerUser}`)) return true;
 
-  // reply_to_message → if that message was sent by this bot
+  // Pemanggilan dengan nickname — buang sufiks "_pomah_bot" / "_bot" dari
+  // username bot untuk mendapatkan nama panggilan persona (mis.
+  // "rania_pomah_bot" → "rania"). Bot merespon bila pesan diawali nickname
+  // diikuti pemisah ("," ":" "." spasi) atau berupa nickname saja. Tetap
+  // mencegah echo 6-arah karena hanya nickname yang cocok yang menjawab.
+  const nickname = lowerUser.replace(/_?(pomah_)?bot$/i, "").replace(/[_-]+$/g, "");
+  if (nickname.length >= 3) {
+    const trimmed = lowerText.trim();
+    const pattern = new RegExp(`^${nickname}(?:[\\s,.:!?]|$)`);
+    if (pattern.test(trimmed)) return true;
+  }
+
+  // reply_to_message → kalau pesan tersebut dikirim oleh bot ini
   const replied = msg.reply_to_message;
-  if (replied?.from?.username && String(replied.from.username).toLowerCase() === myUsername.toLowerCase()) {
+  if (replied?.from?.username && String(replied.from.username).toLowerCase() === lowerUser) {
     return true;
   }
 
-  // text_mention entity (mention without an @username, used when admin
-  // taps the bot name in the member list)
+  // text_mention entity (mention tanpa @username, dipakai bila admin
+  // tap nama bot di daftar member)
   const entities = msg.entities ?? msg.caption_entities ?? [];
   for (const ent of entities) {
     if (ent.type === "text_mention" && ent.user?.username
-        && String(ent.user.username).toLowerCase() === myUsername.toLowerCase()) {
+        && String(ent.user.username).toLowerCase() === lowerUser) {
       return true;
     }
   }
