@@ -70,6 +70,7 @@ interface TranscriptMsg {
   direction: Direction;
   body: string;
   intent?: string;
+  agentKey?: string;
   /** Attachment the WA worker would send alongside this reply (brochure/invoice). */
   attachment?: { url: string; name?: string };
 }
@@ -998,7 +999,7 @@ export function ChatSimulatorView() {
                           )}
                           {m.direction === "out" && m.agentKey && !isEditing && (
                             <span className="mt-1.5 flex items-center justify-end gap-1 text-[9px] font-bold text-sky-700 dark:text-sky-300 uppercase tracking-wider bg-sky-100/50 dark:bg-sky-900/50 w-fit ml-auto px-1.5 py-0.5 rounded border border-sky-500/20 font-mono select-none">
-                              Agent: {aiLabConfig?.agents ? formatAgentBadge(m.agentKey, aiLabConfig.agents) : m.agentKey}
+                              Agent: {aiLabConfig?.config?.agents ? formatAgentBadge(m.agentKey, aiLabConfig.config.agents) : m.agentKey}
                             </span>
                           )}
                         </>

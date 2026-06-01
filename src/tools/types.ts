@@ -58,13 +58,12 @@ export interface ToolContext {
    */
   isSimulator?: boolean;
   /**
-   * True when the conversation is with an internal/manager user (Telegram
-   * per-agent bot, or WhatsApp number recognised as a property manager).
-   * Privileged tools (e.g. update_room_rate) check this flag and refuse to
-   * run when it's not set, so guests can't socially-engineer the agent
-   * into making admin-only changes.
+   * Mutable scratchpad — tools (mis. `check_room_availability`, `start_booking_details`)
+   * mengisi tanggal menginap yang terakhir mereka pakai/sepakati. Orchestrator
+   * memersistkan ini ke slots agar turn berikutnya tetap memakai tanggal
+   * yang sama meski tamu tidak mengulang menyebut.
    */
-  isManager?: boolean;
+  lastDates?: { checkIn: string; checkOut: string };
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */

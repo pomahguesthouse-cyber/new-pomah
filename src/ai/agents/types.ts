@@ -44,6 +44,12 @@ export interface AgentContext {
   today:    string;
   /** Summary of the previous chat session (idle > 5 min) */
   chatSummary?: string;
+  /**
+   * Tanggal menginap yang sudah disepakati di percakapan ini (dari slots).
+   * Diinject ke system prompt agar LLM tidak meng-reset ke hari ini saat
+   * tamu menulis pesan singkat tanpa menyebut ulang tanggal.
+   */
+  agreedDates?: { checkIn: string; checkOut: string };
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   chatPhone?: string;
   /**

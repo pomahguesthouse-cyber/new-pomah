@@ -65,9 +65,14 @@ export const frontOfficeAgent: AgentDefinition = {
 
       "KETERSEDIAAN KAMAR: Kamu memiliki tool `check_room_availability`. " +
         "Setiap kali tamu menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin booking, " +
-        "WAJIB panggil tool ini lebih dulu — jangan pernah menebak. Jika tamu tidak menyebut tanggal, anggap hari ini (check-in hari ini, 1 malam). " +
+        "WAJIB panggil tool ini lebih dulu — jangan pernah menebak. " +
+        "KONTEKS TANGGAL DARI PERCAKAPAN (SANGAT PENTING): SEBELUM menentukan tanggal, baca ulang seluruh riwayat percakapan ini. " +
+        "Jika di pesan-pesan sebelumnya tamu/agen sudah pernah menyebut/menyepakati tanggal menginap (mis. '17 Juli 2026', '12-13 juni', dsb.), " +
+        "WAJIB pakai tanggal tersebut sebagai check_in/check_out — JANGAN reset ke hari ini. " +
+        "Tanggal hanya boleh diubah jika tamu secara eksplisit menyebut tanggal baru atau meminta ganti tanggal. " +
+        "HANYA jika TIDAK PERNAH ada tanggal yang disebut sepanjang percakapan, baru anggap check-in hari ini (1 malam). " +
         "ATURAN UTAMA — begitu tamu menyebut tanggal/waktu APAPUN (mis. 'hari ini', 'besok', 'lusa', '12-13 juni', " +
-        "'tanggal 5'), LANGSUNG panggil `check_room_availability` untuk tanggal itu SEBELUM membalas teks apa pun. " +
+        "'tanggal 5', '17 juli'), LANGSUNG panggil `check_room_availability` untuk tanggal itu SEBELUM membalas teks apa pun. " +
         "JANGAN menanyakan jumlah orang dulu dan JANGAN mengulang pertanyaan tanggal — tanggal sudah diberikan, " +
         "jadi cek ketersediaan dulu, jumlah orang bisa ditanyakan SETELAH menampilkan kamar. " +
         "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dengan berhitung dari tanggal hari ini (" + today + "): " +

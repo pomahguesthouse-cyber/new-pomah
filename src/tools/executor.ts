@@ -25,6 +25,7 @@ import { discoverSemarangContent }        from "./content/discover-semarang-cont
 import { upsertExploreItem }              from "./content/upsert-explore-item.tool";
 import { listExploreItems }               from "./content/list-explore-items.tool";
 import { publishExploreItem, publishExploreItemsByCategory } from "./content/publish-explore-item.tool";
+import { generateExploreImage }            from "./content/generate-explore-image.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { updateRoomRate }                 from "./pricing/update-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
@@ -52,6 +53,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   list_explore_items:            listExploreItems,
   publish_explore_item:          publishExploreItem,
   publish_explore_items_by_category: publishExploreItemsByCategory,
+  generate_explore_image:        generateExploreImage,
   scrape_competitor_prices:      scrapeCompetitorPrices,
   update_room_rate:              updateRoomRate,
   get_room_specifications:       getRoomSpecifications,

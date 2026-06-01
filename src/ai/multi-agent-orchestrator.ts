@@ -124,6 +124,14 @@ async function runAgent(
     systemPrompt += `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
       `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
   }
+  if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
+    systemPrompt +=
+      `\n\nTANGGAL MENGINAP YANG SUDAH DISEPAKATI DI PERCAKAPAN INI:\n` +
+      `• check_in: ${agentCtx.agreedDates.checkIn}\n` +
+      `• check_out: ${agentCtx.agreedDates.checkOut}\n` +
+      `Selalu gunakan tanggal ini saat memanggil tool (check_room_availability, start_booking_details, dll.). ` +
+      `JANGAN reset ke hari ini. Tanggal hanya boleh berubah jika tamu eksplisit menyebut tanggal baru atau meminta mengganti tanggal.`;
+  }
 
   const messages: AiMessage[] = [
     { role: "system", content: systemPrompt },
@@ -377,6 +385,15 @@ export async function runMultiAgentOrchestration(
     },
     input.toolCtx.rooms,
   );
+
+  // Seed agreedDates dari slots tersimpan agar diinject ke system prompt.
+  const priorSlots = (stateRecord.slots ?? {}) as Record<string, unknown>;
+  const priorCheckIn  = typeof priorSlots.checkIn  === "string" ? priorSlots.checkIn  : undefined;
+  const priorCheckOut = typeof priorSlots.checkOut === "string" ? priorSlots.checkOut : undefined;
+  if (priorCheckIn && priorCheckOut) {
+    input.agentCtx.agreedDates = { checkIn: priorCheckIn, checkOut: priorCheckOut };
+  }
+
   const rewrite = rewriteQuery(lastUserMsg, resolved);
   if (rewrite.rewritten_applied) {
     console.info(
@@ -537,14 +554,25 @@ export async function runMultiAgentOrchestration(
   );
 
   // Persist topic/entity/slots so the NEXT turn can resolve short follow-ups.
+  // Merge tanggal terbaru (jika tool availability/start-booking dipanggil) ke
+  // slots agar turn berikutnya tetap memakai tanggal yang sama.
+  const finalSlots: Record<string, unknown> = { ...(resolved.slots ?? {}) };
+  if (input.toolCtx.lastDates) {
+    finalSlots.checkIn  = input.toolCtx.lastDates.checkIn;
+    finalSlots.checkOut = input.toolCtx.lastDates.checkOut;
+  } else if (priorCheckIn && priorCheckOut) {
+    // Pertahankan tanggal sebelumnya kalau tool tanggal tidak dipanggil di turn ini.
+    finalSlots.checkIn  = priorCheckIn;
+    finalSlots.checkOut = priorCheckOut;
+  }
   // Fire-and-forget — failure here must not break the reply path.
-  if (resolved.topic || resolved.entity || Object.keys(resolved.slots).length) {
+  if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
     void input.toolCtx.supabasePublic
       .rpc("update_conversation_topic", {
         p_phone:       input.phone,
         p_last_topic:  resolved.topic ?? null,
         p_last_entity: resolved.entity ?? null,
-        p_slots:       resolved.slots ?? {},
+        p_slots:       finalSlots,
       })
       .then(({ error }: { error: unknown }) => {
         if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
