@@ -51,6 +51,7 @@ import {
 } from "@/admin/modules/homepage/homepage.config";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions";
+import { getPublicExploreItems } from "@/public/functions/public.functions";
 import { BookingDialog, DEFAULT_HOTEL_POLICY, type RoomRow } from "@/routes/rooms.$slug";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DatePickerID } from "@/components/ui/date-picker";
@@ -255,66 +256,44 @@ function PomahHome() {
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
-  // News & Event — sourced from the same City Guide data as /explore.
-  const exploreCfg = mergeExploreConfig(
-    (property as { explore_config?: unknown } | null | undefined)?.explore_config,
-  );
+  // News & Event slider — sourced ENTIRELY from explore_items (where the
+  // Content Manager Agent writes its discoveries). Only is_published=true
+  // rows appear here; drafts stay invisible until admin approves them.
+  // Manual exploreCfg.events / exploreCfg.news arrays + the AI scheduler's
+  // active_public_events view are no longer used as homepage sources —
+  // single source of truth.
+  void mergeExploreConfig; // keep import side-effect free for other usages
+  void listActivePublicEvents;
 
-  // Auto-generated events from the AI scheduler (seo_generated_articles
-  // → active_public_events view). Falls back gracefully if migration not run.
-  const { data: autoEventsData } = useQuery({
-    queryKey: ["public-active-events"],
-    queryFn: () => listActivePublicEvents(),
+  const { data: cityGuideItems } = useQuery({
+    queryKey: ["public-explore-items"],
+    queryFn: () => getPublicExploreItems(),
     staleTime: 5 * 60 * 1000,
   });
-  const autoEvents = autoEventsData?.events ?? [];
 
-  const newsEvents = [
-    // 1. Manually-curated city-guide events
-    ...exploreCfg.events.map((e) => ({
-      date: e.date,
-      category: e.label || "Event",
-      title: e.title,
-      excerpt: e.desc,
-      image: e.image,
-      ts: parseIdDate(e.date),
-    })),
-    // 2. AI-generated events (auto-removed when expired by the cron worker)
-    ...autoEvents.map((e) => {
-      const startIso = e.event_start_date ?? e.event_end_date ?? "";
-      const isoDateStr = startIso
-        ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
-            day: "numeric",
-            month: "long",
-            year: "numeric",
-          })
-        : "";
-      // Prefer the AI-provided label (handles recurring/fuzzy dates like
-      // "Setiap Akhir Pekan") and fall back to formatted ISO range.
-      const dateStr = e.event_date_label || isoDateStr || "Tanggal menyusul";
+  const newsEvents = (cityGuideItems ?? [])
+    .map((it: any) => {
+      const ts = it.date_text ? parseIdDate(it.date_text) : Date.now();
+      const categoryLabel = it.badge
+        ? it.badge
+        : it.category === "event"
+        ? "Event"
+        : it.category === "destinasi"
+        ? "Destinasi"
+        : it.category === "kuliner"
+        ? "Kuliner"
+        : "Tips";
       return {
-        date: dateStr,
-        category: "Event",
-        title: e.title,
-        excerpt:
-          e.description ||
-          (e.event_location ? `${e.event_location}` : "Acara di Semarang"),
-        image: e.image_url || "",
-        ts: startIso ? new Date(startIso).getTime() : Date.now(),
+        date: it.date_text || it.location_text || "",
+        category: categoryLabel,
+        title: it.title,
+        excerpt: it.description ?? "",
+        image: it.image_url || "",
+        ts,
       };
-    }),
-    // 3. Manually-curated news
-    ...exploreCfg.news.map((n) => ({
-      date: n.date,
-      category: n.label || "Berita",
-      title: n.title,
-      excerpt: n.desc,
-      image: n.image,
-      ts: parseIdDate(n.date),
-    })),
-  ]
-    .sort((a, b) => b.ts - a.ts) // newest first
-    .slice(0, 8);
+    })
+    .sort((a: any, b: any) => b.ts - a.ts)
+    .slice(0, 12);
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {
