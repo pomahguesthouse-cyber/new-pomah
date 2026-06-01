@@ -124,6 +124,14 @@ async function runAgent(
     systemPrompt += `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
       `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
   }
+  if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
+    systemPrompt +=
+      `\n\nTANGGAL MENGINAP YANG SUDAH DISEPAKATI DI PERCAKAPAN INI:\n` +
+      `• check_in: ${agentCtx.agreedDates.checkIn}\n` +
+      `• check_out: ${agentCtx.agreedDates.checkOut}\n` +
+      `Selalu gunakan tanggal ini saat memanggil tool (check_room_availability, start_booking_details, dll.). ` +
+      `JANGAN reset ke hari ini. Tanggal hanya boleh berubah jika tamu eksplisit menyebut tanggal baru atau meminta mengganti tanggal.`;
+  }
 
   const messages: AiMessage[] = [
     { role: "system", content: systemPrompt },
