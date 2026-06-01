@@ -90,11 +90,20 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         properties: {
           status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
           payment_status: {
-            type: "string",
-            enum: ["unpaid", "partial", "paid"],
             description:
-              "Status pembayaran. 'unpaid' = belum bayar / belum lunas, 'partial' = bayar sebagian, " +
-              "'paid' = lunas. Pakai 'unpaid' untuk pertanyaan 'siapa yang belum lunas / belum bayar'.",
+              "Status pembayaran. 'unpaid' = belum bayar sama sekali, 'partial' = sudah DP / bayar " +
+              "sebagian, 'paid' = lunas. Boleh string tunggal atau array. Untuk 'siapa yang BELUM " +
+              "LUNAS' (manajer biasanya menganggap ini = belum bayar penuh, jadi termasuk DP yang " +
+              "belum dilunasi), kirim ['unpaid','partial']. Untuk 'siapa yang belum bayar sama sekali', " +
+              "kirim 'unpaid' saja.",
+            oneOf: [
+              { type: "string", enum: ["unpaid", "partial", "paid"] },
+              {
+                type: "array",
+                items: { type: "string", enum: ["unpaid", "partial", "paid"] },
+                minItems: 1,
+              },
+            ],
           },
           date: { type: "string", description: "Tanggal (YYYY-MM-DD) untuk mencari booking yang menginap di tanggal tersebut." },
           limit: { type: "number", description: "Maksimal data yang dikembalikan. Default 10." },
