@@ -15,12 +15,14 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Newspaper, Sparkles, Loader2, Eye, EyeOff, Trash2, MapPin, Calendar,
+  ImageIcon,
 } from "lucide-react";
 import {
   runContentDiscovery,
   listExploreItemsForAdmin,
   toggleExplorePublish,
   deleteExploreItem,
+  generateExploreImageFn,
 } from "@/admin/functions/content.functions";
 
 export const Route = createFileRoute("/admin/content-manager")({
@@ -39,6 +41,7 @@ function ContentManagerPage() {
   const listFn = useServerFn(listExploreItemsForAdmin);
   const toggleFn = useServerFn(toggleExplorePublish);
   const deleteFn = useServerFn(deleteExploreItem);
+  const generateImageFn = useServerFn(generateExploreImageFn);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -49,6 +52,7 @@ function ContentManagerPage() {
   const [category, setCategory] = useState<typeof CATEGORIES[number]["value"]>("event");
   const [extra, setExtra] = useState("");
   const [running, setRunning] = useState(false);
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [agentLog, setAgentLog] = useState<{ reply: string; tools: string[] } | null>(null);
 
   async function handleRun() {
@@ -80,6 +84,23 @@ function ContentManagerPage() {
       await deleteFn({ data: { id } });
       qc.invalidateQueries({ queryKey: ["explore-items-admin"] });
     } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
+
+  async function handleGenerateImage(id: string) {
+    setGeneratingIds((prev) => new Set(prev).add(id));
+    try {
+      await generateImageFn({ data: { id } });
+      qc.invalidateQueries({ queryKey: ["explore-items-admin"] });
+      toast.success("Gambar berhasil digenerate");
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal generate gambar");
+    } finally {
+      setGeneratingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   }
 
   return (
@@ -150,6 +171,18 @@ function ContentManagerPage() {
                   it.is_published ? "bg-emerald-50/50 border-emerald-200" : "bg-stone-50 border-stone-200"
                 }`}
               >
+                {it.image_url ? (
+                  <img
+                    src={it.image_url}
+                    alt={it.title}
+                    className="w-20 h-20 object-cover rounded-md border flex-shrink-0"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-md border bg-stone-100 flex items-center justify-center flex-shrink-0">
+                    <ImageIcon className="h-6 w-6 text-stone-300" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className="text-[10px] capitalize">{it.category}</Badge>
@@ -170,6 +203,22 @@ function ContentManagerPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
+                  {!it.image_url && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-indigo-600 border-indigo-200"
+                      onClick={() => handleGenerateImage(it.id)}
+                      disabled={generatingIds.has(it.id)}
+                    >
+                      {generatingIds.has(it.id) ? (
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <ImageIcon className="h-3 w-3 mr-1" />
+                      )}
+                      Generate gambar
+                    </Button>
+                  )}
                   <Button
                     size="sm" variant="outline" className="h-7"
                     onClick={() => handlePublishToggle(it.id, it.is_published)}

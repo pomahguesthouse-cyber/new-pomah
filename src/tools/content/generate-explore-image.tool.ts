@@ -68,7 +68,8 @@ async function generateImageBase64(prompt: string): Promise<string> {
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash-image",
-        prompt,
+        messages: [{ role: "user", content: prompt }],
+        modalities: ["image", "text"],
         // non-streaming JSON response for server-to-server use
       }),
     },
@@ -87,10 +88,7 @@ async function generateImageBase64(prompt: string): Promise<string> {
 }
 
 function b64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
+  return new Uint8Array(Buffer.from(b64, "base64"));
 }
 
 function slugify(s: string): string {

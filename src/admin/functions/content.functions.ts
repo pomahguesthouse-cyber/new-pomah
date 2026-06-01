@@ -14,6 +14,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { todayWIB } from "@/lib/date";
+import { generateExploreImage } from "@/tools/content/generate-explore-image.tool";
 
 async function resolveLlm() {
   const { data: p } = await (supabaseAdmin as any)
@@ -117,4 +118,23 @@ export const deleteExploreItem = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true as const };
+  });
+
+export const generateExploreImageFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const result = await generateExploreImage(
+      { id: data.id },
+      {
+        supabasePublic: supabasePublic as any,
+        supabaseAdmin: supabaseAdmin as any,
+        rooms: [],
+        property: {} as any,
+        today: todayWIB(),
+      }
+    );
+    const parsed = JSON.parse(result);
+    if (!parsed.ok) throw new Error(parsed.error ?? "Gagal generate gambar");
+    return { ok: true as const, image_url: parsed.item?.image_url ?? null };
   });
