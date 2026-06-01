@@ -1372,7 +1372,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
 
 export type PublicExploreItem = {
   id: string;
-  category: "destination" | "culinary" | "event" | "news";
+  category: "event" | "destinasi" | "kuliner" | "tips";
   title: string;
   description: string | null;
   image_url: string | null;
