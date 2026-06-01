@@ -312,6 +312,43 @@ export function ChatSimulatorView() {
     }
   }
 
+  // ── Export transcript as JSON ───────────────────────────────────────────
+  // Saves the current simulator conversation (or any imported WA chat
+  // loaded into the transcript) to a downloadable JSON file. Useful for
+  // sharing a problematic flow with the team or seeding the same dialog
+  // back into the simulator later via "Impor Chat WA".
+  function handleExportJson() {
+    if (transcript.length === 0) {
+      toast.error("Belum ada percakapan untuk diekspor.");
+      return;
+    }
+    // Strip transient UI-only fields (none currently, but future-proof).
+    const messages = transcript.map((m) => ({
+      direction: m.direction,
+      body:      m.body,
+      ...(m.intent     ? { intent: m.intent } : {}),
+      ...(m.attachment ? { attachment: m.attachment } : {}),
+    }));
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      phone,
+      messageCount: messages.filter((m) => m.direction === "in" || m.direction === "out").length,
+      messages,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const ts   = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `wa-simulator-${phone || "chat"}-${ts}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Diunduh ${payload.messageCount} pesan ke ${a.download}.`);
+  }
+
   // ── Pre-scripted booking demo ───────────────────────────────────────────
   // Drives the bot through: greeting → room inquiry → pricing → booking
   // initiation → name → email → phone → confirmation → invoice. The last
@@ -836,6 +873,16 @@ export function ChatSimulatorView() {
             >
               <PlayCircle className="mr-1 h-3.5 w-3.5" />
               Demo Booking
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportJson}
+              disabled={sending || transcript.length === 0}
+              title="Unduh percakapan ini sebagai file JSON"
+            >
+              <Download className="mr-1 h-3.5 w-3.5" />
+              Ekspor JSON
             </Button>
             <Button variant="outline" size="sm" onClick={handleReset} disabled={sending}>
               <RotateCcw className="mr-1 h-3.5 w-3.5" />
