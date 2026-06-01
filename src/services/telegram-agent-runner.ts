@@ -57,11 +57,16 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
   const userMsg: AiMessage = { role: "user", content: messageText };
   const turn: AiMessage[] = [userMsg];
 
+  // System prompt is rebuilt fresh every run so persona/mode/managerName
+  // changes propagate immediately; only the turn list comes from history.
+  const sysPrompt = agentDef.buildSystemPrompt(agentCtx);
+  const userTurn: AiMessage = { role: "user", content: messageText };
   const messages: AiMessage[] = [
     { role: "system", content: agentDef.buildSystemPrompt(agentCtx) },
     ...(history ?? []),
     userMsg,
   ];
+  const newTurns: AiMessage[] = [userTurn];
 
   const toolTrail: string[] = []; // for error summarising
   let lastToolError: string | null = null;
