@@ -64,13 +64,17 @@ export const frontOfficeAgent: AgentDefinition = {
         : "",
 
       "KETERSEDIAAN KAMAR: Kamu memiliki tool `check_room_availability`. " +
-        "Setiap kali tamu menanyakan kamar yang tersedia/kosong (hari ini atau tanggal tertentu) atau ingin booking, " +
+        "Setiap kali tamu menanyakan kamar yang tersedia/kosong (untuk tanggal tertentu) atau ingin booking, " +
         "WAJIB panggil tool ini lebih dulu — jangan pernah menebak. " +
         "KONTEKS TANGGAL DARI PERCAKAPAN (SANGAT PENTING): SEBELUM menentukan tanggal, baca ulang seluruh riwayat percakapan ini. " +
         "Jika di pesan-pesan sebelumnya tamu/agen sudah pernah menyebut/menyepakati tanggal menginap (mis. '17 Juli 2026', '12-13 juni', dsb.), " +
         "WAJIB pakai tanggal tersebut sebagai check_in/check_out — JANGAN reset ke hari ini. " +
         "Tanggal hanya boleh diubah jika tamu secara eksplisit menyebut tanggal baru atau meminta ganti tanggal. " +
-        "HANYA jika TIDAK PERNAH ada tanggal yang disebut sepanjang percakapan, baru anggap check-in hari ini (1 malam). " +
+        "JIKA TAMU BELUM PERNAH MENYEBUT TANGGAL APAPUN sepanjang percakapan ini: " +
+        "JANGAN memanggil `check_room_availability` dengan asumsi 'hari ini'. " +
+        "WAJIB tanyakan dulu kepada tamu tanggal check-in dan check-out yang diinginkan " +
+        "(contoh: 'Boleh tahu untuk tanggal berapa Kak rencana menginap, dan sampai tanggal berapa? 📅'). " +
+        "Baru setelah tamu menjawab, panggil `check_room_availability` dengan tanggal tersebut. " +
         "ATURAN UTAMA — begitu tamu menyebut tanggal/waktu APAPUN (mis. 'hari ini', 'besok', 'lusa', '12-13 juni', " +
         "'tanggal 5', '17 juli'), LANGSUNG panggil `check_room_availability` untuk tanggal itu SEBELUM membalas teks apa pun. " +
         "JANGAN menanyakan jumlah orang dulu dan JANGAN mengulang pertanyaan tanggal — tanggal sudah diberikan, " +
@@ -85,6 +89,8 @@ export const frontOfficeAgent: AgentDefinition = {
         "Konversi tanggal spesifik ke format YYYY-MM-DD memakai tahun berjalan dari 'Hari ini' di atas " +
         "(mis. '12-13 juni' → check_in YYYY-06-12, check_out YYYY-06-13). " +
         "Jika hanya satu tanggal disebut, anggap menginap 1 malam (check-out adalah check-in + 1 hari). " +
+        "Jika tool mengembalikan `need_dates: true`, JANGAN ulangi pemanggilan — sampaikan pertanyaan tanggal " +
+        "kepada tamu sesuai instruksi pada field `error`. " +
         "Jangan pernah menebak ketersediaan tanpa tool.",
 
       "Saat menyampaikan hasil ketersediaan: awali dengan 'Ketersediaan kamar untuk <tanggal>'. " +
