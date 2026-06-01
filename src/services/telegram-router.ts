@@ -71,30 +71,73 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
         ? String(msg.message_thread_id)
         : null;
 
-    // Allow /start to seed channel registration (admin types
-    // "/start agent <agent_key>" inside the group or topic).
+    // Resolve THIS bot's own username so we can detect mentions and ignore
+    // /start commands aimed at sibling bots (Telegram delivers /start to ALL
+    // bots in a group when privacy mode is off).
+    const myUsername = await resolveBotUsername(botToken);
+
+    // /start handling — bot identity-aware.
     if (text.startsWith("/start")) {
-      const parts = text.split(/\s+/);
-      if (parts[1] === "agent" && parts[2]) {
+      // Telegram may suffix the bot username on commands in groups
+      // (e.g. /start@rania_pomah_bot). Reject commands targeted at OTHER bots.
+      const cmdMatch = text.match(/^\/start(?:@(\S+))?(?:\s+(.*))?$/i);
+      const cmdTarget = cmdMatch?.[1]?.toLowerCase();
+      const cmdArgs = (cmdMatch?.[2] ?? "").trim();
+      if (cmdTarget && myUsername && cmdTarget !== myUsername.toLowerCase()) {
+        // Targeted at a sibling bot — silent for this one.
+        return;
+      }
+
+      // Per-agent bot? /start with no args auto-binds itself.
+      if (args.forcedAgentKey && !cmdArgs) {
         await handleAgentChannelRegister({
           ...args,
           chatId,
           chatType,
-          agentKey:  parts[2],
+          agentKey:  args.forcedAgentKey,
           groupTitle: msg.chat?.title,
           threadId,
         });
         return;
       }
-      await sendMessage(botToken, chatId,
-        "Untuk mengikat tempat ini ke agent, ketik: /start agent <agent_key> " +
-        "(mis. front-office, finance, content, manager, customer-care, pricing).\n\n" +
-        (threadId
-          ? `Anda di topic ${threadId} — agent akan terikat ke topic ini saja.`
-          : "Anda di main chat — agent akan terikat ke seluruh grup."),
-        { message_thread_id: threadId ?? undefined } as any);
+
+      // Explicit `agent <key>` form (legacy single-bot path).
+      const parts = cmdArgs.split(/\s+/);
+      if (parts[0] === "agent" && parts[1]) {
+        // Per-agent bot: only the matching bot registers. Others stay silent.
+        if (args.forcedAgentKey && args.forcedAgentKey !== parts[1].toLowerCase()) {
+          return;
+        }
+        await handleAgentChannelRegister({
+          ...args,
+          chatId,
+          chatType,
+          agentKey:  args.forcedAgentKey ?? parts[1],
+          groupTitle: msg.chat?.title,
+          threadId,
+        });
+        return;
+      }
+
+      // Per-agent bot prompt (without forcedAgentKey shouldn't really happen
+      // here, but be safe).
+      const help =
+        args.forcedAgentKey
+          ? `Ketik /start (tanpa argumen) untuk mengikat ${args.forcedAgentKey} ke ` +
+            `${threadId ? "topic ini" : "grup ini"}.`
+          : "Untuk mengikat tempat ini ke agent, ketik: /start agent <agent_key>.";
+      await sendMessage(botToken, chatId, help, { message_thread_id: threadId ?? undefined } as any);
       return;
     }
+
+    // Non-command messages in groups: ONLY respond when this bot is
+    // explicitly addressed (mention, reply to bot's message, or direct
+    // /command targeting it). Otherwise stay silent — six bots in one
+    // group can otherwise turn every message into a six-way echo.
+    if (!isMessageAddressedToBot(msg, myUsername)) {
+      return;
+    }
+
     await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType, threadId });
     return;
   }
@@ -456,6 +499,62 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   });
 
   await sendMessage(botToken, chatId, reply || "(agent tidak menghasilkan balasan)", replyOpts);
+}
+
+// ─── Bot identity + mention gating ─────────────────────────────────────────
+
+// Cache the bot username per token so the group-message check (which runs on
+// EVERY message in a multi-bot group) doesn't hit Telegram repeatedly.
+const cachedBotUsername = new Map<string, { name: string | null; at: number }>();
+const BOT_USERNAME_TTL_MS = 60 * 60 * 1000;
+
+async function resolveBotUsername(token: string): Promise<string | null> {
+  const cached = cachedBotUsername.get(token);
+  if (cached && Date.now() - cached.at < BOT_USERNAME_TTL_MS) return cached.name;
+  try {
+    const { getMe } = await import("./telegram.service");
+    const r = await getMe(token);
+    const name = r.ok && r.result?.username ? r.result.username : null;
+    cachedBotUsername.set(token, { name, at: Date.now() });
+    return name;
+  } catch {
+    cachedBotUsername.set(token, { name: null, at: Date.now() });
+    return null;
+  }
+}
+
+/**
+ * Decide whether THIS bot should respond to a group message.
+ * Returns true when ANY of these hold:
+ *   - The message text mentions @bot_username
+ *   - The message is a reply to one of the bot's own messages
+ *   - There's a text_mention entity targeting this bot's user id
+ *
+ * Returns false for regular chatter — keeps the room quiet when six bots
+ * coexist.
+ */
+function isMessageAddressedToBot(msg: any, myUsername: string | null): boolean {
+  if (!myUsername) return false;
+  const text: string = (msg.text ?? msg.caption ?? "");
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes(`@${myUsername.toLowerCase()}`)) return true;
+
+  // reply_to_message → if that message was sent by this bot
+  const replied = msg.reply_to_message;
+  if (replied?.from?.username && String(replied.from.username).toLowerCase() === myUsername.toLowerCase()) {
+    return true;
+  }
+
+  // text_mention entity (mention without an @username, used when admin
+  // taps the bot name in the member list)
+  const entities = msg.entities ?? msg.caption_entities ?? [];
+  for (const ent of entities) {
+    if (ent.type === "text_mention" && ent.user?.username
+        && String(ent.user.username).toLowerCase() === myUsername.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function resolveManagerByChatId(chatId: string): Promise<ManagerRow | null> {
