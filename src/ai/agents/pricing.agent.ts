@@ -57,7 +57,10 @@ export const pricingAgent: AgentDefinition = {
         (r.description ? ` — ${r.description}` : ""),
     );
 
-    // If admin has custom instructions, use those (with placeholder substitution)
+    // If admin has custom instructions, use those (with placeholder substitution).
+    // Still append the managerial overlay so Telegram channels (where
+    // ctx.mode === "managerial") override the customer-facing persona and
+    // unlock manager-only tools like update_room_rate.
     if (customInstructions?.trim()) {
       let prompt = customInstructions;
       prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
@@ -67,7 +70,8 @@ export const pricingAgent: AgentDefinition = {
         ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`
         : "";
       prompt = prompt.replace(/\{\{ROOM_DATA\}\}/g, roomDataText);
-      return prompt;
+      const overlay = managerialModeOverlay(ctx, "pricing");
+      return overlay ? `${prompt}\n\n${overlay}` : prompt;
     }
 
     const roomSummary = roomLines.length
