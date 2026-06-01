@@ -83,11 +83,19 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       name: "get_bookings",
       description:
         "Daftar booking. Default urut dari booking yang paling baru dibuat (cocok untuk 'booking terakhir / terbaru'). " +
-        "Bisa difilter berdasarkan status (pending, confirmed, checked_in, dll) atau tanggal check_in/check_out.",
+        "Bisa difilter berdasarkan status booking, status pembayaran (unpaid/partial/paid — pakai untuk " +
+        "'siapa yang belum lunas / belum bayar'), atau tanggal check_in/check_out.",
       parameters: {
         type: "object",
         properties: {
           status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
+          payment_status: {
+            type: "string",
+            enum: ["unpaid", "partial", "paid"],
+            description:
+              "Status pembayaran. 'unpaid' = belum bayar / belum lunas, 'partial' = bayar sebagian, " +
+              "'paid' = lunas. Pakai 'unpaid' untuk pertanyaan 'siapa yang belum lunas / belum bayar'.",
+          },
           date: { type: "string", description: "Tanggal (YYYY-MM-DD) untuk mencari booking yang menginap di tanggal tersebut." },
           limit: { type: "number", description: "Maksimal data yang dikembalikan. Default 10." },
           sort: {

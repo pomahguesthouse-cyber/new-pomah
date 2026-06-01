@@ -10,8 +10,10 @@ import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
 import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
+import { TOOL_DEFINITIONS } from "@/tools/registry";
 
 const FINANCE_TOOLS: ToolDefinition[] = [
+  ...TOOL_DEFINITIONS.filter((t) => t.function.name === "get_bookings"),
   {
     type: "function",
     function: {
@@ -207,6 +209,20 @@ export const financeAgent: AgentDefinition = {
         "arahkan tamu untuk mengirim bukti transfer untuk diverifikasi staf.",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
+
+      "LAPORAN PIUTANG / DAFTAR BELUM LUNAS (managerial only): " +
+        "Saat manajer/internal bertanya 'siapa yang belum lunas / belum bayar / masih piutang', " +
+        "JANGAN minta klarifikasi parameter — langsung panggil `get_bookings` dengan " +
+        "payment_status='unpaid'. Untuk 'siapa yang bayar sebagian', pakai 'partial'. " +
+        "Boleh tambahkan filter date / status booking bila manajer menyebut periode atau tahap. " +
+        "Format hasilnya sebagai daftar blok berurutan, dipisahkan '━━━━━━━━━━━━━', tiap blok:\n" +
+        "📅 <tanggal check-in> – <tanggal check-out>\n" +
+        "👤 <nama tamu>\n" +
+        "🏷 <reference_code>\n" +
+        "🛏 <nama kamar (+ nomor bila ada)>\n" +
+        "💰 Rp<total_amount format Indonesia>\n" +
+        "⏳ <Unpaid / Partial — pakai ⏳ untuk Unpaid, 🟡 untuk Partial>\n" +
+        "Akhiri dengan ringkasan singkat: 'Total <N> booking, outstanding Rp<jumlah>.'",
     ];
 
     sections.push(managerialModeOverlay(ctx, "finance"));
