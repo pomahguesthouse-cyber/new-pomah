@@ -160,7 +160,17 @@ export const frontOfficeAgent: AgentDefinition = {
           "lalu menanyakan hal lain. Jawab pertanyaannya secara SINGKAT, lalu ingatkan dengan ramah bahwa " +
           "kita akan melanjutkan pengisian data pemesanan. JANGAN memanggil tool `start_booking_details` " +
           "atau `create_booking` lagi, dan JANGAN menanyakan nama/email/nomor HP — proses itu sudah berjalan " +
-          "dan akan dilanjutkan otomatis. Contoh penutup: 'Kembali ke pemesanan tadi ya Kak, silakan dilanjut.'"
+          "dan akan dilanjutkan otomatis.\n\n" +
+          "KHUSUS — PILIH NOMOR KAMAR (mis. '205/206 biar sebelahan', 'minta yang lantai 2'): " +
+          "Akui preferensi tamu dengan ramah dan catat sebagai permintaan — JANGAN tolak. " +
+          "Sampaikan bahwa nomor kamar final di-assign tim resepsionis saat check-in untuk memastikan " +
+          "kondisi kamar siap, namun preferensi tamu akan diusahakan. Lalu kembali ke pengisian data " +
+          "yang sedang berjalan. Contoh: 'Noted ya Kak, untuk 205/206 bersebelahan akan kami usahakan. " +
+          "Penetapan kamar final saat check-in. Lanjut ya Kak ke konfirmasi nama tadi.'\n\n" +
+          "KHUSUS — PERTANYAAN PEMBAYARAN / DP / REFUND di tengah booking: Jawab singkat dan jelas " +
+          "lalu kembalikan ke alur. Contoh: 'Untuk pembayaran, kami menerima transfer ke rekening kami " +
+          "(detail akan dikirim setelah booking ter-generate). DP atau pelunasan akan dikonfirmasi oleh " +
+          "tim Finance kami. Lanjut ya Kak ke pengisian data berikut.'"
         : "",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",

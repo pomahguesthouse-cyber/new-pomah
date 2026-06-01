@@ -81,6 +81,16 @@ const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|
  */
 const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|kak|kakak|mba|mbak|mas|pak|bu|nya|kamar|room|wifi|ac|sarapan|breakfast)\b/i;
 
+/**
+ * Detect "this looks like a request about the booking itself (room
+ * preference, payment, etc.), not a name". Used inside CONFIRMING_NAME
+ * so we can defer to the LLM (which can acknowledge "kamar 205/206
+ * sebelahan dicatat ya") instead of just rejecting flatly. We keep the
+ * existing guestName intact in this case.
+ */
+const ROOM_PREFERENCE_OR_QUESTION =
+  /(?:\d{2,3}\s*[\/\-]\s*\d{2,3})|\b(sebelahan|samping|sebelah|depan|belakang|atas|bawah|deket|dekat|view|pemandangan|pojok)\b|\?/i;
+
 function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
   if (t.length < 2 || t.length > 80) return false;
@@ -251,7 +261,16 @@ export async function processBookingState(
     }
     if (!looksLikePersonName(name)) {
       // Looks like the guest typed a question or a room preference instead.
-      // Don't store the garbage as guestName — re-prompt instead.
+      // Don't store the garbage as guestName.
+      // If clearly a question/room-pref, defer to LLM so it can answer and
+      // then re-ask for the name in the same turn.
+      if (ROOM_PREFERENCE_OR_QUESTION.test(name)) {
+        console.info(
+          `[BookingState] AWAITING_NAME: question/room-pref detected ("${name.slice(0, 60)}…"). ` +
+          `Deferring to LLM.`,
+        );
+        return { handled: false };
+      }
       return {
         handled: true,
         reply:
@@ -290,7 +309,24 @@ export async function processBookingState(
     }
     if (!looksLikePersonName(newName)) {
       // Guest sent something like "205/206 aja kak biar sebelahan" — a room
-      // preference, not a name. Don't overwrite guestName with that.
+      // preference or unrelated question, not a name. CRITICAL: do NOT
+      // overwrite the existing guestName (the previous version of this
+      // code did, corrupting the booking record).
+      //
+      // If it looks like a room preference / question, defer to the LLM so
+      // it can acknowledge ("kamar 205/206 bersebelahan dicatat ya, nanti
+      // tim assign saat check-in") AND re-ask for the name. The booking
+      // state is preserved so the flow resumes on the next reply.
+      if (ROOM_PREFERENCE_OR_QUESTION.test(trimmed)) {
+        console.info(
+          `[BookingState] CONFIRMING_NAME: room-preference/question detected ` +
+          `("${trimmed.slice(0, 60)}…") — preserving existing guestName "${context.guestName}" ` +
+          `and deferring to LLM.`,
+        );
+        return { handled: false };
+      }
+      // Otherwise treat as a confused reply and politely re-ask, still
+      // without overwriting guestName.
       return {
         handled: true,
         reply:

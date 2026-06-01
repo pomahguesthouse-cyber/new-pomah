@@ -65,7 +65,8 @@ const RULES: IntentRule[] = [
     category: "payment",
     weight:   7,
     patterns: [
-      /\b(bayar|pembayaran|transfer|rekening|bank|bca|mandiri|bni|bri|gopay|ovo|dana|qris)\b/i,
+      /\b(bayar|pembayaran|payment|paymentnya)\b/i,                  // EN "payment" was missing — guests use it constantly.
+      /\b(transfer|rekening|bank|bca|mandiri|bni|bri|gopay|ovo|dana|qris)\b/i,
       /\b(invoice|kwitansi|bukti bayar|konfirmasi bayar|sudah (bayar|transfer))\b/i,
       /\b(cicil|dp|uang muka|down payment|lunas|sisa pembayaran|tagihan)\b/i,
       /\b(refund|pengembalian dana|cancel dan refund|minta refund)\b/i,
