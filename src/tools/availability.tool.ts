@@ -19,13 +19,26 @@ export const checkRoomAvailability: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
-  const checkIn  = isDateString(args.check_in)  ? args.check_in  : ctx.today;
-  let   checkOut = isDateString(args.check_out) ? args.check_out : nextDay(checkIn);
+  if (!isDateString(args.check_in)) {
+    // Jangan fallback ke "hari ini" jika tamu belum pernah menyebut tanggal.
+    // Minta agen mengonfirmasi tanggal lebih dulu agar booking tidak salah tanggal.
+    return JSON.stringify({
+      ok: false,
+      need_dates: true,
+      error:
+        "Tanggal check-in belum diketahui. Tanyakan dulu kepada tamu: " +
+        "'Untuk tanggal berapa Kak rencana menginap, dan sampai tanggal berapa?' " +
+        "Jangan asumsikan hari ini. Setelah tamu menjawab, panggil ulang tool ini dengan tanggal yang benar.",
+    });
+  }
+
+  const checkIn  = args.check_in as string;
+  let   checkOut = isDateString(args.check_out) ? (args.check_out as string) : nextDay(checkIn);
   if (checkOut <= checkIn) checkOut = nextDay(checkIn);
 
   // Catat tanggal yang dipakai supaya orchestrator bisa menyimpannya ke slots
   // — turn berikutnya tidak akan kehilangan konteks tanggal.
-  ctx.lastDates = { checkIn: checkIn as string, checkOut: checkOut as string };
+  ctx.lastDates = { checkIn, checkOut };
 
   const { data: rows } = await (ctx.supabasePublic as any).rpc(
     "room_type_availability_detail",
