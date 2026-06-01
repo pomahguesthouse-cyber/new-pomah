@@ -15,12 +15,14 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
   Newspaper, Sparkles, Loader2, Eye, EyeOff, Trash2, MapPin, Calendar,
+  ImageIcon,
 } from "lucide-react";
 import {
   runContentDiscovery,
   listExploreItemsForAdmin,
   toggleExplorePublish,
   deleteExploreItem,
+  generateExploreImageFn,
 } from "@/admin/functions/content.functions";
 
 export const Route = createFileRoute("/admin/content-manager")({
