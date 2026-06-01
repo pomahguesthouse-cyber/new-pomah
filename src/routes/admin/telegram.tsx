@@ -195,6 +195,11 @@ function TelegramPage() {
               <code>@rania_pomah_bot selamat pagi</code>) atau{" "}
               <b>reply ke pesan bot</b>. Bot lain tetap diam — anti-spam.
             </li>
+            <li>
+              Tiap bot ingat <b>30 turn terakhir</b> percakapan di tiap chat/topic
+              (history per agent). Untuk reset: <code>/reset</code> (sambil mention bot
+              yang mau di-reset).
+            </li>
           </ol>
         </div>
         <div className="space-y-2">

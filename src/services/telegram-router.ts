@@ -470,12 +470,33 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   const managerName: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.managerName;
   const customInstructions: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.instructions;
 
+  // Handle /reset — clear conversation history for this scope.
+  if (text.toLowerCase() === "/reset" || text.toLowerCase().startsWith("/reset ")) {
+    const { clearHistory } = await import("./telegram-history.service");
+    await clearHistory(supabaseAdmin as any, {
+      chatId,
+      threadId,
+      agentKey: mapping.agent_key,
+    });
+    await sendMessage(botToken, chatId,
+      `🧹 Histori percakapan ${mapping.agent_key} di ${threadId ? "topic" : "grup"} ini telah direset.`,
+      replyOpts);
+    return;
+  }
+
+  // Load prior conversation for this scope so a follow-up like
+  // "publish saja" sees the tool ids from the previous run.
+  const { loadHistory, saveHistory } = await import("./telegram-history.service");
+  const historyKey = { chatId, threadId, agentKey: mapping.agent_key };
+  const priorTurns = await loadHistory(supabaseAdmin as any, historyKey);
+
   // Run the bound agent directly via getAgent + runAgent helper.
   const { getAgent } = await import("@/ai/agents/registry");
   const { runAgentInGroupChannel } = await import("./telegram-agent-runner");
-  const reply = await runAgentInGroupChannel({
+  const result = await runAgentInGroupChannel({
     agentDef: getAgent(mapping.agent_key as any),
     messageText: text,
+    priorTurns,
     agentCtx: {
       property:    p,
       rooms:       rooms || [],
@@ -498,10 +519,11 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
     llmConfig: { apiKey, baseUrl, model },
   });
 
-  // runAgentInGroupChannel now always returns a non-empty string
-  // (either the agent reply or a ⚠️-prefixed diagnostic), so a bare
-  // pass-through is enough.
-  await sendMessage(botToken, chatId, reply, replyOpts);
+  await sendMessage(botToken, chatId, result.reply, replyOpts);
+
+  // Persist updated history fire-and-forget so a DB hiccup never
+  // strands the user without their reply.
+  void saveHistory(supabaseAdmin as any, historyKey, [...priorTurns, ...result.newTurns]);
 }
 
 // ─── Bot identity + mention gating ─────────────────────────────────────────

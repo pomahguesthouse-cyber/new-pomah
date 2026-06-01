@@ -24,6 +24,11 @@ interface RunArgs {
   agentCtx:    AgentContext;
   toolCtx:     ToolContext;
   llmConfig:   AiClientConfig;
+  /**
+   * Prior conversation turns (excluding system prompt) for this
+   * (chat, thread, agent) scope. Empty array for a fresh conversation.
+   */
+  priorTurns?: AiMessage[];
 }
 
 /**
@@ -34,13 +39,24 @@ interface RunArgs {
  * actually went wrong instead of a generic "(agent tidak menghasilkan
  * balasan)".
  */
-export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
-  const { agentDef, messageText, agentCtx, toolCtx, llmConfig } = args;
+export interface RunResult {
+  reply:    string;          // always non-empty
+  newTurns: AiMessage[];     // turns produced THIS run (user + assistant + tools)
+}
 
+export async function runAgentInGroupChannel(args: RunArgs): Promise<RunResult> {
+  const { agentDef, messageText, agentCtx, toolCtx, llmConfig, priorTurns = [] } = args;
+
+  // System prompt is rebuilt fresh every run so persona/mode/managerName
+  // changes propagate immediately; only the turn list comes from history.
+  const sysPrompt = agentDef.buildSystemPrompt(agentCtx);
+  const userTurn: AiMessage = { role: "user", content: messageText };
   const messages: AiMessage[] = [
-    { role: "system", content: agentDef.buildSystemPrompt(agentCtx) },
-    { role: "user",   content: messageText },
+    { role: "system", content: sysPrompt },
+    ...priorTurns,
+    userTurn,
   ];
+  const newTurns: AiMessage[] = [userTurn];
 
   const toolTrail: string[] = []; // for error summarising
   let lastToolError: string | null = null;
@@ -66,12 +82,15 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
       if (!res.ok) {
         const body = await res.text();
         console.error(`[TgAgentRunner][${agentDef.key}] HTTP ${res.status}`, body);
-        return `⚠️ LLM error ${res.status}. ${truncate(body, 200)}`;
+        return { reply: `⚠️ LLM error ${res.status}. ${truncate(body, 200)}`, newTurns };
       }
       json = (await res.json()) as LlmResponse;
     } catch (e) {
       console.error(`[TgAgentRunner][${agentDef.key}] fetch error:`, e);
-      return `⚠️ Tidak bisa menghubungi LLM: ${e instanceof Error ? e.message : String(e)}`;
+      return {
+        reply: `⚠️ Tidak bisa menghubungi LLM: ${e instanceof Error ? e.message : String(e)}`,
+        newTurns,
+      };
     }
 
     const assistantMsg = json.choices?.[0]?.message;
@@ -79,14 +98,22 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
 
     if (toolCalls.length === 0) {
       const text = (assistantMsg?.content ?? "").trim();
-      if (text) return text;
+      if (text) {
+        newTurns.push({ role: "assistant", content: text });
+        return { reply: text, newTurns };
+      }
       // Empty completion — surface what we know so admin can debug.
-      if (lastToolError) return `⚠️ Agent berhenti tanpa balasan. Tool terakhir gagal: ${lastToolError}`;
-      if (toolTrail.length > 0) return `⚠️ Agent berhenti tanpa balasan setelah tool: ${toolTrail.join(" → ")}`;
-      return "⚠️ Agent tidak menghasilkan balasan (LLM mengembalikan content kosong).";
+      const reply = lastToolError
+        ? `⚠️ Agent berhenti tanpa balasan. Tool terakhir gagal: ${lastToolError}`
+        : toolTrail.length > 0
+        ? `⚠️ Agent berhenti tanpa balasan setelah tool: ${toolTrail.join(" → ")}`
+        : "⚠️ Agent tidak menghasilkan balasan (LLM mengembalikan content kosong).";
+      return { reply, newTurns };
     }
 
-    messages.push(assistantMsg as AiMessage);
+    const assistantTurn = assistantMsg as AiMessage;
+    messages.push(assistantTurn);
+    newTurns.push(assistantTurn);
     for (const tc of toolCalls) {
       const name = tc.function?.name ?? "";
       console.info(`[TgAgentRunner][${agentDef.key}] turn ${turn + 1}: ${name}`);
@@ -105,14 +132,19 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<string> {
           lastToolError = null;
         }
       } catch { /* non-JSON output, ignore */ }
-      messages.push({ role: "tool", tool_call_id: tc.id, content: output });
+      const toolTurn: AiMessage = { role: "tool", tool_call_id: tc.id, content: output };
+      messages.push(toolTurn);
+      newTurns.push(toolTurn);
     }
   }
 
   console.warn(`[TgAgentRunner][${agentDef.key}] max turns reached after: ${toolTrail.join(" → ")}`);
-  return `⚠️ Pekerjaan terlalu panjang (lebih dari ${MAX_TURNS} langkah). ` +
-    `Tool yang sudah dijalankan: ${toolTrail.join(" → ") || "(none)"}. ` +
-    `Coba minta task yang lebih spesifik / dipecah.`;
+  return {
+    reply: `⚠️ Pekerjaan terlalu panjang (lebih dari ${MAX_TURNS} langkah). ` +
+      `Tool yang sudah dijalankan: ${toolTrail.join(" → ") || "(none)"}. ` +
+      `Coba minta task yang lebih spesifik / dipecah.`,
+    newTurns,
+  };
 }
 
 function truncate(s: string, n: number): string {
