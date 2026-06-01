@@ -470,30 +470,15 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   const managerName: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.managerName;
   const customInstructions: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.instructions;
 
-  // Handle /reset — clear conversation history for this scope.
-  if (text.toLowerCase() === "/reset" || text.toLowerCase().startsWith("/reset ")) {
-    const { clearHistory } = await import("./telegram-history.service");
-    await clearHistory(supabaseAdmin as any, {
-      chatId,
-      threadId,
-      agentKey: mapping.agent_key,
-    });
-    await sendMessage(botToken, chatId,
-      `🧹 Histori percakapan ${mapping.agent_key} di ${threadId ? "topic" : "grup"} ini telah direset.`,
-      replyOpts);
-    return;
-  }
-
-  // Load prior conversation for this scope so a follow-up like
-  // "publish saja" sees the tool ids from the previous run.
-  const { loadHistory, saveHistory } = await import("./telegram-history.service");
-  const historyKey = { chatId, threadId, agentKey: mapping.agent_key };
-  const priorTurns = await loadHistory(supabaseAdmin as any, historyKey);
+  // Load prior conversation history for this (chat, thread, agent)
+  // so the agent has memory across messages instead of treating each
+  // ping as a cold start.
+  const history = await loadAgentConversation(chatId, threadId, mapping.agent_key);
 
   // Run the bound agent directly via getAgent + runAgent helper.
   const { getAgent } = await import("@/ai/agents/registry");
   const { runAgentInGroupChannel } = await import("./telegram-agent-runner");
-  const result = await runAgentInGroupChannel({
+  const { reply, turn } = await runAgentInGroupChannel({
     agentDef: getAgent(mapping.agent_key as any),
     messageText: text,
     priorTurns,
@@ -517,13 +502,105 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
       phone:          `tg-channel:${mapping.agent_key}:${chatId}`,
     },
     llmConfig: { apiKey, baseUrl, model },
+    history,
   });
 
-  await sendMessage(botToken, chatId, result.reply, replyOpts);
+  // Persist new messages only when the run actually produced an
+  // assistant reply (turn is empty on ⚠️ errors).
+  if (turn.length > 0) {
+    await saveAgentConversation(chatId, threadId, mapping.agent_key, [...history, ...turn]);
+  }
 
-  // Persist updated history fire-and-forget so a DB hiccup never
-  // strands the user without their reply.
-  void saveHistory(supabaseAdmin as any, historyKey, [...priorTurns, ...result.newTurns]);
+  // runAgentInGroupChannel now always returns a non-empty string
+  // (either the agent reply or a ⚠️-prefixed diagnostic), so a bare
+  // pass-through is enough.
+  await sendMessage(botToken, chatId, reply, replyOpts);
+}
+
+// ─── Conversation history per (chat, thread, agent) ─────────────────────────
+
+// Keep the most recent N messages so the token budget stays bounded.
+// Tool chains can produce 4-6 messages per user turn (assistant + tool
+// pairs), so 40 ≈ last ~6-8 user turns of context.
+const MAX_HISTORY_MESSAGES = 40;
+
+async function loadAgentConversation(
+  chatId:   string,
+  threadId: string | null,
+  agentKey: string,
+): Promise<import("@/ai/types").AiMessage[]> {
+  try {
+    const q = (supabaseAdmin as any)
+      .from("telegram_agent_conversations")
+      .select("messages")
+      .eq("chat_id", chatId)
+      .eq("agent_key", agentKey);
+    const { data } = await (threadId == null
+      ? q.is("message_thread_id", null)
+      : q.eq("message_thread_id", threadId)
+    ).maybeSingle();
+    const msgs = (data?.messages ?? []) as import("@/ai/types").AiMessage[];
+    return Array.isArray(msgs) ? msgs : [];
+  } catch (e) {
+    console.warn("[TelegramRouter] loadAgentConversation failed:", e);
+    return [];
+  }
+}
+
+async function saveAgentConversation(
+  chatId:   string,
+  threadId: string | null,
+  agentKey: string,
+  messages: import("@/ai/types").AiMessage[],
+): Promise<void> {
+  // Trim to the cap, preserving the tail. If the trim would orphan a
+  // `tool` message from its preceding assistant tool_calls, slide the
+  // window forward until the first message is either user or
+  // assistant-without-pending-tools.
+  let trimmed = messages.length > MAX_HISTORY_MESSAGES
+    ? messages.slice(messages.length - MAX_HISTORY_MESSAGES)
+    : messages;
+  while (trimmed.length > 0 && trimmed[0].role === "tool") {
+    trimmed = trimmed.slice(1);
+  }
+  // Drop a trailing assistant-with-tool_calls whose tool replies got
+  // sliced off — otherwise the next LLM call sees an unresolved call.
+  while (
+    trimmed.length > 0 &&
+    trimmed[trimmed.length - 1].role === "assistant" &&
+    (trimmed[trimmed.length - 1].tool_calls?.length ?? 0) > 0
+  ) {
+    trimmed = trimmed.slice(0, -1);
+  }
+
+  try {
+    const findQ = (supabaseAdmin as any)
+      .from("telegram_agent_conversations")
+      .select("id")
+      .eq("chat_id", chatId)
+      .eq("agent_key", agentKey);
+    const { data: existing } = await (threadId == null
+      ? findQ.is("message_thread_id", null)
+      : findQ.eq("message_thread_id", threadId)
+    ).maybeSingle();
+
+    const payload = {
+      chat_id:           chatId,
+      message_thread_id: threadId,
+      agent_key:         agentKey,
+      messages:          trimmed,
+      updated_at:        new Date().toISOString(),
+    };
+    const op = existing?.id
+      ? (supabaseAdmin as any)
+          .from("telegram_agent_conversations").update(payload).eq("id", existing.id)
+      : (supabaseAdmin as any)
+          .from("telegram_agent_conversations").insert(payload);
+    const { error } = await op;
+    if (error) console.warn("[TelegramRouter] saveAgentConversation error:", error.message);
+  } catch (e) {
+    console.warn("[TelegramRouter] saveAgentConversation failed:", e);
+  }
 }
 
 // ─── Bot identity + mention gating ─────────────────────────────────────────
