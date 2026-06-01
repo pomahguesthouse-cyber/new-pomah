@@ -481,7 +481,6 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   const { reply, turn } = await runAgentInGroupChannel({
     agentDef: getAgent(mapping.agent_key as any),
     messageText: text,
-    priorTurns: history,
     agentCtx: {
       property:    p,
       rooms:       rooms || [],
