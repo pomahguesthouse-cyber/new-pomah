@@ -74,6 +74,89 @@ export const sendTelegramTestMessage = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/* ---------------- Per-agent bots ---------------- */
+
+const PER_AGENT_KEYS = ["front-office", "pricing", "customer-care", "finance", "content", "manager"] as const;
+
+export const listAgentBots = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("telegram_agent_bots")
+      .select("agent_key, bot_token, bot_username, webhook_secret, webhook_set_at, is_active, updated_at");
+    if (error) throw new Error(error.message);
+    // Mask token in response (return only last 6 chars).
+    const masked = (data ?? []).map((row: any) => ({
+      ...row,
+      bot_token_masked: row.bot_token ? `…${String(row.bot_token).slice(-6)}` : null,
+      bot_token: undefined,
+    }));
+    return { bots: masked };
+  });
+
+export const saveAgentBotToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      agent_key: z.enum(PER_AGENT_KEYS),
+      bot_token: z.string().min(20).max(200),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    // Resolve username up-front so admin sees it immediately.
+    const me = await getMe(data.bot_token);
+    const username = me.ok && me.result ? me.result.username : null;
+    const { error } = await (supabaseAdmin as any)
+      .from("telegram_agent_bots")
+      .upsert({
+        agent_key:    data.agent_key,
+        bot_token:    data.bot_token,
+        bot_username: username,
+        is_active:    true,
+        updated_at:   new Date().toISOString(),
+      }, { onConflict: "agent_key" });
+    if (error) throw new Error(error.message);
+    return { ok: true as const, bot_username: username };
+  });
+
+export const setupAgentBotWebhook = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      agent_key: z.enum(PER_AGENT_KEYS),
+      origin:    z.string().url(),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { data: bot } = await (supabaseAdmin as any)
+      .from("telegram_agent_bots")
+      .select("bot_token")
+      .eq("agent_key", data.agent_key)
+      .maybeSingle();
+    if (!bot?.bot_token) throw new Error("Bot token belum di-set untuk agent ini.");
+    const secret = randomHex(24);
+    const url = `${data.origin.replace(/\/+$/, "")}/api/telegram/${data.agent_key}`;
+    const res = await setWebhook(bot.bot_token, url, secret);
+    if (!res.ok) throw new Error(`setWebhook gagal: ${res.error}`);
+    await (supabaseAdmin as any)
+      .from("telegram_agent_bots")
+      .update({ webhook_secret: secret, webhook_set_at: new Date().toISOString() })
+      .eq("agent_key", data.agent_key);
+    return { ok: true as const, webhook_url: url };
+  });
+
+export const deleteAgentBot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ agent_key: z.enum(PER_AGENT_KEYS) }).parse(d))
+  .handler(async ({ data }) => {
+    const { error } = await (supabaseAdmin as any)
+      .from("telegram_agent_bots")
+      .delete()
+      .eq("agent_key", data.agent_key);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 /* ---------------- Agent channels (group bindings) ---------------- */
 
 const AGENT_KEYS = ["front-office", "pricing", "customer-care", "finance", "content", "manager"] as const;
