@@ -86,7 +86,7 @@ const AGENTS = [
     color: "bg-amber-100 text-amber-700",
     desc: "Reservasi, check-in, info tamu",
     personaDefault: "Rani",
-    personaHint: "Nama yang digunakan bot saat menyapa tamu (default: Rani)",
+    personaHint: "Nama manajer kepala divisi Front Office",
     role: "Resepsionis & Reservasi",
     roleDesc: "Menangani salam pembuka, cek ketersediaan kamar, proses booking, dan pertanyaan umum tamu via WhatsApp.",
     tips: [
@@ -102,7 +102,7 @@ const AGENTS = [
     color: "bg-emerald-100 text-emerald-700",
     desc: "Tarif dinamis & promo",
     personaDefault: "Hana",
-    personaHint: "Nama persona agen harga (default: Hana)",
+    personaHint: "Nama manajer kepala divisi Pricing",
     role: "Pricing Specialist",
     roleDesc: "Menjawab pertanyaan harga, menampilkan tarif live dari database, info diskon dan paket menginap.",
     tips: [
@@ -118,7 +118,7 @@ const AGENTS = [
     color: "bg-sky-100 text-sky-700",
     desc: "Layanan kamar tamu menginap",
     personaDefault: "Dewi",
-    personaHint: "Nama persona customer care (default: Dewi)",
+    personaHint: "Nama manajer kepala divisi Customer Care",
     role: "In-house Guest Services",
     roleDesc: "Menangani permintaan layanan dari tamu yang sedang menginap: handuk, kebersihan kamar, extra pillow, dll.",
     tips: [
@@ -135,7 +135,7 @@ const AGENTS = [
     color: "bg-violet-100 text-violet-700",
     desc: "Pembayaran & tagihan",
     personaDefault: "Sinta",
-    personaHint: "Nama persona petugas keuangan (default: Sinta)",
+    personaHint: "Nama manajer kepala divisi Finance",
     role: "Finance & Pembayaran",
     roleDesc: "Menangani pertanyaan tagihan, info rekening transfer, konfirmasi pembayaran, dan pertanyaan refund.",
     tips: [
@@ -151,7 +151,7 @@ const AGENTS = [
     color: "bg-emerald-100 text-emerald-700",
     desc: "City Guide & konten Semarang",
     personaDefault: "Rara",
-    personaHint: "Nama persona content manager (default: Rara)",
+    personaHint: "Nama manajer kepala divisi Content / City Guide",
     role: "Content & City Guide",
     roleDesc: "Mencari event, destinasi, kuliner, dan tips wisata Semarang dari web lalu menulis draft entri City Guide.",
     tips: [
@@ -167,7 +167,7 @@ const AGENTS = [
     color: "bg-rose-100 text-rose-700",
     desc: "Asisten pribadi manajer properti",
     personaDefault: "Asisten Manajer",
-    personaHint: "Nama asisten digital manajer (default: Asisten Manajer)",
+    personaHint: "Nama manajer eksekutif / general manager",
     role: "Executive Assistant",
     roleDesc: "Hanya melayani manajer properti. Menjalankan instruksi operasional: cek booking, ubah status, pindah kamar.",
     tips: [
@@ -450,11 +450,15 @@ function DashboardView() {
           </Card>
         </section>
 
-        {/* Specialized agents */}
+        {/* Divisions / Departments */}
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Specialized AI Agents
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Divisi / Departemen
           </h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Tiap divisi dikepalai oleh seorang manajer. Saat melayani tamu (WhatsApp) mereka pakai
+            tone hospitality; saat menjawab di Telegram, mereka pakai tone manajerial peer-to-peer.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {AGENTS.map((a) => {
               const ac = cfg.agents[a.key];
@@ -471,7 +475,7 @@ function DashboardView() {
                     <p className="font-medium">{AGENT_DIVISION_NAMES[a.key] ?? a.name}</p>
                     {cfg.agents[a.key]?.managerName && (
                       <p className="mt-0.5 text-[10px] font-medium text-teal-600">
-                        Persona: {cfg.agents[a.key].managerName}
+                        Manajer: {cfg.agents[a.key].managerName}
                       </p>
                     )}
                     <p className="mt-0.5 text-xs text-muted-foreground">{a.desc}</p>

@@ -228,6 +228,8 @@ async function runManagerTurn(args: HandlerArgs & {
       brosurFiles: [],
       today:       todayWIB(),
       managerName: manager.name,
+      // Telegram is internal: managerial register, never guest-facing.
+      mode: "managerial",
     },
     toolCtx: {
       supabasePublic: supabasePublic as any,
@@ -439,6 +441,8 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
       today:       todayWIB(),
       managerName,
       customInstructions,
+      // Telegram channel = internal communication.
+      mode: "managerial",
     },
     toolCtx: {
       supabasePublic: supabasePublic as any,

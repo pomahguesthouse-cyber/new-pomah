@@ -17,6 +17,7 @@
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
+import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
 
 const CONTENT_TOOLS: ToolDefinition[] = [
@@ -131,6 +132,7 @@ export const contentAgent: AgentDefinition = {
       "Bila manajer memberi instruksi spesifik (mis. 'cari event bulan depan saja'), patuhi prioritas itu.",
     ];
 
+    sections.push(managerialModeOverlay(ctx, "content"));
     return sections.filter(Boolean).join("\n\n");
   },
 };

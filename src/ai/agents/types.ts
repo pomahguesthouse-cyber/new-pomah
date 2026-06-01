@@ -58,6 +58,17 @@ export interface AgentContext {
   customInstructions?: string;
   /** The name of the manager assigned to this agent */
   managerName?: string;
+  /**
+   * Conversation register. "guest" (default) is the customer-facing
+   * tone used when answering tamu via WhatsApp — sapa "Kak", empathetic,
+   * full hospitality scripts. "managerial" overrides the tone for
+   * internal Telegram channels where the agent is talking to the property
+   * manager/staff: concise, peer-to-peer, no apologies, operational vocab.
+   *
+   * Set ONLY by Telegram entry points (telegram-router). All WhatsApp
+   * paths leave it unset so guest-facing behavior is preserved unchanged.
+   */
+  mode?: "guest" | "managerial";
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────
