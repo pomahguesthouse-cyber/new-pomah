@@ -122,6 +122,35 @@ const CONTENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "generate_explore_image",
+      description:
+        "Generate gambar ilustrasi (cover) untuk SATU entri City Guide memakai AI image, " +
+        "lalu simpan URL-nya ke kolom image_url entri itu. Pakai setelah `upsert_explore_item` " +
+        "saat entri belum punya gambar, atau saat manajer minta dibuatkan gambar untuk event/destinasi/kuliner tertentu. " +
+        "Tidak akan menimpa gambar yang sudah ada kecuali overwrite=true.",
+      parameters: {
+        type: "object",
+        properties: {
+          id:              { type: "string", description: "UUID entri (paling akurat)." },
+          title:           { type: "string", description: "Judul entri jika tidak tahu id." },
+          overwrite:       { type: "boolean", description: "true untuk regenerate walau entri sudah punya image_url." },
+        },
+      },
+          category:     { type: "string", enum: ["event", "destinasi", "kuliner", "tips"], description: "Kategori entri." },
+          description:  { type: "string", description: "Paraphrase 2-4 kalimat, friendly travel-mag tone." },
+          date_text:    { type: "string", description: "Mis. '15-20 Juni 2026'. Wajib untuk event." },
+          location_text: { type: "string", description: "Mis. 'Kota Lama Semarang'." },
+          image_url:    { type: "string", description: "URL gambar (opsional)." },
+          badge:        { type: "string", description: "Mis. 'New', 'Trending' (opsional)." },
+          publish:      { type: "boolean", description: "true untuk langsung publish (default false)." },
+        },
+        required: ["title", "category"],
+      },
+    },
+  },
 ];
 
 export const contentAgent: AgentDefinition = {
