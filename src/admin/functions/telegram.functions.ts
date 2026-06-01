@@ -83,7 +83,7 @@ export const listAgentChannels = createServerFn({ method: "GET" })
   .handler(async () => {
     const { data, error } = await (supabaseAdmin as any)
       .from("telegram_agent_channels")
-      .select("id, chat_id, agent_key, chat_type, label, is_active, created_at")
+      .select("id, chat_id, agent_key, chat_type, label, message_thread_id, is_active, created_at")
       .order("agent_key");
     if (error) throw new Error(error.message);
     return { channels: data ?? [] };
@@ -93,20 +93,35 @@ export const upsertAgentChannel = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z.object({
-      chat_id:   z.string().min(1).max(40),
-      agent_key: z.enum(AGENT_KEYS),
-      label:     z.string().max(120).optional(),
+      chat_id:           z.string().min(1).max(40),
+      agent_key:         z.enum(AGENT_KEYS),
+      label:             z.string().max(120).optional(),
+      message_thread_id: z.string().max(20).optional(),
     }).parse(d),
   )
   .handler(async ({ data }) => {
-    const { error } = await (supabaseAdmin as any)
+    const threadId = data.message_thread_id?.trim() || null;
+    // Look up by (chat_id + thread_id) — composite unique key.
+    const baseQuery = (supabaseAdmin as any)
       .from("telegram_agent_channels")
-      .upsert({
-        chat_id:   data.chat_id,
-        agent_key: data.agent_key,
-        label:     data.label ?? null,
-        is_active: true,
-      }, { onConflict: "chat_id" });
+      .select("id")
+      .eq("chat_id", data.chat_id);
+    const { data: existing } = await (threadId
+      ? baseQuery.eq("message_thread_id", threadId)
+      : baseQuery.is("message_thread_id", null)
+    ).maybeSingle();
+
+    const payload = {
+      chat_id:           data.chat_id,
+      agent_key:         data.agent_key,
+      label:             data.label ?? null,
+      message_thread_id: threadId,
+      is_active:         true,
+    };
+    const op = existing?.id
+      ? (supabaseAdmin as any).from("telegram_agent_channels").update(payload).eq("id", existing.id)
+      : (supabaseAdmin as any).from("telegram_agent_channels").insert(payload);
+    const { error } = await op;
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });

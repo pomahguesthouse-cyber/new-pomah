@@ -101,16 +101,17 @@ function signature(agentKey: string, personas: Record<string, string>): string {
 }
 
 interface AgentChannelRow {
-  chat_id:   string;
-  agent_key: string;
-  label:     string | null;
+  chat_id:           string;
+  agent_key:         string;
+  label:             string | null;
+  message_thread_id: string | null;
 }
 
 async function loadAgentChannels(db: Db, agentKeys: string[]): Promise<AgentChannelRow[]> {
   if (agentKeys.length === 0) return [];
   const { data, error } = await db
     .from("telegram_agent_channels")
-    .select("chat_id, agent_key, label")
+    .select("chat_id, agent_key, label, message_thread_id")
     .in("agent_key", agentKeys)
     .eq("is_active", true);
   if (error) {
@@ -146,16 +147,18 @@ async function fanOutToAgentChannels(
 
   const tasks = channels.map((ch) => {
     const messageWithSig = base.message + signature(ch.agent_key, personas);
+    const dedupSuffix = ch.message_thread_id ? `${ch.chat_id}:t${ch.message_thread_id}` : ch.chat_id;
     return sendWithRetry(db, null, {
       eventType: base.eventType,
       message:   messageWithSig,
       fileUrl:   base.fileUrl,
       relatedId: base.relatedId,
       channel:   "telegram",
-      dedupeKey: base.dedupeKeyFor(ch.agent_key, ch.chat_id),
+      dedupeKey: base.dedupeKeyFor(ch.agent_key, dedupSuffix),
       replyMarkup: base.replyMarkup,
+      messageThreadId: ch.message_thread_id ?? undefined,
       recipient: {
-        id: `agent:${ch.agent_key}:${ch.chat_id}`,
+        id: `agent:${ch.agent_key}:${ch.chat_id}${ch.message_thread_id ? ":t" + ch.message_thread_id : ""}`,
         name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
         phone: "",
         role: "agent_channel",
@@ -205,6 +208,8 @@ interface SendOptions {
   channel: Channel;
   /** Optional inline keyboard (Telegram-only; ignored for WA). */
   replyMarkup?: ReplyMarkup;
+  /** Telegram Topic ID for supergroup forum threads. */
+  messageThreadId?: string;
 }
 
 /**
@@ -315,7 +320,9 @@ async function dispatchByChannel(
   const tgToken = await getTelegramTokenCached();
   if (!tgToken) return { ok: false, error: "no telegram token" };
   if (!opts.recipient.telegram_chat_id) return { ok: false, error: "no telegram chat_id" };
-  const sendOpts = opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {};
+  const sendOpts: any = {};
+  if (opts.replyMarkup) sendOpts.reply_markup = opts.replyMarkup;
+  if (opts.messageThreadId) sendOpts.message_thread_id = opts.messageThreadId;
   if (opts.fileUrl) {
     return tgSendPhoto(tgToken, opts.recipient.telegram_chat_id, opts.fileUrl, opts.message, sendOpts);
   }
