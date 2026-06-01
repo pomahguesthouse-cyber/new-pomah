@@ -37,8 +37,8 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
               "front-office",
               "pricing",
               "customer-care",
-              "maintenance",
               "finance",
+              "content",
             ] satisfies AgentKey[],
           },
           question: {

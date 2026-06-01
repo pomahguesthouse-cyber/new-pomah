@@ -126,22 +126,7 @@ const AGENTS = [
       "Bisa instruksikan estimasi waktu penanganan atau kata-kata empati khas",
     ],
   },
-  {
-    key: "maintenance",
-    name: "Maintenance Agent",
-    icon: Wrench,
-    color: "bg-orange-100 text-orange-700",
-    desc: "Perbaikan & fasilitas",
-    personaDefault: "Budi",
-    personaHint: "Nama persona teknisi maintenance (default: Budi)",
-    role: "Teknisi & Fasilitas",
-    roleDesc: "Menerima laporan kerusakan atau masalah fasilitas, mencatat prioritas, dan memastikan penanganan cepat.",
-    tips: [
-      "Persona tenang & berorientasi solusi — tamu frustrasi butuh kepastian",
-      "Otomatis mengklasifikasikan prioritas: Critical, High, Medium, Low",
-      "Bisa instruksikan SLA respons atau prosedur darurat spesifik properti",
-    ],
-  },
+  // Maintenance Agent dilebur ke Customer Care (lihat housekeeping.agent.ts).
   {
     key: "finance",
     name: "Finance Agent",

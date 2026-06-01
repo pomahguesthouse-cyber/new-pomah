@@ -604,8 +604,8 @@ export function deriveAgentLabelFromKey(agentKey: string): string {
     "front-office": "Front Office Agent",
     pricing:        "Pricing Agent",
     "customer-care": "Customer Care Agent",
-    maintenance:    "Maintenance Agent",
     finance:        "Finance Agent",
+    content:        "Content Manager Agent",
     manager:        "Manager Agent",
   };
   return labels[agentKey] ?? "Front Office Agent";

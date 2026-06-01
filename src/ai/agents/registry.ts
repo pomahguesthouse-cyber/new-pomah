@@ -9,8 +9,8 @@
 import { frontOfficeAgent } from "./front-office.agent";
 import { pricingAgent      } from "./pricing.agent";
 import { housekeepingAgent } from "./housekeeping.agent";
-import { maintenanceAgent  } from "./maintenance.agent";
 import { financeAgent      } from "./finance.agent";
+import { contentAgent      } from "./content.agent";
 import { managerAgent      } from "./manager.agent";
 import type { AgentDefinition, AgentKey } from "./types";
 
@@ -20,8 +20,8 @@ export const AGENT_REGISTRY: Record<AgentKey, AgentDefinition> = {
   "front-office": frontOfficeAgent,
   pricing:        pricingAgent,
   "customer-care": housekeepingAgent,
-  maintenance:    maintenanceAgent,
   finance:        financeAgent,
+  content:        contentAgent,
   manager:        managerAgent,
 };
 

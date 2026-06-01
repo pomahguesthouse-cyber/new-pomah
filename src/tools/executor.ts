@@ -21,6 +21,10 @@ import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
 import { replyToGuest }                   from "./manager/reply-to-guest.tool";
+import { discoverSemarangContent }        from "./content/discover-semarang-content.tool";
+import { upsertExploreItem }              from "./content/upsert-explore-item.tool";
+import { listExploreItems }               from "./content/list-explore-items.tool";
+import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
@@ -41,6 +45,10 @@ const HANDLERS: Record<string, ToolHandler> = {
   update_booking_status:         updateBookingStatus,
   change_booking_room:           changeBookingRoom,
   reply_to_guest:                replyToGuest,
+  discover_semarang_content:     discoverSemarangContent,
+  upsert_explore_item:           upsertExploreItem,
+  list_explore_items:            listExploreItems,
+  scrape_competitor_prices:      scrapeCompetitorPrices,
   get_room_specifications:       getRoomSpecifications,
 };
 

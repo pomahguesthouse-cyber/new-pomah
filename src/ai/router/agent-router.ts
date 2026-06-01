@@ -23,7 +23,9 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   availability_check: "front-office",
   pricing_inquiry:    "pricing",
   "customer-care":    "customer-care",
-  maintenance:        "maintenance",
+  // Maintenance intent is real (AC mati, kran bocor) but is now handled by
+  // Customer Care — the Maintenance Agent has been merged into it.
+  maintenance:        "customer-care",
   payment:            "finance",
   complaint:          "front-office",
   general:            "front-office",
@@ -33,8 +35,8 @@ const AGENT_NAMES: Record<AgentKey, string> = {
   "front-office": "Front Office Agent",
   pricing:        "Pricing Agent",
   "customer-care": "Customer Care Agent",
-  maintenance:    "Maintenance Agent",
   finance:        "Finance Agent",
+  content:        "Content Manager Agent",
   manager:        "Manager Agent",
 };
 

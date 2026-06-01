@@ -51,7 +51,7 @@ const AGENTS = [
   { key: "front-office",   name: "Front Office Agent",   icon: Building2,  desc: "Reservasi, check-in, info tamu" },
   { key: "pricing",        name: "Pricing Agent",         icon: DollarSign, desc: "Tarif dinamis & promo" },
   { key: "customer-care",  name: "Customer Care Agent",   icon: BedDouble,  desc: "Status & kesiapan kamar" },
-  { key: "maintenance",    name: "Maintenance Agent",     icon: Wrench,     desc: "Perbaikan & fasilitas" },
+  // Maintenance Agent dilebur ke Customer Care.
   { key: "finance",        name: "Finance Agent",         icon: Calculator, desc: "Pembayaran & tagihan" },
   { key: "manager",        name: "Manager Agent",         icon: UserCog,    desc: "Percakapan manajerial" },
 ];
