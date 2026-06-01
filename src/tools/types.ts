@@ -64,6 +64,12 @@ export interface ToolContext {
    * yang sama meski tamu tidak mengulang menyebut.
    */
   lastDates?: { checkIn: string; checkOut: string };
+  /**
+   * True when the caller is in managerial/admin mode (e.g. running pricing
+   * tools from the admin Telegram bot). Tools that mutate property data check
+   * this before running.
+   */
+  isManager?: boolean;
 }
 
 /** A tool handler: receives raw args (from LLM JSON), returns JSON string. */
