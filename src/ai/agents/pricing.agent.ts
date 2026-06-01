@@ -14,7 +14,10 @@ import type { ToolDefinition } from "@/ai/types";
 // Pricing agent: availability (rates come from it) + competitor scraping
 // for ad-hoc rate-benchmarking on staff request.
 const PRICING_TOOLS: ToolDefinition[] = [
-  ...TOOL_DEFINITIONS.filter((t) => t.function.name === "check_room_availability"),
+  ...TOOL_DEFINITIONS.filter((t) =>
+    t.function.name === "check_room_availability" ||
+    t.function.name === "update_room_rate"
+  ),
   {
     type: "function",
     function: {
@@ -113,6 +116,21 @@ export const pricingAgent: AgentDefinition = {
         "Arahkan ke Front Office jika tamu ingin melanjutkan reservasi.",
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
+
+      // Tool privileged terhadap konteks manajerial — instruksinya hanya
+      // relevan saat ctx.mode === 'managerial'. Tetap dijelaskan di prompt
+      // utama supaya LLM tahu cara memetakan perintah natural ke argumen
+      // tool yang benar; eksekusinya tetap diblok di tool layer untuk
+      // konteks non-manajer.
+      "UBAH HARGA (HANYA UNTUK MANAJER/SUPER ADMIN): " +
+        "Saat manajer menginstruksikan perubahan tarif (mis. 'ganti harga Deluxe jadi 350rb', " +
+        "'naikin Single 50.000', 'extrabed semua jadi 75000'), gunakan tool `update_room_rate`. " +
+        "Konversi singkatan ke rupiah utuh: '350rb' / '350k' = 350000, '1.2jt' = 1200000. " +
+        "BILA AMBIGU (mis. 'naikin 50rb' tidak jelas naik 50.000 atau MENJADI 50.000), " +
+        "tanya konfirmasi dulu, jangan menebak. Setelah tool berhasil, sampaikan ringkas: " +
+        "'Tarif <nama> diubah dari Rp <lama> → Rp <baru>.' " +
+        "Tool akan menolak otomatis bila yang berbicara bukan manajer — jangan panggil tool ini " +
+        "untuk tamu biasa walaupun mereka meminta diskon/perubahan harga.",
     ];
 
     sections.push(managerialModeOverlay(ctx, "pricing"));

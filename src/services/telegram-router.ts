@@ -499,6 +499,10 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
       property:       p,
       today:          todayWIB(),
       phone:          `tg-channel:${mapping.agent_key}:${chatId}`,
+      // Per-agent Telegram bots only serve internal staff (managers / super
+      // admin in dedicated groups), so privileged tools — e.g. update_room_rate
+      // — are allowed to run here.
+      isManager:      true,
     },
     llmConfig: { apiKey, baseUrl, model },
     history,

@@ -26,6 +26,7 @@ import { upsertExploreItem }              from "./content/upsert-explore-item.to
 import { listExploreItems }               from "./content/list-explore-items.tool";
 import { publishExploreItem, publishExploreItemsByCategory } from "./content/publish-explore-item.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
+import { updateRoomRate }                 from "./pricing/update-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
@@ -52,6 +53,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   publish_explore_item:          publishExploreItem,
   publish_explore_items_by_category: publishExploreItemsByCategory,
   scrape_competitor_prices:      scrapeCompetitorPrices,
+  update_room_rate:              updateRoomRate,
   get_room_specifications:       getRoomSpecifications,
 };
 
