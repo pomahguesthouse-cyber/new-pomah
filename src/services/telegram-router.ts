@@ -51,7 +51,31 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
   const chatId = String(msg.chat?.id ?? "");
   if (!chatId) return;
 
+  const chatType = String(msg.chat?.type ?? "private");
   const text: string = (msg.text ?? msg.caption ?? "").trim();
+
+  // ── Group/supergroup messages → route to the agent bound to this chat
+  //     (telegram_agent_channels). The agent runs with isManager=true so
+  //     it bypasses guest-routing and gets full tool access.
+  if (chatType === "group" || chatType === "supergroup" || chatType === "channel") {
+    // Allow /start to seed channel registration (admin types
+    // "/start agent <agent_key>" inside the group).
+    if (text.startsWith("/start")) {
+      const parts = text.split(/\s+/);
+      if (parts[1] === "agent" && parts[2]) {
+        await handleAgentChannelRegister({ ...args, chatId, chatType, agentKey: parts[2], groupTitle: msg.chat?.title });
+        return;
+      }
+      await sendMessage(botToken, chatId,
+        "Bot terdaftar di grup ini. Admin perlu mengikat grup ini ke agent tertentu via " +
+        "Admin → Telegram, ATAU ketik: /start agent <agent_key> (mis. front-office, finance, content, manager, customer-care, pricing).");
+      return;
+    }
+    await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType });
+    return;
+  }
+
+  // Private chat below — original DM flow with the Manager Agent.
 
   // ── /start <token> — first-time linking ──────────────────────────────
   if (text.startsWith("/start")) {
@@ -239,6 +263,125 @@ async function handleLinkingCommand(args: HandlerArgs & {
     `Mulai sekarang Anda akan menerima notifikasi booking, bukti transfer, ` +
     `dan komplain di sini. Anda juga bisa langsung bertanya — tanya occupancy, ` +
     `minta status booking, atau balas pesan tamu lewat saya.`);
+}
+
+// ─── Agent group channel handling ───────────────────────────────────────────
+
+const ALLOWED_AGENT_KEYS = new Set([
+  "front-office", "pricing", "customer-care", "finance", "content", "manager",
+]);
+
+async function handleAgentChannelRegister(args: HandlerArgs & {
+  chatId:     string;
+  chatType:   string;
+  agentKey:   string;
+  groupTitle: string | undefined;
+}): Promise<void> {
+  const { botToken, chatId, chatType, agentKey, groupTitle } = args;
+  const key = agentKey.toLowerCase();
+  if (!ALLOWED_AGENT_KEYS.has(key)) {
+    await sendMessage(botToken, chatId,
+      `❌ Agent "${agentKey}" tidak dikenal. Pilihan: ${[...ALLOWED_AGENT_KEYS].join(", ")}.`);
+    return;
+  }
+  const { error } = await (supabaseAdmin as any)
+    .from("telegram_agent_channels")
+    .upsert({
+      chat_id:   chatId,
+      agent_key: key,
+      chat_type: chatType,
+      label:     groupTitle ?? null,
+      is_active: true,
+    }, { onConflict: "chat_id" });
+  if (error) {
+    await sendMessage(botToken, chatId, `❌ Gagal register: ${error.message}`);
+    return;
+  }
+  await sendMessage(botToken, chatId,
+    `✅ Grup ini ter-bind ke agent "${key}". Semua notif untuk agent ini akan masuk ke sini, ` +
+    `dan pesan di grup ini akan dijawab langsung oleh agent tersebut.`);
+}
+
+async function handleAgentChannelMessage(args: HandlerArgs & {
+  chatId:   string;
+  message:  any;
+  chatType: string;
+}): Promise<void> {
+  const { botToken, chatId, message } = args;
+
+  // Lookup mapping.
+  const { data: mapping } = await (supabaseAdmin as any)
+    .from("telegram_agent_channels")
+    .select("agent_key, label")
+    .eq("chat_id", chatId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!mapping?.agent_key) {
+    // Bot is silent in unregistered groups so it doesn't spam.
+    return;
+  }
+
+  const text: string = (message.text ?? message.caption ?? "").trim();
+  if (!text) return;
+
+  // Build a minimal context and run the specific agent (not Manager).
+  const { data: prop } = await (supabaseAdmin as any)
+    .from("properties").select("*").limit(1).maybeSingle();
+  const p = (prop ?? {}) as any;
+  const { data: rooms } = await (supabasePublic as any)
+    .from("room_types")
+    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate")
+    .order("base_rate");
+
+  const explicitKey = p.ai_api_key?.trim();
+  const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
+  const useLovable  = !explicitKey && !!lovableKey;
+  const apiKey      = explicitKey || lovableKey;
+  if (!apiKey) {
+    await sendMessage(botToken, chatId, "AI belum dikonfigurasi.");
+    return;
+  }
+  const baseUrl = useLovable
+    ? "https://ai.gateway.lovable.dev/v1"
+    : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+  const cfgModel = p.ai_model?.trim();
+  const model = useLovable
+    ? cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash"
+    : cfgModel || "gpt-4o-mini";
+
+  // Load the agent's persona name from AI Lab config.
+  const aiLabConfig = (p.ai_lab_config ?? {}) as any;
+  const managerName: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.managerName;
+  const customInstructions: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.instructions;
+
+  // Run the bound agent directly via getAgent + runAgent helper.
+  const { getAgent } = await import("@/ai/agents/registry");
+  const { runAgentInGroupChannel } = await import("./telegram-agent-runner");
+  const reply = await runAgentInGroupChannel({
+    agentDef: getAgent(mapping.agent_key as any),
+    messageText: text,
+    agentCtx: {
+      property:    p,
+      rooms:       rooms || [],
+      sopText:     "",
+      brosurFiles: [],
+      today:       todayWIB(),
+      managerName,
+      customInstructions,
+    },
+    toolCtx: {
+      supabasePublic: supabasePublic as any,
+      supabaseAdmin:  supabaseAdmin  as any,
+      rooms:          rooms || [],
+      property:       p,
+      today:          todayWIB(),
+      phone:          `tg-channel:${mapping.agent_key}:${chatId}`,
+    },
+    llmConfig: { apiKey, baseUrl, model },
+  });
+
+  await sendMessage(botToken, chatId, reply || "(agent tidak menghasilkan balasan)");
 }
 
 async function resolveManagerByChatId(chatId: string): Promise<ManagerRow | null> {

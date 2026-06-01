@@ -53,6 +53,119 @@ async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
   };
 }
 
+/* ---------------- Agent persona + channel resolution ---------------- */
+
+/** Default persona names (mirror src/routes/admin/ai-lab.tsx). */
+const DEFAULT_PERSONA: Record<string, string> = {
+  "front-office": "Rania",
+  "pricing":      "Julia",
+  "customer-care": "Dewi",
+  "finance":      "Santi",
+  "content":      "Rara",
+  "manager":      "Alexandria",
+};
+
+const AGENT_LABEL: Record<string, string> = {
+  "front-office": "Front Office",
+  "pricing":      "Pricing",
+  "customer-care": "Customer Care",
+  "finance":      "Finance",
+  "content":      "Content Manager",
+  "manager":      "Manager",
+};
+
+async function loadAgentPersonas(db: Db): Promise<Record<string, string>> {
+  const personas: Record<string, string> = { ...DEFAULT_PERSONA };
+  try {
+    const { data } = await db
+      .from("properties")
+      .select("ai_lab_config")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const agents = ((data?.ai_lab_config as any)?.agents ?? {}) as Record<string, any>;
+    for (const key of Object.keys(personas)) {
+      const name = agents?.[key]?.managerName?.trim();
+      if (name) personas[key] = name;
+    }
+  } catch (e) {
+    console.warn("[ManagerNotifier] persona load failed:", e);
+  }
+  return personas;
+}
+
+function signature(agentKey: string, personas: Record<string, string>): string {
+  const name = personas[agentKey] ?? DEFAULT_PERSONA[agentKey] ?? "Tim";
+  const role = AGENT_LABEL[agentKey] ?? "Tim";
+  return `\n\n— ${name} (${role})`;
+}
+
+interface AgentChannelRow {
+  chat_id:   string;
+  agent_key: string;
+  label:     string | null;
+}
+
+async function loadAgentChannels(db: Db, agentKeys: string[]): Promise<AgentChannelRow[]> {
+  if (agentKeys.length === 0) return [];
+  const { data, error } = await db
+    .from("telegram_agent_channels")
+    .select("chat_id, agent_key, label")
+    .in("agent_key", agentKeys)
+    .eq("is_active", true);
+  if (error) {
+    console.warn("[ManagerNotifier] agent channels load failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as AgentChannelRow[];
+}
+
+/**
+ * Send a notification to the Telegram group(s) bound to each agent key.
+ * Each agent gets the message with their own persona signature so the
+ * group sees who "spoke" — useful when several agents share one Telegram
+ * workspace.
+ */
+async function fanOutToAgentChannels(
+  db: Db,
+  agentKeys: string[],
+  base: {
+    eventType: SendOptions["eventType"];
+    message:    string;
+    fileUrl?:   string;
+    replyMarkup?: ReplyMarkup;
+    relatedId?: string | null;
+    dedupeKeyFor: (agentKey: string, chatId: string) => string;
+  },
+): Promise<void> {
+  const [channels, personas] = await Promise.all([
+    loadAgentChannels(db, agentKeys),
+    loadAgentPersonas(db),
+  ]);
+  if (channels.length === 0) return;
+
+  const tasks = channels.map((ch) => {
+    const messageWithSig = base.message + signature(ch.agent_key, personas);
+    return sendWithRetry(db, null, {
+      eventType: base.eventType,
+      message:   messageWithSig,
+      fileUrl:   base.fileUrl,
+      relatedId: base.relatedId,
+      channel:   "telegram",
+      dedupeKey: base.dedupeKeyFor(ch.agent_key, ch.chat_id),
+      replyMarkup: base.replyMarkup,
+      recipient: {
+        id: `agent:${ch.agent_key}:${ch.chat_id}`,
+        name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
+        phone: "",
+        role: "agent_channel",
+        telegram_chat_id: ch.chat_id,
+      },
+    });
+  });
+  await Promise.all(tasks);
+}
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -330,12 +443,21 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
       return;
     }
 
-    await fanOut(db, fonnteToken, managers, {
-      eventType: "new_booking",
-      message,
-      relatedId: b.id,
-      dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
-    });
+    await Promise.all([
+      fanOut(db, fonnteToken, managers, {
+        eventType: "new_booking",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (m) => `new_booking:${b.id}:${m.id}`,
+      }),
+      // Bookings concern Front Office (intake) and Manager (oversight) channels.
+      fanOutToAgentChannels(db, ["front-office", "manager"], {
+        eventType: "new_booking",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (agent, chat) => `new_booking:${b.id}:agent:${agent}:${chat}`,
+      }),
+    ]);
   } catch (e) {
     console.error("[ManagerNotifier] notifyNewBooking error:", e);
   }
@@ -465,14 +587,25 @@ export async function notifyPaymentProof(
         }
       : undefined;
 
-    await fanOut(db, fonnteToken, superAdmins, {
-      eventType: "payment_proof",
-      message,
-      fileUrl: input.imageUrl,
-      relatedId: bookingId,
-      dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
-      telegramOnly: tgMarkup ? { replyMarkup: tgMarkup } : undefined,
-    });
+    await Promise.all([
+      fanOut(db, fonnteToken, superAdmins, {
+        eventType: "payment_proof",
+        message,
+        fileUrl: input.imageUrl,
+        relatedId: bookingId,
+        dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
+        telegramOnly: tgMarkup ? { replyMarkup: tgMarkup } : undefined,
+      }),
+      // Payment proofs belong to Finance (verification) and Manager (oversight).
+      fanOutToAgentChannels(db, ["finance", "manager"], {
+        eventType: "payment_proof",
+        message,
+        fileUrl: input.imageUrl,
+        relatedId: bookingId,
+        replyMarkup: tgMarkup,
+        dedupeKeyFor: (agent, chat) => `payment_proof:${input.messageId}:agent:${agent}:${chat}`,
+      }),
+    ]);
   } catch (e) {
     console.error("[ManagerNotifier] notifyPaymentProof error:", e);
   }
@@ -509,12 +642,21 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
-    await fanOut(db, fonnteToken, managers, {
-      eventType: "complaint",
-      message,
-      relatedId: c.id,
-      dedupeKeyFor: (m) => `complaint:${c.id}:${m.id}`,
-    });
+    await Promise.all([
+      fanOut(db, fonnteToken, managers, {
+        eventType: "complaint",
+        message,
+        relatedId: c.id,
+        dedupeKeyFor: (m) => `complaint:${c.id}:${m.id}`,
+      }),
+      // Complaints go to Customer Care (resolution) and Manager (escalation).
+      fanOutToAgentChannels(db, ["customer-care", "manager"], {
+        eventType: "complaint",
+        message,
+        relatedId: c.id,
+        dedupeKeyFor: (agent, chat) => `complaint:${c.id}:agent:${agent}:${chat}`,
+      }),
+    ]);
   } catch (e) {
     console.error("[ManagerNotifier] notifyComplaint error:", e);
   }
