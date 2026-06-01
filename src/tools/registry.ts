@@ -172,6 +172,44 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "update_room_rate",
+      description:
+        "MANAJER ONLY. Ubah tarif dasar (base_rate) dan/atau tarif extrabed " +
+        "sebuah tipe kamar di tabel room_types. Panggil HANYA saat super admin / " +
+        "manajer secara eksplisit menginstruksikan perubahan harga via Telegram atau " +
+        "WhatsApp (mis. 'ganti harga Deluxe jadi 350rb', 'naikin extrabed Single jadi 75000'). " +
+        "JANGAN PERNAH panggil saat berbicara dengan tamu — tool akan menolak. " +
+        "Konfirmasi nominal ke manajer SEBELUM memanggil bila terdapat ambiguitas (mis. 'naikin 50rb' " +
+        "tidak jelas naik 50.000 atau jadi 50.000). Setelah berhasil, sampaikan tarif lama → tarif baru.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: {
+            type: "string",
+            description:
+              "Nama (case-insensitive substring) atau UUID tipe kamar. " +
+              "Contoh: 'Deluxe', 'Family Suite 100'.",
+          },
+          base_rate: {
+            type: "number",
+            description:
+              "Tarif baru per malam dalam rupiah utuh (mis. 350000 untuk Rp 350.000). " +
+              "Kosongkan bila hanya ingin mengubah extrabed_rate.",
+          },
+          extrabed_rate: {
+            type: "number",
+            description:
+              "Tarif baru extrabed per malam dalam rupiah utuh. " +
+              "Kosongkan bila hanya ingin mengubah base_rate.",
+          },
+        },
+        required: ["room_type"],
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -197,5 +235,6 @@ export const TOOL_LABELS: Record<string, string> = {
   publish_explore_items_by_category: "Content - Publish Massal per Kategori",
   generate_explore_image:       "Content - Generate Gambar Event",
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
+  update_room_rate:             "Pricing - Ubah Tarif Kamar (Manajer)",
   get_room_specifications:      "Room Specifications",
 };
