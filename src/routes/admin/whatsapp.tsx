@@ -894,7 +894,7 @@ function MessageBadges({
   aiLabConfig
 }: { 
   m: any;
-  aiLabConfig?: AiLabConfig;
+  aiLabConfig?: { id: string | null; config: AiLabConfig };
 }) {
   const meta = m.metadata as Record<string, unknown> | null | undefined;
   const isOut = m.direction === "out";
@@ -916,7 +916,7 @@ function MessageBadges({
   
   let agent = rawAgent;
   if (!agent && agentKey) {
-    agent = aiLabConfig?.agents ? formatAgentBadge(agentKey, aiLabConfig.agents) : (AGENT_LABELS[agentKey] || agentKey);
+    agent = aiLabConfig?.config?.agents ? formatAgentBadge(agentKey, aiLabConfig.config.agents) : (AGENT_LABELS[agentKey] || agentKey);
   }
   
   const isFallback = meta?.is_fallback as boolean | undefined;
@@ -1022,7 +1022,7 @@ function MessageAttachment({ m }: { m: any }) {
   );
 }
 
-function MessageStream({ messages }: { messages: any[] }) {
+function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig?: { id: string | null; config: AiLabConfig } }) {
   const groups: { label: string; items: any[] }[] = [];
   let last = "";
   for (const m of messages) {
@@ -1079,7 +1079,7 @@ function MessageStream({ messages }: { messages: any[] }) {
                     {formatTimeID(m.sent_at)}
                   </div>
                 </div>
-                <MessageBadges m={m} />
+                  <MessageBadges m={m} aiLabConfig={aiLabConfig} />
               </div>
             ))}
           </div>
