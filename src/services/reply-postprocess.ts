@@ -49,7 +49,33 @@ const BROCHURE_REQUEST_PATTERNS: RegExp[] = [
   /\b(kamar|room|tipe|type)(?:nya)?\b.*\b(gambar|foto|photo|picture|image)(?:nya)?\b/i,
   /\b(lihat|minta|kirim|kirimin|kasih|tunjuk(?:kan|in)?|ada|boleh|bisa)\b.*\b(gambar|foto|brosur|brochure)(?:nya)?\b/i,
   /\b(gambar|foto|brosur)(?:nya)?\b.*\b(lihat|minta|kirim|dong|ya|kak|nya)\b/i,
+  // Indonesian guests often ask without using gambar/foto/brosur literally —
+  // they say "liat contoh kamarnya", "tunjukin kamar", "ada kamar yang bisa
+  // dilihat?". Catch those so the brochure attaches instead of the agent
+  // promising to "kirim brosur" with nothing actually attached.
+  /\b(lihat|liat|liyat|tunjuk(?:kan|in)?|tunjuin|kirim(?:in|kan)?|minta)\b.*\b(contoh\s+)?(kamar|tipe|room)(?:nya|nya)?\b/i,
+  /\bcontoh(?:nya)?\b.*\b(kamar|tipe|room|penginapan)(?:nya)?\b/i,
+  /\b(kamar|tipe|room)(?:nya)?\b.*\bcontoh(?:nya)?\b/i,
 ];
+
+/**
+ * Heuristic for "the LLM just promised to send a brochure but didn't
+ * reference a specific file". Used as a third source of truth in
+ * `pickAttachment` so the bot doesn't make an empty promise. Example
+ * triggers from the wild:
+ *   - "berikut saya kirimkan brosur kami ya."
+ *   - "saya kirim brosur ya, Kak"
+ *   - "saya lampirkan brosurnya"
+ */
+const BROCHURE_PROMISE_PATTERNS: RegExp[] = [
+  /\bberikut\b.*\bbrosur(?:nya)?\b/i,
+  /\b(saya|kami|mimin)\b.*\b(kirim(?:kan|in)?|lampir(?:kan|in)?|berikan|sertakan|attach)\b.*\bbrosur(?:nya)?\b/i,
+  /\bbrosur(?:nya)?\b.*\b(terlampir|menyusul|berikut|saya lampirkan|saya kirim(?:kan|in)?)\b/i,
+];
+
+function llmPromisedBrochure(reply: string): boolean {
+  return BROCHURE_PROMISE_PATTERNS.some((p) => p.test(reply));
+}
 
 export function isBrochureRequest(text: string): boolean {
   return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
@@ -95,6 +121,15 @@ export function pickAttachment(
         return { url: f.url, name: f.name };
       }
     }
+  }
+  // 2b. LLM PROMISED a brochure ("berikut saya kirim brosur") but didn't
+  //     name a file. Without this, the agent's "saya kirimkan brosur"
+  //     becomes a lie — no attachment travels. Force-attach the first
+  //     PDF brosur (or the first file) so the promise is honoured.
+  if (brosurFiles.length > 0 && llmPromisedBrochure(reply)) {
+    const brosur =
+      brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url)) ?? brosurFiles[0];
+    if (brosur) return { url: brosur.url, name: brosur.name };
   }
   // 3. Direct PDF URL in reply (invoice, etc.)
   const pdfMatch = reply.match(/(https?:\/\/[^\s]+?\.pdf)/i);
