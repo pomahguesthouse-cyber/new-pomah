@@ -181,5 +181,9 @@ export const TOOL_LABELS: Record<string, string> = {
   update_booking_status:        "Manager - Update Booking Status",
   change_booking_room:          "Manager - Change Booking Room",
   reply_to_guest:               "Manager - Reply to Guest",
+  discover_semarang_content:    "Content - Cari Konten Semarang",
+  upsert_explore_item:          "Content - Tulis Entri City Guide",
+  list_explore_items:           "Content - List Entri",
+  scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   get_room_specifications:      "Room Specifications",
 };

@@ -16,8 +16,8 @@ export type AgentKey =
   | "front-office"
   | "pricing"
   | "customer-care"
-  | "maintenance"
   | "finance"
+  | "content"
   | "manager";
 
 // ─── Intent categories ────────────────────────────────────────────────────────

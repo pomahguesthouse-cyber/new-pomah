@@ -10,10 +10,29 @@ import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 
-// Pricing agent only needs the availability tool (rates come from it)
-const PRICING_TOOLS: ToolDefinition[] = TOOL_DEFINITIONS.filter(
-  (t) => t.function.name === "check_room_availability",
-);
+// Pricing agent: availability (rates come from it) + competitor scraping
+// for ad-hoc rate-benchmarking on staff request.
+const PRICING_TOOLS: ToolDefinition[] = [
+  ...TOOL_DEFINITIONS.filter((t) => t.function.name === "check_room_availability"),
+  {
+    type: "function",
+    function: {
+      name: "scrape_competitor_prices",
+      description:
+        "Cari + simpan harga kamar hotel kompetitor di Semarang (dari OTA). " +
+        "Hasil disimpan ke tabel competitor_prices untuk dianalisis di dashboard. " +
+        "Hanya panggil saat manajer minta benchmarking harga — bukan untuk menjawab tamu.",
+      parameters: {
+        type: "object",
+        properties: {
+          city:           { type: "string", description: "Default Semarang." },
+          extra_keywords: { type: "string", description: "Filter tambahan (mis. 'dekat tugu muda', 'budget')." },
+          limit:          { type: "number", description: "Maks hasil (1-20, default 8)." },
+        },
+      },
+    },
+  },
+];
 
 export const pricingAgent: AgentDefinition = {
   key:         "pricing",
