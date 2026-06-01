@@ -81,13 +81,22 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     type: "function",
     function: {
       name: "get_bookings",
-      description: "Daftar booking. Bisa difilter berdasarkan status (pending, confirmed, checked_in, dll) atau tanggal check_in/check_out.",
+      description:
+        "Daftar booking. Default urut dari booking yang paling baru dibuat (cocok untuk 'booking terakhir / terbaru'). " +
+        "Bisa difilter berdasarkan status (pending, confirmed, checked_in, dll) atau tanggal check_in/check_out.",
       parameters: {
         type: "object",
         properties: {
           status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
           date: { type: "string", description: "Tanggal (YYYY-MM-DD) untuk mencari booking yang menginap di tanggal tersebut." },
           limit: { type: "number", description: "Maksimal data yang dikembalikan. Default 10." },
+          sort: {
+            type: "string",
+            enum: ["recent", "upcoming"],
+            description:
+              "Urutan hasil. 'recent' (default) = booking yang paling baru dibuat di atas — pakai untuk 'booking terakhir' / 'booking terbaru'. " +
+              "'upcoming' = urut check-in dari yang paling dekat — pakai untuk 'jadwal check-in', 'siapa menginap besok'.",
+          },
         },
       },
     },
