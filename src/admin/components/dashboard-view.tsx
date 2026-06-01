@@ -9,7 +9,6 @@ import {
   DollarSign,
   Sparkles,
   ArrowRight,
-  Activity,
   Wallet,
   TrendingUp,
   Bot,
@@ -75,7 +74,7 @@ export function DashboardView() {
     return <div className="p-10 text-sm text-muted-foreground">Loading the operations center…</div>;
   }
 
-  const { kpis, arrivals, departures, recent, suggestions, threads } = overview.data;
+  const { kpis, arrivals, departures, recent, threads } = overview.data;
   const { trend, summary, pendingPayments, pendingPaymentTotal } = metrics.data;
 
   const fmtMoney = (n: number) => formatIDR(n);
@@ -381,28 +380,6 @@ export function DashboardView() {
           <p className="mt-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
             Payments module · coming soon
           </p>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-semibold">
-              <Activity className="h-4 w-4 text-violet-500" /> AI activity
-            </h2>
-            <Link to="/admin/ai" className="text-xs text-accent hover:underline">
-              More →
-            </Link>
-          </div>
-          <ul className="mt-4 space-y-3">
-            {suggestions.map((s) => (
-              <li key={s.id} className="border-l-2 border-accent pl-3">
-                <p className="text-sm font-medium">{s.title}</p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{s.body}</p>
-              </li>
-            ))}
-            {suggestions.length === 0 && (
-              <p className="text-sm text-muted-foreground">All clear.</p>
-            )}
-          </ul>
         </Card>
 
         <Card className="p-5">

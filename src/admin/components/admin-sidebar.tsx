@@ -67,7 +67,6 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin/telegram", label: "Telegram", icon: Send },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
-      { to: "/admin/ai", label: "AI Suggestions", icon: Sparkles },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
     ],
   },

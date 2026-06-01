@@ -29,7 +29,6 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
       { data: departures },
       { data: rooms },
       { data: recent },
-      { data: suggestions },
       { data: threads },
     ] = await Promise.all([
       supabase.from("bookings").select("*", { count: "exact", head: true }),
@@ -55,12 +54,6 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
         )
         .order("created_at", { ascending: false })
         .limit(8),
-      supabase
-        .from("ai_suggestions")
-        .select("*")
-        .eq("status", "new")
-        .order("created_at", { ascending: false })
-        .limit(5),
       supabase
         .from("whatsapp_threads")
         .select("id, display_name, last_message_preview, last_message_at, unread_count")
@@ -98,7 +91,6 @@ export const getDashboardOverview = createServerFn({ method: "GET" })
       departures: (departures ?? []).map(withRoomsLabel),
       rooms: rooms ?? [],
       recent: (recent ?? []).map(withRoomsLabel),
-      suggestions: suggestions ?? [],
       threads: threads ?? [],
     };
   });
