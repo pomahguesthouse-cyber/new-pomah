@@ -34,6 +34,14 @@ interface HandlerArgs {
   update:     any;
   botToken:   string;
   propertyId: string;
+  /**
+   * When set, this bot IS the agent — skip telegram_agent_channels
+   * lookup and run the named agent for any group message. Used by the
+   * per-agent /api/telegram/$agentKey webhook where each bot is
+   * permanently bound to one role (Rania = front-office,
+   * Santi = finance, etc.).
+   */
+  forcedAgentKey?: string;
 }
 
 export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
@@ -88,6 +96,13 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
       return;
     }
     await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType, threadId });
+    return;
+  }
+
+  // ── Private DM to a per-agent bot (e.g. an admin chats directly with
+  //     @rania_pomah_bot). Same flow as group message — run the forced agent.
+  if (args.forcedAgentKey) {
+    await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType, threadId: null });
     return;
   }
 
@@ -343,11 +358,15 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   const { botToken, chatId, message, threadId } = args;
   const replyOpts = { message_thread_id: threadId ?? undefined } as any;
 
-  // Lookup precedence: exact (chat + thread) match first, fall back to
-  // chat-wide binding (thread_id IS NULL) — supports both topic-aware
-  // supergroups and legacy whole-group bindings.
+  // Lookup precedence:
+  //   1. forcedAgentKey (per-agent bot — Rania/Julia/etc. webhook)
+  //   2. exact (chat + thread) channel binding
+  //   3. chat-wide channel binding
   let mapping: { agent_key: string; label: string | null } | null = null;
-  if (threadId != null) {
+  if (args.forcedAgentKey) {
+    mapping = { agent_key: args.forcedAgentKey, label: null };
+  }
+  if (!mapping && threadId != null) {
     const { data } = await (supabaseAdmin as any)
       .from("telegram_agent_channels")
       .select("agent_key, label")

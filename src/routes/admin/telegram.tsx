@@ -29,9 +29,13 @@ import {
   listAgentChannels,
   upsertAgentChannel,
   deleteAgentChannel,
+  listAgentBots,
+  saveAgentBotToken,
+  setupAgentBotWebhook,
+  deleteAgentBot,
 } from "@/admin/functions/telegram.functions";
 import { toast } from "sonner";
-import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle, Activity, Zap, Users, Plus } from "lucide-react";
+import { Send, Link2, Copy, Trash2, RefreshCw, AlertTriangle, Activity, Zap, Users, Plus, Bot, Key } from "lucide-react";
 
 export const Route = createFileRoute("/admin/telegram")({
   component: TelegramPage,
@@ -48,6 +52,10 @@ function TelegramPage() {
   const listChFn = useServerFn(listAgentChannels);
   const upsertChFn = useServerFn(upsertAgentChannel);
   const deleteChFn = useServerFn(deleteAgentChannel);
+  const listBotsFn = useServerFn(listAgentBots);
+  const saveBotFn = useServerFn(saveAgentBotToken);
+  const setupBotFn = useServerFn(setupAgentBotWebhook);
+  const deleteBotFn = useServerFn(deleteAgentBot);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -61,6 +69,10 @@ function TelegramPage() {
   const { data: channelsData } = useQuery({
     queryKey: ["telegram-agent-channels"],
     queryFn: () => listChFn(),
+  });
+  const { data: botsData } = useQuery({
+    queryKey: ["telegram-agent-bots"],
+    queryFn: () => listBotsFn(),
   });
 
   const [newChannelChatId, setNewChannelChatId] = useState("");
@@ -88,6 +100,45 @@ function TelegramPage() {
       qc.invalidateQueries({ queryKey: ["telegram-agent-channels"] });
     } catch (e: any) { toast.error(e.message ?? "Gagal"); }
   }
+
+  const [botDrafts, setBotDrafts] = useState<Record<string, string>>({});
+  async function handleSaveBot(agent_key: string) {
+    const token = (botDrafts[agent_key] ?? "").trim();
+    if (!token) return;
+    try {
+      const r: any = await saveBotFn({ data: { agent_key: agent_key as any, bot_token: token } });
+      setBotDrafts((d) => ({ ...d, [agent_key]: "" }));
+      qc.invalidateQueries({ queryKey: ["telegram-agent-bots"] });
+      toast.success(`Token tersimpan${r?.bot_username ? ` (@${r.bot_username})` : ""}`);
+    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
+  async function handleSetupBotWebhook(agent_key: string) {
+    try {
+      const origin = window.location.origin;
+      const r: any = await setupBotFn({ data: { agent_key: agent_key as any, origin } });
+      qc.invalidateQueries({ queryKey: ["telegram-agent-bots"] });
+      toast.success(`Webhook di-set: ${r.webhook_url}`);
+    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
+  async function handleDeleteBot(agent_key: string) {
+    if (!window.confirm(`Hapus bot untuk ${agent_key}?`)) return;
+    try {
+      await deleteBotFn({ data: { agent_key: agent_key as any } });
+      qc.invalidateQueries({ queryKey: ["telegram-agent-bots"] });
+    } catch (e: any) { toast.error(e.message ?? "Gagal"); }
+  }
+
+  const AGENT_LIST = [
+    { key: "front-office", label: "Front Office", persona: "Rania" },
+    { key: "pricing", label: "Pricing", persona: "Julia" },
+    { key: "customer-care", label: "Customer Care", persona: "Dewi" },
+    { key: "finance", label: "Finance", persona: "Santi" },
+    { key: "content", label: "Content", persona: "Rara" },
+    { key: "manager", label: "Manager", persona: "Alexandria" },
+  ];
+  const botsByKey = new Map<string, any>(
+    (botsData?.bots ?? []).map((b: any) => [b.agent_key, b]),
+  );
   const [generatedLink, setGeneratedLink] = useState<{ id: string; link: string } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -186,6 +237,70 @@ function TelegramPage() {
             </Button>
           </div>
         )}
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-semibold flex items-center gap-1.5">
+          <Bot className="h-4 w-4 text-rose-600" /> Bot per Agent
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Tiap agent punya bot Telegram sendiri (nama + avatar berbeda). Buat bot di
+          {" "}<a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="underline">@BotFather</a>{" "}
+          (mis. "Rania Pomah", "Santi Pomah"), paste token-nya di sini, lalu klik
+          <b> Setup webhook</b>. Tambahkan semua bot ke satu Telegram group — anggota akan melihat
+          tiap agent sebagai "speaker" terpisah.
+        </p>
+        <div className="space-y-2">
+          {AGENT_LIST.map((a) => {
+            const bot = botsByKey.get(a.key);
+            const draft = botDrafts[a.key] ?? "";
+            return (
+              <div key={a.key} className="flex flex-wrap items-center gap-2 border rounded-md p-2 bg-white">
+                <div className="min-w-[150px]">
+                  <div className="text-sm font-medium">{a.label}</div>
+                  <div className="text-[10px] text-muted-foreground">Persona: {a.persona}</div>
+                </div>
+                {bot ? (
+                  <>
+                    <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">
+                      {bot.bot_username ? `@${bot.bot_username}` : "Token tersimpan"}
+                    </Badge>
+                    <code className="text-[10px] bg-stone-100 px-1.5 py-0.5 rounded">
+                      {bot.bot_token_masked}
+                    </code>
+                    {bot.webhook_set_at ? (
+                      <Badge className="bg-sky-100 text-sky-700 text-[10px]">webhook ✓</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">webhook ✗</Badge>
+                    )}
+                    <Button size="sm" variant="outline" className="h-7"
+                      onClick={() => handleSetupBotWebhook(a.key)}>
+                      <RefreshCw className="h-3 w-3 mr-1" /> Setup webhook
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-red-600"
+                      onClick={() => handleDeleteBot(a.key)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      type="password"
+                      placeholder="Bot token dari @BotFather"
+                      className="h-8 rounded-md border bg-background px-2 text-xs flex-1 min-w-[200px]"
+                      value={draft}
+                      onChange={(e) => setBotDrafts((d) => ({ ...d, [a.key]: e.target.value }))}
+                    />
+                    <Button size="sm" className="h-8" onClick={() => handleSaveBot(a.key)}
+                      disabled={!draft.trim()}>
+                      <Key className="h-3 w-3 mr-1" /> Simpan
+                    </Button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Card>
 
       {/* Diagnostics panel */}

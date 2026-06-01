@@ -145,9 +145,11 @@ async function fanOutToAgentChannels(
   ]);
   if (channels.length === 0) return;
 
-  const tasks = channels.map((ch) => {
+  const tasks = await Promise.all(channels.map(async (ch) => {
     const messageWithSig = base.message + signature(ch.agent_key, personas);
     const dedupSuffix = ch.message_thread_id ? `${ch.chat_id}:t${ch.message_thread_id}` : ch.chat_id;
+    // Resolve per-agent bot token; falls back to property-wide token.
+    const agentBotToken = await getAgentBotToken(db, ch.agent_key);
     return sendWithRetry(db, null, {
       eventType: base.eventType,
       message:   messageWithSig,
@@ -157,6 +159,7 @@ async function fanOutToAgentChannels(
       dedupeKey: base.dedupeKeyFor(ch.agent_key, dedupSuffix),
       replyMarkup: base.replyMarkup,
       messageThreadId: ch.message_thread_id ?? undefined,
+      agentBotToken,
       recipient: {
         id: `agent:${ch.agent_key}:${ch.chat_id}${ch.message_thread_id ? ":t" + ch.message_thread_id : ""}`,
         name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
@@ -165,7 +168,7 @@ async function fanOutToAgentChannels(
         telegram_chat_id: ch.chat_id,
       },
     });
-  });
+  }));
   await Promise.all(tasks);
 }
 
@@ -210,6 +213,9 @@ interface SendOptions {
   replyMarkup?: ReplyMarkup;
   /** Telegram Topic ID for supergroup forum threads. */
   messageThreadId?: string;
+  /** Override Telegram bot token (per-agent bot). Falls back to
+   *  the property-wide token when null/undefined. */
+  agentBotToken?: string | null;
 }
 
 /**
@@ -317,7 +323,7 @@ async function dispatchByChannel(
     return { ok: r.ok, error: r.error ?? undefined };
   }
   // telegram
-  const tgToken = await getTelegramTokenCached();
+  const tgToken = opts.agentBotToken ?? await getTelegramTokenCached();
   if (!tgToken) return { ok: false, error: "no telegram token" };
   if (!opts.recipient.telegram_chat_id) return { ok: false, error: "no telegram chat_id" };
   const sendOpts: any = {};
@@ -342,6 +348,22 @@ async function getTelegramTokenCached(): Promise<string | null> {
   const tokens = await getPropertyTokens(supabaseAdmin as any);
   cachedTelegramToken = { value: tokens.telegramToken, at: now };
   return tokens.telegramToken;
+}
+
+/** Per-agent bot token cache (so a notif fanning out to N agent channels
+ *  doesn't N-query the bots table). Keyed by agent_key. */
+const cachedAgentBots = new Map<string, { token: string | null; at: number }>();
+async function getAgentBotToken(db: Db, agentKey: string): Promise<string | null> {
+  const cached = cachedAgentBots.get(agentKey);
+  if (cached && Date.now() - cached.at < TG_TOKEN_TTL_MS) return cached.token;
+  const { data } = await db
+    .from("telegram_agent_bots")
+    .select("bot_token, is_active")
+    .eq("agent_key", agentKey)
+    .maybeSingle();
+  const token = (data?.is_active && data?.bot_token) ? (data.bot_token as string) : null;
+  cachedAgentBots.set(agentKey, { token, at: Date.now() });
+  return token;
 }
 
 /**
