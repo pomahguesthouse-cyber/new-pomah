@@ -4,7 +4,7 @@
  * A full-screen AI control room (sidebar hidden, like the Page Builder)
  * with its own left navigation: an AI dashboard and the WhatsApp inbox.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -51,6 +51,7 @@ import {
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { WhatsAppPage } from "@/routes/admin/whatsapp";
+import { supabase } from "@/integrations/supabase/client";
 
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings";
@@ -468,9 +469,21 @@ function DashboardView() {
                   onClick={() => setEdit({ type: "agent", key: a.key })}
                   className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
                 >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${a.color}`}>
-                    <a.icon className="h-5 w-5" />
-                  </span>
+                  {ac?.avatarUrl ? (
+                    <img
+                      src={ac.avatarUrl}
+                      alt={ac.managerName || a.name}
+                      className="h-24 w-20 shrink-0 rounded-lg object-cover"
+                      onError={(e) => {
+                        console.warn("[AiLab] avatar failed to load:", ac.avatarUrl);
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${a.color}`}>
+                      <a.icon className="h-5 w-5" />
+                    </span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{AGENT_DIVISION_NAMES[a.key] ?? a.name}</p>
                     {cfg.agents[a.key]?.managerName && (
@@ -597,9 +610,17 @@ function ConfigDialog({
         <DialogHeader>
           {agent && (
             <div className="flex items-center gap-3 mb-1">
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${agent.color}`}>
-                <agent.icon className="h-5 w-5" />
-              </span>
+              {cfg.agents[agent.key]?.avatarUrl ? (
+                <img
+                  src={cfg.agents[agent.key].avatarUrl}
+                  alt={cfg.agents[agent.key].managerName || agent.name}
+                  className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                />
+              ) : (
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${agent.color}`}>
+                  <agent.icon className="h-5 w-5" />
+                </span>
+              )}
               <div>
                 <DialogTitle>{label}</DialogTitle>
                 <p className="text-xs text-muted-foreground mt-0.5">{agent.roleDesc}</p>
@@ -641,6 +662,21 @@ function ConfigDialog({
                 />
               </Row>
             </div>
+
+            {/* Avatar photo */}
+            <AgentAvatarUploader
+              agentKey={edit.key}
+              avatarUrl={cfg.agents[edit.key]?.avatarUrl ?? ""}
+              onChange={(url) =>
+                setCfg((c) => ({
+                  ...c,
+                  agents: {
+                    ...c.agents,
+                    [edit.key]: { ...c.agents[edit.key], avatarUrl: url },
+                  },
+                }))
+              }
+            />
 
             {/* Persona name */}
             <div className="space-y-1.5">
@@ -798,5 +834,114 @@ function ConfigDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Agent avatar uploader                                               */
+/* ------------------------------------------------------------------ */
+
+function AgentAvatarUploader({
+  agentKey,
+  avatarUrl,
+  onChange,
+}: {
+  agentKey: string;
+  avatarUrl: string;
+  onChange: (url: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function handleFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      toast.error("File harus berupa gambar.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Ukuran maksimum 5 MB.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const path = `agent-avatars/${agentKey}-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage
+        .from("room-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+      if (error) {
+        console.error("[AiLab] avatar upload error:", error);
+        toast.error(`Gagal upload: ${error.message}`);
+        return;
+      }
+      const url = supabase.storage.from("room-images").getPublicUrl(path).data.publicUrl;
+      console.info("[AiLab] avatar uploaded:", url);
+      onChange(url);
+      toast.success("Foto avatar diunggah. Klik Simpan untuk menyimpan perubahan.");
+    } catch (e) {
+      console.error("[AiLab] avatar upload exception:", e);
+      toast.error(`Gagal mengunggah foto: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-semibold">Foto Avatar</Label>
+      <div className="flex items-center gap-3">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt="Avatar"
+            className="h-24 w-20 shrink-0 rounded-lg border border-border object-cover"
+            onError={() => console.warn("[AiLab] dialog avatar failed to load:", avatarUrl)}
+          />
+        ) : (
+          <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-[10px] text-muted-foreground">
+            Belum ada
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+            }}
+          />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+            >
+              {busy ? "Mengunggah…" : avatarUrl ? "Ganti foto" : "Unggah foto"}
+            </Button>
+            {avatarUrl && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-rose-600 hover:text-rose-700"
+                disabled={busy}
+                onClick={() => onChange("")}
+              >
+                Hapus
+              </Button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            PNG / JPG, maks 5 MB. Disarankan rasio potret (3:4).
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
