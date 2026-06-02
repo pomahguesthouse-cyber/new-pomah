@@ -29,15 +29,22 @@ const PRICING_TOOLS: ToolDefinition[] = [
     function: {
       name: "scrape_competitor_prices",
       description:
-        "Cari + simpan harga kamar hotel kompetitor di Semarang (dari OTA). " +
-        "Hasil disimpan ke tabel competitor_prices untuk dianalisis di dashboard. " +
-        "Hanya panggil saat manajer minta benchmarking harga — bukan untuk menjawab tamu.",
+        "Cari + simpan harga kamar hotel kompetitor (dari OTA: Traveloka, Tiket, Booking, " +
+        "Agoda, Trip.com). Default mode: pakai daftar kompetitor yang admin simpan di " +
+        "properties.competitor_hotels (curated). Override via arg `hotels`. " +
+        "Tool otomatis menolak listing aggregator/landing page (mis. 'Hotel Dekat …'). " +
+        "Hanya panggil saat manajer minta benchmarking — bukan untuk menjawab tamu.",
       parameters: {
         type: "object",
         properties: {
-          city:           { type: "string", description: "Default Semarang." },
-          extra_keywords: { type: "string", description: "Filter tambahan (mis. 'dekat tugu muda', 'budget')." },
-          limit:          { type: "number", description: "Maks hasil (1-20, default 8)." },
+          city: { type: "string", description: "Default Semarang." },
+          hotels: {
+            type: "array",
+            items: { type: "string", description: "Nama hotel kompetitor." },
+            description: "Override daftar admin. Kosongkan untuk pakai properties.competitor_hotels.",
+          },
+          extra_keywords: { type: "string", description: "Filter tambahan (mis. 'budget', 'bintang 3')." },
+          limit:          { type: "number", description: "Maks hasil per hotel (1-20, default 6)." },
         },
       },
     },

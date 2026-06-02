@@ -1,26 +1,34 @@
 /**
  * Tool: scrape_competitor_prices
  *
- * Searches public OTA / hotel-aggregator results for Semarang hotel
- * rates, parses snippet text into structured rows, and inserts them
- * into `competitor_prices` for trend analysis.
+ * Dua mode:
  *
- * Why two-pass:
- *   1. webSearch → returns titles+snippets like
- *      "Hotel ABC Semarang from Rp 350.000/night..."
- *   2. Heuristic regex extraction of price ranges (Rp X — Rp Y, or
- *      "mulai Rp X"). LLM parsing would be more accurate but adds
- *      token cost on every scrape — we keep it deterministic and
- *      log raw snippets in `notes` so admin can audit.
+ *  1. CURATED (preferred): admin menyimpan daftar nama hotel kompetitor
+ *     di `properties.competitor_hotels` (jsonb array of strings). Tool
+ *     iterasi tiap nama, query OTA dengan frasa kutip ("<nama>" semarang),
+ *     dan HANYA terima baris yang title-nya cocok ke salah satu nama
+ *     kompetitor — tidak akan menyimpan halaman SEO generik.
  *
- * Returns a summary the Pricing Agent can mention to staff.
+ *  2. FREE-TEXT fallback: dipakai bila daftar kompetitor kosong. Query
+ *     bebas seperti versi lama, TAPI dengan junk-filter yang menolak
+ *     judul khas landing aggregator ("Hotel Dekat …", "Hotel Murah …",
+ *     "Hotel di X mulai Rp …", dll.).
+ *
+ * Argumen LLM:
+ *   - city            (default Semarang)
+ *   - hotels          string[] opsional → override daftar admin
+ *   - extra_keywords  string opsional → ditambah ke setiap query
+ *   - limit           per-hotel cap (default 6, max 20)
+ *
+ * Sumber tetap Tavily/Serper via webSearch (cheap, sudah terkonfigurasi).
  */
 
 import { loadSearchKeysFromDb, webSearch, type SearchSnippet } from "@/services/web-search.service";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
+// ─── Price parsing ─────────────────────────────────────────────────────────
+
 function parseRupiah(text: string): number | null {
-  // Match "Rp 350.000", "Rp350,000", "350000", "Rp 350 ribu"
   const m = text.match(/Rp\s*([\d.,]+)(?:\s*(rb|ribu|k|jt|juta))?/i);
   if (!m) return null;
   const numStr = m[1].replace(/[.,]/g, "");
@@ -33,7 +41,6 @@ function parseRupiah(text: string): number | null {
 }
 
 function extractPriceRange(text: string): { min: number | null; max: number | null } {
-  // Range patterns: "Rp X - Rp Y" / "Rp X sampai Rp Y" / "mulai Rp X"
   const range = text.match(/Rp\s*[\d.,]+\s*(?:-|—|–|sampai|hingga|s\/d)\s*Rp\s*[\d.,]+/i);
   if (range) {
     const both = [...range[0].matchAll(/Rp\s*([\d.,]+)/gi)].map((m) => parseRupiah(m[0]));
@@ -41,17 +48,8 @@ function extractPriceRange(text: string): { min: number | null; max: number | nu
       return { min: Math.min(both[0], both[1]), max: Math.max(both[0], both[1]) };
     }
   }
-  // Single price → treat as min
   const single = parseRupiah(text);
   return { min: single, max: null };
-}
-
-/** Extract hotel name from a snippet title — strip OTA suffixes. */
-function extractHotelName(title: string): string {
-  return title
-    .replace(/\s*[\|\-–—]\s*(traveloka|tiket\.com|booking\.com|agoda|trivago|pegipegi|airy).*$/i, "")
-    .replace(/\s*(hotel\s+(murah|terbaik|terdekat).*)/i, "")
-    .trim();
 }
 
 function extractStarRating(text: string): number | null {
@@ -63,6 +61,51 @@ function extractStarRating(text: string): number | null {
   return null;
 }
 
+// ─── Junk filter (aggregator / landing-page detection) ─────────────────────
+
+/**
+ * Reject snippet titles that are clearly NOT a single-hotel listing.
+ * These are mostly SEO aggregator pages: "Hotel Dekat Mall X", "Hotel Murah
+ * Semarang Mulai Rp 60rb", "Hotel di Y — Telusuri di KAYAK", etc.
+ */
+function looksLikeAggregatorTitle(title: string): boolean {
+  const t = title.trim();
+  // Starts with "Hotel " + generic descriptor that's not a brand.
+  const aggregatorPatterns = [
+    /^Hotel\s+(Dekat|Murah|Terdekat|Terbaik|Terbaru|Bintang|Sekitar|di\s+\S+\s+(?:Mulai|Harga|Murah|Terdekat))\b/i,
+    /^Hotel\s+di\s+\S+,?\s+Mulai\s+Rp/i,
+    /^Hotel\s+(Dekat|di)\s+.+(Mulai\s+Rp|Diskon|Promo)/i,
+    /^(Top\s+\d+|Daftar\s+\d+)\s+Hotel/i,
+    /Telusuri\s+di\s+(KAYAK|Trivago|Google)/i,
+    /\b(Mulai|Hanya|Diskon)\s+Rp\s*\d/i,        // "Mulai Rp Xrb" without a clear brand
+  ];
+  return aggregatorPatterns.some((p) => p.test(t));
+}
+
+/** Hotel-name normalize for fuzzy matching against curated list. */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleMatchesAnyHotel(title: string, hotels: string[]): string | null {
+  const t = normalizeForMatch(title);
+  for (const h of hotels) {
+    const n = normalizeForMatch(h);
+    if (!n) continue;
+    // Match if all tokens of hotel name appear contiguously OR all tokens appear in order.
+    if (t.includes(n)) return h;
+    // Fallback: every token of hotel name must be present in title.
+    const tokens = n.split(" ").filter((x) => x.length >= 2);
+    if (tokens.length > 0 && tokens.every((tok) => t.includes(tok))) return h;
+  }
+  return null;
+}
+
+// ─── Row shape ──────────────────────────────────────────────────────────────
+
 interface ParsedRow {
   hotel_name:  string;
   room_type:   string | null;
@@ -73,12 +116,19 @@ interface ParsedRow {
   notes:       string;
 }
 
-function snippetToRow(s: SearchSnippet): ParsedRow | null {
+function snippetToRow(
+  s: SearchSnippet,
+  overrideHotelName?: string,
+): ParsedRow | null {
   const combined = `${s.title} ${s.snippet}`;
   const { min, max } = extractPriceRange(combined);
-  if (min == null) return null; // skip rows with no price detected
+  if (min == null) return null;
+  const fallbackName = s.title
+    .replace(/\s*[\|\-–—]\s*(traveloka|tiket\.com|booking\.com|agoda|trivago|pegipegi|airy).*$/i, "")
+    .replace(/\s*(hotel\s+(murah|terbaik|terdekat).*)/i, "")
+    .trim();
   return {
-    hotel_name:  extractHotelName(s.title),
+    hotel_name:  overrideHotelName ?? fallbackName,
     room_type:   null,
     price_min:   min,
     price_max:   max,
@@ -88,42 +138,95 @@ function snippetToRow(s: SearchSnippet): ParsedRow | null {
   };
 }
 
+// ─── Handler ────────────────────────────────────────────────────────────────
+
+const CURATED_DOMAINS = ["traveloka.com", "tiket.com", "booking.com", "agoda.com", "trip.com", "pegipegi.com"];
+
 export const scrapeCompetitorPrices: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
   const cityArg = (typeof args.city === "string" ? args.city.trim() : "") || "Semarang";
   const extra   = typeof args.extra_keywords === "string" ? args.extra_keywords.trim() : "";
-  const limit   = Math.min(20, Math.max(1, Number(args.limit) || 8));
+  const perHotelLimit = Math.min(20, Math.max(1, Number(args.limit) || 6));
+
+  // Resolve curated competitor list: arg override → property config.
+  const argHotels = Array.isArray(args.hotels)
+    ? (args.hotels as unknown[]).filter((h): h is string => typeof h === "string" && h.trim().length > 0)
+    : null;
+  let curated: string[] = argHotels ?? [];
+  if (curated.length === 0) {
+    const raw = (ctx.property as Record<string, unknown>)?.competitor_hotels;
+    const parsed = typeof raw === "string" ? JSON.parse(raw || "[]") : raw;
+    if (Array.isArray(parsed)) {
+      curated = parsed.filter((h): h is string => typeof h === "string" && h.trim().length > 0);
+    }
+  }
 
   const keys = await loadSearchKeysFromDb(ctx.supabaseAdmin as any);
   if (!keys.tavily && !keys.serper && !process.env.TAVILY_API_KEY && !process.env.SERPER_API_KEY) {
     return JSON.stringify({ ok: false, error: "Web search belum dikonfigurasi." });
   }
 
-  const query = `harga kamar hotel ${cityArg} ${extra} per malam Rp`.trim();
-  const res = await webSearch(query, keys, {
-    curatedDomains: ["traveloka.com", "tiket.com", "booking.com", "agoda.com"],
-    maxResults: limit,
-  });
+  const rowsToInsert: ParsedRow[] = [];
+  let providerUsed: string | null = null;
+  const queriesRan: string[] = [];
 
-  const rows = res.snippets
-    .map(snippetToRow)
-    .filter((r): r is ParsedRow => r !== null);
+  // ── CURATED mode ─────────────────────────────────────────────────────────
+  if (curated.length > 0) {
+    for (const hotelName of curated) {
+      const query = `"${hotelName}" ${cityArg} harga kamar Rp ${extra}`.trim();
+      queriesRan.push(query);
+      const res = await webSearch(query, keys, {
+        curatedDomains: CURATED_DOMAINS,
+        maxResults: perHotelLimit,
+      });
+      if (!providerUsed) providerUsed = res.provider;
+      for (const s of res.snippets) {
+        // Must match THIS hotel (not just any in the list — query was specific).
+        const matched = titleMatchesAnyHotel(s.title, [hotelName])
+          ?? titleMatchesAnyHotel(`${s.title} ${s.snippet}`, [hotelName]);
+        if (!matched) continue;
+        if (looksLikeAggregatorTitle(s.title)) continue;
+        const row = snippetToRow(s, hotelName);
+        if (row) rowsToInsert.push(row);
+      }
+    }
+  }
 
-  if (rows.length === 0) {
+  // ── FREE-TEXT fallback ───────────────────────────────────────────────────
+  if (rowsToInsert.length === 0 && curated.length === 0) {
+    const query = `harga kamar hotel ${cityArg} ${extra} per malam Rp`.trim();
+    queriesRan.push(query);
+    const res = await webSearch(query, keys, {
+      curatedDomains: CURATED_DOMAINS,
+      maxResults: perHotelLimit,
+    });
+    providerUsed = res.provider;
+    for (const s of res.snippets) {
+      if (looksLikeAggregatorTitle(s.title)) continue;
+      const row = snippetToRow(s);
+      if (row) rowsToInsert.push(row);
+    }
+  }
+
+  if (rowsToInsert.length === 0) {
     return JSON.stringify({
       ok: false,
-      error: "Tidak ada harga terbaca dari hasil pencarian.",
-      provider: res.provider,
+      error: curated.length > 0
+        ? `Tidak ada listing kompetitor (${curated.join(", ")}) yang ditemukan di OTA. ` +
+          "Pastikan nama hotel akurat seperti yang muncul di Traveloka/Booking."
+        : "Tidak ada harga terbaca. Daftar kompetitor di Settings kosong — tambahkan nama hotel " +
+          "kompetitor untuk hasil lebih akurat.",
+      provider: providerUsed,
+      queries:  queriesRan,
     });
   }
 
-  // Insert all rows
-  const insertPayload = rows.map((r) => ({
+  const insertPayload = rowsToInsert.map((r) => ({
     ...r,
     city: cityArg,
-    source_provider: res.provider,
+    source_provider: providerUsed,
     currency: "IDR",
     fetched_at: new Date().toISOString(),
   }));
@@ -139,9 +242,11 @@ export const scrapeCompetitorPrices: ToolHandler = async (
 
   return JSON.stringify({
     ok: true,
+    mode: curated.length > 0 ? "curated" : "free_text",
+    competitors: curated.length > 0 ? curated : undefined,
     inserted_count: data?.length ?? 0,
-    provider: res.provider,
-    query,
+    provider: providerUsed,
+    queries: queriesRan,
     sample: (data ?? []).slice(0, 5),
   });
 };
