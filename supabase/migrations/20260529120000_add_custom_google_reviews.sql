@@ -3,7 +3,10 @@ ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS custom_google_rating NUME
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS custom_google_reviews_total INTEGER;
 ALTER TABLE public.properties ADD COLUMN IF NOT EXISTS custom_google_reviews_json JSONB;
 
--- Recreate RPC function to return the new columns too
+-- Recreate RPC function to return the new columns too.
+-- CREATE OR REPLACE cannot change OUT-parameter row type, so drop first.
+DROP FUNCTION IF EXISTS public.get_google_reviews_config();
+
 CREATE OR REPLACE FUNCTION public.get_google_reviews_config()
 RETURNS TABLE(
   google_place_id text,
