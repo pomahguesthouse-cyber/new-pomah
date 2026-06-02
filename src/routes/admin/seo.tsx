@@ -2284,7 +2284,11 @@ function GoogleReviewsSection() {
   }
 
   function addReview() {
-    setReviews((prev) => [...prev, { author: "", text: "", rating: 5 }]);
+    // Prepend the blank entry so it shows up at the TOP of the list —
+    // the "Tambah Ulasan" button lives in the section header, so the
+    // new row appears right below it and the manager doesn't have to
+    // scroll past every existing review to start typing.
+    setReviews((prev) => [{ author: "", text: "", rating: 5 }, ...prev]);
   }
 
   function updateReview(idx: number, patch: Partial<CustomReview>) {
