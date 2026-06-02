@@ -36,12 +36,23 @@ const DEFAULT_MAX_TURNS = 5;
 
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
-async function callLlm(
+/** Hard timeout per panggilan LLM agar tidak pernah menggantung worker. */
+const LLM_CALL_TIMEOUT_MS = 18_000;
+/** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
+const LLM_MAX_RETRIES = 1;
+
+async function callLlmOnce(
   config:   AiClientConfig,
   messages: AiMessage[],
   agent:    AgentDefinition,
   signal?:  AbortSignal,
-): Promise<LlmResponse | null> {
+): Promise<{ ok: true; data: LlmResponse } | { ok: false; retriable: boolean; reason: string }> {
+  // Gabungkan signal pemanggil dengan timeout internal kita.
+  const timeoutCtrl = new AbortController();
+  const timeoutId = setTimeout(() => timeoutCtrl.abort(), LLM_CALL_TIMEOUT_MS);
+  const onAbort = () => timeoutCtrl.abort();
+  signal?.addEventListener("abort", onAbort);
+
   try {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
       method:  "POST",
@@ -49,12 +60,10 @@ async function callLlm(
         "Content-Type":  "application/json",
         Authorization:   `Bearer ${config.apiKey}`,
       },
-      signal,
+      signal: timeoutCtrl.signal,
       body: JSON.stringify({
         model:       config.model,
         temperature: 0.6,
-        // Gemini 2.5 thinking tokens count against this budget; keep it generous
-        // so reasoning + tool calls don't exhaust it and return empty content.
         max_tokens:  2000,
         messages,
         tools:       agent.tools.length > 0 ? agent.tools : undefined,
@@ -63,19 +72,47 @@ async function callLlm(
     });
 
     if (!res.ok) {
-      console.error(
-        `[MultiAgent][${agent.key}] LLM HTTP error:`,
-        res.status,
-        await res.text(),
-      );
-      return null;
+      const body = await res.text();
+      console.error(`[MultiAgent][${agent.key}] LLM HTTP ${res.status}:`, body);
+      // 408/429/5xx → boleh retry; 4xx lainnya → permanen.
+      const retriable = res.status === 408 || res.status === 429 || res.status >= 500;
+      return { ok: false, retriable, reason: `http_${res.status}` };
     }
 
-    return (await res.json()) as LlmResponse;
+    return { ok: true, data: (await res.json()) as LlmResponse };
   } catch (e) {
-    console.error(`[MultiAgent][${agent.key}] LLM fetch error:`, e);
-    return null;
+    const aborted = (e as { name?: string })?.name === "AbortError";
+    const reason = aborted
+      ? (signal?.aborted ? "caller_abort" : "timeout")
+      : "fetch_error";
+    if (reason !== "caller_abort") {
+      console.error(`[MultiAgent][${agent.key}] LLM ${reason}:`, e);
+    }
+    // Caller abort tidak boleh diulang; timeout/jaringan boleh.
+    return { ok: false, retriable: reason !== "caller_abort", reason };
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", onAbort);
   }
+}
+
+async function callLlm(
+  config:   AiClientConfig,
+  messages: AiMessage[],
+  agent:    AgentDefinition,
+  signal?:  AbortSignal,
+): Promise<LlmResponse | null> {
+  for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    const r = await callLlmOnce(config, messages, agent, signal);
+    if (r.ok) return r.data;
+    if (!r.retriable) return null;
+    if (attempt < LLM_MAX_RETRIES) {
+      console.warn(`[MultiAgent][${agent.key}] retry LLM (attempt ${attempt + 1}) — reason: ${r.reason}`);
+      // Backoff singkat sebelum coba ulang.
+      await new Promise((res) => setTimeout(res, 500));
+    }
+  }
+  return null;
 }
 
 // ─── Single agent runner ──────────────────────────────────────────────────────
