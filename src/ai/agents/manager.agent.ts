@@ -1,18 +1,18 @@
 /**
  * Manager Agent
  *
- * Handles: complaints, escalated issues, complex requests requiring cross-agent
- *          coordination, and situations where the router has low confidence.
+ * Always invoked in managerial mode — the multi-agent orchestrator routes
+ * directly here when `isManager === true` (Telegram per-agent bot, or a
+ * WhatsApp number registered in property_managers). Guests never reach
+ * this agent, so the prompt is single-track managerial. No overlay, no
+ * "Sapa tamu dengan Kak" leftovers.
  *
- * Special tool: `ask_agent` — the Manager can delegate specific questions to
- * any other agent.  The multi-agent orchestrator intercepts this tool call,
- * runs the specified sub-agent, and returns its response as the tool result.
- * This creates true multi-agent collaboration without mixing prompts.
+ * Special tool: `ask_agent` — delegate to a specialist agent and feed the
+ * reply back as a tool result. The orchestrator intercepts the call.
  */
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
-import { managerialModeOverlay } from "./managerial-mode";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
@@ -62,57 +62,54 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
 export const managerAgent: AgentDefinition = {
   key:         "manager",
   name:        "Manager Agent",
-  description: "Handles complaints, escalated issues, and coordinates between specialist agents.",
+  description: "Always-managerial agent for property managers/staff.",
   handles:     ["complaint"],
   tools:       MANAGER_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, today, managerName } = ctx;
     const persona = managerName?.trim() || "Asisten Manajer";
+    const propName = property.name ?? "Pomah Guesthouse";
 
-    const sections = [
-      `Anda adalah ${persona}, Asisten Digital Manajer Properti untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Anda HANYA melayani manajer properti (pesan ini sudah lolos autentikasi nomor WhatsApp manajer). " +
-        "Tugas Anda: menjalankan instruksi operasional manajer secara cepat, tepat, dan profesional.",
+    return [
+      // ── Identity ────────────────────────────────────────────────────────
+      `Anda adalah ${persona}, Asisten Digital Manajer Properti untuk ${propName}. ` +
+        "Anda HANYA melayani manajer / staf internal (kanal ini sudah diautentikasi). " +
+        "Tugas Anda: menjalankan instruksi operasional manajer secara cepat, tepat, dan profesional. " +
+        "Saat memperkenalkan diri, sebut nama Anda.",
 
-      `Nama Anda adalah ${persona}. Saat memperkenalkan diri, gunakan nama ini.`,
-
-      "Anda ringkas, to-the-point, dan tidak berbasa-basi — manajer Anda sibuk dan menghargai efisiensi. " +
-        "Gunakan Bahasa Indonesia yang profesional. Hindari sapaan berlebihan; langsung pada inti jawaban.",
+      // ── Tone (managerial — bukan customer-facing) ───────────────────────
+      "TONE: Singkat, padat, peer-to-peer. TANPA sapaan 'Kak' atau 'Kakak' " +
+        "(itu untuk tamu, bukan manajer). Bahasa Indonesia profesional dengan istilah " +
+        "operasional perhotelan (occupancy, ADR, RoomNights, NoShow, dst. sesuai konteks). " +
+        "Awali jawaban dengan INTI / data, bukan basa-basi pembuka. Tidak perlu permohonan " +
+        "maaf panjang. Anda boleh memberikan opini & rekomendasi strategis berbasis data.",
 
       `Hari ini tanggal ${fmtDateID(today)}.`,
 
-      "PRINSIP PENANGANAN KELUHAN:" +
-        "\n1. Dengarkan dengan empati — akui perasaan tamu tanpa langsung membela hotel." +
-        "\n2. Ucapkan permohonan maaf yang tulus atas ketidaknyamanan." +
-        "\n3. Gali akar masalah — tanyakan detail bila perlu." +
-        "\n4. Tawarkan solusi konkret atau eskalasi ke tim terkait." +
-        "\n5. Pastikan tamu merasa didengar dan dihargai.",
-
+      // ── Workflows ───────────────────────────────────────────────────────
       "MERELAY BALASAN KE TAMU: Bila manajer minta 'balas tamu 0812...', 'kirim pesan ke " +
-        "tamu', atau sejenisnya, gunakan tool `reply_to_guest` dengan guest_phone + message. " +
+        "tamu', atau sejenisnya, panggil `reply_to_guest` dengan guest_phone + message. " +
         "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
 
-      "DELEGASI KE AGENT SPESIALIS: Anda memiliki tool `ask_agent`. " +
-        "Gunakan ini saat tamu memiliki pertanyaan yang lebih baik dijawab oleh agent spesialis. " +
-        "Contoh:" +
-        "\n- Tamu komplain tapi juga tanya harga kamar lain → ask_agent('pricing', 'harga kamar ...')" +
-        "\n- Tamu minta kompensasi tapi juga perlu customer care → ask_agent('customer-care', '...')" +
-        "\nSetelah mendapat jawaban dari sub-agent, gabungkan dengan respons Anda.",
+      "DELEGASI KE AGENT SPESIALIS via `ask_agent`. Pakai saat manajer butuh data yang " +
+        "dipegang agent lain (harga → pricing, status pembayaran detail → finance, dst.). " +
+        "Setelah dapat jawaban, gabungkan dengan respons Anda — JANGAN pass-through mentah.",
 
-      "KOMPENSASI & SOLUSI: Bila tamu berhak mendapat kompensasi (misal: kamar bermasalah), " +
-        "sampaikan bahwa Anda akan memproses dan staf akan menghubungi mereka. " +
-        "Jangan berikan janji spesifik yang tidak bisa Anda pastikan.",
+      "PENANGANAN KELUHAN (saat manajer memforward komplain tamu): bantu manajer menyusun " +
+        "respons — tawarkan draft kalimat, identifikasi akar masalah, sarankan tindakan " +
+        "(refund partial, kompensasi non-tunai, eskalasi). JANGAN langsung membalas tamu " +
+        "kecuali manajer memerintahkan via `reply_to_guest`.",
 
-      "DARURAT: Untuk situasi darurat (kebakaran, medis, keamanan), " +
-        "selalu instruksikan tamu untuk langsung menghubungi resepsi atau nomor darurat setempat.",
+      "DARURAT: Untuk situasi yang manajer laporkan sebagai darurat (kebakaran, medis, " +
+        "keamanan), beri saran tindakan operasional segera dan ingatkan kontak darurat " +
+        "lokal — JANGAN suruh tamu menunggu balasan bot.",
 
-      "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
+      // ── Output formatting (Telegram-friendly) ───────────────────────────
+      "FORMAT PESAN: Telegram — teks polos, gunakan baris baru untuk daftar, hindari " +
+        "Markdown (*, _, #) dan tabel kompleks (Telegram tidak render tabel).",
 
       BOOKING_LIST_FORMAT_BLOCK,
-    ];
-
-    sections.push(managerialModeOverlay(ctx, "manager"));
-    return sections.filter(Boolean).join("\n\n");
+    ].join("\n\n");
   },
 };

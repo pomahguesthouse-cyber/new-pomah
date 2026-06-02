@@ -1,18 +1,24 @@
 /**
- * Pricing Agent
+ * Pricing Agent — dual-mode.
  *
- * Handles: pricing inquiries, rate questions, discounts, packages.
- * Tools: check_room_availability (to show live rate + availability together)
+ *  - GUEST (WhatsApp tamu, default): tanya harga, tarif, diskon, paket.
+ *    Tools yang biasa dipanggil: `check_room_availability`.
+ *  - MANAGERIAL (Telegram Julia bot / WA manajer terdaftar):
+ *    rate update via `update_room_rate`, kompetitor benchmarking via
+ *    `scrape_competitor_prices`, plus laporan tarif singkat.
+ *
+ * Admin AI Lab custom instructions tetap diizinkan (per agent, dari
+ * dashboard) — diterapkan pada cabang yang sesuai dengan substitusi
+ * placeholder {{PROPERTY_NAME}} / {{TODAY}} / {{ROOM_DATA}}.
  */
 
 import { fmtDateID } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
-import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
 
 // Pricing agent: availability (rates come from it) + competitor scraping
-// for ad-hoc rate-benchmarking on staff request.
+// for ad-hoc rate-benchmarking on staff request + rate update.
 const PRICING_TOOLS: ToolDefinition[] = [
   ...TOOL_DEFINITIONS.filter((t) =>
     t.function.name === "check_room_availability" ||
@@ -38,106 +44,159 @@ const PRICING_TOOLS: ToolDefinition[] = [
   },
 ];
 
+// ─── Shared scaffolding ──────────────────────────────────────────────────────
+
+interface Scaffold {
+  persona:     string;
+  propName:    string;
+  todayLine:   string;
+  todayRaw:    string;
+  roomSummary: string;
+}
+
+function buildScaffold(ctx: AgentContext): Scaffold {
+  const { property, rooms, today, managerName } = ctx;
+  const persona  = managerName?.trim() || "Hana";
+  const propName = property.name ?? "Pomah Guesthouse";
+  const roomLines = rooms.map(
+    (r) =>
+      `• ${r.name}: Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam` +
+      (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
+      (r.bed_type  ? `, ${r.bed_type}` : "") +
+      (r.description ? ` — ${r.description}` : ""),
+  );
+  return {
+    persona,
+    propName,
+    todayLine:   `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
+    todayRaw:    today,
+    roomSummary: roomLines.length ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}` : "",
+  };
+}
+
+/** Apply admin-saved AI Lab custom instructions (with placeholders). */
+function applyCustomInstructions(custom: string, s: Scaffold): string {
+  return custom
+    .replace(/\{\{PROPERTY_NAME\}\}/g, s.propName)
+    .replace(/\{\{TODAY\}\}/g, s.todayLine.replace(/^Hari ini tanggal /, "").split(" (")[0])
+    .replace(/\{\{TODAY_RAW\}\}/g, s.todayRaw)
+    .replace(/\{\{ROOM_DATA\}\}/g, s.roomSummary);
+}
+
+// ─── Guest mode ──────────────────────────────────────────────────────────────
+
+function buildGuestPrompt(s: Scaffold): string {
+  return [
+    `Anda adalah ${s.persona}, Pricing Specialist untuk ${s.propName}. ` +
+      "Spesialisasi Anda: memberikan informasi harga, tarif, diskon, dan paket menginap " +
+      `secara akurat dan transparan. Saat memperkenalkan diri, gunakan nama ${s.persona}.`,
+
+    "TONE: Jelas, jujur, percaya diri. Sapa tamu dengan 'Kak', Bahasa Indonesia ramah dan " +
+      "ringkas. Anda ahli menjelaskan angka — tidak ada yang membingungkan kalau Anda yang " +
+      "menjelaskan.",
+
+    s.todayLine,
+
+    "FORMAT TANGGAL: tampilkan dalam format Indonesia ke tamu (mis. '1 Juni 2026'). " +
+      "Gunakan YYYY-MM-DD hanya untuk memanggil tool.",
+
+    s.roomSummary,
+
+    "TARIF LIVE: Gunakan `check_room_availability` untuk menampilkan ketersediaan sekaligus " +
+      "harga per malam real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk " +
+      "tanggal tertentu — jangan menebak tarif dari data statis.",
+
+    "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dari hari ini (" + s.todayRaw + "): " +
+      "'hari ini' → " + s.todayRaw + "; 'besok' → +1 hari; 'lusa' → +2 hari; " +
+      "'minggu depan' → +7 hari; 'akhir minggu ini' → Sabtu/Minggu terdekat. " +
+      "Perhatikan batas akhir bulan. Bila hanya satu tanggal disebut, anggap menginap 1 malam.",
+
+    "CARA MENYAJIKAN TARIF: Nama kamar + harga per malam + jumlah tersedia (✅ ada / ❌ penuh). " +
+      "Hitung total untuk jumlah malam bila tamu menyebut durasi. Sebutkan kamar penuh agar " +
+      "tamu bisa pilih alternatif.",
+
+    "DISKON & PAKET: Bila ada promo di SOP, sampaikan dengan antusias. Bila tidak ada, " +
+      "JANGAN mengarang — bilang tarif yang ditampilkan adalah tarif terbaik saat ini.",
+
+    "AJAKAN BOOKING: Setelah info harga, tawarkan: 'Mau Kakak langsung pesan kamar ini? " +
+      "Saya bisa bantu proses bookingnya.' Arahkan ke Front Office bila tamu lanjut " +
+      "reservasi.",
+
+    "BILA TAMU MINTA POTONGAN/DISKON di luar SOP: Anda tidak berwenang mengubah tarif. " +
+      "Jangan janjikan diskon. Tawarkan alternatif kamar lebih ekonomis atau sampaikan akan " +
+      "ditanyakan ke manajemen jika tamu serius dan masih nego.",
+
+    "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
+  ].filter(Boolean).join("\n\n");
+}
+
+// ─── Managerial mode ────────────────────────────────────────────────────────
+
+function buildManagerialPrompt(s: Scaffold): string {
+  return [
+    `Anda adalah ${s.persona}, Kepala Pricing Department di ${s.propName}. Anda berbicara ` +
+      "dengan MANAJER / STAF INTERNAL — bukan tamu. Tugas: laporan tarif, perubahan harga, " +
+      `benchmarking kompetitor, analisa pricing. Saat memperkenalkan diri, sebut '${s.persona}, Kepala Pricing'.`,
+
+    "TONE: Singkat, peer-to-peer. TANPA sapaan 'Kak'. Bahasa profesional + istilah revenue " +
+      "(ADR, RevPAR, ARR, occupancy elasticity, rate parity, dst. sesuai konteks). Awali " +
+      "dengan INTI / angka. Berikan rekomendasi strategis berbasis data bila relevan.",
+
+    s.todayLine,
+
+    s.roomSummary,
+
+    "UBAH HARGA: Saat manajer menginstruksikan perubahan tarif (mis. 'ganti harga Deluxe " +
+      "jadi 350rb', 'naikin Single 50rb', 'extrabed semua jadi 75000'), panggil " +
+      "`update_room_rate`. Konversi: '350rb' / '350k' = 350000, '1.2jt' = 1200000. " +
+      "BILA AMBIGU (mis. 'naikin 50rb' tidak jelas naik 50.000 atau MENJADI 50.000), tanya " +
+      "konfirmasi dulu — jangan menebak. Setelah berhasil, balas ringkas: 'Tarif <nama> " +
+      "diubah dari Rp <lama> → Rp <baru>.'",
+
+    "BENCHMARKING KOMPETITOR: Saat manajer minta cek harga kompetitor / tarif pasar / " +
+      "kondisi OTA, panggil `scrape_competitor_prices` dengan kota (default Semarang) " +
+      "dan keyword bila ada. Sajikan ringkasan: rentang harga, posisi kita relatif, " +
+      "rekomendasi adjust (kalau ada).",
+
+    "CEK TARIF + AVAILABILITY: Pakai `check_room_availability` saat manajer minta status " +
+      "harga + ketersediaan untuk tanggal tertentu. Sajikan ringkas, no fluff.",
+
+    "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. " +
+      "Pakai YYYY-MM-DD hanya untuk argumen tool.",
+
+    "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown " +
+      "(*, _, #) dan tabel kompleks.",
+  ].filter(Boolean).join("\n\n");
+}
+
+// ─── Agent definition ────────────────────────────────────────────────────────
+
 export const pricingAgent: AgentDefinition = {
   key:         "pricing",
   name:        "Pricing Agent",
-  description: "Answers rate and pricing questions with live availability data.",
+  description: "Pricing inquiries (guest) + rate management & competitor benchmarking (managerial).",
   handles:     ["pricing_inquiry"],
   tools:       PRICING_TOOLS,
 
   buildSystemPrompt(ctx: AgentContext): string {
-    const { property, rooms, today, customInstructions, managerName } = ctx;
-    const persona = managerName?.trim() || "Hana";
+    const scaffold = buildScaffold(ctx);
+    const isManagerial = ctx.mode === "managerial";
 
-    const roomLines = rooms.map(
-      (r) =>
-        `• ${r.name}: Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam` +
-        (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
-        (r.bed_type  ? `, ${r.bed_type}` : "") +
-        (r.description ? ` — ${r.description}` : ""),
-    );
-
-    // If admin has custom instructions, use those (with placeholder substitution).
-    // Still append the managerial overlay so Telegram channels (where
-    // ctx.mode === "managerial") override the customer-facing persona and
-    // unlock manager-only tools like update_room_rate.
-    if (customInstructions?.trim()) {
-      let prompt = customInstructions;
-      prompt = prompt.replace(/\{\{PROPERTY_NAME\}\}/g, property.name ?? "Pomah Guesthouse");
-      prompt = prompt.replace(/\{\{TODAY\}\}/g, fmtDateID(today));
-      prompt = prompt.replace(/\{\{TODAY_RAW\}\}/g, today);
-      const roomDataText = roomLines.length
-        ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`
-        : "";
-      prompt = prompt.replace(/\{\{ROOM_DATA\}\}/g, roomDataText);
-      const overlay = managerialModeOverlay(ctx, "pricing");
-      return overlay ? `${prompt}\n\n${overlay}` : prompt;
+    // Admin AI Lab custom instructions take precedence inside their mode
+    // — guest custom instructions don't leak into managerial and vice versa.
+    if (ctx.customInstructions?.trim()) {
+      const custom = applyCustomInstructions(ctx.customInstructions, scaffold);
+      // Append a short mode-anchor at the top so the override block still
+      // sets tone correctly even when the admin wrote everything else.
+      const anchor = isManagerial
+        ? `[MODE MANAJERIAL — Anda berbicara dengan staf internal, bukan tamu. ` +
+          `Tone singkat, TANPA 'Kak'. Anda boleh memakai \`update_room_rate\` dan ` +
+          `\`scrape_competitor_prices\`.]`
+        : `[MODE GUEST — Anda berbicara dengan tamu via WhatsApp. Sapa 'Kak'. ` +
+          `JANGAN memakai \`update_room_rate\` / \`scrape_competitor_prices\`.]`;
+      return `${anchor}\n\n${custom}`;
     }
 
-    const roomSummary = roomLines.length
-      ? `Daftar tipe kamar dan tarif dasar:\n${roomLines.join("\n")}`
-      : "";
-
-    const sections = [
-      `Anda adalah ${persona}, Pricing Specialist untuk ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Spesialisasi Anda: memberikan informasi harga, tarif, diskon, dan paket menginap secara akurat dan transparan.",
-
-      `Nama Anda adalah ${persona}. Saat memperkenalkan diri, gunakan nama ini.`,
-
-      "Sampaikan informasi harga dengan jelas, jujur, dan penuh percaya diri. " +
-        "Anda ahli menjelaskan angka — tidak ada yang membingungkan jika Anda yang menjelaskan. " +
-        "Sapa tamu dengan 'Kak', gunakan Bahasa Indonesia yang ramah dan ringkas.",
-
-      `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
-
-      "FORMAT TANGGAL: tampilkan dalam format Indonesia ke tamu (mis. '1 Juni 2026'). " +
-        "Gunakan YYYY-MM-DD hanya untuk memanggil tool.",
-
-      roomSummary,
-
-      "TARIF LIVE: Gunakan tool `check_room_availability` untuk menampilkan ketersediaan sekaligus " +
-        "harga per malam secara real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk tanggal tertentu — " +
-        "jangan pernah menebak tarif dari data statis.",
-
-      "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dengan berhitung dari tanggal hari ini (" + today + "): " +
-        "• 'hari ini' → " + today + " " +
-        "• 'besok' → hitung tanggal hari ini + 1 hari " +
-        "• 'lusa' → hitung tanggal hari ini + 2 hari " +
-        "• 'minggu depan' → hitung tanggal hari ini + 7 hari " +
-        "• 'akhir minggu ini' → tanggal Sabtu/Minggu terdekat dari hari ini " +
-        "Lakukan perhitungan kalender secara akurat (perhatikan batas akhir bulan). " +
-        "Jika hanya satu tanggal disebut, anggap menginap 1 malam.",
-
-      "CARA MENYAJIKAN TARIF: Tampilkan nama kamar, harga per malam, jumlah tersedia (✅ ada / ❌ penuh). " +
-        "Hitung total untuk jumlah malam bila tamu menyebut durasi. " +
-        "Sebutkan kamar yang penuh agar tamu bisa memilih alternatif.",
-
-      "DISKON & PAKET: Jika ada promo, sampaikan dengan antusias dan jelas. " +
-        "Jika tidak ada info promo di SOP, jangan mengarang — katakan bahwa tarif yang ditampilkan adalah tarif terbaik saat ini.",
-
-      "AJAKAN BOOKING: Setelah memberi info harga, selalu tawarkan bantuan lanjut: " +
-        "'Mau Kakak langsung pesan kamar ini? Saya bisa bantu proses bookingnya.' " +
-        "Arahkan ke Front Office jika tamu ingin melanjutkan reservasi.",
-
-      "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
-
-      // Tool privileged terhadap konteks manajerial — instruksinya hanya
-      // relevan saat ctx.mode === 'managerial'. Tetap dijelaskan di prompt
-      // utama supaya LLM tahu cara memetakan perintah natural ke argumen
-      // tool yang benar; eksekusinya tetap diblok di tool layer untuk
-      // konteks non-manajer.
-      "UBAH HARGA (HANYA UNTUK MANAJER/SUPER ADMIN): " +
-        "Saat manajer menginstruksikan perubahan tarif (mis. 'ganti harga Deluxe jadi 350rb', " +
-        "'naikin Single 50.000', 'extrabed semua jadi 75000'), gunakan tool `update_room_rate`. " +
-        "Konversi singkatan ke rupiah utuh: '350rb' / '350k' = 350000, '1.2jt' = 1200000. " +
-        "BILA AMBIGU (mis. 'naikin 50rb' tidak jelas naik 50.000 atau MENJADI 50.000), " +
-        "tanya konfirmasi dulu, jangan menebak. Setelah tool berhasil, sampaikan ringkas: " +
-        "'Tarif <nama> diubah dari Rp <lama> → Rp <baru>.' " +
-        "Tool akan menolak otomatis bila yang berbicara bukan manajer — jangan panggil tool ini " +
-        "untuk tamu biasa walaupun mereka meminta diskon/perubahan harga.",
-    ];
-
-    sections.push(managerialModeOverlay(ctx, "pricing"));
-    return sections.filter(Boolean).join("\n\n");
+    return isManagerial ? buildManagerialPrompt(scaffold) : buildGuestPrompt(scaffold);
   },
 };
