@@ -55,6 +55,7 @@ const SOURCES = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "walk_in", label: "Walk-in" },
   { value: "website", label: "Website" },
+  { value: "manager_chat", label: "Manager Chat" },
 ] as const;
 
 const PAYMENT_STATUSES = [

@@ -179,15 +179,39 @@ function buildManagerialPrompt(s: Scaffold): string {
       "- 'booking terakhir / terbaru' → sort='recent' (default). " +
       "- Filter status / payment_status sesuai konteks.",
 
-    "BOOKING BARU dari manajer: bila manajer minta dibuatkan booking via chat (mis. 'tolong " +
-      "buat booking atas nama X, Deluxe, 17–18 Juli, 2 tamu'), kumpulkan data minimal " +
-      "(nama, tipe, check_in/out, jumlah tamu) lalu panggil `start_booking_details`. Bila " +
-      "data sudah lengkap dan manajer eksplisit minta langsung create, bisa lanjut. " +
-      "JANGAN auto-trigger `start_booking_details` untuk pertanyaan informasi (cek " +
-      "availability ≠ ingin booking).",
+    "BOOKING BARU dari manajer: WAJIB pakai `create_booking` LANGSUNG — JANGAN PERNAH " +
+      "panggil `start_booking_details` di mode managerial. start_booking_details adalah " +
+      "state machine untuk tamu WhatsApp yang minta konfirmasi step-by-step + tone 'Kak'; " +
+      "manajer sudah punya data dan tidak butuh konfirmasi nama.\n" +
+      "Alur:\n" +
+      "1. Ambil data minimal dari pesan manajer: nama tamu, tipe kamar, check_in. Bila " +
+      "   check_out tidak disebut, kosongkan (tool default 1 malam). Bila adults/children " +
+      "   tidak disebut, default 1/0.\n" +
+      "2. Email & HP TIDAK perlu ditanyakan ke manajer — kosongkan kalau tidak diberikan " +
+      "   (staf isi belakangan via admin UI). Tool menerima itu di mode managerial.\n" +
+      "3. Panggil `create_booking` dengan field yang ada.\n" +
+      "4. Konfirmasi singkat ke manajer hasil dari tool. Format:\n" +
+      "   ✅ Booking dibuat\n" +
+      "   🏷 <reference_code>\n" +
+      "   👤 <nama>\n" +
+      "   🛏 <tipe kamar>\n" +
+      "   📅 <check-in> – <check-out> (<nights> malam)\n" +
+      "   💰 Total Rp<total format Indonesia>\n" +
+      "Tidak ada link invoice, tidak ada instruksi transfer — itu untuk tamu, bukan manajer.\n" +
+      "PENGECUALIAN: bila manajer eksplisit bilang 'pakai flow tamu' atau 'kirim ke tamu " +
+      "via WA' DAN nomor HP disertakan, baru boleh `start_booking_details`. Default selalu " +
+      "create_booking langsung.\n" +
+      "JANGAN trigger create_booking untuk pertanyaan informasi (cek availability ≠ ingin " +
+      "booking).",
 
     "SPESIFIKASI KAMAR: `get_room_specifications` saat manajer minta detail fasilitas/" +
       "kapasitas/extrabed kamar tertentu (mis. cross-check setting tarif).",
+
+    "HAPUS / BATALKAN BOOKING: `delete_booking` saat manajer bilang 'batalkan booking " +
+      "PG-XXXX', 'hapus booking atas nama X', 'cancel reservasi ...'. Default mode='cancel' " +
+      "(status → cancelled, slot bebas). Hanya pakai mode='hard' bila manajer eksplisit " +
+      "minta hapus permanen, dan ikuti two-step confirmation. Boleh by reference_code atau " +
+      "guest_name; bila ambigu, tampilkan kandidat dari `needs_disambiguation`.",
 
     "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. Pakai " +
       "YYYY-MM-DD hanya untuk argumen tool.",

@@ -55,7 +55,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
     },
   },
   ...TOOL_DEFINITIONS.filter((t) =>
-    ["get_bookings", "update_booking_status", "change_booking_room", "reply_to_guest"].includes(t.function.name)
+    ["get_bookings", "update_booking_status", "delete_booking", "change_booking_room", "reply_to_guest"].includes(t.function.name)
   ),
 ];
 
@@ -91,6 +91,18 @@ export const managerAgent: AgentDefinition = {
       "MERELAY BALASAN KE TAMU: Bila manajer minta 'balas tamu 0812...', 'kirim pesan ke " +
         "tamu', atau sejenisnya, panggil `reply_to_guest` dengan guest_phone + message. " +
         "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
+
+      "HAPUS / BATALKAN BOOKING: Bila manajer bilang 'batalkan booking PG-XXXX', " +
+        "'hapus booking atas nama Faizal', 'cancel reservasi X', panggil `delete_booking`.\n" +
+        "- Default mode='cancel' (soft, status → cancelled, slot bebas). JANGAN kirim " +
+        "  mode='hard' kecuali manajer eksplisit minta 'hapus permanen' / 'delete data'.\n" +
+        "- Tool boleh dipanggil dengan reference_code ATAU guest_name (substring).\n" +
+        "- Bila tool return `needs_disambiguation`, tampilkan kandidatnya ringkas dan minta " +
+        "  manajer pilih reference_code yang spesifik.\n" +
+        "- Bila tool return `needs_confirmation` (mode hard), tampilkan target detail dan " +
+        "  tunggu manajer bilang 'ya/lanjut', baru panggil lagi dengan confirmed=true.\n" +
+        "- Setelah berhasil, balas ringkas: '✅ Booking <ref> (<nama>) dibatalkan' atau " +
+        "  '🗑 Booking <ref> dihapus permanen'.",
 
       "DELEGASI KE AGENT SPESIALIS via `ask_agent`. Pakai saat manajer butuh data yang " +
         "dipegang agent lain (harga → pricing, status pembayaran detail → finance, dst.). " +

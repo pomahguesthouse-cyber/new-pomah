@@ -36,21 +36,23 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "create_booking",
       description:
-        "Buat pesanan/booking kamar untuk tamu. Panggil HANYA setelah tamu memilih tipe kamar " +
-        "dan memberikan nama lengkap, email, dan nomor HP. Jangan panggil bila data belum lengkap.",
+        "Buat pesanan/booking kamar. Mode tamu (WA): WAJIB nama+email+HP lengkap (untuk " +
+        "invoice & konfirmasi). Mode manajerial (staff entry via Telegram/manajer): cukup " +
+        "nama + tipe kamar + check_in. Email/HP boleh kosong — staf isi belakangan via admin UI. " +
+        "check_out boleh kosong (default 1 malam = check_in + 1 hari).",
       parameters: {
         type: "object",
         properties: {
-          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih tamu." },
-          full_name:  { type: "string", description: "Nama lengkap tamu." },
-          email:      { type: "string", description: "Alamat email tamu." },
-          phone:      { type: "string", description: "Nomor HP/WhatsApp tamu." },
-          check_in:   { type: "string", description: "Tanggal check-in format YYYY-MM-DD." },
-          check_out:  { type: "string", description: "Tanggal check-out format YYYY-MM-DD." },
-          adults:     { type: "number", description: "Jumlah tamu dewasa. Default 1." },
+          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih." },
+          full_name:  { type: "string", description: "Nama lengkap tamu (WAJIB)." },
+          email:      { type: "string", description: "Email tamu. WAJIB di mode tamu, opsional di mode manajerial." },
+          phone:      { type: "string", description: "HP/WhatsApp tamu. WAJIB di mode tamu, opsional di mode manajerial." },
+          check_in:   { type: "string", description: "Tanggal check-in YYYY-MM-DD." },
+          check_out:  { type: "string", description: "Tanggal check-out YYYY-MM-DD. Kosongkan untuk default 1 malam." },
+          adults:     { type: "number", description: "Jumlah dewasa. Default 1." },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
         },
-        required: ["room_type", "full_name", "email", "phone", "check_in", "check_out"],
+        required: ["room_type", "full_name", "check_in"],
       },
     },
   },
@@ -130,6 +132,27 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           status: { type: "string", description: "Status baru: 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
         },
         required: ["reference_code", "status"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_booking",
+      description:
+        "Hapus/batalkan booking (managerial only). Manajer cukup sebut kode booking atau " +
+        "nama tamu — tool resolve sendiri. Default mode='cancel' (soft: status → cancelled, " +
+        "slot kamar bebas). Mode='hard' untuk DELETE row DB permanen (butuh confirmed=true " +
+        "di panggilan kedua). Pakai saat manajer bilang 'batalkan booking ...', 'hapus " +
+        "booking ...', 'cancel reservasi ...'.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode booking (mis. PG-XXXX). Paling akurat." },
+          guest_name:     { type: "string", description: "Nama tamu (substring match). Bila ambigu, tool minta klarifikasi." },
+          mode:           { type: "string", enum: ["cancel", "hard"], description: "Default 'cancel'. 'hard' = DELETE permanen." },
+          confirmed:      { type: "boolean", description: "Wajib true di panggilan kedua mode='hard'." },
+        },
       },
     },
   },
@@ -243,6 +266,7 @@ export const TOOL_LABELS: Record<string, string> = {
   cc_payment_proof_to_admin:    "Finance - CC Bukti Transfer ke Super Admin",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
+  delete_booking:               "Manager - Hapus / Batalkan Booking",
   change_booking_room:          "Manager - Change Booking Room",
   reply_to_guest:               "Manager - Reply to Guest",
   discover_semarang_content:    "Content - Cari Konten Semarang",

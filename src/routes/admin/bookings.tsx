@@ -56,6 +56,7 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "walk_in", label: "Walk-in" },
   { value: "website", label: "Website" },
+  { value: "manager_chat", label: "Manager Chat" },
 ];
 
 const PAGE_SIZE = 20;
