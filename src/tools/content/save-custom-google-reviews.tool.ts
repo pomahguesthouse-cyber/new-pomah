@@ -157,10 +157,13 @@ export const saveCustomGoogleReviews: ToolHandler = async (
       additions.push(r);
     }
     addedCount   = additions.length;
-    finalReviews = [...existingReviews, ...additions];
-    // Cap; drop oldest when exceeding.
+    // Prepend the new ones so the freshest reviews sit at the top of the
+    // array — easier for the manager to spot when editing the SEO admin
+    // form, and matches "newest first" expectation on the public page.
+    finalReviews = [...additions, ...existingReviews];
+    // Cap at MAX_STORED — drop OLDEST (now at the bottom).
     if (finalReviews.length > MAX_STORED) {
-      finalReviews = finalReviews.slice(finalReviews.length - MAX_STORED);
+      finalReviews = finalReviews.slice(0, MAX_STORED);
     }
   }
 
