@@ -28,6 +28,7 @@ import { publishExploreItem, publishExploreItemsByCategory } from "./content/pub
 import { generateExploreImage }            from "./content/generate-explore-image.tool";
 import { discoverPropertyReviews }         from "./content/discover-property-reviews.tool";
 import { saveCustomGoogleReviews }         from "./content/save-custom-google-reviews.tool";
+import { restoreCustomGoogleReviews }      from "./content/restore-custom-google-reviews.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { updateRoomRate }                 from "./pricing/update-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
@@ -58,6 +59,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   generate_explore_image:        generateExploreImage,
   discover_property_reviews:     discoverPropertyReviews,
   save_custom_google_reviews:    saveCustomGoogleReviews,
+  restore_custom_google_reviews: restoreCustomGoogleReviews,
   scrape_competitor_prices:      scrapeCompetitorPrices,
   update_room_rate:              updateRoomRate,
   get_room_specifications:       getRoomSpecifications,
