@@ -32,6 +32,7 @@ export const getBookings: ToolHandler = async (
       status,
       payment_status,
       total_amount,
+      paid_amount,
       guests ( full_name, phone ),
       booking_rooms (
         room_types ( name ),
@@ -65,23 +66,33 @@ export const getBookings: ToolHandler = async (
     return JSON.stringify({ ok: false, error: error.message });
   }
 
-  const results = (data ?? []).map((b: any) => ({
-    id: b.id,
-    ref: b.reference_code,
-    created_at: b.created_at,
-    check_in: b.check_in,
-    check_out: b.check_out,
-    status: b.status,
-    payment_status: b.payment_status,
-    total: b.total_amount,
-    guest: b.guests?.full_name,
-    phone: b.guests?.phone,
-    rooms: b.booking_rooms?.map((br: any) => `${br.room_types?.name} (${br.rooms?.number ?? "Belum di-assign"})`).join(", "),
-  }));
+  const results = (data ?? []).map((b: any) => {
+    const total       = Number(b.total_amount ?? 0);
+    const paid        = Number(b.paid_amount  ?? 0);
+    const outstanding = Math.max(0, total - paid);
+    return {
+      id: b.id,
+      ref: b.reference_code,
+      created_at: b.created_at,
+      check_in: b.check_in,
+      check_out: b.check_out,
+      status: b.status,
+      payment_status: b.payment_status,
+      total,
+      paid,            // jumlah DP yang sudah dibayar (0 kalau unpaid)
+      outstanding,     // sisa tagihan = total − paid; PAKAI INI untuk laporan piutang, bukan total
+      guest: b.guests?.full_name,
+      phone: b.guests?.phone,
+      rooms: b.booking_rooms?.map((br: any) => `${br.room_types?.name} (${br.rooms?.number ?? "Belum di-assign"})`).join(", "),
+    };
+  });
+
+  const totalOutstanding = results.reduce((sum, r) => sum + r.outstanding, 0);
 
   return JSON.stringify({
     ok: true,
     count: results.length,
+    total_outstanding: totalOutstanding, // jumlahkan sisa tagihan seluruh booking di hasil
     bookings: results,
   });
 };
