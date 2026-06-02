@@ -9,21 +9,22 @@
  * (useful for local development).
  */
 
-export function verifyFonnteToken(request: Request): boolean {
+function isFonnteTokenValid(request: Request): boolean {
   const expected = process.env.FONNTE_WEBHOOK_TOKEN;
   if (!expected) return true;
 
-  // Header-based
   const authHeader = request.headers.get("authorization") ?? "";
   if (authHeader.startsWith("Bearer ") && authHeader.slice(7) === expected) {
     return true;
   }
 
-  // Query param-based
   const url = new URL(request.url);
-  if (url.searchParams.get("token") === expected) {
-    return true;
-  }
+  return url.searchParams.get("token") === expected;
+}
 
-  return false;
+export function verifyFonnteToken(request: Request): boolean {
+  if (isFonnteTokenValid(request)) return true;
+
+  console.warn("[Webhook] Unauthorized Fonnte webhook request blocked");
+  throw new Response("Unauthorized", { status: 403 });
 }
