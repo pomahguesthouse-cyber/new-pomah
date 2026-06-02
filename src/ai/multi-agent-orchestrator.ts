@@ -36,12 +36,23 @@ const DEFAULT_MAX_TURNS = 5;
 
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
-async function callLlm(
+/** Hard timeout per panggilan LLM agar tidak pernah menggantung worker. */
+const LLM_CALL_TIMEOUT_MS = 18_000;
+/** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
+const LLM_MAX_RETRIES = 1;
+
+async function callLlmOnce(
   config:   AiClientConfig,
   messages: AiMessage[],
   agent:    AgentDefinition,
   signal?:  AbortSignal,
-): Promise<LlmResponse | null> {
+): Promise<{ ok: true; data: LlmResponse } | { ok: false; retriable: boolean; reason: string }> {
+  // Gabungkan signal pemanggil dengan timeout internal kita.
+  const timeoutCtrl = new AbortController();
+  const timeoutId = setTimeout(() => timeoutCtrl.abort(), LLM_CALL_TIMEOUT_MS);
+  const onAbort = () => timeoutCtrl.abort();
+  signal?.addEventListener("abort", onAbort);
+
   try {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
       method:  "POST",
@@ -49,12 +60,10 @@ async function callLlm(
         "Content-Type":  "application/json",
         Authorization:   `Bearer ${config.apiKey}`,
       },
-      signal,
+      signal: timeoutCtrl.signal,
       body: JSON.stringify({
         model:       config.model,
         temperature: 0.6,
-        // Gemini 2.5 thinking tokens count against this budget; keep it generous
-        // so reasoning + tool calls don't exhaust it and return empty content.
         max_tokens:  2000,
         messages,
         tools:       agent.tools.length > 0 ? agent.tools : undefined,
@@ -63,19 +72,56 @@ async function callLlm(
     });
 
     if (!res.ok) {
-      console.error(
-        `[MultiAgent][${agent.key}] LLM HTTP error:`,
-        res.status,
-        await res.text(),
-      );
-      return null;
+      const body = await res.text();
+      console.error(`[MultiAgent][${agent.key}] LLM HTTP ${res.status}:`, body);
+      // 408/429/5xx → boleh retry; 4xx lainnya → permanen.
+      const retriable = res.status === 408 || res.status === 429 || res.status >= 500;
+      return { ok: false, retriable, reason: `http_${res.status}` };
     }
 
-    return (await res.json()) as LlmResponse;
+    return { ok: true, data: (await res.json()) as LlmResponse };
   } catch (e) {
-    console.error(`[MultiAgent][${agent.key}] LLM fetch error:`, e);
-    return null;
+    const aborted = (e as { name?: string })?.name === "AbortError";
+    const reason = aborted
+      ? (signal?.aborted ? "caller_abort" : "timeout")
+      : "fetch_error";
+    if (reason !== "caller_abort") {
+      console.error(`[MultiAgent][${agent.key}] LLM ${reason}:`, e);
+    }
+    // Caller abort tidak boleh diulang; timeout/jaringan boleh.
+    return { ok: false, retriable: reason !== "caller_abort", reason };
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener("abort", onAbort);
   }
+}
+
+async function callLlm(
+  config:   AiClientConfig,
+  messages: AiMessage[],
+  agent:    AgentDefinition,
+  signal?:  AbortSignal,
+): Promise<{ response: LlmResponse | null; retries: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
+  const retries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
+  for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    const t0 = Date.now();
+    const r = await callLlmOnce(config, messages, agent, signal);
+    if (r.ok) return { response: r.data, retries };
+    const latency_ms = Date.now() - t0;
+    if (!r.retriable) {
+      retries.push({ attempt, reason: r.reason, latency_ms });
+      return { response: null, retries };
+    }
+    if (attempt < LLM_MAX_RETRIES) {
+      retries.push({ attempt, reason: r.reason, latency_ms });
+      console.warn(`[MultiAgent][${agent.key}] retry LLM (attempt ${attempt + 1}) — reason: ${r.reason}`);
+      // Backoff singkat sebelum coba ulang.
+      await new Promise((res) => setTimeout(res, 500));
+    } else {
+      retries.push({ attempt, reason: r.reason, latency_ms });
+    }
+  }
+  return { response: null, retries };
 }
 
 // ─── Single agent runner ──────────────────────────────────────────────────────
@@ -105,8 +151,9 @@ async function runAgent(
   signal?:          AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
-): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
+): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
   const toolsUsed = new Set<string>();
+  const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
 
   // Drop trailing assistant turns: Gemini returns an empty completion when the
   // conversation ends on an assistant message (it has nothing new to answer).
@@ -145,10 +192,11 @@ async function runAgent(
   ];
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const json = await callLlm(llmConfig, messages, agent, signal);
+    const { response: json, retries } = await callLlm(llmConfig, messages, agent, signal);
+    if (retries.length) allRetries.push(...retries);
 
     if (!json) {
-      return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error" };
+      return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error", ...(allRetries.length ? { retries: allRetries } : {}) };
     }
 
     const assistantMsg = json.choices?.[0]?.message;
@@ -160,9 +208,9 @@ async function runAgent(
       if (!reply) {
         const detail = json.error?.message ?? "Empty LLM response";
         console.error(`[MultiAgent][${agent.key}] No reply:`, detail);
-        return { reply: null, toolsUsed: Array.from(toolsUsed), error: detail };
+        return { reply: null, toolsUsed: Array.from(toolsUsed), error: detail, ...(allRetries.length ? { retries: allRetries } : {}) };
       }
-      return { reply, toolsUsed: Array.from(toolsUsed) };
+      return { reply, toolsUsed: Array.from(toolsUsed), ...(allRetries.length ? { retries: allRetries } : {}) };
     }
 
     // ── Tool calls ────────────────────────────────────────────────────────────
@@ -214,7 +262,7 @@ async function runAgent(
   }
 
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
-  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded" };
+  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}) };
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
@@ -311,6 +359,7 @@ export async function runMultiAgentOrchestration(
       routingConfidence: 1.0,
       escalated:         false,
       error:             agentResult.error,
+      retries:           agentResult.retries,
     };
   }
 
@@ -334,6 +383,7 @@ export async function runMultiAgentOrchestration(
       // guest sees one combined message: state-machine ack + agent-crafted
       // invoice details. Best-effort — if the agent fails, the ack still
       // ships and the guest can ask again later.
+      let financeRetries: any[] | undefined = undefined;
       if (stateResult.followUp === "send_invoice") {
         const refCode = stateResult.followUpRef ?? "";
         const synthesized = refCode
@@ -356,6 +406,7 @@ export async function runMultiAgentOrchestration(
         } else {
           console.warn("[MultiAgent] Finance follow-up failed:", financeResult.error);
         }
+        financeRetries = financeResult.retries;
       }
 
       return {
@@ -366,6 +417,7 @@ export async function runMultiAgentOrchestration(
         intent:            "general",
         routingConfidence: 1.0,
         escalated:         false,
+        retries:           financeRetries,
       };
     }
     // Not handled = the guest interrupted the booking with an unrelated question.
@@ -512,6 +564,7 @@ export async function runMultiAgentOrchestration(
   // 7. Run agent
   //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
   const isManagerRoute = routing.agentKey === "manager";
+  const managerSubAgentRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
 
   const onAskAgent = isManagerRoute
     ? async (subKey: AgentKey, question: string): Promise<string> => {
@@ -539,6 +592,10 @@ export async function runMultiAgentOrchestration(
           input.signal,
           trainingBlock,
         );
+
+        if (result.retries) {
+          managerSubAgentRetries.push(...result.retries);
+        }
 
         return result.reply
           ? JSON.stringify({ ok: true,  response: result.reply })
@@ -619,6 +676,7 @@ export async function runMultiAgentOrchestration(
       error:                foResult.error,
       trainingExamplesUsed: trainingExamples.length,
       trainingExampleIds:   trainingExamples.map((ex) => ex.id),
+      retries:              foResult.retries || managerSubAgentRetries.length ? [...(foResult.retries ?? []), ...managerSubAgentRetries] : undefined,
     };
   }
 
@@ -633,6 +691,7 @@ export async function runMultiAgentOrchestration(
     error:                agentResult.error,
     trainingExamplesUsed: trainingExamples.length,
     trainingExampleIds:   trainingExamples.map((ex) => ex.id),
+    retries:              agentResult.retries || managerSubAgentRetries.length ? [...(agentResult.retries ?? []), ...managerSubAgentRetries] : undefined,
   };
 }
 

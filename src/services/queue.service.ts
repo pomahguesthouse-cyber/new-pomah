@@ -37,14 +37,16 @@ export interface SmartDelayConfig {
 
 export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   enabled:      true,
-  shortMs:      5_000,   // short msgs almost always have a follow-up coming
-  mediumMs:     4_000,
-  longMs:       2_000,   // detailed msgs are usually complete → reply sooner
-  waitSignalMs: 7_000,
+  // Default agresif untuk respon cepat — admin tetap bisa menaikkan via
+  // AI Lab → Smart Delay Settings bila ingin grouping lebih lama.
+  shortMs:      2_000,   // pesan pendek tunggal lazimnya satu kalimat → balas cepat
+  mediumMs:     2_000,
+  longMs:       1_500,   // pesan panjang biasanya sudah lengkap → balas cepat
+  waitSignalMs: 4_000,   // tamu bilang "bentar/tunggu" → beri ruang sedikit
   // Hard cap from the first message. The delay now lives in the DB
   // (process_after), not the request, so the old edge-timeout cap no longer
   // applies — give multi-message bursts room to group fully.
-  maxWaitMs:    12_000,
+  maxWaitMs:    8_000,
 };
 
 /** Keywords/patterns that indicate user is still typing */

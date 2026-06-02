@@ -690,3 +690,126 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
     console.error("[ManagerNotifier] notifyComplaint error:", e);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* 4. New Conversation Session                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Kirim notifikasi ke super admin via Telegram ketika tamu memulai
+ * sesi percakapan WhatsApp baru (gap > 15 menit atau tamu baru sama sekali).
+ *
+ * Hanya menyasar super_admin dengan telegram_chat_id — tidak ke WA
+ * agar tidak flooding manajer dengan notif rutin.
+ *
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyNewConversationSession(
+  db: Db,
+  opts: {
+    phone: string;
+    guestName: string | null;
+    firstMessage: string;
+    isNewThread: boolean;   // true = tamu baru sama sekali, false = sesi baru dari tamu lama
+    threadId: string | null;
+  },
+): Promise<void> {
+  try {
+    const { telegramToken } = await getPropertyTokens(db);
+    if (!telegramToken) {
+      console.info("[ManagerNotifier] notifyNewSession: no telegram token");
+      return;
+    }
+
+    // Hanya kirim ke super_admin yang punya telegram_chat_id
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const telegramAdmins = superAdmins.filter((m) => !!m.telegram_chat_id);
+    if (telegramAdmins.length === 0) {
+      console.info("[ManagerNotifier] notifyNewSession: no super admin with telegram_chat_id");
+      return;
+    }
+
+    const sessionLabel = opts.isNewThread
+      ? "🆕 TAMU BARU"
+      : "🔄 SESI BARU";
+
+    const preview = opts.firstMessage.length > 200
+      ? opts.firstMessage.slice(0, 197) + "…"
+      : opts.firstMessage;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const message =
+      `💬 ${sessionLabel} — Percakapan WhatsApp\n\n` +
+      `👤 Tamu: ${opts.guestName ?? "Tidak dikenal"}\n` +
+      `📱 No HP: ${opts.phone}\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      `💬 Pesan Pertama:\n"${preview}"\n\n` +
+      (opts.isNewThread
+        ? "Ini adalah tamu baru yang belum pernah menghubungi sebelumnya."
+        : "Tamu sudah dikenal, memulai sesi percakapan baru.") +
+      "\n\nℹ️ AI Customer Care sedang menangani percakapan ini.";
+
+    const dedupeKeySuffix = opts.threadId ?? opts.phone;
+    // Dedupe per 15 menit agar tidak double-notif jika tamu mengirim burst
+    const dedupeWindow = Math.floor(Date.now() / (15 * 60 * 1000));
+    const dedupeKey = `new_session:${dedupeKeySuffix}:${dedupeWindow}`;
+
+    await Promise.all(
+      telegramAdmins.map((admin) =>
+        sendWithRetry(db, null, {
+          eventType: "new_booking", // reuse event_type kolom (closest existing value)
+          message,
+          relatedId: opts.threadId,
+          recipient: admin,
+          channel: "telegram",
+          dedupeKey: `${dedupeKey}:${admin.id}`,
+        }),
+      ),
+    );
+
+    console.info(
+      `[ManagerNotifier] New session notif sent — ${opts.phone.slice(-6)} ` +
+      `(${opts.isNewThread ? "new thread" : "new session"})`,
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyNewConversationSession error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. Conversation Monitor → Managerial Channels                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Publik wrapper untuk `fanOutToAgentChannels` yang dipakai oleh
+ * conversation-monitor.service (dynamic import) agar tidak ada
+ * circular dependency di bundler.
+ *
+ * Setiap alert percakapan dikirim ke kanal agent yang relevan dengan
+ * tanda tangan agent (persona) sehingga grup Telegram tahu siapa yang
+ * "berbicara".
+ *
+ * eventType "complaint" dipakai supaya sistem dedupe yang sudah ada
+ * bekerja (kolom event_type di notification_logs), meski konteksnya
+ * monitoring bukan complaint murni.
+ */
+export async function fanOutAgentChannelsForMonitor(
+  db: Db,
+  agentKeys: string[],
+  message: string,
+  alertId: string,
+): Promise<void> {
+  if (agentKeys.length === 0) return;
+  await fanOutToAgentChannels(db, agentKeys, {
+    eventType: "complaint",          // tipe terdekat yang sudah ada di enum
+    message,
+    relatedId: alertId,
+    dedupeKeyFor: (agentKey, chatId) =>
+      `conv_monitor:${alertId}:${agentKey}:${chatId}`,
+  });
+}

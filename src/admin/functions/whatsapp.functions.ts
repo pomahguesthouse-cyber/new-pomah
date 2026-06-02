@@ -431,3 +431,67 @@ export const updateChatSummary = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ─── Conversation Monitor Functions ──────────────────────────────────────────
+
+export const getConversationAlerts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await (context.supabase as any)
+      .from("conversation_alerts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return { alerts: data ?? [] };
+  });
+
+export const dismissConversationAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      alertId: z.string().uuid(),
+      status: z.enum(["handled", "dismissed"]),
+      notes: z.string().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { resolveAlert } = await import("@/services/conversation-monitor.service");
+    const result = await resolveAlert(
+      context.supabase as any,
+      data.alertId,
+      "admin",
+      data.notes,
+    );
+    if (!result.ok) throw new Error(result.error ?? "Failed to resolve alert");
+    return { ok: true };
+  });
+
+export const triggerManualAlert = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      threadId: z.string().uuid(),
+      note: z.string().min(1).max(500),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    // Ambil data thread
+    const { data: thread } = await context.supabase
+      .from("whatsapp_threads")
+      .select("phone, display_name")
+      .eq("id", data.threadId)
+      .maybeSingle();
+    if (!thread) throw new Error("Thread not found");
+
+    const { triggerManualAlert: doTrigger } = await import("@/services/conversation-monitor.service");
+    const result = await doTrigger(context.supabase as any, {
+      threadId: data.threadId,
+      phone: (thread as any).phone,
+      guestName: (thread as any).display_name ?? null,
+      note: data.note,
+    });
+    if (!result.ok) throw new Error(result.error ?? "Failed to trigger alert");
+    return { ok: true, alertId: result.alertId };
+  });
+
+

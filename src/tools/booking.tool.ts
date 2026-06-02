@@ -20,9 +20,8 @@ async function pickAvailableRooms(
   roomTypeId: string,
   checkIn:    string,
   checkOut:   string,
-  needed:     number,
-): Promise<Array<{ id: string; number: string }>> {
-  if (needed <= 0) return [];
+  skipRoomIds?: Set<string>,
+): Promise<string | null> {
   const { data: rooms } = await (ctx.supabaseAdmin as any)
     .from("rooms")
     .select("id, number")
@@ -40,16 +39,25 @@ async function pickAvailableRooms(
     .gt("check_out", checkIn);
 
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
-  if (activeIds.length === 0) return roomRows.slice(0, needed);
 
-  const { data: occ } = await (ctx.supabaseAdmin as any)
-    .from("booking_rooms")
-    .select("room_id")
-    .not("room_id", "is", null)
-    .in("booking_id", activeIds);
+  let taken = new Set<string>();
+  if (activeIds.length > 0) {
+    const { data: occ } = await (ctx.supabaseAdmin as any)
+      .from("booking_rooms")
+      .select("room_id")
+      .not("room_id", "is", null)
+      .in("booking_id", activeIds);
+    taken = new Set(((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id));
+  }
 
-  const taken = new Set(((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id));
-  return roomRows.filter((r) => !taken.has(r.id)).slice(0, needed);
+  if (skipRoomIds) {
+    for (const id of skipRoomIds) {
+      taken.add(id);
+    }
+  }
+
+  const free  = roomRows.find((r) => !taken.has(r.id));
+  return free ? free.id : null;
 }
 
 /**
@@ -72,20 +80,31 @@ async function findBookingByIdemKey(
 
   if (!b) return null;
 
-  const br = Array.isArray(b.booking_rooms) ? b.booking_rooms[0] : b.booking_rooms;
+  const bookingRoomsList = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
   const g  = Array.isArray(b.guests)        ? b.guests[0]        : b.guests;
-  const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
+  
+  // Group rooms to show e.g. "1x Single, 2x Deluxe"
+  const roomTypeCounts = new Map<string, number>();
+  for (const brRow of bookingRoomsList) {
+    const rt = ctx.rooms.find((r) => r.id === brRow?.room_type_id);
+    if (rt) {
+      roomTypeCounts.set(rt.name, (roomTypeCounts.get(rt.name) ?? 0) + 1);
+    }
+  }
+  const roomTypeDisplay = roomTypeCounts.size > 0
+    ? Array.from(roomTypeCounts.entries()).map(([name, qty]) => `${qty}x ${name}`).join(", ")
+    : "";
 
   return JSON.stringify({
     ok:               true,
     reference_code:   b.reference_code,
-    room_type:        rt?.name ?? "",
+    room_type:        roomTypeDisplay,
     check_in:         b.check_in,
     check_out:        b.check_out,
     check_in_tampil:  fmtDateID(b.check_in),
     check_out_tampil: fmtDateID(b.check_out),
     nights:           b.nights,
-    nightly_rate:     Number(br?.nightly_rate ?? 0),
+    nightly_rate:     bookingRoomsList[0]?.nightly_rate ? Number(bookingRoomsList[0].nightly_rate) : 0,
     total:            Number(b.total_amount ?? 0),
     guest:            { full_name: g?.full_name, email: g?.email, phone: g?.phone },
     pembayaran: {
@@ -150,91 +169,102 @@ export const createBooking: ToolHandler = async (
   const email = emailRaw || null;
   const phone = phoneRaw || null;
 
-  // ── Resolve room items: single (`room_type`) or multi (`rooms` array) ─────
-  // Multi shape (managerial direct entry, mis. "deluxe 2 kamar, single 1"):
-  //   args.rooms = [ { room_type: "Deluxe", quantity: 2 }, { room_type: "Single", quantity: 1 } ]
-  // Single shape (existing guest flow): args.room_type = "Deluxe".
-  interface RawItem { name: string; quantity: number }
-  let rawItems: RawItem[] = [];
-  if (Array.isArray(args.rooms) && (args.rooms as unknown[]).length > 0) {
-    rawItems = (args.rooms as unknown[]).map((it) => {
-      const obj = (it ?? {}) as Record<string, unknown>;
-      return {
-        name:     str(obj.room_type),
-        quantity: Math.max(1, Math.min(20, Number(obj.quantity) || 1)),
-      };
-    }).filter((it) => it.name.length > 0);
-  } else if (str(args.room_type)) {
-    rawItems = [{ name: str(args.room_type), quantity: 1 }];
-  }
-  if (rawItems.length === 0) {
-    return JSON.stringify({
-      ok:    false,
-      error: "Sebutkan tipe kamar (pakai `room_type` untuk satu kamar, atau `rooms: " +
-             "[{room_type, quantity}]` untuk multi-kamar).",
-    });
-  }
-
-  // Resolve each item to a real room_type row.
-  interface ResolvedItem { rt: typeof ctx.rooms[number]; quantity: number }
-  const resolved: ResolvedItem[] = [];
-  for (const item of rawItems) {
-    const needle = item.name.toLowerCase().trim();
-    const rt =
-      ctx.rooms.find((r) => r.name.toLowerCase().trim() === needle) ??
-      ctx.rooms.find((r) => r.name.toLowerCase().includes(needle) || needle.includes(r.name.toLowerCase()));
-    if (!rt) {
-      return JSON.stringify({
-        ok:    false,
-        error: `Tipe kamar "${item.name}" tidak ditemukan. Pilihan: ${ctx.rooms.map((r) => r.name).join(", ")}.`,
-      });
+  // ── Check if multiple rooms are requested ──────────────────────────────────
+  let roomsToBook: Array<{ roomTypeId: string; roomTypeName: string; quantity: number; pricePerNight: number }> = [];
+  if (Array.isArray(args.rooms)) {
+    roomsToBook = args.rooms as any;
+  } else if (typeof args.rooms === "string" && args.rooms.trim().length > 0) {
+    try {
+      roomsToBook = JSON.parse(args.rooms);
+    } catch (e) {
+      console.error("[createBooking] Failed to parse args.rooms:", e);
     }
-    // Merge duplicates (mis. user kirim Deluxe 2x dalam dua item).
-    const existing = resolved.find((x) => x.rt.id === rt.id);
-    if (existing) existing.quantity += item.quantity;
-    else resolved.push({ rt, quantity: item.quantity });
   }
 
-  // ── Check availability per type AND allocate concrete rooms ──────────────
-  // We do this BEFORE any write so a partial booking can't land.
   const { data: availRows } = await (ctx.supabasePublic as any).rpc(
     "room_type_availability_detail",
     { p_check_in: checkIn, p_check_out: checkOut },
   );
-  const availMap = new Map<string, number>();
-  for (const row of ((availRows ?? []) as Array<{ room_type_id: string; available: number }>)) {
-    availMap.set(row.room_type_id, row.available);
-  }
+  const availMap = new Map(((availRows ?? []) as any[]).map((r) => [r.room_type_id, r.available]));
 
-  interface Allocation {
-    rt:         typeof ctx.rooms[number];
-    quantity:   number;
-    rooms:      Array<{ id: string; number: string }>;
-    rate:       number;
-    subtotal:   number;
-  }
-  const allocations: Allocation[] = [];
-  for (const r of resolved) {
-    const have = availMap.get(r.rt.id);
-    if (have != null && have < r.quantity) {
+  const skipRoomIds = new Set<string>();
+  const assignments: Array<{ roomTypeId: string; roomTypeName: string; roomId: string; rate: number }> = [];
+
+  if (roomsToBook.length > 0) {
+    // Group requested rooms by roomTypeId to verify total availability first
+    const requestedQuantities = new Map<string, number>();
+    for (const r of roomsToBook) {
+      requestedQuantities.set(r.roomTypeId, (requestedQuantities.get(r.roomTypeId) ?? 0) + r.quantity);
+    }
+
+    for (const [rtId, qty] of requestedQuantities.entries()) {
+      const available = availMap.get(rtId) ?? 0;
+      if (available < qty) {
+        const rtName = roomsToBook.find((r) => r.roomTypeId === rtId)?.roomTypeName || "Kamar";
+        return JSON.stringify({
+          ok: false,
+          error: `${rtName} tidak cukup tersedia untuk tanggal tersebut (diminta: ${qty}, tersedia: ${available}).`,
+        });
+      }
+    }
+
+    // Allocate concrete rooms
+    for (const r of roomsToBook) {
+      for (let q = 0; q < r.quantity; q++) {
+        const assignedRoomId = await pickAvailableRoom(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
+        if (!assignedRoomId) {
+          return JSON.stringify({
+            ok: false,
+            error: `Gagal mengalokasikan kamar fisik untuk ${r.roomTypeName}.`,
+          });
+        }
+        skipRoomIds.add(assignedRoomId);
+        assignments.push({
+          roomTypeId: r.roomTypeId,
+          roomTypeName: r.roomTypeName,
+          roomId: assignedRoomId,
+          rate: r.pricePerNight,
+        });
+      }
+    }
+  } else {
+    // Single room type fallback (behavior lama)
+    const roomTypeName = str(args.room_type).toLowerCase();
+    const rt =
+      ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
+      ctx.rooms.find((r) => {
+        const n = r.name.toLowerCase();
+        return n.includes(roomTypeName) || roomTypeName.includes(n);
+      });
+
+    if (!rt) {
       return JSON.stringify({
-        ok:    false,
-        error: `${r.rt.name}: diminta ${r.quantity} kamar, tersedia ${have} untuk tanggal tersebut.`,
+        ok: false,
+        error: `Tipe kamar "${str(args.room_type)}" tidak ditemukan.`,
       });
     }
-    const picked = await pickAvailableRooms(ctx, r.rt.id, checkIn, checkOut, r.quantity);
-    if (picked.length < r.quantity) {
+
+    const available = availMap.get(rt.id) ?? 0;
+    if (available < 1) {
       return JSON.stringify({
-        ok:    false,
-        error: `${r.rt.name}: hanya ${picked.length} kamar fisik kosong, butuh ${r.quantity}.`,
+        ok: false,
+        error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
       });
     }
-    allocations.push({
-      rt:       r.rt,
-      quantity: r.quantity,
-      rooms:    picked,
-      rate:     Number(r.rt.base_rate ?? 0),
-      subtotal: 0, // computed below
+
+    const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+    if (!assignedRoomId) {
+      return JSON.stringify({
+        ok: false,
+        error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+      });
+    }
+
+    assignments.push({
+      roomTypeId: rt.id,
+      roomTypeName: rt.name,
+      roomId: assignedRoomId,
+      rate: Number(rt.base_rate ?? 0),
     });
   }
 
@@ -245,10 +275,7 @@ export const createBooking: ToolHandler = async (
   const nights = Math.round(
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
   );
-  for (const a of allocations) {
-    a.subtotal = a.rate * a.quantity * nights;
-  }
-  const total = allocations.reduce((sum, a) => sum + a.subtotal, 0);
+  const total = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
 
   const { data: guest, error: gErr } = await (ctx.supabaseAdmin as any)
     .from("guests")
@@ -312,18 +339,17 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Assign rooms — one booking_rooms row per physical unit ─────────────────
-  const brRows = allocations.flatMap((a) =>
-    a.rooms.map((room) => ({
-      booking_id:   booking.id,
-      room_id:      room.id,
-      room_type_id: a.rt.id,
-      nightly_rate: a.rate,
-    })),
-  );
+  // ── Assign rooms (resolved above, guaranteed non-null) ────────────────────────
+  const brRows = assignments.map((a) => ({
+    booking_id:   booking.id,
+    room_id:      a.roomId,
+    room_type_id: a.roomTypeId,
+    nightly_rate: a.rate,
+  }));
   const { error: brErr } = await (ctx.supabaseAdmin as any)
     .from("booking_rooms")
     .insert(brRows);
+
   if (brErr) {
     return JSON.stringify({
       ok:    false,
@@ -372,6 +398,11 @@ export const createBooking: ToolHandler = async (
   if (waitUntil) waitUntil(notifyManager());
   else void notifyManager();
 
+  // Format room type display for returned JSON
+  const finalRoomTypeDisplay = roomsToBook.length > 0 
+    ? roomsToBook.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ")
+    : assignments[0].roomTypeName;
+
   // ── Return success payload ─────────────────────────────────────────────────
   // Backwards-compat: single-room callers still get `room_type` and
   // `nightly_rate`. Multi-room callers get `rooms` array.
@@ -380,23 +411,13 @@ export const createBooking: ToolHandler = async (
   return JSON.stringify({
     ok:               true,
     reference_code:   booking.reference_code,
-    // Single-room legacy fields (point to first allocation).
-    room_type:        firstAlloc.rt.name,
-    nightly_rate:     firstAlloc.rate,
-    // Multi-room shape — always present, so callers can prefer this.
-    rooms:            allocations.map((a) => ({
-      room_type:    a.rt.name,
-      quantity:     a.quantity,
-      rate_per_night: a.rate,
-      subtotal:     a.subtotal,
-      room_numbers: a.rooms.map((r) => r.number),
-    })),
-    room_count:       totalUnits,
+    room_type:        finalRoomTypeDisplay,
     check_in:         checkIn,
     check_out:        checkOut,
     check_in_tampil:  fmtDateID(checkIn),
     check_out_tampil: fmtDateID(checkOut),
     nights,
+    nightly_rate:     assignments[0].rate,
     total,
     guest:            { full_name: fullName, email, phone },
     pembayaran: {

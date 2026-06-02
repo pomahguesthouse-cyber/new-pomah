@@ -38,6 +38,8 @@ import {
   FileText,
   MessageSquare,
   Cpu,
+  Activity,
+  Clock,
 } from "lucide-react";
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
 import {
@@ -59,6 +61,8 @@ import { ChatSimulatorView } from "@/admin/modules/ai-lab/chat-simulator-view";
 import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-settings";
 import { SeoPage } from "@/routes/admin/seo";
 import { IntentRulesView } from "@/admin/modules/ai-lab/intent-rules-view";
+import { RetryObservabilityView } from "@/admin/modules/ai-lab/retry-observability-view";
+import { QueueMonitoringView } from "@/admin/modules/ai-lab/queue-monitoring-view";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -225,7 +229,7 @@ const DECISION_HIERARCHY = [
   },
 ];
 
-type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training-rag" | "smart-delay" | "seo" | "intent-rules";
+type ViewKey = "dashboard" | "whatsapp" | "simulator" | "sop" | "training-rag" | "smart-delay" | "seo" | "intent-rules" | "retry-observability" | "queue-monitoring";
 const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "dashboard",    label: "Dashboard",      icon: LayoutDashboard },
   { key: "whatsapp",     label: "WhatsApp",        icon: MessageCircle },
@@ -235,6 +239,8 @@ const NAV: { key: ViewKey; label: string; icon: React.ComponentType<{ className?
   { key: "smart-delay",  label: "Response Timing", icon: Timer },
   { key: "seo",          label: "SEO",             icon: Search },
   { key: "intent-rules", label: "Aturan Intent",    icon: Network },
+  { key: "retry-observability", label: "Retry Observability", icon: Activity },
+  { key: "queue-monitoring",    label: "Queue Latency",      icon: Clock },
 ];
 
 type EditTarget = { type: "agent" | "tool"; key: string } | null;
@@ -313,6 +319,14 @@ function AiLab() {
             </div>
           ) : view === "intent-rules" ? (
             <IntentRulesView />
+          ) : view === "retry-observability" ? (
+            <div className="flex-1 overflow-hidden">
+              <RetryObservabilityView />
+            </div>
+          ) : view === "queue-monitoring" ? (
+            <div className="flex-1 overflow-hidden">
+              <QueueMonitoringView />
+            </div>
           ) : (
             <div className="flex-1 overflow-y-auto">
               <TrainingRagSettings />

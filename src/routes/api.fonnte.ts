@@ -130,6 +130,61 @@ export const Route = createFileRoute("/api/fonnte")({
           metadata: { intent_label: classifyMessageIntent(message), attachment_url: attachmentUrl ?? null },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
+        // ── NEW SESSION DETECTION ─────────────────────────────────────────
+        // Cek apakah ini sesi percakapan baru (gap >15 menit sejak pesan
+        // terakhir, atau thread baru sama sekali). Jika ya, kirim notifikasi
+        // ke super admin via Telegram secara fire-and-forget.
+        void (async () => {
+          try {
+            const SESSION_GAP_MS = 15 * 60 * 1000; // sama dengan reply-postprocess.ts
+
+            // Ambil thread + pesan sebelum yg baru ini
+            const { data: threadRow } = await (supabaseAdmin as any)
+              .from("whatsapp_threads")
+              .select("id, last_message_at, created_at")
+              .eq("phone", customerPhone)
+              .maybeSingle();
+
+            if (!threadRow) return; // thread tidak ditemukan
+
+            const t = threadRow as any;
+            const threadId: string = t.id;
+            const lastMsgAt: string | null = t.last_message_at;
+            const threadCreatedAt: string = t.created_at;
+
+            // Hitung apakah ini thread baru atau sesi baru
+            const isNewThread =
+              // Thread dibuat dalam 60 detik terakhir → baru
+              Date.now() - new Date(threadCreatedAt).getTime() < 60_000;
+
+            const isNewSession = isNewThread || (() => {
+              if (!lastMsgAt) return true;
+              // Bandingkan last_message_at dengan sekarang SEBELUM pesan baru ini
+              // (field sudah diupdate oleh receive_whatsapp_message, jadi kita
+              //  banding dengan pesan outbound terakhir sebagai proxy)
+              const gapMs = Date.now() - new Date(lastMsgAt).getTime();
+              // Hanya deteksi gap jika pesan terakhir bukan baru saja masuk
+              // (tolerance 30 detik untuk menghindari false positive burst)
+              return gapMs > SESSION_GAP_MS + 30_000;
+            })();
+
+            if (!isNewSession) return; // bukan sesi baru, skip notif
+
+            const { notifyNewConversationSession } = await import(
+              "@/services/manager-notifier.service"
+            );
+            await notifyNewConversationSession(supabaseAdmin as any, {
+              phone: customerPhone,
+              guestName: name || null,
+              firstMessage: message,
+              isNewThread,
+              threadId,
+            });
+          } catch (e) {
+            console.warn("[Webhook] New session notif failed (non-fatal):", e);
+          }
+        })();
+
         // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
         // → jalankan Vision OCR untuk ekstrak data, lalu teruskan ke super admin.
         if (attachmentUrl) {

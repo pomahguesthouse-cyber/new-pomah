@@ -132,4 +132,6 @@ export interface MultiAgentResult {
   trainingExamplesUsed?: number;
   /** ID contoh training yang dipakai — berguna untuk debug di UI */
   trainingExampleIds?:   string[];
+  /** LLM retry events that occurred during this orchestration run */
+  retries?: Array<{ attempt: number; reason: string; latency_ms: number }>;
 }

@@ -367,6 +367,56 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_google_reviews_audit: {
+        Row: {
+          actor: string | null
+          created_at: string
+          id: string
+          mode: string
+          next_rating: number | null
+          next_reviews: Json | null
+          next_total: number | null
+          prev_rating: number | null
+          prev_reviews: Json | null
+          prev_total: number | null
+          property_id: string
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          mode: string
+          next_rating?: number | null
+          next_reviews?: Json | null
+          next_total?: number | null
+          prev_rating?: number | null
+          prev_reviews?: Json | null
+          prev_total?: number | null
+          property_id: string
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          id?: string
+          mode?: string
+          next_rating?: number | null
+          next_reviews?: Json | null
+          next_total?: number | null
+          prev_rating?: number | null
+          prev_reviews?: Json | null
+          prev_total?: number | null
+          property_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_google_reviews_audit_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       explore_items: {
         Row: {
           badge: string | null
@@ -753,9 +803,13 @@ export type Database = {
           ai_lab_config: Json
           ai_model: string | null
           city: string | null
+          competitor_hotels: Json
           country: string | null
           created_at: string
           currency: string
+          custom_google_rating: number | null
+          custom_google_reviews_json: Json | null
+          custom_google_reviews_total: number | null
           description: string | null
           email: string | null
           explore_config: Json
@@ -796,9 +850,13 @@ export type Database = {
           ai_lab_config?: Json
           ai_model?: string | null
           city?: string | null
+          competitor_hotels?: Json
           country?: string | null
           created_at?: string
           currency?: string
+          custom_google_rating?: number | null
+          custom_google_reviews_json?: Json | null
+          custom_google_reviews_total?: number | null
           description?: string | null
           email?: string | null
           explore_config?: Json
@@ -839,9 +897,13 @@ export type Database = {
           ai_lab_config?: Json
           ai_model?: string | null
           city?: string | null
+          competitor_hotels?: Json
           country?: string | null
           created_at?: string
           currency?: string
+          custom_google_rating?: number | null
+          custom_google_reviews_json?: Json | null
+          custom_google_reviews_total?: number | null
           description?: string | null
           email?: string | null
           explore_config?: Json
@@ -2311,6 +2373,9 @@ export type Database = {
       get_google_reviews_config: {
         Args: never
         Returns: {
+          custom_google_rating: number
+          custom_google_reviews_json: Json
+          custom_google_reviews_total: number
           google_place_id: string
           google_places_api_key: string
         }[]
@@ -2483,7 +2548,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "staff"
-      booking_source: "direct" | "whatsapp" | "walk_in" | "website" | "manager_chat"
+      booking_source: "direct" | "whatsapp" | "walk_in" | "website"
       booking_status:
         | "pending"
         | "confirmed"
@@ -2623,7 +2688,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
-      booking_source: ["direct", "whatsapp", "walk_in", "website", "manager_chat"],
+      booking_source: ["direct", "whatsapp", "walk_in", "website"],
       booking_status: [
         "pending",
         "confirmed",
