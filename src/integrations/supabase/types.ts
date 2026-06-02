@@ -2483,7 +2483,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "staff"
-      booking_source: "direct" | "whatsapp" | "walk_in" | "website"
+      booking_source: "direct" | "whatsapp" | "walk_in" | "website" | "manager_chat"
       booking_status:
         | "pending"
         | "confirmed"
@@ -2623,7 +2623,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
-      booking_source: ["direct", "whatsapp", "walk_in", "website"],
+      booking_source: ["direct", "whatsapp", "walk_in", "website", "manager_chat"],
       booking_status: [
         "pending",
         "confirmed",

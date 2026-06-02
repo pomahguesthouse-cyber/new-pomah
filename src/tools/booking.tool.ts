@@ -215,6 +215,11 @@ export const createBooking: ToolHandler = async (
   }
 
   // ── Create booking ─────────────────────────────────────────────────────────
+  // Source attribution: managerial direct entry vs guest WA chat. Web/walk-in
+  // bookings don't come through this tool — they go through the website
+  // checkout flow (public.functions.ts) which sets source='direct' itself.
+  const source: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
+
   const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .insert({
@@ -226,7 +231,7 @@ export const createBooking: ToolHandler = async (
       adults,
       children,
       total_amount: total,
-      source:       "direct",
+      source,
       status:       "pending",
       idempotency_key: idemKey ?? null,
     })
