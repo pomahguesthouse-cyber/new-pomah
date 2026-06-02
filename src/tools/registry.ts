@@ -68,14 +68,26 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih tamu." },
+          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih tamu. Boleh kosong jika parameter 'rooms' diisi." },
+          rooms: {
+            type: "array",
+            description: "Daftar tipe kamar dan jumlahnya jika tamu memesan lebih dari satu kamar. Contoh: [{\"room_type\": \"Single\", \"quantity\": 1}, {\"room_type\": \"Deluxe\", \"quantity\": 2}]",
+            items: {
+              type: "object",
+              properties: {
+                room_type: { type: "string", description: "Nama tipe kamar." },
+                quantity: { type: "number", description: "Jumlah kamar." }
+              },
+              required: ["room_type", "quantity"]
+            }
+          },
           check_in:   { type: "string", description: "Tanggal check-in format YYYY-MM-DD." },
           check_out:  { type: "string", description: "Tanggal check-out format YYYY-MM-DD. Kosongkan untuk 1 malam." },
           adults:     { type: "number", description: "Jumlah tamu dewasa. Default 1." },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
           guest_name: { type: "string", description: "Nama tamu bila sudah disebutkan di percakapan. Kosongkan bila belum." },
         },
-        required: ["room_type", "check_in"],
+        required: ["check_in"],
       },
     },
   },

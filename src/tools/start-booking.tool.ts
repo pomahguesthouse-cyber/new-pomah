@@ -28,16 +28,12 @@ export const startBookingDetails: ToolHandler = async (
     return JSON.stringify({ ok: false, error: "Nomor kontak tamu tidak tersedia." });
   }
 
-  const roomTypeName = str(args.room_type).toLowerCase();
   const checkIn = isDateString(args.check_in) ? (args.check_in as string) : "";
   let checkOut = isDateString(args.check_out) ? (args.check_out as string) : "";
   const adults = Math.max(1, Math.min(8, Number(args.adults) || 1));
   const children = Math.max(0, Math.min(8, Number(args.children) || 0));
   const guestName = str(args.guest_name);
 
-  if (!roomTypeName) {
-    return JSON.stringify({ ok: false, error: "Tipe kamar belum dipilih." });
-  }
   if (!checkIn) {
     return JSON.stringify({ ok: false, error: "Tanggal check-in belum ditentukan." });
   }
@@ -48,29 +44,86 @@ export const startBookingDetails: ToolHandler = async (
     checkOut = d.toISOString().slice(0, 10);
   }
 
-  const rt =
-    ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
-    ctx.rooms.find((r) => {
-      const n = r.name.toLowerCase();
-      return n.includes(roomTypeName) || roomTypeName.includes(n);
-    });
-
-  if (!rt) {
-    return JSON.stringify({
-      ok: false,
-      error: `Tipe kamar "${str(args.room_type)}" tidak ditemukan.`,
-    });
-  }
-
   const context: BookingContext = {
     checkIn,
     checkOut,
-    roomId: rt.id,
-    roomName: rt.name,
-    pricePerNight: Number(rt.base_rate ?? 0),
     adults,
     children,
   };
+
+  const roomsArg = args.rooms;
+  let roomsDescription = "";
+
+  if (Array.isArray(roomsArg) && roomsArg.length > 0) {
+    const parsedRooms = [];
+    for (const item of roomsArg) {
+      const rName = str(item.room_type).toLowerCase();
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      if (!rName) continue;
+
+      const rt =
+        ctx.rooms.find((r) => r.name.toLowerCase() === rName) ??
+        ctx.rooms.find((r) => {
+          const n = r.name.toLowerCase();
+          return n.includes(rName) || rName.includes(n);
+        });
+
+      if (!rt) {
+        return JSON.stringify({
+          ok: false,
+          error: `Tipe kamar "${item.room_type}" tidak ditemukan.`,
+        });
+      }
+
+      parsedRooms.push({
+        roomTypeId: rt.id,
+        roomTypeName: rt.name,
+        quantity: qty,
+        pricePerNight: Number(rt.base_rate ?? 0),
+      });
+    }
+
+    if (parsedRooms.length === 0) {
+      return JSON.stringify({ ok: false, error: "Tipe kamar belum dipilih." });
+    }
+
+    context.rooms = parsedRooms;
+    // Set fallback variables
+    context.roomId = parsedRooms[0].roomTypeId;
+    context.roomName = parsedRooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ");
+    context.pricePerNight = parsedRooms[0].pricePerNight;
+    roomsDescription = context.roomName;
+  } else {
+    const roomTypeName = str(args.room_type).toLowerCase();
+    if (!roomTypeName) {
+      return JSON.stringify({ ok: false, error: "Tipe kamar belum dipilih." });
+    }
+
+    const rt =
+      ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
+      ctx.rooms.find((r) => {
+        const n = r.name.toLowerCase();
+        return n.includes(roomTypeName) || roomTypeName.includes(n);
+      });
+
+    if (!rt) {
+      return JSON.stringify({
+        ok: false,
+        error: `Tipe kamar "${str(args.room_type)}" tidak ditemukan.`,
+      });
+    }
+
+    context.roomId = rt.id;
+    context.roomName = rt.name;
+    context.pricePerNight = Number(rt.base_rate ?? 0);
+    context.rooms = [{
+      roomTypeId: rt.id,
+      roomTypeName: rt.name,
+      quantity: 1,
+      pricePerNight: Number(rt.base_rate ?? 0),
+    }];
+    roomsDescription = rt.name;
+  }
 
   ctx.lastDates = { checkIn, checkOut };
 
@@ -81,11 +134,11 @@ export const startBookingDetails: ToolHandler = async (
     context.guestName = guestName;
     state = "CONFIRMING_NAME";
     message =
-      `Baik, untuk pemesanan kamar ${rt.name} apakah Kakak ingin memakai nama "${guestName}", ` +
+      `Baik, untuk pemesanan kamar ${roomsDescription} apakah Kakak ingin memakai nama "${guestName}", ` +
       `atau menggunakan nama lain? Balas "Ya" untuk memakai nama ini, atau ketik langsung nama lain yang Kakak inginkan.`;
   } else {
     state = "AWAITING_NAME";
-    message = `Baik Kak, untuk memproses pemesanan kamar ${rt.name}, mohon ketikkan nama lengkap Kakak:`;
+    message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak:`;
   }
 
   await updateBookingState(ctx.supabasePublic, ctx.phone, state, context);

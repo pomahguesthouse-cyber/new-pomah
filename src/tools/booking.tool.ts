@@ -20,6 +20,7 @@ async function pickAvailableRoom(
   roomTypeId: string,
   checkIn:    string,
   checkOut:   string,
+  skipRoomIds?: Set<string>,
 ): Promise<string | null> {
   const { data: rooms } = await (ctx.supabaseAdmin as any)
     .from("rooms")
@@ -38,15 +39,23 @@ async function pickAvailableRoom(
     .gt("check_out", checkIn);
 
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
-  if (activeIds.length === 0) return roomRows[0].id;
 
-  const { data: occ } = await (ctx.supabaseAdmin as any)
-    .from("booking_rooms")
-    .select("room_id")
-    .not("room_id", "is", null)
-    .in("booking_id", activeIds);
+  let taken = new Set<string>();
+  if (activeIds.length > 0) {
+    const { data: occ } = await (ctx.supabaseAdmin as any)
+      .from("booking_rooms")
+      .select("room_id")
+      .not("room_id", "is", null)
+      .in("booking_id", activeIds);
+    taken = new Set(((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id));
+  }
 
-  const taken = new Set(((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id));
+  if (skipRoomIds) {
+    for (const id of skipRoomIds) {
+      taken.add(id);
+    }
+  }
+
   const free  = roomRows.find((r) => !taken.has(r.id));
   return free ? free.id : null;
 }
@@ -71,20 +80,31 @@ async function findBookingByIdemKey(
 
   if (!b) return null;
 
-  const br = Array.isArray(b.booking_rooms) ? b.booking_rooms[0] : b.booking_rooms;
+  const bookingRoomsList = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
   const g  = Array.isArray(b.guests)        ? b.guests[0]        : b.guests;
-  const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
+  
+  // Group rooms to show e.g. "1x Single, 2x Deluxe"
+  const roomTypeCounts = new Map<string, number>();
+  for (const brRow of bookingRoomsList) {
+    const rt = ctx.rooms.find((r) => r.id === brRow?.room_type_id);
+    if (rt) {
+      roomTypeCounts.set(rt.name, (roomTypeCounts.get(rt.name) ?? 0) + 1);
+    }
+  }
+  const roomTypeDisplay = roomTypeCounts.size > 0
+    ? Array.from(roomTypeCounts.entries()).map(([name, qty]) => `${qty}x ${name}`).join(", ")
+    : "";
 
   return JSON.stringify({
     ok:               true,
     reference_code:   b.reference_code,
-    room_type:        rt?.name ?? "",
+    room_type:        roomTypeDisplay,
     check_in:         b.check_in,
     check_out:        b.check_out,
     check_in_tampil:  fmtDateID(b.check_in),
     check_out_tampil: fmtDateID(b.check_out),
     nights:           b.nights,
-    nightly_rate:     Number(br?.nightly_rate ?? 0),
+    nightly_rate:     bookingRoomsList[0]?.nightly_rate ? Number(bookingRoomsList[0].nightly_rate) : 0,
     total:            Number(b.total_amount ?? 0),
     guest:            { full_name: g?.full_name, email: g?.email, phone: g?.phone },
     pembayaran: {
@@ -150,44 +170,102 @@ export const createBooking: ToolHandler = async (
   const email = emailRaw || null;
   const phone = phoneRaw || null;
 
-  // ── Find room type ─────────────────────────────────────────────────────────
-  const rt =
-    ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
-    ctx.rooms.find((r) => {
-      const n = r.name.toLowerCase();
-      return n.includes(roomTypeName) || roomTypeName.includes(n);
-    });
-
-  if (!rt) {
-    return JSON.stringify({
-      ok:    false,
-      error: `Tipe kamar "${str(args.room_type)}" tidak ditemukan.`,
-    });
+  // ── Check if multiple rooms are requested ──────────────────────────────────
+  let roomsToBook: Array<{ roomTypeId: string; roomTypeName: string; quantity: number; pricePerNight: number }> = [];
+  if (Array.isArray(args.rooms)) {
+    roomsToBook = args.rooms as any;
+  } else if (typeof args.rooms === "string" && args.rooms.trim().length > 0) {
+    try {
+      roomsToBook = JSON.parse(args.rooms);
+    } catch (e) {
+      console.error("[createBooking] Failed to parse args.rooms:", e);
+    }
   }
 
-  // ── Check availability ─────────────────────────────────────────────────────
   const { data: availRows } = await (ctx.supabasePublic as any).rpc(
     "room_type_availability_detail",
     { p_check_in: checkIn, p_check_out: checkOut },
   );
-  const avail = ((availRows ?? []) as Array<{ room_type_id: string; available: number }>).find(
-    (r) => r.room_type_id === rt.id,
-  );
-  if (avail && avail.available < 1) {
-    return JSON.stringify({
-      ok:    false,
-      error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
-    });
-  }
+  const availMap = new Map(((availRows ?? []) as any[]).map((r) => [r.room_type_id, r.available]));
 
-  // ── Pick a concrete free room BEFORE any write ───────────────────────────────
-  // Fail fast if no physical room is free: avoids creating an orphan guest/booking
-  // and prevents silently inserting a booking_room with room_id = null.
-  const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
-  if (!assignedRoomId) {
-    return JSON.stringify({
-      ok:    false,
-      error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+  const skipRoomIds = new Set<string>();
+  const assignments: Array<{ roomTypeId: string; roomTypeName: string; roomId: string; rate: number }> = [];
+
+  if (roomsToBook.length > 0) {
+    // Group requested rooms by roomTypeId to verify total availability first
+    const requestedQuantities = new Map<string, number>();
+    for (const r of roomsToBook) {
+      requestedQuantities.set(r.roomTypeId, (requestedQuantities.get(r.roomTypeId) ?? 0) + r.quantity);
+    }
+
+    for (const [rtId, qty] of requestedQuantities.entries()) {
+      const available = availMap.get(rtId) ?? 0;
+      if (available < qty) {
+        const rtName = roomsToBook.find((r) => r.roomTypeId === rtId)?.roomTypeName || "Kamar";
+        return JSON.stringify({
+          ok: false,
+          error: `${rtName} tidak cukup tersedia untuk tanggal tersebut (diminta: ${qty}, tersedia: ${available}).`,
+        });
+      }
+    }
+
+    // Allocate concrete rooms
+    for (const r of roomsToBook) {
+      for (let q = 0; q < r.quantity; q++) {
+        const assignedRoomId = await pickAvailableRoom(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
+        if (!assignedRoomId) {
+          return JSON.stringify({
+            ok: false,
+            error: `Gagal mengalokasikan kamar fisik untuk ${r.roomTypeName}.`,
+          });
+        }
+        skipRoomIds.add(assignedRoomId);
+        assignments.push({
+          roomTypeId: r.roomTypeId,
+          roomTypeName: r.roomTypeName,
+          roomId: assignedRoomId,
+          rate: r.pricePerNight,
+        });
+      }
+    }
+  } else {
+    // Single room type fallback (behavior lama)
+    const roomTypeName = str(args.room_type).toLowerCase();
+    const rt =
+      ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
+      ctx.rooms.find((r) => {
+        const n = r.name.toLowerCase();
+        return n.includes(roomTypeName) || roomTypeName.includes(n);
+      });
+
+    if (!rt) {
+      return JSON.stringify({
+        ok: false,
+        error: `Tipe kamar "${str(args.room_type)}" tidak ditemukan.`,
+      });
+    }
+
+    const available = availMap.get(rt.id) ?? 0;
+    if (available < 1) {
+      return JSON.stringify({
+        ok: false,
+        error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+      });
+    }
+
+    const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+    if (!assignedRoomId) {
+      return JSON.stringify({
+        ok: false,
+        error: `${rt.name} sudah penuh untuk tanggal tersebut.`,
+      });
+    }
+
+    assignments.push({
+      roomTypeId: rt.id,
+      roomTypeName: rt.name,
+      roomId: assignedRoomId,
+      rate: Number(rt.base_rate ?? 0),
     });
   }
 
@@ -198,8 +276,7 @@ export const createBooking: ToolHandler = async (
   const nights = Math.round(
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
   );
-  const rate  = Number(rt.base_rate ?? 0);
-  const total = rate * nights;
+  const total = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
 
   const { data: guest, error: gErr } = await (ctx.supabaseAdmin as any)
     .from("guests")
@@ -251,15 +328,16 @@ export const createBooking: ToolHandler = async (
     });
   }
 
-  // ── Assign room (resolved above, guaranteed non-null) ────────────────────────
+  // ── Assign rooms (resolved above, guaranteed non-null) ────────────────────────
+  const brRows = assignments.map((a) => ({
+    booking_id:   booking.id,
+    room_id:      a.roomId,
+    room_type_id: a.roomTypeId,
+    nightly_rate: a.rate,
+  }));
   const { error: brErr } = await (ctx.supabaseAdmin as any)
     .from("booking_rooms")
-    .insert({
-      booking_id:   booking.id,
-      room_id:      assignedRoomId,
-      room_type_id: rt.id,
-      nightly_rate: rate,
-    });
+    .insert(brRows);
 
   if (brErr) {
     return JSON.stringify({
@@ -309,17 +387,22 @@ export const createBooking: ToolHandler = async (
   if (waitUntil) waitUntil(notifyManager());
   else void notifyManager();
 
+  // Format room type display for returned JSON
+  const finalRoomTypeDisplay = roomsToBook.length > 0 
+    ? roomsToBook.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ")
+    : assignments[0].roomTypeName;
+
   // ── Return success payload ─────────────────────────────────────────────────
   return JSON.stringify({
     ok:               true,
     reference_code:   booking.reference_code,
-    room_type:        rt.name,
+    room_type:        finalRoomTypeDisplay,
     check_in:         checkIn,
     check_out:        checkOut,
     check_in_tampil:  fmtDateID(checkIn),
     check_out_tampil: fmtDateID(checkOut),
     nights,
-    nightly_rate:     rate,
+    nightly_rate:     assignments[0].rate,
     total,
     guest:            { full_name: fullName, email, phone },
     pembayaran: {

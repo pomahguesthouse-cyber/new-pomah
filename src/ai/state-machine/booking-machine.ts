@@ -16,6 +16,13 @@ export type BookingState =
   | "PAYMENT_PENDING"
   | "COMPLETED";
 
+export interface BookingRoomItem {
+  roomTypeId: string;
+  roomTypeName: string;
+  quantity: number;
+  pricePerNight: number;
+}
+
 export interface BookingContext {
   checkIn?: string;
   checkOut?: string;
@@ -29,6 +36,7 @@ export interface BookingContext {
   bookingCode?: string;
   adults?: number;
   children?: number;
+  rooms?: BookingRoomItem[];
 }
 
 export interface StateRecord {
@@ -65,6 +73,9 @@ const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 // Affirm = "use this one"; Decline/Other = "use a different one".
 const USE_THIS_PATTERN = /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|pake ini|betul|benar|oke|ok|sip|setuju|lanjut)\b/i;
 const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
+
+const CONFIRM_PATTERN = /\b(ya|iya|yes|lanjut|benar|oke|ok|setuju|betul|lanjutkan|ya benar|yup)\b/i;
+const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/i;
 
 /**
  * Looks-like-a-person-name heuristic. The state machine previously took
@@ -113,12 +124,19 @@ function formatPhoneDisplay(raw: string): string {
 
 /** Build the pre-confirmation booking summary once all guest details are set. */
 function buildBookingSummary(context: BookingContext): StateMachineResult {
+  let roomsDisplay = context.roomName ?? "—";
+  if (context.rooms && context.rooms.length > 0) {
+    roomsDisplay = "\n  " + context.rooms
+      .map((r) => `* ${r.quantity}x ${r.roomTypeName} (@Rp ${r.pricePerNight.toLocaleString("id-ID")}/malam)`)
+      .join("\n  ");
+  }
+
   const summary = `Data pemesanan sudah lengkap! Berikut ringkasannya:
 
 - Nama: ${context.guestName}
 - Email: ${context.guestEmail}
 - No. HP: ${context.guestPhone}
-- Kamar: ${context.roomName}
+- Kamar: ${roomsDisplay}
 
 Apakah data di atas sudah benar dan Kakak ingin melanjutkan untuk proses Booking & Pembayaran? (Ketik "Ya" atau "Lanjut" / "Batal")`;
   return { handled: true, reply: summary };
@@ -196,7 +214,7 @@ function isExpectedAnswer(state: BookingState, message: string): boolean {
     case "CONFIRMING_NAME":
       return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
     case "CONFIRMING_BOOKING":
-      return /\b(ya|lanjut|benar|oke|ok|setuju|betul|tidak|batal|salah|ubah|ganti)\b/i.test(message);
+      return CONFIRM_PATTERN.test(message) || CANCEL_PATTERN.test(message);
     case "AWAITING_NAME":
     default:
       return false; // a name is freeform — rely on interruption signals instead
@@ -390,11 +408,12 @@ export async function processBookingState(
   }
 
   if (state === "CONFIRMING_BOOKING") {
-    if (/\b(ya|lanjut|benar|oke|ok|setuju|betul)\b/i.test(message)) {
+    if (CONFIRM_PATTERN.test(message)) {
       // Create the booking deterministically with the data collected in context.
       const raw = await createBooking(
         {
           room_type:  context.roomName,
+          rooms:      context.rooms,
           full_name:  context.guestName,
           email:      context.guestEmail,
           phone:      context.guestPhone,
@@ -432,7 +451,7 @@ export async function processBookingState(
         followUp: "send_invoice",
         followUpRef: result.reference_code,
       };
-    } else if (/\b(tidak|batal|salah|ubah|ganti)\b/i.test(message)) {
+    } else if (CANCEL_PATTERN.test(message)) {
       await updateBookingState(supabase, phone, "AWAITING_NAME", context);
       return { handled: true, reply: "Baik, mari kita ulangi pengisian datanya. Mohon ketik nama lengkap Kakak:" };
     } else {
