@@ -29,7 +29,7 @@ async function pickAvailableRooms(
     .order("number");
 
   const roomRows = (rooms ?? []) as Array<{ id: string; number: string }>;
-  if (roomRows.length === 0) return [];
+  if (roomRows.length === 0) return null;
 
   const { data: activeBookings } = await (ctx.supabaseAdmin as any)
     .from("bookings")
@@ -64,6 +64,11 @@ async function pickAvailableRooms(
  * Look up a booking already created for this idempotency key and rebuild the
  * success payload. Returns null if none exists. Used to make create_booking
  * safe under webhook retries of the same inbound message.
+ *
+ * Payload mirrors the success-path shape — including the structured `rooms`
+ * array — so an idempotent replay of a multi-room booking doesn't degrade
+ * into a single-room view (callers can format the confirmation the same way
+ * either time).
  */
 async function findBookingByIdemKey(
   ctx:     ToolContext,
@@ -73,38 +78,63 @@ async function findBookingByIdemKey(
     .from("bookings")
     .select(
       "id, reference_code, check_in, check_out, nights, total_amount, " +
-      "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate)",
+      "guests(full_name, email, phone), " +
+      "booking_rooms(room_type_id, nightly_rate, rooms(number))",
     )
     .eq("idempotency_key", idemKey)
     .maybeSingle();
 
   if (!b) return null;
 
-  const bookingRoomsList = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
-  const g  = Array.isArray(b.guests)        ? b.guests[0]        : b.guests;
-  
-  // Group rooms to show e.g. "1x Single, 2x Deluxe"
-  const roomTypeCounts = new Map<string, number>();
-  for (const brRow of bookingRoomsList) {
-    const rt = ctx.rooms.find((r) => r.id === brRow?.room_type_id);
-    if (rt) {
-      roomTypeCounts.set(rt.name, (roomTypeCounts.get(rt.name) ?? 0) + 1);
-    }
+  const bookingRoomsList: any[] = Array.isArray(b.booking_rooms)
+    ? b.booking_rooms
+    : [b.booking_rooms].filter(Boolean);
+  const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
+  const nights = Number(b.nights ?? 0);
+
+  // Group by room_type_id so the response shape matches createBooking's
+  // success payload: one entry per type with quantity + subtotal.
+  const byType = new Map<string, { name: string; rate: number; count: number; numbers: string[] }>();
+  for (const br of bookingRoomsList) {
+    const tid = br?.room_type_id;
+    if (!tid) continue;
+    const rt = ctx.rooms.find((r) => r.id === tid);
+    const num = (Array.isArray(br.rooms) ? br.rooms[0]?.number : br.rooms?.number) ?? null;
+    const slot = byType.get(tid) ?? {
+      name: rt?.name ?? "",
+      rate: Number(br.nightly_rate ?? 0),
+      count: 0,
+      numbers: [],
+    };
+    slot.count += 1;
+    if (num) slot.numbers.push(String(num));
+    byType.set(tid, slot);
   }
-  const roomTypeDisplay = roomTypeCounts.size > 0
-    ? Array.from(roomTypeCounts.entries()).map(([name, qty]) => `${qty}x ${name}`).join(", ")
+  const rooms = Array.from(byType.values()).map((s) => ({
+    room_type:      s.name,
+    quantity:       s.count,
+    rate_per_night: s.rate,
+    subtotal:       s.rate * s.count * nights,
+    room_numbers:   s.numbers,
+  }));
+  const roomTypeDisplay = rooms.length > 0
+    ? rooms.map((r) => `${r.quantity}x ${r.room_type}`).join(", ")
     : "";
+  const firstRate = rooms[0]?.rate_per_night ?? 0;
+  const roomCount = rooms.reduce((sum, r) => sum + r.quantity, 0);
 
   return JSON.stringify({
     ok:               true,
     reference_code:   b.reference_code,
     room_type:        roomTypeDisplay,
+    rooms,
+    room_count:       roomCount,
     check_in:         b.check_in,
     check_out:        b.check_out,
     check_in_tampil:  fmtDateID(b.check_in),
     check_out_tampil: fmtDateID(b.check_out),
-    nights:           b.nights,
-    nightly_rate:     bookingRoomsList[0]?.nightly_rate ? Number(bookingRoomsList[0].nightly_rate) : 0,
+    nights,
+    nightly_rate:     firstRate,
     total:            Number(b.total_amount ?? 0),
     guest:            { full_name: g?.full_name, email: g?.email, phone: g?.phone },
     pembayaran: {
@@ -117,6 +147,74 @@ async function findBookingByIdemKey(
       : `https://pomahguesthouse.com/book/confirmation/${b.reference_code ?? b.id}`,
     idempotent_replay: true,
   });
+}
+
+// ─── Rollback helpers ──────────────────────────────────────────────────────
+// create_booking writes guest → bookings → booking_rooms in three steps. We
+// don't have transactional access through PostgREST, so on failure (or on a
+// detected room-race) we best-effort delete what we did insert to avoid
+// littering the DB with orphans. Each step swallows errors and just logs —
+// missing rows on cleanup are fine, but a hard throw would mask the original
+// failure we're already reporting.
+async function rollbackBooking(
+  ctx: ToolContext,
+  refs: { bookingId?: string; guestId?: string },
+): Promise<void> {
+  if (refs.bookingId) {
+    try {
+      // booking_rooms cascades via FK ON DELETE CASCADE on most schemas; if
+      // the FK isn't set up that way the rows just stay orphaned. Best
+      // effort — explicit delete first.
+      await (ctx.supabaseAdmin as any).from("booking_rooms").delete().eq("booking_id", refs.bookingId);
+      await (ctx.supabaseAdmin as any).from("bookings").delete().eq("id", refs.bookingId);
+    } catch (e) {
+      console.warn("[create_booking] rollback bookings failed:", e);
+    }
+  }
+  if (refs.guestId) {
+    try {
+      await (ctx.supabaseAdmin as any).from("guests").delete().eq("id", refs.guestId);
+    } catch (e) {
+      console.warn("[create_booking] rollback guest failed:", e);
+    }
+  }
+}
+
+/**
+ * Re-check that the rooms we just inserted into booking_rooms aren't ALSO
+ * referenced by another active booking with an overlapping date range.
+ *
+ * After migration 20260603000000_booking_rooms_no_overlap.sql is applied,
+ * Postgres enforces this directly via an EXCLUDE constraint and the insert
+ * itself raises 23P01 — making this function defensive belt-and-suspenders.
+ * We keep it so environments that haven't run the migration yet still get
+ * race protection (just slightly weaker than the constraint).
+ */
+async function detectRoomConflicts(
+  ctx: ToolContext,
+  ourBookingId: string,
+  ourRoomIds: string[],
+  checkIn: string,
+  checkOut: string,
+): Promise<string[]> {
+  if (ourRoomIds.length === 0) return [];
+  // Find active bookings overlapping our date range (excluding ourselves).
+  const { data: activeBookings } = await (ctx.supabaseAdmin as any)
+    .from("bookings")
+    .select("id")
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .neq("id", ourBookingId)
+    .lt("check_in",  checkOut)
+    .gt("check_out", checkIn);
+  const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
+  if (activeIds.length === 0) return [];
+
+  const { data: occ } = await (ctx.supabaseAdmin as any)
+    .from("booking_rooms")
+    .select("room_id")
+    .in("booking_id", activeIds)
+    .in("room_id", ourRoomIds);
+  return ((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id);
 }
 
 // ─── Tool handler ─────────────────────────────────────────────────────────────
@@ -211,7 +309,7 @@ export const createBooking: ToolHandler = async (
     // Allocate concrete rooms
     for (const r of roomsToBook) {
       for (let q = 0; q < r.quantity; q++) {
-        const assignedRoomId = await pickAvailableRoom(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
+        const assignedRoomId = await pickAvailableRooms(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
         if (!assignedRoomId) {
           return JSON.stringify({
             ok: false,
@@ -252,7 +350,7 @@ export const createBooking: ToolHandler = async (
       });
     }
 
-    const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+    const assignedRoomId = await pickAvailableRooms(ctx, rt.id, checkIn, checkOut);
     if (!assignedRoomId) {
       return JSON.stringify({
         ok: false,
@@ -331,8 +429,15 @@ export const createBooking: ToolHandler = async (
     // Return the booking it created instead of erroring.
     if (idemKey && (bErr as any)?.code === "23505") {
       const existing = await findBookingByIdemKey(ctx, idemKey);
-      if (existing) return existing;
+      if (existing) {
+        // Clean up the orphan guest we just inserted — the winning replay
+        // already has its own guest row.
+        await rollbackBooking(ctx, { guestId: guest.id });
+        return existing;
+      }
     }
+    // Hard failure: roll back the guest we inserted so it doesn't sit orphaned.
+    await rollbackBooking(ctx, { guestId: guest.id });
     return JSON.stringify({
       ok:    false,
       error: `Gagal membuat booking: ${bErr?.message ?? "tidak diketahui"}`,
@@ -351,9 +456,49 @@ export const createBooking: ToolHandler = async (
     .insert(brRows);
 
   if (brErr) {
+    // Partial state: booking row landed, booking_rooms didn't. Roll back so we
+    // don't leave a roomless booking sitting in the table.
+    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
+    // 23P01 = exclusion_violation. The DB-level booking_rooms_no_overlap
+    // constraint caught a race we would have otherwise missed: another
+    // booking grabbed one of these rooms for an overlapping range between
+    // our pickAvailableRooms() and this insert. Surface as a retry hint.
+    if ((brErr as any)?.code === "23P01") {
+      return JSON.stringify({
+        ok:    false,
+        error:
+          "Kamar baru saja diambil booking lain di tanggal yang sama. " +
+          "Coba ulangi — tool akan memilih kamar lain yang masih kosong.",
+      });
+    }
     return JSON.stringify({
       ok:    false,
       error: `Gagal menyimpan detail kamar: ${brErr.message}`,
+    });
+  }
+
+  // ── Race detection — see if a concurrent caller grabbed the same room ────
+  // Window: between pickAvailableRooms() and the insert above, another tool
+  // call could have observed the same rooms as free and inserted them too.
+  // Without a DB-level exclusion constraint, we detect post-write and roll
+  // back if we lost the race.
+  const conflictRoomIds = await detectRoomConflicts(
+    ctx,
+    booking.id,
+    assignments.map((a) => a.roomId),
+    checkIn,
+    checkOut,
+  );
+  if (conflictRoomIds.length > 0) {
+    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
+    const conflictNames = assignments
+      .filter((a) => conflictRoomIds.includes(a.roomId))
+      .map((a) => a.roomTypeName);
+    return JSON.stringify({
+      ok:    false,
+      error:
+        `Kamar ${conflictNames.join(", ")} baru saja diambil booking lain saat ` +
+        `kita mau finalisasi. Coba ulangi — tool akan memilih kamar yang masih kosong.`,
     });
   }
 
@@ -404,14 +549,30 @@ export const createBooking: ToolHandler = async (
     : assignments[0].roomTypeName;
 
   // ── Return success payload ─────────────────────────────────────────────────
-  // Backwards-compat: single-room callers still get `room_type` and
-  // `nightly_rate`. Multi-room callers get `rooms` array.
-  const firstAlloc = allocations[0];
-  const totalUnits = allocations.reduce((sum, a) => sum + a.quantity, 0);
+  // Backwards-compat: single-room callers still get `room_type` (joined string)
+  // and `nightly_rate` from the first allocation. Multi-room callers also get
+  // a structured `rooms` array + `room_count`.
+  const roomsByType = new Map<string, { name: string; rate: number; count: number }>();
+  for (const a of assignments) {
+    const slot = roomsByType.get(a.roomTypeId)
+      ?? { name: a.roomTypeName, rate: a.rate, count: 0 };
+    slot.count += 1;
+    roomsByType.set(a.roomTypeId, slot);
+  }
+  const roomsPayload = Array.from(roomsByType.values()).map((s) => ({
+    room_type:      s.name,
+    quantity:       s.count,
+    rate_per_night: s.rate,
+    subtotal:       s.rate * s.count * nights,
+  }));
+  const roomCount = assignments.length;
+
   return JSON.stringify({
     ok:               true,
     reference_code:   booking.reference_code,
     room_type:        finalRoomTypeDisplay,
+    rooms:            roomsPayload,
+    room_count:       roomCount,
     check_in:         checkIn,
     check_out:        checkOut,
     check_in_tampil:  fmtDateID(checkIn),
