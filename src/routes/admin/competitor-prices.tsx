@@ -14,12 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  TrendingUp, Loader2, Search, Trash2, ExternalLink, RefreshCw,
+  TrendingUp, Loader2, Search, Trash2, ExternalLink, RefreshCw, Plus, Save, X,
 } from "lucide-react";
 import {
   runCompetitorScrape,
   listCompetitorPrices,
   deleteCompetitorPrice,
+  getCompetitorHotels,
+  saveCompetitorHotels,
 } from "@/admin/functions/competitor.functions";
 
 export const Route = createFileRoute("/admin/competitor-prices")({
@@ -46,6 +48,8 @@ function CompetitorPricesPage() {
   const runFn = useServerFn(runCompetitorScrape);
   const listFn = useServerFn(listCompetitorPrices);
   const delFn = useServerFn(deleteCompetitorPrice);
+  const getHotelsFn = useServerFn(getCompetitorHotels);
+  const saveHotelsFn = useServerFn(saveCompetitorHotels);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -53,10 +57,54 @@ function CompetitorPricesPage() {
     queryFn: () => listFn(),
   });
 
+  const { data: hotelsData } = useQuery({
+    queryKey: ["competitor-hotels"],
+    queryFn: () => getHotelsFn(),
+  });
+
   const [city, setCity] = useState("Semarang");
   const [extra, setExtra] = useState("");
   const [limit, setLimit] = useState(8);
   const [running, setRunning] = useState(false);
+
+  // Curated hotel list editor — local draft synced from server query.
+  const [hotelDraft, setHotelDraft] = useState<string[] | null>(null);
+  const [newHotel, setNewHotel] = useState("");
+  const [savingHotels, setSavingHotels] = useState(false);
+  const hotels = hotelDraft ?? hotelsData?.hotels ?? [];
+  const dirty = hotelDraft !== null
+    && JSON.stringify(hotelDraft) !== JSON.stringify(hotelsData?.hotels ?? []);
+
+  function addHotel() {
+    const name = newHotel.trim();
+    if (!name) return;
+    const base = hotels;
+    if (base.some((h) => h.toLowerCase() === name.toLowerCase())) {
+      toast.info("Hotel sudah ada di daftar.");
+      return;
+    }
+    setHotelDraft([...base, name]);
+    setNewHotel("");
+  }
+
+  function removeHotel(idx: number) {
+    setHotelDraft(hotels.filter((_, i) => i !== idx));
+  }
+
+  async function handleSaveHotels() {
+    if (hotelDraft == null) return;
+    setSavingHotels(true);
+    try {
+      const res = await saveHotelsFn({ data: { hotels: hotelDraft } });
+      toast.success(`Daftar kompetitor disimpan (${res.hotels.length}).`);
+      setHotelDraft(null);
+      qc.invalidateQueries({ queryKey: ["competitor-hotels"] });
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menyimpan");
+    } finally {
+      setSavingHotels(false);
+    }
+  }
 
   async function handleRun() {
     setRunning(true);
@@ -109,11 +157,69 @@ function CompetitorPricesPage() {
 
       <Card className="p-4 space-y-3">
         <div className="text-sm font-semibold flex items-center gap-1.5">
+          <Plus className="h-4 w-4 text-violet-600" /> Daftar Kompetitor (Curated)
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Tulis nama hotel kompetitor yang Anda pantau (mis. "INARA BY KIYANA Semarang",
+          "Hotel ABC"). Scrape akan iterasi tiap nama, hanya menyimpan listing hotel sebenarnya
+          — bukan halaman SEO "Hotel Dekat …". Kosongkan untuk pakai mode free-text.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {hotels.length === 0 && (
+            <span className="text-xs text-muted-foreground italic">
+              Belum ada kompetitor — mode free-text aktif.
+            </span>
+          )}
+          {hotels.map((h, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-800">
+              {h}
+              <button
+                onClick={() => removeHotel(idx)}
+                className="hover:text-violet-950"
+                title="Hapus dari daftar"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={newHotel}
+            onChange={(e) => setNewHotel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addHotel(); } }}
+            placeholder="Nama hotel kompetitor (Enter untuk tambah)"
+            className="flex-1 min-w-[220px]"
+          />
+          <Button size="sm" variant="outline" onClick={addHotel} disabled={!newHotel.trim()}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Tambah
+          </Button>
+          {dirty && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => setHotelDraft(null)}>
+                Batal
+              </Button>
+              <Button size="sm" onClick={handleSaveHotels} disabled={savingHotels}>
+                {savingHotels ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                Simpan
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-semibold flex items-center gap-1.5">
           <Search className="h-4 w-4 text-violet-600" /> Scrape Harga Baru
         </div>
         <p className="text-xs text-muted-foreground">
           Pricing Agent akan cari listing hotel di OTA (Traveloka, Tiket, Booking, Agoda),
           ekstrak rentang harga per malam, dan simpan ke tabel sebagai snapshot.
+          {hotels.length > 0 && (
+            <span className="block mt-1 text-violet-700">
+              Mode curated aktif — {hotels.length} hotel kompetitor akan di-scrape satu per satu.
+            </span>
+          )}
         </p>
         <div className="flex flex-wrap gap-2 items-center">
           <Input

@@ -69,3 +69,54 @@ export const deleteCompetitorPrice = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return { ok: true as const };
   });
+
+// ─── Curated competitor list (properties.competitor_hotels) ─────────────────
+
+export const getCompetitorHotels = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("properties")
+      .select("id, competitor_hotels")
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const raw = data?.competitor_hotels;
+    const list = Array.isArray(raw)
+      ? raw.filter((h): h is string => typeof h === "string")
+      : typeof raw === "string"
+        ? (JSON.parse(raw || "[]") as unknown[]).filter((h): h is string => typeof h === "string")
+        : [];
+    return { hotels: list, propertyId: (data?.id as string | undefined) ?? null };
+  });
+
+export const saveCompetitorHotels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      hotels: z.array(z.string().trim().min(2).max(120)).max(30),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    // De-dupe (case-insensitive) while preserving original casing of first hit.
+    const seen = new Set<string>();
+    const cleaned: string[] = [];
+    for (const h of data.hotels.map((s) => s.trim()).filter((s) => s.length > 0)) {
+      const key = h.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      cleaned.push(h);
+    }
+    const { data: prop } = await (supabaseAdmin as any)
+      .from("properties")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+    if (!prop?.id) throw new Error("Properti belum dikonfigurasi.");
+    const { error } = await (supabaseAdmin as any)
+      .from("properties")
+      .update({ competitor_hotels: cleaned })
+      .eq("id", prop.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const, hotels: cleaned };
+  });
