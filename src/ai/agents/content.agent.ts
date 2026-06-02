@@ -256,20 +256,28 @@ export const contentAgent: AgentDefinition = {
 
       "IMPORT ULASAN PROPERTI ke Custom Google Reviews (saat manajer minta 'import google " +
         "review', 'sinkronkan ulasan', 'scrape testimoni', 'update review publik'):\n" +
-        "1. Panggil `discover_property_reviews` (boleh tambah extra_keywords bila manajer " +
-        "   menyebut sumber tertentu).\n" +
-        "2. Dari snippets, pilih 3–6 yang JELAS merupakan ulasan tamu (bukan deskripsi " +
-        "   properti / iklan / harga). Indikator: ada nama orang, kata sifat pengalaman " +
-        "   ('bersih', 'ramah', 'strategis'), atau bintang/rating eksplisit di snippet.\n" +
+        "1. Panggil `discover_property_reviews`. Tool punya 2 tier:\n" +
+        "   - Tier 1 (PREFERRED): Serper /places + /reviews → ulasan langsung dari Google " +
+        "     Maps. Hasil punya field `source: 'google_maps_direct'`, dan tiap review punya " +
+        "     `author`, `rating` (angka 1..5 aktual), `date`, `text`. PAKAI rating asli — " +
+        "     JANGAN estimasi.\n" +
+        "   - Tier 2 (fallback): web search ke TripAdvisor/Traveloka/dll. Field `source: " +
+        "     'fallback_web_search'`. Snippet lebih kasar, rating sering tidak ada.\n" +
+        "2. Bila manajer minta filter spesifik ('bintang 5', 'rating 4 ke atas', 'yang " +
+        "   bagus saja'): filter array reviews berdasarkan field `rating`. Untuk 'bintang " +
+        "   5' WAJIB rating === 5 (atau ≥ 5 kalau pakai skala 10 — bagi 2 dulu). Bila " +
+        "   setelah filter sisanya < 3 review, sampaikan ke manajer ('hanya ada N ulasan " +
+        "   bintang 5 — lanjut simpan atau longgarkan kriteria?').\n" +
         "3. PARAFRASE setiap ulasan 1–2 kalimat (Bahasa Indonesia natural, gaya testimoni " +
-        "   ringkas). JANGAN copy-paste mentah. Bila snippet menyebut nama penulis, pakai " +
-        "   nama itu; bila tidak, pakai 'Tamu', 'Pengunjung', atau nama generik wajar.\n" +
-        "4. Estimasi rating per ulasan (1..5) dari tone snippet. Estimasi `rating` overall " +
-        "   (rata-rata, mis. 4.6) dan `total` (perkiraan jumlah ulasan publik bila terlihat " +
-        "   di snippet, mis. 'lebih dari 200 ulasan' → 200; bila tidak yakin, kosongkan).\n" +
-        "5. Panggil `save_custom_google_reviews` dengan rating, total (opsional), dan reviews.\n" +
-        "6. Konfirmasi singkat ke manajer: 'Tersimpan: rating X.X dari N ulasan, sekarang " +
-        "   halaman publik menampilkan testimoni kustom.'\n" +
+        "   ringkas). JANGAN copy-paste mentah. Pakai nama penulis dari field `author`.\n" +
+        "4. Untuk Tier 1: pakai `overall.rating` dan `overall.total` apa adanya dari hasil " +
+        "   tool. Untuk Tier 2: estimasi konservatif (mis. 4.5) dan kosongkan `total`. " +
+        "   JANGAN klaim sebagai 'Google review' kalau source = fallback_web_search — " +
+        "   tanya manajer dulu apakah OK menyimpan dari sumber sekunder.\n" +
+        "5. Panggil `save_custom_google_reviews` dengan rating, total, dan reviews curated.\n" +
+        "6. Konfirmasi singkat ke manajer: 'Tersimpan: rating X.X dari N ulasan " +
+        "   (source: Google Maps via Serper / fallback), sekarang halaman publik " +
+        "   menampilkan testimoni kustom.'\n" +
         "PENTING: tool ini menulis ke DB live yang langsung tampil di website publik. " +
         "JANGAN auto-trigger tanpa permintaan eksplisit manajer. Tool layer juga akan " +
         "menolak bila Anda bukan manajer (isManager=false).",
