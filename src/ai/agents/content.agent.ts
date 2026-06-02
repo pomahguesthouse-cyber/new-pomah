@@ -149,26 +149,41 @@ const CONTENT_TOOLS: ToolDefinition[] = [
     function: {
       name: "save_custom_google_reviews",
       description:
-        "Simpan rating + daftar ulasan yang sudah Anda kurasi/parafrase ke kolom " +
-        "custom_google_* di tabel properties. Setelah ini halaman publik akan pakai data " +
-        "kustom ini, bukan fetch dari Google Places API. Hanya panggil setelah " +
-        "`discover_property_reviews` (atau sumber ulasan lain yang reliable) menghasilkan " +
-        "snippet yang sudah Anda saring.",
+        "Tambahkan rating + daftar ulasan yang sudah Anda kurasi ke kolom custom_google_* " +
+        "di tabel properties. DEFAULT: APPEND — ulasan baru digabungkan dengan ulasan yang " +
+        "sudah tersimpan (dedupe otomatis, cap 30 entry, FIFO drop yang paling lama bila " +
+        "melebihi). Rating overall dihitung weighted-average bila Anda tidak mengirim " +
+        "`rating` baru. Pakai `replace_all: true` HANYA bila manajer eksplisit minta reset " +
+        "(mis. 'hapus semua testimoni lama, ganti baru'). Setelah ini halaman publik " +
+        "menampilkan data kustom — Google Places API tidak di-hit.",
       parameters: {
         type: "object",
         properties: {
-          rating: { type: "number", description: "Rating rata-rata 0..5 (mis. 4.7). WAJIB." },
-          total:  { type: "number", description: "Total ulasan publik (opsional, perkiraan dari snippet)." },
+          rating: {
+            type: "number",
+            description:
+              "Rating rata-rata 0..5 baru (opsional). Bila kosong di mode append, " +
+              "rating dihitung weighted-average antara existing dan batch ini.",
+          },
+          total: {
+            type: "number",
+            description:
+              "Total ulasan publik (opsional). Mode append: bila kosong, existing total " +
+              "dinaikkan sebanyak jumlah ulasan baru yang benar-benar masuk (skip dupe).",
+          },
           reviews: {
             type: "array",
-            description: "3–12 ulasan curated. Tiap item: {author, text, rating 1..5}.",
-            items: {
-              type: "object",
-              description: "Satu ulasan kurasi.",
-            },
+            description: "1–12 ulasan curated. Tiap item: {author, text, rating 1..5}.",
+            items: { type: "object", description: "Satu ulasan kurasi." },
+          },
+          replace_all: {
+            type: "boolean",
+            description:
+              "Default false (append). Set true HANYA bila manajer eksplisit minta " +
+              "menghapus ulasan lama dan replace dengan batch ini.",
           },
         },
-        required: ["rating", "reviews"],
+        required: ["reviews"],
       },
     },
   },
@@ -274,10 +289,14 @@ export const contentAgent: AgentDefinition = {
         "   tool. Untuk Tier 2: estimasi konservatif (mis. 4.5) dan kosongkan `total`. " +
         "   JANGAN klaim sebagai 'Google review' kalau source = fallback_web_search — " +
         "   tanya manajer dulu apakah OK menyimpan dari sumber sekunder.\n" +
-        "5. Panggil `save_custom_google_reviews` dengan rating, total, dan reviews curated.\n" +
-        "6. Konfirmasi singkat ke manajer: 'Tersimpan: rating X.X dari N ulasan " +
-        "   (source: Google Maps via Serper / fallback), sekarang halaman publik " +
-        "   menampilkan testimoni kustom.'\n" +
+        "5. Panggil `save_custom_google_reviews` dengan `reviews` curated. " +
+        "   DEFAULT APPEND — ulasan lama tidak terhapus. JANGAN kirim `replace_all: true` " +
+        "   kecuali manajer eksplisit minta 'reset', 'hapus semua', 'ganti total'. Field " +
+        "   `rating` dan `total` boleh dikirim untuk override; bila kosong, sistem hitung " +
+        "   weighted-average dan bump total existing.\n" +
+        "6. Konfirmasi singkat dengan ringkasan dari hasil tool: jumlah ulasan baru yang " +
+        "   ditambahkan, jumlah duplikat dilewati, rating baru, dan total tersimpan. " +
+        "   Mis. 'Tambah 4 ulasan baru (0 duplikat), total sekarang 7 ulasan, rating 4.8.'\n" +
         "PENTING: tool ini menulis ke DB live yang langsung tampil di website publik. " +
         "JANGAN auto-trigger tanpa permintaan eksplisit manajer. Tool layer juga akan " +
         "menolak bila Anda bukan manajer (isManager=false).",
