@@ -150,17 +150,42 @@ export const scrapeCompetitorPrices: ToolHandler = async (
   const extra   = typeof args.extra_keywords === "string" ? args.extra_keywords.trim() : "";
   const perHotelLimit = Math.min(20, Math.max(1, Number(args.limit) || 6));
 
+  // `mode`:
+  //   - 'general'  → ALWAYS free-text scan kota (abaikan daftar admin).
+  //                  Pakai untuk pertanyaan "harga kamar di kota" generic.
+  //   - 'curated'  → ALWAYS pakai daftar admin (atau arg hotels override).
+  //                  Pakai untuk "cek harga kompetitor".
+  //   - undefined  → auto: curated bila daftar tersedia, else free-text.
+  const modeArg = typeof args.mode === "string"
+    ? args.mode.toLowerCase()
+    : "";
+  const forceGeneral = modeArg === "general";
+  const forceCurated = modeArg === "curated";
+
   // Resolve curated competitor list: arg override → property config.
   const argHotels = Array.isArray(args.hotels)
     ? (args.hotels as unknown[]).filter((h): h is string => typeof h === "string" && h.trim().length > 0)
     : null;
   let curated: string[] = argHotels ?? [];
-  if (curated.length === 0) {
+  if (curated.length === 0 && !forceGeneral) {
     const raw = (ctx.property as Record<string, unknown>)?.competitor_hotels;
     const parsed = typeof raw === "string" ? JSON.parse(raw || "[]") : raw;
     if (Array.isArray(parsed)) {
       curated = parsed.filter((h): h is string => typeof h === "string" && h.trim().length > 0);
     }
+  }
+  // forceGeneral wins over everything → drop curated list.
+  if (forceGeneral) curated = [];
+  // forceCurated with empty list = error (manager asked for curated but admin
+  // hasn't configured any).
+  if (forceCurated && curated.length === 0) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "Mode 'curated' diminta, tapi daftar kompetitor di admin (Settings → " +
+        "Competitor Prices → Daftar Kompetitor) masih kosong. Minta admin isi " +
+        "dulu, atau pakai mode='general' untuk scan kota umum.",
+    });
   }
 
   const keys = await loadSearchKeysFromDb(ctx.supabaseAdmin as any);
