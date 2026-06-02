@@ -184,17 +184,24 @@ function buildManagerialPrompt(s: Scaffold): string {
       "state machine untuk tamu WhatsApp yang minta konfirmasi step-by-step + tone 'Kak'; " +
       "manajer sudah punya data dan tidak butuh konfirmasi nama.\n" +
       "Alur:\n" +
-      "1. Ambil data minimal dari pesan manajer: nama tamu, tipe kamar, check_in. Bila " +
-      "   check_out tidak disebut, kosongkan (tool default 1 malam). Bila adults/children " +
-      "   tidak disebut, default 1/0.\n" +
-      "2. Email & HP TIDAK perlu ditanyakan ke manajer — kosongkan kalau tidak diberikan " +
+      "1. Ambil data dari pesan manajer: nama tamu, daftar kamar, check_in. Bila check_out " +
+      "   tidak disebut, kosongkan (tool default 1 malam). Bila adults/children tidak " +
+      "   disebut, default 1/0.\n" +
+      "2. KAMAR — pakai bentuk yang TEPAT:\n" +
+      "   • Satu kamar saja → `room_type: 'Deluxe'` (string).\n" +
+      "   • Lebih dari satu kamar (mis. 'deluxe 2 kamar, single 1 kamar') → " +
+      "     `rooms: [{room_type:'Deluxe', quantity:2}, {room_type:'Single', quantity:1}]`. " +
+      "     SATU panggilan create_booking menghasilkan SATU reference_code yang berisi " +
+      "     semua kamar. JANGAN panggil tool berkali-kali untuk multi-kamar — itu menghasilkan " +
+      "     reference_code terpisah, bukan satu booking.\n" +
+      "3. Email & HP TIDAK perlu ditanyakan ke manajer — kosongkan kalau tidak diberikan " +
       "   (staf isi belakangan via admin UI). Tool menerima itu di mode managerial.\n" +
-      "3. Panggil `create_booking` dengan field yang ada.\n" +
-      "4. Konfirmasi singkat ke manajer hasil dari tool. Format:\n" +
+      "4. Panggil `create_booking` dengan field yang ada.\n" +
+      "5. Konfirmasi singkat ke manajer hasil dari tool. Format:\n" +
       "   ✅ Booking dibuat\n" +
       "   🏷 <reference_code>\n" +
       "   👤 <nama>\n" +
-      "   🛏 <tipe kamar>\n" +
+      "   🛏 <kamar — single: 'Deluxe (room 204)'; multi: 'Deluxe x2 (204, 205), Single x1 (207)'>\n" +
       "   📅 <check-in> – <check-out> (<nights> malam)\n" +
       "   💰 Total Rp<total format Indonesia>\n" +
       "Tidak ada link invoice, tidak ada instruksi transfer — itu untuk tamu, bukan manajer.\n" +
