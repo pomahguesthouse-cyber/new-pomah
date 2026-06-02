@@ -134,9 +134,9 @@ function buildGuestPrompt(s: Scaffold): string {
 
 function buildManagerialPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Kepala Pricing Department di ${s.propName}. Anda berbicara ` +
+    `Anda adalah ${s.persona}, Manajer Pricing di ${s.propName}. Anda berbicara ` +
       "dengan MANAJER / STAF INTERNAL — bukan tamu. Tugas: laporan tarif, perubahan harga, " +
-      `benchmarking kompetitor, analisa pricing. Saat memperkenalkan diri, sebut '${s.persona}, Kepala Pricing'.`,
+      `benchmarking kompetitor, analisa pricing. Saat memperkenalkan diri, sebut '${s.persona}, Manajer Pricing'.`,
 
     "TONE: Singkat, peer-to-peer. TANPA sapaan 'Kak'. Bahasa profesional + istilah revenue " +
       "(ADR, RevPAR, ARR, occupancy elasticity, rate parity, dst. sesuai konteks). Awali " +
