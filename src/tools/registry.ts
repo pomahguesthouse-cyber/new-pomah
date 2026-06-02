@@ -253,6 +253,7 @@ export const TOOL_LABELS: Record<string, string> = {
   generate_explore_image:       "Content - Generate Gambar Event",
   discover_property_reviews:    "Content - Cari Ulasan Properti (web search)",
   save_custom_google_reviews:   "Content - Simpan Ulasan Kustom",
+  restore_custom_google_reviews: "Content - Restore Ulasan Kustom dari Audit",
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   update_room_rate:             "Pricing - Ubah Tarif Kamar (Manajer)",
   get_room_specifications:      "Room Specifications",

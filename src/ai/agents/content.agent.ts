@@ -190,6 +190,25 @@ const CONTENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "restore_custom_google_reviews",
+      description:
+        "Daftar / restore snapshot ulasan kustom dari audit log. Tanpa argumen → " +
+        "list 10 snapshot terakhir. Dengan `audit_id` atau `index` (1-based dari list) → " +
+        "kembalikan kolom custom_google_* ke nilai sebelum-tulis snapshot terpilih. " +
+        "Pakai saat manajer bilang 'kembalikan ulasan lama', 'undo simpan tadi', " +
+        "'restore review yang kemarin'.",
+      parameters: {
+        type: "object",
+        properties: {
+          audit_id: { type: "string", description: "UUID snapshot dari list mode (paling akurat)." },
+          index:    { type: "number", description: "1-based index dari list mode (1 = paling baru)." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "generate_explore_image",
       description:
         "Generate gambar ilustrasi (cover) untuk SATU entri City Guide memakai AI image, " +
@@ -300,6 +319,16 @@ export const contentAgent: AgentDefinition = {
         "PENTING: tool ini menulis ke DB live yang langsung tampil di website publik. " +
         "JANGAN auto-trigger tanpa permintaan eksplisit manajer. Tool layer juga akan " +
         "menolak bila Anda bukan manajer (isManager=false).",
+
+      "RESTORE / UNDO ULASAN KUSTOM (saat manajer bilang 'kembalikan yang lama', 'undo " +
+        "simpan kemarin', 'restore review tanggal X'):\n" +
+        "1. Panggil `restore_custom_google_reviews` tanpa argumen → dapat list 10 snapshot " +
+        "   terbaru beserta sample_first text + created_at + reviews_count.\n" +
+        "2. Tampilkan ringkas ke manajer: index, tanggal, jumlah ulasan, contoh ulasan " +
+        "   pertama. Tanya snapshot mana yang ingin di-restore.\n" +
+        "3. Setelah manajer memilih, panggil lagi dengan `index: <N>` atau `audit_id: '<id>'`.\n" +
+        "4. Tool otomatis catat snapshot saat ini SEBELUM restore, jadi manajer bisa undo " +
+        "   restore juga kalau ternyata salah pilih.",
     ];
 
     return sections.filter(Boolean).join("\n\n");

@@ -207,6 +207,27 @@ export const saveCustomGoogleReviews: ToolHandler = async (
   }
 
   try {
+    // Audit FIRST — capture the "before" snapshot so accidental overwrite
+    // can be restored via restore_custom_google_reviews. Non-fatal if the
+    // audit table is missing (older deploys without the migration).
+    try {
+      await (ctx.supabaseAdmin as any)
+        .from("custom_google_reviews_audit")
+        .insert({
+          property_id:  propertyId,
+          prev_rating:  existingRating,
+          prev_total:   existingTotal,
+          prev_reviews: existingReviews,
+          next_rating:  finalRating,
+          next_total:   finalTotal,
+          next_reviews: finalReviews,
+          mode:         replaceAll ? "replace" : "append",
+          actor:        (ctx as any).managerName ?? "system",
+        });
+    } catch (auditErr) {
+      console.warn("[save_custom_google_reviews] audit insert failed:", auditErr);
+    }
+
     const { error } = await (ctx.supabaseAdmin as any)
       .from("properties")
       .update({
