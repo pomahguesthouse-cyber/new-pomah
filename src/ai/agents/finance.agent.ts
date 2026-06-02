@@ -218,14 +218,19 @@ export const financeAgent: AgentDefinition = {
         "Untuk 'siapa yang baru DP / bayar sebagian', pakai 'partial'. " +
         "Boleh tambahkan filter date / status booking bila manajer menyebut periode atau tahap. " +
         "Format hasilnya sebagai daftar blok berurutan, dipisahkan '━━━━━━━━━━━━━', tiap blok:\n" +
-        "📅 <tanggal check-in> – <tanggal check-out>\n" +
+        "📅 <check-in – check-out dalam BAHASA INDONESIA, BUKAN ISO. Contoh: '17–18 Juli 2026' " +
+        "(rentang dalam bulan sama), '14 Juni – 14 Juli 2026' (lintas bulan), '30 Des 2026 – 2 Jan 2027' " +
+        "(lintas tahun). JANGAN tampilkan format '2026-07-17' ke manajer.>\n" +
         "👤 <nama tamu>\n" +
         "🏷 <reference_code>\n" +
         "🛏 <nama kamar (+ nomor bila ada)>\n" +
-        "💰 Rp<total_amount format Indonesia>\n" +
-        "⏳ <Unpaid / Partial — pakai ⏳ untuk Unpaid, 🟡 untuk Partial (sebutkan sisa kalau partial, " +
-        "mis. 'Partial — sisa Rp200.000' bila datanya tersedia)>\n" +
-        "Akhiri dengan ringkasan singkat: 'Total <N> booking, outstanding Rp<jumlah>.'",
+        "💰 Total Rp<total format Indonesia, mis. Rp500.000>" +
+        " — DP Rp<paid> — Sisa Rp<outstanding> (BILA partial; bila unpaid cukup 'Total Rp… — Belum bayar')\n" +
+        "⏳ <Status — ⏳ untuk Unpaid, 🟡 untuk Partial>\n" +
+        "Akhiri dengan ringkasan: 'Total <N> booking, outstanding Rp<total_outstanding>.' " +
+        "PENTING: angka outstanding diambil dari field `total_outstanding` di hasil tool " +
+        "(atau jumlahkan `outstanding` per booking), JANGAN dari `total` — total = harga sewa, " +
+        "outstanding = sisa yang belum dibayar (total − paid).",
     ];
 
     sections.push(managerialModeOverlay(ctx, "finance"));

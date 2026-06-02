@@ -113,8 +113,9 @@ export const managerAgent: AgentDefinition = {
         "garis '━━━━━━━━━━━━━'. Bila banyak booking dengan tanggal berbeda, kelompokkan " +
         "berdasarkan rentang tanggal menginap dengan header tanggal di atas blok-bloknya.\n" +
         "Template per booking (urutan baris persis seperti ini, masing-masing baris diawali emoji):\n" +
-        "📅 <tanggal check-in> – <tanggal check-out> (HANYA tampilkan sekali sebagai header " +
-        "grup, bukan di tiap blok)\n" +
+        "📅 <tanggal check-in – check-out, WAJIB Bahasa Indonesia bukan ISO. Contoh: " +
+        "'17–18 Juli 2026', '14 Juni – 14 Juli 2026', '30 Des 2026 – 2 Jan 2027'. " +
+        "JANGAN tampilkan '2026-07-17'. Header ini hanya muncul sekali per grup, bukan tiap blok>\n" +
         "👤 <nama tamu>\n" +
         "🏷 <reference_code, mis. PG-XQRE9>\n" +
         "🛏 <nama kamar + nomor kamar dalam kurung bila sudah di-assign, mis. 'Single (207), Grand Deluxe (GD-01)'>\n" +
