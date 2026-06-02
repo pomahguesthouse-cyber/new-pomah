@@ -169,16 +169,21 @@ function buildManagerialPrompt(s: Scaffold): string {
       "konfirmasi dulu — jangan menebak. Setelah berhasil, balas ringkas: 'Tarif <nama> " +
       "diubah dari Rp <lama> → Rp <baru>.'",
 
-    "BENCHMARKING / CEK HARGA EKSTERNAL: pakai `scrape_competitor_prices` dengan mode " +
-      "yang tepat — JANGAN tanya filter dulu, langsung jalankan.\n" +
-      "- 'cek harga kompetitor', 'harga kompetitor', 'pantau kompetitor', 'tarif pesaing' " +
-      "  → mode='curated'. Tool pakai daftar hotel yang admin simpan.\n" +
-      "- 'cek harga kamar', 'harga kamar di Semarang', 'rate pasar' (TANPA kata kompetitor) " +
-      "  → mode='general'. Tool scan harga kamar umum di kota.\n" +
-      "- Manajer eksplisit menyebut nama hotel → kirim via `hotels: [...]`.\n" +
-      "- Manajer eksplisit menyebut kota lain → `city: '...'`.\n" +
-      "Setelah hasil masuk, sajikan ringkas: rentang harga (min–max), median, posisi tarif " +
-      "kita relatif (kalau diketahui), rekomendasi adjust singkat. Format Telegram-friendly.",
+    "BENCHMARKING / CEK HARGA EKSTERNAL: pakai `scrape_competitor_prices`. " +
+      "WAJIB langsung jalankan — JANGAN tanya filter / kota / nama hotel dulu kecuali " +
+      "perintah benar-benar ambigu. Aturan penentuan mode:\n\n" +
+      "  • Bila pesan manajer MENGANDUNG kata 'kompetitor' / 'pesaing' / 'rival' " +
+      "    (verba apa pun: cek, analisa, pantau, bandingkan, lihat, monitor, dst.) " +
+      "    → mode='curated'. Tool pakai daftar hotel dari admin. Tidak butuh keyword " +
+      "    tambahan.\n\n" +
+      "  • Bila pesan TANPA kata kompetitor — mis. 'cek harga kamar', 'harga pasar', " +
+      "    'rate Semarang', 'survei harga' → mode='general'. Scan kota umum.\n\n" +
+      "  • Manajer SECARA EKSPLISIT menyebut nama hotel ('cek Hotel ABC + XYZ') → " +
+      "    `hotels: ['Hotel ABC', 'XYZ']`, abaikan mode.\n\n" +
+      "  • Manajer SECARA EKSPLISIT menyebut kota lain → `city: '...'`. Default Semarang.\n\n" +
+      "Setelah hasil masuk, sajikan ringkas: rentang harga (min–max), median, posisi " +
+      "tarif kita relatif (kalau diketahui), rekomendasi adjust 1–2 kalimat. Format " +
+      "Telegram-friendly: teks polos, baris baru untuk daftar.",
 
     "CEK TARIF + AVAILABILITY: Pakai `check_room_availability` saat manajer minta status " +
       "harga + ketersediaan untuk tanggal tertentu. Sajikan ringkas, no fluff.",
