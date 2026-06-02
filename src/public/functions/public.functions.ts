@@ -1159,7 +1159,13 @@ export const chatWithAI = createServerFn({ method: "POST" })
           no_rekening: (p.payment_account_number as string | undefined) || null,
           atas_nama: (p.payment_account_holder as string | undefined) || null,
         },
-        invoice_url: `https://pomahguesthouse.com/book/confirmation/${booking.reference_code ?? booking.id}`,
+        invoice_url: (() => {
+          const pDom = (p.public_domain as string | undefined)?.trim();
+          const base = pDom
+            ? (pDom.startsWith("http") ? pDom : `https://${pDom}`).replace(/\/+$/, "")
+            : "https://pomahguesthouse.com";
+          return `${base}/book/confirmation/${booking.reference_code ?? booking.id}`;
+        })(),
       });
     };
 

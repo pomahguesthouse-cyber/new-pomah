@@ -364,7 +364,7 @@ export async function runMultiAgentOrchestration(
   }
 
   // 3. State Machine Interception
-  const stateRecord = await getBookingState(input.toolCtx.supabasePublic, input.phone);
+  const stateRecord = await getBookingState(input.toolCtx.supabaseAdmin, input.phone);
   
   if (stateRecord.state !== "IDLE") {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
@@ -633,7 +633,7 @@ export async function runMultiAgentOrchestration(
   }
   // Fire-and-forget — failure here must not break the reply path.
   if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
-    void input.toolCtx.supabasePublic
+    void input.toolCtx.supabaseAdmin
       .rpc("update_conversation_topic", {
         p_phone:       input.phone,
         p_last_topic:  resolved.topic ?? null,

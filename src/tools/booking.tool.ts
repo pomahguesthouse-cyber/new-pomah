@@ -142,9 +142,15 @@ async function findBookingByIdemKey(
       no_rekening: ctx.property.payment_account_number ?? null,
       atas_nama:   ctx.property.payment_account_holder  ?? null,
     },
-    invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${b.reference_code ?? b.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${b.reference_code ?? b.id}`,
+    invoice_url: (() => {
+      const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
+      const base = pDom
+        ? (pDom.startsWith("http") ? pDom : `https://${pDom}`).replace(/\/+$/, "")
+        : ctx.origin
+          ? ctx.origin.replace(/\/+$/, "")
+          : "https://pomahguesthouse.com";
+      return `${base}/book/confirmation/${b.reference_code ?? b.id}`;
+    })(),
     idempotent_replay: true,
   });
 }
@@ -586,8 +592,14 @@ export const createBooking: ToolHandler = async (
       no_rekening: ctx.property.payment_account_number ?? null,
       atas_nama:  ctx.property.payment_account_holder  ?? null,
     },
-    invoice_url: ctx.origin
-      ? `${ctx.origin}/book/confirmation/${booking.reference_code ?? booking.id}`
-      : `https://pomahguesthouse.com/book/confirmation/${booking.reference_code ?? booking.id}`,
+    invoice_url: (() => {
+      const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
+      const base = pDom
+        ? (pDom.startsWith("http") ? pDom : `https://${pDom}`).replace(/\/+$/, "")
+        : ctx.origin
+          ? ctx.origin.replace(/\/+$/, "")
+          : "https://pomahguesthouse.com";
+      return `${base}/book/confirmation/${booking.reference_code ?? booking.id}`;
+    })(),
   });
 };

@@ -242,7 +242,7 @@ export async function processBookingState(
   message: string,
   currentStateRecord: StateRecord
 ): Promise<StateMachineResult> {
-  const supabase = ctx.supabasePublic;
+  const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
 
   // Interruption Check (Cancellation) — explicit "batal" resets the flow.
