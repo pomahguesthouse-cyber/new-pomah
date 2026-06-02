@@ -536,12 +536,12 @@ export function WhatsAppPage() {
                   <AlertCard
                     key={alert.id}
                     alert={alert}
-                    onOpenThread={(threadId) => {
+                    onOpenThread={(threadId: string) => {
                       setSidebarTab("inbox");
                       setActiveId(threadId);
                     }}
-                    onHandled={(id) => dismissMut.mutate({ alertId: id, status: "handled" })}
-                    onDismissed={(id) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
+                    onHandled={(id: string) => dismissMut.mutate({ alertId: id, status: "handled" })}
+                    onDismissed={(id: string) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
                     isPending={dismissMut.isPending}
                   />
                 ))
@@ -559,7 +559,7 @@ export function WhatsAppPage() {
                         <AlertCard
                           key={alert.id}
                           alert={alert}
-                          onOpenThread={(threadId) => {
+                          onOpenThread={(threadId: string) => {
                             setSidebarTab("inbox");
                             setActiveId(threadId);
                           }}
