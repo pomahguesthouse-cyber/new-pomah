@@ -251,6 +251,8 @@ export const TOOL_LABELS: Record<string, string> = {
   publish_explore_item:         "Content - Publish Entri",
   publish_explore_items_by_category: "Content - Publish Massal per Kategori",
   generate_explore_image:       "Content - Generate Gambar Event",
+  discover_property_reviews:    "Content - Cari Ulasan Properti (web search)",
+  save_custom_google_reviews:   "Content - Simpan Ulasan Kustom",
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   update_room_rate:             "Pricing - Ubah Tarif Kamar (Manajer)",
   get_room_specifications:      "Room Specifications",

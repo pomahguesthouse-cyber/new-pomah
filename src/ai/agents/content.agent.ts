@@ -128,6 +128,53 @@ const CONTENT_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "discover_property_reviews",
+      description:
+        "Cari snippet ulasan publik tentang properti ini dari web (Google Maps profile, " +
+        "TripAdvisor, Traveloka, Tiket, Agoda, Booking) memakai Tavily/Serper. TIDAK memakai " +
+        "Google Places API. Pakai sebagai langkah pertama saat manajer minta 'import ulasan' / " +
+        "'sinkronkan google review' / 'update testimoni publik'. Lalu parafrase + simpan " +
+        "via `save_custom_google_reviews`.",
+      parameters: {
+        type: "object",
+        properties: {
+          extra_keywords: { type: "string", description: "Filter tambahan (opsional, mis. 'bagus pelayanan')." },
+          limit:          { type: "number", description: "Maks snippet (3–20, default 10)." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "save_custom_google_reviews",
+      description:
+        "Simpan rating + daftar ulasan yang sudah Anda kurasi/parafrase ke kolom " +
+        "custom_google_* di tabel properties. Setelah ini halaman publik akan pakai data " +
+        "kustom ini, bukan fetch dari Google Places API. Hanya panggil setelah " +
+        "`discover_property_reviews` (atau sumber ulasan lain yang reliable) menghasilkan " +
+        "snippet yang sudah Anda saring.",
+      parameters: {
+        type: "object",
+        properties: {
+          rating: { type: "number", description: "Rating rata-rata 0..5 (mis. 4.7). WAJIB." },
+          total:  { type: "number", description: "Total ulasan publik (opsional, perkiraan dari snippet)." },
+          reviews: {
+            type: "array",
+            description: "3–12 ulasan curated. Tiap item: {author, text, rating 1..5}.",
+            items: {
+              type: "object",
+              description: "Satu ulasan kurasi.",
+            },
+          },
+        },
+        required: ["rating", "reviews"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "generate_explore_image",
       description:
         "Generate gambar ilustrasi (cover) untuk SATU entri City Guide memakai AI image, " +
@@ -198,6 +245,26 @@ export const contentAgent: AgentDefinition = {
         "  akan gagal kalau Anda lupa salah satu.",
 
       "Bila manajer memberi instruksi spesifik (mis. 'cari event bulan depan saja'), patuhi prioritas itu.",
+
+      "IMPORT ULASAN PROPERTI ke Custom Google Reviews (saat manajer minta 'import google " +
+        "review', 'sinkronkan ulasan', 'scrape testimoni', 'update review publik'):\n" +
+        "1. Panggil `discover_property_reviews` (boleh tambah extra_keywords bila manajer " +
+        "   menyebut sumber tertentu).\n" +
+        "2. Dari snippets, pilih 3–6 yang JELAS merupakan ulasan tamu (bukan deskripsi " +
+        "   properti / iklan / harga). Indikator: ada nama orang, kata sifat pengalaman " +
+        "   ('bersih', 'ramah', 'strategis'), atau bintang/rating eksplisit di snippet.\n" +
+        "3. PARAFRASE setiap ulasan 1–2 kalimat (Bahasa Indonesia natural, gaya testimoni " +
+        "   ringkas). JANGAN copy-paste mentah. Bila snippet menyebut nama penulis, pakai " +
+        "   nama itu; bila tidak, pakai 'Tamu', 'Pengunjung', atau nama generik wajar.\n" +
+        "4. Estimasi rating per ulasan (1..5) dari tone snippet. Estimasi `rating` overall " +
+        "   (rata-rata, mis. 4.6) dan `total` (perkiraan jumlah ulasan publik bila terlihat " +
+        "   di snippet, mis. 'lebih dari 200 ulasan' → 200; bila tidak yakin, kosongkan).\n" +
+        "5. Panggil `save_custom_google_reviews` dengan rating, total (opsional), dan reviews.\n" +
+        "6. Konfirmasi singkat ke manajer: 'Tersimpan: rating X.X dari N ulasan, sekarang " +
+        "   halaman publik menampilkan testimoni kustom.'\n" +
+        "PENTING: tool ini menulis ke DB live yang langsung tampil di website publik. " +
+        "JANGAN auto-trigger tanpa permintaan eksplisit manajer. Tool layer juga akan " +
+        "menolak bila Anda bukan manajer (isManager=false).",
     ];
 
     return sections.filter(Boolean).join("\n\n");
