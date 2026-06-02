@@ -25,6 +25,7 @@ import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
+import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
@@ -127,6 +128,11 @@ const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
 const ApiFonnteRoute = ApiFonnteRouteImport.update({
   id: '/api/fonnte',
   path: '/api/fonnte',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
+  id: '/api/debug-db',
+  path: '/api/debug-db',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
@@ -312,6 +319,7 @@ export interface FileRoutesByTo {
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
@@ -354,6 +362,7 @@ export interface FileRoutesById {
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
@@ -397,6 +406,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
@@ -437,6 +447,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
@@ -478,6 +489,7 @@ export interface FileRouteTypes {
     | '/admin/telegram'
     | '/admin/training'
     | '/admin/whatsapp'
+    | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
     | '/api/queue-worker'
@@ -502,6 +514,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  ApiDebugDbRoute: typeof ApiDebugDbRoute
   ApiFonnteRoute: typeof ApiFonnteRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
@@ -628,6 +641,13 @@ declare module '@tanstack/react-router' {
       path: '/api/fonnte'
       fullPath: '/api/fonnte'
       preLoaderRoute: typeof ApiFonnteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/debug-db': {
+      id: '/api/debug-db'
+      path: '/api/debug-db'
+      fullPath: '/api/debug-db'
+      preLoaderRoute: typeof ApiDebugDbRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/whatsapp': {
@@ -860,6 +880,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  ApiDebugDbRoute: ApiDebugDbRoute,
   ApiFonnteRoute: ApiFonnteRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
