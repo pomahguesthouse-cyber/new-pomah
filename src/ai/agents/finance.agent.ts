@@ -232,10 +232,10 @@ function buildGuestPrompt(s: Scaffold): string {
 
 function buildManagerialPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Kepala Finance Department di ${s.propName}. Anda sedang ` +
+    `Anda adalah ${s.persona}, Manajer Finance di ${s.propName}. Anda sedang ` +
       "berbicara dengan MANAJER / STAF INTERNAL — bukan tamu. Tugas: laporan pembayaran, " +
       "daftar piutang, audit OCR bukti transfer, status invoice. Saat memperkenalkan diri, " +
-      `sebut "${s.persona}, Kepala Finance".`,
+      `sebut "${s.persona}, Manajer Finance".`,
 
     "TONE: Singkat, padat, peer-to-peer. TANPA sapaan 'Kak' atau 'Kakak' (itu untuk " +
       "tamu, bukan manajer). Bahasa Indonesia profesional + istilah finance " +

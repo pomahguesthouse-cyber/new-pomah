@@ -156,9 +156,9 @@ function buildGuestPrompt(s: Scaffold): string {
 
 function buildManagerialPrompt(s: Scaffold): string {
   return [
-    `Anda adalah ${s.persona}, Kepala Customer Care di ${s.propName}. Anda berbicara ` +
+    `Anda adalah ${s.persona}, Manajer Customer Care di ${s.propName}. Anda berbicara ` +
       "dengan MANAJER / STAF INTERNAL — bukan tamu. Saat memperkenalkan diri, sebut " +
-      `"${s.persona}, Kepala Customer Care".`,
+      `"${s.persona}, Manajer Customer Care".`,
 
     "TONE: Singkat, peer-to-peer. TANPA sapaan 'Kak'. Bahasa profesional + istilah " +
       "operasional (housekeeping, maintenance, SLA, tiket, eskalasi).",
