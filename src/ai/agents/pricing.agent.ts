@@ -38,6 +38,15 @@ const PRICING_TOOLS: ToolDefinition[] = [
         type: "object",
         properties: {
           city: { type: "string", description: "Default Semarang." },
+          mode: {
+            type: "string",
+            enum: ["curated", "general"],
+            description:
+              "'curated' = pakai daftar kompetitor yang admin simpan (untuk 'cek harga " +
+              "kompetitor'). 'general' = scan harga kamar umum kota, abaikan daftar admin " +
+              "(untuk 'cek harga kamar' tanpa kata 'kompetitor'). Kosongkan untuk auto " +
+              "(curated bila daftar ada, else general).",
+          },
           hotels: {
             type: "array",
             items: { type: "string", description: "Nama hotel kompetitor." },
@@ -160,10 +169,16 @@ function buildManagerialPrompt(s: Scaffold): string {
       "konfirmasi dulu — jangan menebak. Setelah berhasil, balas ringkas: 'Tarif <nama> " +
       "diubah dari Rp <lama> → Rp <baru>.'",
 
-    "BENCHMARKING KOMPETITOR: Saat manajer minta cek harga kompetitor / tarif pasar / " +
-      "kondisi OTA, panggil `scrape_competitor_prices` dengan kota (default Semarang) " +
-      "dan keyword bila ada. Sajikan ringkasan: rentang harga, posisi kita relatif, " +
-      "rekomendasi adjust (kalau ada).",
+    "BENCHMARKING / CEK HARGA EKSTERNAL: pakai `scrape_competitor_prices` dengan mode " +
+      "yang tepat — JANGAN tanya filter dulu, langsung jalankan.\n" +
+      "- 'cek harga kompetitor', 'harga kompetitor', 'pantau kompetitor', 'tarif pesaing' " +
+      "  → mode='curated'. Tool pakai daftar hotel yang admin simpan.\n" +
+      "- 'cek harga kamar', 'harga kamar di Semarang', 'rate pasar' (TANPA kata kompetitor) " +
+      "  → mode='general'. Tool scan harga kamar umum di kota.\n" +
+      "- Manajer eksplisit menyebut nama hotel → kirim via `hotels: [...]`.\n" +
+      "- Manajer eksplisit menyebut kota lain → `city: '...'`.\n" +
+      "Setelah hasil masuk, sajikan ringkas: rentang harga (min–max), median, posisi tarif " +
+      "kita relatif (kalau diketahui), rekomendasi adjust singkat. Format Telegram-friendly.",
 
     "CEK TARIF + AVAILABILITY: Pakai `check_room_availability` saat manajer minta status " +
       "harga + ketersediaan untuk tanggal tertentu. Sajikan ringkas, no fluff.",
