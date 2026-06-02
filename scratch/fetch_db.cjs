@@ -1,12 +1,13 @@
-import fs from 'fs';
+const fs = require('fs');
 
 async function main() {
+  console.log("Starting...");
   const envContent = fs.readFileSync('.env', 'utf-8');
   const env = {};
   for (const line of envContent.split('\n')) {
     const match = line.match(/^([^=]+)=(.*)$/);
     if (match) {
-      env[match[1].trim()] = match[2].trim();
+      env[match[1].trim()] = match[2].trim().replace(/\r/g, "");
     }
   }
 
@@ -24,4 +25,4 @@ async function main() {
   res = await fetch(`${url}/rest/v1/whatsapp_threads?select=id,phone,status,auto_reply_enabled,last_message_at&order=last_message_at.desc&limit=3`, { headers });
   console.log(await res.json());
 }
-main();
+main().catch(console.error);

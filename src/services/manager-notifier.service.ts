@@ -189,15 +189,29 @@ async function getFonnteToken(db: Db): Promise<string | null> {
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {
   let query = db
     .from("property_managers")
-    .select("id, name, phone, role, telegram_chat_id")
-    .eq("is_active", true);
+    .select("id, name, phone, role, telegram_chat_id, is_active");
+  
   if (role) query = query.eq("role", role);
-  const { data, error } = await query;
+  let { data, error } = await query;
+
+  if (error && (error.code === 'PGRST106' || String(error.message).includes('is_active'))) {
+    console.warn("[ManagerNotifier] Failed with is_active, falling back");
+    let fallbackQuery = db
+      .from("property_managers")
+      .select("id, name, phone, role, telegram_chat_id");
+    if (role) fallbackQuery = fallbackQuery.eq("role", role);
+    const fallback = await fallbackQuery;
+    data = fallback.data;
+    error = fallback.error;
+  }
+
   if (error) {
     console.error("[ManagerNotifier] Gagal memuat manager:", error.message);
     return [];
   }
-  return (data ?? []) as ManagerContact[];
+  
+  // Filter active managers in JS
+  return (data ?? []).filter((m: any) => m.is_active !== false) as ManagerContact[];
 }
 
 interface SendOptions {

@@ -59,17 +59,40 @@ export async function resolveManagerByPhone(
 ): Promise<{ id: string; name: string; role: string; phone: string } | null> {
   const needle = normalizePhone(phone);
   if (!needle) return null;
-  const { data } = await (supabaseAdmin as any)
+  const { data, error } = await (supabaseAdmin as any)
     .from("property_managers")
-    .select("id, name, role, phone")
-    .eq("is_active", true);
-  for (const m of (data ?? []) as Array<{ id: string; name: string; role: string; phone: string | null }>) {
-    if (m.phone && normalizePhone(m.phone) === needle) {
+    .select("id, name, role, phone, is_active")
+    .catch(async (err: any) => {
+      // Fallback if is_active column does not exist
+      console.error("[Autoreply] Failed to select with is_active, falling back to basic select:", err);
+      return (supabaseAdmin as any).from("property_managers").select("id, name, role, phone");
+    });
+  
+  if (error) {
+    console.error("[Autoreply] Error fetching managers:", error);
+    // If it's a column not found error, try without is_active
+    if (error.code === 'PGRST106' || String(error.message).includes('is_active')) {
+      const fallback = await (supabaseAdmin as any)
+        .from("property_managers")
+        .select("id, name, role, phone");
+      if (!fallback.error && fallback.data) {
+        for (const m of fallback.data) {
+          if (m.phone && normalizePhone(m.phone) === needle) return m as any;
+        }
+      }
+    }
+  }
+
+  for (const m of (data ?? []) as any[]) {
+    // Treat as active if is_active is true or undefined (fallback)
+    const isActive = m.is_active !== false;
+    if (isActive && m.phone && normalizePhone(m.phone) === needle) {
       return m as any;
     }
   }
   return null;
 }
+
 
 export type AutoreplyOutcome =
   | "ok"

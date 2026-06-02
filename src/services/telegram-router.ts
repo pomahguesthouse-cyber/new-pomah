@@ -702,13 +702,34 @@ function isMessageAddressedToBot(msg: any, myUsername: string | null): boolean {
 }
 
 async function resolveManagerByChatId(chatId: string): Promise<ManagerRow | null> {
-  const { data } = await (supabaseAdmin as any)
+  const { data, error } = await (supabaseAdmin as any)
     .from("property_managers")
-    .select("id, name, role, phone, telegram_chat_id")
+    .select("id, name, role, phone, telegram_chat_id, is_active")
     .eq("telegram_chat_id", chatId)
-    .eq("is_active", true)
-    .maybeSingle();
-  return (data as ManagerRow | null) ?? null;
+    .maybeSingle()
+    .catch(async (err: any) => {
+      console.error("[TelegramRouter] Failed with is_active:", err);
+      return (supabaseAdmin as any)
+        .from("property_managers")
+        .select("id, name, role, phone, telegram_chat_id")
+        .eq("telegram_chat_id", chatId)
+        .maybeSingle();
+    });
+
+  let row = data;
+  if (error && (error.code === 'PGRST106' || String(error.message).includes('is_active'))) {
+    const fallback = await (supabaseAdmin as any)
+      .from("property_managers")
+      .select("id, name, role, phone, telegram_chat_id")
+      .eq("telegram_chat_id", chatId)
+      .maybeSingle();
+    row = fallback.data;
+  }
+
+  if (row && row.is_active !== false) {
+    return (row as ManagerRow | null) ?? null;
+  }
+  return null;
 }
 
 // ─── Callback queries (inline buttons) ──────────────────────────────────────
