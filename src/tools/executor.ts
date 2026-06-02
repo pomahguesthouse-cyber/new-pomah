@@ -19,6 +19,7 @@ import { updatePaymentStatus }            from "./finance/update-payment-status.
 import { ccPaymentProofToAdmin }          from "./finance/cc-payment-proof-to-admin.tool";
 import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
+import { deleteBooking }                  from "./manager/delete-booking.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
 import { replyToGuest }                   from "./manager/reply-to-guest.tool";
 import { discoverSemarangContent }        from "./content/discover-semarang-content.tool";
@@ -49,6 +50,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   cc_payment_proof_to_admin:     ccPaymentProofToAdmin,
   get_bookings:                  getBookings,
   update_booking_status:         updateBookingStatus,
+  delete_booking:                deleteBooking,
   change_booking_room:           changeBookingRoom,
   reply_to_guest:                replyToGuest,
   discover_semarang_content:     discoverSemarangContent,

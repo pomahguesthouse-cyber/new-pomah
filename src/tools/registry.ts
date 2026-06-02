@@ -138,6 +138,27 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "delete_booking",
+      description:
+        "Hapus/batalkan booking (managerial only). Manajer cukup sebut kode booking atau " +
+        "nama tamu — tool resolve sendiri. Default mode='cancel' (soft: status → cancelled, " +
+        "slot kamar bebas). Mode='hard' untuk DELETE row DB permanen (butuh confirmed=true " +
+        "di panggilan kedua). Pakai saat manajer bilang 'batalkan booking ...', 'hapus " +
+        "booking ...', 'cancel reservasi ...'.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode booking (mis. PG-XXXX). Paling akurat." },
+          guest_name:     { type: "string", description: "Nama tamu (substring match). Bila ambigu, tool minta klarifikasi." },
+          mode:           { type: "string", enum: ["cancel", "hard"], description: "Default 'cancel'. 'hard' = DELETE permanen." },
+          confirmed:      { type: "boolean", description: "Wajib true di panggilan kedua mode='hard'." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "change_booking_room",
       description: "Pindahkan booking ke kamar lain (ubah nomor kamar yang di-assign).",
       parameters: {
@@ -245,6 +266,7 @@ export const TOOL_LABELS: Record<string, string> = {
   cc_payment_proof_to_admin:    "Finance - CC Bukti Transfer ke Super Admin",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
+  delete_booking:               "Manager - Hapus / Batalkan Booking",
   change_booking_room:          "Manager - Change Booking Room",
   reply_to_guest:               "Manager - Reply to Guest",
   discover_semarang_content:    "Content - Cari Konten Semarang",

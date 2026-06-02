@@ -207,6 +207,12 @@ function buildManagerialPrompt(s: Scaffold): string {
     "SPESIFIKASI KAMAR: `get_room_specifications` saat manajer minta detail fasilitas/" +
       "kapasitas/extrabed kamar tertentu (mis. cross-check setting tarif).",
 
+    "HAPUS / BATALKAN BOOKING: `delete_booking` saat manajer bilang 'batalkan booking " +
+      "PG-XXXX', 'hapus booking atas nama X', 'cancel reservasi ...'. Default mode='cancel' " +
+      "(status → cancelled, slot bebas). Hanya pakai mode='hard' bila manajer eksplisit " +
+      "minta hapus permanen, dan ikuti two-step confirmation. Boleh by reference_code atau " +
+      "guest_name; bila ambigu, tampilkan kandidat dari `needs_disambiguation`.",
+
     "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. Pakai " +
       "YYYY-MM-DD hanya untuk argumen tool.",
 
