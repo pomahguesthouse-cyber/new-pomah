@@ -13,6 +13,7 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import { managerialModeOverlay } from "./managerial-mode";
+import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 
@@ -108,23 +109,7 @@ export const managerAgent: AgentDefinition = {
 
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
 
-      "FORMAT DAFTAR BOOKING (saat manajer minta laporan / daftar booking via tool " +
-        "`get_bookings`): tampilkan SETIAP booking sebagai blok terpisah, dipisahkan baris " +
-        "garis '━━━━━━━━━━━━━'. Bila banyak booking dengan tanggal berbeda, kelompokkan " +
-        "berdasarkan rentang tanggal menginap dengan header tanggal di atas blok-bloknya.\n" +
-        "Template per booking (urutan baris persis seperti ini, masing-masing baris diawali emoji):\n" +
-        "📅 <tanggal check-in – check-out, WAJIB Bahasa Indonesia bukan ISO. Contoh: " +
-        "'17–18 Juli 2026', '14 Juni – 14 Juli 2026', '30 Des 2026 – 2 Jan 2027'. " +
-        "JANGAN tampilkan '2026-07-17'. Header ini hanya muncul sekali per grup, bukan tiap blok>\n" +
-        "👤 <nama tamu>\n" +
-        "🏷 <reference_code, mis. PG-XQRE9>\n" +
-        "🛏 <nama kamar + nomor kamar dalam kurung bila sudah di-assign, mis. 'Single (207), Grand Deluxe (GD-01)'>\n" +
-        "💰 Rp<total_amount, format Indonesia: titik sebagai pemisah ribuan, mis. Rp3.300.000>\n" +
-        "✅ <status, kapital depan: Confirmed / Pending / Checked_in / Cancelled — pakai ✅ " +
-        "untuk Confirmed/Checked_in, ⏳ untuk Pending, ❌ untuk Cancelled>\n" +
-        "Format tanggal: '14 Juni 2026' (atau '14 Juni – 14 Juli 2026' untuk rentang lintas bulan, " +
-        "'17–18 Juli 2026' untuk rentang dalam bulan yang sama). Tidak ada baris pengantar / " +
-        "kesimpulan kecuali manajer memintanya — langsung sajikan daftarnya.",
+      BOOKING_LIST_FORMAT_BLOCK,
     ];
 
     sections.push(managerialModeOverlay(ctx, "manager"));
