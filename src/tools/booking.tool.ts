@@ -275,13 +275,50 @@ export const createBooking: ToolHandler = async (
 
   // ── Check if multiple rooms are requested ──────────────────────────────────
   let roomsToBook: Array<{ roomTypeId: string; roomTypeName: string; quantity: number; pricePerNight: number }> = [];
+  let rawRooms: any[] = [];
   if (Array.isArray(args.rooms)) {
-    roomsToBook = args.rooms as any;
+    rawRooms = args.rooms;
   } else if (typeof args.rooms === "string" && args.rooms.trim().length > 0) {
     try {
-      roomsToBook = JSON.parse(args.rooms);
+      rawRooms = JSON.parse(args.rooms);
     } catch (e) {
       console.error("[createBooking] Failed to parse args.rooms:", e);
+    }
+  }
+
+  if (Array.isArray(rawRooms) && rawRooms.length > 0) {
+    for (const item of rawRooms) {
+      if (!item) continue;
+      // If it's already resolved (contains roomTypeId, roomTypeName, pricePerNight)
+      if (item.roomTypeId && item.roomTypeName && item.pricePerNight !== undefined) {
+        roomsToBook.push(item);
+        continue;
+      }
+      // Otherwise resolve it from room_type
+      const rName = str(item.room_type || item.roomTypeName || item.room_type_name).toLowerCase();
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      if (!rName) continue;
+
+      const rt =
+        ctx.rooms.find((r) => r.name.toLowerCase() === rName) ??
+        ctx.rooms.find((r) => {
+          const n = r.name.toLowerCase();
+          return n.includes(rName) || rName.includes(n);
+        });
+
+      if (!rt) {
+        return JSON.stringify({
+          ok: false,
+          error: `Tipe kamar "${item.room_type || item.roomTypeName || item.room_type_name}" tidak ditemukan.`,
+        });
+      }
+
+      roomsToBook.push({
+        roomTypeId: rt.id,
+        roomTypeName: rt.name,
+        quantity: qty,
+        pricePerNight: Number(rt.base_rate ?? 0),
+      });
     }
   }
 

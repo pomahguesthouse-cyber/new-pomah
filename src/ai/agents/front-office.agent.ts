@@ -115,8 +115,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
     "BOOKING VIA CHAT: " +
       "(1) cek availability dulu, " +
       "(2) setelah tamu pilih tipe + tanggal jelas + ingin booking, LANGSUNG panggil " +
-      "`start_booking_details` (sertakan room_type, check_in, check_out, adults/children, " +
-      "guest_name bila ada). JANGAN tanya nama/email/HP sendiri — tool ini yang ambil alih. " +
+      "`start_booking_details` (sertakan parameter `rooms` array berisi objek `{ room_type, quantity }` jika tamu memesan lebih dari satu tipe kamar atau lebih dari satu kamar dari tipe yang sama, atau sertakan `room_type` jika hanya memesan satu kamar; sertakan juga check_in, check_out, adults/children, dan guest_name bila ada). " +
+      "JANGAN tanya nama/email/HP sendiri — tool ini yang ambil alih. " +
       "Setelah panggil, sampaikan `message` dari hasil tool VERBATIM. " +
       "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool.",
 

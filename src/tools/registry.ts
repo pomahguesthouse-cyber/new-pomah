@@ -56,7 +56,11 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
               "Pakai ini bila manajer menyebut lebih dari satu tipe atau >1 kamar dari tipe yang sama.",
             items: {
               type: "object",
-              description: "Satu baris item kamar.",
+              properties: {
+                room_type: { type: "string", description: "Nama tipe kamar." },
+                quantity: { type: "number", description: "Jumlah kamar." }
+              },
+              required: ["room_type", "quantity"]
             },
           },
           full_name:  { type: "string", description: "Nama lengkap tamu (WAJIB)." },

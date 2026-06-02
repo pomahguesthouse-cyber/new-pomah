@@ -56,6 +56,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
   },
   ...TOOL_DEFINITIONS.filter((t) =>
     [
+      "create_booking",
       "get_bookings",
       "update_booking_status",
       "delete_booking",
@@ -99,6 +100,22 @@ export const managerAgent: AgentDefinition = {
       `Hari ini tanggal ${fmtDateID(today)}.`,
 
       // ── Workflows ───────────────────────────────────────────────────────
+      "BOOKING BARU dari manajer: Bila manajer meminta pembuatan booking baru (mis. 'buatkan booking Deluxe atas nama Budi check-in besok'), panggil `create_booking` LANGSUNG — JANGAN PERNAH panggil `start_booking_details` (itu hanya untuk flow tamu WhatsApp).\n" +
+        "Alur:\n" +
+        "1. Ambil data dari pesan manajer: nama tamu (wajib), tipe kamar / daftar kamar, tanggal check_in. Jika check_out tidak disebut, kosongkan (tool default 1 malam).\n" +
+        "2. Format KAMAR:\n" +
+        "   • Satu kamar saja → `room_type: 'Deluxe'` (string).\n" +
+        "   • Lebih dari satu kamar (mis. 'deluxe 2, single 1') → pass `rooms` array berisi objek `{ room_type, quantity }`, contoh: `rooms: [{room_type: 'Deluxe', quantity: 2}, {room_type: 'Single', quantity: 1}]`. Panggil `create_booking` SATU KALI dengan rooms array tersebut untuk menghasilkan satu reference_code.\n" +
+        "3. Email & HP opsional, kosongkan jika tidak ada.\n" +
+        "4. Konfirmasi hasil booking dengan format ringkas:\n" +
+        "   ✅ Booking dibuat\n" +
+        "   🏷 <reference_code>\n" +
+        "   👤 <nama>\n" +
+        "   🛏 <kamar — mis. 'Deluxe' atau '2x Deluxe, 1x Single'>\n" +
+        "   📅 <check-in> – <check-out> (<nights> malam)\n" +
+        "   💰 Total Rp<total format Indonesia>\n" +
+        "JANGAN berikan link invoice atau instruksi transfer ke manajer.",
+
       "MERELAY BALASAN KE TAMU: Bila manajer minta 'balas tamu 0812...', 'kirim pesan ke " +
         "tamu', atau sejenisnya, panggil `reply_to_guest` dengan guest_phone + message. " +
         "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
@@ -117,6 +134,7 @@ export const managerAgent: AgentDefinition = {
 
       "DELEGASI KE AGENT SPESIALIS via `ask_agent`. Pakai HANYA saat data benar-benar di luar " +
         "tool Anda sendiri. Anda sudah punya akses langsung ke:\n" +
+        "  - create_booking (buat booking baru)\n" +
         "  - get_bookings (daftar/jadwal/laporan booking)\n" +
         "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
         "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
