@@ -98,7 +98,7 @@ const SUMMARY_MIN_MESSAGES = 3;
 //  so the AI Lab simulator can share the same windowing logic.)
 void SESSION_GAP_MS;
 
-async function generateSessionSummary(
+export async function generateSessionSummary(
   history: Array<{ direction: string; body: string; sent_at?: string }>,
   existingSummary: string | null | undefined,
   config: { apiKey: string; baseUrl: string; model: string },
