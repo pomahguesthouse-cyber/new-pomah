@@ -17,6 +17,15 @@ const listBookingsSchema = z.object({
   search: z.string().trim().max(120).optional(),
 });
 
+const exportBookingsSchema = z.object({
+  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]).optional(),
+  source: z.enum(["direct", "whatsapp", "walk_in", "website", "manager_chat"]).optional(),
+  search: z.string().trim().max(120).optional(),
+  // Optional date-range filter on check_in.
+  from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 /** Rooms of a booking, via the booking_rooms child table. */
 const BOOKING_ROOMS_SELECT =
@@ -97,6 +106,96 @@ export const listBookings = createServerFn({ method: "GET" })
         degraded: true,
       };
     }
+  });
+
+/**
+ * Export bookings matching the given filters, no pagination, capped at
+ * 5000 rows. Returns flat rows suitable for CSV/PDF rendering on the
+ * client. Same filter shape as listBookings + optional check_in range.
+ */
+export const exportBookings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => exportBookingsSchema.parse(d ?? {}))
+  .handler(async ({ data, context }) => {
+    const MAX_ROWS = 5000;
+
+    const search = data.search?.replace(/[,()*:%]/g, " ").trim() || "";
+    let guestIds: string[] = [];
+    if (search) {
+      const { data: guests } = await context.supabase
+        .from("guests")
+        .select("id")
+        .ilike("full_name", `%${search}%`)
+        .limit(500);
+      guestIds = (guests ?? []).map((g) => g.id);
+    }
+    const searchOr = (): string | null => {
+      if (!search) return null;
+      const ors: string[] = [`reference_code.ilike.*${search}*`];
+      if (guestIds.length) ors.push(`guest_id.in.(${guestIds.join(",")})`);
+      return ors.join(",");
+    };
+
+    let q = context.supabase.from("bookings").select(FULL_BOOKING_SELECT);
+    if (data.status) q = q.eq("status", data.status);
+    if (data.source) q = q.eq("source", data.source);
+    if (data.from)   q = q.gte("check_in", data.from);
+    if (data.to)     q = q.lte("check_in", data.to);
+    if (search) {
+      const or = searchOr();
+      q = or ? q.or(or) : q.eq("id", ZERO_UUID);
+    }
+    const res = await q
+      .order("check_in", { ascending: false })
+      .limit(MAX_ROWS);
+    if (res.error) throw res.error;
+
+    // Flatten to a stable export shape — no nested objects, no nulls turning into "[object]".
+    const rows = (res.data ?? []).map((b: any) => {
+      const brs: any[] = Array.isArray(b.booking_rooms) ? b.booking_rooms : [];
+      const roomLabels = brs.map((br) => {
+        const name = br?.room_types?.name ?? "?";
+        const num  = br?.rooms?.number;
+        return num ? `${name} (${num})` : name;
+      });
+      const nightlyRates = brs.map((br) => Number(br?.nightly_rate ?? 0));
+      const checkIn = b.check_in as string;
+      const checkOut = b.check_out as string;
+      const nights = checkIn && checkOut
+        ? Math.max(0, Math.round((Date.parse(checkOut + "T00:00:00Z") - Date.parse(checkIn + "T00:00:00Z")) / 86_400_000))
+        : 0;
+      const total = Number(b.total_amount ?? 0);
+      const paid  = Number(b.paid_amount  ?? 0);
+      return {
+        reference_code: b.reference_code ?? "",
+        guest_name:     b.guests?.full_name ?? "",
+        guest_email:    b.guests?.email ?? "",
+        guest_phone:    b.guests?.phone ?? "",
+        check_in:       checkIn ?? "",
+        check_out:      checkOut ?? "",
+        nights,
+        rooms:          roomLabels.join("; "),
+        room_count:     brs.length,
+        adults:         Number(b.adults ?? 0),
+        children:       Number(b.children ?? 0),
+        status:         b.status,
+        source:         b.source ?? "",
+        payment_status: b.payment_status ?? "",
+        total_amount:   total,
+        paid_amount:    paid,
+        outstanding:    Math.max(0, total - paid),
+        nightly_rate_min: nightlyRates.length ? Math.min(...nightlyRates) : 0,
+        nightly_rate_max: nightlyRates.length ? Math.max(...nightlyRates) : 0,
+        created_at:     b.created_at ?? "",
+      };
+    });
+
+    return {
+      rows,
+      count:    rows.length,
+      capped:   rows.length >= MAX_ROWS,
+      filters:  { status: data.status, source: data.source, search: search || null, from: data.from ?? null, to: data.to ?? null },
+    };
   });
 
 export const updateBookingStatus = createServerFn({ method: "POST" })

@@ -3,12 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt, FileDown, Printer, Loader2 } from "lucide-react";
 import {
   listBookings,
   updateBookingStatus,
   deleteBooking,
+  exportBookings,
 } from "@/admin/functions/bookings.functions";
+import { downloadCsv, openPrintView, type ExportRow } from "@/admin/lib/booking-export";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -132,6 +134,55 @@ function getWhatsAppLink(phone: string) {
 
 function BookingsPage() {
   const fn = useServerFn(listBookings);
+  const exportFn = useServerFn(exportBookings);
+  const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
+
+  async function runExport(kind: "csv" | "pdf") {
+    setExporting(kind);
+    try {
+      const res = await exportFn({
+        data: {
+          status: statusFilter === "all" ? undefined : (statusFilter as BookingStatus),
+          source: sourceFilter === "all" ? undefined : sourceFilter,
+          search: search || undefined,
+        },
+      });
+      const rows = (res.rows ?? []) as ExportRow[];
+      if (rows.length === 0) {
+        toast.info("Tidak ada booking yang cocok dengan filter saat ini.");
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      const filterBits = [
+        statusFilter !== "all" ? `status-${statusFilter}` : null,
+        sourceFilter !== "all" ? `sumber-${sourceFilter}` : null,
+        search ? `cari-${search.slice(0, 20)}` : null,
+      ].filter(Boolean).join("_");
+      const stem = `bookings_${stamp}${filterBits ? "_" + filterBits : ""}`;
+
+      if (kind === "csv") {
+        downloadCsv(rows, stem);
+        toast.success(`CSV diunduh — ${rows.length} baris.`);
+      } else {
+        const filterSummary = [
+          statusFilter !== "all" ? `Status: ${statusFilter}` : null,
+          sourceFilter !== "all" ? `Sumber: ${sourceFilter}` : null,
+          search ? `Pencarian: "${search}"` : null,
+        ].filter(Boolean).join(" · ");
+        openPrintView(rows, {
+          filterSummary: filterSummary || "Semua booking",
+        });
+        toast.success(`Dialog cetak terbuka — pilih "Save as PDF" untuk simpan ke file.`);
+      }
+      if (res.capped) {
+        toast.warning(`Hasil dipotong di 5000 baris. Persempit filter untuk export lebih spesifik.`);
+      }
+    } catch (e) {
+      toast.error((e as Error).message ?? "Export gagal.");
+    } finally {
+      setExporting(null);
+    }
+  }
   const update = useServerFn(updateBookingStatus);
   const removeFn = useServerFn(deleteBooking);
   const qc = useQueryClient();
@@ -225,10 +276,32 @@ function BookingsPage() {
           </p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1>
         </div>
-        <Button onClick={() => setNewOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Booking Baru
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => runExport("csv")}
+            disabled={exporting !== null}
+            className="gap-2"
+            title="Export semua booking yang cocok filter saat ini ke CSV"
+          >
+            {exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => runExport("pdf")}
+            disabled={exporting !== null}
+            className="gap-2"
+            title="Buka tampilan cetak — pilih 'Save as PDF' di dialog browser"
+          >
+            {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            Cetak / PDF
+          </Button>
+          <Button onClick={() => setNewOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Booking Baru
+          </Button>
+        </div>
       </header>
 
       {error && (
