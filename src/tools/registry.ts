@@ -36,21 +36,23 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "create_booking",
       description:
-        "Buat pesanan/booking kamar untuk tamu. Panggil HANYA setelah tamu memilih tipe kamar " +
-        "dan memberikan nama lengkap, email, dan nomor HP. Jangan panggil bila data belum lengkap.",
+        "Buat pesanan/booking kamar. Mode tamu (WA): WAJIB nama+email+HP lengkap (untuk " +
+        "invoice & konfirmasi). Mode manajerial (staff entry via Telegram/manajer): cukup " +
+        "nama + tipe kamar + check_in. Email/HP boleh kosong — staf isi belakangan via admin UI. " +
+        "check_out boleh kosong (default 1 malam = check_in + 1 hari).",
       parameters: {
         type: "object",
         properties: {
-          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih tamu." },
-          full_name:  { type: "string", description: "Nama lengkap tamu." },
-          email:      { type: "string", description: "Alamat email tamu." },
-          phone:      { type: "string", description: "Nomor HP/WhatsApp tamu." },
-          check_in:   { type: "string", description: "Tanggal check-in format YYYY-MM-DD." },
-          check_out:  { type: "string", description: "Tanggal check-out format YYYY-MM-DD." },
-          adults:     { type: "number", description: "Jumlah tamu dewasa. Default 1." },
+          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih." },
+          full_name:  { type: "string", description: "Nama lengkap tamu (WAJIB)." },
+          email:      { type: "string", description: "Email tamu. WAJIB di mode tamu, opsional di mode manajerial." },
+          phone:      { type: "string", description: "HP/WhatsApp tamu. WAJIB di mode tamu, opsional di mode manajerial." },
+          check_in:   { type: "string", description: "Tanggal check-in YYYY-MM-DD." },
+          check_out:  { type: "string", description: "Tanggal check-out YYYY-MM-DD. Kosongkan untuk default 1 malam." },
+          adults:     { type: "number", description: "Jumlah dewasa. Default 1." },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
         },
-        required: ["room_type", "full_name", "email", "phone", "check_in", "check_out"],
+        required: ["room_type", "full_name", "check_in"],
       },
     },
   },

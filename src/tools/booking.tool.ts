@@ -116,23 +116,39 @@ export const createBooking: ToolHandler = async (
 
   // ── Validate inputs ────────────────────────────────────────────────────────
   const fullName      = str(args.full_name);
-  const email         = str(args.email);
-  const phone         = str(args.phone);
+  const emailRaw      = str(args.email);
+  const phoneRaw      = str(args.phone);
   const roomTypeName  = str(args.room_type).toLowerCase();
   const checkIn       = isDateString(args.check_in)  ? args.check_in  : "";
-  const checkOut      = isDateString(args.check_out) ? args.check_out : "";
+  // Default check_out = check_in + 1 day (1 malam) when omitted — useful for
+  // managerial direct entry where staff says "Faizal, Single, hari ini, 1 malam".
+  let checkOut        = isDateString(args.check_out) ? args.check_out : "";
+  if (!checkOut && checkIn) {
+    checkOut = new Date(new Date(checkIn).getTime() + 86_400_000).toISOString().slice(0, 10);
+  }
   const adults        = Math.max(1, Math.min(8, Number(args.adults)   || 1));
   const children      = Math.max(0, Math.min(8, Number(args.children) || 0));
 
-  if (!fullName || !email || !phone) {
+  // Managerial direct entry: nama wajib, email/HP opsional (staff isi belakangan
+  // via admin UI). Guest WA flow tetap strict — semua data wajib karena harus
+  // bisa kirim invoice + konfirmasi.
+  const managerialDirect = ctx.isManager === true;
+
+  if (!fullName) {
+    return JSON.stringify({ ok: false, error: "Nama tamu wajib diisi." });
+  }
+  if (!managerialDirect && (!emailRaw || !phoneRaw)) {
     return JSON.stringify({ ok: false, error: "Data tamu belum lengkap (nama, email, HP)." });
   }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+  if (emailRaw && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw)) {
     return JSON.stringify({ ok: false, error: "Format email tidak valid." });
   }
   if (!checkIn || !checkOut || checkOut <= checkIn) {
     return JSON.stringify({ ok: false, error: "Tanggal check-in/check-out tidak valid." });
   }
+
+  const email = emailRaw || null;
+  const phone = phoneRaw || null;
 
   // ── Find room type ─────────────────────────────────────────────────────────
   const rt =
