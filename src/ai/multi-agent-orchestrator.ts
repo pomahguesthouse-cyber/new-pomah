@@ -464,8 +464,18 @@ export async function runMultiAgentOrchestration(
   }
 
   // 5. Classify intent — use the rewritten query when one was produced.
+  //    Pass conversation context so short follow-ups ("ya", "oke") inherit the
+  //    prior intent instead of degrading to "general".
   const queryForClassifier = rewrite.rewritten_applied ? rewrite.rewritten : lastUserMsg;
-  const classified = await classifyIntent(queryForClassifier, input.toolCtx.supabaseAdmin, input.llmConfig);
+  const classified = await classifyIntent(
+    queryForClassifier,
+    input.toolCtx.supabaseAdmin,
+    input.llmConfig,
+    {
+      bookingActive: stateRecord.state !== "IDLE",
+      lastTopic:     resolved.topic ?? stateRecord.last_topic ?? null,
+    },
+  );
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
     `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,

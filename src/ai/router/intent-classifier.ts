@@ -142,6 +142,30 @@ export function clearIntentRulesCache(): void {
 }
 
 /**
+ * Optional conversation context that lets the classifier route short
+ * follow-ups (e.g. "ya", "oke", "yg itu aja") to the previously-active intent
+ * instead of falling through to "general".
+ */
+export interface IntentContext {
+  /** True when the booking state machine is mid-flow (state !== IDLE). */
+  bookingActive?: boolean;
+  /** Last resolved topic from the context resolver (e.g. "pricing", "availability"). */
+  lastTopic?: string | null;
+}
+
+const SHORT_AFFIRMATIVE =
+  /^\s*(ya|iya|yoi|yap|yup|oke|ok|okeh|sip|boleh|mau|lanjut|setuju|deal|gas|gass|baik|y|yh|yg itu|itu aja|yang itu|itu)[\s.!?]*$/i;
+
+const TOPIC_TO_INTENT: Record<string, IntentCategory> = {
+  pricing:         "pricing_inquiry",
+  availability:    "availability_check",
+  room_facilities: "booking_inquiry",
+  room_specs:      "booking_inquiry",
+  payment:         "payment",
+  complaint:       "complaint",
+};
+
+/**
  * Classify the intent of a user message.
  *
  * Returns the top-scoring IntentCategory with a normalised confidence (0–1).
@@ -150,8 +174,20 @@ export function clearIntentRulesCache(): void {
 export async function classifyIntent(
   text: string,
   supabase?: SupabaseClient,
-  llmConfig?: { apiKey: string; baseUrl: string; model: string }
+  llmConfig?: { apiKey: string; baseUrl: string; model: string },
+  context?: IntentContext,
 ): Promise<ClassifiedIntent> {
+  // Short affirmative follow-up — inherit prior intent so the agent keeps
+  // its train of thought instead of greeting/generalising.
+  if (context && SHORT_AFFIRMATIVE.test(text)) {
+    const inherited =
+      (context.lastTopic && TOPIC_TO_INTENT[context.lastTopic]) ||
+      (context.bookingActive ? "booking_inquiry" : undefined);
+    if (inherited) {
+      return { category: inherited, confidence: 0.8, matchedTerms: ["context-inherit"] };
+    }
+  }
+
   let activeRules = RULES;
 
   if (supabase) {
