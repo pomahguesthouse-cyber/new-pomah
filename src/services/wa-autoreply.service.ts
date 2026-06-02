@@ -248,10 +248,7 @@ export async function executeAutoreplyForPhone(
   const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
   const messages = c.messages ?? [];
 
-  // If the sender's WhatsApp number is registered as an active property
-  // manager, run in managerial mode — same routing/tone/tool gating as the
-  // per-agent Telegram bots. Falls through to guest mode for everyone else.
-  const manager = await resolveManagerByPhone(phone);
+  // manager is already resolved at the beginning of the function
   if (manager) {
     console.info(`[Autoreply] Managerial WA flow — ${manager.name} (${manager.role})`);
   }
