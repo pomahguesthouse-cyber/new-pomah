@@ -347,3 +347,82 @@ export const getRetryLogs = createServerFn({ method: "GET" })
       created_at: string;
     }>;
   });
+
+/** Get queue latency and LLM call duration stats rollup. */
+export const getQueueMetricsStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await (db(context.supabase) as any)
+      .from("wa_queue_latency_stats")
+      .select("*")
+      .order("hour_wib", { ascending: false })
+      .limit(168); // 1 week of hourly stats
+    if (error) {
+      console.error("[getQueueMetricsStats] Error fetching queue latency stats:", error);
+      throw error;
+    }
+    return (data ?? []) as Array<{
+      hour_wib: string;
+      total_bursts: number;
+      sent: number;
+      failed: number;
+      retrying: number;
+      processing: number;
+      queued: number;
+      zombie_timeouts: number;
+      failed_zombies: number;
+      retrying_zombies: number;
+      max_wait_exceeded_count: number;
+      queue_latency_p50_sec: number;
+      queue_latency_p95_sec: number;
+      queue_latency_p99_sec: number;
+      llm_duration_p50_sec: number;
+      llm_duration_p95_sec: number;
+      llm_duration_p99_sec: number;
+      avg_scheduler_delay_sec: number;
+    }>;
+  });
+
+/** Get recent queue jobs list details. */
+export const getQueueJobs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await (db(context.supabase) as any)
+      .from("wa_conversation_queue")
+      .select(`
+        id,
+        phone,
+        status,
+        created_at,
+        started_at,
+        completed_at,
+        process_after,
+        max_wait_until,
+        message_count,
+        last_message_body,
+        reply_text,
+        attempt,
+        last_error
+      `)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error("[getQueueJobs] Error fetching queue jobs:", error);
+      throw error;
+    }
+    return (data ?? []) as Array<{
+      id: string;
+      phone: string;
+      status: string;
+      created_at: string;
+      started_at: string | null;
+      completed_at: string | null;
+      process_after: string;
+      max_wait_until: string;
+      message_count: number;
+      last_message_body: string;
+      reply_text: string | null;
+      attempt: number;
+      last_error: string | null;
+    }>;
+  });
