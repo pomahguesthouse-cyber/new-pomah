@@ -54,7 +54,7 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import { BookingDialog, DEFAULT_HOTEL_POLICY, type RoomRow } from "@/routes/rooms.$slug";
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
-import { DatePickerID } from "@/components/ui/date-picker";
+import { DateRangePickerID } from "@/components/ui/date-range-picker";
 
 export const Route = createFileRoute("/")({
   loader: async () => getPublicSiteData(),
@@ -344,22 +344,10 @@ function PomahHome() {
   };
   const pb = { isBuilder, sel, onSelect: pbSelect };
 
-  // Booking date-picker state.
+  // Booking date-picker state — driven by DateRangePickerID which
+  // sets both ends in one update.
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
-  const [checkInOpen, setCheckInOpen] = useState(false);
-  const [checkOutOpen, setCheckOutOpen] = useState(false);
-
-  const handleCheckInChange = (val: string) => {
-    setCheckIn(val);
-    setCheckInOpen(false);
-    if (!checkOut || checkOut <= val) {
-      setCheckOut(isoAddDays(val, 1));
-    }
-    setTimeout(() => {
-      setCheckOutOpen(true);
-    }, 150);
-  };
 
   const [guests, setGuests] = useState(1);
   // Cart of rooms picked from the carousel; keyed by room type id.
@@ -563,28 +551,15 @@ function PomahHome() {
                 </p>
               )}
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
-                <Field label="Check-In">
-                  <DatePickerID
-                    value={checkIn}
-                    onChange={handleCheckInChange}
+                <Field label="Tanggal Menginap" className="flex-1 min-w-0">
+                  <DateRangePickerID
+                    checkIn={checkIn || null}
+                    checkOut={checkOut || null}
                     min={today}
-                    open={checkInOpen}
-                    onOpenChange={setCheckInOpen}
-                    placeholder="Check-in"
-                    className="h-11 text-xs md:h-10 md:text-sm"
-                    shortFormat
-                  />
-                </Field>
-                <Field label="Check-Out">
-                  <DatePickerID
-                    value={checkOut}
-                    onChange={setCheckOut}
-                    min={checkIn ? isoAddDays(checkIn, 1) : today}
-                    open={checkOutOpen}
-                    onOpenChange={setCheckOutOpen}
-                    placeholder="Check-out"
-                    className="h-11 text-xs md:h-10 md:text-sm"
-                    shortFormat
+                    onChange={({ checkIn: ci, checkOut: co }) => {
+                      setCheckIn(ci);
+                      setCheckOut(co);
+                    }}
                   />
                 </Field>
                 <Field label="Tamu" className="flex-none w-[72px] md:flex-1 md:w-auto">
