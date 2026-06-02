@@ -29,7 +29,7 @@ async function pickAvailableRooms(
     .order("number");
 
   const roomRows = (rooms ?? []) as Array<{ id: string; number: string }>;
-  if (roomRows.length === 0) return [];
+  if (roomRows.length === 0) return null;
 
   const { data: activeBookings } = await (ctx.supabaseAdmin as any)
     .from("bookings")
@@ -211,7 +211,7 @@ export const createBooking: ToolHandler = async (
     // Allocate concrete rooms
     for (const r of roomsToBook) {
       for (let q = 0; q < r.quantity; q++) {
-        const assignedRoomId = await pickAvailableRoom(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
+        const assignedRoomId = await pickAvailableRooms(ctx, r.roomTypeId, checkIn, checkOut, skipRoomIds);
         if (!assignedRoomId) {
           return JSON.stringify({
             ok: false,
@@ -252,7 +252,7 @@ export const createBooking: ToolHandler = async (
       });
     }
 
-    const assignedRoomId = await pickAvailableRoom(ctx, rt.id, checkIn, checkOut);
+    const assignedRoomId = await pickAvailableRooms(ctx, rt.id, checkIn, checkOut);
     if (!assignedRoomId) {
       return JSON.stringify({
         ok: false,
@@ -404,14 +404,30 @@ export const createBooking: ToolHandler = async (
     : assignments[0].roomTypeName;
 
   // ── Return success payload ─────────────────────────────────────────────────
-  // Backwards-compat: single-room callers still get `room_type` and
-  // `nightly_rate`. Multi-room callers get `rooms` array.
-  const firstAlloc = allocations[0];
-  const totalUnits = allocations.reduce((sum, a) => sum + a.quantity, 0);
+  // Backwards-compat: single-room callers still get `room_type` (joined string)
+  // and `nightly_rate` from the first allocation. Multi-room callers also get
+  // a structured `rooms` array + `room_count`.
+  const roomsByType = new Map<string, { name: string; rate: number; count: number }>();
+  for (const a of assignments) {
+    const slot = roomsByType.get(a.roomTypeId)
+      ?? { name: a.roomTypeName, rate: a.rate, count: 0 };
+    slot.count += 1;
+    roomsByType.set(a.roomTypeId, slot);
+  }
+  const roomsPayload = Array.from(roomsByType.values()).map((s) => ({
+    room_type:      s.name,
+    quantity:       s.count,
+    rate_per_night: s.rate,
+    subtotal:       s.rate * s.count * nights,
+  }));
+  const roomCount = assignments.length;
+
   return JSON.stringify({
     ok:               true,
     reference_code:   booking.reference_code,
     room_type:        finalRoomTypeDisplay,
+    rooms:            roomsPayload,
+    room_count:       roomCount,
     check_in:         checkIn,
     check_out:        checkOut,
     check_in_tampil:  fmtDateID(checkIn),
