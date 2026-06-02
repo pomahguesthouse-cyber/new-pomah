@@ -10,7 +10,7 @@ import {
   deleteBooking,
   exportBookings,
 } from "@/admin/functions/bookings.functions";
-import { downloadCsv, openPrintView, type ExportRow } from "@/admin/lib/booking-export";
+import { downloadCsv, openPrintView, openBlankPrintWindow, type ExportRow } from "@/admin/lib/booking-export";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,6 +138,19 @@ function BookingsPage() {
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
 
   async function runExport(kind: "csv" | "pdf") {
+    // CRITICAL: for PDF, open the window SYNCHRONOUSLY right here — still
+    // inside the click gesture — before any await. Browsers block popups
+    // that are opened after async work because they're no longer attributed
+    // to a user gesture.
+    let printWindow: Window | null = null;
+    if (kind === "pdf") {
+      printWindow = openBlankPrintWindow();
+      if (!printWindow) {
+        toast.error("Tidak bisa membuka tab cetak. Izinkan popup untuk halaman ini lalu coba lagi.");
+        return;
+      }
+    }
+
     setExporting(kind);
     try {
       const res = await exportFn({
@@ -150,6 +163,7 @@ function BookingsPage() {
       const rows = (res.rows ?? []) as ExportRow[];
       if (rows.length === 0) {
         toast.info("Tidak ada booking yang cocok dengan filter saat ini.");
+        printWindow?.close();
         return;
       }
       const stamp = new Date().toISOString().slice(0, 10);
@@ -171,6 +185,7 @@ function BookingsPage() {
         ].filter(Boolean).join(" · ");
         openPrintView(rows, {
           filterSummary: filterSummary || "Semua booking",
+          targetWindow: printWindow,
         });
         toast.success(`Dialog cetak terbuka — pilih "Save as PDF" untuk simpan ke file.`);
       }
@@ -178,6 +193,7 @@ function BookingsPage() {
         toast.warning(`Hasil dipotong di 5000 baris. Persempit filter untuk export lebih spesifik.`);
       }
     } catch (e) {
+      printWindow?.close();
       toast.error((e as Error).message ?? "Export gagal.");
     } finally {
       setExporting(null);

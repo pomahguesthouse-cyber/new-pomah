@@ -103,7 +103,32 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Open a new window with a clean tabular layout and auto-trigger the
+ * Open a new window synchronously, returns the handle. MUST be called
+ * from inside the user-gesture event handler (no awaits before).
+ *
+ * Returns null when the popup is blocked. Note we DO NOT pass `noopener`
+ * — per spec that forces window.open to return null even when the
+ * window opens successfully, so the caller would think it was blocked.
+ */
+export function openBlankPrintWindow(): Window | null {
+  const w = window.open("", "_blank", "width=1100,height=800");
+  if (!w) return null;
+  try {
+    w.document.open();
+    w.document.write(
+      `<!doctype html><html lang="id"><head><meta charset="utf-8"/>` +
+      `<title>Memuat daftar booking…</title>` +
+      `<style>body{font:14px -apple-system,'Segoe UI',sans-serif;padding:24px;color:#475569}` +
+      `</style></head><body>Memuat data booking…</body></html>`,
+    );
+    w.document.close();
+  } catch { /* cross-origin? unlikely for about:blank */ }
+  return w;
+}
+
+/**
+ * Render the print view into a window that the caller already opened
+ * via openBlankPrintWindow() inside the click handler. Auto-triggers
  * print dialog. Browser handles "Save as PDF" from there.
  */
 export function openPrintView(
@@ -112,11 +137,12 @@ export function openPrintView(
     propertyName?:    string;
     filterSummary?:   string;
     generatedAtIso?:  string;
+    /** Window handle previously obtained from openBlankPrintWindow(). */
+    targetWindow?:    Window | null;
   } = {},
 ) {
-  const w = window.open("", "_blank", "noopener,width=1100,height=800");
+  const w = meta.targetWindow ?? window.open("", "_blank", "width=1100,height=800");
   if (!w) {
-    // Popup blocked → bail; caller should toast.
     throw new Error("Tidak bisa membuka window cetak. Pastikan popup tidak diblokir browser.");
   }
 
