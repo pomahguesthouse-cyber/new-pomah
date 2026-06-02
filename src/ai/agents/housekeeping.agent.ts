@@ -12,8 +12,15 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
+import { TOOL_DEFINITIONS } from "@/tools/registry";
 
 const HOUSEKEEPING_TOOLS: ToolDefinition[] = [
+  // reply_to_guest is shared from the registry — the same tool the Manager
+  // Agent uses. Gated at the tool layer (ctx.isManager === true), so guests
+  // can't trick the agent into invoking it from a WA conversation. Useful so
+  // a manager can ask Dewi via Telegram "balas tamu 0812... bilang handuknya
+  // sudah dikirim" and the WA reply goes out via Fonnte.
+  ...TOOL_DEFINITIONS.filter((t) => t.function.name === "reply_to_guest"),
   {
     type: "function",
     function: {
@@ -179,6 +186,20 @@ function buildManagerialPrompt(s: Scaffold): string {
       "description, tapi tanpa guest_phone — dan ingatkan manajer bahwa dashboard admin " +
       "lebih cocok untuk batch input. Untuk MELIHAT daftar tiket aktif, arahkan ke " +
       "dashboard admin (belum ada tool list di kanal ini).",
+
+    "MERELAY BALASAN KE TAMU via WhatsApp: Manajer bisa minta Anda balas ke nomor tamu " +
+      "via Telegram, mis. 'balas tamu 0812... handuknya sudah dikirim ya' atau 'kirim ke " +
+      "+6281234... maaf AC kamarnya diperbaiki sekarang'. Alur:\n" +
+      "1. Ekstrak nomor HP tamu dan isi pesan dari instruksi manajer. Nomor boleh format " +
+      "   '0812…', '+6281…', '6281…' — tool yang normalisasi.\n" +
+      "2. Panggil `reply_to_guest` dengan `guest_phone` + `message`. JANGAN tambahkan " +
+      "   'Kak' kalau manajer tidak menulis demikian — kirim apa adanya yang manajer " +
+      "   instruksikan.\n" +
+      "3. Tool akan REFUSE bila thread tamu tidak ada di DB (tidak boleh kirim cold " +
+      "   message ke nomor random). Bila ditolak, sampaikan alasannya ke manajer.\n" +
+      "4. Setelah sukses, konfirmasi singkat: 'Sudah dikirim ke 6281…'.\n" +
+      "Tool layer juga gating dengan `ctx.isManager === true`, jadi tamu yang " +
+      "social-engineering 'kirim pesan ke teman saya' akan ditolak otomatis.",
 
     "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown " +
       "(*, _, #).",

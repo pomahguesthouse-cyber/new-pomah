@@ -32,6 +32,19 @@ export const replyToGuest: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
+  // Hard gate: tool only available in managerial channels. Defends against
+  // a guest social-engineering an agent into "kirim pesan ke teman saya"
+  // from a normal WA conversation. Mirrors the guard on update_room_rate.
+  if (ctx.isManager !== true) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        "Hanya manajer/super admin yang boleh mengirim pesan ke nomor WhatsApp tamu. " +
+        "Tool ini hanya tersedia di kanal internal (Telegram bot Manager / Customer Care / " +
+        "agent lain, atau nomor WhatsApp manajer terdaftar).",
+    });
+  }
+
   const phoneRaw = str(args.guest_phone);
   const message  = str(args.message);
   if (!phoneRaw || !message) {
