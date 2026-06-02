@@ -182,21 +182,20 @@ export const pricingAgent: AgentDefinition = {
     const scaffold = buildScaffold(ctx);
     const isManagerial = ctx.mode === "managerial";
 
-    // Admin AI Lab custom instructions take precedence inside their mode
-    // — guest custom instructions don't leak into managerial and vice versa.
-    if (ctx.customInstructions?.trim()) {
-      const custom = applyCustomInstructions(ctx.customInstructions, scaffold);
-      // Append a short mode-anchor at the top so the override block still
-      // sets tone correctly even when the admin wrote everything else.
-      const anchor = isManagerial
-        ? `[MODE MANAJERIAL — Anda berbicara dengan staf internal, bukan tamu. ` +
-          `Tone singkat, TANPA 'Kak'. Anda boleh memakai \`update_room_rate\` dan ` +
-          `\`scrape_competitor_prices\`.]`
-        : `[MODE GUEST — Anda berbicara dengan tamu via WhatsApp. Sapa 'Kak'. ` +
-          `JANGAN memakai \`update_room_rate\` / \`scrape_competitor_prices\`.]`;
-      return `${anchor}\n\n${custom}`;
+    // MANAGERIAL: ALWAYS the built-in managerial prompt. Admin's AI Lab
+    // custom instructions were written for guest tone ("Sapa Kak, ramah,
+    // jelaskan tarif dst.") — letting them override here drowns out the
+    // managerial directives that authorize update_room_rate and the
+    // small LLM ends up refusing the tool call even though it's allowed.
+    if (isManagerial) {
+      return buildManagerialPrompt(scaffold);
     }
 
-    return isManagerial ? buildManagerialPrompt(scaffold) : buildGuestPrompt(scaffold);
+    // GUEST: custom instructions take precedence (this is what admin
+    // wrote the textarea for).
+    if (ctx.customInstructions?.trim()) {
+      return applyCustomInstructions(ctx.customInstructions, scaffold);
+    }
+    return buildGuestPrompt(scaffold);
   },
 };
