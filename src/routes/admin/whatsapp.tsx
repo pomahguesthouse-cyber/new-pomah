@@ -9,7 +9,6 @@ import {
   Search as SearchIcon,
   Pin,
   PinOff,
-
   Tag,
   User as UserIcon,
   UserCheck,
@@ -29,6 +28,13 @@ import {
   RotateCcw,
   FileText,
   Download,
+  Bell,
+  AlertOctagon,
+  CheckCircle2,
+  XCircle,
+  ShieldAlert,
+  BellOff,
+  SendHorizonal,
 } from "lucide-react";
 import {
   listThreads,
@@ -37,7 +43,6 @@ import {
   draftAiReply,
   markRead,
   togglePinned,
-
   setAiMode,
   simulateInbound,
   classifyIntent,
@@ -45,6 +50,9 @@ import {
   setTrainingExample,
   updateChatSummary,
   summarizeThread,
+  getConversationAlerts,
+  dismissConversationAlert,
+  triggerManualAlert,
 } from "@/admin/functions/whatsapp.functions";
 import { getAiLabConfig, formatAgentBadge, type AiLabConfig } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -162,23 +170,37 @@ export function WhatsAppPage() {
   const trainingFn = useServerFn(setTrainingExample);
   const updateSummaryFn = useServerFn(updateChatSummary);
   const summarizeFn = useServerFn(summarizeThread);
+  const alertsFn = useServerFn(getConversationAlerts);
+  const dismissFn = useServerFn(dismissConversationAlert);
+  const manualAlertFn = useServerFn(triggerManualAlert);
   
   const qc = useQueryClient();
 
   const { data: threadsData } = useQuery({ queryKey: ["wa-threads"], queryFn: () => listFn() });
   const { data: aiLabConfig } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => getAiLabConfig() });
+  const { data: alertsData } = useQuery({ queryKey: ["conv-alerts"], queryFn: () => alertsFn() });
   
   const threads = threadsData?.threads ?? [];
+  const allAlerts = alertsData?.alerts ?? [];
+  const openAlerts = allAlerts.filter((a: any) => a.status === "open");
+
   useRealtimeInvalidate(
     "admin-wa-stream",
     ["whatsapp_threads", "whatsapp_messages"],
     [["wa-threads"], ["wa-thread"]],
   );
+  useRealtimeInvalidate(
+    "admin-conv-alerts",
+    ["conversation_alerts"],
+    [["conv-alerts"]],
+  );
 
+  const [sidebarTab, setSidebarTab] = useState<"inbox" | "monitor">("inbox");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
   const [draft, setDraft] = useState("");
+  const [manualAlertNote, setManualAlertNote] = useState("");
 
   const filteredThreads = useMemo(() => {
     return threads.filter((t) => {
@@ -313,51 +335,107 @@ export function WhatsAppPage() {
 
   const totalUnread = threads.reduce((s, t) => s + (t.unread_count ?? 0), 0);
 
+  // ─── Monitor mutations ─────────────────────────────────────────────────────
+  const dismissMut = useMutation({
+    mutationFn: (p: { alertId: string; status: "handled" | "dismissed"; notes?: string }) =>
+      dismissFn({ data: p }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conv-alerts"] });
+      toast.success("Alert diselesaikan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const manualAlertMut = useMutation({
+    mutationFn: (p: { threadId: string; note: string }) =>
+      manualAlertFn({ data: p }),
+    onSuccess: () => {
+      setManualAlertNote("");
+      qc.invalidateQueries({ queryKey: ["conv-alerts"] });
+      toast.success("Alert manual berhasil dikirim ke super admin via Telegram!");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   return (
     <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[300px_1fr_320px] bg-background">
       {/* THREADS LIST */}
       <aside className="flex min-h-0 flex-col border-r border-border bg-white">
         <div className="border-b border-border p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Inbox className="h-4 w-4 text-muted-foreground" />
-              <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                Inbox
-              </p>
-            </div>
-            {totalUnread > 0 && (
-              <Badge variant="default" className="h-5 px-2 text-[10px]">
-                {totalUnread} new
-              </Badge>
-            )}
+          {/* Tab switcher: Inbox | Monitor */}
+          <div className="flex gap-1 mb-3">
+            <button
+              onClick={() => setSidebarTab("inbox")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors",
+                sidebarTab === "inbox"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent/10",
+              )}
+            >
+              <Inbox className="h-3.5 w-3.5" />
+              Inbox
+              {totalUnread > 0 && (
+                <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-foreground/20 px-1 text-[9px] font-bold">
+                  {totalUnread}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setSidebarTab("monitor")}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition-colors",
+                sidebarTab === "monitor"
+                  ? "bg-rose-600 text-white"
+                  : "text-muted-foreground hover:bg-accent/10",
+              )}
+            >
+              <Bell className="h-3.5 w-3.5" />
+              Monitor
+              {openAlerts.length > 0 && (
+                <span className={cn(
+                  "ml-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
+                  sidebarTab === "monitor" ? "bg-white/20" : "bg-rose-100 text-rose-700"
+                )}>
+                  {openAlerts.length}
+                </span>
+              )}
+            </button>
           </div>
-          <div className="relative mt-3">
-            <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, phone, message"
-              className="h-8 pl-8 text-xs"
-            />
-          </div>
-          <div className="mt-2 flex gap-1">
-            {(["all", "unread", "open", "closed"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors",
-                  filter === f
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border text-muted-foreground hover:bg-accent/10",
-                )}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
+
+          {sidebarTab === "inbox" && (
+            <>
+              <div className="relative mt-1">
+                <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search name, phone, message"
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
+              <div className="mt-2 flex gap-1">
+                {(["all", "unread", "open", "closed"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFilter(f)}
+                    className={cn(
+                      "rounded-md border px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors",
+                      filter === f
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:bg-accent/10",
+                    )}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-        <ScrollArea className="flex-1">
+
+        {sidebarTab === "inbox" ? (
+          <ScrollArea className="flex-1">
           <ul>
             {filteredThreads.map((t) => {
               const intent = INTENT_STYLES[t.intent ?? "other"] ?? INTENT_STYLES.other;
@@ -443,6 +521,60 @@ export function WhatsAppPage() {
             )}
           </ul>
         </ScrollArea>
+        ) : (
+          /* ── MONITOR PANEL ───────────────────────────────────────────────── */
+          <ScrollArea className="flex-1">
+            <div className="p-3 space-y-2">
+              {openAlerts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400 mb-2" />
+                  <p className="text-xs font-medium text-emerald-700">Semua percakapan aman</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Tidak ada alert aktif saat ini</p>
+                </div>
+              ) : (
+                openAlerts.map((alert: any) => (
+                  <AlertCard
+                    key={alert.id}
+                    alert={alert}
+                    onOpenThread={(threadId) => {
+                      setSidebarTab("inbox");
+                      setActiveId(threadId);
+                    }}
+                    onHandled={(id) => dismissMut.mutate({ alertId: id, status: "handled" })}
+                    onDismissed={(id) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
+                    isPending={dismissMut.isPending}
+                  />
+                ))
+              )}
+              {allAlerts.filter((a: any) => a.status !== "open").length > 0 && (
+                <details className="mt-4">
+                  <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-muted-foreground py-1">
+                    Riwayat ({allAlerts.filter((a: any) => a.status !== "open").length})
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    {allAlerts
+                      .filter((a: any) => a.status !== "open")
+                      .slice(0, 20)
+                      .map((alert: any) => (
+                        <AlertCard
+                          key={alert.id}
+                          alert={alert}
+                          onOpenThread={(threadId) => {
+                            setSidebarTab("inbox");
+                            setActiveId(threadId);
+                          }}
+                          onHandled={() => {}}
+                          onDismissed={() => {}}
+                          isPending={false}
+                          readonly
+                        />
+                      ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          </ScrollArea>
+        )}
       </aside>
 
       {/* CONVERSATION */}
@@ -741,6 +873,40 @@ export function WhatsAppPage() {
                 onToggleTraining={(v) => trainingMut.mutate(v)}
                 togglingTraining={trainingMut.isPending}
               />
+
+              <Separator />
+
+              {/* ── MANUAL ALERT TO TELEGRAM ───────────────────────── */}
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+                  <ShieldAlert className="h-3 w-3 text-rose-500" />
+                  Eskalasi ke Super Admin
+                </p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Kirim alert langsung ke super admin via Telegram jika percakapan ini butuh perhatian segera.
+                </p>
+                <textarea
+                  className="mt-2 w-full resize-none rounded-md border border-border bg-background p-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-rose-400"
+                  rows={2}
+                  placeholder="Catatan untuk super admin (wajib)…"
+                  value={manualAlertNote}
+                  onChange={(e) => setManualAlertNote(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="mt-2 w-full gap-1.5 text-xs"
+                  disabled={!manualAlertNote.trim() || manualAlertMut.isPending}
+                  onClick={() => {
+                    if (activeId && manualAlertNote.trim()) {
+                      manualAlertMut.mutate({ threadId: activeId, note: manualAlertNote.trim() });
+                    }
+                  }}
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  {manualAlertMut.isPending ? "Mengirim…" : "Kirim Alert ke Telegram"}
+                </Button>
+              </div>
             </div>
           </ScrollArea>
         ) : (

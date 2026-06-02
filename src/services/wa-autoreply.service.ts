@@ -26,6 +26,7 @@ import {
   pickAttachment,
   cleanReplyBody,
 } from "@/services/reply-postprocess";
+import { checkConversation } from "@/services/conversation-monitor.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -372,6 +373,51 @@ export async function executeAutoreplyForPhone(
     threadId: c.thread_id,
     toolsUsed: orchResult?.toolsUsed ?? [],
   }).catch((e) => console.warn(e));
+
+  // ── Conversation Monitor (fire-and-forget) ──────────────────────────────
+  // Hitung berapa kali berturut-turut fallback dalam sesi ini.
+  // Kami perkirakan dari metadata pesan outbound terakhir — bukan state
+  // persisten agar tidak menambah latensi ke hot-path.
+  void (async () => {
+    try {
+      // Hitung consecutive fallbacks: lihat N pesan outbound terakhir
+      const { data: recentOut } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("metadata")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "out")
+        .order("sent_at", { ascending: false })
+        .limit(5);
+      let consecutiveFallbacks = 0;
+      for (const msg of (recentOut ?? []) as any[]) {
+        if ((msg.metadata as any)?.is_fallback) consecutiveFallbacks++;
+        else break;
+      }
+      if (isFallback) consecutiveFallbacks++; // hitung yang baru
+
+      // Ambil guest name dari thread
+      const { data: threadRow } = await (supabaseAdmin as any)
+        .from("whatsapp_threads")
+        .select("display_name, ai_auto")
+        .eq("id", c.thread_id)
+        .maybeSingle();
+      const guestName = (threadRow as any)?.display_name ?? null;
+      const aiAutoOn = (threadRow as any)?.ai_auto !== false;
+
+      await checkConversation({
+        db: supabaseAdmin as any,
+        threadId: c.thread_id,
+        phone,
+        guestName,
+        messages: rollingMessages,
+        aiStatus: aiAutoOn ? "auto" : "human",
+        isFallback,
+        consecutiveFallbacks,
+      });
+    } catch (e) {
+      console.warn("[Autoreply] ConvMonitor check failed (non-fatal):", e);
+    }
+  })();
 
   // Background summarizer: run AFTER the reply is sent so it never adds
   // latency to the user-visible turn. Guards:
