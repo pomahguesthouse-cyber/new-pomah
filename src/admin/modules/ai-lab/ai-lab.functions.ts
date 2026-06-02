@@ -20,6 +20,11 @@ export const AGENT_KEYS = [
   "maintenance",
   "finance",
   "manager",
+  // "content" had to be added here to match the UI's AGENTS list in
+  // routes/admin/ai-lab.tsx. Without it, mergeAiLabConfig() rebuilt the
+  // agents map without a `content` key, so every toggle ON was stripped on
+  // save and the card kept resetting to "Nonaktif" after reload.
+  "content",
 ] as const;
 export const TOOL_KEYS = [
   "pms-database",
@@ -183,6 +188,17 @@ export const AGENT_DEFAULTS: Record<string, string> = {
     "REFUND: Jelaskan bahwa proses refund memerlukan verifikasi dan akan diproses oleh tim Finance — tidak dapat langsung dilakukan via WhatsApp.\n\n" +
     "Jangan pernah mengkonfirmasi penerimaan pembayaran secara manual — selalu arahkan tamu untuk mengirim bukti transfer untuk diverifikasi staf.\n\n" +
     "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
+
+  content:
+    // Content Manager is invoked via Manager.ask_agent('content', ...) or the
+    // admin Content dashboard, never from a guest WA thread. The built-in
+    // prompt in src/ai/agents/content.agent.ts handles persona + workflow;
+    // this default is just a placeholder hint for the AI Lab textarea so
+    // admins know it's there.
+    "Anda adalah Rara, Content Manager untuk konten publik {{PROPERTY_NAME}} — City " +
+    "Guide Semarang (event, destinasi, kuliner, tips) dan testimoni publik (import + " +
+    "kurasi Google Reviews kustom). Selalu peer-to-peer dengan manajer, tanpa sapaan " +
+    "'Kak'. Hari ini {{TODAY}}.",
 
   manager:
     "Anda adalah Asisten Manajer, Asisten Digital Manajer Properti untuk {{PROPERTY_NAME}}.\n" +
