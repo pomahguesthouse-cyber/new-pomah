@@ -218,25 +218,37 @@ export const createBooking: ToolHandler = async (
   // Source attribution: managerial direct entry vs guest WA chat. Web/walk-in
   // bookings don't come through this tool — they go through the website
   // checkout flow (public.functions.ts) which sets source='direct' itself.
-  const source: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
+  const desiredSource: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
 
-  const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
-    .from("bookings")
-    .insert({
-      property_id:  propId,
-      guest_id:     guest.id,
-      check_in:     checkIn,
-      check_out:    checkOut,
-      nights,
-      adults,
-      children,
-      total_amount: total,
-      source,
-      status:       "pending",
-      idempotency_key: idemKey ?? null,
-    })
-    .select("id, reference_code")
-    .single();
+  async function insertBooking(srcValue: string) {
+    return await (ctx.supabaseAdmin as any)
+      .from("bookings")
+      .insert({
+        property_id:  propId,
+        guest_id:     guest.id,
+        check_in:     checkIn,
+        check_out:    checkOut,
+        nights,
+        adults,
+        children,
+        total_amount: total,
+        source:       srcValue,
+        status:       "pending",
+        idempotency_key: idemKey ?? null,
+      })
+      .select("id, reference_code")
+      .single();
+  }
+
+  let { data: booking, error: bErr } = await insertBooking(desiredSource);
+
+  // Graceful fallback: a DB that hasn't been migrated yet won't know
+  // 'manager_chat' as a booking_source enum value (22P02 invalid_text_representation).
+  // Retry once with 'direct' so the booking still lands, and log a warning.
+  if (bErr && desiredSource === "manager_chat" && (bErr as any)?.code === "22P02") {
+    console.warn("[create_booking] enum 'manager_chat' not in DB — apply migration 20260602010000_booking_source_manager_chat.sql. Falling back to 'direct'.");
+    ({ data: booking, error: bErr } = await insertBooking("direct"));
+  }
 
   if (bErr || !booking) {
     // Unique-violation on idempotency_key = a concurrent retry won the race.
