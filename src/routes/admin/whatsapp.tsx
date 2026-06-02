@@ -536,12 +536,12 @@ export function WhatsAppPage() {
                   <AlertCard
                     key={alert.id}
                     alert={alert}
-                    onOpenThread={(threadId) => {
+                    onOpenThread={(threadId: string) => {
                       setSidebarTab("inbox");
                       setActiveId(threadId);
                     }}
-                    onHandled={(id) => dismissMut.mutate({ alertId: id, status: "handled" })}
-                    onDismissed={(id) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
+                    onHandled={(id: string) => dismissMut.mutate({ alertId: id, status: "handled" })}
+                    onDismissed={(id: string) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
                     isPending={dismissMut.isPending}
                   />
                 ))
@@ -559,7 +559,7 @@ export function WhatsAppPage() {
                         <AlertCard
                           key={alert.id}
                           alert={alert}
-                          onOpenThread={(threadId) => {
+                          onOpenThread={(threadId: string) => {
                             setSidebarTab("inbox");
                             setActiveId(threadId);
                           }}
@@ -1251,6 +1251,51 @@ function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Conversation Monitor Alert Card ─────────────────────────────────────────
+// Stub minimal — full UI alert dapat diperluas kemudian.
+interface AlertCardProps {
+  alert: { id: string; thread_id?: string | null; title?: string | null; message?: string | null; severity?: string | null; status?: string | null; created_at?: string | null };
+  onOpenThread: (threadId: string) => void;
+  onHandled: (id: string) => void;
+  onDismissed: (id: string) => void;
+  isPending: boolean;
+  readonly?: boolean;
+}
+
+function AlertCard({ alert, onOpenThread, onHandled, onDismissed, isPending, readonly }: AlertCardProps) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 text-xs space-y-2">
+      <div className="flex items-start gap-2">
+        <ShieldAlert className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium truncate">{alert.title ?? "Alert"}</div>
+          {alert.message && (
+            <p className="text-muted-foreground line-clamp-2 mt-0.5">{alert.message}</p>
+          )}
+          {alert.created_at && (
+            <div className="text-[10px] text-muted-foreground mt-1">{formatRelativeDateID(alert.created_at)}</div>
+          )}
+        </div>
+      </div>
+      {!readonly && (
+        <div className="flex gap-1.5">
+          {alert.thread_id && (
+            <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onOpenThread(alert.thread_id!)}>
+              Buka
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={isPending} onClick={() => onHandled(alert.id)}>
+            <CheckCircle2 className="h-3 w-3 mr-1" /> Ditangani
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[11px]" disabled={isPending} onClick={() => onDismissed(alert.id)}>
+            <XCircle className="h-3 w-3 mr-1" /> Tutup
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
