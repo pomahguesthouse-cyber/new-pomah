@@ -102,11 +102,33 @@ export const updateRoomRate: ToolHandler = async (
   }
 
   // ── 3. Resolve room type ──────────────────────────────────────────
-  const needle = roomNameOrId.toLowerCase();
+  const needle = roomNameOrId.toLowerCase().trim();
   const isUuid = /^[0-9a-f-]{32,}$/i.test(roomNameOrId);
-  const candidates = ctx.rooms.filter((r) =>
-    isUuid ? (r as any).id === roomNameOrId : r.name.toLowerCase().includes(needle),
-  );
+
+  // Match precedence (so "Deluxe" doesn't ambiguously match "Grand Deluxe"):
+  //   1. UUID exact match.
+  //   2. Case-insensitive exact name match.
+  //   3. Word-boundary match — needle is a standalone word in the room name
+  //      (handles "single", "deluxe" without grabbing "grand deluxe").
+  //   4. Substring fallback (multi-hit → disambiguation error).
+  let candidates: Array<typeof ctx.rooms[number]>;
+  if (isUuid) {
+    candidates = ctx.rooms.filter((r) => (r as any).id === roomNameOrId);
+  } else {
+    const exact = ctx.rooms.filter((r) => r.name.toLowerCase().trim() === needle);
+    if (exact.length === 1) {
+      candidates = exact;
+    } else {
+      const wordRe = new RegExp(
+        `(?:^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`,
+        "i",
+      );
+      const wordHits = ctx.rooms.filter((r) => wordRe.test(r.name));
+      candidates = wordHits.length > 0
+        ? wordHits
+        : ctx.rooms.filter((r) => r.name.toLowerCase().includes(needle));
+    }
+  }
 
   if (candidates.length === 0) {
     return JSON.stringify({
