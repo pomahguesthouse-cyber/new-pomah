@@ -436,7 +436,7 @@ export const updateChatSummary = createServerFn({ method: "POST" })
 export const getConversationAlerts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+    const { data, error } = await (context.supabase as any)
       .from("conversation_alerts")
       .select("*")
       .order("created_at", { ascending: false })

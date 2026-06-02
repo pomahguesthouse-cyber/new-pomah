@@ -69,7 +69,7 @@ export const listBookings = createServerFn({ method: "GET" })
     {
       let q = context.supabase.from("bookings").select(FULL_BOOKING_SELECT, { count: "exact" });
       if (data.status) q = q.eq("status", data.status);
-      if (data.source) q = q.eq("source", data.source);
+      if (data.source) q = q.eq("source", data.source as never);
       if (search) {
         const or = searchOr(true);
         q = or ? q.or(or) : q.eq("id", ZERO_UUID);
@@ -91,7 +91,7 @@ export const listBookings = createServerFn({ method: "GET" })
     {
       let q = context.supabase.from("bookings").select(BASE_BOOKING_SELECT, { count: "exact" });
       if (data.status) q = q.eq("status", data.status);
-      if (data.source) q = q.eq("source", data.source);
+      if (data.source) q = q.eq("source", data.source as never);
       if (search) {
         const or = searchOr(false);
         q = or ? q.or(or) : q.eq("id", ZERO_UUID);
@@ -138,7 +138,7 @@ export const exportBookings = createServerFn({ method: "GET" })
 
     let q = context.supabase.from("bookings").select(FULL_BOOKING_SELECT);
     if (data.status) q = q.eq("status", data.status);
-    if (data.source) q = q.eq("source", data.source);
+    if (data.source) q = q.eq("source", data.source as never);
     if (data.from)   q = q.gte("check_in", data.from);
     if (data.to)     q = q.lte("check_in", data.to);
     if (search) {
