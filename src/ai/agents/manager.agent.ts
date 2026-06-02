@@ -55,7 +55,18 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
     },
   },
   ...TOOL_DEFINITIONS.filter((t) =>
-    ["get_bookings", "update_booking_status", "delete_booking", "change_booking_room", "reply_to_guest"].includes(t.function.name)
+    [
+      "get_bookings",
+      "update_booking_status",
+      "delete_booking",
+      "change_booking_room",
+      "reply_to_guest",
+      // Quick-answer tools — avoid round-tripping through ask_agent for the
+      // most common managerial questions ("berapa harga kamar hari ini",
+      // "ada kamar kosong tanggal X", "spek Family Suite 100").
+      "check_room_availability",
+      "get_room_specifications",
+    ].includes(t.function.name)
   ),
 ];
 
@@ -104,9 +115,19 @@ export const managerAgent: AgentDefinition = {
         "- Setelah berhasil, balas ringkas: '✅ Booking <ref> (<nama>) dibatalkan' atau " +
         "  '🗑 Booking <ref> dihapus permanen'.",
 
-      "DELEGASI KE AGENT SPESIALIS via `ask_agent`. Pakai saat manajer butuh data yang " +
-        "dipegang agent lain (harga → pricing, status pembayaran detail → finance, dst.). " +
-        "Setelah dapat jawaban, gabungkan dengan respons Anda — JANGAN pass-through mentah.",
+      "DELEGASI KE AGENT SPESIALIS via `ask_agent`. Pakai HANYA saat data benar-benar di luar " +
+        "tool Anda sendiri. Anda sudah punya akses langsung ke:\n" +
+        "  - get_bookings (daftar/jadwal/laporan booking)\n" +
+        "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
+        "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
+        "  - update_booking_status, delete_booking, change_booking_room (mutasi booking)\n" +
+        "  - reply_to_guest (relay ke tamu)\n" +
+        "Untuk 'berapa harga kamar hari ini / tanggal X', 'ada kamar kosong', 'spek kamar', " +
+        "JANGAN delegasi — panggil tool langsung. Konversi 'hari ini'/'besok' ke YYYY-MM-DD " +
+        "memakai field tanggal hari ini di atas.\n" +
+        "Delegasi via `ask_agent` cocok untuk: ubah tarif (pricing → update_room_rate), " +
+        "scrape kompetitor (pricing), OCR bukti transfer (finance), import google review " +
+        "(content). Setelah dapat jawaban, ringkas, JANGAN pass-through mentah.",
 
       "PENANGANAN KELUHAN (saat manajer memforward komplain tamu): bantu manajer menyusun " +
         "respons — tawarkan draft kalimat, identifikasi akar masalah, sarankan tindakan " +

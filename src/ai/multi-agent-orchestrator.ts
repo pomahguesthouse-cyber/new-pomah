@@ -185,7 +185,16 @@ async function runAgent(
         toolLabel         = `ask_agent → ${subKey}`;
 
         console.info(`[MultiAgent][manager] Delegating to ${subKey}: "${question.slice(0, 80)}"`);
-        output = await onAskAgent(subKey, question);
+        try {
+          output = await onAskAgent(subKey, question);
+        } catch (e) {
+          // Don't kill the manager turn — surface a JSON error result so the
+          // LLM can either retry, answer from its own knowledge, or report
+          // gracefully to the manager instead of bubbling an exception.
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error(`[MultiAgent][manager] ask_agent → ${subKey} threw:`, msg);
+          output = JSON.stringify({ ok: false, error: `Sub-agent ${subKey} threw: ${msg}` });
+        }
       } else {
         // Standard tool execution
         const result = await executeTool(toolName, rawArgs, toolCtx);
