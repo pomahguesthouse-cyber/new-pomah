@@ -9,10 +9,12 @@
  * separate groups per agent.
  */
 
-import type { AgentDefinition, AgentContext } from "@/ai/agents/types";
+import type { AgentDefinition, AgentContext, AgentKey } from "@/ai/agents/types";
 import type { AiClientConfig, AiMessage, LlmResponse } from "@/ai/types";
 import type { ToolContext } from "@/tools/types";
 import { executeTool } from "@/tools/executor";
+import { getAgent } from "@/ai/agents/registry";
+import { ASK_AGENT_TOOL_NAME } from "@/ai/agents/manager.agent";
 
 // Content Manager + Manager Agent commonly chain 3-5 tool calls
 // (list → discover → upsert×N → summarize), so the cap is generous.
@@ -137,11 +139,23 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
     for (const tc of toolCalls) {
       const name = tc.function?.name ?? "";
       console.info(`[TgAgentRunner][${agentDef.key}] turn ${turnNo + 1}: ${name}`);
-      const { output } = await executeTool(
-        name,
-        tc.function?.arguments ?? "{}",
-        toolCtx,
-      );
+
+      let output: string;
+      if (name === ASK_AGENT_TOOL_NAME) {
+        // ask_agent is intercepted here, not executed by the standard
+        // executor (which has no handler for it). Spawn a sub-agent run
+        // in-process and feed its reply back as the tool result.
+        output = await delegateToSubAgent({
+          rawArgs:  tc.function?.arguments ?? "{}",
+          agentCtx,
+          toolCtx,
+          llmConfig,
+          parentAgentKey: agentDef.key,
+        });
+      } else {
+        const result = await executeTool(name, tc.function?.arguments ?? "{}", toolCtx);
+        output = result.output;
+      }
       toolTrail.push(name);
       // Sniff JSON ok:false for short error chain so we can surface it.
       try {
@@ -170,4 +184,80 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
 
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+// ─── ask_agent delegation (in-process sub-agent run) ────────────────────────
+
+const ALLOWED_SUB_AGENTS: ReadonlySet<AgentKey> = new Set([
+  "front-office", "pricing", "customer-care", "finance", "content",
+] as AgentKey[]);
+
+interface DelegateArgs {
+  rawArgs:        string;
+  agentCtx:       AgentContext;
+  toolCtx:        ToolContext;
+  llmConfig:      AiClientConfig;
+  parentAgentKey: AgentKey;
+}
+
+/**
+ * Run a sub-agent for ONE turn (cold conversation, just the question)
+ * and return its reply as a JSON tool result.
+ *
+ * The sub-agent inherits agentCtx — so mode='managerial' carries over,
+ * and the sub-agent's prompt branches correctly (e.g. Pricing managerial
+ * vs guest). Tool ctx is the same too, so isManager + supabase clients
+ * are preserved.
+ *
+ * Never throws — exceptions become an error JSON so the parent agent
+ * can decide how to handle it.
+ */
+async function delegateToSubAgent(args: DelegateArgs): Promise<string> {
+  let parsed: { agent_key?: string; question?: string } = {};
+  try { parsed = JSON.parse(args.rawArgs); } catch { /* ignore */ }
+  const rawKey = (parsed.agent_key ?? "").toLowerCase().trim();
+  const question = (parsed.question ?? "").trim();
+
+  if (!rawKey || !ALLOWED_SUB_AGENTS.has(rawKey as AgentKey)) {
+    return JSON.stringify({
+      ok: false,
+      error: `agent_key tidak valid: '${rawKey}'. Pilihan: ${[...ALLOWED_SUB_AGENTS].join(", ")}.`,
+    });
+  }
+  if (!question) {
+    return JSON.stringify({
+      ok: false,
+      error: "Field 'question' wajib diisi saat memanggil ask_agent.",
+    });
+  }
+  const subKey = rawKey as AgentKey;
+
+  console.info(`[TgAgentRunner][${args.parentAgentKey}] ask_agent → ${subKey}: "${question.slice(0, 80)}"`);
+
+  try {
+    const subAgent = getAgent(subKey);
+    // Override managerName so the sub-agent introduces itself as itself,
+    // not the parent (Juminten asking Pricing should get a Julia-flavored
+    // reply, not Juminten talking to herself).
+    const subCtx: AgentContext = { ...args.agentCtx, managerName: undefined };
+    const result = await runAgentInGroupChannel({
+      agentDef:    subAgent,
+      messageText: question,
+      agentCtx:    subCtx,
+      toolCtx:     args.toolCtx,
+      llmConfig:   args.llmConfig,
+      // No history — sub-agent runs as a cold one-shot.
+      history:     [],
+    });
+    // Reply starts with ⚠️ when the sub-agent itself errored. Surface that
+    // as ok:false so the parent LLM knows to recover instead of pass-through.
+    if (result.reply.startsWith("⚠️")) {
+      return JSON.stringify({ ok: false, error: result.reply, sub_agent: subKey });
+    }
+    return JSON.stringify({ ok: true, sub_agent: subKey, response: result.reply });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[TgAgentRunner][${args.parentAgentKey}] ask_agent → ${subKey} threw:`, msg);
+    return JSON.stringify({ ok: false, error: `Sub-agent threw: ${msg}`, sub_agent: subKey });
+  }
 }
