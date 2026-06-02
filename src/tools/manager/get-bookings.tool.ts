@@ -5,7 +5,13 @@ export const getBookings: ToolHandler = async (
   ctx:  ToolContext,
 ): Promise<string> => {
   const status = typeof args.status === "string" ? args.status : null;
-  const paymentStatus = typeof args.payment_status === "string" ? args.payment_status : null;
+  const paymentStatusRaw = args.payment_status;
+  const paymentStatuses: string[] | null =
+    typeof paymentStatusRaw === "string"
+      ? [paymentStatusRaw]
+      : Array.isArray(paymentStatusRaw)
+        ? paymentStatusRaw.filter((v): v is string => typeof v === "string")
+        : null;
   const date = typeof args.date === "string" ? args.date : null;
   const limit = typeof args.limit === "number" ? args.limit : 10;
   // "recent"  → urut booking yang paling baru dibuat dulu (default; ini yang
@@ -43,8 +49,10 @@ export const getBookings: ToolHandler = async (
   if (status) {
     query = query.eq("status", status);
   }
-  if (paymentStatus) {
-    query = query.eq("payment_status", paymentStatus);
+  if (paymentStatuses && paymentStatuses.length > 0) {
+    query = paymentStatuses.length === 1
+      ? query.eq("payment_status", paymentStatuses[0])
+      : query.in("payment_status", paymentStatuses);
   }
   if (date) {
     // Basic filter: bookings overlapping the date

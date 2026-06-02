@@ -211,9 +211,11 @@ export const financeAgent: AgentDefinition = {
       "Ini percakapan WhatsApp — gunakan teks biasa, hindari Markdown (*, _, #).",
 
       "LAPORAN PIUTANG / DAFTAR BELUM LUNAS (managerial only): " +
-        "Saat manajer/internal bertanya 'siapa yang belum lunas / belum bayar / masih piutang', " +
+        "Saat manajer/internal bertanya 'siapa yang belum lunas / masih piutang / outstanding', " +
         "JANGAN minta klarifikasi parameter — langsung panggil `get_bookings` dengan " +
-        "payment_status='unpaid'. Untuk 'siapa yang bayar sebagian', pakai 'partial'. " +
+        "payment_status=['unpaid','partial'] (DP yang belum dilunasi termasuk 'belum lunas'). " +
+        "Untuk 'siapa yang belum bayar SAMA SEKALI', pakai 'unpaid'. " +
+        "Untuk 'siapa yang baru DP / bayar sebagian', pakai 'partial'. " +
         "Boleh tambahkan filter date / status booking bila manajer menyebut periode atau tahap. " +
         "Format hasilnya sebagai daftar blok berurutan, dipisahkan '━━━━━━━━━━━━━', tiap blok:\n" +
         "📅 <tanggal check-in> – <tanggal check-out>\n" +
@@ -221,7 +223,8 @@ export const financeAgent: AgentDefinition = {
         "🏷 <reference_code>\n" +
         "🛏 <nama kamar (+ nomor bila ada)>\n" +
         "💰 Rp<total_amount format Indonesia>\n" +
-        "⏳ <Unpaid / Partial — pakai ⏳ untuk Unpaid, 🟡 untuk Partial>\n" +
+        "⏳ <Unpaid / Partial — pakai ⏳ untuk Unpaid, 🟡 untuk Partial (sebutkan sisa kalau partial, " +
+        "mis. 'Partial — sisa Rp200.000' bila datanya tersedia)>\n" +
         "Akhiri dengan ringkasan singkat: 'Total <N> booking, outstanding Rp<jumlah>.'",
     ];
 

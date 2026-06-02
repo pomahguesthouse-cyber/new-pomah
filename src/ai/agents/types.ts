@@ -71,8 +71,10 @@ export interface AgentContext {
    * internal Telegram channels where the agent is talking to the property
    * manager/staff: concise, peer-to-peer, no apologies, operational vocab.
    *
-   * Set ONLY by Telegram entry points (telegram-router). All WhatsApp
-   * paths leave it unset so guest-facing behavior is preserved unchanged.
+   * Set to "managerial" by Telegram entry points (per-agent bot router)
+   * AND by the WhatsApp autoreply when the sender's number matches an
+   * active property_managers row. Otherwise left unset so guest-facing
+   * behavior is preserved.
    */
   mode?: "guest" | "managerial";
 }

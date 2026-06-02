@@ -143,8 +143,34 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
   }
 
   // ── Private DM to a per-agent bot (e.g. an admin chats directly with
-  //     @rania_pomah_bot). Same flow as group message — run the forced agent.
+  //     @rania_pomah_bot). Same flow as group message — run the forced agent,
+  //     BUT only for chat_ids that belong to a linked, active manager.
+  //     Per-agent bots run with isManager=true (unlocks update_room_rate,
+  //     get_bookings, etc.); without this gate, anyone who finds the bot's
+  //     username could DM it and trigger privileged tools.
   if (args.forcedAgentKey) {
+    // Allow /start <token> through so an unlinked manager can still
+    // activate themselves on a per-agent bot.
+    if (text.startsWith("/start")) {
+      const token = text.slice("/start".length).trim();
+      if (token) {
+        await handleLinkingCommand({ ...args, chatId, token, fromName: msg.from?.first_name });
+        return;
+      }
+      const m = await resolveManagerByChatId(chatId);
+      await sendMessage(botToken, chatId,
+        m
+          ? `✅ Sudah terhubung sebagai ${m.name} (${m.role}).`
+          : "Bot ini hanya untuk manajer/staf internal. Hubungi super admin untuk link aktivasi.");
+      return;
+    }
+
+    const linkedManager = await resolveManagerByChatId(chatId);
+    if (!linkedManager) {
+      await sendMessage(botToken, chatId,
+        "Bot ini hanya untuk manajer/staf internal. Hubungi super admin untuk link aktivasi.");
+      return;
+    }
     await handleAgentChannelMessage({ ...args, chatId, message: msg, chatType, threadId: null });
     return;
   }
