@@ -781,3 +781,35 @@ export async function notifyNewConversationSession(
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 5. Conversation Monitor → Managerial Channels                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Publik wrapper untuk `fanOutToAgentChannels` yang dipakai oleh
+ * conversation-monitor.service (dynamic import) agar tidak ada
+ * circular dependency di bundler.
+ *
+ * Setiap alert percakapan dikirim ke kanal agent yang relevan dengan
+ * tanda tangan agent (persona) sehingga grup Telegram tahu siapa yang
+ * "berbicara".
+ *
+ * eventType "complaint" dipakai supaya sistem dedupe yang sudah ada
+ * bekerja (kolom event_type di notification_logs), meski konteksnya
+ * monitoring bukan complaint murni.
+ */
+export async function fanOutAgentChannelsForMonitor(
+  db: Db,
+  agentKeys: string[],
+  message: string,
+  alertId: string,
+): Promise<void> {
+  if (agentKeys.length === 0) return;
+  await fanOutToAgentChannels(db, agentKeys, {
+    eventType: "complaint",          // tipe terdekat yang sudah ada di enum
+    message,
+    relatedId: alertId,
+    dedupeKeyFor: (agentKey, chatId) =>
+      `conv_monitor:${alertId}:${agentKey}:${chatId}`,
+  });
+}

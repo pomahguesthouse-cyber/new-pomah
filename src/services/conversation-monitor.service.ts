@@ -11,7 +11,14 @@
  *  4. FALLBACK_LOOP— AI gagal membalas (fallback message) >2x berturut-turut
  *  5. KEYWORD      — Kata sensitif / keluhan keras terdeteksi
  *
- * Alert dikirim ke super_admin yang punya telegram_chat_id via Telegram.
+ * Alert dikirim ke:
+ *  a. super_admin yang punya telegram_chat_id (DM langsung)
+ *  b. Kanal manajerial (telegram_agent_channels) sesuai jenis masalah:
+ *       escalation / keyword → customer-care + manager
+ *       fallback_loop        → customer-care + manager
+ *       repetitive           → customer-care
+ *       unresponsive         → manager
+ *       manual               → manager
  * Alert juga disimpan di tabel conversation_alerts untuk dashboard admin.
  *
  * Fire-and-forget — semua fungsi exported tidak pernah throw,
@@ -374,7 +381,7 @@ async function dispatchAlert(opts: AlertOptions): Promise<void> {
 
   if (!alertId) return;
 
-  // 2. Kirim Telegram
+  // 2. Bangun pesan Telegram
   const message = buildTelegramMessage({
     guestName: opts.guestName,
     phone: opts.phone,
@@ -386,11 +393,64 @@ async function dispatchAlert(opts: AlertOptions): Promise<void> {
     alertId,
   });
 
-  const tgMsgId = await fanOutTelegramAlert(db, message);
+  // 3. Kirim ke super admin (DM langsung) + kanal manajerial (paralel)
+  const agentTargets = resolveAgentChannels(opts.triggerType);
 
-  // 3. Patch telegram_message_id jika berhasil
+  const [tgMsgId] = await Promise.all([
+    // a. super admin DM
+    fanOutTelegramAlert(db, message),
+    // b. kanal agent manajerial
+    fanOutToManagerialChannels(db, agentTargets, message, alertId),
+  ]);
+
+  // 4. Patch telegram_message_id (dari DM super admin) jika berhasil
   if (tgMsgId) {
     await patchTelegramMessageId(db, alertId, tgMsgId);
+  }
+}
+
+/**
+ * Petakan trigger type ke daftar agent channel key yang harus menerima alert.
+ * Urutan: lebih spesifik → lebih umum.
+ */
+function resolveAgentChannels(triggerType: string): string[] {
+  switch (triggerType) {
+    case "keyword":
+    case "escalation":
+      return ["customer-care", "manager"];
+    case "fallback_loop":
+      return ["customer-care", "manager"];
+    case "repetitive":
+      return ["customer-care"];
+    case "unresponsive":
+      return ["manager"];
+    case "manual":
+      return ["manager"];
+    default:
+      return ["manager"];
+  }
+}
+
+/**
+ * Kirim alert ke kanal agent di Telegram (telegram_agent_channels).
+ * Menggunakan fanOutToAgentChannels dari manager-notifier lewat dynamic import
+ * untuk menghindari circular dependency.
+ */
+async function fanOutToManagerialChannels(
+  db: Db,
+  agentKeys: string[],
+  message: string,
+  alertId: string,
+): Promise<void> {
+  if (agentKeys.length === 0) return;
+  try {
+    const { fanOutAgentChannelsForMonitor } = await import(
+      "./manager-notifier.service"
+    );
+    await fanOutAgentChannelsForMonitor(db, agentKeys, message, alertId);
+  } catch (e) {
+    // Jika managerial channel belum dikonfigurasi, tidak fatal
+    console.warn("[ConvMonitor] fanOutManagerialChannels error (non-fatal):", e);
   }
 }
 
@@ -692,7 +752,10 @@ export async function triggerManualAlert(
       alertId,
     });
 
-    const tgMsgId = await fanOutTelegramAlert(db, message);
+    const [tgMsgId] = await Promise.all([
+      fanOutTelegramAlert(db, message),
+      fanOutToManagerialChannels(db, resolveAgentChannels("manual"), message, alertId),
+    ]);
     if (tgMsgId) await patchTelegramMessageId(db, alertId, tgMsgId);
 
     return { ok: true, alertId };
