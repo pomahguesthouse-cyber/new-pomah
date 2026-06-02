@@ -553,6 +553,7 @@ function PomahHome() {
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
                 <Field label="Tanggal Menginap" className="flex-1 min-w-0">
                   <DateRangePickerID
+                    className="bg-[#5f6d61] text-white hover:bg-[#5f6d61]/90 border-none"
                     checkIn={checkIn || null}
                     checkOut={checkOut || null}
                     min={today}

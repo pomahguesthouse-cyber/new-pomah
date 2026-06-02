@@ -226,13 +226,13 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
             variant="outline"
             className={cn("w-full justify-start gap-2 font-normal h-12", className)}
           >
-            <CalendarDays className="h-4 w-4 shrink-0 text-stone-400" />
+            <CalendarDays className="h-4 w-4 shrink-0 opacity-70" />
             {checkInDate && checkOutDate ? (
               <span className="text-sm">
                 {checkInDate.getDate()} {ID_MONTHS_SHORT[checkInDate.getMonth()]} – {checkOutDate.getDate()} {ID_MONTHS_SHORT[checkOutDate.getMonth()]} {checkOutDate.getFullYear()}
               </span>
             ) : (
-              <span className="text-stone-500 text-sm">Pilih tanggal menginap</span>
+              <span className="opacity-90 text-sm">Pilih tanggal menginap</span>
             )}
           </Button>
         )}
