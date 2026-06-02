@@ -15,7 +15,7 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-async function pickAvailableRoom(
+async function pickAvailableRooms(
   ctx:        ToolContext,
   roomTypeId: string,
   checkIn:    string,
@@ -29,7 +29,7 @@ async function pickAvailableRoom(
     .order("number");
 
   const roomRows = (rooms ?? []) as Array<{ id: string; number: string }>;
-  if (roomRows.length === 0) return null;
+  if (roomRows.length === 0) return [];
 
   const { data: activeBookings } = await (ctx.supabaseAdmin as any)
     .from("bookings")
@@ -138,7 +138,6 @@ export const createBooking: ToolHandler = async (
   const fullName      = str(args.full_name);
   const emailRaw      = str(args.email);
   const phoneRaw      = str(args.phone);
-  const roomTypeName  = str(args.room_type).toLowerCase();
   const checkIn       = isDateString(args.check_in)  ? args.check_in  : "";
   // Default check_out = check_in + 1 day (1 malam) when omitted — useful for
   // managerial direct entry where staff says "Faizal, Single, hari ini, 1 malam".
@@ -295,25 +294,37 @@ export const createBooking: ToolHandler = async (
   // Source attribution: managerial direct entry vs guest WA chat. Web/walk-in
   // bookings don't come through this tool — they go through the website
   // checkout flow (public.functions.ts) which sets source='direct' itself.
-  const source: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
+  const desiredSource: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
 
-  const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
-    .from("bookings")
-    .insert({
-      property_id:  propId,
-      guest_id:     guest.id,
-      check_in:     checkIn,
-      check_out:    checkOut,
-      nights,
-      adults,
-      children,
-      total_amount: total,
-      source,
-      status:       "pending",
-      idempotency_key: idemKey ?? null,
-    })
-    .select("id, reference_code")
-    .single();
+  async function insertBooking(srcValue: string) {
+    return await (ctx.supabaseAdmin as any)
+      .from("bookings")
+      .insert({
+        property_id:  propId,
+        guest_id:     guest.id,
+        check_in:     checkIn,
+        check_out:    checkOut,
+        nights,
+        adults,
+        children,
+        total_amount: total,
+        source:       srcValue,
+        status:       "pending",
+        idempotency_key: idemKey ?? null,
+      })
+      .select("id, reference_code")
+      .single();
+  }
+
+  let { data: booking, error: bErr } = await insertBooking(desiredSource);
+
+  // Graceful fallback: a DB that hasn't been migrated yet won't know
+  // 'manager_chat' as a booking_source enum value (22P02 invalid_text_representation).
+  // Retry once with 'direct' so the booking still lands, and log a warning.
+  if (bErr && desiredSource === "manager_chat" && (bErr as any)?.code === "22P02") {
+    console.warn("[create_booking] enum 'manager_chat' not in DB — apply migration 20260602010000_booking_source_manager_chat.sql. Falling back to 'direct'.");
+    ({ data: booking, error: bErr } = await insertBooking("direct"));
+  }
 
   if (bErr || !booking) {
     // Unique-violation on idempotency_key = a concurrent retry won the race.
@@ -393,6 +404,10 @@ export const createBooking: ToolHandler = async (
     : assignments[0].roomTypeName;
 
   // ── Return success payload ─────────────────────────────────────────────────
+  // Backwards-compat: single-room callers still get `room_type` and
+  // `nightly_rate`. Multi-room callers get `rooms` array.
+  const firstAlloc = allocations[0];
+  const totalUnits = allocations.reduce((sum, a) => sum + a.quantity, 0);
   return JSON.stringify({
     ok:               true,
     reference_code:   booking.reference_code,

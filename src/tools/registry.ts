@@ -36,14 +36,29 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "create_booking",
       description:
-        "Buat pesanan/booking kamar. Mode tamu (WA): WAJIB nama+email+HP lengkap (untuk " +
-        "invoice & konfirmasi). Mode manajerial (staff entry via Telegram/manajer): cukup " +
-        "nama + tipe kamar + check_in. Email/HP boleh kosong — staf isi belakangan via admin UI. " +
-        "check_out boleh kosong (default 1 malam = check_in + 1 hari).",
+        "Buat SATU booking (satu reference_code) yang bisa berisi SATU atau BEBERAPA kamar. " +
+        "Mode tamu (WA): WAJIB nama+email+HP lengkap (untuk invoice & konfirmasi). " +
+        "Mode manajerial (staff entry via Telegram/manajer): cukup nama + minimal 1 tipe kamar + " +
+        "check_in. Email/HP boleh kosong — staf isi belakangan via admin UI. " +
+        "check_out boleh kosong (default 1 malam = check_in + 1 hari).\n\n" +
+        "MULTI-KAMAR: pakai `rooms: [{room_type, quantity}, ...]`. Total akan dihitung " +
+        "sum(rate × quantity × nights) dari semua item. Contoh manajer bilang " +
+        "'deluxe 2 kamar, single 1 kamar' → rooms: [{room_type:'Deluxe',quantity:2},{room_type:'Single',quantity:1}].\n" +
+        "SINGLE-KAMAR: boleh tetap pakai `room_type` string lama untuk kompatibel.",
       parameters: {
         type: "object",
         properties: {
-          room_type:  { type: "string", description: "Nama tipe kamar yang dipilih." },
+          room_type:  { type: "string", description: "Tipe kamar tunggal. Pakai HANYA kalau 1 kamar saja." },
+          rooms: {
+            type: "array",
+            description:
+              "Multi-kamar dalam SATU booking. Tiap item: { room_type, quantity }. " +
+              "Pakai ini bila manajer menyebut lebih dari satu tipe atau >1 kamar dari tipe yang sama.",
+            items: {
+              type: "object",
+              description: "Satu baris item kamar.",
+            },
+          },
           full_name:  { type: "string", description: "Nama lengkap tamu (WAJIB)." },
           email:      { type: "string", description: "Email tamu. WAJIB di mode tamu, opsional di mode manajerial." },
           phone:      { type: "string", description: "HP/WhatsApp tamu. WAJIB di mode tamu, opsional di mode manajerial." },
@@ -52,7 +67,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           adults:     { type: "number", description: "Jumlah dewasa. Default 1." },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
         },
-        required: ["room_type", "full_name", "check_in"],
+        required: ["full_name", "check_in"],
       },
     },
   },
