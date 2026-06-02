@@ -9,6 +9,7 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
 import { managerialModeOverlay } from "./managerial-mode";
+import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 
@@ -217,20 +218,11 @@ export const financeAgent: AgentDefinition = {
         "Untuk 'siapa yang belum bayar SAMA SEKALI', pakai 'unpaid'. " +
         "Untuk 'siapa yang baru DP / bayar sebagian', pakai 'partial'. " +
         "Boleh tambahkan filter date / status booking bila manajer menyebut periode atau tahap. " +
-        "Format hasilnya sebagai daftar blok berurutan, dipisahkan '━━━━━━━━━━━━━', tiap blok:\n" +
-        "📅 <check-in – check-out dalam BAHASA INDONESIA, BUKAN ISO. Contoh: '17–18 Juli 2026' " +
-        "(rentang dalam bulan sama), '14 Juni – 14 Juli 2026' (lintas bulan), '30 Des 2026 – 2 Jan 2027' " +
-        "(lintas tahun). JANGAN tampilkan format '2026-07-17' ke manajer.>\n" +
-        "👤 <nama tamu>\n" +
-        "🏷 <reference_code>\n" +
-        "🛏 <nama kamar (+ nomor bila ada)>\n" +
-        "💰 Total Rp<total format Indonesia, mis. Rp500.000>" +
-        " — DP Rp<paid> — Sisa Rp<outstanding> (BILA partial; bila unpaid cukup 'Total Rp… — Belum bayar')\n" +
-        "⏳ <Status — ⏳ untuk Unpaid, 🟡 untuk Partial>\n" +
-        "Akhiri dengan ringkasan: 'Total <N> booking, outstanding Rp<total_outstanding>.' " +
-        "PENTING: angka outstanding diambil dari field `total_outstanding` di hasil tool " +
-        "(atau jumlahkan `outstanding` per booking), JANGAN dari `total` — total = harga sewa, " +
-        "outstanding = sisa yang belum dibayar (total − paid).",
+        "PENTING saat menghitung ringkasan: angka outstanding dari field `total_outstanding` di " +
+        "hasil tool (atau jumlahkan `outstanding` per booking), JANGAN dari `total` — total = " +
+        "harga sewa, outstanding = sisa belum dibayar (total − paid).",
+
+      BOOKING_LIST_FORMAT_BLOCK,
     ];
 
     sections.push(managerialModeOverlay(ctx, "finance"));

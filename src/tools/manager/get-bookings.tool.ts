@@ -87,7 +87,7 @@ export const getBookings: ToolHandler = async (
     };
   });
 
-  const totalOutstanding = results.reduce((sum, r) => sum + r.outstanding, 0);
+  const totalOutstanding = results.reduce((sum: number, r: { outstanding: number }) => sum + r.outstanding, 0);
 
   return JSON.stringify({
     ok: true,

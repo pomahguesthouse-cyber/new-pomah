@@ -30,9 +30,14 @@ export interface AiToolCall {
 // ─── Tool definitions (OpenAI function-calling schema) ────────────────────────
 
 export interface ToolParameter {
-  type:        string;
+  type?:       string;
   description: string;
   enum?:       string[];
+  /** JSON Schema union — used when a param can be one of several shapes
+   *  (e.g. string OR array of strings). When set, `type` can be omitted. */
+  oneOf?:      Array<Record<string, unknown>>;
+  /** For array params: schema of each item. */
+  items?:      Record<string, unknown>;
 }
 
 export interface ToolDefinition {
