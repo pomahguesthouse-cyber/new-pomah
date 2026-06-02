@@ -17,8 +17,11 @@
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
-import { managerialModeOverlay } from "./managerial-mode";
 import type { ToolDefinition } from "@/ai/types";
+
+// Content agent is invoked only via Manager.ask_agent or the admin
+// dashboard — guest WA never reaches it (handles: []). Prompt is
+// single-track managerial; no overlay needed.
 
 const CONTENT_TOOLS: ToolDefinition[] = [
   {
@@ -158,10 +161,12 @@ export const contentAgent: AgentDefinition = {
 
     const sections = [
       `Anda adalah ${persona}, Content Manager untuk City Guide di ${property.name ?? "Pomah Guesthouse"}. ` +
-        "Tugas: menemukan event, destinasi, kuliner, dan tips wisata Semarang terbaru, " +
-        "lalu menulis entri singkat untuk City Guide yang menarik calon tamu menginap.",
+        "Anda berbicara dengan MANAJER / STAF INTERNAL (lewat Manager Agent atau dashboard admin), " +
+        "bukan tamu. Tugas: menemukan event, destinasi, kuliner, dan tips wisata Semarang terbaru, " +
+        `lalu menulis entri singkat untuk City Guide. Saat memperkenalkan diri, sebut '${persona}, Content Manager'.`,
 
-      `Nama Anda adalah ${persona}.`,
+      "TONE: Peer-to-peer, ringkas, profesional. TANPA sapaan 'Kak' (itu untuk tamu). " +
+        "Langsung ke inti — laporkan progress, jumlah item, rekomendasi.",
 
       `Hari ini ${fmtDateID(today)}.`,
 
@@ -195,7 +200,6 @@ export const contentAgent: AgentDefinition = {
       "Bila manajer memberi instruksi spesifik (mis. 'cari event bulan depan saja'), patuhi prioritas itu.",
     ];
 
-    sections.push(managerialModeOverlay(ctx, "content"));
     return sections.filter(Boolean).join("\n\n");
   },
 };
