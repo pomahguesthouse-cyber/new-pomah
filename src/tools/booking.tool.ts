@@ -182,12 +182,13 @@ async function rollbackBooking(
 
 /**
  * Re-check that the rooms we just inserted into booking_rooms aren't ALSO
- * referenced by another active booking with an overlapping date range. The
- * window between `pickAvailableRooms` and the booking_rooms insert is small
- * but real: two concurrent callers can both observe a room as free and both
- * insert it. We don't have an exclusion constraint at the DB level, so this
- * is the post-write detection. Returns the offending room ids, or [] if
- * we're clean.
+ * referenced by another active booking with an overlapping date range.
+ *
+ * After migration 20260603000000_booking_rooms_no_overlap.sql is applied,
+ * Postgres enforces this directly via an EXCLUDE constraint and the insert
+ * itself raises 23P01 — making this function defensive belt-and-suspenders.
+ * We keep it so environments that haven't run the migration yet still get
+ * race protection (just slightly weaker than the constraint).
  */
 async function detectRoomConflicts(
   ctx: ToolContext,
@@ -458,6 +459,18 @@ export const createBooking: ToolHandler = async (
     // Partial state: booking row landed, booking_rooms didn't. Roll back so we
     // don't leave a roomless booking sitting in the table.
     await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
+    // 23P01 = exclusion_violation. The DB-level booking_rooms_no_overlap
+    // constraint caught a race we would have otherwise missed: another
+    // booking grabbed one of these rooms for an overlapping range between
+    // our pickAvailableRooms() and this insert. Surface as a retry hint.
+    if ((brErr as any)?.code === "23P01") {
+      return JSON.stringify({
+        ok:    false,
+        error:
+          "Kamar baru saja diambil booking lain di tanggal yang sama. " +
+          "Coba ulangi — tool akan memilih kamar lain yang masih kosong.",
+      });
+    }
     return JSON.stringify({
       ok:    false,
       error: `Gagal menyimpan detail kamar: ${brErr.message}`,
