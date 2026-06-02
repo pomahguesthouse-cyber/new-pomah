@@ -299,12 +299,35 @@ export const createBooking: ToolHandler = async (
       const qty = Math.max(1, Number(item.quantity) || 1);
       if (!rName) continue;
 
-      const rt =
+      const cleanName = rName.replace(/^(kamar|room|no\.?)\s+/i, "").trim();
+      let rt =
         ctx.rooms.find((r) => r.name.toLowerCase() === rName) ??
         ctx.rooms.find((r) => {
           const n = r.name.toLowerCase();
           return n.includes(rName) || rName.includes(n);
+        }) ??
+        ctx.rooms.find((r) => r.name.toLowerCase() === cleanName) ??
+        ctx.rooms.find((r) => {
+          const n = r.name.toLowerCase();
+          return n.includes(cleanName) || cleanName.includes(n);
         });
+
+      if (!rt) {
+        // Fallback: Check if cleanName is a physical room number in the DB
+        try {
+          const { data: physicalRoom } = await (ctx.supabaseAdmin as any)
+            .from("rooms")
+            .select("room_type_id")
+            .eq("number", cleanName.toUpperCase())
+            .maybeSingle();
+
+          if (physicalRoom?.room_type_id) {
+            rt = ctx.rooms.find((r) => r.id === physicalRoom.room_type_id);
+          }
+        } catch (dbErr) {
+          console.error(`[createBooking] Failed to resolve physical room "${cleanName}":`, dbErr);
+        }
+      }
 
       if (!rt) {
         return JSON.stringify({
@@ -371,12 +394,35 @@ export const createBooking: ToolHandler = async (
   } else {
     // Single room type fallback (behavior lama)
     const roomTypeName = str(args.room_type).toLowerCase();
-    const rt =
+    const cleanTypeName = roomTypeName.replace(/^(kamar|room|no\.?)\s+/i, "").trim();
+    let rt =
       ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
       ctx.rooms.find((r) => {
         const n = r.name.toLowerCase();
         return n.includes(roomTypeName) || roomTypeName.includes(n);
+      }) ??
+      ctx.rooms.find((r) => r.name.toLowerCase() === cleanTypeName) ??
+      ctx.rooms.find((r) => {
+        const n = r.name.toLowerCase();
+        return n.includes(cleanTypeName) || cleanTypeName.includes(n);
       });
+
+    if (!rt) {
+      // Fallback: Check if cleanTypeName is a physical room number in the DB
+      try {
+        const { data: physicalRoom } = await (ctx.supabaseAdmin as any)
+          .from("rooms")
+          .select("room_type_id")
+          .eq("number", cleanTypeName.toUpperCase())
+          .maybeSingle();
+
+        if (physicalRoom?.room_type_id) {
+          rt = ctx.rooms.find((r) => r.id === physicalRoom.room_type_id);
+        }
+      } catch (dbErr) {
+        console.error(`[createBooking] Failed to resolve physical room "${cleanTypeName}":`, dbErr);
+      }
+    }
 
     if (!rt) {
       return JSON.stringify({

@@ -38,7 +38,7 @@ async function main() {
   const { data: threads, error: threadErr } = await supabase
     .from("whatsapp_threads")
     .select("*")
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(20);
 
   if (threadErr) {
