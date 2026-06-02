@@ -54,7 +54,7 @@ function normalizePhone(raw: string): string {
  * Returns the manager row, or null if the sender is a guest.
  * Tolerant to phone-format differences (with/without 62, leading 0, spaces).
  */
-async function resolveManagerByPhone(
+export async function resolveManagerByPhone(
   phone: string,
 ): Promise<{ id: string; name: string; role: string; phone: string } | null> {
   const needle = normalizePhone(phone);
@@ -175,7 +175,9 @@ export async function executeAutoreplyForPhone(
   }
 
   const c = ctx as any;
-  if (!c.auto_reply_enabled || !c.fonnte_token) {
+  const manager = await resolveManagerByPhone(phone);
+  const isManager = !!manager;
+  if ((!isManager && !c.auto_reply_enabled) || !c.fonnte_token) {
     return "skipped_config";
   }
 

@@ -233,7 +233,13 @@ export const Route = createFileRoute("/api/fonnte")({
           smart_delay_config?: Record<string, unknown> | null;
         };
 
-        if (!c.auto_reply_enabled) {
+        const { resolveManagerByPhone } = await import(
+          "@/services/wa-autoreply.service"
+        );
+        const manager = await resolveManagerByPhone(customerPhone);
+        const isManager = !!manager;
+
+        if (!isManager && !c.auto_reply_enabled) {
           console.log(`[Webhook] auto_reply_enabled=false — skipping | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }
@@ -454,7 +460,13 @@ export const Route = createFileRoute("/api/fonnte")({
                 direction: m.direction, body: m.body?.slice(0, 60),
               }));
 
-              if (!c.auto_reply_enabled) {
+              const { resolveManagerByPhone } = await import(
+                "@/services/wa-autoreply.service"
+              );
+              const manager = await resolveManagerByPhone(testPhone);
+              const isManager = !!manager;
+
+              if (!isManager && !c.auto_reply_enabled) {
                 result.skipped = "auto_reply_enabled is false";
               } else {
                 const { data: prop } = await (supabaseAdmin as any)
