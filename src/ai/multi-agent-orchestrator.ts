@@ -101,18 +101,27 @@ async function callLlm(
   messages: AiMessage[],
   agent:    AgentDefinition,
   signal?:  AbortSignal,
-): Promise<LlmResponse | null> {
+): Promise<{ response: LlmResponse | null; retries: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
+  const retries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
   for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    const t0 = Date.now();
     const r = await callLlmOnce(config, messages, agent, signal);
-    if (r.ok) return r.data;
-    if (!r.retriable) return null;
+    if (r.ok) return { response: r.data, retries };
+    const latency_ms = Date.now() - t0;
+    if (!r.retriable) {
+      retries.push({ attempt, reason: r.reason, latency_ms });
+      return { response: null, retries };
+    }
     if (attempt < LLM_MAX_RETRIES) {
+      retries.push({ attempt, reason: r.reason, latency_ms });
       console.warn(`[MultiAgent][${agent.key}] retry LLM (attempt ${attempt + 1}) — reason: ${r.reason}`);
       // Backoff singkat sebelum coba ulang.
       await new Promise((res) => setTimeout(res, 500));
+    } else {
+      retries.push({ attempt, reason: r.reason, latency_ms });
     }
   }
-  return null;
+  return { response: null, retries };
 }
 
 // ─── Single agent runner ──────────────────────────────────────────────────────
@@ -142,8 +151,9 @@ async function runAgent(
   signal?:          AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
-): Promise<{ reply: string | null; toolsUsed: string[]; error?: string }> {
+): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
   const toolsUsed = new Set<string>();
+  const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
 
   // Drop trailing assistant turns: Gemini returns an empty completion when the
   // conversation ends on an assistant message (it has nothing new to answer).
@@ -182,10 +192,11 @@ async function runAgent(
   ];
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const json = await callLlm(llmConfig, messages, agent, signal);
+    const { response: json, retries } = await callLlm(llmConfig, messages, agent, signal);
+    if (retries.length) allRetries.push(...retries);
 
     if (!json) {
-      return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error" };
+      return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error", ...(allRetries.length ? { retries: allRetries } : {}) };
     }
 
     const assistantMsg = json.choices?.[0]?.message;
@@ -197,9 +208,9 @@ async function runAgent(
       if (!reply) {
         const detail = json.error?.message ?? "Empty LLM response";
         console.error(`[MultiAgent][${agent.key}] No reply:`, detail);
-        return { reply: null, toolsUsed: Array.from(toolsUsed), error: detail };
+        return { reply: null, toolsUsed: Array.from(toolsUsed), error: detail, ...(allRetries.length ? { retries: allRetries } : {}) };
       }
-      return { reply, toolsUsed: Array.from(toolsUsed) };
+      return { reply, toolsUsed: Array.from(toolsUsed), ...(allRetries.length ? { retries: allRetries } : {}) };
     }
 
     // ── Tool calls ────────────────────────────────────────────────────────────
@@ -251,7 +262,7 @@ async function runAgent(
   }
 
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
-  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded" };
+  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}) };
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
@@ -348,6 +359,7 @@ export async function runMultiAgentOrchestration(
       routingConfidence: 1.0,
       escalated:         false,
       error:             agentResult.error,
+      retries:           agentResult.retries,
     };
   }
 
@@ -371,6 +383,7 @@ export async function runMultiAgentOrchestration(
       // guest sees one combined message: state-machine ack + agent-crafted
       // invoice details. Best-effort — if the agent fails, the ack still
       // ships and the guest can ask again later.
+      let financeRetries: any[] | undefined = undefined;
       if (stateResult.followUp === "send_invoice") {
         const refCode = stateResult.followUpRef ?? "";
         const synthesized = refCode
@@ -393,6 +406,7 @@ export async function runMultiAgentOrchestration(
         } else {
           console.warn("[MultiAgent] Finance follow-up failed:", financeResult.error);
         }
+        financeRetries = financeResult.retries;
       }
 
       return {
@@ -403,6 +417,7 @@ export async function runMultiAgentOrchestration(
         intent:            "general",
         routingConfidence: 1.0,
         escalated:         false,
+        retries:           financeRetries,
       };
     }
     // Not handled = the guest interrupted the booking with an unrelated question.
@@ -549,6 +564,7 @@ export async function runMultiAgentOrchestration(
   // 7. Run agent
   //    For Manager Agent: provide the `onAskAgent` callback that runs sub-agents
   const isManagerRoute = routing.agentKey === "manager";
+  const managerSubAgentRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
 
   const onAskAgent = isManagerRoute
     ? async (subKey: AgentKey, question: string): Promise<string> => {
@@ -576,6 +592,10 @@ export async function runMultiAgentOrchestration(
           input.signal,
           trainingBlock,
         );
+
+        if (result.retries) {
+          managerSubAgentRetries.push(...result.retries);
+        }
 
         return result.reply
           ? JSON.stringify({ ok: true,  response: result.reply })
@@ -656,6 +676,7 @@ export async function runMultiAgentOrchestration(
       error:                foResult.error,
       trainingExamplesUsed: trainingExamples.length,
       trainingExampleIds:   trainingExamples.map((ex) => ex.id),
+      retries:              foResult.retries || managerSubAgentRetries.length ? [...(foResult.retries ?? []), ...managerSubAgentRetries] : undefined,
     };
   }
 
@@ -670,6 +691,7 @@ export async function runMultiAgentOrchestration(
     error:                agentResult.error,
     trainingExamplesUsed: trainingExamples.length,
     trainingExampleIds:   trainingExamples.map((ex) => ex.id),
+    retries:              agentResult.retries || managerSubAgentRetries.length ? [...(agentResult.retries ?? []), ...managerSubAgentRetries] : undefined,
   };
 }
 

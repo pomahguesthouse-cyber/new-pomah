@@ -297,3 +297,53 @@ export async function readTrainingRagConfig(
     return TRAINING_RAG_DEFAULTS;
   }
 }
+
+/** Get retry hourly stats rollup. */
+export const getRetryStats = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await (db(context.supabase) as any)
+      .from("ai_retry_stats")
+      .select("*")
+      .order("hour_wib", { ascending: false });
+    if (error) {
+      console.error("[getRetryStats] Error fetching retry stats:", error);
+      throw error;
+    }
+    return (data ?? []) as Array<{
+      hour_wib: string;
+      reason: string;
+      agent_key: string;
+      total: number;
+      resolved_count: number;
+      avg_latency_ms: number;
+    }>;
+  });
+
+/** Get recent retry logs details. */
+export const getRetryLogs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await (db(context.supabase) as any)
+      .from("ai_retry_audit")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      console.error("[getRetryLogs] Error fetching retry logs:", error);
+      throw error;
+    }
+    return (data ?? []) as Array<{
+      id: string;
+      thread_id: string | null;
+      phone: string;
+      agent_key: string;
+      attempt: number;
+      reason: string;
+      model: string | null;
+      latency_ms: number | null;
+      resolved: boolean;
+      queue_entry_id: string | null;
+      created_at: string;
+    }>;
+  });

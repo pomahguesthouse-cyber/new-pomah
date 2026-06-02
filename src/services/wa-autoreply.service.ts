@@ -162,6 +162,7 @@ export async function executeAutoreplyForPhone(
   phone: string,
   origin: string,
   onBeforeAttempt?: () => Promise<void>,
+  queueEntryId?: string,
 ): Promise<AutoreplyOutcome> {
   const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
     "get_autoreply_context",
@@ -274,6 +275,7 @@ export async function executeAutoreplyForPhone(
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    const tStart = Date.now();
     try {
       orchResult = await runMultiAgentOrchestration({
         phone,
@@ -301,12 +303,78 @@ export async function executeAutoreplyForPhone(
         llmConfig: { apiKey, baseUrl, model },
         signal: controller.signal,
       });
+
+      // Log any retry attempts that happened inside this run
+      if (orchResult?.retries && orchResult.retries.length > 0) {
+        const rows = orchResult.retries.map((r: any) => ({
+          thread_id: c.thread_id,
+          phone,
+          agent_key: orchResult.agentKey ?? "front-office",
+          attempt: r.attempt + 1, // 0-based to 1-based
+          reason: r.reason,
+          model,
+          latency_ms: r.latency_ms,
+          resolved: false,
+          queue_entry_id: queueEntryId || null,
+        }));
+        await (supabaseAdmin as any).from("ai_retry_audit").insert(rows).catch((err: any) => {
+          console.warn("[Autoreply] Failed to log retry audits:", err);
+        });
+      }
+
       if (orchResult?.reply) {
         reply = orchResult.reply;
+        // Resolve all retry attempts for this message execution
+        const updateQuery = (supabaseAdmin as any).from("ai_retry_audit").update({ resolved: true });
+        if (queueEntryId) {
+          await updateQuery.eq("queue_entry_id", queueEntryId).catch((err: any) => {
+            console.warn("[Autoreply] Failed to resolve retry audits by queue entry:", err);
+          });
+        } else {
+          const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+          await updateQuery.eq("phone", phone).eq("resolved", false).gte("created_at", twoMinutesAgo).catch((err: any) => {
+            console.warn("[Autoreply] Failed to resolve retry audits by phone/time:", err);
+          });
+        }
         break;
+      } else {
+        // If runMultiAgentOrchestration returned normally but status is "error" or no reply,
+        // and we haven't already logged retries (e.g. general orchestrator error), log it.
+        if (orchResult?.error && (!orchResult.retries || orchResult.retries.length === 0)) {
+          const latency = Date.now() - tStart;
+          await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+            thread_id: c.thread_id,
+            phone,
+            agent_key: orchResult.agentKey ?? "front-office",
+            attempt: 1,
+            reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
+            model,
+            latency_ms: latency,
+            resolved: false,
+            queue_entry_id: queueEntryId || null,
+          }]).catch((err: any) => {
+            console.warn("[Autoreply] Failed to log orch error:", err);
+          });
+        }
       }
     } catch (e) {
       console.error(`[Autoreply] AI attempt ${attempt}:`, e);
+      const latency = Date.now() - tStart;
+      const isTimeout = (e as { name?: string })?.name === "AbortError" || String(e).includes("aborted") || String(e).includes("timeout");
+      const reason = isTimeout ? "timeout" : "fetch_error";
+      await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+        thread_id: c.thread_id,
+        phone,
+        agent_key: "front-office",
+        attempt: 1,
+        reason,
+        model,
+        latency_ms: latency,
+        resolved: false,
+        queue_entry_id: queueEntryId || null,
+      }]).catch((err: any) => {
+        console.warn("[Autoreply] Failed to log caught exception retry audit:", err);
+      });
     } finally {
       clearTimeout(aiTimeout);
     }
@@ -501,8 +569,11 @@ export async function drainQueue(
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
     try {
-      outcome = await executeAutoreplyForPhone(claim.phone, origin, () =>
-        queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
+      outcome = await executeAutoreplyForPhone(
+        claim.phone,
+        origin,
+        () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
+        claim.entryId
       );
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
