@@ -21,6 +21,7 @@ import {
   getFileUrl,
 } from "./telegram.service";
 import { todayWIB } from "@/lib/date";
+import { deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 
 interface ManagerRow {
   id: string;
@@ -158,9 +159,10 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
         return;
       }
       const m = await resolveManagerByChatId(chatId);
+      const botLabel = deriveAgentLabelFromKey(args.forcedAgentKey);
       await sendMessage(botToken, chatId,
         m
-          ? `✅ Sudah terhubung sebagai ${m.name} (${m.role}).`
+          ? `✅ ${m.name} (${m.role}) — terhubung ke ${botLabel}.`
           : "Bot ini hanya untuk manajer/staf internal. Hubungi super admin untuk link aktivasi.");
       return;
     }
@@ -188,7 +190,7 @@ export async function handleTelegramUpdate(args: HandlerArgs): Promise<void> {
     const manager = await resolveManagerByChatId(chatId);
     if (manager) {
       await sendMessage(botToken, chatId,
-        `✅ Sudah terhubung sebagai ${manager.name} (${manager.role}).`);
+        `✅ ${manager.name} (${manager.role}) — terhubung ke Manager Agent.`);
     } else {
       await sendMessage(botToken, chatId,
         "Bot ini hanya untuk manajer properti. Hubungi admin untuk mendapatkan link aktivasi.");
