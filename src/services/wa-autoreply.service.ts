@@ -59,15 +59,16 @@ export async function resolveManagerByPhone(
 ): Promise<{ id: string; name: string; role: string; phone: string } | null> {
   const needle = normalizePhone(phone);
   if (!needle) return null;
+  // NOTE: do NOT chain `.catch()` onto the Supabase query builder. In the
+  // edge runtime it is a thenable, not a native Promise, and `.catch` is
+  // undefined → calling it throws `TypeError: ... .catch is not a function`,
+  // which bubbles up as a 500 from /api/fonnte and silently kills every
+  // incoming WhatsApp message. Schema fallback (missing `is_active` column)
+  // is handled below via the standard `{ data, error }` return.
   const { data, error } = await (supabaseAdmin as any)
     .from("property_managers")
-    .select("id, name, role, phone, is_active")
-    .catch(async (err: any) => {
-      // Fallback if is_active column does not exist
-      console.error("[Autoreply] Failed to select with is_active, falling back to basic select:", err);
-      return (supabaseAdmin as any).from("property_managers").select("id, name, role, phone");
-    });
-  
+    .select("id, name, role, phone, is_active");
+
   if (error) {
     console.error("[Autoreply] Error fetching managers:", error);
     // If it's a column not found error, try without is_active
