@@ -1,4 +1,27 @@
+import { fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "../types";
+
+function formatStayDates(checkIn: unknown, checkOut: unknown): string {
+  const start = typeof checkIn === "string" ? checkIn : "";
+  const end = typeof checkOut === "string" ? checkOut : "";
+
+  if (!start && !end) return "Tanggal menginap belum diisi";
+  if (start && !end) return fmtDateID(start);
+  if (!start && end) return `Sampai ${fmtDateID(end)}`;
+
+  const [startYear, startMonth, startDay] = start.split("-").map(Number);
+  const [endYear, endMonth, endDay] = end.split("-").map(Number);
+
+  if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+    return `${fmtDateID(start)} – ${fmtDateID(end)}`;
+  }
+
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${startDay}–${endDay} ${fmtDateID(start).split(" ").slice(1).join(" ")}`;
+  }
+
+  return `${fmtDateID(start)} – ${fmtDateID(end)}`;
+}
 
 export const getBookings: ToolHandler = async (
   args: Record<string, unknown>,
@@ -81,6 +104,7 @@ export const getBookings: ToolHandler = async (
       created_at: b.created_at,
       check_in: b.check_in,
       check_out: b.check_out,
+      stay_dates: formatStayDates(b.check_in, b.check_out),
       status: b.status,
       payment_status: b.payment_status,
       total,
