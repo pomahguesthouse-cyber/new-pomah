@@ -215,7 +215,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
 
     if (!row || !(row as any).file_path) return { url: null };
     const bucket = ((row as any).storage_bucket as string | null) || "sop-documents";
-    const url = supabaseAdmin.storage
+    const url = supabasePublic.storage
       .from(bucket)
       .getPublicUrl((row as any).file_path).data.publicUrl;
     return { url };
