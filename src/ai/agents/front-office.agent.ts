@@ -16,14 +16,15 @@ import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 
-const pickTools = (toolNames: string[]) =>
+const pickTools = (toolNames: readonly string[]) =>
   TOOL_DEFINITIONS.filter((tool) => toolNames.includes(tool.function.name));
 
 const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "check_room_availability",
   "get_room_specifications",
   "start_booking_details",
-]);
+  "create_booking",
+] as const);
 
 const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
   "check_room_availability",
@@ -33,9 +34,7 @@ const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
   "change_booking_room",
   "delete_booking",
   "update_booking_status",
-]);
-
-const FRONT_OFFICE_TOOLS = [...FRONT_OFFICE_GUEST_TOOLS, ...FRONT_OFFICE_MANAGER_TOOLS];
+] as const);
 
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
 
