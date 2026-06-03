@@ -6,6 +6,50 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import type { Json } from "@/integrations/supabase/types";
 import { mergeAiLabConfig, AGENT_KEYS } from "@/admin/modules/ai-lab/ai-lab.functions";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
+import {
+  getDailyRatesForRange,
+  resolveRoomNightlyRates,
+} from "@/services/pricing/daily-rate.service";
+
+/**
+ * Resolve dynamic per-night rate for ONE room type over a stay.
+ *
+ * Used by every booking-creation path here (single, cart, webchat) so
+ * new bookings honour `room_daily_rates` overrides + stop_sell. Returns
+ * the average per-night rate (so legacy `nightly_rate × nights = subtotal`
+ * invariant still holds) and any stop-sell dates the caller must
+ * surface as a refusal.
+ */
+async function resolveBookingNightlyRate(
+  roomType: { id: string; base_rate: number | null; extrabed_rate?: number | null },
+  checkIn:  string,
+  checkOut: string,
+): Promise<{ avgRate: number; stopSellDates: string[] }> {
+  const overridesByRoom = await getDailyRatesForRange(
+    supabasePublic,
+    [roomType.id],
+    checkIn,
+    checkOut,
+  );
+  const resolved = resolveRoomNightlyRates(
+    {
+      id:         roomType.id,
+      name:       "",
+      base_rate:  Number(roomType.base_rate ?? 0),
+      capacity:   null,
+      bed_type:   null,
+      description: null,
+      extrabed_rate: roomType.extrabed_rate == null ? null : Number(roomType.extrabed_rate),
+    },
+    checkIn,
+    checkOut,
+    overridesByRoom.get(roomType.id),
+  );
+  const avg = resolved.nights > 0
+    ? resolved.total / resolved.nights
+    : Number(roomType.base_rate ?? 0);
+  return { avgRate: avg, stopSellDates: resolved.stop_sell_dates };
+}
 
 /** Untyped client view — `images` column isn't in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -278,8 +322,18 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     const roomsCount = data.rooms ?? 1;
     const extrabedCount = data.extrabed ?? 0;
     const extrabedRate = Number(rt.extrabed_rate ?? 0);
+    // Dynamic daily rate: honour room_daily_rates overrides + stop_sell.
+    // Extrabed rate stays static for now (override is per-night-room, not
+    // per-night-extrabed — change here when that surface lands).
+    const dyn = await resolveBookingNightlyRate(rt, data.checkIn, data.checkOut);
+    if (dyn.stopSellDates.length > 0) {
+      throw new Error(
+        `Kamar ini tidak dijual untuk tanggal ${dyn.stopSellDates.join(", ")}. ` +
+        `Silakan pilih tanggal lain.`,
+      );
+    }
     const total =
-      Number(rt.base_rate) * nights * roomsCount + extrabedRate * nights * extrabedCount;
+      dyn.avgRate * nights * roomsCount + extrabedRate * nights * extrabedCount;
     const extrabedNote =
       extrabedCount > 0 ? `Extrabed: ${extrabedCount}` : "";
     const specialRequests =
@@ -314,7 +368,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         booking_id: booking.id,
         room_id: roomId,
         room_type_id: rt.id,
-        nightly_rate: rt.base_rate,
+        nightly_rate: dyn.avgRate,
       })),
     );
     if (brErr) throw brErr;
@@ -404,9 +458,18 @@ export const submitCartBooking = createServerFn({ method: "POST" })
     // Calculate totals, extra beds notes, and assign physical rooms
     for (const item of data.cart) {
       const rt = rts.find((r) => r.id === item.roomTypeId)!;
-      const roomBaseTotal = Number(rt.base_rate) * nights * item.quantity;
+      // Dynamic daily rate per room type. Stop-sell at ANY night in the
+      // stay rejects the whole cart — guests can re-pick dates.
+      const dyn = await resolveBookingNightlyRate(rt, data.checkIn, data.checkOut);
+      if (dyn.stopSellDates.length > 0) {
+        throw new Error(
+          `${rt.name} tidak dijual untuk tanggal ${dyn.stopSellDates.join(", ")}. ` +
+          `Silakan pilih tanggal lain.`,
+        );
+      }
+      const roomBaseTotal = dyn.avgRate * nights * item.quantity;
       const extrabedTotal = item.extraBeds ? (Number(rt.extrabed_rate) * nights * item.extraBeds) : 0;
-      
+
       grandTotal += roomBaseTotal + extrabedTotal;
       totalRooms += item.quantity;
 
@@ -420,7 +483,7 @@ export const submitCartBooking = createServerFn({ method: "POST" })
         roomInserts.push({
           room_id: roomId,
           room_type_id: rt.id,
-          nightly_rate: rt.base_rate,
+          nightly_rate: dyn.avgRate,
         });
       }
     }
@@ -1084,7 +1147,22 @@ export const chatWithAI = createServerFn({ method: "POST" })
       const nights = Math.round(
         (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
       );
-      const rate = Number(rt.base_rate ?? 0);
+      // Dynamic daily rate (overrides + stop_sell). For webchat we don't
+      // have the room name handy in the error path, so surface generic copy.
+      const dynRate = await resolveBookingNightlyRate(
+        { id: rt.id as string, base_rate: Number(rt.base_rate ?? 0), extrabed_rate: Number(rt.extrabed_rate ?? 0) },
+        checkIn,
+        checkOut,
+      );
+      if (dynRate.stopSellDates.length > 0) {
+        return JSON.stringify({
+          ok: false,
+          error:
+            `Kamar ini tidak dijual untuk tanggal ${dynRate.stopSellDates.join(", ")}. ` +
+            `Pilih tanggal lain ya.`,
+        });
+      }
+      const rate = dynRate.avgRate;
       const total = rate * nights;
 
       // Writes use the service-role client: booking creation is a

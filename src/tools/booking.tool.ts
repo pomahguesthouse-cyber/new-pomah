@@ -7,6 +7,10 @@
  */
 
 import { isDateString, fmtDateID } from "@/lib/date";
+import {
+  getDailyRatesForRange,
+  resolveRoomNightlyRates,
+} from "@/services/pricing/daily-rate.service";
 import type { ToolContext, ToolHandler } from "./types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -462,6 +466,60 @@ export const createBooking: ToolHandler = async (
   const nights = Math.round(
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
   );
+
+  // ── Resolve dynamic daily rates ───────────────────────────────────────────
+  // Bookings yang sudah ada di DB tidak disentuh (sesuai keputusan
+  // "jangan ubah booking yang sudah ada"). Untuk booking BARU, resolve
+  // per-malam dari room_daily_rates dan fallback ke base_rate. Stop-sell
+  // di salah satu malam → tolak booking (sumber kebenaran sudah ada di
+  // check_room_availability, tapi state machine bisa kelewat — defense
+  // in depth di sini supaya kamar yang ditutup tidak ter-book).
+  //
+  // Skema booking_rooms tidak berubah: kita simpan `nightly_rate` =
+  // average per malam (total/nights) supaya invariant lama (rate × nights
+  // = subtotal) tetap berlaku di RPC invoice & laporan.
+  const uniqueRoomTypeIds = Array.from(new Set(assignments.map((a) => a.roomTypeId)));
+  const overridesByRoom = await getDailyRatesForRange(
+    ctx.supabasePublic,
+    uniqueRoomTypeIds,
+    checkIn,
+    checkOut,
+  );
+  const resolvedByRoomType = new Map<string, { avgRate: number; stopSellDates: string[] }>();
+  for (const rtId of uniqueRoomTypeIds) {
+    const rt = ctx.rooms.find((r) => r.id === rtId);
+    if (!rt) continue;
+    const resolved = resolveRoomNightlyRates(
+      rt,
+      checkIn,
+      checkOut,
+      overridesByRoom.get(rtId),
+    );
+    const avg = resolved.nights > 0 ? resolved.total / resolved.nights : Number(rt.base_rate ?? 0);
+    resolvedByRoomType.set(rtId, {
+      avgRate:       avg,
+      stopSellDates: resolved.stop_sell_dates,
+    });
+  }
+  const stopSellHit = assignments
+    .map((a) => ({ a, info: resolvedByRoomType.get(a.roomTypeId) }))
+    .find(({ info }) => info && info.stopSellDates.length > 0);
+  if (stopSellHit && stopSellHit.info) {
+    return JSON.stringify({
+      ok:    false,
+      error:
+        `${stopSellHit.a.roomTypeName} tidak dijual untuk tanggal ` +
+        `${stopSellHit.info.stopSellDates.map(fmtDateID).join(", ")}. ` +
+        `Tawarkan tanggal lain atau tipe kamar lain.`,
+    });
+  }
+  // Re-stamp each assignment's nightly_rate with the resolved average so
+  // booking_rooms.nightly_rate × nights = subtotal stays true.
+  for (const a of assignments) {
+    const info = resolvedByRoomType.get(a.roomTypeId);
+    if (info) a.rate = info.avgRate;
+  }
+
   const total = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
 
   const { data: guest, error: gErr } = await (ctx.supabaseAdmin as any)
