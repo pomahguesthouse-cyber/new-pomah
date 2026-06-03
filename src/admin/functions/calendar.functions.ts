@@ -136,75 +136,37 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
   .inputValidator((d) => createBookingFromAdminSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const nights = calculateNights(data.checkIn, data.checkOut);
+    calculateNights(data.checkIn, data.checkOut);
 
-    await assertRoomIsAvailable({
-      supabase,
-      roomId: data.roomId,
-      checkIn: data.checkIn,
-      checkOut: data.checkOut,
+    const { data: bookingId, error } = await supabase.rpc("create_admin_booking_with_lock", {
+      p_guest_name: data.guestName,
+      p_room_id: data.roomId,
+      p_check_in: data.checkIn,
+      p_check_out: data.checkOut,
+      p_nightly_rate: data.nightlyRate,
+      p_status: data.status,
     });
 
-    const { data: g, error: guestError } = await supabase
-      .from("guests")
-      .insert({ full_name: data.guestName })
-      .select("id")
-      .single();
-    if (guestError) throw guestError;
-
-    const { data: r, error: roomError } = await supabase
-      .from("rooms")
-      .select("room_type_id, room_types(property_id)")
-      .eq("id", data.roomId)
-      .single();
-    if (roomError) throw roomError;
-    if (!r?.room_type_id || !(r as any).room_types?.property_id) {
-      throw new Error("Data kamar tidak lengkap. Periksa room type dan property kamar.");
-    }
-
-    const { data: booking, error: bookingError } = await supabase
-      .from("bookings")
-      .insert({
-        property_id: (r as any).room_types.property_id,
-        guest_id: g.id,
-        check_in: data.checkIn,
-        check_out: data.checkOut,
-        nights,
-        status: data.status,
-        total_amount: data.nightlyRate * nights,
-        source: "direct",
-      })
-      .select("id")
-      .single();
-    if (bookingError) throw bookingError;
-
-    const { error: bookingRoomError } = await supabase.from("booking_rooms").insert({
-      booking_id: booking.id,
-      room_id: data.roomId,
-      room_type_id: r.room_type_id,
-      nightly_rate: data.nightlyRate,
-    });
-    if (bookingRoomError) throw bookingRoomError;
+    if (error) throw error;
+    if (!bookingId) throw new Error("Booking gagal dibuat. Database tidak mengembalikan booking ID.");
 
     // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
-    if (booking.id) {
-      void generateAndSendInvoiceNotification({
-        supabase,
-        bookingId: booking.id,
-        skipWhatsApp: false,
-      }).catch((err) =>
-        console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
+    void generateAndSendInvoiceNotification({
+      supabase,
+      bookingId,
+      skipWhatsApp: false,
+    }).catch((err) =>
+      console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
+    );
+
+    // Beritahu manager (fire-and-forget).
+    void import("@/services/manager-notifier.service")
+      .then(({ notifyNewBooking }) => notifyNewBooking(supabase, bookingId))
+      .catch((err) =>
+        console.warn("[createBookingFromAdmin] notifyNewBooking gagal (non-fatal):", err),
       );
 
-      // Beritahu manager (fire-and-forget).
-      void import("@/services/manager-notifier.service")
-        .then(({ notifyNewBooking }) => notifyNewBooking(supabase, booking.id))
-        .catch((err) =>
-          console.warn("[createBookingFromAdmin] notifyNewBooking gagal (non-fatal):", err),
-        );
-    }
-
-    return { ok: true };
+    return { ok: true, bookingId };
   });
 
 export const updateBookingFromAdmin = createServerFn({ method: "POST" })
