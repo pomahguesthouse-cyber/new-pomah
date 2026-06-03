@@ -32,6 +32,7 @@ import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
+import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing-calendar'
 import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
@@ -165,6 +166,11 @@ const AdminRoomsRoute = AdminRoomsRouteImport.update({
   path: '/rooms',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPricingCalendarRoute = AdminPricingCalendarRouteImport.update({
+  id: '/pricing-calendar',
+  path: '/pricing-calendar',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminPricingRoute = AdminPricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -356,6 +364,7 @@ export interface FileRoutesById {
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing': typeof AdminPricingRoute
+  '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -400,6 +409,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
+    | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
@@ -441,6 +451,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
+    | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
@@ -483,6 +494,7 @@ export interface FileRouteTypes {
     | '/admin/notifications'
     | '/admin/pages'
     | '/admin/pricing'
+    | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
     | '/admin/settings'
@@ -692,6 +704,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRoomsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/pricing-calendar': {
+      id: '/admin/pricing-calendar'
+      path: '/pricing-calendar'
+      fullPath: '/admin/pricing-calendar'
+      preLoaderRoute: typeof AdminPricingCalendarRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/pricing': {
       id: '/admin/pricing'
       path: '/pricing'
@@ -827,6 +846,7 @@ interface AdminRouteChildren {
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPagesRoute: typeof AdminPagesRoute
   AdminPricingRoute: typeof AdminPricingRoute
+  AdminPricingCalendarRoute: typeof AdminPricingCalendarRoute
   AdminRoomsRoute: typeof AdminRoomsRoute
   AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -849,6 +869,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPagesRoute: AdminPagesRoute,
   AdminPricingRoute: AdminPricingRoute,
+  AdminPricingCalendarRoute: AdminPricingCalendarRoute,
   AdminRoomsRoute: AdminRoomsRoute,
   AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
@@ -897,3 +918,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
