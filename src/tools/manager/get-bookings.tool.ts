@@ -13,9 +13,11 @@ export const getBookings: ToolHandler = async (
         ? paymentStatusRaw.filter((v): v is string => typeof v === "string")
         : null;
   const date = typeof args.date === "string" ? args.date : null;
+  const today = typeof ctx.today === "string" ? ctx.today : new Date().toISOString().slice(0, 10);
   const limit = typeof args.limit === "number" ? args.limit : 10;
-  // "recent"  → urut booking yang paling baru dibuat dulu (default; ini yang
-  //             dimaksud manajer saat bilang "5 booking terakhir").
+  // "recent"  → booking baru dari PMS yang BELUM check-in, urut tanggal pembuatan
+  //             booking terbaru dulu (created_at desc). Ini yang dimaksud manajer
+  //             saat bilang "booking terbaru".
   // "upcoming"→ urut tanggal check-in mendekat ke depan; cocok untuk
   //             "siapa check-in besok?" / "jadwal minggu ini".
   const sortRaw = typeof args.sort === "string" ? args.sort.toLowerCase() : "recent";
@@ -44,7 +46,10 @@ export const getBookings: ToolHandler = async (
   if (sort === "upcoming") {
     query = query.order("check_in", { ascending: true });
   } else {
-    query = query.order("created_at", { ascending: false });
+    query = query
+      .gte("check_in", today)
+      .not("status", "in", "(checked_in,checked_out,cancelled)")
+      .order("created_at", { ascending: false });
   }
 
   if (status) {
