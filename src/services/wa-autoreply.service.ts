@@ -393,19 +393,21 @@ export async function executeAutoreplyForPhone(
       const latency = Date.now() - tStart;
       const isTimeout = (e as { name?: string })?.name === "AbortError" || String(e).includes("aborted") || String(e).includes("timeout");
       const reason = isTimeout ? "timeout" : "fetch_error";
-      await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-        thread_id: c.thread_id,
-        phone,
-        agent_key: "front-office",
-        attempt: 1,
-        reason,
-        model,
-        latency_ms: latency,
-        resolved: false,
-        queue_entry_id: queueEntryId || null,
-      }]).catch((err: any) => {
+      try {
+        await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+          thread_id: c.thread_id,
+          phone,
+          agent_key: "front-office",
+          attempt: 1,
+          reason,
+          model,
+          latency_ms: latency,
+          resolved: false,
+          queue_entry_id: queueEntryId || null,
+        }]);
+      } catch (err) {
         console.warn("[Autoreply] Failed to log caught exception retry audit:", err);
-      });
+      }
     } finally {
       clearTimeout(aiTimeout);
     }
