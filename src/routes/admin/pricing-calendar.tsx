@@ -228,6 +228,36 @@ function PricingCalendarPage() {
     return () => window.removeEventListener("mouseup", onUp);
   }, [endDrag]);
 
+  // Touch drag-select. The day cell handles `onTouchStart` to anchor
+  // (mirrors mousedown). `touchmove` runs on `document` so the finger
+  // can leave the originating element — we resolve the cell underneath
+  // via elementFromPoint and read its `data-iso`. `touchend` finalises.
+  useEffect(() => {
+    const onMove = (ev: TouchEvent) => {
+      if (!dragStateRef.current.dragging) return;
+      const t = ev.touches[0];
+      if (!t) return;
+      const el = document.elementFromPoint(t.clientX, t.clientY) as HTMLElement | null;
+      if (!el) return;
+      const cell = el.closest("[data-iso]") as HTMLElement | null;
+      const iso  = cell?.dataset.iso;
+      if (iso) {
+        ev.preventDefault();  // suppress scroll while dragging across cells
+        extendDrag(iso);
+      }
+    };
+    const onEnd = () => endDrag();
+    // `passive: false` so preventDefault actually suppresses scroll.
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend",  onEnd);
+    document.addEventListener("touchcancel", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend",  onEnd);
+      document.removeEventListener("touchcancel", onEnd);
+    };
+  }, [extendDrag, endDrag]);
+
   // ── Mutations ──
   const upsertFn = useServerFn(upsertDailyRates);
   const deleteFn = useServerFn(deleteDailyRates);
@@ -498,6 +528,12 @@ function CalendarGrid({
               onMouseEnter={() => {
                 if (disabled) return;
                 onCellMouseEnter(cell.iso);
+              }}
+              onTouchStart={() => {
+                if (disabled) return;
+                // touchmove + touchend are handled at document level so the
+                // drag survives finger excursions outside the originating cell.
+                onCellMouseDown(cell.iso);
               }}
               className={[base, outOfMonth, tone, ring, todayMark, disabledCls].filter(Boolean).join(" ")}
             >
