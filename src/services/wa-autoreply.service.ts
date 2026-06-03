@@ -340,9 +340,11 @@ export async function executeAutoreplyForPhone(
           resolved: false,
           queue_entry_id: queueEntryId || null,
         }));
-        await (supabaseAdmin as any).from("ai_retry_audit").insert(rows).catch((err: any) => {
+        try {
+          await (supabaseAdmin as any).from("ai_retry_audit").insert(rows);
+        } catch (err) {
           console.warn("[Autoreply] Failed to log retry audits:", err);
-        });
+        }
       }
 
       if (orchResult?.reply) {
@@ -350,14 +352,18 @@ export async function executeAutoreplyForPhone(
         // Resolve all retry attempts for this message execution
         const updateQuery = (supabaseAdmin as any).from("ai_retry_audit").update({ resolved: true });
         if (queueEntryId) {
-          await updateQuery.eq("queue_entry_id", queueEntryId).catch((err: any) => {
+          try {
+            await updateQuery.eq("queue_entry_id", queueEntryId);
+          } catch (err) {
             console.warn("[Autoreply] Failed to resolve retry audits by queue entry:", err);
-          });
+          }
         } else {
           const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-          await updateQuery.eq("phone", phone).eq("resolved", false).gte("created_at", twoMinutesAgo).catch((err: any) => {
+          try {
+            await updateQuery.eq("phone", phone).eq("resolved", false).gte("created_at", twoMinutesAgo);
+          } catch (err) {
             console.warn("[Autoreply] Failed to resolve retry audits by phone/time:", err);
-          });
+          }
         }
         break;
       } else {
@@ -365,19 +371,21 @@ export async function executeAutoreplyForPhone(
         // and we haven't already logged retries (e.g. general orchestrator error), log it.
         if (orchResult?.error && (!orchResult.retries || orchResult.retries.length === 0)) {
           const latency = Date.now() - tStart;
-          await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-            thread_id: c.thread_id,
-            phone,
-            agent_key: orchResult.agentKey ?? "front-office",
-            attempt: 1,
-            reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
-            model,
-            latency_ms: latency,
-            resolved: false,
-            queue_entry_id: queueEntryId || null,
-          }]).catch((err: any) => {
+          try {
+            await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+              thread_id: c.thread_id,
+              phone,
+              agent_key: orchResult.agentKey ?? "front-office",
+              attempt: 1,
+              reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
+              model,
+              latency_ms: latency,
+              resolved: false,
+              queue_entry_id: queueEntryId || null,
+            }]);
+          } catch (err) {
             console.warn("[Autoreply] Failed to log orch error:", err);
-          });
+          }
         }
       }
     } catch (e) {
@@ -385,19 +393,21 @@ export async function executeAutoreplyForPhone(
       const latency = Date.now() - tStart;
       const isTimeout = (e as { name?: string })?.name === "AbortError" || String(e).includes("aborted") || String(e).includes("timeout");
       const reason = isTimeout ? "timeout" : "fetch_error";
-      await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-        thread_id: c.thread_id,
-        phone,
-        agent_key: "front-office",
-        attempt: 1,
-        reason,
-        model,
-        latency_ms: latency,
-        resolved: false,
-        queue_entry_id: queueEntryId || null,
-      }]).catch((err: any) => {
+      try {
+        await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+          thread_id: c.thread_id,
+          phone,
+          agent_key: "front-office",
+          attempt: 1,
+          reason,
+          model,
+          latency_ms: latency,
+          resolved: false,
+          queue_entry_id: queueEntryId || null,
+        }]);
+      } catch (err) {
         console.warn("[Autoreply] Failed to log caught exception retry audit:", err);
-      });
+      }
     } finally {
       clearTimeout(aiTimeout);
     }

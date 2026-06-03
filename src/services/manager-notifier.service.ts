@@ -201,7 +201,7 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
       .select("id, name, phone, role, telegram_chat_id");
     if (role) fallbackQuery = fallbackQuery.eq("role", role);
     const fallback = await fallbackQuery;
-    data = fallback.data;
+    data = fallback.data as any;
     error = fallback.error;
   }
 
