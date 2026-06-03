@@ -371,19 +371,21 @@ export async function executeAutoreplyForPhone(
         // and we haven't already logged retries (e.g. general orchestrator error), log it.
         if (orchResult?.error && (!orchResult.retries || orchResult.retries.length === 0)) {
           const latency = Date.now() - tStart;
-          await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-            thread_id: c.thread_id,
-            phone,
-            agent_key: orchResult.agentKey ?? "front-office",
-            attempt: 1,
-            reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
-            model,
-            latency_ms: latency,
-            resolved: false,
-            queue_entry_id: queueEntryId || null,
-          }]).catch((err: any) => {
+          try {
+            await (supabaseAdmin as any).from("ai_retry_audit").insert([{
+              thread_id: c.thread_id,
+              phone,
+              agent_key: orchResult.agentKey ?? "front-office",
+              attempt: 1,
+              reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
+              model,
+              latency_ms: latency,
+              resolved: false,
+              queue_entry_id: queueEntryId || null,
+            }]);
+          } catch (err) {
             console.warn("[Autoreply] Failed to log orch error:", err);
-          });
+          }
         }
       }
     } catch (e) {
