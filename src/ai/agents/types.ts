@@ -90,8 +90,10 @@ export interface AgentDefinition {
   description: string;
   /** Which intent categories this agent handles */
   handles:     IntentCategory[];
-  /** OpenAI tool definitions available to THIS agent only */
+  /** Default OpenAI tool definitions available to THIS agent. */
   tools:       ToolDefinition[];
+  /** Optional dynamic tool selector, useful for guest vs managerial mode. */
+  getTools?:   (ctx: AgentContext) => ToolDefinition[];
   /**
    * Builds the agent's system prompt from runtime context.
    * Pure function — no I/O.
