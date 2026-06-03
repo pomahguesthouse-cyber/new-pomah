@@ -92,6 +92,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_retry_audit: {
+        Row: {
+          agent_key: string
+          attempt: number
+          created_at: string
+          id: string
+          latency_ms: number | null
+          model: string | null
+          phone: string
+          queue_entry_id: string | null
+          reason: string
+          resolved: boolean
+          thread_id: string | null
+        }
+        Insert: {
+          agent_key: string
+          attempt: number
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          phone: string
+          queue_entry_id?: string | null
+          reason: string
+          resolved?: boolean
+          thread_id?: string | null
+        }
+        Update: {
+          agent_key?: string
+          attempt?: number
+          created_at?: string
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          phone?: string
+          queue_entry_id?: string | null
+          reason?: string
+          resolved?: boolean
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_retry_audit_queue_entry_id_fkey"
+            columns: ["queue_entry_id"]
+            isOneToOne: false
+            referencedRelation: "wa_conversation_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_retry_audit_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_suggestions: {
         Row: {
           action_payload: Json | null
@@ -160,6 +217,9 @@ export type Database = {
       booking_rooms: {
         Row: {
           booking_id: string
+          booking_status: string | null
+          check_in: string | null
+          check_out: string | null
           created_at: string
           id: string
           nightly_rate: number
@@ -168,6 +228,9 @@ export type Database = {
         }
         Insert: {
           booking_id: string
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
           created_at?: string
           id?: string
           nightly_rate?: number
@@ -176,6 +239,9 @@ export type Database = {
         }
         Update: {
           booking_id?: string
+          booking_status?: string | null
+          check_in?: string | null
+          check_out?: string | null
           created_at?: string
           id?: string
           nightly_rate?: number
@@ -2267,6 +2333,17 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_retry_stats: {
+        Row: {
+          agent_key: string | null
+          avg_latency_ms: number | null
+          hour_wib: string | null
+          reason: string | null
+          resolved_count: number | null
+          total: number | null
+        }
+        Relationships: []
+      }
       ai_routing_audit: {
         Row: {
           agent_key: string | null
@@ -2548,7 +2625,12 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "staff"
-      booking_source: "direct" | "whatsapp" | "walk_in" | "website"
+      booking_source:
+        | "direct"
+        | "whatsapp"
+        | "walk_in"
+        | "website"
+        | "manager_chat"
       booking_status:
         | "pending"
         | "confirmed"
@@ -2688,7 +2770,13 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "staff"],
-      booking_source: ["direct", "whatsapp", "walk_in", "website"],
+      booking_source: [
+        "direct",
+        "whatsapp",
+        "walk_in",
+        "website",
+        "manager_chat",
+      ],
       booking_status: [
         "pending",
         "confirmed",
