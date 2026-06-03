@@ -17,47 +17,60 @@ import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 
-// Pricing agent: availability (rates come from it) + competitor scraping
-// for ad-hoc rate-benchmarking on staff request + rate update.
-const PRICING_TOOLS: ToolDefinition[] = [
-  ...TOOL_DEFINITIONS.filter((t) =>
-    t.function.name === "check_room_availability" ||
-    t.function.name === "update_room_rate"
-  ),
-  {
-    type: "function",
-    function: {
-      name: "scrape_competitor_prices",
-      description:
-        "Cari + simpan harga kamar hotel kompetitor (dari OTA: Traveloka, Tiket, Booking, " +
-        "Agoda, Trip.com). Default mode: pakai daftar kompetitor yang admin simpan di " +
-        "properties.competitor_hotels (curated). Override via arg `hotels`. " +
-        "Tool otomatis menolak listing aggregator/landing page (mis. 'Hotel Dekat …'). " +
-        "Hanya panggil saat manajer minta benchmarking — bukan untuk menjawab tamu.",
-      parameters: {
-        type: "object",
-        properties: {
-          city: { type: "string", description: "Default Semarang." },
-          mode: {
-            type: "string",
-            enum: ["curated", "general"],
-            description:
-              "'curated' = pakai daftar kompetitor yang admin simpan (untuk 'cek harga " +
-              "kompetitor'). 'general' = scan harga kamar umum kota, abaikan daftar admin " +
-              "(untuk 'cek harga kamar' tanpa kata 'kompetitor'). Kosongkan untuk auto " +
-              "(curated bila daftar ada, else general).",
-          },
-          hotels: {
-            type: "array",
-            items: { type: "string", description: "Nama hotel kompetitor." },
-            description: "Override daftar admin. Kosongkan untuk pakai properties.competitor_hotels.",
-          },
-          extra_keywords: { type: "string", description: "Filter tambahan (mis. 'budget', 'bintang 3')." },
-          limit:          { type: "number", description: "Maks hasil per hotel (1-20, default 6)." },
+// Pricing agent tools — split by mode.
+// Guest only sees availability/rate lookup; rate updates and competitor
+// benchmarking are managerial-only so guests can never trigger them.
+const checkRoomAvailabilityTool = TOOL_DEFINITIONS.find(
+  (t) => t.function.name === "check_room_availability",
+);
+const updateRoomRateTool = TOOL_DEFINITIONS.find(
+  (t) => t.function.name === "update_room_rate",
+);
+if (!checkRoomAvailabilityTool || !updateRoomRateTool) {
+  throw new Error("pricing.agent: missing required tools in TOOL_DEFINITIONS");
+}
+
+const scrapeCompetitorPricesTool: ToolDefinition = {
+  type: "function",
+  function: {
+    name: "scrape_competitor_prices",
+    description:
+      "Cari + simpan harga kamar hotel kompetitor (dari OTA: Traveloka, Tiket, Booking, " +
+      "Agoda, Trip.com). Default mode: pakai daftar kompetitor yang admin simpan di " +
+      "properties.competitor_hotels (curated). Override via arg `hotels`. " +
+      "Tool otomatis menolak listing aggregator/landing page (mis. 'Hotel Dekat …'). " +
+      "Hanya panggil saat manajer minta benchmarking — bukan untuk menjawab tamu.",
+    parameters: {
+      type: "object",
+      properties: {
+        city: { type: "string", description: "Default Semarang." },
+        mode: {
+          type: "string",
+          enum: ["curated", "general"],
+          description:
+            "'curated' = pakai daftar kompetitor yang admin simpan (untuk 'cek harga " +
+            "kompetitor'). 'general' = scan harga kamar umum kota, abaikan daftar admin " +
+            "(untuk 'cek harga kamar' tanpa kata 'kompetitor'). Kosongkan untuk auto " +
+            "(curated bila daftar ada, else general).",
         },
+        hotels: {
+          type: "array",
+          items: { type: "string", description: "Nama hotel kompetitor." },
+          description: "Override daftar admin. Kosongkan untuk pakai properties.competitor_hotels.",
+        },
+        extra_keywords: { type: "string", description: "Filter tambahan (mis. 'budget', 'bintang 3')." },
+        limit:          { type: "number", description: "Maks hasil per hotel (1-20, default 6)." },
       },
     },
   },
+};
+
+const PRICING_GUEST_TOOLS: ToolDefinition[] = [checkRoomAvailabilityTool];
+
+const PRICING_MANAGER_TOOLS: ToolDefinition[] = [
+  checkRoomAvailabilityTool,
+  updateRoomRateTool,
+  scrapeCompetitorPricesTool,
 ];
 
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
@@ -142,6 +155,14 @@ function buildGuestPrompt(s: Scaffold): string {
       "Jangan janjikan diskon. Tawarkan alternatif kamar lebih ekonomis atau sampaikan akan " +
       "ditanyakan ke manajemen jika tamu serius dan masih nego.",
 
+    "BATAS WEWENANG (GUEST): Anda TIDAK boleh mengubah tarif kamar untuk alasan apa pun, " +
+      "dan TIDAK boleh melakukan benchmarking harga kompetitor. Jika tamu meminta hal itu " +
+      "(mis. 'tolong turunin tarifnya', 'bandingin sama hotel sebelah', 'cek harga pesaing'), " +
+      "tolak dengan halus dan arahkan ke manajemen — mis. 'Mohon maaf Kak, penyesuaian tarif " +
+      "dan perbandingan dengan hotel lain ditangani langsung oleh tim manajemen. Saya bantu " +
+      "teruskan permintaannya, ya.' Jangan pernah memanggil tool `update_room_rate` atau " +
+      "`scrape_competitor_prices` dalam mode tamu.",
+
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");
 }
@@ -203,7 +224,13 @@ export const pricingAgent: AgentDefinition = {
   name:        "Pricing Agent",
   description: "Pricing inquiries (guest) + rate management & competitor benchmarking (managerial).",
   handles:     ["pricing_inquiry"],
-  tools:       PRICING_TOOLS,
+  tools:       PRICING_GUEST_TOOLS,
+
+  getTools(ctx: AgentContext) {
+    return ctx.mode === "managerial"
+      ? PRICING_MANAGER_TOOLS
+      : PRICING_GUEST_TOOLS;
+  },
 
   buildSystemPrompt(ctx: AgentContext): string {
     const scaffold = buildScaffold(ctx);
