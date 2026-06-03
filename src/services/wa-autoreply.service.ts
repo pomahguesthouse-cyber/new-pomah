@@ -340,9 +340,11 @@ export async function executeAutoreplyForPhone(
           resolved: false,
           queue_entry_id: queueEntryId || null,
         }));
-        await (supabaseAdmin as any).from("ai_retry_audit").insert(rows).catch((err: any) => {
+        try {
+          await (supabaseAdmin as any).from("ai_retry_audit").insert(rows);
+        } catch (err) {
           console.warn("[Autoreply] Failed to log retry audits:", err);
-        });
+        }
       }
 
       if (orchResult?.reply) {
