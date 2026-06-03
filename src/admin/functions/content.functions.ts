@@ -1,11 +1,5 @@
 /**
  * Admin server functions for the Content Manager dashboard.
- *
- * - runContentDiscovery: invokes Content Manager Agent end-to-end with a
- *   category + extra keywords. Returns the agent's final summary + a
- *   refreshed list of explore_items (draft + published).
- * - listExploreItemsForAdmin: read-only fetch used by the UI table.
- * - toggleExplorePublish / deleteExploreItem: admin moderation actions.
  */
 
 import { createServerFn } from "@tanstack/react-start";
