@@ -702,19 +702,20 @@ function isMessageAddressedToBot(msg: any, myUsername: string | null): boolean {
 }
 
 async function resolveManagerByChatId(chatId: string): Promise<ManagerRow | null> {
-  const { data, error } = await (supabaseAdmin as any)
-    .from("property_managers")
-    .select("id, name, role, phone, telegram_chat_id, is_active")
-    .eq("telegram_chat_id", chatId)
-    .maybeSingle()
-    .catch(async (err: any) => {
-      console.error("[TelegramRouter] Failed with is_active:", err);
-      return (supabaseAdmin as any)
-        .from("property_managers")
-        .select("id, name, role, phone, telegram_chat_id")
-        .eq("telegram_chat_id", chatId)
-        .maybeSingle();
-    });
+  let data: any = null;
+  let error: any = null;
+  try {
+    const res = await (supabaseAdmin as any)
+      .from("property_managers")
+      .select("id, name, role, phone, telegram_chat_id, is_active")
+      .eq("telegram_chat_id", chatId)
+      .maybeSingle();
+    data = res.data;
+    error = res.error;
+  } catch (err: any) {
+    console.error("[TelegramRouter] Failed with is_active:", err);
+    error = err;
+  }
 
   let row = data;
   if (error && (error.code === 'PGRST106' || String(error.message).includes('is_active'))) {
