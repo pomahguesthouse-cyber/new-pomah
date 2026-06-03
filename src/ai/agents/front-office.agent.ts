@@ -16,20 +16,26 @@ import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 
-const frontOfficeToolNames = [
+const pickTools = (toolNames: string[]) =>
+  TOOL_DEFINITIONS.filter((tool) => toolNames.includes(tool.function.name));
+
+const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "check_room_availability",
   "get_room_specifications",
   "start_booking_details",
+]);
+
+const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
+  "check_room_availability",
+  "get_room_specifications",
   "create_booking",
   "get_bookings",
   "change_booking_room",
   "delete_booking",
   "update_booking_status",
-];
+]);
 
-const FRONT_OFFICE_TOOLS = TOOL_DEFINITIONS.filter((tool) =>
-  frontOfficeToolNames.includes(tool.function.name),
-);
+const FRONT_OFFICE_TOOLS = [...FRONT_OFFICE_GUEST_TOOLS, ...FRONT_OFFICE_MANAGER_TOOLS];
 
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
 
@@ -198,7 +204,13 @@ export const frontOfficeAgent: AgentDefinition = {
   name:        "Front Office Agent",
   description: "Greetings + room inquiries + booking flow (guest), operational queries (managerial).",
   handles:     ["greeting", "booking_inquiry", "availability_check", "general"],
-  tools:       FRONT_OFFICE_TOOLS,
+  tools:       FRONT_OFFICE_GUEST_TOOLS,
+
+  getTools(ctx: AgentContext) {
+    return ctx.mode === "managerial"
+      ? FRONT_OFFICE_MANAGER_TOOLS
+      : FRONT_OFFICE_GUEST_TOOLS;
+  },
 
   buildSystemPrompt(ctx: AgentContext): string {
     const scaffold = buildScaffold(ctx);
