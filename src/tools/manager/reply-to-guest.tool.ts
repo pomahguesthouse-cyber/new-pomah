@@ -11,6 +11,7 @@
  *     upstream), so this tool inherits that auth.
  *   - We refuse to send if the guest's phone has no existing thread —
  *     prevents accidental cold messages.
+ *   - Requires explicit confirmation before sending the WhatsApp message.
  *   - Returns the saved message id so the agent can confirm to the
  *     manager.
  */
@@ -47,6 +48,7 @@ export const replyToGuest: ToolHandler = async (
 
   const phoneRaw = str(args.guest_phone);
   const message  = str(args.message);
+  const confirmed = args.confirmed === true;
   if (!phoneRaw || !message) {
     return JSON.stringify({ ok: false, error: "guest_phone dan message wajib diisi." });
   }
@@ -62,6 +64,22 @@ export const replyToGuest: ToolHandler = async (
     return JSON.stringify({
       ok: false,
       error: `Tidak ada thread WhatsApp untuk nomor ${phone}. Tamu harus inisiasi chat dulu.`,
+    });
+  }
+
+  if (!confirmed) {
+    return JSON.stringify({
+      ok: false,
+      needs_confirmation: true,
+      action: "reply_to_guest",
+      target: {
+        guest_phone: phone,
+        guest_name: thread.display_name ?? null,
+        message_preview: message.slice(0, 300),
+      },
+      error:
+        `Konfirmasi kirim pesan WhatsApp ke ${thread.display_name ?? phone}: "${message.slice(0, 120)}". ` +
+        `Jika sudah benar, panggil ulang tool dengan confirmed=true.`,
     });
   }
 
