@@ -27,7 +27,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -139,16 +139,35 @@ function PricingCalendarPage() {
   const roomQ = useQuery({
     queryKey: ["pricing-calendar", "room-types"],
     queryFn:  () => listFn(),
+    // Room types rarely change inside an admin session, and a stale
+    // base_rate here is harmless (cells show the previous value while
+    // the next read refreshes). 5-minute stale-time avoids the
+    // refetch-on-focus tax that dominates perceived load time.
+    staleTime: 5 * 60 * 1000,
+    gcTime:    30 * 60 * 1000,
   });
   const roomTypes = roomQ.data?.roomTypes ?? [];
 
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  // Auto-pick the first room type when the list lands.
+  // Hydrate `selectedRoomId` from localStorage synchronously so the
+  // month query fires on the FIRST render instead of waiting for the
+  // room-types query to land. Eliminates the waterfall on subsequent
+  // visits — first visit still pays one roundtrip.
+  const LS_KEY = "pricing-calendar:selectedRoomId";
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { return window.localStorage.getItem(LS_KEY); } catch { return null; }
+  });
+  // Auto-pick the first room type once the list lands if none stored.
   useEffect(() => {
-    if (!selectedRoomId && roomTypes.length > 0) {
+    if (selectedRoomId == null && roomTypes.length > 0) {
       setSelectedRoomId(roomTypes[0].id);
     }
   }, [roomTypes, selectedRoomId]);
+  // Persist whenever it changes.
+  useEffect(() => {
+    if (selectedRoomId == null) return;
+    try { window.localStorage.setItem(LS_KEY, selectedRoomId); } catch { /* ignore */ }
+  }, [selectedRoomId]);
 
   const selectedRoom = roomTypes.find((r) => r.id === selectedRoomId) ?? null;
 
@@ -168,6 +187,14 @@ function PricingCalendarPage() {
       data: { room_type_id: selectedRoomId!, from_date: monthStart, to_date: monthEnd },
     }),
     enabled: !!selectedRoomId,
+    // Keep the previous month's overrides painted while the next month
+    // fetches, so prev/next nav feels instant instead of blanking the
+    // grid. Realtime invalidation still refreshes the data behind it.
+    placeholderData: keepPreviousData,
+    // Short stale window — daily rates change in bursts (rate sheet update),
+    // not constantly. Background refetches on focus are wasted within the
+    // same minute of editing.
+    staleTime: 60 * 1000,
   });
 
   // Realtime invalidation: any write to room_daily_rates from elsewhere
@@ -425,14 +452,19 @@ function PricingCalendarPage() {
         </div>
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid. `pricesReady` is false until room types arrive
+          so cells skip rendering "Rp 0" before we know the base rate. */}
       <CalendarGrid
         grid={grid}
         overrides={overridesByDate}
         baseRate={baseRate}
+        pricesReady={selectedRoom != null}
         todayIso={todayIso}
         selection={selection}
-        disabled={!selectedRoomId || monthQ.isLoading}
+        // Only disable the grid while the FIRST month load is in flight
+        // (no placeholder available). Subsequent month nav keeps showing
+        // the previous month thanks to keepPreviousData and stays clickable.
+        disabled={!selectedRoomId || (monthQ.isLoading && !monthQ.data)}
         onCellMouseDown={beginDrag}
         onCellMouseEnter={extendDrag}
       />
@@ -476,6 +508,8 @@ interface CalendarGridProps {
     note:          string | null;
   }>;
   baseRate:        number;
+  /** False until room types load — suppresses "Rp 0" cells on first paint. */
+  pricesReady:     boolean;
   todayIso:        string;
   selection:       Set<string>;
   disabled:        boolean;
@@ -484,7 +518,7 @@ interface CalendarGridProps {
 }
 
 function CalendarGrid({
-  grid, overrides, baseRate, todayIso, selection, disabled,
+  grid, overrides, baseRate, pricesReady, todayIso, selection, disabled,
   onCellMouseDown, onCellMouseEnter,
 }: CalendarGridProps) {
   return (
@@ -549,7 +583,9 @@ function CalendarGrid({
                 )}
               </div>
               <div className="mt-auto truncate text-[11px] font-medium">
-                {compactRp(rate)}
+                {pricesReady
+                  ? compactRp(rate)
+                  : <span className="inline-block h-3 w-12 animate-pulse rounded bg-muted-foreground/20" />}
               </div>
               {isOverride && !isStop && (
                 <span
