@@ -12,19 +12,22 @@ import {
 } from "@/services/pricing/daily-rate.service";
 
 /**
- * Resolve dynamic per-night rate for ONE room type over a stay.
+ * Resolve dynamic per-night rate AND extrabed rate for ONE room type
+ * over a stay.
  *
  * Used by every booking-creation path here (single, cart, webchat) so
- * new bookings honour `room_daily_rates` overrides + stop_sell. Returns
- * the average per-night rate (so legacy `nightly_rate × nights = subtotal`
- * invariant still holds) and any stop-sell dates the caller must
- * surface as a refusal.
+ * new bookings honour `room_daily_rates` overrides + stop_sell.
+ *
+ * Returns averages so the legacy invariants:
+ *   booking_rooms.nightly_rate × nights = room subtotal
+ *   extrabed_rate × nights × count       = extrabed subtotal
+ * continue to hold without any schema change.
  */
 async function resolveBookingNightlyRate(
   roomType: { id: string; base_rate: number | null; extrabed_rate?: number | null },
   checkIn:  string,
   checkOut: string,
-): Promise<{ avgRate: number; stopSellDates: string[] }> {
+): Promise<{ avgRate: number; avgExtraBedRate: number; stopSellDates: string[] }> {
   const overridesByRoom = await getDailyRatesForRange(
     supabasePublic,
     [roomType.id],
@@ -48,7 +51,15 @@ async function resolveBookingNightlyRate(
   const avg = resolved.nights > 0
     ? resolved.total / resolved.nights
     : Number(roomType.base_rate ?? 0);
-  return { avgRate: avg, stopSellDates: resolved.stop_sell_dates };
+  const ebrTotal = resolved.nightly.reduce((acc, n) => acc + n.extrabed_rate, 0);
+  const avgExtraBed = resolved.nights > 0
+    ? ebrTotal / resolved.nights
+    : Number(roomType.extrabed_rate ?? 0);
+  return {
+    avgRate:         avg,
+    avgExtraBedRate: avgExtraBed,
+    stopSellDates:   resolved.stop_sell_dates,
+  };
 }
 
 /** Untyped client view — `images` column isn't in the generated types. */
@@ -321,10 +332,8 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
 
     const roomsCount = data.rooms ?? 1;
     const extrabedCount = data.extrabed ?? 0;
-    const extrabedRate = Number(rt.extrabed_rate ?? 0);
-    // Dynamic daily rate: honour room_daily_rates overrides + stop_sell.
-    // Extrabed rate stays static for now (override is per-night-room, not
-    // per-night-extrabed — change here when that surface lands).
+    // Dynamic daily rate AND extrabed rate: both honour room_daily_rates
+    // overrides + fallback to room_types.extrabed_rate per night.
     const dyn = await resolveBookingNightlyRate(rt, data.checkIn, data.checkOut);
     if (dyn.stopSellDates.length > 0) {
       throw new Error(
@@ -333,7 +342,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       );
     }
     const total =
-      dyn.avgRate * nights * roomsCount + extrabedRate * nights * extrabedCount;
+      dyn.avgRate * nights * roomsCount + dyn.avgExtraBedRate * nights * extrabedCount;
     const extrabedNote =
       extrabedCount > 0 ? `Extrabed: ${extrabedCount}` : "";
     const specialRequests =
@@ -468,7 +477,7 @@ export const submitCartBooking = createServerFn({ method: "POST" })
         );
       }
       const roomBaseTotal = dyn.avgRate * nights * item.quantity;
-      const extrabedTotal = item.extraBeds ? (Number(rt.extrabed_rate) * nights * item.extraBeds) : 0;
+      const extrabedTotal = item.extraBeds ? (dyn.avgExtraBedRate * nights * item.extraBeds) : 0;
 
       grandTotal += roomBaseTotal + extrabedTotal;
       totalRooms += item.quantity;
