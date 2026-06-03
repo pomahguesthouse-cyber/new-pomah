@@ -23,6 +23,8 @@
  *     "350" (instead of 350000) gets caught instead of accidentally
  *     wrecking the live rate.
  *
+ *  4. Requires explicit confirmation before applying the price change.
+ *
  * Returns the OLD and NEW rate in the JSON result so the agent can
  * confirm the change back to the manager ("Tarif Deluxe diubah dari
  * Rp 300.000 → Rp 350.000.").
@@ -75,6 +77,7 @@ export const updateRoomRate: ToolHandler = async (
   const roomNameOrId = str(args.room_type);
   const baseRate     = args.base_rate     != null ? num(args.base_rate)     : null;
   const extrabedRate = args.extrabed_rate != null ? num(args.extrabed_rate) : null;
+  const confirmed    = args.confirmed === true;
 
   if (!roomNameOrId) {
     return JSON.stringify({
@@ -120,7 +123,7 @@ export const updateRoomRate: ToolHandler = async (
       candidates = exact;
     } else {
       const wordRe = new RegExp(
-        `(?:^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`,
+        `(?:^|\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\s|$)`,
         "i",
       );
       const wordHits = ctx.rooms.filter((r) => wordRe.test(r.name));
@@ -151,6 +154,27 @@ export const updateRoomRate: ToolHandler = async (
   const target = candidates[0] as any;
   const oldBase     = Number(target.base_rate     ?? 0);
   const oldExtrabed = Number(target.extrabed_rate ?? 0);
+
+  if (!confirmed) {
+    return JSON.stringify({
+      ok: false,
+      needs_confirmation: true,
+      action: "update_room_rate",
+      target: {
+        room_type: target.name,
+        before: { base_rate: oldBase, extrabed_rate: oldExtrabed },
+        after: {
+          base_rate: baseRate ?? oldBase,
+          extrabed_rate: extrabedRate ?? oldExtrabed,
+        },
+      },
+      error:
+        `Konfirmasi ubah tarif ${target.name}` +
+        (baseRate != null ? ` base ${oldBase.toLocaleString("id-ID")} → ${baseRate.toLocaleString("id-ID")}` : "") +
+        (extrabedRate != null ? ` extrabed ${oldExtrabed.toLocaleString("id-ID")} → ${extrabedRate.toLocaleString("id-ID")}` : "") +
+        `. Jika sudah benar, panggil ulang tool dengan confirmed=true.`,
+    });
+  }
 
   // ── 4. Apply update ───────────────────────────────────────────────
   const patch: Record<string, unknown> = {};
