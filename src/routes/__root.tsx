@@ -85,34 +85,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Pomah Guesthouse — Booking & Hospitality OS" },
+      { title: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
       {
         name: "description",
         content:
-          "Pomah Guesthouse — boutique stays with an AI-native front office. Book direct, message us on WhatsApp, and feel at home.",
+          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
       },
-      { property: "og:title", content: "Pomah Guesthouse — Booking & Hospitality OS" },
+      { property: "og:title", content: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
       {
         property: "og:description",
-        content: "Boutique stays with an AI-native front office.",
+        content:
+          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Pomah Guesthouse — Booking & Hospitality OS" },
-      {
-        name: "description",
-        content:
-          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
-      },
-      {
-        property: "og:description",
-        content:
-          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
-      },
+      { name: "twitter:title", content: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
       {
         name: "twitter:description",
         content:
-          "Pomah Guesthouse is an AI-powered hospitality operating system for managing guesthouses.",
+          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
       },
       {
         property: "og:image",
