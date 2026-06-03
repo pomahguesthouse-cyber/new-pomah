@@ -20,15 +20,16 @@ import type { ToolDefinition } from "@/ai/types";
 // Pricing agent tools — split by mode.
 // Guest only sees availability/rate lookup; rate updates and competitor
 // benchmarking are managerial-only so guests can never trigger them.
-const checkRoomAvailabilityTool = TOOL_DEFINITIONS.find(
-  (t) => t.function.name === "check_room_availability",
-);
-const updateRoomRateTool = TOOL_DEFINITIONS.find(
-  (t) => t.function.name === "update_room_rate",
-);
-if (!checkRoomAvailabilityTool || !updateRoomRateTool) {
-  throw new Error("pricing.agent: missing required tools in TOOL_DEFINITIONS");
+function requireTool(name: string): ToolDefinition {
+  const t = TOOL_DEFINITIONS.find((d) => d.function.name === name);
+  if (!t) throw new Error(`pricing.agent: missing required tool in TOOL_DEFINITIONS: ${name}`);
+  return t;
 }
+const checkRoomAvailabilityTool = requireTool("check_room_availability");
+const updateRoomRateTool        = requireTool("update_room_rate");
+const setDailyRoomRateTool      = requireTool("set_daily_room_rate");
+const getDailyRoomRatesTool     = requireTool("get_daily_room_rates");
+const deleteDailyRoomRateTool   = requireTool("delete_daily_room_rate");
 
 const scrapeCompetitorPricesTool: ToolDefinition = {
   type: "function",
@@ -70,6 +71,9 @@ const PRICING_GUEST_TOOLS: ToolDefinition[] = [checkRoomAvailabilityTool];
 const PRICING_MANAGER_TOOLS: ToolDefinition[] = [
   checkRoomAvailabilityTool,
   updateRoomRateTool,
+  setDailyRoomRateTool,
+  getDailyRoomRatesTool,
+  deleteDailyRoomRateTool,
   scrapeCompetitorPricesTool,
 ];
 
@@ -183,12 +187,26 @@ function buildManagerialPrompt(s: Scaffold): string {
 
     s.roomSummary,
 
-    "UBAH HARGA: Saat manajer menginstruksikan perubahan tarif (mis. 'ganti harga Deluxe " +
-      "jadi 350rb', 'naikin Single 50rb', 'extrabed semua jadi 75000'), panggil " +
-      "`update_room_rate`. Konversi: '350rb' / '350k' = 350000, '1.2jt' = 1200000. " +
-      "BILA AMBIGU (mis. 'naikin 50rb' tidak jelas naik 50.000 atau MENJADI 50.000), tanya " +
-      "konfirmasi dulu — jangan menebak. Setelah berhasil, balas ringkas: 'Tarif <nama> " +
-      "diubah dari Rp <lama> → Rp <baru>.'",
+    "UBAH HARGA DASAR (BASE RATE): Saat manajer mengubah tarif berlaku terus-menerus " +
+      "(mis. 'ganti harga Deluxe jadi 350rb', 'naikin Single 50rb', 'extrabed semua jadi " +
+      "75000'), panggil `update_room_rate`. Konversi: '350rb' / '350k' = 350000, '1.2jt' = " +
+      "1200000. BILA AMBIGU (mis. 'naikin 50rb' tidak jelas naik 50.000 atau MENJADI 50.000), " +
+      "tanya konfirmasi dulu — jangan menebak. Setelah berhasil, balas ringkas: 'Tarif " +
+      "<nama> diubah dari Rp <lama> → Rp <baru>.'",
+
+    "HARGA HARIAN (DAILY OVERRIDE): Saat manajer mengubah tarif untuk TANGGAL TERTENTU " +
+      "saja (mis. 'Set Deluxe 10 Juni jadi 350rb', 'Family weekend ini 600rb', 'naikin " +
+      "Single 17–18 Agustus jadi 400rb', 'block Deluxe tanggal 17 Agustus'), panggil " +
+      "`set_daily_room_rate`. WAJIB konversi tanggal ke YYYY-MM-DD lebih dulu (gunakan " +
+      "TODAY dan kalender). 'weekend ini' = Sabtu+Minggu terdekat (set from_date=Sabtu, " +
+      "to_date=Minggu). Single date → kirim from_date saja. 'block' / 'tutup' → " +
+      "stop_sell=true (tidak perlu kirim rate; tool snapshot dari base_rate).\n\n" +
+      "Untuk MELIHAT harga harian ('lihat harga harian bulan Juni', 'harga Deluxe minggu " +
+      "depan', 'tanggal apa yang sudah di-set khusus'), panggil `get_daily_room_rates`. " +
+      "Rangkum hasil dengan format Telegram: tanggal — nominal — sumber (override/base).\n\n" +
+      "Untuk MEMBATALKAN override ('reset Deluxe 11 Juni ke base', 'hapus override Juli " +
+      "minggu pertama'), panggil `delete_daily_room_rate`. Untuk rentang ≥31 hari, tool " +
+      "akan minta confirmed=true.",
 
     "BENCHMARKING / CEK HARGA EKSTERNAL: pakai `scrape_competitor_prices`. " +
       "WAJIB langsung jalankan — JANGAN tanya filter / kota / nama hotel dulu kecuali " +

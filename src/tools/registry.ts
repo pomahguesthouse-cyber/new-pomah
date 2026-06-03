@@ -327,6 +327,79 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "set_daily_room_rate",
+      description:
+        "MANAJER ONLY. Upsert harga harian (override) untuk satu tipe kamar di tabel " +
+        "room_daily_rates — menimpa room_types.base_rate untuk tanggal yang ditentukan. " +
+        "Pakai untuk perintah seperti 'Set Deluxe 10 Juni jadi 350rb', " +
+        "'Family 17–18 Agustus 600rb', 'block Single 17 Agustus', " +
+        "'set extrabed Deluxe weekend ini 75rb'.\n\n" +
+        "Range: from_date wajib, to_date opsional (default = from_date untuk single date). " +
+        "Maksimum rentang 366 hari. Konversi nilai harga: '350rb'/'350k' = 350000, '1.2jt' = 1200000. " +
+        "Minimal SATU dari (rate, extrabed_rate, stop_sell, min_stay, note) harus diberikan; " +
+        "field yang tidak disebut akan di-preserve untuk row existing atau di-snapshot " +
+        "(rate = base_rate saat ini) untuk row baru. " +
+        "stop_sell=true berarti tipe kamar ini tidak dijual untuk tanggal itu.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type:     { type: "string", description: "Nama (substring case-insensitive) atau UUID tipe kamar." },
+          from_date:     { type: "string", description: "Tanggal mulai YYYY-MM-DD (inclusive)." },
+          to_date:       { type: "string", description: "Tanggal akhir YYYY-MM-DD (inclusive). Kosongkan untuk single date." },
+          rate:          { type: "number", description: "Tarif per malam (rupiah utuh). Kosongkan untuk preserve / snapshot base_rate." },
+          extrabed_rate: { type: "number", description: "Tarif extrabed per malam. Kosongkan untuk fallback ke room_types.extrabed_rate." },
+          stop_sell:     { type: "boolean", description: "True = tidak dijual untuk tanggal ini. Default false." },
+          min_stay:      { type: "number", description: "Minimum nights (integer 1–30). Default 1 (saat ini informasional, belum diberlakukan)." },
+          note:          { type: "string", description: "Catatan singkat (opsional)." },
+        },
+        required: ["room_type", "from_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_daily_room_rates",
+      description:
+        "MANAJER ONLY. Baca daftar harga harian (override + base) dalam rentang tanggal. " +
+        "Pakai untuk 'lihat harga harian bulan Juni', 'harga Deluxe minggu depan', " +
+        "'tanggal apa saja yang sudah di-set khusus'. Output JSON murni (array per tanggal × tipe kamar). " +
+        "Tanpa room_type → kembalikan semua tipe.",
+      parameters: {
+        type: "object",
+        properties: {
+          from_date:         { type: "string", description: "Tanggal mulai YYYY-MM-DD (inclusive)." },
+          to_date:           { type: "string", description: "Tanggal akhir YYYY-MM-DD (inclusive). Kosongkan untuk single date." },
+          room_type:         { type: "string", description: "Filter ke satu tipe kamar (nama/UUID). Kosongkan untuk semua." },
+          include_base_rate: { type: "boolean", description: "Default true: sertakan tanggal-tanggal yang TIDAK punya override (source='base_rate')." },
+        },
+        required: ["from_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_daily_room_rate",
+      description:
+        "MANAJER ONLY. Hapus override harga harian untuk satu tipe kamar di rentang tanggal " +
+        "— tanggal tersebut kembali ke room_types.base_rate. Pakai untuk 'reset Deluxe 11 Juni ke base', " +
+        "'hapus override Juli minggu pertama'. Rentang ≥31 hari minta konfirmasi (panggil ulang dengan confirmed=true).",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: { type: "string", description: "Nama atau UUID tipe kamar." },
+          from_date: { type: "string", description: "Tanggal mulai YYYY-MM-DD (inclusive)." },
+          to_date:   { type: "string", description: "Tanggal akhir YYYY-MM-DD (inclusive). Kosongkan untuk single date." },
+          confirmed: { type: "boolean", description: "Wajib true di panggilan kedua untuk rentang ≥31 hari." },
+        },
+        required: ["room_type", "from_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "update_room_rate",
       description:
         "MANAJER ONLY. Ubah tarif dasar (base_rate) dan/atau tarif extrabed " +
@@ -392,6 +465,9 @@ export const TOOL_LABELS: Record<string, string> = {
   restore_custom_google_reviews: "Content - Restore Ulasan Kustom dari Audit",
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   update_room_rate:             "Pricing - Ubah Tarif Kamar (Manajer)",
+  set_daily_room_rate:          "Pricing - Set Harga Harian (Manajer)",
+  get_daily_room_rates:         "Pricing - Lihat Harga Harian (Manajer)",
+  delete_daily_room_rate:       "Pricing - Hapus Override Harga Harian (Manajer)",
   get_room_specifications:      "Room Specifications",
   check_keyword_ranking:        "Content - SEO Cek Posisi Google",
   list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
