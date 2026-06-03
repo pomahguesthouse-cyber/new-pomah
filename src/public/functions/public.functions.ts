@@ -196,7 +196,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
     //    resort so the asset still loads (matches the user's intent of
     //    "use the file" without breaking on a folder typo).
     const tryFetch = async (nameMatch: string, useFolder: boolean) => {
-      let q = supabaseAdmin
+      let q = supabasePublic
         .from("sop_documents")
         .select("file_path, storage_bucket, name, folder_id")
         .ilike("name", nameMatch)
