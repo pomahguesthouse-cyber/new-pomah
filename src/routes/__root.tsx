@@ -107,13 +107,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       {
         property: "og:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png",
+        content: "https://pomahguesthouse.com/og-home.jpg",
       },
       {
         name: "twitter:image",
-        content:
-          "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/27e1ab1b-e444-46f2-b5a2-927b92586dea/id-preview-e9572865--dfd1db42-3838-4443-9a62-39f8c2588d38.lovable.app-1778764824597.png",
+        content: "https://pomahguesthouse.com/og-home.jpg",
       },
     ],
     links: [
