@@ -246,6 +246,87 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "check_keyword_ranking",
+      description:
+        "Cek posisi domain Pomah di Google SERP untuk satu keyword via Serper. Simpan hasilnya ke " +
+        "seo_keywords (upsert) dan log ke seo_agent_logs. Return: posisi (1-30 atau null bila tidak " +
+        "dalam top 30), posisi sebelumnya, delta, top 5 kompetitor. Pakai saat manajer minta " +
+        "'cek posisi kita untuk keyword X' atau 'apakah peringkat kita untuk Y turun'.",
+      parameters: {
+        type: "object",
+        properties: {
+          keyword: {
+            type: "string",
+            description:
+              "Keyword target persis seperti yang akan diketik tamu di Google " +
+              "(mis. 'guesthouse semarang dekat unnes').",
+          },
+        },
+        required: ["keyword"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_tracked_keywords",
+      description:
+        "Daftar keyword yang ditrack di tabel seo_keywords berikut posisi terakhir, search volume, " +
+        "intent, dan priority. Pakai sebagai langkah PERTAMA saat manajer minta laporan SEO umum " +
+        "('bagaimana posisi kita sekarang', 'mana yang turun', 'fokus keyword apa hari ini') — " +
+        "dari hasil ini Anda bisa pilih keyword mana yang layak di-refresh via check_keyword_ranking.",
+      parameters: {
+        type: "object",
+        properties: {
+          priority: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+            description: "Filter berdasarkan kolom priority. Kosongkan untuk semua.",
+          },
+          only_unranked: {
+            type: "boolean",
+            description: "True untuk hanya menampilkan keyword yang ranking_position-nya null.",
+          },
+          order_by: {
+            type: "string",
+            enum: ["position", "priority", "updated_at"],
+            description:
+              "Default 'updated_at' (paling baru cek). 'position' = posisi terbaik dulu. " +
+              "'priority' = high → medium → low.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "audit_page_seo",
+      description:
+        "Audit on-page SEO untuk SATU halaman publik Pomah. Fetch HTML, ekstrak title, meta " +
+        "description, canonical, robots, og tags, jumlah H1/H2, word count, lalu beri daftar " +
+        "issue (title terlalu pendek/panjang, meta hilang, noindex, dll.). Domain wajib sama " +
+        "dengan public_domain properti — proteksi SSRF.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Path relatif halaman (mis. '/rooms', '/'). Akan di-resolve ke domain properti.",
+          },
+          url: {
+            type: "string",
+            description:
+              "URL lengkap (alternatif untuk path). Wajib menggunakan domain yang sama dengan " +
+              "public_domain properti, kalau berbeda tool akan reject.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "update_room_rate",
       description:
         "MANAJER ONLY. Ubah tarif dasar (base_rate) dan/atau tarif extrabed " +
@@ -312,4 +393,7 @@ export const TOOL_LABELS: Record<string, string> = {
   scrape_competitor_prices:     "Pricing - Scrape Harga Kompetitor",
   update_room_rate:             "Pricing - Ubah Tarif Kamar (Manajer)",
   get_room_specifications:      "Room Specifications",
+  check_keyword_ranking:        "Content - SEO Cek Posisi Google",
+  list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
+  audit_page_seo:               "Content - SEO Audit Halaman",
 };
