@@ -15,6 +15,10 @@ import type { ToolContext } from "@/tools/types";
 import { executeTool } from "@/tools/executor";
 import { getAgent } from "@/ai/agents/registry";
 import { ASK_AGENT_TOOL_NAME } from "@/ai/agents/manager.agent";
+import {
+  formatManagerCommandResult,
+  parseManagerCommand,
+} from "@/ai/manager-command-parser";
 
 // Content Manager + Manager Agent commonly chain 3-5 tool calls
 // (list → discover → upsert×N → summarize), so the cap is generous.
@@ -58,6 +62,20 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
 
   const userMsg: AiMessage = { role: "user", content: messageText };
   const turn: AiMessage[] = [userMsg];
+
+  if (agentDef.key === "manager") {
+    const parsedCommand = parseManagerCommand(messageText);
+    if (parsedCommand) {
+      const result = await executeTool(parsedCommand.toolName, parsedCommand.rawArgs, {
+        ...toolCtx,
+        isManager: true,
+      });
+      const reply = formatManagerCommandResult(parsedCommand, result.output);
+      turn.push({ role: "assistant", content: reply });
+      console.info(`[TgAgentRunner][manager] deterministic command: ${parsedCommand.label}`);
+      return { reply, turn };
+    }
+  }
 
   // System prompt is rebuilt fresh every run so persona/mode/managerName
   // changes propagate immediately; only the turn list comes from history.
