@@ -6,6 +6,7 @@ import { generateAndSendInvoiceNotification } from "@/services/invoice-notificat
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus dalam format YYYY-MM-DD");
+const bookingStatusSchema = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]);
 
 const createBookingFromAdminSchema = z.object({
   guestName: z.string().trim().min(2, "Nama tamu wajib diisi").max(120),
@@ -13,17 +14,19 @@ const createBookingFromAdminSchema = z.object({
   checkIn: dateSchema,
   checkOut: dateSchema,
   nightlyRate: z.coerce.number().min(0, "Harga kamar tidak boleh negatif"),
-  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]),
+  status: bookingStatusSchema,
 });
 
 const updateBookingFromAdminSchema = z.object({
   id: z.string().uuid("Booking ID tidak valid"),
   bookingRoomId: z.string().uuid("Booking room ID tidak valid").optional().nullable(),
   roomId: z.string().uuid("Room ID tidak valid").optional().nullable(),
-  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]),
+  status: bookingStatusSchema,
 });
 
-const activeBookingStatuses = ["pending", "confirmed", "checked_in"] as const;
+const bookingIdSchema = z.object({
+  id: z.string().uuid("Booking ID tidak valid"),
+});
 
 function calculateNights(checkIn: string, checkOut: string) {
   const checkInMs = Date.parse(`${checkIn}T00:00:00Z`);
@@ -42,42 +45,27 @@ function calculateNights(checkIn: string, checkOut: string) {
   return nights;
 }
 
-async function assertRoomIsAvailable({
+async function updateBookingStatusWithLock({
   supabase,
-  roomId,
-  checkIn,
-  checkOut,
-  excludeBookingId,
+  bookingId,
+  bookingRoomId = null,
+  roomId = null,
+  status,
 }: {
   supabase: any;
-  roomId: string;
-  checkIn: string;
-  checkOut: string;
-  excludeBookingId?: string | null;
+  bookingId: string;
+  bookingRoomId?: string | null;
+  roomId?: string | null;
+  status: z.infer<typeof bookingStatusSchema>;
 }) {
-  let query = supabase
-    .from("booking_rooms")
-    .select("booking_id, bookings!inner(id, reference_code, check_in, check_out, status)")
-    .eq("room_id", roomId)
-    .in("bookings.status", activeBookingStatuses)
-    .lt("bookings.check_in", checkOut)
-    .gt("bookings.check_out", checkIn)
-    .limit(1);
+  const { error } = await supabase.rpc("update_booking_room_with_lock", {
+    p_booking_id: bookingId,
+    p_booking_room_id: bookingRoomId,
+    p_room_id: roomId,
+    p_status: status,
+  });
 
-  if (excludeBookingId) {
-    query = query.neq("booking_id", excludeBookingId);
-  }
-
-  const { data, error } = await query;
   if (error) throw error;
-
-  const conflict = data?.[0]?.bookings;
-  if (conflict) {
-    const reference = conflict.reference_code ? ` (${conflict.reference_code})` : "";
-    throw new Error(
-      `Kamar sudah terpakai pada ${conflict.check_in} sampai ${conflict.check_out}${reference}. Pilih kamar atau tanggal lain.`,
-    );
-  }
 }
 
 export const getCalendarData = createServerFn({ method: "GET" })
@@ -173,39 +161,52 @@ export const updateBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => updateBookingFromAdminSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    await updateBookingStatusWithLock({
+      supabase: context.supabase,
+      bookingId: data.id,
+      bookingRoomId: data.bookingRoomId ?? null,
+      roomId: data.roomId ?? null,
+      status: data.status,
+    });
 
-    const { data: currentBooking, error: currentBookingError } = await supabase
-      .from("bookings")
-      .select("id, check_in, check_out")
-      .eq("id", data.id)
-      .single();
-    if (currentBookingError) throw currentBookingError;
+    return { ok: true };
+  });
 
-    if (data.roomId) {
-      await assertRoomIsAvailable({
-        supabase,
-        roomId: data.roomId,
-        checkIn: currentBooking.check_in,
-        checkOut: currentBooking.check_out,
-        excludeBookingId: data.id,
-      });
-    }
+export const cancelBookingFromAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => bookingIdSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await updateBookingStatusWithLock({
+      supabase: context.supabase,
+      bookingId: data.id,
+      status: "cancelled",
+    });
 
-    const { error: bookingUpdateError } = await supabase
-      .from("bookings")
-      .update({ status: data.status })
-      .eq("id", data.id);
-    if (bookingUpdateError) throw bookingUpdateError;
+    return { ok: true };
+  });
 
-    // Assign (or clear) the physical room on the booking_rooms line.
-    if (data.bookingRoomId) {
-      const { error: bookingRoomUpdateError } = await supabase
-        .from("booking_rooms")
-        .update({ room_id: data.roomId || null })
-        .eq("id", data.bookingRoomId);
-      if (bookingRoomUpdateError) throw bookingRoomUpdateError;
-    }
+export const checkInBookingFromAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => bookingIdSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await updateBookingStatusWithLock({
+      supabase: context.supabase,
+      bookingId: data.id,
+      status: "checked_in",
+    });
+
+    return { ok: true };
+  });
+
+export const checkOutBookingFromAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => bookingIdSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    await updateBookingStatusWithLock({
+      supabase: context.supabase,
+      bookingId: data.id,
+      status: "checked_out",
+    });
 
     return { ok: true };
   });
