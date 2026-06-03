@@ -35,6 +35,9 @@ import { listTrackedKeywords }             from "./content/list-tracked-keywords
 import { auditPageSeo }                    from "./content/audit-page-seo.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { updateRoomRate }                 from "./pricing/update-room-rate.tool";
+import { setDailyRoomRate }               from "./pricing/set-daily-room-rate.tool";
+import { getDailyRoomRates }              from "./pricing/get-daily-room-rates.tool";
+import { deleteDailyRoomRate }            from "./pricing/delete-daily-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
@@ -70,6 +73,9 @@ const HANDLERS: Record<string, ToolHandler> = {
   audit_page_seo:                auditPageSeo,
   scrape_competitor_prices:      scrapeCompetitorPrices,
   update_room_rate:              updateRoomRate,
+  set_daily_room_rate:           setDailyRoomRate,
+  get_daily_room_rates:          getDailyRoomRates,
+  delete_daily_room_rate:        deleteDailyRoomRate,
   get_room_specifications:       getRoomSpecifications,
 };
 

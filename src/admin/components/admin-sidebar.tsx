@@ -57,6 +57,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { to: "/admin/explore", label: "City Guide", icon: Compass },
       { to: "/admin/content-manager", label: "Content Manager", icon: Newspaper },
       { to: "/admin/pricing", label: "Pricing", icon: DollarSign },
+      { to: "/admin/pricing-calendar", label: "Pricing Calendar", icon: CalendarDays },
       { to: "/admin/competitor-prices", label: "Competitor Prices", icon: TrendingUp },
     ],
   },
