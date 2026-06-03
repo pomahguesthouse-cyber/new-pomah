@@ -18,12 +18,22 @@
 import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
+import { TOOL_DEFINITIONS } from "@/tools/registry";
 
 // Content agent is invoked only via Manager.ask_agent or the admin
 // dashboard — guest WA never reaches it (handles: []). Prompt is
 // single-track managerial; no overlay needed.
 
+// SEO ranking + audit tools are shared from the registry so the same
+// definitions stay in sync with the executor.
+const SEO_TOOLS: ToolDefinition[] = TOOL_DEFINITIONS.filter((t) =>
+  ["check_keyword_ranking", "list_tracked_keywords", "audit_page_seo"].includes(
+    t.function.name,
+  ),
+);
+
 const CONTENT_TOOLS: ToolDefinition[] = [
+  ...SEO_TOOLS,
   {
     type: "function",
     function: {
@@ -252,6 +262,8 @@ export const contentAgent: AgentDefinition = {
         "    TripAdvisor, Traveloka, dst.) lalu simpan ke kolom custom properti " +
         "    (`discover_property_reviews`, `save_custom_google_reviews`). Ini menggantikan " +
         "    fetch real-time Google Places API yang mahal.\n" +
+        "  • SEO monitoring: pantau posisi web Pomah di Google + audit on-page " +
+        "    (`list_tracked_keywords`, `check_keyword_ranking`, `audit_page_seo`).\n" +
         `Saat memperkenalkan diri, sebut '${persona}, Content Manager'.`,
 
       "TONE: Peer-to-peer, ringkas, profesional. TANPA sapaan 'Kak' (itu untuk tamu). " +
@@ -320,6 +332,33 @@ export const contentAgent: AgentDefinition = {
         "JANGAN auto-trigger tanpa permintaan eksplisit manajer. Tool layer juga akan " +
         "menolak bila Anda bukan manajer (isManager=false).",
 
+      "MONITORING POSISI GOOGLE + AUDIT SEO (saat manajer minta 'cek peringkat', 'cek posisi " +
+        "Google', 'kita posisi berapa untuk keyword X', 'audit SEO halaman /rooms', 'laporan SEO " +
+        "mingguan'):\n" +
+        "1. Untuk LAPORAN UMUM ('bagaimana posisi kita sekarang' / 'mana yang turun') → mulai " +
+        "   dengan `list_tracked_keywords` (default order = updated_at) untuk melihat daftar + " +
+        "   posisi terakhir. Identifikasi yang stale (updated_at > 7 hari lalu) atau yang null.\n" +
+        "2. Untuk CEK SATU KEYWORD ('cek posisi untuk \"guesthouse semarang dekat unnes\"') → " +
+        "   langsung `check_keyword_ranking` dengan keyword tersebut. Tool akan upsert hasil ke " +
+        "   seo_keywords + log ke seo_agent_logs.\n" +
+        "3. Saat manajer minta REFRESH MASSAL ('refresh semua keyword priority high') → jalankan " +
+        "   `list_tracked_keywords` dengan priority filter, lalu LOOP `check_keyword_ranking` " +
+        "   untuk tiap keyword (max 8 per sesi agar tidak menghabiskan kuota Serper). " +
+        "   Laporkan ringkasan: berapa naik, berapa turun, berapa keluar dari top 10.\n" +
+        "4. Untuk AUDIT HALAMAN ('audit /rooms', 'cek SEO landing UNNES') → `audit_page_seo` " +
+        "   dengan path. Tool reject URL di luar domain properti. Sampaikan issue terdaftar + " +
+        "   prioritas perbaikan (title/meta paling impactful, OG tags low-impact).\n" +
+        "5. INTERPRETASI POSISI: 1-3 = excellent, 4-10 = page 1 (target utama), 11-20 = page 2 " +
+        "   (perlu push), 21-30 = page 3 (work in progress), null = di luar top 30 (perlu strategi " +
+        "   konten baru, tidak hanya optimasi).\n" +
+        "6. DELTA: tool return `delta = previous_position - position` → positif berarti NAIK " +
+        "   (mis. dari 12 ke 8 = delta +4), negatif berarti TURUN. Jangan terbalik saat lapor.\n" +
+        "7. JANGAN spam `check_keyword_ranking` untuk keyword yang sama dalam <1 jam — Google " +
+        "   SERP relatif stabil dan Serper bayar per query. Bila manajer baru saja minta cek " +
+        "   keyword yang sama, beri tahu hasil terakhir dari `list_tracked_keywords`.\n" +
+        "8. Untuk REKOMENDASI AKSI setelah cek: kalau posisi 11-20, sarankan internal linking + " +
+        "   refresh konten. Kalau >20 atau null, sarankan buat halaman baru via " +
+        "   `upsert_explore_item` / programmatic SEO (admin dashboard).",
       "RESTORE / UNDO ULASAN KUSTOM (saat manajer bilang 'kembalikan yang lama', 'undo " +
         "simpan kemarin', 'restore review tanggal X'):\n" +
         "1. Panggil `restore_custom_google_reviews` tanpa argumen → dapat list 10 snapshot " +

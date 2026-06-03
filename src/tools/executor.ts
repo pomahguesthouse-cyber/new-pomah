@@ -30,6 +30,9 @@ import { generateExploreImage }            from "./content/generate-explore-imag
 import { discoverPropertyReviews }         from "./content/discover-property-reviews.tool";
 import { saveCustomGoogleReviews }         from "./content/save-custom-google-reviews.tool";
 import { restoreCustomGoogleReviews }      from "./content/restore-custom-google-reviews.tool";
+import { checkKeywordRanking }             from "./content/check-keyword-ranking.tool";
+import { listTrackedKeywords }             from "./content/list-tracked-keywords.tool";
+import { auditPageSeo }                    from "./content/audit-page-seo.tool";
 import { scrapeCompetitorPrices }         from "./pricing/scrape-competitor-prices.tool";
 import { updateRoomRate }                 from "./pricing/update-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
@@ -62,6 +65,9 @@ const HANDLERS: Record<string, ToolHandler> = {
   discover_property_reviews:     discoverPropertyReviews,
   save_custom_google_reviews:    saveCustomGoogleReviews,
   restore_custom_google_reviews: restoreCustomGoogleReviews,
+  check_keyword_ranking:         checkKeywordRanking,
+  list_tracked_keywords:         listTrackedKeywords,
+  audit_page_seo:                auditPageSeo,
   scrape_competitor_prices:      scrapeCompetitorPrices,
   update_room_rate:              updateRoomRate,
   get_room_specifications:       getRoomSpecifications,
