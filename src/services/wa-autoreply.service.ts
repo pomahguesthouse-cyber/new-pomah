@@ -352,14 +352,18 @@ export async function executeAutoreplyForPhone(
         // Resolve all retry attempts for this message execution
         const updateQuery = (supabaseAdmin as any).from("ai_retry_audit").update({ resolved: true });
         if (queueEntryId) {
-          await updateQuery.eq("queue_entry_id", queueEntryId).catch((err: any) => {
+          try {
+            await updateQuery.eq("queue_entry_id", queueEntryId);
+          } catch (err) {
             console.warn("[Autoreply] Failed to resolve retry audits by queue entry:", err);
-          });
+          }
         } else {
           const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-          await updateQuery.eq("phone", phone).eq("resolved", false).gte("created_at", twoMinutesAgo).catch((err: any) => {
+          try {
+            await updateQuery.eq("phone", phone).eq("resolved", false).gte("created_at", twoMinutesAgo);
+          } catch (err) {
             console.warn("[Autoreply] Failed to resolve retry audits by phone/time:", err);
-          });
+          }
         }
         break;
       } else {
