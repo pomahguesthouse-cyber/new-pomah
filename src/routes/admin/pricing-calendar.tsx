@@ -32,12 +32,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
-  listRoomTypesForPricingCalendar,
-  getMonthDailyRates,
   upsertDailyRates,
   deleteDailyRates,
 } from "@/admin/modules/pricing-calendar/pricing-calendar.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,15 +133,27 @@ interface EditorFormFields {
 function PricingCalendarPage() {
   const qc = useQueryClient();
 
-  // ── Room types ──
-  const listFn = useServerFn(listRoomTypesForPricingCalendar);
+  // ── Room types (read directly from Supabase, bypass server fn) ──
+  // The server function detour adds ~200–600ms of TanStack Start RPC +
+  // auth-middleware overhead per call, which dominated perceived load
+  // on this page. Reads here are guarded by RLS (anon SELECT allowed
+  // on room_types) so going direct is safe; writes still go through
+  // server fns for staff-auth enforcement.
   const roomQ = useQuery({
     queryKey: ["pricing-calendar", "room-types"],
-    queryFn:  () => listFn(),
-    // Room types rarely change inside an admin session, and a stale
-    // base_rate here is harmless (cells show the previous value while
-    // the next read refreshes). 5-minute stale-time avoids the
-    // refetch-on-focus tax that dominates perceived load time.
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from("room_types")
+        .select("id, name, base_rate, extrabed_rate")
+        .order("name");
+      if (error) throw error;
+      return { roomTypes: (data ?? []) as Array<{
+        id:            string;
+        name:          string;
+        base_rate:     number | null;
+        extrabed_rate: number | null;
+      }> };
+    },
     staleTime: 5 * 60 * 1000,
     gcTime:    30 * 60 * 1000,
   });
@@ -180,20 +191,30 @@ function PricingCalendarPage() {
   const monthEnd   = ymd(cursor.year, cursor.month, daysInMonth(cursor.year, cursor.month));
 
   // ── Overrides for the visible month ──
-  const monthFn = useServerFn(getMonthDailyRates);
+  // Read overrides directly via the browser Supabase client too — same
+  // reasoning as room types: anon SELECT is allowed by RLS, and direct
+  // queries skip the server-fn / auth-middleware roundtrip.
   const monthQ = useQuery({
     queryKey: ["pricing-calendar", "month", selectedRoomId, monthStart, monthEnd],
-    queryFn:  () => monthFn({
-      data: { room_type_id: selectedRoomId!, from_date: monthStart, to_date: monthEnd },
-    }),
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from("room_daily_rates")
+        .select("date, rate, extrabed_rate, min_stay, stop_sell, note")
+        .eq("room_type_id", selectedRoomId!)
+        .gte("date", monthStart)
+        .lte("date", monthEnd);
+      if (error) throw error;
+      return { overrides: (data ?? []) as Array<{
+        date:          string;
+        rate:          number;
+        extrabed_rate: number | null;
+        min_stay:      number;
+        stop_sell:     boolean;
+        note:          string | null;
+      }> };
+    },
     enabled: !!selectedRoomId,
-    // Keep the previous month's overrides painted while the next month
-    // fetches, so prev/next nav feels instant instead of blanking the
-    // grid. Realtime invalidation still refreshes the data behind it.
     placeholderData: keepPreviousData,
-    // Short stale window — daily rates change in bursts (rate sheet update),
-    // not constantly. Background refetches on focus are wasted within the
-    // same minute of editing.
     staleTime: 60 * 1000,
   });
 
