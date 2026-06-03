@@ -182,7 +182,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
     //    LIKE-with-wildcards so "icon" matches "Icon", "ICON", "Icons", etc.
     let folderIds: string[] = [];
     if (data.folder) {
-      const { data: folderRows } = await supabaseAdmin
+      const { data: folderRows } = await supabasePublic
         .from("media_folders")
         .select("id, name")
         .ilike("name", `%${data.folder}%`);
