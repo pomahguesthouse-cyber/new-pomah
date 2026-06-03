@@ -80,13 +80,12 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
   // System prompt is rebuilt fresh every run so persona/mode/managerName
   // changes propagate immediately; only the turn list comes from history.
   const sysPrompt = agentDef.buildSystemPrompt(agentCtx);
-  const userTurn: AiMessage = { role: "user", content: messageText };
+  const agentTools = agentDef.getTools?.(agentCtx) ?? agentDef.tools;
   const messages: AiMessage[] = [
-    { role: "system", content: agentDef.buildSystemPrompt(agentCtx) },
+    { role: "system", content: sysPrompt },
     ...(history ?? []),
     userMsg,
   ];
-  const newTurns: AiMessage[] = [userTurn];
 
   const toolTrail: string[] = []; // for error summarising
   let lastToolError: string | null = null;
@@ -105,8 +104,8 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
           temperature: 0.6,
           max_tokens:  1500,
           messages,
-          tools:       agentDef.tools.length > 0 ? agentDef.tools : undefined,
-          tool_choice: agentDef.tools.length > 0 ? "auto"      : undefined,
+          tools:       agentTools.length > 0 ? agentTools : undefined,
+          tool_choice: agentTools.length > 0 ? "auto"     : undefined,
         }),
       });
       if (!res.ok) {
