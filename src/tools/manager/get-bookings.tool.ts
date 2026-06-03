@@ -1,6 +1,15 @@
 import { fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "../types";
 
+type BookingReportType =
+  | "recent_created_not_checked_in"
+  | "upcoming_checkin"
+  | "today_checkin"
+  | "today_checkout"
+  | "unpaid"
+  | "active_stay"
+  | "cancelled";
+
 function formatStayDates(checkIn: unknown, checkOut: unknown): string {
   const start = typeof checkIn === "string" ? checkIn : "";
   const end = typeof checkOut === "string" ? checkOut : "";
@@ -23,13 +32,30 @@ function formatStayDates(checkIn: unknown, checkOut: unknown): string {
   return `${fmtDateID(start)} – ${fmtDateID(end)}`;
 }
 
+function normalizeReportType(args: Record<string, unknown>): BookingReportType {
+  const raw = typeof args.report_type === "string" ? args.report_type : "";
+  const known: BookingReportType[] = [
+    "recent_created_not_checked_in",
+    "upcoming_checkin",
+    "today_checkin",
+    "today_checkout",
+    "unpaid",
+    "active_stay",
+    "cancelled",
+  ];
+  if (known.includes(raw as BookingReportType)) return raw as BookingReportType;
+
+  const sortRaw = typeof args.sort === "string" ? args.sort.toLowerCase() : "recent";
+  return sortRaw === "upcoming" ? "upcoming_checkin" : "recent_created_not_checked_in";
+}
+
 export const getBookings: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
   const status = typeof args.status === "string" ? args.status : null;
   const paymentStatusRaw = args.payment_status;
-  const paymentStatuses: string[] | null =
+  const explicitPaymentStatuses: string[] | null =
     typeof paymentStatusRaw === "string"
       ? [paymentStatusRaw]
       : Array.isArray(paymentStatusRaw)
@@ -37,14 +63,9 @@ export const getBookings: ToolHandler = async (
         : null;
   const date = typeof args.date === "string" ? args.date : null;
   const today = typeof ctx.today === "string" ? ctx.today : new Date().toISOString().slice(0, 10);
+  const effectiveDate = date ?? today;
   const limit = typeof args.limit === "number" ? args.limit : 10;
-  // "recent"  → booking baru dari PMS yang BELUM check-in, urut tanggal pembuatan
-  //             booking terbaru dulu (created_at desc). Ini yang dimaksud manajer
-  //             saat bilang "booking terbaru".
-  // "upcoming"→ urut tanggal check-in mendekat ke depan; cocok untuk
-  //             "siapa check-in besok?" / "jadwal minggu ini".
-  const sortRaw = typeof args.sort === "string" ? args.sort.toLowerCase() : "recent";
-  const sort: "recent" | "upcoming" = sortRaw === "upcoming" ? "upcoming" : "recent";
+  const reportType = normalizeReportType(args);
 
   let query = (ctx.supabaseAdmin as any)
     .from("bookings")
@@ -66,25 +87,53 @@ export const getBookings: ToolHandler = async (
     `)
     .limit(limit);
 
-  if (sort === "upcoming") {
-    query = query.order("check_in", { ascending: true });
-  } else {
+  if (reportType === "recent_created_not_checked_in") {
     query = query
       .gte("check_in", today)
       .not("status", "in", "(checked_in,checked_out,cancelled)")
+      .order("created_at", { ascending: false });
+  } else if (reportType === "upcoming_checkin") {
+    query = query
+      .gte("check_in", effectiveDate)
+      .not("status", "in", "(checked_out,cancelled)")
+      .order("check_in", { ascending: true });
+  } else if (reportType === "today_checkin") {
+    query = query
+      .eq("check_in", effectiveDate)
+      .not("status", "in", "(checked_out,cancelled)")
+      .order("created_at", { ascending: false });
+  } else if (reportType === "today_checkout") {
+    query = query
+      .eq("check_out", effectiveDate)
+      .not("status", "in", "(cancelled)")
+      .order("created_at", { ascending: false });
+  } else if (reportType === "unpaid") {
+    query = query
+      .in("payment_status", ["unpaid", "partial"])
+      .not("status", "in", "(checked_out,cancelled)")
+      .order("check_in", { ascending: true });
+  } else if (reportType === "active_stay") {
+    query = query
+      .lte("check_in", effectiveDate)
+      .gt("check_out", effectiveDate)
+      .in("status", ["confirmed", "checked_in"])
+      .order("check_in", { ascending: true });
+  } else if (reportType === "cancelled") {
+    query = query
+      .eq("status", "cancelled")
       .order("created_at", { ascending: false });
   }
 
   if (status) {
     query = query.eq("status", status);
   }
-  if (paymentStatuses && paymentStatuses.length > 0) {
-    query = paymentStatuses.length === 1
-      ? query.eq("payment_status", paymentStatuses[0])
-      : query.in("payment_status", paymentStatuses);
+  if (explicitPaymentStatuses && explicitPaymentStatuses.length > 0) {
+    query = explicitPaymentStatuses.length === 1
+      ? query.eq("payment_status", explicitPaymentStatuses[0])
+      : query.in("payment_status", explicitPaymentStatuses);
   }
-  if (date) {
-    // Basic filter: bookings overlapping the date
+  if (date && reportType === "recent_created_not_checked_in") {
+    // For recent-created report, date is an optional overlap filter.
     query = query.lte("check_in", date).gte("check_out", date);
   }
 
@@ -120,6 +169,7 @@ export const getBookings: ToolHandler = async (
 
   return JSON.stringify({
     ok: true,
+    report_type: reportType,
     count: results.length,
     total_outstanding: totalOutstanding, // jumlahkan sisa tagihan seluruh booking di hasil
     bookings: results,
