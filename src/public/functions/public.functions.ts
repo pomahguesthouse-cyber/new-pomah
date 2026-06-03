@@ -182,7 +182,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
     //    LIKE-with-wildcards so "icon" matches "Icon", "ICON", "Icons", etc.
     let folderIds: string[] = [];
     if (data.folder) {
-      const { data: folderRows } = await supabaseAdmin
+      const { data: folderRows } = await supabasePublic
         .from("media_folders")
         .select("id, name")
         .ilike("name", `%${data.folder}%`);
@@ -196,7 +196,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
     //    resort so the asset still loads (matches the user's intent of
     //    "use the file" without breaking on a folder typo).
     const tryFetch = async (nameMatch: string, useFolder: boolean) => {
-      let q = supabaseAdmin
+      let q = supabasePublic
         .from("sop_documents")
         .select("file_path, storage_bucket, name, folder_id")
         .ilike("name", nameMatch)
@@ -215,7 +215,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
 
     if (!row || !(row as any).file_path) return { url: null };
     const bucket = ((row as any).storage_bucket as string | null) || "sop-documents";
-    const url = supabaseAdmin.storage
+    const url = supabasePublic.storage
       .from(bucket)
       .getPublicUrl((row as any).file_path).data.publicUrl;
     return { url };
