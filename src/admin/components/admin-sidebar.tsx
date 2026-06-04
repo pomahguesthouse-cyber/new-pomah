@@ -78,13 +78,8 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/pages", label: "Page Builder", icon: LayoutTemplate },
       { to: "/admin/explore", label: "City Guide", icon: Compass },
       { to: "/admin/content-manager", label: "Content Manager", icon: Newspaper },
-<<<<<<< Updated upstream
-      { to: "/admin/pricing-calendar", label: "Pricing", icon: DollarSign },
-      { to: "/admin/competitor-prices", label: "Competitor Prices", icon: TrendingUp },
-=======
-      { to: "/admin/pricing", label: "Calendar Pricing", icon: DollarSign },
+      { to: "/admin/pricing-calendar", label: "Calendar Pricing", icon: DollarSign },
       { to: "/admin/competitor-prices", label: "PriceS Analyst", icon: TrendingUp },
->>>>>>> Stashed changes
     ],
   },
   {
