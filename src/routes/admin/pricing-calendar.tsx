@@ -29,11 +29,12 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   upsertDailyRates,
   deleteDailyRates,
+  updateRoomTypeRates,
 } from "@/admin/modules/pricing-calendar/pricing-calendar.functions";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,6 +50,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { fmtDateID, todayWIB, nextDay } from "@/lib/date";
 
 export const Route = createFileRoute("/admin/pricing-calendar")({
@@ -349,6 +355,20 @@ function PricingCalendarPage() {
     },
   });
 
+  // Base-rate editor — replaces the old standalone /admin/pricing page.
+  const updateRatesFn = useServerFn(updateRoomTypeRates);
+  const updateRatesM = useMutation({
+    mutationFn: (v: { base_rate?: number; extrabed_rate?: number }) =>
+      updateRatesFn({ data: { room_type_id: selectedRoomId!, ...v } }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pricing-calendar", "room-types"] });
+      toast.success("Tarif dasar disimpan");
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Gagal simpan tarif dasar");
+    },
+  });
+
   // ── Render ──
   const baseRate     = Number(selectedRoom?.base_rate     ?? 0);
   const baseExtraBed = Number(selectedRoom?.extrabed_rate ?? 0);
@@ -467,6 +487,15 @@ function PricingCalendarPage() {
           </Button>
         </div>
         <div className="flex items-center gap-2">
+          {selectedRoom && (
+            <BaseRateEditor
+              roomName={selectedRoom.name}
+              baseRate={baseRate}
+              baseExtraBed={baseExtraBed}
+              isSaving={updateRatesM.isPending}
+              onSave={(v) => updateRatesM.mutate(v)}
+            />
+          )}
           <Button variant="outline" size="sm" onClick={goToday}>
             Hari ini
           </Button>
@@ -852,3 +881,101 @@ function EditDialog({
   );
 }
 
+// ─── Base rate editor ───────────────────────────────────────────────────────
+//
+// Lives next to the month nav. Replaces the standalone /admin/pricing page —
+// admins still need a UI to change room_types.base_rate and extrabed_rate,
+// and the most natural anchor is the room context they're already viewing in
+// the calendar.
+
+interface BaseRateEditorProps {
+  roomName:     string;
+  baseRate:     number;
+  baseExtraBed: number;
+  isSaving:     boolean;
+  onSave:       (v: { base_rate?: number; extrabed_rate?: number }) => void;
+}
+
+function BaseRateEditor({
+  roomName, baseRate, baseExtraBed, isSaving, onSave,
+}: BaseRateEditorProps) {
+  const [open, setOpen] = useState(false);
+  const [baseStr, setBaseStr]         = useState("");
+  const [extraStr, setExtraStr]       = useState("");
+
+  // Reset inputs whenever the popover opens — so switching rooms behind a
+  // closed popover and reopening it shows the right starting values.
+  useEffect(() => {
+    if (open) {
+      setBaseStr(String(baseRate));
+      setExtraStr(String(baseExtraBed));
+    }
+  }, [open, baseRate, baseExtraBed]);
+
+  const handleSave = () => {
+    const payload: { base_rate?: number; extrabed_rate?: number } = {};
+    const b = baseStr.trim() === "" ? null : Number(baseStr);
+    const e = extraStr.trim() === "" ? null : Number(extraStr);
+    if (b != null) {
+      if (!Number.isFinite(b) || b < 0) { toast.error("Base rate tidak valid"); return; }
+      if (b !== baseRate) payload.base_rate = b;
+    }
+    if (e != null) {
+      if (!Number.isFinite(e) || e < 0) { toast.error("Extrabed rate tidak valid"); return; }
+      if (e !== baseExtraBed) payload.extrabed_rate = e;
+    }
+    if (payload.base_rate === undefined && payload.extrabed_rate === undefined) {
+      toast.error("Tidak ada perubahan.");
+      return;
+    }
+    onSave(payload);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-1.5">
+          <Pencil className="h-3.5 w-3.5" />
+          Tarif dasar
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-3">
+        <div>
+          <div className="text-sm font-medium">{roomName}</div>
+          <div className="text-xs text-muted-foreground">Berlaku untuk semua tanggal tanpa override.</div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="bre-base">Base rate (Rp)</Label>
+          <Input
+            id="bre-base"
+            type="number"
+            inputMode="decimal"
+            value={baseStr}
+            onChange={(ev) => setBaseStr(ev.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="bre-extra">Extrabed rate (Rp)</Label>
+          <Input
+            id="bre-extra"
+            type="number"
+            inputMode="decimal"
+            value={extraStr}
+            onChange={(ev) => setExtraStr(ev.target.value)}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+            Batal
+          </Button>
+          <Button size="sm" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? "Menyimpan…" : "Simpan"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
