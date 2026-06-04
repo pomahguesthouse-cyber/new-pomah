@@ -166,6 +166,41 @@ export const upsertDailyRates = createServerFn({ method: "POST" })
     return { ok: true, count: rows.length };
   });
 
+// ─── Update room_types.base_rate / extrabed_rate ───────────────────────────
+
+/**
+ * Update a room type's base rate and/or extrabed rate. This used to live in
+ * the standalone /admin/pricing page; consolidated here so all pricing edits
+ * happen in one place. The Pricing Agent's `update_room_rate` tool does the
+ * same thing for the Telegram/WhatsApp managerial path.
+ */
+export const updateRoomTypeRates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      room_type_id:  z.string().uuid(),
+      base_rate:     z.number().min(0).max(MAX_RATE).optional(),
+      extrabed_rate: z.number().min(0).max(MAX_RATE).optional(),
+    })
+      .refine(
+        (v) => v.base_rate !== undefined || v.extrabed_rate !== undefined,
+        { message: "Tidak ada perubahan." },
+      )
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, number> = {};
+    if (data.base_rate     !== undefined) patch.base_rate     = data.base_rate;
+    if (data.extrabed_rate !== undefined) patch.extrabed_rate = data.extrabed_rate;
+
+    const { error } = await context.supabase
+      .from("room_types")
+      .update(patch)
+      .eq("id", data.room_type_id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 // ─── Delete overrides (= reset to base) ────────────────────────────────────
 
 export const deleteDailyRates = createServerFn({ method: "POST" })

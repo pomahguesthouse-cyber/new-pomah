@@ -33,7 +33,6 @@ import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
 import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
 import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing-calendar'
-import { Route as AdminPricingRouteImport } from './routes/admin/pricing'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
@@ -171,11 +170,6 @@ const AdminPricingCalendarRoute = AdminPricingCalendarRouteImport.update({
   path: '/pricing-calendar',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminPricingRoute = AdminPricingRouteImport.update({
-  id: '/pricing',
-  path: '/pricing',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminPagesRoute = AdminPagesRouteImport.update({
   id: '/pages',
   path: '/pages',
@@ -277,7 +271,6 @@ export interface FileRoutesByFullPath {
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
-  '/admin/pricing': typeof AdminPricingRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
@@ -319,7 +312,6 @@ export interface FileRoutesByTo {
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
-  '/admin/pricing': typeof AdminPricingRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
@@ -363,7 +355,6 @@ export interface FileRoutesById {
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
-  '/admin/pricing': typeof AdminPricingRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
   '/admin/seo': typeof AdminSeoRoute
@@ -408,7 +399,6 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
-    | '/admin/pricing'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
@@ -450,7 +440,6 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
-    | '/admin/pricing'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
@@ -493,7 +482,6 @@ export interface FileRouteTypes {
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
-    | '/admin/pricing'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
     | '/admin/seo'
@@ -711,13 +699,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPricingCalendarRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/pricing': {
-      id: '/admin/pricing'
-      path: '/pricing'
-      fullPath: '/admin/pricing'
-      preLoaderRoute: typeof AdminPricingRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/pages': {
       id: '/admin/pages'
       path: '/pages'
@@ -845,7 +826,6 @@ interface AdminRouteChildren {
   AdminMediaRoute: typeof AdminMediaRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPagesRoute: typeof AdminPagesRoute
-  AdminPricingRoute: typeof AdminPricingRoute
   AdminPricingCalendarRoute: typeof AdminPricingCalendarRoute
   AdminRoomsRoute: typeof AdminRoomsRoute
   AdminSeoRoute: typeof AdminSeoRoute
@@ -868,7 +848,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminMediaRoute: AdminMediaRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPagesRoute: AdminPagesRoute,
-  AdminPricingRoute: AdminPricingRoute,
   AdminPricingCalendarRoute: AdminPricingCalendarRoute,
   AdminRoomsRoute: AdminRoomsRoute,
   AdminSeoRoute: AdminSeoRoute,
