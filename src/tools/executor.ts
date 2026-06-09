@@ -49,6 +49,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   check_room_availability:       checkRoomAvailability,
   start_booking_details:         startBookingDetails,
   update_booking_slots:          updateBookingSlots,
+  offer_alternative_rooms:       offerAlternativeRooms,
   create_booking:                createBooking,
   request_housekeeping_service:  requestHousekeepingService,
   report_maintenance_issue:      reportMaintenanceIssue,
