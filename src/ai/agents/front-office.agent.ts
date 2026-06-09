@@ -23,6 +23,7 @@ const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "check_room_availability",
   "get_room_specifications",
   "update_booking_slots",
+  "offer_alternative_rooms",
   "start_booking_details",
   "create_booking",
 ] as const);
