@@ -8,7 +8,7 @@ import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { CheckCircle2, Printer, Loader2 } from "lucide-react";
+import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
 
