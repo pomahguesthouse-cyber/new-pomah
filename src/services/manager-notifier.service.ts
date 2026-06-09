@@ -1010,6 +1010,8 @@ export async function notifyBookingStuck(
     console.warn("[ManagerNotifier] notifyBookingStuck error (non-fatal):", e);
   }
 }
+
+/* ------------------------------------------------------------------ */
 /* 5. Conversation Monitor → Managerial Channels                      */
 /* ------------------------------------------------------------------ */
 
