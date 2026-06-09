@@ -6,6 +6,7 @@ import type { ToolContext } from "@/tools/types";
 export type BookingState =
   | "IDLE"
   | "AWAITING_DATES"
+  | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
   | "AWAITING_NAME"
   | "CONFIRMING_NAME"
@@ -23,6 +24,12 @@ export interface BookingRoomItem {
   pricePerNight: number;
 }
 
+export interface AlternativeRoomOption {
+  roomTypeId: string;
+  name: string;
+  pricePerNight: number;
+}
+
 export interface BookingContext {
   checkIn?: string;
   checkOut?: string;
@@ -37,6 +44,12 @@ export interface BookingContext {
   adults?: number;
   children?: number;
   rooms?: BookingRoomItem[];
+  /** Tipe kamar yang AWALNYA diminta tamu (mis. "Deluxe") tapi penuh. */
+  requestedRoomType?: string;
+  /** Tipe kamar alternatif yang dipilih tamu setelah requested room penuh. */
+  selectedRoomType?: string;
+  /** Daftar alternatif yang ditawarkan saat requested room penuh. */
+  availableAlternatives?: AlternativeRoomOption[];
 }
 
 export interface StateRecord {
