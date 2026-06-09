@@ -485,10 +485,15 @@ export async function runMultiAgentOrchestration(
   );
 
   // Seed agreedDates dari slots tersimpan agar diinject ke system prompt.
+  // Hanya pakai kalau topic belum di-timeout (10 menit) — `last_topic` masih
+  // ada artinya percakapan benar-benar masih aktif. Kalau sudah expired,
+  // tanggal lama dianggap basi: men-inject-nya hanya mengelabui Gemini
+  // sehingga membalas dengan sapaan terakhir (lihat regresi simulator).
   const priorSlots = (stateRecord.slots ?? {}) as Record<string, unknown>;
   const priorCheckIn  = typeof priorSlots.checkIn  === "string" ? priorSlots.checkIn  : undefined;
   const priorCheckOut = typeof priorSlots.checkOut === "string" ? priorSlots.checkOut : undefined;
-  if (priorCheckIn && priorCheckOut) {
+  const topicStillFresh = !!stateRecord.last_topic;
+  if (priorCheckIn && priorCheckOut && topicStillFresh) {
     input.agentCtx.agreedDates = { checkIn: priorCheckIn, checkOut: priorCheckOut };
   }
 
