@@ -124,8 +124,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan dan JANGAN bilang " +
       "'sistem gangguan'. Kirim isi field `reply_to_guest` VERBATIM ke tamu.",
 
-    "PRESENTASI HASIL: awali 'Ketersediaan kamar untuk <tanggal>'. Tiap tipe satu baris — " +
-      "✅ tersedia / ❌ penuh + nama + jumlah + harga. Tutup dengan ajakan booking.",
+    "PRESENTASI HASIL: gunakan gaya resepsionis hotel yang natural dan ramah. " +
+      "Jangan selalu mengawali dengan 'Ketersediaan kamar untuk'. " +
+      "Mulailah dengan konfirmasi singkat bahwa kamar masih tersedia atau tidak tersedia. " +
+      "Fokus tampilkan kamar yang tersedia terlebih dahulu. " +
+      "Jangan tampilkan semua tipe kamar dengan simbol ✅ dan ❌ kecuali tamu meminta daftar lengkap. " +
+      "Gunakan format percakapan WhatsApp yang mudah dibaca, bukan laporan sistem. " +
+      "Untuk kamar yang penuh, cukup sebutkan secara singkat. " +
+      "Tutup dengan pertanyaan yang membantu proses booking, misalnya jumlah tamu atau pilihan kamar.",
 
     "KAMAR DIMINTA PENUH: jika tipe kamar yang TAMU SEBUT SECARA SPESIFIK (mis. 'Deluxe') " +
       "ditandai `tidak_tersedia=true` atau `kamar_tersedia<=0`, TAPI ada tipe lain dengan " +
