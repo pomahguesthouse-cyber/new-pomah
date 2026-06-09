@@ -9,7 +9,9 @@
     "build:dev": "node scratch/generate_routes.js && vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test:admin-bookings": "bun run scripts/test-admin-booking-types.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
