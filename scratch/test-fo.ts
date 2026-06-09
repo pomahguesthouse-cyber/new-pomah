@@ -16,7 +16,8 @@ const ctx: any = {
   agreedDates: { checkIn: "2026-06-09", checkOut: "2026-06-10" },
 };
 
-const sys = frontOfficeAgent.buildSystemPrompt(ctx);
+let sys = frontOfficeAgent.buildSystemPrompt(ctx);
+sys += `\n\nTANGGAL MENGINAP YANG SUDAH DISEPAKATI DI PERCAKAPAN INI:\n• check_in: 2026-06-09\n• check_out: 2026-06-10\nSelalu gunakan tanggal ini saat memanggil tool. JANGAN reset ke hari ini.`;
 const tools = frontOfficeAgent.getTools?.(ctx) ?? frontOfficeAgent.tools;
 const messages = [
   { role: "system", content: sys },
