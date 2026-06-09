@@ -733,6 +733,7 @@ export async function runMultiAgentOrchestration(
     trainingExamplesUsed: trainingExamples.length,
     trainingExampleIds:   trainingExamples.map((ex) => ex.id),
     retries:              agentResult.retries || managerSubAgentRetries.length ? [...(agentResult.retries ?? []), ...managerSubAgentRetries] : undefined,
+    loopAlert:            agentResult.loopAlert,
   };
 }
 
