@@ -1055,6 +1055,53 @@ export type Database = {
           },
         ]
       }
+      room_daily_rates: {
+        Row: {
+          created_at: string
+          date: string
+          extrabed_rate: number | null
+          id: string
+          min_stay: number
+          note: string | null
+          rate: number
+          room_type_id: string
+          stop_sell: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          extrabed_rate?: number | null
+          id?: string
+          min_stay?: number
+          note?: string | null
+          rate: number
+          room_type_id: string
+          stop_sell?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          extrabed_rate?: number | null
+          id?: string
+          min_stay?: number
+          note?: string | null
+          rate?: number
+          room_type_id?: string
+          stop_sell?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_daily_rates_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: false
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_types: {
         Row: {
           amenities: string[] | null
