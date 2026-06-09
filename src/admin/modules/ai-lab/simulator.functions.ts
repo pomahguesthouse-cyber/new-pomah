@@ -245,12 +245,27 @@ export const getSimBookingState = createServerFn({ method: "GET" })
 
 // ─── resetSimulation ────────────────────────────────────────────────────────────
 
-/** Reset the booking state machine for the test phone back to IDLE. */
+/**
+ * Reset the booking state machine for the test phone back to IDLE.
+ *
+ * `updateBookingState` hanya mereset kolom `state` + `context`. Kolom
+ * `slots` / `last_topic` / `last_entity` di `wa_booking_states` TIDAK ikut
+ * bersih, sehingga tanggal sesi sebelumnya akan ter-inject lagi sebagai
+ * `agreedDates` ke prompt agen — membuat Gemini mengira percakapan sudah
+ * lewat fase pengumpulan tanggal dan justru hanya mengulang sapaan. Reset
+ * simulator membersihkan semuanya supaya percakapan benar-benar dari nol.
+ */
 export const resetSimulation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ phone: z.string().min(5) }).parse(d))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
     await updateBookingState(supabasePublic as any, data.phone, "IDLE", {});
+    await (supabasePublic as any).rpc("update_conversation_topic", {
+      p_phone:       data.phone,
+      p_last_topic:  null,
+      p_last_entity: null,
+      p_slots:       {},
+    });
     return { ok: true };
   });
 
