@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "test:admin-bookings": "bun run scripts/test-admin-booking-types.ts"
+    "test:admin-bookings": "bun run scripts/test-admin-booking-types.ts",
+    "test:awaiting-alt-room": "bun run scripts/test-awaiting-alternative-room-type.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
