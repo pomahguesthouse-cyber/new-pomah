@@ -17,12 +17,16 @@ import { getAgent } from "@/ai/agents/registry";
 import { ASK_AGENT_TOOL_NAME } from "@/ai/agents/manager.agent";
 import {
   formatManagerCommandResult,
+  formatRoomRatesList,
   parseManagerCommand,
 } from "@/ai/manager-command-parser";
 
 // Content Manager + Manager Agent commonly chain 3-5 tool calls
 // (list → discover → upsert×N → summarize), so the cap is generous.
 const MAX_TURNS = 8;
+
+/** Agent keys that support deterministic command interception. */
+const DETERMINISTIC_AGENT_KEYS = new Set(["manager", "pricing"]);
 
 interface RunArgs {
   agentDef:    AgentDefinition;
@@ -63,16 +67,25 @@ export async function runAgentInGroupChannel(args: RunArgs): Promise<AgentRunRes
   const userMsg: AiMessage = { role: "user", content: messageText };
   const turn: AiMessage[] = [userMsg];
 
-  if (agentDef.key === "manager") {
+  if (DETERMINISTIC_AGENT_KEYS.has(agentDef.key)) {
     const parsedCommand = parseManagerCommand(messageText);
     if (parsedCommand) {
+      // list_room_rates is special: it doesn't need a tool call,
+      // just formats the room data already available in toolCtx.
+      if (parsedCommand.toolName === "list_room_rates") {
+        const reply = formatRoomRatesList(toolCtx.rooms as any);
+        turn.push({ role: "assistant", content: reply });
+        console.info(`[TgAgentRunner][${agentDef.key}] deterministic command: ${parsedCommand.label}`);
+        return { reply, turn };
+      }
+
       const result = await executeTool(parsedCommand.toolName, parsedCommand.rawArgs, {
         ...toolCtx,
         isManager: true,
       });
       const reply = formatManagerCommandResult(parsedCommand, result.output);
       turn.push({ role: "assistant", content: reply });
-      console.info(`[TgAgentRunner][manager] deterministic command: ${parsedCommand.label}`);
+      console.info(`[TgAgentRunner][${agentDef.key}] deterministic command: ${parsedCommand.label}`);
       return { reply, turn };
     }
   }

@@ -22,7 +22,7 @@ import { routeToAgent }                      from "./router/agent-router";
 import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
-import { parseManagerCommand, formatManagerCommandResult } from "./manager-command-parser";
+import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
@@ -358,6 +358,21 @@ export async function runMultiAgentOrchestration(
     const parsedCommand = parseManagerCommand(lastUserMsg);
     if (parsedCommand) {
       console.info(`[MultiAgent][manager] Intercepted deterministic command: ${parsedCommand.label}`);
+
+      // list_room_rates is special: formats ctx.rooms directly, no tool call.
+      if (parsedCommand.toolName === "list_room_rates") {
+        const reply = formatRoomRatesList(input.toolCtx.rooms as any);
+        return {
+          status:            "reply",
+          reply,
+          toolsUsed:         [],
+          agentKey:          "manager",
+          intent:            "general",
+          routingConfidence: 1.0,
+          escalated:         false,
+        };
+      }
+
       const result = await executeTool(parsedCommand.toolName, parsedCommand.rawArgs, {
         ...input.toolCtx,
         isManager: true,
