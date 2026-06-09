@@ -84,14 +84,16 @@ const ALTS: AlternativeRoomOption[] = [
   { roomTypeId: "rt-suite",  name: "Family Suite 100", pricePerNight: 500000 },
 ];
 
-const baseCtx: BookingContext = {
-  checkIn:  "2026-06-10",
-  checkOut: "2026-06-12",
-  adults:   2,
-  children: 0,
-  requestedRoomType:     "Deluxe",
-  availableAlternatives: ALTS,
-};
+function freshBaseCtx(): BookingContext {
+  return {
+    checkIn:  "2026-06-10",
+    checkOut: "2026-06-12",
+    adults:   2,
+    children: 0,
+    requestedRoomType:     "Deluxe",
+    availableAlternatives: ALTS.map((a) => ({ ...a })),
+  };
+}
 
 // ─── Test 1: offer_alternative_rooms tool sets the stage ─────────────────────
 console.log("\nTest 1: requested room unavailable → AWAITING_ALTERNATIVE_ROOM_TYPE");
