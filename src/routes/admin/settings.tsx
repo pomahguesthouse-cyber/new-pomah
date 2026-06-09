@@ -42,7 +42,6 @@ import {
   updatePropertyManagerRole,
   togglePropertyManagerActive,
   deletePropertyManager,
-  togglePropertyManagerMute,
 } from "@/admin/modules/settings/settings.functions";
 import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -975,7 +974,7 @@ function ManagerTab() {
   const updateFn = useServerFn(updatePropertyManagerRole);
   const toggleActiveFn = useServerFn(togglePropertyManagerActive);
   const deleteFn = useServerFn(deletePropertyManager);
-  const toggleMuteFn = useServerFn(togglePropertyManagerMute);
+  
   
   const getPropFn = useServerFn(getPropertySettings);
   const qc = useQueryClient();
