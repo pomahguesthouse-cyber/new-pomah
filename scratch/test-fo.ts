@@ -16,6 +16,7 @@ const ctx: any = {
 };
 
 const sys = frontOfficeAgent.buildSystemPrompt(ctx);
+const tools = frontOfficeAgent.getTools?.(ctx) ?? frontOfficeAgent.tools;
 const messages = [
   { role: "system", content: sys },
   { role: "user", content: "pagi" },
@@ -26,8 +27,15 @@ const messages = [
 const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
   method: "POST",
   headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.LOVABLE_API_KEY}` },
-  body: JSON.stringify({ model: "google/gemini-2.5-flash", temperature: 0.6, max_tokens: 600, messages }),
+  body: JSON.stringify({
+    model: "google/gemini-2.5-flash",
+    temperature: 0.6,
+    max_tokens: 600,
+    messages,
+    tools,
+    tool_choice: "auto",
+  }),
 });
 const j: any = await r.json();
 console.log("REPLY:", j.choices?.[0]?.message?.content);
-console.log("TOOL_CALLS:", JSON.stringify(j.choices?.[0]?.message?.tool_calls ?? null));
+console.log("TOOL_CALLS:", JSON.stringify(j.choices?.[0]?.message?.tool_calls ?? null, null, 2));
