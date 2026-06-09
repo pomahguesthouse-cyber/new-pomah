@@ -76,19 +76,11 @@ check("createBookingFromAdmin export shape", () => {
   assert(typeof createBookingFromAdmin === "function", "is callable");
 });
 
-check("createBookingFromAdmin rejects bad date", () => {
-  let threw = false;
-  try {
-    // Trigger schema by invoking the fn with malformed input; server fns
-    // run validators before handlers, so a bad date throws synchronously
-    // in the validator step.
-    void createBookingFromAdmin({ data: { ...validCreate, checkIn: "not-a-date" } as never });
-  } catch {
-    threw = true;
-  }
-  // Server fn may defer validation to the network step; accept either path.
-  // The real safeguard is `tsc --noEmit` for compile-time shape.
-  assert(threw || true, "validator path exercised");
+check("createBookingFromAdmin input shape is well-formed", () => {
+  assert(typeof validCreate.guestName === "string", "guestName string");
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(validCreate.checkIn), "checkIn ISO date");
+  assert(/^\d{4}-\d{2}-\d{2}$/.test(validCreate.checkOut), "checkOut ISO date");
+  assert(typeof validCreate.nightlyRate === "number", "nightlyRate number");
 });
 
 // ─── updateRoomTypeRates payload shape (the original TS error) ────────────
