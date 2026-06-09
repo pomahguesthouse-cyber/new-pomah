@@ -127,8 +127,12 @@ export const checkRoomAvailability: ToolHandler = async (
   ctx.lastDates = { checkIn, checkOut };
 
   // RPC return shape pre-dates strict types; cast once at the boundary.
-  const rpc = (ctx.supabasePublic as unknown as { rpc: AnyRpc }).rpc;
-  const { data: rows } = await rpc("room_type_availability_detail", {
+  // IMPORTANT: do NOT destructure `.rpc` from the supabase client — the method
+  // relies on `this` (it reaches into `this.rest`). Calling it unbound throws
+  // "Cannot read properties of undefined (reading 'rest')", which the LLM
+  // then surfaces to guests as a "kendala teknis" apology.
+  const client = ctx.supabasePublic as unknown as { rpc: AnyRpc };
+  const { data: rows } = await client.rpc("room_type_availability_detail", {
     p_check_in:  checkIn,
     p_check_out: checkOut,
   });
