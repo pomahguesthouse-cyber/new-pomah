@@ -89,7 +89,7 @@ interface Scaffold {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
-  const persona  = managerName?.trim() || "Hana";
+  const persona  = managerName?.trim() || "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const roomLines = rooms.map(
     (r) =>
