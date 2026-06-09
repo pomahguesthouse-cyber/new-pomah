@@ -12,28 +12,6 @@ import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
 
-const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
-
-/**
- * Local error boundary so a failure inside the PDF library
- * (e.g. @react-pdf/renderer chunk init crash) never takes down the
- * whole invoice page — the user can still read and print the invoice.
- */
-class PDFErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback: React.ReactNode },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-  componentDidCatch(error: unknown) {
-    console.error("[confirmation] PDF download component failed:", error);
-  }
-  render() {
-    return this.state.hasError ? this.props.fallback : this.props.children;
-  }
-}
 
 export const Route = createFileRoute("/book/confirmation/$id")({
   // Override the site-wide og:image (homepage hero) with a dedicated invoice
