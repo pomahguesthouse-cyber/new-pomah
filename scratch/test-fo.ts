@@ -13,6 +13,7 @@ const ctx: any = {
   today,
   mode: "guest",
   managerName: "Rani",
+  agreedDates: { checkIn: "2026-06-09", checkOut: "2026-06-10" },
 };
 
 const sys = frontOfficeAgent.buildSystemPrompt(ctx);
