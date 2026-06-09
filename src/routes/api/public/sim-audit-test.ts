@@ -75,11 +75,15 @@ export const Route = createFileRoute("/api/public/sim-audit-test")({
         }
 
         if (data.action === "classify") {
-          const cls = await classifyIntent({
-            text: data.message ?? "",
-            lastTopic: data.lastTopic,
-            recentMessages: data.transcript ?? [],
-          } as any);
+          const env0 = await buildEnv();
+          const { data: rt } = await (supabasePublic as any)
+            .from("room_types").select("name");
+          const cls = await classifyIntent(
+            data.message ?? "",
+            supabasePublic as any,
+            env0.apiKey ? { apiKey: env0.apiKey, baseUrl: env0.baseUrl, model: env0.model } : undefined,
+            { lastTopic: data.lastTopic, roomTypeNames: (rt ?? []).map((r: any) => r.name) } as any,
+          );
           return Response.json({ ok: true, classification: cls });
         }
 
