@@ -336,8 +336,105 @@ export async function processBookingState(
     }
   }
 
+  // State: AWAITING_ALTERNATIVE_ROOM_TYPE
+  // Requested room is full; tamu memilih tipe kamar pengganti.
+  if (state === "AWAITING_ALTERNATIVE_ROOM_TYPE") {
+    const alts = context.availableAlternatives ?? [];
+    const requested = context.requestedRoomType ?? "kamar pilihan awal";
+    const altListText = formatAlternativesList(alts);
+    const altNamesInline = alts.map((a) => a.name).join(", ");
+
+    // Helper: prompt ulang setelah menyimpan info pendukung.
+    const reAskWithPrefix = (prefix: string): StateMachineResult => ({
+      handled: true,
+      reply: `${prefix}Untuk melanjutkan booking, silakan pilih tipe kamar yang tersedia: ${altNamesInline}.`,
+    });
+
+    const trimmed = message.trim();
+    // 1) Pilih alternatif valid → simpan & lanjut ke pengisian nama.
+    const picked = matchAlternative(trimmed, alts);
+    if (picked) {
+      context.selectedRoomType = picked.name;
+      context.roomId = picked.roomTypeId;
+      context.roomName = picked.name;
+      context.pricePerNight = picked.pricePerNight;
+      context.rooms = [{
+        roomTypeId:    picked.roomTypeId,
+        roomTypeName:  picked.name,
+        quantity:      1,
+        pricePerNight: picked.pricePerNight,
+      }];
+      // Lanjut ke slot berikutnya yang masih kosong.
+      if (context.guestName && looksLikePersonName(context.guestName)) {
+        await updateBookingState(supabase, phone, "CONFIRMING_NAME", context);
+        return {
+          handled: true,
+          reply:
+            `Siap Kak, kamar ${picked.name} saya catat. ` +
+            `Apakah Kakak ingin memakai nama "${context.guestName}" untuk pemesanan, ` +
+            `atau menggunakan nama lain? Balas "Ya" untuk memakai nama ini, atau ketik nama lain.`,
+        };
+      }
+      await updateBookingState(supabase, phone, "AWAITING_NAME", context);
+      return {
+        handled: true,
+        reply: `Siap Kak, kamar ${picked.name} saya catat. Untuk melanjutkan, mohon ketikkan nama lengkap Kakak:`,
+      };
+    }
+
+    // 2) Email → simpan, tetap minta tipe kamar.
+    const email = extractEmail(trimmed);
+    if (email) {
+      context.guestEmail = email;
+      await updateBookingState(supabase, phone, state, context);
+      return {
+        handled: true,
+        reply:
+          `Email ${email} sudah saya catat, Kak. ` +
+          `Untuk melanjutkan booking, silakan pilih tipe kamar yang tersedia: ${altNamesInline}.`,
+      };
+    }
+
+    // 3) Nomor HP → simpan, tetap minta tipe kamar.
+    const typedPhone = extractPhone(trimmed);
+    if (typedPhone) {
+      context.guestPhone = typedPhone;
+      await updateBookingState(supabase, phone, state, context);
+      return reAskWithPrefix(`Nomor ${typedPhone} sudah saya catat, Kak. `);
+    }
+
+    // 4) Konfirmasi tanpa pilih kamar ("ya", "lanjut", "oke") → tampilkan ulang.
+    if (USE_THIS_PATTERN.test(trimmed) && !matchAlternative(trimmed, alts)) {
+      return {
+        handled: true,
+        reply:
+          `Siap Kak. Karena ${requested} penuh, silakan pilih salah satu kamar yang tersedia:\n${altListText}`,
+      };
+    }
+
+    // 5) Nama orang → simpan, tetap minta tipe kamar.
+    if (looksLikePersonName(trimmed)) {
+      context.guestName = trimmed;
+      await updateBookingState(supabase, phone, state, context);
+      const firstName = trimmed.split(/\s+/)[0];
+      return reAskWithPrefix(
+        `Baik Kak ${firstName}, saya catat namanya. Karena ${requested} penuh, `,
+      );
+    }
+
+    // 6) Tidak jelas → tampilkan ulang opsi.
+    return {
+      handled: true,
+      reply:
+        `Mohon maaf Kak, saya belum menangkap pilihan kamarnya. ` +
+        `Kamar yang tersedia untuk tanggal tersebut:\n${altListText}\n\n` +
+        `Balas dengan salah satu nama kamar di atas ya, Kak.`,
+    };
+  }
+
   // State: ROOM_SELECTED -> AWAITING_NAME
   // (Transition from IDLE to ROOM_SELECTED is handled by the AI Front Office Agent when tool is called)
+
   
   if (state === "AWAITING_NAME") {
     // We assume the user replied with their name.
