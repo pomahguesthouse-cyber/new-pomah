@@ -507,7 +507,7 @@ export async function runMultiAgentOrchestration(
   const partialAdults   = typeof priorSlots.partialAdults   === "number" ? priorSlots.partialAdults   : undefined;
   const partialChildren = typeof priorSlots.partialChildren === "number" ? priorSlots.partialChildren : undefined;
   if (partialRoomType || partialAdults !== undefined || partialChildren !== undefined) {
-    (input.agentCtx as Record<string, unknown>).partialBooking = {
+    input.agentCtx.partialBooking = {
       roomType: partialRoomType,
       adults:   partialAdults,
       children: partialChildren,
