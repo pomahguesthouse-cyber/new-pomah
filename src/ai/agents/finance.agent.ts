@@ -131,7 +131,7 @@ interface Scaffold {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, today, managerName } = ctx;
-  const persona  = managerName?.trim() || "Sinta";
+  const persona  = managerName?.trim() || "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const prop     = property as Record<string, unknown>;
   const bankInfo = [
