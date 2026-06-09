@@ -423,9 +423,22 @@ export async function runMultiAgentOrchestration(
       let financeRetries: any[] | undefined = undefined;
       if (stateResult.followUp === "send_invoice") {
         const refCode = stateResult.followUpRef ?? "";
+        // Pass full booking context so Finance Agent doesn't rely solely on a
+        // DB lookup that may not have propagated yet (race condition right after
+        // booking creation). Include booking code + key fields inline.
+        const bookingCtx = stateRecord.context;
+        const ctxLines = [
+          refCode ? `Kode booking: ${refCode}` : null,
+          bookingCtx.guestName  ? `Nama tamu: ${bookingCtx.guestName}`   : null,
+          bookingCtx.guestPhone ? `Nomor HP: ${bookingCtx.guestPhone}`   : null,
+          bookingCtx.guestEmail ? `Email: ${bookingCtx.guestEmail}`      : null,
+          bookingCtx.checkIn    ? `Check-in: ${bookingCtx.checkIn}`      : null,
+          bookingCtx.checkOut   ? `Check-out: ${bookingCtx.checkOut}`    : null,
+          bookingCtx.roomName   ? `Kamar: ${bookingCtx.roomName}`        : null,
+        ].filter(Boolean).join("\n");
         const synthesized = refCode
-          ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking dengan kode ${refCode}.`
-          : "Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.";
+          ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking berikut:\n${ctxLines}`
+          : `Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.`;
         const financeAgent = getAgent("finance");
         const financeResult = await runAgent(
           financeAgent,
@@ -441,7 +454,17 @@ export async function runMultiAgentOrchestration(
           combinedReply = `${stateResult.reply}\n\n${financeResult.reply}`;
           for (const t of financeResult.toolsUsed) toolsUsed.push(t);
         } else {
+          // Finance Agent failed (e.g. DB lookup race after booking creation).
+          // Degrade gracefully: show a friendly fallback instead of silently
+          // dropping the invoice section, so the guest still gets confirmation.
           console.warn("[MultiAgent] Finance follow-up failed:", financeResult.error);
+          if (refCode) {
+            combinedReply =
+              `${stateResult.reply}\n\n` +
+              `Booking Kakak sudah berhasil dibuat dengan kode *${refCode}*. ` +
+              `Detail pembayaran akan kami kirimkan segera. ` +
+              `Admin juga sudah kami beri notifikasi.`;
+          }
         }
         financeRetries = financeResult.retries;
       }

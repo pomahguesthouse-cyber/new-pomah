@@ -135,23 +135,79 @@ function formatPhoneDisplay(raw: string): string {
   return digits;
 }
 
+/** Format YYYY-MM-DD ke "10 Juni 2026" dalam bahasa Indonesia. */
+function formatDateId(iso: string): string {
+  const months = [
+    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  ];
+  const [year, month, day] = iso.split("-").map(Number);
+  return `${day} ${months[month - 1]} ${year}`;
+}
+
+/** Hitung selisih malam antara dua tanggal YYYY-MM-DD. */
+function countNights(checkIn: string, checkOut: string): number {
+  const d1 = new Date(checkIn);
+  const d2 = new Date(checkOut);
+  return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
+}
+
 /** Build the pre-confirmation booking summary once all guest details are set. */
 function buildBookingSummary(context: BookingContext): StateMachineResult {
-  let roomsDisplay = context.roomName ?? "—";
+  // --- Room line ---
+  let roomsDisplay: string;
   if (context.rooms && context.rooms.length > 0) {
-    roomsDisplay = "\n  " + context.rooms
-      .map((r) => `* ${r.quantity}x ${r.roomTypeName} (@Rp ${r.pricePerNight.toLocaleString("id-ID")}/malam)`)
-      .join("\n  ");
+    roomsDisplay = context.rooms
+      .map((r) => `${r.quantity}x ${r.roomTypeName}`)
+      .join(", ");
+  } else {
+    roomsDisplay = context.roomName ?? "—";
   }
 
-  const summary = `Data pemesanan sudah lengkap! Berikut ringkasannya:
+  // --- Price per night ---
+  const pricePerNight =
+    context.rooms && context.rooms.length > 0
+      ? context.rooms[0].pricePerNight
+      : (context.pricePerNight ?? 0);
 
-- Nama: ${context.guestName}
-- Email: ${context.guestEmail}
-- No. HP: ${context.guestPhone}
-- Kamar: ${roomsDisplay}
+  // --- Nights & total ---
+  const nights =
+    context.checkIn && context.checkOut
+      ? countNights(context.checkIn, context.checkOut)
+      : null;
+  const total =
+    context.totalPrice ??
+    (nights && pricePerNight ? nights * pricePerNight : null);
 
-Apakah data di atas sudah benar dan Kakak ingin melanjutkan untuk proses Booking & Pembayaran? (Ketik "Ya" atau "Lanjut" / "Batal")`;
+  // --- Dates with check-in / check-out times ---
+  const checkInDisplay = context.checkIn
+    ? `${formatDateId(context.checkIn)}, 14.00`
+    : "—";
+  const checkOutDisplay = context.checkOut
+    ? `${formatDateId(context.checkOut)}, 12.00`
+    : "—";
+
+  // --- Adults ---
+  const adults = context.adults ?? 1;
+  const adultLine = `${adults} orang dewasa`;
+
+  // --- Format currency IDR ---
+  const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
+
+  const summary =
+    `Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n` +
+    `- Nama: ${context.guestName ?? "—"}\n` +
+    `- Email: ${context.guestEmail ?? "—"}\n` +
+    `- No. HP: ${context.guestPhone ?? "—"}\n` +
+    `- Kamar: ${roomsDisplay}\n` +
+    `- Check-in: ${checkInDisplay}\n` +
+    `- Check-out: ${checkOutDisplay}\n` +
+    `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
+    `- Jumlah tamu: ${adultLine}\n` +
+    `- Harga: ${pricePerNight ? `${fmtRp(pricePerNight)}/malam` : "—"}\n` +
+    `- Total: ${total ? fmtRp(total) : "—"}\n\n` +
+    `Apakah data di atas sudah benar dan Kakak ingin melanjutkan ke Booking & Pembayaran? ` +
+    `Ketik "Ya", "Lanjut", atau "Batal".`;
   return { handled: true, reply: summary };
 }
 
