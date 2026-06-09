@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { notifyBookingStuck } from "@/services/manager-notifier.service";
+import { getRequiredField, type BookingState } from "@/ai/state-machine/booking-machine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -109,6 +110,7 @@ async function handle(): Promise<Response> {
       await notifyBookingStuck(supabaseAdmin as any, {
         phone: c.phone,
         state: c.state,
+        requiredField: getRequiredField(c.state as BookingState),
         stuckSeconds: Math.round(stuckMs / 1000),
         lastInboundBody: last.body,
         lastInboundAt: last.sent_at,

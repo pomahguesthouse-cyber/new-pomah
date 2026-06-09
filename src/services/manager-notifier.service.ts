@@ -943,6 +943,7 @@ export async function notifyBookingStuck(
   opts: {
     phone: string;
     state: string;
+    requiredField?: string | null;
     stuckSeconds: number;
     lastInboundBody: string | null;
     lastInboundAt: string; // ISO
@@ -966,6 +967,7 @@ export async function notifyBookingStuck(
       `🛑 BOOKING FLOW MACET\n\n` +
       `📱 Tamu: ${opts.phone}${opts.guestName ? ` (${opts.guestName})` : ""}\n` +
       `📍 State: ${opts.state}\n` +
+      (opts.requiredField ? `🔖 Field ditunggu: ${opts.requiredField}\n` : "") +
       `⏱️ Macet: ~${opts.stuckSeconds}s\n` +
       `🕒 Waktu: ${wibTime}\n\n` +
       (inboundPreview ? `📥 Pesan terakhir tamu:\n"${inboundPreview}"\n\n` : "") +
