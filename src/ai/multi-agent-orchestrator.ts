@@ -259,6 +259,22 @@ async function runAgent(
 
       if (toolLabel) toolsUsed.add(toolLabel);
 
+      // Loop heuristic: jika tool yang sama mengembalikan need_dates: true
+      // ≥2× dalam 1 run → surface ke caller (super admin akan dapat alert).
+      if (toolName && output.includes('"need_dates"')) {
+        try {
+          const parsed = JSON.parse(output);
+          if (parsed && parsed.need_dates === true) {
+            const prev = needDatesCount.get(toolName) ?? { count: 0, lastArgs: "", lastOutput: "" };
+            needDatesCount.set(toolName, {
+              count: prev.count + 1,
+              lastArgs: rawArgs,
+              lastOutput: output,
+            });
+          }
+        } catch { /* ignore non-JSON */ }
+      }
+
       messages.push({
         role:         "tool",
         tool_call_id: tc.id,
@@ -268,8 +284,16 @@ async function runAgent(
     // next turn: send tool results back to agent LLM
   }
 
+  // Build loopAlert payload if any tool stuck on need_dates.
+  let loopAlert: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string } | undefined;
+  for (const [toolName, info] of needDatesCount.entries()) {
+    if (info.count >= 2 && (!loopAlert || info.count > loopAlert.repeatCount)) {
+      loopAlert = { toolName, repeatCount: info.count, lastArgs: info.lastArgs, sampleOutput: info.lastOutput };
+    }
+  }
+
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
-  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}) };
+  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}), ...(loopAlert ? { loopAlert } : {}) };
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
