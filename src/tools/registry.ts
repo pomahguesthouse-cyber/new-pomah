@@ -137,6 +137,52 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "offer_alternative_rooms",
+      description:
+        "Panggil saat `check_room_availability` menunjukkan tipe kamar yang DIMINTA tamu " +
+        "PENUH untuk tanggalnya, TAPI ada tipe kamar lain yang tersedia di tanggal yang sama. " +
+        "Tool ini menyetel state machine ke AWAITING_ALTERNATIVE_ROOM_TYPE — jangan tanya " +
+        "tipe kamar lagi sendiri. Setelah memanggil, kirim isi `message` VERBATIM ke tamu. " +
+        "JANGAN dipanggil bila tipe kamar yang diminta justru tersedia.",
+      parameters: {
+        type: "object",
+        properties: {
+          requested_room_type: {
+            type: "string",
+            description: "Nama tipe kamar yang awalnya diminta tamu dan ternyata penuh (mis. 'Deluxe').",
+          },
+          check_in:  { type: "string", description: "Tanggal check-in YYYY-MM-DD." },
+          check_out: { type: "string", description: "Tanggal check-out YYYY-MM-DD." },
+          adults:    { type: "number", description: "Jumlah dewasa. Default 1." },
+          children:  { type: "number", description: "Jumlah anak. Default 0." },
+          guest_name: {
+            type: "string",
+            description: "Nama tamu bila sudah disebut sebelumnya. Kosongkan bila belum.",
+          },
+          alternatives: {
+            type: "array",
+            description:
+              "Daftar tipe kamar yang masih tersedia. Ambil DARI hasil " +
+              "`check_room_availability` (entry dengan `tidak_tersedia=false` dan " +
+              "`kamar_tersedia>0`). Sertakan minimal 1 item.",
+            items: {
+              type: "object",
+              properties: {
+                room_type:       { type: "string", description: "Nama tipe kamar." },
+                price_per_night: { type: "number", description: "Harga per malam (rupiah)." },
+              },
+              required: ["room_type"],
+            },
+            minItems: 1,
+          },
+        },
+        required: ["requested_room_type", "check_in", "check_out", "alternatives"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_bookings",
       description:
         "Daftar booking. Default urut dari booking yang paling baru dibuat (cocok untuk 'booking terakhir / terbaru'). " +
