@@ -25,7 +25,9 @@ function str(v: unknown): string {
 
 function normalizePhone(raw: string): string {
   let p = raw.replace(/\D/g, "");
-  if (p.startsWith("0")) p = "62" + p.slice(1);
+  if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("8")) p = "62" + p;
   return p;
 }
 

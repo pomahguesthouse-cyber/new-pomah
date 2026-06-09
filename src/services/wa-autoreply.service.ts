@@ -45,7 +45,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** Normalize an Indonesian phone to digits-only with 62 prefix. */
 function normalizePhone(raw: string): string {
   let p = String(raw).replace(/\D/g, "");
-  if (p.startsWith("0")) p = "62" + p.slice(1);
+  if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("8")) p = "62" + p;
   return p;
 }
 

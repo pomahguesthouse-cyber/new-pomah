@@ -22,6 +22,7 @@ import { routeToAgent }                      from "./router/agent-router";
 import { getAgent }                          from "./agents/registry";
 import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
 import { executeTool }                       from "@/tools/executor";
+import { parseManagerCommand, formatManagerCommandResult } from "./manager-command-parser";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
@@ -352,6 +353,27 @@ export async function runMultiAgentOrchestration(
   // 2. Manager Bypass
   if (input.isManager) {
     console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
+    
+    // Intercept deterministic commands
+    const parsedCommand = parseManagerCommand(lastUserMsg);
+    if (parsedCommand) {
+      console.info(`[MultiAgent][manager] Intercepted deterministic command: ${parsedCommand.label}`);
+      const result = await executeTool(parsedCommand.toolName, parsedCommand.rawArgs, {
+        ...input.toolCtx,
+        isManager: true,
+      });
+      const reply = formatManagerCommandResult(parsedCommand, result.output);
+      return {
+        status:            "reply",
+        reply,
+        toolsUsed:         [parsedCommand.toolName],
+        agentKey:          "manager",
+        intent:            "general",
+        routingConfidence: 1.0,
+        escalated:         false,
+      };
+    }
+
     const agent = getAgent("manager");
     
     // For manager agent, we still need the onAskAgent callback
