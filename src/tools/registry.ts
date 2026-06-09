@@ -465,6 +465,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 export const TOOL_LABELS: Record<string, string> = {
   check_room_availability:      "Room Availability",
   start_booking_details:        "Booking Flow",
+  update_booking_slots:         "Booking Slots",
   create_booking:               "Booking Engine",
   request_housekeeping_service: "Housekeeping",
   report_maintenance_issue:     "Maintenance",
