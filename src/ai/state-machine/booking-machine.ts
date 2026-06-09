@@ -195,6 +195,30 @@ export function isDataEntryState(state: BookingState): boolean {
   return DATA_ENTRY_STATES.includes(state);
 }
 
+/**
+ * Human-readable label of the field the bot is currently waiting on.
+ * Used by the stuck-state monitor + super-admin notifications so investigators
+ * see "macet di nomor_hp" tanpa menebak dari nama state.
+ */
+export function getRequiredField(state: BookingState): string | null {
+  switch (state) {
+    case "AWAITING_DATES":      return "tanggal";
+    case "ROOM_SELECTED":       return "tipe_kamar";
+    case "AWAITING_NAME":       return "nama";
+    case "CONFIRMING_NAME":     return "konfirmasi_nama";
+    case "AWAITING_EMAIL":      return "email";
+    case "CONFIRMING_PHONE":    return "konfirmasi_nomor_hp";
+    case "AWAITING_PHONE":      return "nomor_hp";
+    case "CONFIRMING_BOOKING":  return "konfirmasi_booking";
+    case "PAYMENT_PENDING":     return "bukti_pembayaran";
+    default:                    return null;
+  }
+}
+
+/** Detect "tamu jelas-jelas memulai booking baru" — pakai untuk auto-reset stale states. */
+const NEW_BOOKING_INTENT_PATTERN =
+  /\b(booking|pesan|reservasi|mau (nginap|menginap|pesan|booking)|cek (kamar|ketersediaan)|ada kamar|kamar (kosong|tersedia))\b/i;
+
 // Question / info-request signals that indicate the guest is asking something
 // else instead of answering the current prompt.
 const QUESTION_PATTERN =
