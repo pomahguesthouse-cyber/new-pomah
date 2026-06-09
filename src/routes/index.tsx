@@ -2034,6 +2034,7 @@ function RoomCarousel({
   onChangeRooms?: (id: string, n: number) => void;
   onChangeExtrabed?: (id: string, n: number) => void;
 }) {
+  const usingDateFilter = !!checkIn && !!checkOut && checkIn < checkOut;
   const [cardsPerView, setCardsPerView] = useState(Math.max(1, Math.min(rc.cardsPerView, 4)));
   // Adjust cards per view for mobile screens (show 1 card on small widths)
   useEffect(() => {
@@ -2286,7 +2287,9 @@ function RoomCarousel({
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>Harga</p>
+                      <p className={cartOpen ? "text-[9px] text-stone-400" : "text-[10px] text-stone-400"}>
+                        {usingDateFilter ? "Harga" : "Harga Hari Ini"}
+                      </p>
                       <p className="text-amber-700">
                         {formatIDR(Number(rt.base_rate), cartOpen ? "text-sm" : "text-lg", "font-sans font-bold tabular-nums")}
                       </p>

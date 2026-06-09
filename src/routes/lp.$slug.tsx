@@ -866,7 +866,9 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                             </p>
                           </div>
                           <div className="shrink-0 text-right">
-                            <p className="text-[10px] text-stone-400">Harga</p>
+                            <p className="text-[10px] text-stone-400">
+                              {usingFilter ? "Harga" : "Harga Hari Ini"}
+                            </p>
                             <p className="text-lg font-bold text-teal-700">Rp {Number(rt.base_rate).toLocaleString("id-ID")}</p>
                           </div>
                         </div>
