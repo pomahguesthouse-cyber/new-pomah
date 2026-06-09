@@ -106,7 +106,7 @@ interface Scaffold {
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, today, managerName } = ctx;
   return {
-    persona:   managerName?.trim() || "Dewi",
+    persona:   managerName?.trim() || "Rani",
     propName:  property.name ?? "Pomah Guesthouse",
     todayLine: `Hari ini tanggal ${fmtDateID(today)}.`,
   };
