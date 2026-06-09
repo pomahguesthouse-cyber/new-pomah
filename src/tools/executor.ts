@@ -11,6 +11,7 @@ import { checkRoomAvailability }          from "./availability.tool";
 import { createBooking }                  from "./booking.tool";
 import { startBookingDetails }            from "./start-booking.tool";
 import { updateBookingSlots }             from "./booking-slots.tool";
+import { offerAlternativeRooms }           from "./offer-alternative-rooms.tool";
 import { requestHousekeepingService }     from "./housekeeping/request-service.tool";
 import { reportMaintenanceIssue }         from "./maintenance/report-issue.tool";
 import { getPaymentInfo }                 from "./finance/get-payment-info.tool";
