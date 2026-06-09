@@ -221,7 +221,8 @@ interface SendOptions {
     | "complaint"
     | "new_session"
     | "bot_loop"
-    | "zombie_timeout";
+    | "zombie_timeout"
+    | "booking_stuck";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -920,6 +921,93 @@ export async function notifyZombieTimeout(
     );
   } catch (e) {
     console.warn("[ManagerNotifier] notifyZombieTimeout error (non-fatal):", e);
+  }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Booking-flow stuck alert                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Alert ke super admin ketika alur booking di state machine (CONFIRMING_PHONE,
+ * AWAITING_EMAIL, dst.) macet — tamu sudah mengirim pesan tetapi tidak ada
+ * balasan bot >10 detik.
+ *
+ * Dedupe per kombinasi (phone, state, inbound message timestamp) sehingga
+ * tiap kejadian macet hanya menghasilkan satu pesan, tetapi kejadian baru
+ * berikutnya tetap dialarmkan.
+ */
+export async function notifyBookingStuck(
+  db: Db,
+  opts: {
+    phone: string;
+    state: string;
+    stuckSeconds: number;
+    lastInboundBody: string | null;
+    lastInboundAt: string; // ISO
+    threadId: string | null;
+    guestName?: string | null;
+  },
+): Promise<void> {
+  try {
+    const { fonnteToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const targets = superAdmins.filter((m) => !!m.phone || !!m.telegram_chat_id);
+    if (targets.length === 0) return;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+    });
+
+    const inboundPreview = (opts.lastInboundBody ?? "").slice(0, 200);
+
+    const message =
+      `🛑 BOOKING FLOW MACET\n\n` +
+      `📱 Tamu: ${opts.phone}${opts.guestName ? ` (${opts.guestName})` : ""}\n` +
+      `📍 State: ${opts.state}\n` +
+      `⏱️ Macet: ~${opts.stuckSeconds}s\n` +
+      `🕒 Waktu: ${wibTime}\n\n` +
+      (inboundPreview ? `📥 Pesan terakhir tamu:\n"${inboundPreview}"\n\n` : "") +
+      `Bot belum membalas pesan tamu. Mohon cek log percakapan & bantu balas manual jika perlu.`;
+
+    // Dedupe per (phone, state, inbound timestamp) — alert sekali per pesan
+    // tamu yang nyangkut, tapi tetap alarm untuk macet baru selanjutnya.
+    const inboundKey = Date.parse(opts.lastInboundAt) || 0;
+    const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${inboundKey}`;
+
+    await Promise.all(
+      targets.flatMap((admin) => {
+        const tasks: Promise<void>[] = [];
+        if (admin.phone) {
+          tasks.push(
+            sendWithRetry(db, fonnteToken, {
+              eventType: "booking_stuck",
+              message,
+              relatedId: opts.threadId,
+              recipient: admin,
+              channel: "wa",
+              dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+            }),
+          );
+        }
+        if (admin.telegram_chat_id) {
+          tasks.push(
+            sendWithRetry(db, fonnteToken, {
+              eventType: "booking_stuck",
+              message,
+              relatedId: opts.threadId,
+              recipient: admin,
+              channel: "telegram",
+              dedupeKey: `${dedupeBase}:tg:${admin.id}`,
+            }),
+          );
+        }
+        return tasks;
+      }),
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBookingStuck error (non-fatal):", e);
   }
 }
 
