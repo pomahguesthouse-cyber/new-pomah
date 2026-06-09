@@ -92,10 +92,8 @@ function ConfirmationPage() {
   const { data: siteData } = useQuery({ queryKey: ["public-site"], queryFn: () => siteFn() });
   const inv = data?.invoice ?? null;
 
-  const [isMounted, setIsMounted] = React.useState(false);
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
+
+
 
   const logoUrl = siteData?.property?.invoice_logo_url || siteData?.property?.logo_url;
   const propertyName = siteData?.property?.name || inv?.property.name;
