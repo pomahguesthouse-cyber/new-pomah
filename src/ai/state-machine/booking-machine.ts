@@ -484,6 +484,15 @@ export async function processBookingState(
   }
   
   if (state === "PAYMENT_PENDING") {
+    // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar
+    // lagi tanggal 25", "ada kamar deluxe 30 Juni?"). Tanpa ini, state
+    // tersangkut sampai 15-menit auto-expire dan tamu disambut Finance Agent
+    // padahal yang dia mau adalah Front Office.
+    if (NEW_BOOKING_INTENT_PATTERN.test(message)) {
+      console.info(`[BookingState] PAYMENT_PENDING → IDLE: tamu memulai booking baru.`);
+      await updateBookingState(supabase, phone, "IDLE", {});
+      return { handled: false };
+    }
     // Pre-Finance-Agent ownership, this state auto-flipped to COMPLETED on
     // any "bayar/sudah/transfer" keyword which bypassed OCR + status update.
     // Now the Finance Agent owns the post-booking flow: hand the turn over
