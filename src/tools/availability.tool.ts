@@ -36,11 +36,74 @@ interface AvailabilityRow {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRpc = (name: string, params: Record<string, unknown>) => Promise<{ data: unknown }>;
 
+const ID_MONTHS: Record<string, number> = {
+  jan: 1, januari: 1,
+  feb: 2, februari: 2, pebruari: 2,
+  mar: 3, maret: 3,
+  apr: 4, april: 4,
+  mei: 5,
+  jun: 6, juni: 6,
+  jul: 7, juli: 7,
+  agu: 8, agt: 8, agustus: 8,
+  sep: 9, sept: 9, september: 9,
+  okt: 10, oktober: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12,
+};
+
+/**
+ * Best-effort coerce a date input from the LLM into YYYY-MM-DD.
+ * Handles:
+ *  - already-correct "YYYY-MM-DD"
+ *  - "8 juni 2026", "08 Jun 2026", "8/6/2026", "8-6-2026", "2026/06/08"
+ * Returns null if it can't make sense of the value.
+ */
+function coerceDate(v: unknown, today: string): string | null {
+  if (typeof v !== "string") return null;
+  const s: string = v.trim().toLowerCase();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // YYYY/MM/DD
+  let m = s.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+  if (m) {
+    let [, d, mo, y] = m;
+    if (y.length === 2) y = `20${y}`;
+    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  }
+
+  // "8 juni 2026" / "8 jun"
+  m = s.match(/^(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?$/);
+  if (m) {
+    const [, d, monthName, yRaw] = m;
+    const mo = ID_MONTHS[monthName];
+    if (mo) {
+      const year = yRaw
+        ? (yRaw.length === 2 ? `20${yRaw}` : yRaw)
+        : today.slice(0, 4);
+      return `${year}-${String(mo).padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+  }
+
+  return null;
+}
+
 export const checkRoomAvailability: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
-  if (!isDateString(args.check_in)) {
+  const today = (ctx as { today?: string }).today ?? new Date().toISOString().slice(0, 10);
+  const coercedIn  = coerceDate(args.check_in, today);
+  const coercedOut = coerceDate(args.check_out, today);
+
+  if (!coercedIn) {
     // Jangan fallback ke "hari ini" jika tamu belum pernah menyebut tanggal.
     // Minta agen mengonfirmasi tanggal lebih dulu agar booking tidak salah tanggal.
     return JSON.stringify({
@@ -53,9 +116,10 @@ export const checkRoomAvailability: ToolHandler = async (
     });
   }
 
-  const checkIn  = args.check_in as string;
-  let   checkOut = isDateString(args.check_out) ? (args.check_out as string) : nextDay(checkIn);
+  const checkIn  = coercedIn;
+  let   checkOut = coercedOut ?? nextDay(checkIn);
   if (checkOut <= checkIn) checkOut = nextDay(checkIn);
+
 
   // Catat tanggal yang dipakai supaya orchestrator bisa menyimpannya ke slots
   // — turn berikutnya tidak akan kehilangan konteks tanggal.
