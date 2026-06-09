@@ -231,6 +231,35 @@ function RoomBookingPage() {
             : "Tersedia"
           : "Mengecek…";
 
+  const displayRoom = useMemo(() => {
+    if (!room) return null;
+    const resolvedRates = availData?.rates ?? null;
+    if (resolvedRates && resolvedRates[room.id]) {
+      return {
+        ...room,
+        base_rate: resolvedRates[room.id].base_rate,
+        extrabed_rate: resolvedRates[room.id].extrabed_rate,
+      };
+    }
+    return room;
+  }, [room, availData?.rates]);
+
+  const displayOthers = useMemo(() => {
+    const resolvedRates = availData?.rates ?? null;
+    if (!resolvedRates) return others;
+    return others.map((o) => {
+      const rateInfo = resolvedRates[o.id];
+      if (rateInfo) {
+        return {
+          ...o,
+          base_rate: rateInfo.base_rate,
+          extrabed_rate: rateInfo.extrabed_rate,
+        };
+      }
+      return o;
+    });
+  }, [others, availData?.rates]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-stone-50">
@@ -365,7 +394,7 @@ function RoomBookingPage() {
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-medium text-stone-500">Harga Kamar</p>
               <p className="mt-1 text-3xl font-bold text-amber-700">
-                {formatIDR(Number(room.base_rate), "text-3xl", "font-sans font-bold text-amber-700 tabular-nums")}
+                {formatIDR(Number(displayRoom?.base_rate ?? 0), "text-3xl", "font-sans font-bold text-amber-700 tabular-nums")}
               </p>
               <p className="text-xs text-stone-400">per malam</p>
 
@@ -435,11 +464,11 @@ function RoomBookingPage() {
         </div>
 
         {/* Other rooms */}
-        {others.length > 0 && (
+        {displayOthers.length > 0 && (
           <section className="mt-16">
             <h2 className="text-center text-2xl font-bold">Kamar Lainnya</h2>
             <div className="mt-6 grid gap-6 md:grid-cols-3">
-              {others.map((o) => {
+              {displayOthers.map((o) => {
                 const cover = galleryOf(o)[0];
                 return (
                   <Link
@@ -481,7 +510,7 @@ function RoomBookingPage() {
       <BookingDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        room={room}
+        room={displayRoom || room}
         checkIn={checkIn}
         checkOut={checkOut}
         rooms={rooms}

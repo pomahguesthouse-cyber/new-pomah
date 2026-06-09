@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -451,6 +451,48 @@ function PomahHome() {
   const availability = availData?.availability ?? null;
   const availableRooms = availData?.availableRooms ?? null;
 
+  const resolvedRates = availData?.rates ?? null;
+  const displayRooms = useMemo(() => {
+    if (!resolvedRates) return rooms;
+    return rooms.map((rt: any) => {
+      const rateInfo = resolvedRates[rt.id];
+      if (rateInfo) {
+        return {
+          ...rt,
+          base_rate: rateInfo.base_rate,
+          extrabed_rate: rateInfo.extrabed_rate,
+        };
+      }
+      return rt;
+    });
+  }, [rooms, resolvedRates]);
+
+  useEffect(() => {
+    if (!resolvedRates) return;
+    setCart((currentCart) => {
+      let changed = false;
+      const newCart = { ...currentCart };
+      for (const id of Object.keys(newCart)) {
+        const rateInfo = resolvedRates[id];
+        if (rateInfo) {
+          const room = newCart[id].room;
+          if (room.base_rate !== rateInfo.base_rate || room.extrabed_rate !== rateInfo.extrabed_rate) {
+            newCart[id] = {
+              ...newCart[id],
+              room: {
+                ...room,
+                base_rate: rateInfo.base_rate,
+                extrabed_rate: rateInfo.extrabed_rate,
+              },
+            };
+            changed = true;
+          }
+        }
+      }
+      return changed ? newCart : currentCart;
+    });
+  }, [resolvedRates]);
+
   return (
     <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
@@ -888,7 +930,7 @@ function PomahHome() {
                 >
                   <div className="min-w-0">
                     <RoomCarousel
-                      rooms={rooms}
+                      rooms={displayRooms}
                       rc={cfg.roomCarousel}
                       availability={availability}
                       availableRooms={availableRooms}

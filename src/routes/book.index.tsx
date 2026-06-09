@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { getPublicSiteData, submitCartBooking } from "@/public/functions/public.functions";
+import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from "@/public/functions/public.functions";
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { Button } from "@/components/ui/button";
@@ -137,6 +137,30 @@ function BookPage() {
   }, [prefillRoom, rooms]);
 
   // Calculations for summary
+  const availFn = useServerFn(checkRoomTypeAvailability);
+  const { data: availData } = useQuery({
+    queryKey: ["availability", form.checkIn, form.checkOut],
+    queryFn: () => availFn({ data: { checkIn: form.checkIn, checkOut: form.checkOut } }),
+    enabled: !!form.checkIn && !!form.checkOut && form.checkIn < form.checkOut,
+    staleTime: 60 * 1000,
+  });
+
+  const displayRooms = useMemo(() => {
+    const resolvedRates = availData?.rates ?? null;
+    if (!resolvedRates) return rooms;
+    return rooms.map((rt: any) => {
+      const rateInfo = resolvedRates[rt.id];
+      if (rateInfo) {
+        return {
+          ...rt,
+          base_rate: rateInfo.base_rate,
+          extrabed_rate: rateInfo.extrabed_rate,
+        };
+      }
+      return rt;
+    });
+  }, [rooms, availData?.rates]);
+
   const nights = useMemo(() => {
     const d1 = new Date(form.checkIn).getTime();
     const d2 = new Date(form.checkOut).getTime();
@@ -148,7 +172,7 @@ function BookPage() {
     if (nights <= 0) return 0;
     let total = 0;
     cartItems.forEach(item => {
-      const room = rooms.find((r: any) => r.id === item.roomTypeId);
+      const room = displayRooms.find((r: any) => r.id === item.roomTypeId);
       if (room) {
         total += Number(room.base_rate) * nights * item.quantity;
         if (item.extraBeds > 0) {
@@ -157,13 +181,13 @@ function BookPage() {
       }
     });
     return total;
-  }, [cartItems, nights, rooms]);
+  }, [cartItems, nights, displayRooms]);
 
   const handleAddToCart = (roomTypeId: string) => {
     setCartItems(prev => {
       const existing = prev.find(item => item.roomTypeId === roomTypeId);
       if (existing) {
-        const room = rooms.find((r: any) => r.id === roomTypeId);
+        const room = displayRooms.find((r: any) => r.id === roomTypeId);
         const limit = room?.total_physical_rooms || 10;
         if (existing.quantity < limit) {
            return prev.map(item => item.roomTypeId === roomTypeId ? { ...item, quantity: item.quantity + 1 } : item);
@@ -301,10 +325,10 @@ function BookPage() {
                 className="w-full"
               >
                 <CarouselContent className="-ml-6">
-                  {rooms.map((room: any, index: number) => {
+                  {displayRooms.map((room: any, index: number) => {
                     const cartItem = cartItems.find(item => item.roomTypeId === room.id);
                     const isInCart = !!cartItem;
-                    const availableCount = room.total_physical_rooms || 10;
+                    const availableCount = availData?.availableRooms?.[room.id] ?? room.total_physical_rooms ?? 10;
                     
                     return (
                       <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
@@ -566,7 +590,7 @@ function BookPage() {
                 <>
                   <div className="max-h-[40vh] overflow-y-auto pr-2 mb-6 space-y-4">
                   {cartItems.map((item, idx) => {
-                     const room = rooms.find((r: any) => r.id === item.roomTypeId);
+                     const room = displayRooms.find((r: any) => r.id === item.roomTypeId);
                      if (!room) return null;
                      const roomSubtotal = Number(room.base_rate) * nights * item.quantity;
                      const extrabedSubtotal = item.extraBeds > 0 ? Number(room.extrabed_rate || 0) * nights * item.extraBeds : 0;

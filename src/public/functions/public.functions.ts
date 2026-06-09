@@ -879,7 +879,12 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { checkIn, checkOut } = data;
     if (checkIn >= checkOut) {
-      return { availability: {} as Record<string, boolean>, debug: { rows: 0, error: null } };
+      return {
+        availability: {} as Record<string, boolean>,
+        availableRooms: {} as Record<string, number>,
+        rates: {} as Record<string, { base_rate: number; extrabed_rate: number }>,
+        debug: { rows: 0, error: null },
+      };
     }
 
     // Computed by a SECURITY DEFINER DB function so booking data stays
@@ -904,9 +909,54 @@ export const checkRoomTypeAvailability = createServerFn({ method: "GET" })
       availability[r.room_type_id] = r.available > 0;
       availableRooms[r.room_type_id] = r.available;
     }
+
+    // Fetch base rates and extrabed rates for all room types
+    const { data: rts } = await supabasePublic
+      .from("room_types")
+      .select("id, base_rate, extrabed_rate");
+
+    const rates: Record<string, { base_rate: number; extrabed_rate: number }> = {};
+    if (rts && rts.length > 0) {
+      const overrides = await getDailyRatesForRange(
+        supabasePublic,
+        rts.map((rt) => rt.id),
+        checkIn,
+        checkOut,
+      );
+      for (const rt of rts) {
+        const resolved = resolveRoomNightlyRates(
+          {
+            id: rt.id,
+            name: "",
+            base_rate: Number(rt.base_rate ?? 0),
+            capacity: null,
+            bed_type: null,
+            description: null,
+            extrabed_rate: rt.extrabed_rate == null ? null : Number(rt.extrabed_rate),
+          },
+          checkIn,
+          checkOut,
+          overrides.get(rt.id),
+        );
+        const avgRate = resolved.nights > 0
+          ? resolved.total / resolved.nights
+          : Number(rt.base_rate ?? 0);
+        const ebrTotal = resolved.nightly.reduce((acc, n) => acc + n.extrabed_rate, 0);
+        const avgExtraBed = resolved.nights > 0
+          ? ebrTotal / resolved.nights
+          : Number(rt.extrabed_rate ?? 0);
+
+        rates[rt.id] = {
+          base_rate: avgRate,
+          extrabed_rate: avgExtraBed,
+        };
+      }
+    }
+
     return {
       availability,
       availableRooms,
+      rates,
       debug: { rows: (rows ?? []).length, error: error?.message ?? null },
     };
   });

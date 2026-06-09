@@ -3,7 +3,7 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
-import { useState, useEffect, createContext, useContext } from "react";
+import { useState, useEffect, createContext, useContext, useMemo } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -793,6 +793,21 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
   });
   const availability = availData?.availability ?? null;
 
+  const displayRooms = useMemo(() => {
+    const resolvedRates = availData?.rates ?? null;
+    if (!resolvedRates) return rooms;
+    return rooms.map((rt: any) => {
+      const rateInfo = resolvedRates[rt.id];
+      if (rateInfo) {
+        return {
+          ...rt,
+          base_rate: rateInfo.base_rate,
+        };
+      }
+      return rt;
+    });
+  }, [rooms, availData?.rates]);
+
   const per = Math.max(1, Math.min(s.cardsPerView ?? 3, 4));
   const [cardsPerView, setCardsPerView] = useState(per);
   useEffect(() => {
@@ -802,15 +817,15 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
     return () => window.removeEventListener("resize", update);
   }, [per]);
 
-  const maxIndex = Math.max(0, rooms.length - cardsPerView);
+  const maxIndex = Math.max(0, displayRooms.length - cardsPerView);
   const [i, setI] = useState(0);
   useEffect(() => { setI((v) => Math.min(v, maxIndex)); }, [maxIndex]);
 
   useEffect(() => {
-    if (!(s.autoplay ?? true) || rooms.length <= cardsPerView || (s.slideMs ?? 4000) <= 0) return;
+    if (!(s.autoplay ?? true) || displayRooms.length <= cardsPerView || (s.slideMs ?? 4000) <= 0) return;
     const t = setInterval(() => setI((v) => (v >= maxIndex ? 0 : v + 1)), s.slideMs ?? 4000);
     return () => clearInterval(t);
-  }, [s.autoplay, s.slideMs, rooms.length, cardsPerView, maxIndex]);
+  }, [s.autoplay, s.slideMs, displayRooms.length, cardsPerView, maxIndex]);
 
   return (
     <section id="lp-room-slider" className="scroll-mt-4 bg-[#f3ece0] py-16">
@@ -827,14 +842,14 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
           </p>
         )}
 
-        {rooms.length === 0 ? (
+        {displayRooms.length === 0 ? (
           <p className="mt-10 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>
         ) : (
           <div className="relative mt-8">
             <div className="overflow-hidden">
               <div className="flex transition-transform duration-500 ease-out"
                 style={{ transform: `translateX(-${i * (100 / cardsPerView)}%)` }}>
-                {rooms.map((rt) => (
+                {displayRooms.map((rt) => (
                   <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
                     <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
