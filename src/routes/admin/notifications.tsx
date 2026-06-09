@@ -21,6 +21,9 @@ const EVENT_LABEL: Record<string, { label: string; color: string }> = {
   complaint: { label: "Komplain", color: "bg-red-100 text-red-700" },
   booking_modified: { label: "Booking Diubah", color: "bg-amber-100 text-amber-700" },
   booking_cancelled: { label: "Booking Dibatalkan", color: "bg-gray-200 text-gray-700" },
+  new_session: { label: "Sesi Baru", color: "bg-indigo-100 text-indigo-700" },
+  bot_loop: { label: "Bot Loop", color: "bg-orange-100 text-orange-700" },
+  zombie_timeout: { label: "Zombie Worker", color: "bg-rose-100 text-rose-700" },
 };
 
 function StatusBadge({ status }: { status: string }) {
