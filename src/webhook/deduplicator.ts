@@ -29,13 +29,23 @@ export function isDuplicate(key: string): boolean {
 
 /**
  * Build a stable dedup key.
- * Prefer the Fonnte message ID; fall back to "sender::body_prefix" so that
- * duplicate webhook deliveries without explicit IDs are still caught.
+ * Prefer the Fonnte message ID; fall back to
+ * "sender::body_prefix::timestamp_bucket" so legitimate repeated short
+ * replies (e.g. "ya" / "ok" across distinct booking-flow turns within the
+ * TTL window) are NOT swallowed. The 10s bucket still catches genuine
+ * webhook retries (which land in the same bucket) while letting a new
+ * user message a minute later through.
  */
+const DEDUP_BUCKET_MS = 10_000;
+
 export function buildDedupKey(
   fonnteId: string | undefined,
   sender:   string,
   message:  string,
+  timestamp?: number,
 ): string {
-  return fonnteId ?? `${sender}::${message.slice(0, 100)}`;
+  if (fonnteId) return fonnteId;
+  const ts = timestamp ?? Date.now();
+  const bucket = Math.floor(ts / DEDUP_BUCKET_MS);
+  return `${sender}::${message.slice(0, 100)}::${bucket}`;
 }
