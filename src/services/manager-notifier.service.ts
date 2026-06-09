@@ -221,7 +221,8 @@ interface SendOptions {
     | "complaint"
     | "new_session"
     | "bot_loop"
-    | "zombie_timeout";
+    | "zombie_timeout"
+    | "booking_stuck";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
