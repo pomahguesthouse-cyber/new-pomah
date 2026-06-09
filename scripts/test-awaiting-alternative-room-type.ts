@@ -126,9 +126,9 @@ console.log("\nTest 1: requested room unavailable → AWAITING_ALTERNATIVE_ROOM_
 // ─── Test 2: "ya" → no booking, alternatives shown again ─────────────────────
 console.log("\nTest 2: \"ya\" while awaiting → reshow alternatives, no booking");
 {
-  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: { ...baseCtx } });
+  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: freshBaseCtx() });
   const ctx = makeCtx(sb);
-  const res = await processBookingState(ctx, "6281234567899", "ya", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", baseCtx));
+  const res = await processBookingState(ctx, "6281234567899", "ya", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", freshBaseCtx()));
   eq("handled",                     res.handled, true);
   truthy("reply lists Grand Deluxe", res.reply?.includes("Grand Deluxe"));
   truthy("reply mentions Deluxe penuh", /Deluxe.*penuh/i.test(res.reply ?? ""));
@@ -139,9 +139,9 @@ console.log("\nTest 2: \"ya\" while awaiting → reshow alternatives, no booking
 // ─── Test 3: name → guestName saved, stage unchanged ─────────────────────────
 console.log("\nTest 3: name while awaiting → guestName saved, stage unchanged");
 {
-  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: { ...baseCtx } });
+  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: freshBaseCtx() });
   const ctx = makeCtx(sb);
-  const res = await processBookingState(ctx, "6281234567899", "Budi Santoso", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", baseCtx));
+  const res = await processBookingState(ctx, "6281234567899", "Budi Santoso", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", freshBaseCtx()));
   eq("handled",                     res.handled, true);
   const s = sb.getState();
   eq("stage unchanged",             s.state, "AWAITING_ALTERNATIVE_ROOM_TYPE");
@@ -153,9 +153,9 @@ console.log("\nTest 3: name while awaiting → guestName saved, stage unchanged"
 // ─── Test 4: email → guestEmail saved, stage unchanged ───────────────────────
 console.log("\nTest 4: email while awaiting → guestEmail saved, stage unchanged");
 {
-  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: { ...baseCtx } });
+  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: freshBaseCtx() });
   const ctx = makeCtx(sb);
-  const res = await processBookingState(ctx, "6281234567899", "budi.test@example.com", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", baseCtx));
+  const res = await processBookingState(ctx, "6281234567899", "budi.test@example.com", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", freshBaseCtx()));
   eq("handled",                     res.handled, true);
   const s = sb.getState();
   eq("stage unchanged",             s.state, "AWAITING_ALTERNATIVE_ROOM_TYPE");
@@ -167,9 +167,9 @@ console.log("\nTest 4: email while awaiting → guestEmail saved, stage unchange
 // ─── Test 5: valid alternative → selectedRoomType saved, flow advances ───────
 console.log("\nTest 5: valid alternative chosen → selectedRoomType saved, flow advances");
 {
-  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: { ...baseCtx } });
+  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: freshBaseCtx() });
   const ctx = makeCtx(sb);
-  const res = await processBookingState(ctx, "6281234567899", "Grand Deluxe", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", baseCtx));
+  const res = await processBookingState(ctx, "6281234567899", "Grand Deluxe", makeRecord("AWAITING_ALTERNATIVE_ROOM_TYPE", freshBaseCtx()));
   eq("handled",                     res.handled, true);
   const s = sb.getState();
   eq("stage advanced to AWAITING_NAME", s.state, "AWAITING_NAME");
@@ -183,7 +183,7 @@ console.log("\nTest 5: valid alternative chosen → selectedRoomType saved, flow
 console.log("\nTest 6: no create_booking before selectedRoomType + slots complete");
 {
   // Simulate the full sequence: "ya" → name → email; none should create a booking.
-  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: { ...baseCtx } });
+  const sb = makeFakeSupabase({ state: "AWAITING_ALTERNATIVE_ROOM_TYPE", context: freshBaseCtx() });
   const ctx = makeCtx(sb);
   for (const msg of ["ya", "Budi Santoso", "budi.test@example.com"]) {
     const cur = sb.getState();
