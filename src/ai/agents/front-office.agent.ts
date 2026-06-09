@@ -119,8 +119,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "KONVERSI tanggal relatif dari hari ini (" + today + "): 'hari ini' → " + today + "; " +
       "'besok' → +1; 'lusa' → +2; 'minggu depan' → +7; 'akhir minggu ini' → Sab/Min terdekat. " +
       "Bila hanya satu tanggal disebut, anggap 1 malam. " +
-      "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan — pakai pesan di " +
-      "field `error`.",
+      "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan dan JANGAN bilang " +
+      "'sistem gangguan'. Kirim isi field `reply_to_guest` VERBATIM ke tamu.",
 
     "PRESENTASI HASIL: awali 'Ketersediaan kamar untuk <tanggal>'. Tiap tipe satu baris — " +
       "✅ tersedia / ❌ penuh + nama + jumlah + harga. Tutup dengan ajakan booking.",
