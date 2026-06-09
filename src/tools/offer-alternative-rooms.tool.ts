@@ -58,12 +58,12 @@ export const offerAlternativeRooms: ToolHandler = async (
     if (!item || typeof item !== "object") continue;
     const rawName = str((item as Record<string, unknown>).room_type);
     if (!rawName) continue;
-    const rt = ctx.rooms.find(
-      (r) =>
-        r.name.toLowerCase() === rawName.toLowerCase() ||
-        r.name.toLowerCase().includes(rawName.toLowerCase()) ||
-        rawName.toLowerCase().includes(r.name.toLowerCase()),
-    );
+    const needle = rawName.toLowerCase();
+    // Prefer exact name match; fall back to substring only when no exact match
+    // exists. Otherwise "Grand Deluxe" wrongly resolves to "Deluxe".
+    const rt =
+      ctx.rooms.find((r) => r.name.toLowerCase() === needle) ??
+      ctx.rooms.find((r) => r.name.toLowerCase().includes(needle) || needle.includes(r.name.toLowerCase()));
     if (!rt) continue;
     const provided = Number((item as Record<string, unknown>).price_per_night);
     const price = Number.isFinite(provided) && provided > 0
