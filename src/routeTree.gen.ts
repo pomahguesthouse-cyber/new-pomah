@@ -46,7 +46,7 @@ import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
-import { Route as ApiPublicSimAuditTestRouteImport } from './routes/api/public/sim-audit-test'
+import { Route as ApiPublicSimAuditTestRouteImport } from './routes/api.public.sim-audit-test'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
@@ -940,3 +940,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
