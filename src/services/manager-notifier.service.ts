@@ -735,28 +735,19 @@ export async function notifyNewConversationSession(
   },
 ): Promise<void> {
   try {
-    const { telegramToken } = await getPropertyTokens(db);
-    if (!telegramToken) {
-      console.info("[ManagerNotifier] notifyNewSession: no telegram token");
-      return;
-    }
+    const { fonnteToken, telegramToken } = await getPropertyTokens(db);
 
-    // Hanya kirim ke super_admin yang punya telegram_chat_id
+    // Super admin via property_managers (yang punya nomor HP / chat id)
     const superAdmins = await getActiveManagers(db, "super_admin");
-    const telegramAdmins = superAdmins.filter((m) => !!m.telegram_chat_id);
-    if (telegramAdmins.length === 0) {
-      console.info("[ManagerNotifier] notifyNewSession: no super admin with telegram_chat_id");
+    if (superAdmins.length === 0) {
+      console.info("[ManagerNotifier] notifyNewSession: no super_admin manager configured");
       return;
     }
 
-    const sessionLabel = opts.isNewThread
-      ? "🆕 TAMU BARU"
-      : "🔄 SESI BARU";
-
+    const sessionLabel = opts.isNewThread ? "🆕 TAMU BARU" : "🔄 SESI BARU";
     const preview = opts.firstMessage.length > 200
       ? opts.firstMessage.slice(0, 197) + "…"
       : opts.firstMessage;
-
     const wibTime = new Date().toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
       dateStyle: "short",
@@ -775,29 +766,160 @@ export async function notifyNewConversationSession(
       "\n\nℹ️ AI Customer Care sedang menangani percakapan ini.";
 
     const dedupeKeySuffix = opts.threadId ?? opts.phone;
-    // Dedupe per 15 menit agar tidak double-notif jika tamu mengirim burst
     const dedupeWindow = Math.floor(Date.now() / (15 * 60 * 1000));
     const dedupeKey = `new_session:${dedupeKeySuffix}:${dedupeWindow}`;
 
+    const jobs: Promise<unknown>[] = [];
+    for (const admin of superAdmins) {
+      // Kirim ke WA jika ada nomor
+      if (admin.phone) {
+        jobs.push(
+          sendWithRetry(db, fonnteToken, {
+            eventType: "new_session",
+            message,
+            relatedId: opts.threadId,
+            recipient: admin,
+            channel: "wa",
+            dedupeKey: `${dedupeKey}:wa:${admin.id}`,
+          }),
+        );
+      }
+      // Mirror ke Telegram bila terdaftar (opsional, tidak fatal)
+      if (telegramToken && admin.telegram_chat_id) {
+        jobs.push(
+          sendWithRetry(db, null, {
+            eventType: "new_session",
+            message,
+            relatedId: opts.threadId,
+            recipient: admin,
+            channel: "telegram",
+            dedupeKey: `${dedupeKey}:tg:${admin.id}`,
+          }),
+        );
+      }
+    }
+    await Promise.all(jobs);
+
+    console.info(
+      `[ManagerNotifier] New session notif → ${superAdmins.length} super admin(s) | ${opts.phone.slice(-6)}`,
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyNewConversationSession error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. Bot Health Alerts — loop & zombie                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Alert ketika tool agen "stuck" (mis. check_room_availability terus
+ * mengembalikan need_dates di turn berulang dalam 1 percakapan).
+ * Dikirim ke super admin WA agar bisa intervensi manual.
+ */
+export async function notifyBotLoop(
+  db: Db,
+  opts: {
+    phone: string;
+    threadId: string | null;
+    toolName: string;
+    repeatCount: number;
+    lastArgs?: string;
+    sampleOutput?: string;
+  },
+): Promise<void> {
+  try {
+    const { fonnteToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const targets = superAdmins.filter((m) => !!m.phone);
+    if (targets.length === 0) return;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+    });
+
+    const message =
+      `⚠️ BOT STUCK — Tool Loop Terdeteksi\n\n` +
+      `📱 Tamu: ${opts.phone}\n` +
+      `🛠️ Tool: ${opts.toolName}\n` +
+      `🔁 Diulang: ${opts.repeatCount}× dalam 1 turn\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      (opts.lastArgs ? `📥 Args terakhir:\n${opts.lastArgs.slice(0, 240)}\n\n` : "") +
+      (opts.sampleOutput ? `📤 Output:\n${opts.sampleOutput.slice(0, 240)}\n\n` : "") +
+      `Bot mungkin tidak bisa menyelesaikan percakapan otomatis — silakan cek log/percakapan & bantu balas manual bila perlu.`;
+
+    // Dedupe per thread per 10 menit
+    const window = Math.floor(Date.now() / (10 * 60 * 1000));
+    const dedupeKey = `bot_loop:${opts.threadId ?? opts.phone}:${opts.toolName}:${window}`;
+
     await Promise.all(
-      telegramAdmins.map((admin) =>
-        sendWithRetry(db, null, {
-          eventType: "new_booking", // reuse event_type kolom (closest existing value)
+      targets.map((admin) =>
+        sendWithRetry(db, fonnteToken, {
+          eventType: "bot_loop",
           message,
           relatedId: opts.threadId,
           recipient: admin,
-          channel: "telegram",
+          channel: "wa",
           dedupeKey: `${dedupeKey}:${admin.id}`,
         }),
       ),
     );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBotLoop error (non-fatal):", e);
+  }
+}
 
-    console.info(
-      `[ManagerNotifier] New session notif sent — ${opts.phone.slice(-6)} ` +
-      `(${opts.isNewThread ? "new thread" : "new session"})`,
+/**
+ * Alert ketika queue worker mendeteksi zombie (lock_expires_at lewat).
+ * Tidak per-entry — digabung jadi 1 pesan ringkas dengan sample, dedupe
+ * per 10 menit agar tidak flooding.
+ */
+export async function notifyZombieTimeout(
+  db: Db,
+  opts: {
+    count: number;
+    samples: Array<{ phone: string | null; entryId: string; lastError: string | null }>;
+  },
+): Promise<void> {
+  try {
+    if (opts.count <= 0) return;
+    const { fonnteToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const targets = superAdmins.filter((m) => !!m.phone);
+    if (targets.length === 0) return;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+    });
+
+    const sampleLines = opts.samples.slice(0, 5).map((s) =>
+      `• ${s.phone ?? "?"} — entry ${s.entryId.slice(0, 8)} (${s.lastError ?? "zombie_timeout"})`,
+    ).join("\n");
+
+    const message =
+      `🧟 ZOMBIE WORKER — Queue Reset\n\n` +
+      `Jumlah job yang lock-nya expired & di-reset: ${opts.count}\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      (sampleLines ? `Contoh:\n${sampleLines}\n\n` : "") +
+      `Job akan dicoba ulang otomatis. Bila berulang, cek beban LLM / koneksi Fonnte.`;
+
+    const window = Math.floor(Date.now() / (10 * 60 * 1000));
+    const dedupeKey = `zombie_timeout:${window}`;
+
+    await Promise.all(
+      targets.map((admin) =>
+        sendWithRetry(db, fonnteToken, {
+          eventType: "zombie_timeout",
+          message,
+          relatedId: null,
+          recipient: admin,
+          channel: "wa",
+          dedupeKey: `${dedupeKey}:${admin.id}`,
+        }),
+      ),
     );
   } catch (e) {
-    console.warn("[ManagerNotifier] notifyNewConversationSession error (non-fatal):", e);
+    console.warn("[ManagerNotifier] notifyZombieTimeout error (non-fatal):", e);
   }
 }
 
