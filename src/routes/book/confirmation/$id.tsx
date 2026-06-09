@@ -248,71 +248,14 @@ function ConfirmationPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
-              {isMounted && inv ? (
-                <PDFErrorBoundary
-                  fallback={
-                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed" title="Unduhan PDF tidak tersedia, gunakan tombol Cetak Invoice">
-                      <Download className="h-4 w-4" />
-                      PDF tidak tersedia
-                    </span>
-                  }
-                >
-                  <React.Suspense
-                    fallback={
-                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Menyiapkan PDF…
-                      </span>
-                    }
-                  >
-                    <GuestPDFDownloadLink
-                      booking={{
-                        id: id,
-                        reference_code: inv.reference_code,
-                        check_in: inv.check_in,
-                        check_out: inv.check_out,
-                        total_amount: inv.total_amount,
-                        payment_status:
-                          inv.status === "confirmed" ||
-                          inv.status === "checked_in" ||
-                          inv.status === "checked_out"
-                            ? "paid"
-                            : "unpaid",
-                        paid_amount:
-                          inv.status === "confirmed" ||
-                          inv.status === "checked_in" ||
-                          inv.status === "checked_out"
-                            ? inv.total_amount
-                            : 0,
-                        source: "direct",
-                        guests: {
-                          full_name: inv.guest.full_name,
-                          email: inv.guest.email,
-                          phone: inv.guest.phone,
-                        },
-                        booking_rooms: Array.from({ length: inv.rooms }, (_, i) => ({
-                          id: `${id}-room-${i}`,
-                          room_id: null,
-                          nightly_rate: inv.nightly_rate,
-                          room_types: { name: inv.room_type },
-                          rooms: null,
-                        })),
-                      }}
-                      logoUrl={logoUrl}
-                      propertyName={propertyName}
-                      propertyAddress={propertyAddress}
-                      propertyPhone={propertyPhone}
-                      propertyWebsite={propertyWebsite}
-                      fileName={`Invoice-${inv.reference_code || id.slice(0, 8)}.pdf`}
-                    />
-                  </React.Suspense>
-                </PDFErrorBoundary>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-lg bg-stone-200 px-4 py-2 text-sm text-stone-500 cursor-not-allowed">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  PDF sedang disiapkan…
-                </span>
-              )}
+              <button
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                title="Gunakan dialog cetak browser dan pilih 'Save as PDF' untuk menyimpan sebagai PDF"
+              >
+                <Download className="h-4 w-4" />
+                Simpan / Cetak PDF
+              </button>
               <button
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
@@ -327,6 +270,7 @@ function ConfirmationPage() {
                 Kembali ke Beranda
               </Link>
             </div>
+
           </>
         )}
       </main>
