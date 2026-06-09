@@ -153,9 +153,11 @@ async function runAgent(
   signal?:          AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
-): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
+): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }>; loopAlert?: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string } }> {
   const toolsUsed = new Set<string>();
   const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
+  // Track per-tool need_dates repeats — surfaces loop pattern to caller.
+  const needDatesCount = new Map<string, { count: number; lastArgs: string; lastOutput: string }>();
   // Resolve tools dynamically per run so context-aware tool sets (e.g.
   // mode-gated Front Office tools) take effect; fall back to the static list.
   const agentTools = agent.getTools?.(agentCtx) ?? agent.tools;
@@ -257,6 +259,22 @@ async function runAgent(
 
       if (toolLabel) toolsUsed.add(toolLabel);
 
+      // Loop heuristic: jika tool yang sama mengembalikan need_dates: true
+      // ≥2× dalam 1 run → surface ke caller (super admin akan dapat alert).
+      if (toolName && output.includes('"need_dates"')) {
+        try {
+          const parsed = JSON.parse(output);
+          if (parsed && parsed.need_dates === true) {
+            const prev = needDatesCount.get(toolName) ?? { count: 0, lastArgs: "", lastOutput: "" };
+            needDatesCount.set(toolName, {
+              count: prev.count + 1,
+              lastArgs: rawArgs,
+              lastOutput: output,
+            });
+          }
+        } catch { /* ignore non-JSON */ }
+      }
+
       messages.push({
         role:         "tool",
         tool_call_id: tc.id,
@@ -266,8 +284,16 @@ async function runAgent(
     // next turn: send tool results back to agent LLM
   }
 
+  // Build loopAlert payload if any tool stuck on need_dates.
+  let loopAlert: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string } | undefined;
+  for (const [toolName, info] of needDatesCount.entries()) {
+    if (info.count >= 2 && (!loopAlert || info.count > loopAlert.repeatCount)) {
+      loopAlert = { toolName, repeatCount: info.count, lastArgs: info.lastArgs, sampleOutput: info.lastOutput };
+    }
+  }
+
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
-  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}) };
+  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}), ...(loopAlert ? { loopAlert } : {}) };
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
@@ -707,6 +733,7 @@ export async function runMultiAgentOrchestration(
     trainingExamplesUsed: trainingExamples.length,
     trainingExampleIds:   trainingExamples.map((ex) => ex.id),
     retries:              agentResult.retries || managerSubAgentRetries.length ? [...(agentResult.retries ?? []), ...managerSubAgentRetries] : undefined,
+    loopAlert:            agentResult.loopAlert,
   };
 }
 

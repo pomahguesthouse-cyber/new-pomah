@@ -388,6 +388,27 @@ export async function executeAutoreplyForPhone(
           }
         }
       }
+
+      // Surface bot-loop signal ke super admin (fire-and-forget) —
+      // berlaku baik saat ada reply maupun saat orchestrator gagal.
+      if (orchResult?.loopAlert) {
+        const la = orchResult.loopAlert;
+        void (async () => {
+          try {
+            const { notifyBotLoop } = await import("@/services/manager-notifier.service");
+            await notifyBotLoop(supabaseAdmin as any, {
+              phone,
+              threadId: c.thread_id,
+              toolName: la.toolName,
+              repeatCount: la.repeatCount,
+              lastArgs: la.lastArgs,
+              sampleOutput: la.sampleOutput,
+            });
+          } catch (e) {
+            console.warn("[Autoreply] notifyBotLoop failed:", e);
+          }
+        })();
+      }
     } catch (e) {
       console.error(`[Autoreply] AI attempt ${attempt}:`, e);
       const latency = Date.now() - tStart;
