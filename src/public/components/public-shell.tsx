@@ -176,7 +176,7 @@ export function PublicFooter({
   const restWords = parts.slice(1).join(" ");
 
   return (
-    <footer className="border-t border-stone-200 bg-stone-900 text-stone-300">
+    <footer className="border-t border-teal-800/30 bg-teal-950 text-teal-100/90">
       <div className="mx-auto max-w-6xl px-6 py-16">
         <div className="grid gap-12 md:grid-cols-4">
           {/* Brand */}
@@ -187,14 +187,14 @@ export function PublicFooter({
                 <span className="font-serif text-2xl font-light text-amber-400">{restWords}</span>
               )}
             </div>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-400">
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-teal-200/80">
               Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
               istimewa.
             </p>
             <div className="mt-5 flex items-center gap-3">
               <a
                 href="#"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-700 text-stone-400 transition hover:border-amber-400 hover:text-amber-400"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
               >
                 <Instagram className="h-4 w-4" />
               </a>
@@ -204,7 +204,7 @@ export function PublicFooter({
                     ? `https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`
                     : "#"
                 }
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-stone-700 text-stone-400 transition hover:border-amber-400 hover:text-amber-400"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
               >
                 <MessageCircle className="h-4 w-4" />
               </a>
@@ -213,7 +213,7 @@ export function PublicFooter({
 
           {/* Links */}
           <div>
-            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-teal-400/85">
               Navigasi
             </p>
             <ul className="space-y-2 text-sm">
@@ -224,7 +224,7 @@ export function PublicFooter({
                 { to: "/book", label: "Reservasi" },
               ].map((l) => (
                 <li key={l.label}>
-                  <Link to={l.to} className="text-stone-400 transition hover:text-white">
+                  <Link to={l.to} className="text-teal-200/80 transition hover:text-white">
                     {l.label}
                   </Link>
                 </li>
@@ -234,12 +234,12 @@ export function PublicFooter({
 
           {/* Contact */}
           <div>
-            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-stone-500">
+            <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-teal-400/85">
               Kontak
             </p>
             <ul className="space-y-3 text-sm">
               {property?.address && (
-                <li className="flex items-start gap-2 text-stone-400">
+                <li className="flex items-start gap-2 text-teal-200/80">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   <span>
                     {property.address}
@@ -248,7 +248,7 @@ export function PublicFooter({
                 </li>
               )}
               {property?.whatsapp_number && (
-                <li className="flex items-center gap-2 text-stone-400">
+                <li className="flex items-center gap-2 text-teal-200/80">
                   <Phone className="h-4 w-4 shrink-0 text-amber-500" />
                   <a
                     href={`https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`}
@@ -259,7 +259,7 @@ export function PublicFooter({
                 </li>
               )}
               {property?.email && (
-                <li className="flex items-center gap-2 text-stone-400">
+                <li className="flex items-center gap-2 text-teal-200/80">
                   <Mail className="h-4 w-4 shrink-0 text-amber-500" />
                   <a href={`mailto:${property.email}`} className="hover:text-white">
                     {property.email}
@@ -270,13 +270,13 @@ export function PublicFooter({
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-stone-800 pt-8 md:flex-row">
-          <p className="text-xs text-stone-600">
+        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-teal-900/30 pt-8 md:flex-row">
+          <p className="text-xs text-teal-400/60">
             © {new Date().getFullYear()} {fullName}. Semua hak dilindungi.
           </p>
           <Link
             to="/login"
-            className="font-mono text-[10px] uppercase tracking-widest text-stone-700 hover:text-stone-500"
+            className="font-mono text-[10px] uppercase tracking-widest text-teal-400/40 hover:text-teal-300/60"
           >
             Staff Login
           </Link>
@@ -522,16 +522,16 @@ export function PomahNav({
 
 export function PomahFooter({ name }: { name: string }) {
   return (
-    <footer className="bg-amber-800 text-amber-100">
+    <footer className="bg-teal-900 text-teal-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
         <div>
           <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
-          <p className="mt-3 max-w-xs text-sm text-amber-200/80">
+          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
             Experience comfort and hospitality at {name}.
           </p>
         </div>
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-300">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
             Quick Links
           </p>
           <ul className="mt-4 space-y-2 text-sm">
@@ -558,19 +558,19 @@ export function PomahFooter({ name }: { name: string }) {
           </ul>
         </div>
         <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-300">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
             Follow Us
           </p>
           <a
             href="#"
             aria-label="Instagram"
-            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-600 text-amber-200 transition hover:border-white hover:text-white"
+            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-700 text-teal-200 transition hover:border-white hover:text-white"
           >
             <Instagram className="h-4 w-4" />
           </a>
         </div>
       </div>
-      <div className="border-t border-amber-700/60 py-5 text-center text-xs text-amber-300/70">
+      <div className="border-t border-teal-800/60 py-5 text-center text-xs text-teal-300/70">
         © {new Date().getFullYear()} {name}. Semua hak dilindungi.
       </div>
     </footer>
