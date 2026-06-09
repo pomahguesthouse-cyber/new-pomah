@@ -104,15 +104,16 @@ export const checkRoomAvailability: ToolHandler = async (
   const coercedOut = coerceDate(args.check_out, today);
 
   if (!coercedIn) {
-    // Jangan fallback ke "hari ini" jika tamu belum pernah menyebut tanggal.
-    // Minta agen mengonfirmasi tanggal lebih dulu agar booking tidak salah tanggal.
+    // Tamu belum menyebut tanggal — jangan tandai sebagai error (LLM bisa
+    // salah tafsir jadi "sistem gangguan"). Beri pesan siap-kirim ke tamu.
     return JSON.stringify({
-      ok: false,
+      ok: true,
       need_dates: true,
-      error:
-        "Tanggal check-in belum diketahui. Tanyakan dulu kepada tamu: " +
-        "'Untuk tanggal berapa Kak rencana menginap, dan sampai tanggal berapa?' " +
-        "Jangan asumsikan hari ini. Setelah tamu menjawab, panggil ulang tool ini dengan tanggal yang benar.",
+      reply_to_guest:
+        "Boleh tahu untuk tanggal berapa Kakak rencana menginap, dan sampai tanggal berapa ya? 📅",
+      instruction_to_agent:
+        "Tanggal belum diketahui. Kirim `reply_to_guest` VERBATIM ke tamu. " +
+        "JANGAN bilang sistem error/gangguan. Setelah tamu menjawab tanggal, panggil ulang tool ini.",
     });
   }
 
