@@ -24,6 +24,8 @@ import {
   Users,
   Plus,
   Send,
+  BellOff,
+  Bell,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -40,6 +42,7 @@ import {
   updatePropertyManagerRole,
   togglePropertyManagerActive,
   deletePropertyManager,
+  togglePropertyManagerMute,
 } from "@/admin/modules/settings/settings.functions";
 import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -972,6 +975,7 @@ function ManagerTab() {
   const updateFn = useServerFn(updatePropertyManagerRole);
   const toggleActiveFn = useServerFn(togglePropertyManagerActive);
   const deleteFn = useServerFn(deletePropertyManager);
+  const toggleMuteFn = useServerFn(togglePropertyManagerMute);
   
   const getPropFn = useServerFn(getPropertySettings);
   const qc = useQueryClient();
@@ -1021,6 +1025,14 @@ function ManagerTab() {
 
   const toggleActiveMut = useMutation({
     mutationFn: (v: { id: string; is_active: boolean }) => toggleActiveFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["property-managers"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const toggleMuteMut = useMutation({
+    mutationFn: (v: { id: string; is_muted: boolean }) => toggleMuteFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["property-managers"] });
     },
@@ -1151,6 +1163,24 @@ function ManagerTab() {
                     <SelectItem value="viewer" className="text-xs">Viewer</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "h-8 w-8 transition-colors",
+                    (m as any).is_muted
+                      ? "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                      : "text-muted-foreground hover:text-amber-500 hover:bg-amber-50",
+                  )}
+                  title={(m as any).is_muted ? "Notifikasi dinonaktifkan — klik untuk aktifkan" : "Klik untuk menonaktifkan notifikasi"}
+                  onClick={() => toggleMuteMut.mutate({ id: m.id, is_muted: !(m as any).is_muted })}
+                >
+                  {(m as any).is_muted ? (
+                    <BellOff className="w-4 h-4" />
+                  ) : (
+                    <Bell className="w-4 h-4" />
+                  )}
+                </Button>
                 <Button 
                   variant="ghost" 
                   size="icon" 
