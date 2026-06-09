@@ -386,8 +386,27 @@ export async function executeAutoreplyForPhone(
           } catch (err) {
             console.warn("[Autoreply] Failed to log orch error:", err);
           }
-        }
       }
+
+      // Surface bot-loop signal ke super admin (fire-and-forget).
+      if (orchResult?.loopAlert) {
+        void (async () => {
+          try {
+            const { notifyBotLoop } = await import("@/services/manager-notifier.service");
+            await notifyBotLoop(supabaseAdmin as any, {
+              phone,
+              threadId: c.thread_id,
+              toolName: orchResult.loopAlert!.toolName,
+              repeatCount: orchResult.loopAlert!.repeatCount,
+              lastArgs: orchResult.loopAlert!.lastArgs,
+              sampleOutput: orchResult.loopAlert!.sampleOutput,
+            });
+          } catch (e) {
+            console.warn("[Autoreply] notifyBotLoop failed:", e);
+          }
+        })();
+      }
+    }
     } catch (e) {
       console.error(`[Autoreply] AI attempt ${attempt}:`, e);
       const latency = Date.now() - tStart;
