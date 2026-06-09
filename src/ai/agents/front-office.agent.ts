@@ -127,6 +127,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
     "PRESENTASI HASIL: awali 'Ketersediaan kamar untuk <tanggal>'. Tiap tipe satu baris — " +
       "✅ tersedia / ❌ penuh + nama + jumlah + harga. Tutup dengan ajakan booking.",
 
+    "KAMAR DIMINTA PENUH: jika tipe kamar yang TAMU SEBUT SECARA SPESIFIK (mis. 'Deluxe') " +
+      "ditandai `tidak_tersedia=true` atau `kamar_tersedia<=0`, TAPI ada tipe lain dengan " +
+      "`kamar_tersedia>0`, WAJIB panggil `offer_alternative_rooms` dengan requested_room_type, " +
+      "check_in, check_out, adults, children, dan array `alternatives` (ambil dari tipe lain yang " +
+      "tersedia). Setelah tool jalan, kirim isi `message` VERBATIM. JANGAN menulis sendiri " +
+      "kalimat 'apakah Kakak ingin memilih tipe kamar lain' — biarkan state machine yang " +
+      "memandu pemilihan kamar pengganti.",
+
     "EXTRA BED: Bila jumlah tamu > kapasitas default kamar yang dipilih, panggil " +
       "`get_room_specifications`, dan bila extra bed tersedia, tawarkan. Hitung total " +
       "akurat: (tarif kamar + extrabed_rate × jumlah) × malam.",
