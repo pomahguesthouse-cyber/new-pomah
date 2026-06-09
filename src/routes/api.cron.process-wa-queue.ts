@@ -13,14 +13,50 @@ import { drainQueue } from "@/services/wa-autoreply.service";
  * the access posture of /api/queue-worker (hotfix 54a3274).
  */
 async function handle(request: Request): Promise<Response> {
-  await (supabaseAdmin as any).rpc("wa_queue_cleanup_zombies");
+  const { data: zombieCount } = await (supabaseAdmin as any).rpc(
+    "wa_queue_cleanup_zombies",
+  );
+  const count = typeof zombieCount === "number" ? zombieCount : 0;
+
+  // Fire-and-forget super admin alert when zombies were reset.
+  if (count > 0) {
+    void (async () => {
+      try {
+        // Ambil sampel entry yang baru saja di-reset (status retrying + zombie error).
+        const { data: samples } = await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .select("id, phone, last_error, updated_at")
+          .ilike("last_error", "%zombie%")
+          .order("updated_at", { ascending: false })
+          .limit(5);
+
+        const { notifyZombieTimeout } = await import(
+          "@/services/manager-notifier.service"
+        );
+        await notifyZombieTimeout(supabaseAdmin as any, {
+          count,
+          samples: ((samples ?? []) as any[]).map((r) => ({
+            phone: r.phone ?? null,
+            entryId: r.id,
+            lastError: r.last_error ?? null,
+          })),
+        });
+      } catch (e) {
+        console.warn("[Cron] notifyZombieTimeout failed:", e);
+      }
+    })();
+  }
+
   const origin = new URL(request.url).origin;
   const { processed } = await drainQueue(origin);
 
-  return new Response(JSON.stringify({ processed }, null, 2), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ processed, zombies_reset: count }, null, 2),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 export const Route = createFileRoute("/api/cron/process-wa-queue")({
