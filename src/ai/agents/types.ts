@@ -50,6 +50,12 @@ export interface AgentContext {
    * tamu menulis pesan singkat tanpa menyebut ulang tanggal.
    */
   agreedDates?: { checkIn: string; checkOut: string };
+  /**
+   * Potongan data booking yang sudah disebut tamu di turn-turn sebelumnya
+   * tapi belum lengkap untuk memanggil `start_booking_details`. Diinject
+   * dari `wa_booking_states.slots`.
+   */
+  partialBooking?: { roomType?: string; adults?: number; children?: number };
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   chatPhone?: string;
   /**

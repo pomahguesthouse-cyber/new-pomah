@@ -492,9 +492,26 @@ export async function runMultiAgentOrchestration(
   const priorSlots = (stateRecord.slots ?? {}) as Record<string, unknown>;
   const priorCheckIn  = typeof priorSlots.checkIn  === "string" ? priorSlots.checkIn  : undefined;
   const priorCheckOut = typeof priorSlots.checkOut === "string" ? priorSlots.checkOut : undefined;
-  const topicStillFresh = !!stateRecord.last_topic;
-  if (priorCheckIn && priorCheckOut && topicStillFresh) {
+
+  // Decouple agreedDates dari last_topic — slots fresh selama record itu
+  // sendiri belum kadaluarsa (DB sudah filter expired records via
+  // get_active_booking_state). Hilangkan kelangkaan: tanggal hilang padahal
+  // booking state masih aktif.
+  if (priorCheckIn && priorCheckOut) {
     input.agentCtx.agreedDates = { checkIn: priorCheckIn, checkOut: priorCheckOut };
+  }
+
+  // Inject partial booking slots (room type / jumlah tamu) ke prompt agent
+  // supaya tidak re-ask info yang sudah disebut tamu di turn sebelumnya.
+  const partialRoomType = typeof priorSlots.partialRoomType === "string" ? priorSlots.partialRoomType : undefined;
+  const partialAdults   = typeof priorSlots.partialAdults   === "number" ? priorSlots.partialAdults   : undefined;
+  const partialChildren = typeof priorSlots.partialChildren === "number" ? priorSlots.partialChildren : undefined;
+  if (partialRoomType || partialAdults !== undefined || partialChildren !== undefined) {
+    input.agentCtx.partialBooking = {
+      roomType: partialRoomType,
+      adults:   partialAdults,
+      children: partialChildren,
+    };
   }
 
   const rewrite = rewriteQuery(lastUserMsg, resolved);
@@ -516,6 +533,7 @@ export async function runMultiAgentOrchestration(
     {
       bookingActive: stateRecord.state !== "IDLE",
       lastTopic:     resolved.topic ?? stateRecord.last_topic ?? null,
+      roomTypeNames: input.toolCtx.rooms.map((r) => r.name),
     },
   );
   console.info(

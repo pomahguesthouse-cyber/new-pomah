@@ -10,6 +10,7 @@ import { TOOL_LABELS }                   from "./registry";
 import { checkRoomAvailability }          from "./availability.tool";
 import { createBooking }                  from "./booking.tool";
 import { startBookingDetails }            from "./start-booking.tool";
+import { updateBookingSlots }             from "./booking-slots.tool";
 import { requestHousekeepingService }     from "./housekeeping/request-service.tool";
 import { reportMaintenanceIssue }         from "./maintenance/report-issue.tool";
 import { getPaymentInfo }                 from "./finance/get-payment-info.tool";
@@ -46,6 +47,7 @@ import type { ToolContext, ToolHandler }  from "./types";
 const HANDLERS: Record<string, ToolHandler> = {
   check_room_availability:       checkRoomAvailability,
   start_booking_details:         startBookingDetails,
+  update_booking_slots:          updateBookingSlots,
   create_booking:                createBooking,
   request_housekeeping_service:  requestHousekeepingService,
   report_maintenance_issue:      reportMaintenanceIssue,

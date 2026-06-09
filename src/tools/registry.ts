@@ -113,6 +113,30 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "update_booking_slots",
+      description:
+        "Simpan POTONGAN data booking ke memori percakapan saat tamu menjawab sebagian. " +
+        "Gunakan SETIAP KALI tamu menyebut satu informasi booking (tipe kamar / jumlah orang / " +
+        "tanggal) TAPI Anda BELUM punya semua data untuk memanggil `start_booking_details`. " +
+        "Contoh: tamu hanya bilang 'Deluxe' atau '2 orang' atau 'tanggal 20 Juni'. " +
+        "Tool ini tidak mengirim balasan — setelah memanggil, lanjutkan menanyakan slot " +
+        "berikutnya yang masih kosong. Jangan memanggil bila semua data sudah lengkap " +
+        "(langsung panggil `start_booking_details` saja).",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: { type: "string", description: "Tipe kamar yang baru disebut tamu (mis. 'Deluxe'). Kosongkan jika belum disebut di pesan ini." },
+          adults:    { type: "number", description: "Jumlah dewasa yang baru disebut tamu. Kosongkan jika belum disebut." },
+          children:  { type: "number", description: "Jumlah anak yang baru disebut tamu. Kosongkan jika belum disebut." },
+          check_in:  { type: "string", description: "Tanggal check-in YYYY-MM-DD yang baru disebut. Kosongkan jika belum disebut." },
+          check_out: { type: "string", description: "Tanggal check-out YYYY-MM-DD. Kosongkan jika belum disebut atau hanya 1 malam." },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_bookings",
       description:
         "Daftar booking. Default urut dari booking yang paling baru dibuat (cocok untuk 'booking terakhir / terbaru'). " +
@@ -441,6 +465,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 export const TOOL_LABELS: Record<string, string> = {
   check_room_availability:      "Room Availability",
   start_booking_details:        "Booking Flow",
+  update_booking_slots:         "Booking Slots",
   create_booking:               "Booking Engine",
   request_housekeeping_service: "Housekeeping",
   report_maintenance_issue:     "Maintenance",

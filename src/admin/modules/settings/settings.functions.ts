@@ -460,6 +460,21 @@ export const togglePropertyManagerActive = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const togglePropertyManagerMute = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), is_muted: z.boolean() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { error } = await db(context.supabase)
+      .from("property_managers")
+      .update({ is_muted: data.is_muted })
+      .eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+
 export const deletePropertyManager = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.string().uuid().parse(d))

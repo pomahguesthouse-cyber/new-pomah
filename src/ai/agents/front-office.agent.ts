@@ -22,6 +22,7 @@ const pickTools = (toolNames: readonly string[]) =>
 const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "check_room_availability",
   "get_room_specifications",
+  "update_booking_slots",
   "start_booking_details",
   "create_booking",
 ] as const);
@@ -136,6 +137,23 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN tanya nama/email/HP sendiri — tool ini yang ambil alih. " +
       "Setelah panggil, sampaikan `message` dari hasil tool VERBATIM. " +
       "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool.",
+
+    "SLOT-FILL PARTIAL: jika tamu hanya menyebut SEBAGIAN info booking di satu pesan " +
+      "(mis. cuma 'Deluxe', cuma '2 orang', atau cuma tanggal) DAN data lain masih kurang " +
+      "untuk `start_booking_details`, WAJIB panggil `update_booking_slots` dengan info yang " +
+      "baru disebut, lalu tanya slot berikutnya yang masih kosong dalam satu balasan singkat. " +
+      "Jangan menunggu sampai semua info baru lalu ekstrak — simpan tiap potongan langsung.",
+
+    ctx.partialBooking
+      ? "INFO YANG SUDAH DISIMPAN DARI PERCAKAPAN SEBELUMNYA: " +
+        [
+          ctx.partialBooking.roomType ? `tipe kamar = ${ctx.partialBooking.roomType}` : null,
+          ctx.partialBooking.adults   !== undefined ? `dewasa = ${ctx.partialBooking.adults}` : null,
+          ctx.partialBooking.children !== undefined ? `anak = ${ctx.partialBooking.children}` : null,
+        ].filter(Boolean).join(", ") +
+        ". JANGAN tanya ulang info ini — gunakan langsung saat memanggil tool."
+      : "",
+
 
     "Setelah proses booking berhasil: sapa nama tamu, kode booking, total harga, instruksi " +
       "transfer (bila info rekening ada), minta bukti pembayaran, dan berikan link invoice bila tersedia.",

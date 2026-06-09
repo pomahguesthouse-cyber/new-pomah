@@ -1,73 +1,84 @@
-## Manager Agent — Notification & Escalation System
+# Audit & Perbaikan Gap State Machine Booking
 
-Tujuan: Manager Agent menerima event operasional penting (booking baru, bukti transfer, komplain tamu) lewat WhatsApp secara otomatis, dengan retry, logging, dan halaman tindak lanjut untuk komplain.
+## Ringkasan temuan audit
 
-### Catatan keputusan
+Sistem **sudah punya** state machine + draft persisten (`wa_booking_states`: state enum, BookingContext JSON, slots, last_topic, last_entity, expires_at 15 menit) + interruption handling + stuck-state monitor. **Namun ada gap nyata** di fase awal percakapan — persis skenario yang Anda contohkan ("Ada kamar tanggal 20?" → "Deluxe" → "2 orang" → "Budi"):
 
-- **Reuse tabel `property_managers`** yang sudah ada (kolom `name`, `phone`, `role` di mana `role ∈ super_admin | booking_manager | viewer`). Cukup tambah kolom `is_active`. Tidak membuat tabel `manager_contacts` baru karena akan duplikat.
-- **Super admin** = `property_managers` dengan `role='super_admin' AND is_active=true` (tidak menambah kolom `super_admin_phone` di `properties`).
-- Pengiriman pakai layanan Fonnte yang sudah ada (`src/services/whatsapp.service.ts` + `properties.fonnte_token`).
+### Gap #1 — State `AWAITING_DATES` / `ROOM_SELECTED` / `AWAITING_DATES` di enum tapi tidak pernah di-set
+Booking machine hanya mulai dari `AWAITING_NAME` ke atas. Fase tanya tanggal / tipe kamar / jumlah tamu 100% diserahkan ke LLM Front Office Agent, yang baru memanggil tool `start_booking_details` ketika **semua** parameter sudah lengkap. Jika tamu menjawab bertahap ("Deluxe" lalu "2 orang"), agent harus menyusun ulang dari history tiap turn — rentan halusinasi tanggal.
 
-### 1. Database migration
+### Gap #2 — Slots hanya menyimpan `checkIn`/`checkOut`, tidak menyimpan `partialRoomType` / `partialAdults` / `partialChildren`
+Akibatnya jawaban tunggal "Deluxe" (saat state masih IDLE) dilihat classifier sebagai pesan general → bisa salah route ke agen lain.
 
-Satu migration menambah/membuat:
+### Gap #3 — Classifier short-affirmative hanya menangani "ya/oke"
+Tidak ada penanganan untuk reply pendek non-affirmatif yang jelas-jelas mengisi slot: angka jumlah orang ("2", "2 orang"), nama tipe kamar tunggal ("Deluxe", "Family"), atau tanggal lepas ("20 Juni") saat `last_topic ∈ {availability, pricing, booking}`.
 
-- `ALTER TABLE property_managers ADD COLUMN is_active boolean NOT NULL DEFAULT true`.
-- `CREATE TABLE notification_logs` — kolom domain: `event_type` (`new_booking | payment_proof | complaint`), `recipient_phone`, `recipient_role`, `message`, `attachment_url`, `status` (`pending | sent | failed`), `attempts`, `error`, `dedupe_key` (unik, untuk anti-duplikat), `sent_at`. + GRANT + RLS staff-only.
-- `CREATE TABLE guest_complaints` — `guest_name`, `phone`, `thread_id`, `booking_id` (nullable), `category`, `message`, `confidence`, `status` (`OPEN | IN_PROGRESS | RESOLVED | CLOSED` default `OPEN`), `assigned_to`, `resolved_at`, `notes`. + GRANT + RLS staff-only + trigger `set_updated_at`.
+### Gap #4 — Mismatch timeout
+`last_topic` di-treat fresh selama state record belum auto-expire (15 menit), tapi `agreedDates` hanya di-inject jika `last_topic` ada. Setelah cron-cleanup, partial slots ikut hilang sementara booking_state mungkin masih hidup → tamu disuruh ulangi tanggal.
 
-### 2. Notifier service
+### Gap #5 — `last_required_field` tidak eksplisit
+Sudah tersirat dari `state`, tapi tidak ada satu kolom yang bisa di-render di admin inbox untuk "tamu sedang ditanya: nomor HP". Akan membantu debugging & superadmin notification.
 
-File baru `src/services/manager-notifier.service.ts`:
+### Gap #6 — `PAYMENT_PENDING` & `COMPLETED` tidak punya transisi balik kalau tamu tiba-tiba minta ubah
+State akan terjebak sampai 15 menit / sampai cancel keyword.
 
-- `notifyNewBooking(bookingId)` — ambil booking + guest + room_type, render template "🏨 NEW BOOKING ALERT", kirim ke semua manager aktif (semua role).
-- `notifyPaymentProof({ threadId, guestName, bookingCode, imageUrl })` — render "💳 PAYMENT PROOF RECEIVED", kirim ke `super_admin` saja, sertakan `fileUrl` ke `sendWhatsAppMessage`. `dedupe_key = "payment_proof:" + messageId` untuk cegah duplikat.
-- `notifyComplaint({ complaintId })` — render "🚨 GUEST COMPLAINT DETECTED", kirim ke semua manager aktif.
-- Helper `sendWithRetry(recipient, message, fileUrl?, dedupeKey)` — insert row `notification_logs` (status=pending), retry 3× dengan backoff (1s, 2s, 4s), update status `sent/failed`. Idempoten via `dedupe_key` unik.
-- Semua handler dipanggil **fire-and-forget** (`void notifier(...).catch(log)`) dari titik pemicu, jadi tidak memblokir alur utama.
+---
 
-### 3. Pemicu (triggers)
+## Rencana perbaikan (fokus high-impact, minimal invasive)
 
-- **Website booking** — `src/public/functions/public.functions.ts` setelah booking insert sukses → panggil `notifyNewBooking(id)`.
-- **WhatsApp AI booking** — `src/tools/booking.tool.ts` `createBooking` (juga menangani booking lewat state machine) setelah `bookings.insert(...).select()` sukses → panggil notifier (source: `direct/whatsapp`).
-- **Admin booking** — `src/admin/functions/calendar.functions.ts` di handler create booking → panggil notifier (source: `admin`).
-- **OTA import** — hook yang sama bila ada path import; jika belum ada, tinggalkan TODO terdokumentasi (di luar scope minimal).
-- **Payment proof** — di `src/routes/api.fonnte.ts` / `src/webhook/parser.ts`, deteksi inbound message dengan `attachment/image url` (Fonnte field `url`/`media`). Bila ada: simpan ke `whatsapp_messages` seperti biasa, lalu fire-and-forget `notifyPaymentProof` dengan `guestName` dari thread + booking aktif (kalau ada `bookings` terbaru untuk phone tsb).
-- **Complaint** — di `src/ai/multi-agent-orchestrator.ts` setelah intent classification: bila intent ∈ {`complaint`, `maintenance`, `service_issue`, `noise`, `cleanliness`, `urgent`} **dan** confidence > 0.7 → `INSERT INTO guest_complaints (status=OPEN, ...)` + fire-and-forget `notifyComplaint(id)`. Kategori intent dipetakan ke `category`. (Intent-classifier diperluas: tambah keyword/intent untuk noise, cleanliness, maintenance, urgent jika belum.)
+### Step 1 — Perluas slots untuk partial booking data
+File: `src/ai/state-machine/booking-machine.ts` + `src/ai/multi-agent-orchestrator.ts`
 
-### 4. UI admin — halaman Komplain
+Tambah field opsional di slots: `partialRoomType` (string), `partialAdults` (number), `partialChildren` (number) di samping `checkIn`/`checkOut` yang sudah ada. Front Office agent akan menulis ke slots tiap kali ekstrak salah satu, sehingga turn berikut tidak perlu re-derive.
 
-- Route baru `src/routes/admin/complaints.tsx` + modul `src/admin/modules/complaints/`.
-  - `complaints.functions.ts`: `listComplaints`, `updateComplaintStatus({id, status, notes?})`, `assignComplaint`.
-  - `complaints-view.tsx`: tabel komplain (filter status), detail drawer, tombol ubah status (OPEN → IN_PROGRESS → RESOLVED → CLOSED), kolom catatan, link ke thread WhatsApp & booking.
-- Tambah link sidebar di `src/admin/layout` (tempat menu admin yang sudah ada).
-- Halaman log notifikasi opsional: tab di Settings → "Notifikasi Manager" yang menampilkan `notification_logs` (read-only) untuk audit. (Bisa fase 2 — sebut sebagai opsional.)
+### Step 2 — Tool helper baru `update_booking_slots`
+File baru: `src/tools/booking-slots.tool.ts` + daftar di `src/tools/registry.ts`
 
-### 5. Template pesan
+Tool ringan yang dipanggil agent ketika menangkap potongan data ("Deluxe" saja, "2 orang" saja). Menulis ke `wa_booking_states.slots` lewat RPC yang sudah ada (`update_booking_state` dipanggil dengan state IDLE + slots terbaru). Konsekuensi: jika tamu berikutnya bilang "ok pesan", agent sudah punya {checkIn, checkOut, roomType, adults} lengkap untuk memanggil `start_booking_details`.
 
-Template literal di notifier mengikuti format yang diminta user (NEW BOOKING ALERT, PAYMENT PROOF RECEIVED, GUEST COMPLAINT DETECTED) dengan placeholder yang diisi dari DB. Format datetime: DD/MM/YYYY (sesuai workspace standard).
+### Step 3 — Perluas SHORT_AFFIRMATIVE classifier menjadi "slot-filling follow-up"
+File: `src/ai/router/intent-classifier.ts`
 
-### 6. Validasi
+Tambah deteksi: jika `lastTopic ∈ {availability, pricing, booking, room_facilities}` DAN pesan match salah satu pola:
+- Angka pendek ("2", "3 orang", "2 dewasa 1 anak")
+- Nama tipe kamar tunggal (cocokkan dengan daftar `ctx.rooms` dari context)
+- Tanggal terisolasi ("20 Juni", "besok")
 
-- Setelah migration: cek lint Supabase.
-- Manual: buat booking via website → cek WhatsApp manager + row di `notification_logs`. Kirim gambar via WhatsApp ke nomor Fonnte → cek super admin menerima. Kirim pesan keluhan → cek halaman Complaints muncul + manager dapat notif.
+Maka inherit intent jadi `booking_inquiry` dengan confidence 0.8 (sama seperti SHORT_AFFIRMATIVE sekarang) supaya tidak salah-route ke agent lain.
 
-### File yang akan dibuat / diubah
+### Step 4 — Decouple `agreedDates` dari `last_topic`
+File: `src/ai/multi-agent-orchestrator.ts` (line 495-498)
 
-Create:
-- `supabase/migrations/{ts}_manager_notifications.sql`
-- `src/services/manager-notifier.service.ts`
-- `src/admin/modules/complaints/complaints.functions.ts`
-- `src/admin/modules/complaints/complaints-view.tsx`
-- `src/routes/admin/complaints.tsx`
+Ubah guard: inject `agreedDates` jika slots berisi tanggal **DAN** state record belum kadaluarsa (cek `updated_at` vs 15 menit), tidak peduli `last_topic` masih ada. Hilangkan kelangkaan di Gap #4.
 
-Edit:
-- `src/public/functions/public.functions.ts` (hook booking)
-- `src/tools/booking.tool.ts` (hook booking)
-- `src/admin/functions/calendar.functions.ts` (hook booking)
-- `src/routes/api.fonnte.ts` dan/atau `src/webhook/parser.ts` (hook payment proof)
-- `src/ai/multi-agent-orchestrator.ts` (hook complaint)
-- `src/ai/router/intent-classifier.ts` (perluas intent komplain bila perlu)
-- Sidebar admin layout (tambah menu Komplain)
+### Step 5 — Tambah kolom display `last_required_field` (computed)
+File: `src/ai/state-machine/booking-machine.ts`
 
-Tidak menyentuh: alur RAG, simulator, smart-delay, booking state machine logic.
+Fungsi derived helper `getRequiredField(state)` → string ("tanggal" | "tipe_kamar" | "jumlah_tamu" | "nama" | "email" | "nomor_hp" | "konfirmasi" | null). Dipakai oleh:
+- Stuck-state monitor notification (superadmin lihat "macet di field nomor_hp")
+- Admin WhatsApp inbox (optional badge, ditunda — bukan scope sekarang)
+
+Tidak perlu migrasi DB, cukup derive di TS.
+
+### Step 6 — Reset otomatis dari `COMPLETED` / `PAYMENT_PENDING` saat detect intent baru
+File: `src/ai/state-machine/booking-machine.ts`
+
+Tambah cek: di `PAYMENT_PENDING`, jika classifier intent = `booking_inquiry` dengan confidence tinggi dan pesan jelas pemesanan baru (mengandung tanggal/tipe), reset ke IDLE dan biarkan flow baru jalan. Hindari guest stuck.
+
+---
+
+## Yang TIDAK dikerjakan (tetap seperti sekarang)
+
+- **Tidak menambah kolom DB baru** di `wa_booking_states` / `whatsapp_threads` — semua kebutuhan tertutup oleh `state` + `slots` JSON existing.
+- **Tidak menambah state baru** di enum BookingState — `AWAITING_DATES` dan `ROOM_SELECTED` tetap unused (dead code akan dihapus di task lain, bukan sekarang).
+- **Tidak mengubah Front Office agent prompt** — perbaikan deterministik di state/slots/classifier sudah cukup untuk skenario yang Anda sebutkan.
+- **Visualisasi flowchart** — bukan scope (sudah Anda pilih audit, bukan dokumentasi).
+
+---
+
+## Verifikasi setelah implementasi
+
+1. Jalankan AI Lab simulator dengan skenario: "ada kamar 20 desember?" → "deluxe" → "2 orang" → "ok pesan" → "Budi" → "budi@x.com" → "ya" → "ya konfirmasi". Pastikan tidak ada turn di mana agent re-ask data yang sudah disebut.
+2. Cek `wa_booking_states.slots` setelah turn ke-3 berisi `{checkIn, checkOut, partialRoomType: "Deluxe", partialAdults: 2}`.
+3. Cek classifier log: turn "deluxe" dan "2 orang" intent = `booking_inquiry` (bukan `general`).
+4. Cron stuck-monitor: paksa state CONFIRMING_PHONE > 10 detik, pastikan notifikasi superadmin menyebut `last_required_field = "nomor_hp"`.

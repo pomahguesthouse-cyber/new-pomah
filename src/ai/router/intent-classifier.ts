@@ -156,6 +156,14 @@ export interface IntentContext {
 const SHORT_AFFIRMATIVE =
   /^\s*(ya|iya|yoi|yap|yup|oke|ok|okeh|sip|boleh|mau|lanjut|setuju|deal|gas|gass|baik|y|yh|yg itu|itu aja|yang itu|itu)[\s.!?]*$/i;
 
+// Slot-filling follow-ups: jawaban PENDEK yang jelas mengisi satu slot
+// booking saat percakapan sebelumnya masih seputar booking/pricing/availability.
+// Tanpa ini, "Deluxe" atau "2 orang" jatuh ke intent "general" dan kena
+// salah-route ke agen lain.
+const SLOT_FILL_PEOPLE_COUNT = /^\s*\d+\s*(orang|tamu|dewasa|pax|anak|adult|child)?\s*(dan\s*\d+\s*(anak|child|kids?))?[\s.!?]*$/i;
+const SLOT_FILL_ISOLATED_DATE =
+  /^\s*(\d{1,2}([\/\-\.]\d{1,2})?([\/\-\.]\d{2,4})?|tanggal\s+\d{1,2}|\d{1,2}\s+(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)\w*|besok|lusa|hari ini|minggu depan|akhir (minggu|pekan))[\s.!?]*$/i;
+
 const TOPIC_TO_INTENT: Record<string, IntentCategory> = {
   pricing:         "pricing_inquiry",
   availability:    "availability_check",
@@ -163,7 +171,16 @@ const TOPIC_TO_INTENT: Record<string, IntentCategory> = {
   room_specs:      "booking_inquiry",
   payment:         "payment",
   complaint:       "complaint",
+  booking:         "booking_inquiry",
 };
+
+/**
+ * Optional extra signals for slot-fill detection: a list of room-type display
+ * names so a bare reply like "Deluxe" can be recognised as `booking_inquiry`.
+ */
+export interface IntentContextExtras {
+  roomTypeNames?: string[];
+}
 
 /**
  * Classify the intent of a user message.
@@ -175,7 +192,7 @@ export async function classifyIntent(
   text: string,
   supabase?: SupabaseClient,
   llmConfig?: { apiKey: string; baseUrl: string; model: string },
-  context?: IntentContext,
+  context?: IntentContext & IntentContextExtras,
 ): Promise<ClassifiedIntent> {
   // Short affirmative follow-up — inherit prior intent so the agent keeps
   // its train of thought instead of greeting/generalising.
@@ -185,6 +202,35 @@ export async function classifyIntent(
       (context.bookingActive ? "booking_inquiry" : undefined);
     if (inherited) {
       return { category: inherited, confidence: 0.8, matchedTerms: ["context-inherit"] };
+    }
+  }
+
+  // Slot-fill follow-up: only when there's a booking-ish topic on the table.
+  if (context) {
+    const topicIsBookingish = context.bookingActive
+      || context.lastTopic === "availability"
+      || context.lastTopic === "pricing"
+      || context.lastTopic === "booking"
+      || context.lastTopic === "room_facilities"
+      || context.lastTopic === "room_specs";
+
+    if (topicIsBookingish) {
+      const trimmed = text.trim();
+      const isShort = trimmed.length <= 30;
+      const matchesPeople = SLOT_FILL_PEOPLE_COUNT.test(trimmed);
+      const matchesDate   = SLOT_FILL_ISOLATED_DATE.test(trimmed);
+      const matchesRoom   = isShort && (context.roomTypeNames ?? []).some((rn) => {
+        const n = rn.trim().toLowerCase();
+        return n.length >= 3 && new RegExp(`^${n}$|^${n}\\s|\\s${n}$`, "i").test(trimmed);
+      });
+
+      if (matchesPeople || matchesDate || matchesRoom) {
+        return {
+          category: "booking_inquiry",
+          confidence: 0.8,
+          matchedTerms: [matchesRoom ? "slot-fill-room" : matchesPeople ? "slot-fill-people" : "slot-fill-date"],
+        };
+      }
     }
   }
 

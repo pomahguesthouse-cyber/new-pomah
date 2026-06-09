@@ -195,6 +195,30 @@ export function isDataEntryState(state: BookingState): boolean {
   return DATA_ENTRY_STATES.includes(state);
 }
 
+/**
+ * Human-readable label of the field the bot is currently waiting on.
+ * Used by the stuck-state monitor + super-admin notifications so investigators
+ * see "macet di nomor_hp" tanpa menebak dari nama state.
+ */
+export function getRequiredField(state: BookingState): string | null {
+  switch (state) {
+    case "AWAITING_DATES":      return "tanggal";
+    case "ROOM_SELECTED":       return "tipe_kamar";
+    case "AWAITING_NAME":       return "nama";
+    case "CONFIRMING_NAME":     return "konfirmasi_nama";
+    case "AWAITING_EMAIL":      return "email";
+    case "CONFIRMING_PHONE":    return "konfirmasi_nomor_hp";
+    case "AWAITING_PHONE":      return "nomor_hp";
+    case "CONFIRMING_BOOKING":  return "konfirmasi_booking";
+    case "PAYMENT_PENDING":     return "bukti_pembayaran";
+    default:                    return null;
+  }
+}
+
+/** Detect "tamu jelas-jelas memulai booking baru" — pakai untuk auto-reset stale states. */
+const NEW_BOOKING_INTENT_PATTERN =
+  /\b(booking|pesan|reservasi|mau (nginap|menginap|pesan|booking)|cek (kamar|ketersediaan)|ada kamar|kamar (kosong|tersedia))\b/i;
+
 // Question / info-request signals that indicate the guest is asking something
 // else instead of answering the current prompt.
 const QUESTION_PATTERN =
@@ -460,6 +484,15 @@ export async function processBookingState(
   }
   
   if (state === "PAYMENT_PENDING") {
+    // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar
+    // lagi tanggal 25", "ada kamar deluxe 30 Juni?"). Tanpa ini, state
+    // tersangkut sampai 15-menit auto-expire dan tamu disambut Finance Agent
+    // padahal yang dia mau adalah Front Office.
+    if (NEW_BOOKING_INTENT_PATTERN.test(message)) {
+      console.info(`[BookingState] PAYMENT_PENDING → IDLE: tamu memulai booking baru.`);
+      await updateBookingState(supabase, phone, "IDLE", {});
+      return { handled: false };
+    }
     // Pre-Finance-Agent ownership, this state auto-flipped to COMPLETED on
     // any "bayar/sudah/transfer" keyword which bypassed OCR + status update.
     // Now the Finance Agent owns the post-booking flow: hand the turn over
