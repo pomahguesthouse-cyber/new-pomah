@@ -215,18 +215,49 @@ export function isDataEntryState(state: BookingState): boolean {
  */
 export function getRequiredField(state: BookingState): string | null {
   switch (state) {
-    case "AWAITING_DATES":      return "tanggal";
-    case "ROOM_SELECTED":       return "tipe_kamar";
-    case "AWAITING_NAME":       return "nama";
-    case "CONFIRMING_NAME":     return "konfirmasi_nama";
-    case "AWAITING_EMAIL":      return "email";
-    case "CONFIRMING_PHONE":    return "konfirmasi_nomor_hp";
-    case "AWAITING_PHONE":      return "nomor_hp";
-    case "CONFIRMING_BOOKING":  return "konfirmasi_booking";
-    case "PAYMENT_PENDING":     return "bukti_pembayaran";
-    default:                    return null;
+    case "AWAITING_DATES":                  return "tanggal";
+    case "AWAITING_ALTERNATIVE_ROOM_TYPE":  return "tipe_kamar_alternatif";
+    case "ROOM_SELECTED":                   return "tipe_kamar";
+    case "AWAITING_NAME":                   return "nama";
+    case "CONFIRMING_NAME":                 return "konfirmasi_nama";
+    case "AWAITING_EMAIL":                  return "email";
+    case "CONFIRMING_PHONE":                return "konfirmasi_nomor_hp";
+    case "AWAITING_PHONE":                  return "nomor_hp";
+    case "CONFIRMING_BOOKING":              return "konfirmasi_booking";
+    case "PAYMENT_PENDING":                 return "bukti_pembayaran";
+    default:                                return null;
   }
 }
+
+/** Format daftar alternatif sebagai numbered list untuk ditampilkan ke tamu. */
+export function formatAlternativesList(alts: AlternativeRoomOption[]): string {
+  return alts
+    .map((a, i) => `${i + 1}. ${a.name} - Rp${a.pricePerNight.toLocaleString("id-ID")}/malam`)
+    .join("\n");
+}
+
+/** Cocokkan jawaban tamu dengan salah satu alternatif (nama / nomor urut). */
+export function matchAlternative(
+  message: string,
+  alts: AlternativeRoomOption[],
+): AlternativeRoomOption | null {
+  const t = message.trim().toLowerCase();
+  if (!t) return null;
+  // Pilihan nomor: "1", "2", "pilih 2", "no 3"
+  const numMatch = t.match(/^(?:pilih\s+|nomor\s+|no\.?\s+|opsi\s+)?(\d+)\b/);
+  if (numMatch) {
+    const idx = Number(numMatch[1]) - 1;
+    if (idx >= 0 && idx < alts.length) return alts[idx];
+  }
+  // Cocokkan nama (substring dua arah, case-insensitive)
+  for (const a of alts) {
+    const n = a.name.toLowerCase();
+    if (t === n) return a;
+    if (t.includes(n) || n.includes(t)) return a;
+  }
+  return null;
+}
+
 
 /** Detect "tamu jelas-jelas memulai booking baru" — pakai untuk auto-reset stale states. */
 const NEW_BOOKING_INTENT_PATTERN =
