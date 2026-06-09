@@ -153,9 +153,11 @@ async function runAgent(
   signal?:          AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
-): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
+): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }>; loopAlert?: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string } }> {
   const toolsUsed = new Set<string>();
   const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
+  // Track per-tool need_dates repeats — surfaces loop pattern to caller.
+  const needDatesCount = new Map<string, { count: number; lastArgs: string; lastOutput: string }>();
   // Resolve tools dynamically per run so context-aware tool sets (e.g.
   // mode-gated Front Office tools) take effect; fall back to the static list.
   const agentTools = agent.getTools?.(agentCtx) ?? agent.tools;
