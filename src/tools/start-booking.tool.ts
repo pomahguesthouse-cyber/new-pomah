@@ -51,6 +51,20 @@ export const startBookingDetails: ToolHandler = async (
     children,
   };
 
+  // Dynamic nightly rate passed by the LLM from check_room_availability result.
+  // When provided, ALWAYS prefer this over base_rate so the review summary and
+  // the invoice show the same number (the pricing engine's authoritative value).
+  const dynamicRate = typeof args.price_per_night === "number" && args.price_per_night > 0
+    ? args.price_per_night
+    : null;
+
+  // Compute nights count for totalPrice calculation.
+  function calcNights(ci: string, co: string): number {
+    const d1 = new Date(ci);
+    const d2 = new Date(co);
+    return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
+  }
+
   const roomsArg = args.rooms;
   let roomsDescription = "";
 
@@ -102,7 +116,14 @@ export const startBookingDetails: ToolHandler = async (
         roomTypeId: rt.id,
         roomTypeName: rt.name,
         quantity: qty,
-        pricePerNight: Number(rt.base_rate ?? 0),
+        // Per-room price_per_night (from rooms array item) takes priority;
+        // then top-level dynamic rate; then base_rate fallback.
+        pricePerNight:
+          (typeof item.price_per_night === "number" && item.price_per_night > 0
+            ? item.price_per_night
+            : null) ??
+          dynamicRate ??
+          Number(rt.base_rate ?? 0),
       });
     }
 
@@ -111,11 +132,17 @@ export const startBookingDetails: ToolHandler = async (
     }
 
     context.rooms = parsedRooms;
-    // Set fallback variables
+    // Set fallback scalar variables from first room.
     context.roomId = parsedRooms[0].roomTypeId;
     context.roomName = parsedRooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ");
     context.pricePerNight = parsedRooms[0].pricePerNight;
     roomsDescription = context.roomName;
+    // Compute total: sum(rate × qty × nights) across all room items.
+    const nights = calcNights(checkIn, checkOut);
+    context.totalPrice = parsedRooms.reduce(
+      (sum, r) => sum + r.pricePerNight * r.quantity * nights,
+      0,
+    );
   } else {
     const roomTypeName = str(args.room_type).toLowerCase();
     if (!roomTypeName) {
@@ -161,13 +188,17 @@ export const startBookingDetails: ToolHandler = async (
 
     context.roomId = rt.id;
     context.roomName = rt.name;
-    context.pricePerNight = Number(rt.base_rate ?? 0);
+    // Use dynamic rate from availability result when provided; fall back to base_rate.
+    context.pricePerNight = dynamicRate ?? Number(rt.base_rate ?? 0);
     context.rooms = [{
       roomTypeId: rt.id,
       roomTypeName: rt.name,
       quantity: 1,
-      pricePerNight: Number(rt.base_rate ?? 0),
+      pricePerNight: context.pricePerNight,
     }];
+    // Persist total so summary and invoice are always consistent.
+    const nights = calcNights(checkIn, checkOut);
+    context.totalPrice = context.pricePerNight * nights;
     roomsDescription = rt.name;
   }
 

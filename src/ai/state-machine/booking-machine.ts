@@ -87,6 +87,12 @@ const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 const USE_THIS_PATTERN = /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|pake ini|betul|benar|oke|ok|sip|setuju|lanjut)\b/i;
 const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
 
+// Specific "use this phone number" phrases for CONFIRMING_PHONE state.
+// Must be checked BEFORE USE_THIS_PATTERN to guarantee "ya nomor ini" doesn't
+// get misrouted by the generic interruption-detection heuristics.
+const USE_THIS_PHONE_PATTERN =
+  /^(ya|iya|yes)?\s*(pakai|gunakan|pake|nomor)?\s*(nomor)\s*(ini|sini|aja|saja|oke|ok|ya)\b/i;
+
 const CONFIRM_PATTERN = /\b(ya|iya|yes|lanjut|benar|oke|ok|setuju|betul|lanjutkan|ya benar|yup)\b/i;
 const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/i;
 
@@ -334,7 +340,7 @@ function isExpectedAnswer(state: BookingState, message: string): boolean {
       return !!extractEmail(message);
     case "AWAITING_PHONE":
     case "CONFIRMING_PHONE":
-      return !!extractPhone(message) || USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
+      return !!extractPhone(message) || USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message) || USE_THIS_PHONE_PATTERN.test(message);
     case "CONFIRMING_NAME":
       return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
     case "CONFIRMING_BOOKING":
@@ -597,8 +603,14 @@ export async function processBookingState(
 
   if (state === "CONFIRMING_PHONE") {
     const trimmed = message.trim();
-    // Explicit "use this number" (the chat number)
-    if (USE_THIS_PATTERN.test(trimmed) && !USE_OTHER_PATTERN.test(trimmed) && !extractPhone(trimmed)) {
+    // Explicit "use this (chat) number" — check phrase-specific pattern first
+    // to handle "ya nomor ini", "pakai nomor ini", "nomor ini aja", etc.
+    // BEFORE the generic USE_THIS_PATTERN so the word "nomor" doesn't confuse
+    // the interruption detector into thinking it's a phone question.
+    const wantsThisPhone =
+      USE_THIS_PHONE_PATTERN.test(trimmed) ||
+      (USE_THIS_PATTERN.test(trimmed) && !USE_OTHER_PATTERN.test(trimmed) && !extractPhone(trimmed));
+    if (wantsThisPhone) {
       context.guestPhone = formatPhoneDisplay(phone);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return buildBookingSummary(context);

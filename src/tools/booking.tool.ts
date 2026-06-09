@@ -451,11 +451,15 @@ export const createBooking: ToolHandler = async (
       });
     }
 
+    const singleRate = (typeof args.price_per_night === "number" && args.price_per_night > 0)
+      ? args.price_per_night
+      : Number(rt.base_rate ?? 0);
+
     assignments.push({
       roomTypeId: rt.id,
       roomTypeName: rt.name,
       roomId: assignedRoomId,
-      rate: Number(rt.base_rate ?? 0),
+      rate: singleRate,
     });
   }
 
@@ -517,7 +521,17 @@ export const createBooking: ToolHandler = async (
   // booking_rooms.nightly_rate × nights = subtotal stays true.
   for (const a of assignments) {
     const info = resolvedByRoomType.get(a.roomTypeId);
-    if (info) a.rate = info.avgRate;
+    if (info) {
+      const rt = ctx.rooms.find((r) => r.id === a.roomTypeId);
+      const baseRate = rt ? Number(rt.base_rate ?? 0) : 0;
+      // If the assignment already has a custom/dynamic rate that is different from base_rate,
+      // and the DB resolved rate is just the fallback base_rate, do NOT overwrite the custom rate.
+      if (a.rate > 0 && a.rate !== baseRate && info.avgRate === baseRate) {
+        // Keep a.rate
+      } else {
+        a.rate = info.avgRate;
+      }
+    }
   }
 
   const total = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);

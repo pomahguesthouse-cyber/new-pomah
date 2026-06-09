@@ -83,7 +83,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         "Mulai proses pengisian data pemesanan. Panggil SETELAH tamu memilih tipe kamar dan tanggal " +
         "menginap serta menyatakan ingin booking — JANGAN menanyakan nama/email/HP sendiri. " +
         "Tool ini mengambil alih percakapan untuk mengumpulkan & mengonfirmasi nama dan nomor secara bertahap. " +
-        "Sertakan guest_name bila tamu sudah pernah menyebutkan namanya.",
+        "Sertakan guest_name bila tamu sudah pernah menyebutkan namanya. " +
+        "WAJIB sertakan price_per_night dari hasil check_room_availability (nightly_rate) " +
+        "agar ringkasan harga yang dilihat tamu sama dengan invoice.",
       parameters: {
         type: "object",
         properties: {
@@ -95,7 +97,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
               type: "object",
               properties: {
                 room_type: { type: "string", description: "Nama tipe kamar." },
-                quantity: { type: "number", description: "Jumlah kamar." }
+                quantity: { type: "number", description: "Jumlah kamar." },
+                price_per_night: { type: "number", description: "Harga per malam dari hasil check_room_availability (nightly_rate). Wajib diisi agar harga akurat." },
               },
               required: ["room_type", "quantity"]
             }
@@ -105,6 +108,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           adults:     { type: "number", description: "Jumlah tamu dewasa. Default 1." },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
           guest_name: { type: "string", description: "Nama tamu bila sudah disebutkan di percakapan. Kosongkan bila belum." },
+          price_per_night: {
+            type: "number",
+            description:
+              "Harga per malam DINAMIS dari hasil check_room_availability (field nightly_rate). " +
+              "WAJIB diisi agar ringkasan tamu dan invoice menunjukkan harga yang sama. " +
+              "Jangan abaikan atau biarkan kosong jika availability sudah dipanggil.",
+          },
         },
         required: ["check_in"],
       },
