@@ -173,7 +173,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
               },
               required: ["room_type"],
             },
-            minItems: 1,
           },
         },
         required: ["requested_room_type", "check_in", "check_out", "alternatives"],
