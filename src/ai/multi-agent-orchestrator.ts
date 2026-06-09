@@ -179,12 +179,18 @@ async function runAgent(
       `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
   }
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
+    // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…
+    // JANGAN reset" membuat Gemini menyimpulkan percakapan sudah selesai
+    // sehingga hanya membalas dengan sapaan terakhir. Sekarang tanggal
+    // disajikan sebagai catatan konteks — agen tetap menanyakan ulang
+    // kalau tamu jelas-jelas mengajukan pertanyaan baru tanpa tanggal.
     systemPrompt +=
-      `\n\nTANGGAL MENGINAP YANG SUDAH DISEPAKATI DI PERCAKAPAN INI:\n` +
+      `\n\nCATATAN KONTEKS — tanggal yang sebelumnya pernah dibahas dengan tamu ini:\n` +
       `• check_in: ${agentCtx.agreedDates.checkIn}\n` +
       `• check_out: ${agentCtx.agreedDates.checkOut}\n` +
-      `Selalu gunakan tanggal ini saat memanggil tool (check_room_availability, start_booking_details, dll.). ` +
-      `JANGAN reset ke hari ini. Tanggal hanya boleh berubah jika tamu eksplisit menyebut tanggal baru atau meminta mengganti tanggal.`;
+      `Pakai tanggal ini sebagai default kalau tamu jelas melanjutkan topik kamar/booking ` +
+      `yang sama (misal "harganya?", "yang deluxe gimana?", "oke booking"). ` +
+      `Kalau tamu memulai topik baru atau menyebut tanggal lain, abaikan default ini.`;
   }
 
   const messages: AiMessage[] = [
