@@ -215,7 +215,13 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
 }
 
 interface SendOptions {
-  eventType: "new_booking" | "payment_proof" | "complaint";
+  eventType:
+    | "new_booking"
+    | "payment_proof"
+    | "complaint"
+    | "new_session"
+    | "bot_loop"
+    | "zombie_timeout";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
