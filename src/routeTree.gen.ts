@@ -49,6 +49,7 @@ import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
+import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -251,6 +252,12 @@ const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
   path: '/api/cron/process-wa-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronBookingStuckMonitorRoute =
+  ApiCronBookingStuckMonitorRouteImport.update({
+    id: '/api/cron/booking-stuck-monitor',
+    path: '/api/cron/booking-stuck-monitor',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -288,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -329,6 +337,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
+  '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -372,6 +381,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -416,6 +426,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -457,6 +468,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/book'
     | '/rooms'
+    | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -499,6 +511,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -523,6 +536,7 @@ export interface RootRouteChildren {
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
@@ -811,6 +825,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/booking-stuck-monitor': {
+      id: '/api/cron/booking-stuck-monitor'
+      path: '/api/cron/booking-stuck-monitor'
+      fullPath: '/api/cron/booking-stuck-monitor'
+      preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -889,6 +910,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
