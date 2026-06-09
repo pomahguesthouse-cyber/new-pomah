@@ -60,9 +60,9 @@ const ID_MONTHS: Record<string, number> = {
  */
 function coerceDate(v: unknown, today: string): string | null {
   if (typeof v !== "string") return null;
-  const s = v.trim().toLowerCase();
+  const s: string = v.trim().toLowerCase();
   if (!s) return null;
-  if (isDateString(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
   // YYYY/MM/DD
   let m = s.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
