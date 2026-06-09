@@ -193,8 +193,8 @@ export const updateRoomTypeRates = createServerFn({ method: "POST" })
     if (data.base_rate     !== undefined) patch.base_rate     = data.base_rate;
     if (data.extrabed_rate !== undefined) patch.extrabed_rate = data.extrabed_rate;
 
-    const { error } = await context.supabase
-      .from("room_types")
+    const { error } = await (context.supabase
+      .from("room_types") as any)
       .update(patch)
       .eq("id", data.room_type_id);
     if (error) throw error;

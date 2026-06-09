@@ -126,14 +126,14 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
     const { supabase } = context;
     calculateNights(data.checkIn, data.checkOut);
 
-    const { data: bookingId, error } = await supabase.rpc("create_admin_booking_with_lock", {
+    const { data: bookingId, error } = (await (supabase as any).rpc("create_admin_booking_with_lock", {
       p_guest_name: data.guestName,
       p_room_id: data.roomId,
       p_check_in: data.checkIn,
       p_check_out: data.checkOut,
       p_nightly_rate: data.nightlyRate,
       p_status: data.status,
-    });
+    })) as { data: string | null; error: any };
 
     if (error) throw error;
     if (!bookingId) throw new Error("Booking gagal dibuat. Database tidak mengembalikan booking ID.");
