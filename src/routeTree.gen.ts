@@ -46,7 +46,6 @@ import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
-import { Route as ApiPublicSimAuditTestRouteImport } from './routes/api.public.sim-audit-test'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
@@ -237,11 +236,6 @@ const ApiTelegramAgentKeyRoute = ApiTelegramAgentKeyRouteImport.update({
   path: '/$agentKey',
   getParentRoute: () => ApiTelegramRoute,
 } as any)
-const ApiPublicSimAuditTestRoute = ApiPublicSimAuditTestRouteImport.update({
-  id: '/api/public/sim-audit-test',
-  path: '/api/public/sim-audit-test',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   id: '/api/cron/sync-explore',
   path: '/api/cron/sync-explore',
@@ -305,7 +299,6 @@ export interface FileRoutesByFullPath {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
-  '/api/public/sim-audit-test': typeof ApiPublicSimAuditTestRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -348,7 +341,6 @@ export interface FileRoutesByTo {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
-  '/api/public/sim-audit-test': typeof ApiPublicSimAuditTestRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -393,7 +385,6 @@ export interface FileRoutesById {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
-  '/api/public/sim-audit-test': typeof ApiPublicSimAuditTestRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRoute
 }
@@ -439,7 +430,6 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
-    | '/api/public/sim-audit-test'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -482,7 +472,6 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
-    | '/api/public/sim-audit-test'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   id:
@@ -526,7 +515,6 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
-    | '/api/public/sim-audit-test'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
   fileRoutesById: FileRoutesById
@@ -552,7 +540,6 @@ export interface RootRouteChildren {
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
-  ApiPublicSimAuditTestRoute: typeof ApiPublicSimAuditTestRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRoute
 }
 
@@ -817,13 +804,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTelegramAgentKeyRouteImport
       parentRoute: typeof ApiTelegramRoute
     }
-    '/api/public/sim-audit-test': {
-      id: '/api/public/sim-audit-test'
-      path: '/api/public/sim-audit-test'
-      fullPath: '/api/public/sim-audit-test'
-      preLoaderRoute: typeof ApiPublicSimAuditTestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/cron/sync-explore': {
       id: '/api/cron/sync-explore'
       path: '/api/cron/sync-explore'
@@ -934,7 +914,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
-  ApiPublicSimAuditTestRoute: ApiPublicSimAuditTestRoute,
   BookConfirmationIdRoute: BookConfirmationIdRoute,
 }
 export const routeTree = rootRouteImport
