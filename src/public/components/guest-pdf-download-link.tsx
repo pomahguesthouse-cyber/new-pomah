@@ -1,7 +1,5 @@
 import * as React from "react";
 import { Download } from "lucide-react";
-import { PDFDownloadLink } from "@react-pdf/renderer";
-import { InvoiceDocument } from "@/admin/components/invoice-pdf";
 
 export interface GuestPDFDownloadLinkProps {
   booking: any;
@@ -13,36 +11,33 @@ export interface GuestPDFDownloadLinkProps {
   fileName: string;
 }
 
-export default function GuestPDFDownloadLink({
-  booking,
-  logoUrl,
-  propertyName,
-  propertyAddress,
-  propertyPhone,
-  propertyWebsite,
-  fileName,
-}: GuestPDFDownloadLinkProps) {
+/**
+ * Public invoice pages must stay lightweight and resilient in production.
+ *
+ * The previous implementation imported @react-pdf/renderer and the admin
+ * InvoiceDocument into the public route. In the deployed browser bundle this
+ * can throw `Cannot read properties of undefined (reading 'call')` from the
+ * generated invoice-pdf chunk before the page renders.
+ *
+ * Use the browser print dialog instead. Users can still choose "Save as PDF",
+ * while the confirmation page no longer depends on the heavy PDF renderer.
+ */
+export default function GuestPDFDownloadLink(_props: GuestPDFDownloadLinkProps) {
+  const handleClick = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.print();
+    }
+  }, []);
+
   return (
-    <PDFDownloadLink
-      document={
-        <InvoiceDocument
-          booking={booking}
-          logoUrl={logoUrl}
-          propertyName={propertyName}
-          propertyAddress={propertyAddress}
-          propertyPhone={propertyPhone}
-          propertyWebsite={propertyWebsite}
-        />
-      }
-      fileName={fileName}
+    <button
+      type="button"
+      onClick={handleClick}
       className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+      title="Gunakan dialog cetak browser dan pilih 'Save as PDF' untuk menyimpan sebagai PDF"
     >
-      {({ loading }: { loading: boolean }) => (
-        <>
-          <Download className="h-4 w-4" />
-          {loading ? "Menyiapkan PDF..." : "Download Invoice PDF"}
-        </>
-      )}
-    </PDFDownloadLink>
+      <Download className="h-4 w-4" />
+      Simpan / Cetak PDF
+    </button>
   );
 }
