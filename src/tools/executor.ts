@@ -121,7 +121,18 @@ export async function executeTool(
   }
 
   try {
-    const output = await handler(args, ctx);
+    // Per-tool hard timeout so a hung Supabase RPC / external fetch can't
+    // burn the worker lock window and turn the entry into a zombie.
+    const TOOL_TIMEOUT_MS = 15_000;
+    const output = await Promise.race([
+      handler(args, ctx),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`tool_timeout_${TOOL_TIMEOUT_MS}ms`)),
+          TOOL_TIMEOUT_MS,
+        ),
+      ),
+    ]);
     return { output, toolLabel: label };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
