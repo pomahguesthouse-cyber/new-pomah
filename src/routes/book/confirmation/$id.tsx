@@ -7,10 +7,8 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
 import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
 
 const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
 
@@ -85,13 +83,26 @@ const STATUS_LABEL: Record<string, string> = {
 
 function ConfirmationPage() {
   const { id } = Route.useParams();
-  const fn = useServerFn(getBookingInvoice);
-  const siteFn = useServerFn(getPublicSiteData);
   const { data, isLoading } = useQuery({
     queryKey: ["booking-invoice", id],
-    queryFn: () => fn({ data: { id } }),
+    queryFn: async () => {
+      const res = await fetch(`/api/booking-invoice/${encodeURIComponent(id)}`);
+      if (!res.ok) {
+        throw new Error("Failed to fetch booking invoice");
+      }
+      return res.json() as Promise<{ invoice: any | null }>;
+    },
   });
-  const { data: siteData } = useQuery({ queryKey: ["public-site"], queryFn: () => siteFn() });
+  const { data: siteData } = useQuery({
+    queryKey: ["public-site"],
+    queryFn: async () => {
+      const res = await fetch("/api/public-site-data");
+      if (!res.ok) {
+        throw new Error("Failed to fetch public site data");
+      }
+      return res.json() as Promise<any>;
+    },
+  });
   const inv = data?.invoice ?? null;
 
   const mappedBooking = React.useMemo(() => {
