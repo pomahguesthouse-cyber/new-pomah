@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Download, Mail, Phone, RefreshCw } from "lucide-react";
+import { Download, Mail, Phone, RefreshCw, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -178,6 +178,16 @@ Silakan simpan pesan ini sebagai referensi.`;
           >
             <Phone className="h-4 w-4" />
             Kirim Whatsapp
+          </a>
+
+          <a
+            href={`${webInvoiceUrl}?print=true`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+          >
+            <Printer className="h-4 w-4" />
+            Cetak Invoice
           </a>
 
           {/* Fix 2: Kirim ulang invoice (regenerate PDF + send WA) */}

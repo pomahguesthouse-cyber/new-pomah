@@ -596,6 +596,8 @@ export type BookingInvoice = {
   room_type: string;
   nightly_rate: number;
   total_amount: number;
+  payment_status: "unpaid" | "partial" | "paid" | null;
+  paid_amount: number;
   payment_method: string;
   check_in_time: string;
   check_out_time: string;
@@ -691,7 +693,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       try {
         const { data: extRow } = await sb
           .from("bookings")
-          .select("reference_code, nights, payment_method, check_in_time, check_out_time")
+          .select("reference_code, nights, payment_method, check_in_time, check_out_time, payment_status, paid_amount")
           .eq("id", bookingId)
           .maybeSingle();
         ext = (extRow ?? {}) as Record<string, unknown>;
@@ -801,6 +803,8 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         room_type: roomType,
         nightly_rate: Number(rows[0]?.nightly_rate ?? 0),
         total_amount: Number(b.total_amount ?? 0),
+        payment_status: (b.payment_status as any) ?? null,
+        paid_amount: Number(b.paid_amount ?? 0),
         payment_method: String(b.payment_method ?? ""),
         check_in_time: String(b.check_in_time ?? ""),
         check_out_time: String(b.check_out_time ?? ""),

@@ -12,6 +12,8 @@ import { CheckCircle2, Printer, Loader2, Download } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { getBookingInvoice, getPublicSiteData } from "@/public/functions/public.functions";
 
+const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
+
 
 export const Route = createFileRoute("/book/confirmation/$id")({
   // Override the site-wide og:image (homepage hero) with a dedicated invoice
@@ -91,6 +93,45 @@ function ConfirmationPage() {
   });
   const { data: siteData } = useQuery({ queryKey: ["public-site"], queryFn: () => siteFn() });
   const inv = data?.invoice ?? null;
+
+  const mappedBooking = React.useMemo(() => {
+    if (!inv) return null;
+    return {
+      id: id,
+      reference_code: inv.reference_code,
+      check_in: inv.check_in,
+      check_out: inv.check_out,
+      total_amount: inv.total_amount,
+      payment_status: inv.payment_status,
+      paid_amount: inv.paid_amount,
+      special_requests: inv.special_requests,
+      guests: {
+        full_name: inv.guest.full_name,
+        email: inv.guest.email,
+        phone: inv.guest.phone,
+      },
+      booking_rooms: Array.from({ length: inv.rooms }).map((_, idx) => ({
+        id: `room-${idx}`,
+        room_id: null,
+        nightly_rate: inv.nightly_rate,
+        room_types: {
+          name: inv.room_type,
+        },
+      })),
+    };
+  }, [inv, id]);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined" && inv) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("print") === "true") {
+        const timer = setTimeout(() => {
+          window.print();
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [inv]);
 
 
 
@@ -246,14 +287,38 @@ function ConfirmationPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
-              <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
-                title="Gunakan dialog cetak browser dan pilih 'Save as PDF' untuk menyimpan sebagai PDF"
-              >
-                <Download className="h-4 w-4" />
-                Simpan / Cetak PDF
-              </button>
+              {mappedBooking ? (
+                <React.Suspense
+                  fallback={
+                    <button
+                      disabled
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700/70 px-4 py-2 text-sm font-semibold text-white cursor-not-allowed"
+                    >
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Menyiapkan PDF...
+                    </button>
+                  }
+                >
+                  <GuestPDFDownloadLink
+                    booking={mappedBooking}
+                    logoUrl={logoUrl}
+                    propertyName={propertyName}
+                    propertyAddress={propertyAddress}
+                    propertyPhone={propertyPhone}
+                    propertyWebsite={propertyWebsite}
+                    fileName={`Invoice-${inv.reference_code || id.slice(0, 8)}.pdf`}
+                  />
+                </React.Suspense>
+              ) : (
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  title="Gunakan dialog cetak browser dan pilih 'Save as PDF' untuk menyimpan sebagai PDF"
+                >
+                  <Download className="h-4 w-4" />
+                  Simpan / Cetak PDF
+                </button>
+              )}
               <button
                 onClick={() => window.print()}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
