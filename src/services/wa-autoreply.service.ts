@@ -624,6 +624,14 @@ export async function drainQueue(
 
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
+
+    // Periodic heartbeat so a long-running single attempt (tool chain + LLM
+    // retries) keeps extending lock_expires_at and the entry never becomes a
+    // zombie. Fires every 30s for the entire executeAutoreplyForPhone call.
+    const heartbeatTimer = setInterval(() => {
+      void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
+    }, 30_000);
+
     try {
       outcome = await executeAutoreplyForPhone(
         claim.phone,
@@ -634,6 +642,8 @@ export async function drainQueue(
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
+    } finally {
+      clearInterval(heartbeatTimer);
     }
 
     if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
