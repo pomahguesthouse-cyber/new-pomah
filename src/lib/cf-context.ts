@@ -33,3 +33,20 @@ export function runWithCfContext<T>(ctx: CfRequestContext, fn: () => T): T {
 export function getWaitUntil(): WaitUntil | undefined {
   return storage.getStore()?.waitUntil || (globalThis as any).__cfWaitUntil;
 }
+
+/**
+ * Run `task` in the background. On Cloudflare Workers, hands it to
+ * `waitUntil` so the runtime keeps the request alive until it settles;
+ * elsewhere falls back to awaiting it. Either way, errors are logged and
+ * swallowed so callers stay non-blocking.
+ */
+export function runDeferred(label: string, task: () => Promise<unknown>): void | Promise<void> {
+  const safe = task().catch((err) => console.error(`[${label}] deferred task failed:`, err));
+  const wu = getWaitUntil();
+  if (wu) {
+    wu(safe);
+    return;
+  }
+  // Local dev / non-CF: await so the process doesn't exit early.
+  return safe.then(() => undefined);
+}
