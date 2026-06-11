@@ -399,10 +399,12 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       console.error("[submitPublicBooking] Notification trigger error:", notificationErr);
     }
 
-    // Notif manager (fire-and-forget).
-    void import("@/services/manager-notifier.service")
-      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-      .catch((err) => console.warn("[submitPublicBooking] notifyNewBooking gagal:", err));
+    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("submitPublicBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(supabaseAdmin, booking.id);
+    });
 
     return {
       id: booking.id,
