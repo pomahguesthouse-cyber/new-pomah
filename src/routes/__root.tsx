@@ -20,6 +20,207 @@ import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import appCss from "../styles.css?url";
 
+const pomahStructuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://pomahguesthouse.com/#organization",
+      name: "Pomah Guesthouse",
+      url: "https://pomahguesthouse.com",
+      logo: "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
+      email: "info@pomahguesthouse.com",
+      telephone: "+6281227271799",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://pomahguesthouse.com/#website",
+      url: "https://pomahguesthouse.com",
+      name: "Pomah Guesthouse",
+      publisher: {
+        "@id": "https://pomahguesthouse.com/#organization",
+      },
+    },
+    {
+      "@type": "LodgingBusiness",
+      "@id": "https://pomahguesthouse.com/#lodging",
+      name: "Pomah Guesthouse",
+      description:
+        "Guesthouse nyaman di Semarang dekat Universitas Diponegoro (UNDIP), Universitas Negeri Semarang (UNNES), Simpang Lima, dan pusat kota. Cocok untuk keluarga, wisatawan, maupun perjalanan bisnis.",
+      url: "https://pomahguesthouse.com",
+      image:
+        "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
+      telephone: "+6281227271799",
+      email: "info@pomahguesthouse.com",
+      priceRange: "IDR 180000 - 500000",
+      checkinTime: "14:00",
+      checkoutTime: "12:00",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "Jl. Dewi Sartika IV No. 71 Sampangan",
+        addressLocality: "Semarang",
+        addressRegion: "Jawa Tengah",
+        postalCode: "50232",
+        addressCountry: "ID",
+      },
+      hasMap: "https://maps.google.com/maps?q=Pomah+Guesthouse+Semarang",
+      amenityFeature: [
+        { "@type": "LocationFeatureSpecification", name: "WiFi Gratis", value: true },
+        { "@type": "LocationFeatureSpecification", name: "AC", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Smart TV", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Mini Kitchen", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Dapur Bersama", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Parkir Gratis", value: true },
+      ],
+      containsPlace: [
+        { "@id": "https://pomahguesthouse.com/#single-room" },
+        { "@id": "https://pomahguesthouse.com/#deluxe-room" },
+        { "@id": "https://pomahguesthouse.com/#grand-deluxe-room" },
+        { "@id": "https://pomahguesthouse.com/#family-room" },
+      ],
+    },
+    {
+      "@type": "HotelRoom",
+      "@id": "https://pomahguesthouse.com/#single-room",
+      name: "Single Room",
+      description:
+        "Kamar praktis dan nyaman untuk satu orang, ideal untuk solo traveler di Semarang.",
+      occupancy: { "@type": "QuantitativeValue", value: 1 },
+      bed: { "@type": "BedDetails", typeOfBed: "Single Bed" },
+      amenityFeature: [
+        { "@type": "LocationFeatureSpecification", name: "AC", value: true },
+        { "@type": "LocationFeatureSpecification", name: "WiFi", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Dapur Bersama", value: true },
+      ],
+      offers: {
+        "@type": "Offer",
+        price: 180000,
+        priceCurrency: "IDR",
+        availability: "https://schema.org/InStock",
+        url: "https://pomahguesthouse.com",
+      },
+    },
+    {
+      "@type": "HotelRoom",
+      "@id": "https://pomahguesthouse.com/#deluxe-room",
+      name: "Deluxe Room",
+      description:
+        "Kamar nyaman untuk dua orang dengan fasilitas modern dan suasana tenang di Semarang.",
+      occupancy: { "@type": "QuantitativeValue", value: 2 },
+      bed: { "@type": "BedDetails", typeOfBed: "Queen Bed" },
+      amenityFeature: [
+        { "@type": "LocationFeatureSpecification", name: "AC", value: true },
+        { "@type": "LocationFeatureSpecification", name: "WiFi", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Shower", value: true },
+        { "@type": "LocationFeatureSpecification", name: "View Taman", value: true },
+      ],
+      offers: {
+        "@type": "Offer",
+        price: 250000,
+        priceCurrency: "IDR",
+        availability: "https://schema.org/InStock",
+        url: "https://pomahguesthouse.com",
+      },
+    },
+    {
+      "@type": "HotelRoom",
+      "@id": "https://pomahguesthouse.com/#grand-deluxe-room",
+      name: "Grand Deluxe Room",
+      description:
+        "Kamar premium untuk dua orang dengan kenyamanan ekstra untuk pengalaman menginap lebih maksimal.",
+      occupancy: { "@type": "QuantitativeValue", value: 2 },
+      bed: { "@type": "BedDetails", typeOfBed: "Double Bed" },
+      amenityFeature: [
+        { "@type": "LocationFeatureSpecification", name: "AC", value: true },
+        { "@type": "LocationFeatureSpecification", name: "WiFi", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Air Panas", value: true },
+      ],
+      offers: {
+        "@type": "Offer",
+        price: 300000,
+        priceCurrency: "IDR",
+        availability: "https://schema.org/InStock",
+        url: "https://pomahguesthouse.com",
+      },
+    },
+    {
+      "@type": "HotelRoom",
+      "@id": "https://pomahguesthouse.com/#family-room",
+      name: "Family Room 222",
+      description:
+        "Suite luas untuk keluarga atau kelompok dengan dua kamar tidur, dua kamar mandi, dan ruang keluarga.",
+      occupancy: { "@type": "QuantitativeValue", value: 4 },
+      amenityFeature: [
+        { "@type": "LocationFeatureSpecification", name: "WiFi", value: true },
+        { "@type": "LocationFeatureSpecification", name: "2 Kamar Tidur", value: true },
+        { "@type": "LocationFeatureSpecification", name: "2 Kamar Mandi", value: true },
+        { "@type": "LocationFeatureSpecification", name: "Ruang Keluarga", value: true },
+      ],
+      offers: {
+        "@type": "Offer",
+        price: 500000,
+        priceCurrency: "IDR",
+        availability: "https://schema.org/InStock",
+        url: "https://pomahguesthouse.com",
+      },
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://pomahguesthouse.com/#faq",
+      mainEntity: [
+        {
+          "@type": "Question",
+          name: "Di mana lokasi Pomah Guesthouse?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Pomah Guesthouse berlokasi di Jl. Dewi Sartika IV No. 71 Sampangan, Semarang, Jawa Tengah.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Jam berapa check-in dan check-out?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Check-in mulai pukul 14.00 WIB dan check-out maksimal pukul 12.00 WIB.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Apakah tersedia WiFi gratis?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Ya, Pomah Guesthouse menyediakan WiFi gratis untuk tamu.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Apakah tersedia parkir?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Ya, tersedia area parkir untuk tamu Pomah Guesthouse.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Tipe kamar apa saja yang tersedia?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Pomah Guesthouse menyediakan beberapa tipe kamar seperti Single Room, Deluxe Room, Grand Deluxe Room, dan Family Room.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Bagaimana cara booking kamar?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Tamu dapat melakukan pemesanan melalui website resmi Pomah Guesthouse atau menghubungi WhatsApp resmi di +62 812-2727-1799.",
+          },
+        },
+      ],
+    },
+  ],
+};
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -137,6 +338,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="id">
       <head>
         <HeadContent />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(pomahStructuredData) }}
+        />
       </head>
       <body>
         {children}
