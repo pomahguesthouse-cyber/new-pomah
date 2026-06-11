@@ -340,6 +340,65 @@ export const deleteGeneratedArticle = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/* ─── Manual event creation (admin) ───────────────────────────────────────── */
+
+export const createManualEvent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        title: z.string().min(1).max(255),
+        description: z.string().max(2000).optional(),
+        event_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        event_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        event_date_label: z.string().max(100).optional(),
+        event_location: z.string().max(300).optional(),
+        image_url: z.string().max(2000).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const start = data.event_start_date || null;
+    const end = data.event_end_date || start || null;
+
+    let dateLabel = (data.event_date_label || "").trim();
+    if (!dateLabel) {
+      const fmt = (iso: string) =>
+        new Date(iso + "T00:00:00").toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        });
+      if (start && end && start !== end) dateLabel = `${fmt(start)} – ${fmt(end)}`;
+      else if (start) dateLabel = fmt(start);
+      else dateLabel = "Tanggal menyusul";
+    }
+
+    const row = {
+      category: "event" as const,
+      title: data.title.trim(),
+      topic: "manual",
+      meta_description: data.description?.trim() || null,
+      paragraphs: data.description?.trim() ? [data.description.trim()] : [],
+      tags: [] as string[],
+      sources: [] as unknown[],
+      event_start_date: start,
+      event_end_date: end,
+      event_date_label: dateLabel,
+      event_location: data.event_location?.trim() || null,
+      image_url: data.image_url?.trim() || null,
+      status: "active" as const,
+    };
+
+    const { data: inserted, error } = await db(context.supabase)
+      .from("seo_generated_articles")
+      .insert(row)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { ok: true, id: (inserted as any)?.id ?? null };
+  });
+
 /* ─── Public getter for the city-guide event slider ───────────────────────── */
 
 export type PublicEvent = {

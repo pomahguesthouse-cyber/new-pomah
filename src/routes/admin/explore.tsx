@@ -27,6 +27,7 @@ import { Sparkles, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import {
   listActivePublicEvents,
   deleteGeneratedArticle,
+  createManualEvent,
 } from "@/admin/modules/seo/schedules.functions";
 import { generateArticleFromWebSearch } from "@/admin/modules/seo/article-generator.functions";
 import {
@@ -169,6 +170,43 @@ function AdminExplorePage() {
         toast.success("Konten berhasil dibuat");
       }
       setGenDialogOpen(false);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  /* ─── Manual event creation ──────────────────────────────────────────── */
+  const createManualEventFn = useServerFn(createManualEvent);
+  const emptyManual = {
+    title: "",
+    description: "",
+    event_start_date: "",
+    event_end_date: "",
+    event_date_label: "",
+    event_location: "",
+    image_url: "",
+  };
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [manualForm, setManualForm] = useState(emptyManual);
+  const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  const createManualEventMut = useMutation({
+    mutationFn: (payload: typeof emptyManual) =>
+      createManualEventFn({
+        data: {
+          title: payload.title.trim(),
+          description: payload.description.trim() || undefined,
+          event_start_date: payload.event_start_date || null,
+          event_end_date: payload.event_end_date || null,
+          event_date_label: payload.event_date_label.trim() || undefined,
+          event_location: payload.event_location.trim() || undefined,
+          image_url: payload.image_url.trim() || undefined,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["public-active-events"] });
+      qc.invalidateQueries({ queryKey: ["generated-articles"] });
+      toast.success("Event berhasil ditambahkan");
+      setManualDialogOpen(false);
+      setManualForm(emptyManual);
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -906,13 +944,28 @@ function AdminExplorePage() {
                   )}
                   {generateEventMut.isPending ? "Menarik..." : "Tarik Data via AI"}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] px-2 gap-1 text-stone-700"
+                  onClick={() => {
+                    setManualForm(emptyManual);
+                    setManualDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  Buat Manual
+                </Button>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() => setGenDialogOpen(true)}
-                title="Tarik event baru via AI"
+                onClick={() => {
+                  setManualForm(emptyManual);
+                  setManualDialogOpen(true);
+                }}
+                title="Buat event manual"
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -1225,6 +1278,158 @@ function AdminExplorePage() {
               ) : (
                 <>
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Tarik Sekarang
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual event dialog */}
+      <MediaPicker
+        open={manualPickerOpen}
+        kind="image"
+        onPick={(url) => setManualForm((f) => ({ ...f, image_url: url }))}
+        onClose={() => setManualPickerOpen(false)}
+      />
+      <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-emerald-700" />
+              Buat Event Manual
+            </DialogTitle>
+            <DialogDescription>
+              Tambahkan event secara manual. Event akan langsung tampil di slider
+              "Event Mendatang" sampai tanggal berakhir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div>
+              <Label className="text-xs font-semibold">Judul Event *</Label>
+              <Input
+                value={manualForm.title}
+                onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
+                placeholder="contoh: Semarang Night Carnival 2026"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Tanggal Mulai</Label>
+                <Input
+                  type="date"
+                  value={manualForm.event_start_date}
+                  onChange={(e) =>
+                    setManualForm({ ...manualForm, event_start_date: e.target.value })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Tanggal Berakhir</Label>
+                <Input
+                  type="date"
+                  value={manualForm.event_end_date}
+                  onChange={(e) =>
+                    setManualForm({ ...manualForm, event_end_date: e.target.value })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Label Tanggal (Opsional)</Label>
+              <Input
+                value={manualForm.event_date_label}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, event_date_label: e.target.value })
+                }
+                placeholder="contoh: 15 Agustus 2026, Setiap Akhir Pekan"
+                className="mt-1 text-sm"
+              />
+              <p className="text-[10px] text-stone-400 mt-1">
+                Kosongkan untuk auto-generate dari tanggal mulai/berakhir.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Lokasi</Label>
+              <Input
+                value={manualForm.event_location}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, event_location: e.target.value })
+                }
+                placeholder="contoh: Kawasan Simpang Lima"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Deskripsi</Label>
+              <Textarea
+                value={manualForm.description}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, description: e.target.value })
+                }
+                placeholder="Deskripsi singkat tentang event ini..."
+                className="mt-1 text-sm h-20 resize-none"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Gambar</Label>
+              <div className="mt-1 flex gap-2 items-start">
+                <div className="h-16 w-16 bg-stone-100 rounded border border-stone-200 overflow-hidden shrink-0">
+                  {manualForm.image_url ? (
+                    <img
+                      src={getDisplayImageUrl(manualForm.image_url)}
+                      alt=""
+                      onError={(e) => handleImageError(e, "event")}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <CalendarIcon className="h-5 w-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Input
+                    value={manualForm.image_url}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, image_url: e.target.value })
+                    }
+                    placeholder="URL gambar atau pilih dari Media"
+                    className="text-sm h-9"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setManualPickerOpen(true)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Pilih dari Media
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={createManualEventMut.isPending || !manualForm.title.trim()}
+              onClick={() => createManualEventMut.mutate(manualForm)}
+            >
+              {createManualEventMut.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5 mr-1.5" /> Simpan Event
                 </>
               )}
             </Button>
