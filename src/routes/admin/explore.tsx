@@ -944,13 +944,28 @@ function AdminExplorePage() {
                   )}
                   {generateEventMut.isPending ? "Menarik..." : "Tarik Data via AI"}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 text-[10px] px-2 gap-1 text-stone-700"
+                  onClick={() => {
+                    setManualForm(emptyManual);
+                    setManualDialogOpen(true);
+                  }}
+                >
+                  <Plus className="h-3 w-3" />
+                  Buat Manual
+                </Button>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() => setGenDialogOpen(true)}
-                title="Tarik event baru via AI"
+                onClick={() => {
+                  setManualForm(emptyManual);
+                  setManualDialogOpen(true);
+                }}
+                title="Buat event manual"
               >
                 <Plus className="h-4 w-4" />
               </Button>
