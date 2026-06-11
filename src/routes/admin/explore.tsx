@@ -1284,6 +1284,158 @@ function AdminExplorePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Manual event dialog */}
+      <MediaPicker
+        open={manualPickerOpen}
+        kind="image"
+        onPick={(url) => setManualForm((f) => ({ ...f, image_url: url }))}
+        onClose={() => setManualPickerOpen(false)}
+      />
+      <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarIcon className="h-4 w-4 text-emerald-700" />
+              Buat Event Manual
+            </DialogTitle>
+            <DialogDescription>
+              Tambahkan event secara manual. Event akan langsung tampil di slider
+              "Event Mendatang" sampai tanggal berakhir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            <div>
+              <Label className="text-xs font-semibold">Judul Event *</Label>
+              <Input
+                value={manualForm.title}
+                onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
+                placeholder="contoh: Semarang Night Carnival 2026"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold">Tanggal Mulai</Label>
+                <Input
+                  type="date"
+                  value={manualForm.event_start_date}
+                  onChange={(e) =>
+                    setManualForm({ ...manualForm, event_start_date: e.target.value })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold">Tanggal Berakhir</Label>
+                <Input
+                  type="date"
+                  value={manualForm.event_end_date}
+                  onChange={(e) =>
+                    setManualForm({ ...manualForm, event_end_date: e.target.value })
+                  }
+                  className="mt-1 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Label Tanggal (Opsional)</Label>
+              <Input
+                value={manualForm.event_date_label}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, event_date_label: e.target.value })
+                }
+                placeholder="contoh: 15 Agustus 2026, Setiap Akhir Pekan"
+                className="mt-1 text-sm"
+              />
+              <p className="text-[10px] text-stone-400 mt-1">
+                Kosongkan untuk auto-generate dari tanggal mulai/berakhir.
+              </p>
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Lokasi</Label>
+              <Input
+                value={manualForm.event_location}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, event_location: e.target.value })
+                }
+                placeholder="contoh: Kawasan Simpang Lima"
+                className="mt-1 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Deskripsi</Label>
+              <Textarea
+                value={manualForm.description}
+                onChange={(e) =>
+                  setManualForm({ ...manualForm, description: e.target.value })
+                }
+                placeholder="Deskripsi singkat tentang event ini..."
+                className="mt-1 text-sm h-20 resize-none"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Gambar</Label>
+              <div className="mt-1 flex gap-2 items-start">
+                <div className="h-16 w-16 bg-stone-100 rounded border border-stone-200 overflow-hidden shrink-0">
+                  {manualForm.image_url ? (
+                    <img
+                      src={getDisplayImageUrl(manualForm.image_url)}
+                      alt=""
+                      onError={(e) => handleImageError(e, "event")}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <CalendarIcon className="h-5 w-5" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Input
+                    value={manualForm.image_url}
+                    onChange={(e) =>
+                      setManualForm({ ...manualForm, image_url: e.target.value })
+                    }
+                    placeholder="URL gambar atau pilih dari Media"
+                    className="text-sm h-9"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setManualPickerOpen(true)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Pilih dari Media
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={createManualEventMut.isPending || !manualForm.title.trim()}
+              onClick={() => createManualEventMut.mutate(manualForm)}
+            >
+              {createManualEventMut.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> Menyimpan...
+                </>
+              ) : (
+                <>
+                  <Check className="h-3.5 w-3.5 mr-1.5" /> Simpan Event
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
