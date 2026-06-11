@@ -1282,10 +1282,12 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal menyimpan detail kamar: ${brErr.message}`,
         });
 
-      // Notif manager (fire-and-forget).
-      void import("@/services/manager-notifier.service")
-        .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-        .catch((err) => console.warn("[webchatTool] notifyNewBooking gagal:", err));
+      // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+      const { runDeferred: runDeferredWebchat } = await import("@/lib/cf-context");
+      runDeferredWebchat("webchatTool.notifyNewBooking", async () => {
+        const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+        await notifyNewBooking(supabaseAdmin, booking.id);
+      });
 
       return JSON.stringify({
         ok: true,
