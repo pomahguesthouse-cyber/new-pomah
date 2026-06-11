@@ -113,6 +113,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "twitter:image",
         content: "https://pomahguesthouse.com/og-home.jpg",
       },
+      { name: "description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
+      { property: "og:description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
+      { name: "twitter:description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/5Qu1z4UKkvcNIYafDWtJ5fj5CEg2/social-images/social-1781137954731-og-picture.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/5Qu1z4UKkvcNIYafDWtJ5fj5CEg2/social-images/social-1781137954731-og-picture.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
