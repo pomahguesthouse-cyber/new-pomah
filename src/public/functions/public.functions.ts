@@ -561,10 +561,12 @@ export const submitCartBooking = createServerFn({ method: "POST" })
       console.error("[submitCartBooking] Notification trigger error:", notificationErr);
     }
 
-    // Notif manager (fire-and-forget).
-    void import("@/services/manager-notifier.service")
-      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-      .catch((err) => console.warn("[submitCartBooking] notifyNewBooking gagal:", err));
+    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+    const { runDeferred: runDeferredCart } = await import("@/lib/cf-context");
+    runDeferredCart("submitCartBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(supabaseAdmin, booking.id);
+    });
 
     return {
       id: booking.id,
