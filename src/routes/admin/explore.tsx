@@ -27,6 +27,7 @@ import { Sparkles, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import {
   listActivePublicEvents,
   deleteGeneratedArticle,
+  createManualEvent,
 } from "@/admin/modules/seo/schedules.functions";
 import { generateArticleFromWebSearch } from "@/admin/modules/seo/article-generator.functions";
 import {
