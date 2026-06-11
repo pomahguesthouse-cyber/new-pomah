@@ -174,6 +174,43 @@ function AdminExplorePage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  /* ─── Manual event creation ──────────────────────────────────────────── */
+  const createManualEventFn = useServerFn(createManualEvent);
+  const emptyManual = {
+    title: "",
+    description: "",
+    event_start_date: "",
+    event_end_date: "",
+    event_date_label: "",
+    event_location: "",
+    image_url: "",
+  };
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [manualForm, setManualForm] = useState(emptyManual);
+  const [manualPickerOpen, setManualPickerOpen] = useState(false);
+  const createManualEventMut = useMutation({
+    mutationFn: (payload: typeof emptyManual) =>
+      createManualEventFn({
+        data: {
+          title: payload.title.trim(),
+          description: payload.description.trim() || undefined,
+          event_start_date: payload.event_start_date || null,
+          event_end_date: payload.event_end_date || null,
+          event_date_label: payload.event_date_label.trim() || undefined,
+          event_location: payload.event_location.trim() || undefined,
+          image_url: payload.image_url.trim() || undefined,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["public-active-events"] });
+      qc.invalidateQueries({ queryKey: ["generated-articles"] });
+      toast.success("Event berhasil ditambahkan");
+      setManualDialogOpen(false);
+      setManualForm(emptyManual);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   // Sync state on load
   if (data && !config && !isLoading) {
     setConfig(mergeExploreConfig((data as any).explore_config));
