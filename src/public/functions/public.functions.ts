@@ -399,10 +399,12 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
       console.error("[submitPublicBooking] Notification trigger error:", notificationErr);
     }
 
-    // Notif manager (fire-and-forget).
-    void import("@/services/manager-notifier.service")
-      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-      .catch((err) => console.warn("[submitPublicBooking] notifyNewBooking gagal:", err));
+    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("submitPublicBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(supabaseAdmin, booking.id);
+    });
 
     return {
       id: booking.id,
@@ -559,10 +561,12 @@ export const submitCartBooking = createServerFn({ method: "POST" })
       console.error("[submitCartBooking] Notification trigger error:", notificationErr);
     }
 
-    // Notif manager (fire-and-forget).
-    void import("@/services/manager-notifier.service")
-      .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-      .catch((err) => console.warn("[submitCartBooking] notifyNewBooking gagal:", err));
+    // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+    const { runDeferred: runDeferredCart } = await import("@/lib/cf-context");
+    runDeferredCart("submitCartBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(supabaseAdmin, booking.id);
+    });
 
     return {
       id: booking.id,
@@ -1278,10 +1282,12 @@ export const chatWithAI = createServerFn({ method: "POST" })
           error: `Gagal menyimpan detail kamar: ${brErr.message}`,
         });
 
-      // Notif manager (fire-and-forget).
-      void import("@/services/manager-notifier.service")
-        .then(({ notifyNewBooking }) => notifyNewBooking(supabaseAdmin, booking.id))
-        .catch((err) => console.warn("[webchatTool] notifyNewBooking gagal:", err));
+      // Notif manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+      const { runDeferred: runDeferredWebchat } = await import("@/lib/cf-context");
+      runDeferredWebchat("webchatTool.notifyNewBooking", async () => {
+        const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+        await notifyNewBooking(supabaseAdmin, booking.id);
+      });
 
       return JSON.stringify({
         ok: true,

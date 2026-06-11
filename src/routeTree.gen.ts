@@ -23,6 +23,8 @@ import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
 import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
+import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
+import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
@@ -50,6 +52,7 @@ import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-e
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
+import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -119,6 +122,16 @@ const ApiTelegramRoute = ApiTelegramRouteImport.update({
 const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
   id: '/api/queue-worker',
   path: '/api/queue-worker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSiteDataRoute = ApiPublicSiteDataRouteImport.update({
+  id: '/api/public-site-data',
+  path: '/api/public-site-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
+  id: '/api/public-site',
+  path: '/api/public-site',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
@@ -258,6 +271,11 @@ const ApiCronBookingStuckMonitorRoute =
     path: '/api/cron/booking-stuck-monitor',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
+  id: '/api/booking-invoice/$id',
+  path: '/api/booking-invoice/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -288,6 +306,8 @@ export interface FileRoutesByFullPath {
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
+  '/api/public-site': typeof ApiPublicSiteRoute
+  '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
@@ -295,6 +315,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -330,6 +351,8 @@ export interface FileRoutesByTo {
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
+  '/api/public-site': typeof ApiPublicSiteRoute
+  '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
@@ -337,6 +360,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -374,6 +398,8 @@ export interface FileRoutesById {
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
+  '/api/public-site': typeof ApiPublicSiteRoute
+  '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
   '/lp/$slug': typeof LpSlugRoute
@@ -381,6 +407,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -419,6 +446,8 @@ export interface FileRouteTypes {
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
+    | '/api/public-site'
+    | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
     | '/lp/$slug'
@@ -426,6 +455,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -461,6 +491,8 @@ export interface FileRouteTypes {
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
+    | '/api/public-site'
+    | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
     | '/lp/$slug'
@@ -468,6 +500,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/book'
     | '/rooms'
+    | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -504,6 +537,8 @@ export interface FileRouteTypes {
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
+    | '/api/public-site'
+    | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
     | '/lp/$slug'
@@ -511,6 +546,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -530,12 +566,15 @@ export interface RootRouteChildren {
   ApiDebugDbRoute: typeof ApiDebugDbRoute
   ApiFonnteRoute: typeof ApiFonnteRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
+  ApiPublicSiteRoute: typeof ApiPublicSiteRoute
+  ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
   ApiTelegramRoute: typeof ApiTelegramRouteWithChildren
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRoute
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
@@ -641,6 +680,20 @@ declare module '@tanstack/react-router' {
       path: '/api/queue-worker'
       fullPath: '/api/queue-worker'
       preLoaderRoute: typeof ApiQueueWorkerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public-site-data': {
+      id: '/api/public-site-data'
+      path: '/api/public-site-data'
+      fullPath: '/api/public-site-data'
+      preLoaderRoute: typeof ApiPublicSiteDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public-site': {
+      id: '/api/public-site'
+      path: '/api/public-site'
+      fullPath: '/api/public-site'
+      preLoaderRoute: typeof ApiPublicSiteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/place-photo': {
@@ -832,6 +885,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/booking-invoice/$id': {
+      id: '/api/booking-invoice/$id'
+      path: '/api/booking-invoice/$id'
+      fullPath: '/api/booking-invoice/$id'
+      preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -904,12 +964,15 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDebugDbRoute: ApiDebugDbRoute,
   ApiFonnteRoute: ApiFonnteRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
+  ApiPublicSiteRoute: ApiPublicSiteRoute,
+  ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
   ApiTelegramRoute: ApiTelegramRouteWithChildren,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,

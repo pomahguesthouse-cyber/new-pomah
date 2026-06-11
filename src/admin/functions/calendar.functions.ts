@@ -147,12 +147,12 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       console.warn("[createBookingFromAdmin] Notifikasi invoice gagal (non-fatal):", err),
     );
 
-    // Beritahu manager (fire-and-forget).
-    void import("@/services/manager-notifier.service")
-      .then(({ notifyNewBooking }) => notifyNewBooking(supabase, bookingId))
-      .catch((err) =>
-        console.warn("[createBookingFromAdmin] notifyNewBooking gagal (non-fatal):", err),
-      );
+    // Beritahu manager — pakai waitUntil agar tetap jalan setelah response dikirim.
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("createBookingFromAdmin.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(supabase, bookingId);
+    });
 
     return { ok: true, bookingId };
   });
