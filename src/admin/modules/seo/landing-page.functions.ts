@@ -238,6 +238,8 @@ const pageShape = z.object({
   meta_description: z.string().max(160).optional().nullable(),
   og_image_url:     z.string().url().max(500).optional().nullable(),
   published:        z.boolean().default(false),
+  page_type:        z.enum(["home", "booking", "landing"]).default("landing"),
+  is_system:        z.boolean().default(false),
   sections:         z.union([z.array(z.record(z.string(), z.unknown())), z.record(z.string(), z.unknown())]).optional().nullable(),
   custom_head:      z.string().max(20000).optional().nullable(),
   custom_robots:    z.string().max(10000).optional().nullable(),
