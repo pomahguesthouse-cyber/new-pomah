@@ -381,6 +381,8 @@ function HomepageBuilder() {
       <div className="flex flex-1 overflow-hidden">
         {/* ── Left: Site Menu ── */}
         <SiteMenu
+          activeMenuTab={activeMenuTab}
+          onMenuTabChange={setActiveMenuTab}
           pages={pages}
           activePageId={activePageId}
           onSelect={setActivePageId}
@@ -488,36 +490,7 @@ function HomepageBuilder() {
               </div>
             </>
           )}
-
-      {activeMenuTab === "GLOBAL" && (
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-header" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-header")}>
-            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Header</span>
-          </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-footer" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-footer")}>
-            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Footer</span>
-          </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-whatsapp" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-whatsapp")}>
-            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">WhatsApp Float</span>
-          </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-cookie" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-cookie")}>
-            <Check className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Cookie Banner</span>
-          </div>
-        </div>
-      )}
-    </aside>
+        </aside>
       </div>
 
       {/* "Site Pages and Menu" modal (Wix-style) */}
@@ -2135,9 +2108,37 @@ function SiteMenu({
       )}
       
       {activeMenuTab === "GLOBAL" && (
+        <>
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <p className="text-sm font-semibold">Global Sections</p>
         </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div
+            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-header" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
+            onClick={() => onSelect("global-header")}>
+            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">Header</span>
+          </div>
+          <div
+            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-footer" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
+            onClick={() => onSelect("global-footer")}>
+            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">Footer</span>
+          </div>
+          <div
+            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-whatsapp" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
+            onClick={() => onSelect("global-whatsapp")}>
+            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">WhatsApp Float</span>
+          </div>
+          <div
+            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-cookie" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
+            onClick={() => onSelect("global-cookie")}>
+            <Check className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">Cookie Banner</span>
+          </div>
+        </div>
+        </>
       )}
 
       {activeMenuTab === "PAGES" && (
