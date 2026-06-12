@@ -47,6 +47,9 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  Copy,
+  MoreHorizontal,
+  Pencil,
 } from "lucide-react";
 // useQuery already imported above; useMutation available if needed
 import {
@@ -54,6 +57,7 @@ import {
   createSeoLandingPage,
   updateSeoLandingPage,
   deleteSeoLandingPage,
+  duplicateSeoLandingPage,
   type SeoLandingPage,
   type LPSection,
   type LPSectionsData,
@@ -146,6 +150,10 @@ function HomepageBuilder() {
   // Active page in the Site Menu: "home" or a landing-page id.
   const [activePageId, setActivePageId] = useState<string>("home");
   const activeLp = activePageId === "home" ? null : pages.find((p) => p.id === activePageId) ?? null;
+
+  // Duplicate / Rename state
+  const [duplicating, setDuplicating] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SeoLandingPage | null>(null);
 
   // Sections of the active landing page (edited in the right panel).
   const [lpSections, setLpSections] = useState<LPSectionsData>([]);
@@ -256,6 +264,31 @@ function HomepageBuilder() {
     }
   };
 
+  const handleDuplicatePage = async (p: SeoLandingPage) => {
+    if (!confirm(`Duplikasi halaman "${p.title}"?`)) return;
+    setDuplicating(p.id);
+    try {
+      const res = await duplicateSeoLandingPage({ data: { id: p.id } });
+      await lpQuery.refetch();
+      setActivePageId(res.id);
+      toast.success("Halaman berhasil diduplikasi.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDuplicating(null);
+    }
+  };
+
+  const handleRenamePage = async (p: SeoLandingPage, newTitle: string, newSlug: string) => {
+    try {
+      await updateSeoLandingPage({ data: { id: p.id, title: newTitle, slug: newSlug } });
+      await lpQuery.refetch();
+      toast.success("Halaman diperbarui.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
   const visibleSections = activePageId === "book" 
     ? SECTIONS.filter(s => ["header", "bookingHero"].includes(s.key))
     : SECTIONS.filter(s => s.key !== "bookingHero");
@@ -334,7 +367,10 @@ function HomepageBuilder() {
           onSelect={setActivePageId}
           onAdd={handleAddPage}
           onDelete={handleDeletePage}
+          onDuplicate={handleDuplicatePage}
+          onRename={(p) => setRenameTarget(p)}
           onSeo={(id) => openPageSettings(id)}
+          duplicatingId={duplicating}
         />
 
         {/* ── Centre: live preview ── */}
@@ -446,10 +482,25 @@ function HomepageBuilder() {
         onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
+        onDuplicate={handleDuplicatePage}
+        onRename={(p) => setRenameTarget(p)}
         onSaved={() => { lpQuery.refetch(); setPreviewKey((k) => k + 1); }}
         homeCfg={cfg}
         propertyId={data?.id ?? null}
+        duplicatingId={duplicating}
       />
+
+      {/* Rename Dialog */}
+      {renameTarget && (
+        <RenamePageDialog
+          page={renameTarget}
+          onClose={() => setRenameTarget(null)}
+          onSave={async (title, slug) => {
+            await handleRenamePage(renameTarget, title, slug);
+            setRenameTarget(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1906,10 +1957,76 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
 /* 6. Landing Pages Tab                                                */
 /* ================================================================== */
 
+/** Rename Page Dialog — lets the user update a page's title and slug. */
+function RenamePageDialog({
+  page,
+  onClose,
+  onSave,
+}: {
+  page: SeoLandingPage;
+  onClose: () => void;
+  onSave: (title: string, slug: string) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(page.title);
+  const [slug, setSlug] = useState(page.slug);
+  const [saving, setSaving] = useState(false);
+
+  const handleSlugFromTitle = (t: string) => {
+    const s = t.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+    setSlug(s);
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Rename Halaman</DialogTitle>
+          <DialogDescription>Ubah judul dan slug URL halaman ini.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Judul Halaman</Label>
+            <Input
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); handleSlugFromTitle(e.target.value); }}
+              placeholder="Judul halaman"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Slug URL</Label>
+            <Input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+              placeholder="slug-halaman"
+              className="font-mono text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground">/lp/{slug}</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
+          <Button
+            onClick={async () => {
+              if (!title.trim() || !slug.trim()) return;
+              setSaving(true);
+              await onSave(title.trim(), slug.trim());
+              setSaving(false);
+            }}
+            disabled={saving || !title.trim() || !slug.trim()}
+          >
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Simpan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Site Menu — Wix-style left sidebar listing all editable pages
- * (Home + landing pages). Each landing page row has a SEO gear and a
- * delete control on hover; "+ Add Page" creates a new landing page.
+ * (Home + landing pages). Each landing page row has a dropdown menu
+ * with Edit/SEO, Duplicate, Rename, and Delete actions.
  */
 function SiteMenu({
   pages,
@@ -1917,16 +2034,23 @@ function SiteMenu({
   onSelect,
   onAdd,
   onDelete,
+  onDuplicate,
+  onRename,
   onSeo,
+  duplicatingId,
 }: {
   pages: SeoLandingPage[];
   activePageId: string;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
+  onDuplicate: (p: SeoLandingPage) => void;
+  onRename: (p: SeoLandingPage) => void;
   onSeo: (id: string) => void;
+  duplicatingId: string | null;
 }) {
   const [search, setSearch] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const filtered = pages.filter((p) => p.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -1948,7 +2072,7 @@ function SiteMenu({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Home — always present */}
+        {/* Home — always present, cannot duplicate */}
         <div
           className={cn(
             "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
@@ -1984,32 +2108,55 @@ function SiteMenu({
           </div>
         </div>
 
+        {/* Landing pages */}
         {filtered.map((p) => (
-          <div key={p.id}
-            className={cn(
-              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-              activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-            )}
-            onClick={() => onSelect(p.id)}>
-            <Globe className={cn("h-3.5 w-3.5 shrink-0", p.published ? "text-emerald-500" : "text-stone-300")} />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-              <button type="button" title="Pengaturan SEO"
-                onClick={(e) => { e.stopPropagation(); onSeo(p.id); }}
-                className="rounded p-0.5 text-stone-400 hover:text-teal-600">
-                <Settings2 className="h-3.5 w-3.5" />
-              </button>
-              <a href={`/lp/${p.slug}`} target="_blank" rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="rounded p-0.5 text-stone-400 hover:text-teal-600">
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-              <button type="button" title="Hapus halaman"
-                onClick={(e) => { e.stopPropagation(); onDelete(p); }}
-                className="rounded p-0.5 text-stone-400 hover:text-red-500">
-                <Trash2 className="h-3.5 w-3.5" />
+          <div key={p.id} className="relative">
+            <div
+              className={cn(
+                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+              )}
+              onClick={() => { setOpenMenuId(null); onSelect(p.id); }}>
+              <Globe className={cn("h-3.5 w-3.5 shrink-0", p.published ? "text-emerald-500" : "text-stone-300")} />
+              <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
+              {duplicatingId === p.id && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+              <button
+                type="button"
+                title="Opsi halaman"
+                onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === p.id ? null : p.id); }}
+                className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
+                <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
             </div>
+            {/* Dropdown menu */}
+            {openMenuId === p.id && (
+              <div
+                className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                onClick={(e) => e.stopPropagation()}>
+                <button type="button"
+                  onClick={() => { setOpenMenuId(null); onSeo(p.id); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+                  <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+                </button>
+                <button type="button"
+                  onClick={() => { setOpenMenuId(null); onDuplicate(p); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                  disabled={duplicatingId === p.id}>
+                  <Copy className="h-3.5 w-3.5" /> Duplicate
+                </button>
+                <button type="button"
+                  onClick={() => { setOpenMenuId(null); onRename(p); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+                  <Pencil className="h-3.5 w-3.5" /> Rename
+                </button>
+                <div className="my-1 border-t border-stone-100" />
+                <button type="button"
+                  onClick={() => { setOpenMenuId(null); onDelete(p); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">
+                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -2327,9 +2474,12 @@ function SitePagesModal({
   onSelect,
   onAdd,
   onDelete,
+  onDuplicate,
+  onRename,
   onSaved,
   homeCfg,
   propertyId,
+  duplicatingId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -2340,9 +2490,12 @@ function SitePagesModal({
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
+  onDuplicate: (p: SeoLandingPage) => void;
+  onRename: (p: SeoLandingPage) => void;
   onSaved: () => void;
   homeCfg: HomepageConfig;
   propertyId: string | null;
+  duplicatingId: string | null;
 }) {
   const [rail, setRail] = useState<SitePagesRail>("menu");
   const activeLp = activePageId !== "home"
@@ -2402,6 +2555,9 @@ function SitePagesModal({
                       published={p.published}
                       onClick={() => onSelect(p.id)}
                       onDelete={() => onDelete(p)}
+                      onDuplicate={() => onDuplicate(p)}
+                      onRename={() => onRename(p)}
+                      duplicatingId={duplicatingId === p.id}
                     />
                   ))}
                 </div>
@@ -2429,32 +2585,74 @@ function SitePagesModal({
   );
 }
 
-/** A single row in the Site Menu list (page name + delete action). */
+/** A single row in the Site Menu list (page name + dropdown with actions). */
 function PageRow({
-  icon, label, active, published, onClick, onDelete,
+  icon, label, active, published, onClick, onDelete, onDuplicate, onRename, duplicatingId,
 }: {
   icon: React.ReactNode; label: string; active: boolean;
-  published?: boolean; onClick: () => void; onDelete?: () => void;
+  published?: boolean;
+  onClick: () => void;
+  onDelete?: () => void;
+  onDuplicate?: () => void;
+  onRename?: () => void;
+  duplicatingId?: boolean;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const hasActions = !!(onDelete || onDuplicate || onRename);
+
   return (
-    <div
-      className={cn(
-        "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-        active ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-      )}
-      onClick={onClick}>
-      {icon}
-      <span className="flex-1 truncate text-xs font-medium text-stone-700">{label}</span>
-      {published === false && <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-        {onDelete && (
-          <button type="button" title="Hapus halaman"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="rounded p-0.5 text-stone-400 hover:text-red-500">
-            <Trash2 className="h-3.5 w-3.5" />
+    <div className="relative">
+      <div
+        className={cn(
+          "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+          active ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+        )}
+        onClick={() => { setMenuOpen(false); onClick(); }}>
+        {icon}
+        <span className="flex-1 truncate text-xs font-medium text-stone-700">{label}</span>
+        {published === false && <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>}
+        {duplicatingId && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+        {hasActions && (
+          <button
+            type="button"
+            title="Opsi halaman"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
+            className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
+            <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
+      {menuOpen && hasActions && (
+        <div
+          className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+          onClick={(e) => e.stopPropagation()}>
+          {onDuplicate && (
+            <button type="button"
+              onClick={() => { setMenuOpen(false); onDuplicate(); }}
+              disabled={duplicatingId}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted disabled:opacity-50">
+              <Copy className="h-3.5 w-3.5" /> Duplicate
+            </button>
+          )}
+          {onRename && (
+            <button type="button"
+              onClick={() => { setMenuOpen(false); onRename(); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+              <Pencil className="h-3.5 w-3.5" /> Rename
+            </button>
+          )}
+          {onDelete && (
+            <>
+              <div className="my-1 border-t border-stone-100" />
+              <button type="button"
+                onClick={() => { setMenuOpen(false); onDelete(); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

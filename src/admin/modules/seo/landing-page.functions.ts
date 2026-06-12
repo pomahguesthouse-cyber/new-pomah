@@ -431,3 +431,57 @@ export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
       .maybeSingle();
     return { page: (row as unknown as SeoLandingPage) ?? null };
   });
+
+/** Duplicate a landing page — clone semua konfigurasi, buat slug unik. */
+export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = db(context.supabase);
+
+    // 1. Ambil halaman asli
+    const { data: original, error: fetchErr } = await sb
+      .from("seo_landing_pages")
+      .select("*")
+      .eq("id", data.id)
+      .single();
+    if (fetchErr || !original) throw new Error("Halaman tidak ditemukan");
+
+    // 2. Ambil semua slug yang ada untuk generate slug unik
+    const { data: allPages } = await sb
+      .from("seo_landing_pages")
+      .select("slug");
+    const existingSlugs = new Set((allPages ?? []).map((p: { slug: string }) => p.slug));
+
+    // 3. Generate slug unik
+    const baseSlug = `${original.slug}-copy`;
+    let finalSlug = baseSlug;
+    let counter = 2;
+    while (existingSlugs.has(finalSlug)) {
+      finalSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    // 4. Clone dengan id/slug/title/timestamps baru
+    const now = new Date().toISOString();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = original as Record<string, unknown>;
+    const newPage = {
+      ...rest,
+      title: `${original.title} Copy`,
+      slug: finalSlug,
+      published: false, // hasil duplikasi selalu draft
+      created_at: now,
+      updated_at: now,
+    };
+
+    // 5. Insert
+    const { data: inserted, error: insertErr } = await sb
+      .from("seo_landing_pages")
+      .insert(newPage)
+      .select("id")
+      .single();
+    if (insertErr) throw insertErr;
+
+    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+  });
