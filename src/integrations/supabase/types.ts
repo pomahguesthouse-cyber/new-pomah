@@ -1608,6 +1608,7 @@ export type Database = {
           hero_cta_url: string
           hero_headline: string | null
           hero_subheadline: string | null
+          homepage_config: Json | null
           id: string
           json_ld_enabled: boolean
           meta_description: string | null
@@ -1631,6 +1632,7 @@ export type Database = {
           hero_cta_url?: string
           hero_headline?: string | null
           hero_subheadline?: string | null
+          homepage_config?: Json | null
           id?: string
           json_ld_enabled?: boolean
           meta_description?: string | null
@@ -1654,6 +1656,7 @@ export type Database = {
           hero_cta_url?: string
           hero_headline?: string | null
           hero_subheadline?: string | null
+          homepage_config?: Json | null
           id?: string
           json_ld_enabled?: boolean
           meta_description?: string | null

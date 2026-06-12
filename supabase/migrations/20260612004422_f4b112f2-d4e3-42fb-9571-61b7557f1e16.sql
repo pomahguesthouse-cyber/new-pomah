@@ -1,0 +1,1 @@
+alter table public.seo_landing_pages add column if not exists homepage_config jsonb;

@@ -32,6 +32,8 @@ import {
   type LPRoomSliderSection,
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
+import { PomahHomeView } from "@/routes/index";
+import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
 /* ─── Shared booking-date state (date picker → room slider) ───────── */
 type BookingDates = {
@@ -69,10 +71,12 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   },
 
   loader: async ({ params }: any) => {
-    const result = await getSeoLandingPageBySlug({ data: { slug: params.slug } });
+    const result = (await getSeoLandingPageBySlug({ data: { slug: params.slug } })) as {
+      page: SeoLandingPage | null;
+    };
     if (!result.page) throw notFound();
     const siteData = await getPublicSiteData();
-    return { ...result, property: siteData?.property };
+    return { ...result, property: (siteData as { property?: unknown } | null)?.property };
   },
 
   component: LandingPage,
@@ -81,6 +85,11 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
   const { page } = Route.useLoaderData() as { page: SeoLandingPage };
+  // Bila halaman ini hasil duplikasi Home, render dengan komponen homepage asli.
+  if (page.homepage_config && typeof page.homepage_config === "object") {
+    return <PomahHomeView configOverride={mergeHomepageConfig(page.homepage_config)} />;
+  }
+
   const sectionsData = page.sections;
   const isSplit = !!(sectionsData && !Array.isArray(sectionsData) && (sectionsData as any).split);
 

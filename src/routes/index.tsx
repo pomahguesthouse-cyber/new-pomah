@@ -212,11 +212,28 @@ function nightsBetween(a: string, b: string): number {
 
 function PomahHome() {
   const loaderData = Route.useLoaderData();
+  return <PomahHomeView initialData={loaderData} />;
+}
+
+/**
+ * Komponen utama yang merender seluruh tampilan Home.
+ * Dapat dipakai ulang oleh `/lp/$slug` ketika halaman LP merupakan
+ * hasil duplikasi Home (kolom `homepage_config` terisi) — diberikan
+ * `configOverride` agar konfigurasinya dipakai sebagai pengganti
+ * konfigurasi homepage properti.
+ */
+export function PomahHomeView({
+  initialData,
+  configOverride,
+}: {
+  initialData?: unknown;
+  configOverride?: HomepageConfig;
+}) {
   const fetchData = useServerFn(getPublicSiteData);
   const { data } = useQuery({
     queryKey: ["public-site"],
     queryFn: () => fetchData(),
-    initialData: loaderData,
+    initialData: initialData as never,
     staleTime: 5 * 60 * 1000,
   });
   const property = data?.property;
@@ -252,7 +269,7 @@ function PomahHome() {
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
   const address = property?.address ?? "Pomah Guesthouse Semarang";
   const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
-  const cfg = mergeHomepageConfig(
+  const cfg = configOverride ?? mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
