@@ -513,10 +513,13 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
 
     const newPage = {
       ...clonedRest,
-      // Hanya field ini yang boleh berbeda:
+      // Hanya field berikut yang boleh berbeda dari halaman asal:
+      // id (auto), slug, title, created_at, updated_at.
+      // Semua field lain (published/status, sections, SEO metadata, custom
+      // CSS, global settings, media reference, dll.) di-clone apa adanya
+      // agar tampilan hasil duplikasi sama persis dengan halaman asal.
       title: `${original.title} Copy`,
       slug: finalSlug,
-      published: false, // hasil duplikasi selalu draft
       created_at: now,
       updated_at: now,
     };
@@ -580,7 +583,7 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
         id: "header",
         type: "header",
         brand: "Pomah Guesthouse",
-        links: config.header.links,
+        links: config.header.links.map((l) => ({ label: l.label, url: l.href })),
         cta_text: config.header.bookLabel,
         cta_url: "/book"
       });
