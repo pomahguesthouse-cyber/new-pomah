@@ -69,10 +69,12 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   },
 
   loader: async ({ params }: any) => {
-    const result = await getSeoLandingPageBySlug({ data: { slug: params.slug } });
+    const result = (await getSeoLandingPageBySlug({ data: { slug: params.slug } })) as {
+      page: SeoLandingPage | null;
+    };
     if (!result.page) throw notFound();
     const siteData = await getPublicSiteData();
-    return { ...result, property: siteData?.property };
+    return { ...result, property: (siteData as { property?: unknown } | null)?.property };
   },
 
   component: LandingPage,
