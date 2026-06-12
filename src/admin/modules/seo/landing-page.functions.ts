@@ -583,7 +583,7 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
         id: "header",
         type: "header",
         brand: "Pomah Guesthouse",
-        links: config.header.links,
+        links: config.header.links.map((l) => ({ label: l.label, url: l.href })),
         cta_text: config.header.bookLabel,
         cta_url: "/book"
       });
