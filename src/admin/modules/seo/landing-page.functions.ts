@@ -513,10 +513,13 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
 
     const newPage = {
       ...clonedRest,
-      // Hanya field ini yang boleh berbeda:
+      // Hanya field berikut yang boleh berbeda dari halaman asal:
+      // id (auto), slug, title, created_at, updated_at.
+      // Semua field lain (published/status, sections, SEO metadata, custom
+      // CSS, global settings, media reference, dll.) di-clone apa adanya
+      // agar tampilan hasil duplikasi sama persis dengan halaman asal.
       title: `${original.title} Copy`,
       slug: finalSlug,
-      published: false, // hasil duplikasi selalu draft
       created_at: now,
       updated_at: now,
     };
