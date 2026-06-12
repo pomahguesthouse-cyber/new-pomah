@@ -58,6 +58,7 @@ import {
   updateSeoLandingPage,
   deleteSeoLandingPage,
   duplicateSeoLandingPage,
+  duplicateSystemPageToLandingPage,
   type SeoLandingPage,
   type LPSection,
   type LPSectionsData,
@@ -279,6 +280,22 @@ function HomepageBuilder() {
     }
   };
 
+  const handleDuplicateSystemPage = async (type: "home" | "book") => {
+    const label = type === "home" ? "Home" : "Booking Page";
+    if (!confirm(`Duplikasi halaman "${label}" menghasilkan landing page baru?`)) return;
+    setDuplicating(type);
+    try {
+      const res = await duplicateSystemPageToLandingPage({ data: { type } });
+      await lpQuery.refetch();
+      setActivePageId(res.id);
+      toast.success("Halaman berhasil diduplikasi.");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDuplicating(null);
+    }
+  };
+
   const handleRenamePage = async (p: SeoLandingPage, newTitle: string, newSlug: string) => {
     try {
       await updateSeoLandingPage({ data: { id: p.id, title: newTitle, slug: newSlug } });
@@ -368,6 +385,7 @@ function HomepageBuilder() {
           onAdd={handleAddPage}
           onDelete={handleDeletePage}
           onDuplicate={handleDuplicatePage}
+          onDuplicateSystem={handleDuplicateSystemPage}
           onRename={(p) => setRenameTarget(p)}
           onSeo={(id) => openPageSettings(id)}
           duplicatingId={duplicating}
@@ -483,6 +501,7 @@ function HomepageBuilder() {
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
         onDuplicate={handleDuplicatePage}
+        onDuplicateSystem={handleDuplicateSystemPage}
         onRename={(p) => setRenameTarget(p)}
         onSaved={() => { lpQuery.refetch(); setPreviewKey((k) => k + 1); }}
         homeCfg={cfg}
@@ -2035,6 +2054,7 @@ function SiteMenu({
   onAdd,
   onDelete,
   onDuplicate,
+  onDuplicateSystem,
   onRename,
   onSeo,
   duplicatingId,
@@ -2045,6 +2065,7 @@ function SiteMenu({
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
   onDuplicate: (p: SeoLandingPage) => void;
+  onDuplicateSystem: (type: "home" | "book") => void;
   onRename: (p: SeoLandingPage) => void;
   onSeo: (id: string) => void;
   duplicatingId: string | null;
@@ -2072,40 +2093,82 @@ function SiteMenu({
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Home — always present, cannot duplicate */}
-        <div
-          className={cn(
-            "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-            activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-          )}
-          onClick={() => onSelect("home")}>
-          <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-          <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-            <button type="button" title="Pengaturan SEO"
-              onClick={(e) => { e.stopPropagation(); onSeo("home"); }}
-              className="p-1 hover:bg-stone-200 rounded text-stone-400 hover:text-teal-600">
-              <Settings2 className="h-3.5 w-3.5" />
+        {/* Home — present, can duplicate */}
+        <div className="relative">
+          <div
+            className={cn(
+              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+              activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+            )}
+            onClick={() => { setOpenMenuId(null); onSelect("home"); }}>
+            <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
+            {duplicatingId === "home" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+            <button
+              type="button"
+              title="Opsi halaman"
+              onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === "home" ? null : "home"); }}
+              className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
+              <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </div>
+          {/* Dropdown menu */}
+          {openMenuId === "home" && (
+            <div
+              className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+              onClick={(e) => e.stopPropagation()}>
+              <button type="button"
+                onClick={() => { setOpenMenuId(null); onSeo("home"); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+                <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+              </button>
+              <button type="button"
+                onClick={() => { setOpenMenuId(null); onDuplicateSystem("home"); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                disabled={!!duplicatingId}>
+                <Copy className="h-3.5 w-3.5" /> Duplicate
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Booking Page */}
-        <div
-          className={cn(
-            "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-            activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-          )}
-          onClick={() => onSelect("book")}>
-          <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-          <span className="flex-1 truncate text-xs font-medium text-stone-700">Booking Page</span>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-            <button type="button" title="Pengaturan SEO"
-              onClick={(e) => { e.stopPropagation(); onSeo("book"); }}
-              className="p-1 hover:bg-stone-200 rounded text-stone-400 hover:text-teal-600">
-              <Settings2 className="h-3.5 w-3.5" />
+        <div className="relative">
+          <div
+            className={cn(
+              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+              activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+            )}
+            onClick={() => { setOpenMenuId(null); onSelect("book"); }}>
+            <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+            <span className="flex-1 truncate text-xs font-medium text-stone-700">Booking Page</span>
+            {duplicatingId === "book" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+            <button
+              type="button"
+              title="Opsi halaman"
+              onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === "book" ? null : "book"); }}
+              className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
+              <MoreHorizontal className="h-3.5 w-3.5" />
             </button>
           </div>
+          {/* Dropdown menu */}
+          {openMenuId === "book" && (
+            <div
+              className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+              onClick={(e) => e.stopPropagation()}>
+              <button type="button"
+                onClick={() => { setOpenMenuId(null); onSeo("book"); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+                <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+              </button>
+              <button type="button"
+                onClick={() => { setOpenMenuId(null); onDuplicateSystem("book"); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                disabled={!!duplicatingId}>
+                <Copy className="h-3.5 w-3.5" /> Duplicate
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Landing pages */}
@@ -2475,6 +2538,7 @@ function SitePagesModal({
   onAdd,
   onDelete,
   onDuplicate,
+  onDuplicateSystem,
   onRename,
   onSaved,
   homeCfg,
@@ -2491,6 +2555,7 @@ function SitePagesModal({
   onAdd: () => void;
   onDelete: (p: SeoLandingPage) => void;
   onDuplicate: (p: SeoLandingPage) => void;
+  onDuplicateSystem: (type: "home" | "book") => void;
   onRename: (p: SeoLandingPage) => void;
   onSaved: () => void;
   homeCfg: HomepageConfig;
@@ -2541,12 +2606,16 @@ function SitePagesModal({
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Home" active={activePageId === "home"}
                     onClick={() => onSelect("home")}
+                    onDuplicate={() => onDuplicateSystem("home")}
+                    duplicatingId={duplicatingId === "home"}
                   />
                   {/* Booking Page */}
                   <PageRow
                     icon={<CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
                     label="Booking Page" active={activePageId === "book"}
                     onClick={() => onSelect("book")}
+                    onDuplicate={() => onDuplicateSystem("book")}
+                    duplicatingId={duplicatingId === "book"}
                   />
                   {pages.map((p) => (
                     <PageRow key={p.id}

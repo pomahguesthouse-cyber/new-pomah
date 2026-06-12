@@ -7,7 +7,7 @@
  * reservation directly.
  */
 import { useMemo, useState } from "react";
-import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, notFound, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -56,6 +56,12 @@ export const Route = createFileRoute("/rooms/$slug")({
     return out;
   },
   loader: async ({ params }) => {
+    if (params.slug === "deluxe-ocean-view") {
+      throw redirect({
+        to: "/rooms",
+        statusCode: 301,
+      });
+    }
     const { getRoomTypeDetail } = await import("@/public/functions/public.functions");
     const result = await getRoomTypeDetail({ data: { slug: params.slug } });
     // Slug tidak ditemukan di database → lempar 404 agar mesin pencari tidak mengindeks

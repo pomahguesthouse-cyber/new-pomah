@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createClient } from "@supabase/supabase-js";
+import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
 /** Cast to an untyped client — seo_landing_pages is not in the generated types yet. */
 function db(client: unknown): SupabaseClient {
@@ -485,3 +486,243 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
 
     return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
   });
+
+/** Duplikasi halaman sistem (Home atau Booking) menghasilkan landing page baru. */
+export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ type: z.enum(["home", "book"]) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const sb = db(context.supabase);
+
+    // 1. Ambil properties.homepage_config dan property id
+    const { data: prop, error: propErr } = await sb
+      .from("properties")
+      .select("id, homepage_config")
+      .limit(1)
+      .maybeSingle();
+
+    if (propErr || !prop) throw new Error("Property config tidak ditemukan");
+    
+    const config = mergeHomepageConfig(prop.homepage_config);
+
+    // 2. Fetch existing slugs to generate unique slug
+    const { data: allPages } = await sb
+      .from("seo_landing_pages")
+      .select("slug");
+    const existingSlugs = new Set((allPages ?? []).map((p: { slug: string }) => p.slug));
+
+    // 3. Set page attributes based on system page type (home or book)
+    const systemType = data.type;
+    const baseSlug = `${systemType === "home" ? "home" : "booking"}-copy`;
+    let finalSlug = baseSlug;
+    let counter = 2;
+    while (existingSlugs.has(finalSlug)) {
+      finalSlug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    const title = systemType === "home" ? "Home Copy" : "Booking Page Copy";
+    
+    // Map seo settings
+    const seo = systemType === "home" ? config.seo : config.bookingSeo;
+    
+    // Generate sections list based on HomepageConfig
+    const lpSections: LPSection[] = [];
+    
+    // Header section
+    if (config.header) {
+      lpSections.push({
+        id: "header",
+        type: "header",
+        brand: "Pomah Guesthouse",
+        links: config.header.links,
+        cta_text: config.header.bookLabel,
+        cta_url: "/book"
+      });
+    }
+
+    if (systemType === "home") {
+      // Hero Section
+      if (config.hero) {
+        lpSections.push({
+          id: "hero-slider",
+          type: "slider",
+          slides: config.hero.slides.map(s => ({
+            imageUrl: s.imageUrl,
+            videoUrl: s.videoUrl,
+            heading: s.heading,
+            subheading: s.subheading,
+          })),
+          autoplayMs: config.hero.autoplayMs,
+          height: config.hero.height,
+          transition: config.hero.transition,
+          fontFamily: config.hero.fontFamily === "brother-signature" ? "serif" : config.hero.fontFamily,
+          fontSize: config.hero.fontSize,
+          fontStyle: config.hero.fontStyle,
+        });
+      }
+
+      // DatePicker Section
+      if (config.datePicker?.enabled) {
+        lpSections.push({
+          id: "date-picker",
+          type: "datepicker",
+          heading: config.datePicker.heading,
+          buttonLabel: config.datePicker.buttonLabel,
+        });
+      }
+
+      // Loop over sectionOrder and map them in that order
+      const order = config.sectionOrder || [];
+      for (const key of order) {
+        if (key === "badges" && config.badges) {
+          lpSections.push({
+            id: "badges",
+            type: "features",
+            title: config.badges.heading,
+            columns: 3,
+            items: config.badges.items.map(item => ({
+              title: item.title,
+              description: item.desc
+            }))
+          });
+        } else if (key === "story" && config.story) {
+          lpSections.push({
+            id: "story",
+            type: "text",
+            title: config.story.heading,
+            content: config.story.paragraphs.map(p => `<p>${p}</p>`).join(""),
+            align: "center"
+          });
+        } else if (key === "reviews" && config.reviews) {
+          lpSections.push({
+            id: "reviews",
+            type: "testimonials",
+            title: config.reviews.heading,
+            source: "google",
+            items: []
+          });
+        } else if (key === "rooms" && config.roomCarousel) {
+          lpSections.push({
+            id: "rooms",
+            type: "room_slider",
+            title: config.roomCarousel.heading,
+            subheading: config.roomCarousel.subheading,
+            cardsPerView: (config.roomCarousel.cardsPerView === 1 || config.roomCarousel.cardsPerView === 2 || config.roomCarousel.cardsPerView === 3 || config.roomCarousel.cardsPerView === 4) ? config.roomCarousel.cardsPerView as 1 | 2 | 3 | 4 : 3,
+            autoplay: config.roomCarousel.autoplay,
+            slideMs: config.roomCarousel.slideMs,
+          });
+        } else if (key === "facilities" && config.facilities) {
+          lpSections.push({
+            id: "facilities",
+            type: "text",
+            title: config.facilities.heading,
+            content: `<p>${config.facilities.subheading || ""}</p>`,
+            align: "center"
+          });
+        } else if (key === "lokasi" && config.lokasi) {
+          lpSections.push({
+            id: "lokasi",
+            type: "text",
+            title: config.lokasi.heading,
+            content: `<p>${config.lokasi.subheading || ""}</p><h4>${config.lokasi.nearbyTitle || ""}</h4><ul>` + 
+              (config.lokasi.nearby || []).map(n => `<li><strong>${n.name}</strong> (${n.type}) - ${n.distance} / ${n.time}</li>`).join("") + "</ul>",
+            align: "left"
+          });
+        } else if (key === "news" && config.news) {
+          lpSections.push({
+            id: "news",
+            type: "text",
+            title: config.news.heading,
+            content: `<p>${config.news.subheading || ""}</p>`,
+            align: "center"
+          });
+        } else if (key === "cta" && config.cta) {
+          lpSections.push({
+            id: "cta",
+            type: "text",
+            title: config.cta.heading,
+            content: "",
+            align: "center"
+          });
+        }
+      }
+    } else if (systemType === "book") {
+      // Slider/Hero Section (using bookingHero)
+      if (config.bookingHero) {
+        lpSections.push({
+          id: "hero-slider",
+          type: "slider",
+          slides: config.bookingHero.slides.map(s => ({
+            imageUrl: s.imageUrl,
+            videoUrl: s.videoUrl,
+            heading: s.heading,
+            subheading: s.subheading,
+          })),
+          autoplayMs: config.bookingHero.autoplayMs,
+          height: config.bookingHero.height,
+          transition: config.bookingHero.transition,
+          fontFamily: config.bookingHero.fontFamily === "brother-signature" ? "serif" : config.bookingHero.fontFamily,
+          fontSize: config.bookingHero.fontSize,
+          fontStyle: config.bookingHero.fontStyle,
+        });
+      }
+
+      // DatePicker Section
+      if (config.datePicker) {
+        lpSections.push({
+          id: "date-picker",
+          type: "datepicker",
+          heading: config.datePicker.heading,
+          buttonLabel: config.datePicker.buttonLabel,
+        });
+      }
+
+      // Room carousel (usually good on booking page)
+      if (config.roomCarousel) {
+        lpSections.push({
+          id: "rooms",
+          type: "room_slider",
+          title: config.roomCarousel.heading,
+          subheading: config.roomCarousel.subheading,
+          cardsPerView: (config.roomCarousel.cardsPerView === 1 || config.roomCarousel.cardsPerView === 2 || config.roomCarousel.cardsPerView === 3 || config.roomCarousel.cardsPerView === 4) ? config.roomCarousel.cardsPerView as 1 | 2 | 3 | 4 : 3,
+          autoplay: config.roomCarousel.autoplay,
+          slideMs: config.roomCarousel.slideMs,
+        });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const newPage = {
+      property_id: prop.id,
+      title,
+      slug: finalSlug,
+      target_keyword: seo?.targetKeyword || null,
+      hero_headline: systemType === "home" ? (config.hero?.slides[0]?.heading || null) : (config.bookingHero?.slides[0]?.heading || null),
+      hero_subheadline: systemType === "home" ? (config.hero?.slides[0]?.subheading || null) : (config.bookingHero?.slides[0]?.subheading || null),
+      hero_cta_text: config.header?.bookLabel || "Pesan Sekarang",
+      hero_cta_url: "/book",
+      body_content: "",
+      meta_title: seo?.metaTitle || null,
+      meta_description: seo?.metaDescription || null,
+      og_image_url: seo?.ogImageUrl || null,
+      published: false,
+      sections: lpSections,
+      custom_head: seo?.customHead || null,
+      custom_robots: seo?.customRobots || null,
+      json_ld_enabled: seo?.jsonLdEnabled ?? true,
+      custom_json_ld: seo?.customJsonLd || null,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { data: inserted, error: insertErr } = await sb
+      .from("seo_landing_pages")
+      .insert(newPage)
+      .select("id")
+      .single();
+    if (insertErr) throw insertErr;
+
+    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+  });
+
