@@ -744,6 +744,14 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
     }
 
     const now = new Date().toISOString();
+    // Untuk type=home: simpan SELURUH homepage_config (deep clone) supaya
+    // halaman hasil duplikasi dirender memakai komponen homepage asli dan
+    // tampilannya identik dengan halaman Home.
+    const clonedHomepageConfig =
+      systemType === "home" && prop.homepage_config
+        ? JSON.parse(JSON.stringify(prop.homepage_config))
+        : null;
+
     const newPage = {
       property_id: prop.id,
       title,
@@ -758,7 +766,8 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
       meta_description: seo?.metaDescription || null,
       og_image_url: seo?.ogImageUrl || null,
       published: false,
-      sections: lpSections,
+      sections: clonedHomepageConfig ? [] : lpSections,
+      homepage_config: clonedHomepageConfig,
       custom_head: seo?.customHead || null,
       custom_robots: seo?.customRobots || null,
       json_ld_enabled: seo?.jsonLdEnabled ?? true,
