@@ -433,14 +433,14 @@ export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
     return { page: (row as unknown as SeoLandingPage) ?? null };
   });
 
-/** Duplicate a landing page — clone semua konfigurasi, buat slug unik. */
+/** Duplicate a landing page — deep-clone semua konfigurasi, buat slug unik. */
 export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const sb = db(context.supabase);
 
-    // 1. Ambil halaman asli
+    // 1. Ambil halaman asli (semua kolom)
     const { data: original, error: fetchErr } = await sb
       .from("seo_landing_pages")
       .select("*")
@@ -463,12 +463,57 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
       counter++;
     }
 
-    // 4. Clone dengan id/slug/title/timestamps baru
+    // ── Helper: generate random section id ──
+    const genId = () => Math.random().toString(36).slice(2, 10);
+
+    // ── Helper: deep-clone sections dan regenerate semua section id ──
+    const deepCloneSections = (sections: unknown): unknown => {
+      if (sections == null) return null;
+
+      // Deep clone via JSON round-trip — memastikan semua nested object
+      // (styles, items, slides, images, dll.) adalah salinan independen.
+      const cloned = JSON.parse(JSON.stringify(sections));
+
+      // Regenerate section id untuk setiap section
+      const regenIds = (list: Array<Record<string, unknown>>) => {
+        for (const section of list) {
+          if (section && typeof section === "object" && "id" in section) {
+            section.id = genId();
+          }
+        }
+      };
+
+      // Handle split sections (desktop + mobile terpisah)
+      if (
+        cloned &&
+        typeof cloned === "object" &&
+        !Array.isArray(cloned) &&
+        cloned.split === true
+      ) {
+        if (Array.isArray(cloned.desktop)) regenIds(cloned.desktop);
+        if (Array.isArray(cloned.mobile)) regenIds(cloned.mobile);
+      } else if (Array.isArray(cloned)) {
+        // Handle flat section array
+        regenIds(cloned);
+      }
+
+      return cloned;
+    };
+
+    // 4. Deep-clone seluruh halaman — pastikan semua data terpisah dari aslinya
     const now = new Date().toISOString();
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = original as Record<string, unknown>;
+
+    // Deep-clone semua field JSONB/object agar tidak share referensi
+    const clonedRest = JSON.parse(JSON.stringify(rest));
+
+    // Regenerate section IDs di dalam sections
+    clonedRest.sections = deepCloneSections(clonedRest.sections);
+
     const newPage = {
-      ...rest,
+      ...clonedRest,
+      // Hanya field ini yang boleh berbeda:
       title: `${original.title} Copy`,
       slug: finalSlug,
       published: false, // hasil duplikasi selalu draft
