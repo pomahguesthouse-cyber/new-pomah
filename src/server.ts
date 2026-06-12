@@ -71,6 +71,29 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // ── Redirect 301 permanen ────────────────────────────────────────
+    // URL-URL berikut pernah terindeks mesin pencari namun tidak valid.
+    // Redirect 301 memindahkan link-equity ke URL yang benar dan
+    // memberi sinyal kepada Googlebot untuk menghapus URL lama dari indeks.
+    const PERMANENT_REDIRECTS: Record<string, string> = {
+      "/rooms/deluxe-ocean-view": "/rooms",
+      // Tambahkan slug kamar tidak valid lainnya di sini jika ada:
+      // "/rooms/contoh-slug-salah": "/rooms",
+    };
+    const pathname = new URL(request.url).pathname;
+    const redirectTarget = PERMANENT_REDIRECTS[pathname];
+    if (redirectTarget) {
+      return new Response(null, {
+        status: 301,
+        headers: {
+          Location: redirectTarget,
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "X-Redirect-Reason": "seo-cleanup",
+        },
+      });
+    }
+    // ────────────────────────────────────────────────────────────────
+
     try {
       const handler = await getServerEntry();
       const waitUntil = (ctx as ExecutionContextLike | undefined)?.waitUntil?.bind(ctx);
@@ -84,3 +107,4 @@ export default {
     }
   },
 };
+

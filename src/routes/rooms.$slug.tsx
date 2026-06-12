@@ -7,7 +7,7 @@
  * reservation directly.
  */
 import { useMemo, useState } from "react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -57,18 +57,32 @@ export const Route = createFileRoute("/rooms/$slug")({
   },
   loader: async ({ params }) => {
     const { getRoomTypeDetail } = await import("@/public/functions/public.functions");
-    return getRoomTypeDetail({ data: { slug: params.slug } });
+    const result = await getRoomTypeDetail({ data: { slug: params.slug } });
+    // Slug tidak ditemukan di database → lempar 404 agar mesin pencari tidak mengindeks
+    // halaman "Kamar tidak ditemukan" sebagai halaman valid.
+    if (!result.room) throw notFound();
+    return result;
   },
   head: ({ loaderData }) => {
     const room = loaderData?.room;
-    const name = room?.name ?? "Kamar";
-    const desc = room?.description ?? "Kamar di Pomah Guesthouse Semarang";
+    // Jika room tidak ditemukan, tambahkan noindex agar tidak terindeks oleh mesin pencari
+    if (!room) {
+      return {
+        meta: [
+          { title: "Kamar Tidak Ditemukan — Pomah Guesthouse" },
+          { name: "robots", content: "noindex, follow" },
+        ],
+      };
+    }
+    const name = room.name ?? "Kamar";
+    const desc = room.description ?? "Kamar di Pomah Guesthouse Semarang";
     const domain = loaderData?.property?.public_domain || "pomahliving.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room?.slug || ""}`;
+    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room.slug || ""}`;
     return {
       meta: [
         { title: `${name} — Pomah Guesthouse Semarang` },
         { name: "description", content: desc },
+        { name: "robots", content: "index, follow" },
         { property: "og:title", content: `${name} — Pomah Guesthouse Semarang` },
         { property: "og:description", content: desc },
         { property: "og:image", content: room?.hero_image_url || undefined },
@@ -270,19 +284,10 @@ function RoomBookingPage() {
     );
   }
 
+  // Fallback client-side: room null setelah hydration (sangat jarang terjadi
+  // karena loader sudah melempar notFound(), tapi sebagai safety net).
   if (!room) {
-    return (
-      <div className="min-h-screen bg-stone-50">
-        <PublicNav property={data?.property} />
-        <div className="mx-auto max-w-6xl px-6 py-24 text-center">
-          <h1 className="text-2xl font-semibold">Kamar tidak ditemukan</h1>
-          <Link to="/rooms" className="mt-4 inline-block text-sm text-amber-700 underline">
-            Kembali ke daftar kamar
-          </Link>
-        </div>
-        <PublicFooter property={data?.property} />
-      </div>
-    );
+    return <RoomNotFoundPage property={data?.property} />;
   }
 
   return (
@@ -1036,6 +1041,74 @@ function Line({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* 404 Room Not Found Page                                             */
+/* ================================================================== */
+
+/**
+ * Halaman 404 khusus untuk slug kamar yang tidak ada di database.
+ * Menampilkan meta noindex (via head) dan menyediakan navigasi keluar.
+ * Komponen ini hanya tampil sebagai client-side fallback — biasanya
+ * loader sudah melempar notFound() sebelum render ini tercapai.
+ */
+function RoomNotFoundPage({ property }: { property?: Record<string, unknown> | null }) {
+  return (
+    <div className="min-h-screen bg-stone-50 text-stone-900">
+      {/* noindex injected di sisi klien sebagai safety net */}
+      <meta name="robots" content="noindex, follow" />
+
+      <PublicNav property={property} />
+
+      <main className="mx-auto flex max-w-2xl flex-col items-center px-6 py-24 text-center">
+        {/* Angka 404 besar */}
+        <div className="relative mb-6 select-none">
+          <span className="block font-mono text-[120px] font-extrabold leading-none tracking-tighter text-stone-200">
+            404
+          </span>
+          <span className="absolute inset-0 flex items-center justify-center font-mono text-5xl font-extrabold tracking-tight text-amber-700">
+            404
+          </span>
+        </div>
+
+        <h1 className="text-2xl font-bold text-stone-800">
+          Kamar Tidak Ditemukan
+        </h1>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-500">
+          Halaman kamar yang kamu cari tidak tersedia atau URL-nya tidak valid.
+          Mungkin kamar ini sudah tidak ada, atau ada kesalahan pengetikan pada alamat.
+        </p>
+
+        {/* Tombol navigasi */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-5 py-2.5 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 hover:shadow"
+          >
+            <Home className="h-4 w-4" />
+            Kembali ke Beranda
+          </Link>
+          <Link
+            to="/rooms"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800"
+          >
+            <BedDouble className="h-4 w-4" />
+            Lihat Semua Kamar
+          </Link>
+        </div>
+
+        {/* Divider dekoratif */}
+        <div className="mt-12 flex items-center gap-4 text-stone-300">
+          <span className="h-px w-16 bg-stone-200" />
+          <span className="text-xs uppercase tracking-widest">Pomah Guesthouse</span>
+          <span className="h-px w-16 bg-stone-200" />
+        </div>
+      </main>
+
+      <PublicFooter property={property} />
     </div>
   );
 }
