@@ -139,7 +139,7 @@ function HomepageBuilder() {
     queryKey: ["lp-list-builder"],
     queryFn: () => listSeoLandingPages(),
   });
-  const pages = lpQuery.data?.pages ?? [];
+  const pages = (lpQuery.data as { pages?: SeoLandingPage[] } | undefined)?.pages ?? [];
 
   const [section, setSection] = useState<SectionKey>("header");
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
