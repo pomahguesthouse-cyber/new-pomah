@@ -214,7 +214,7 @@ export type SeoLandingPage = {
   published: boolean;
   sections: LPSectionsData | null;
   /** Bila terisi, halaman dirender memakai komponen homepage asli (hasil duplikasi Home). */
-  homepage_config: unknown | null;
+  homepage_config: Record<string, unknown> | null;
   /* ── Advanced SEO ── */
   custom_head: string | null;
   custom_robots: string | null;
