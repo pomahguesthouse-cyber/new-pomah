@@ -213,6 +213,8 @@ export type SeoLandingPage = {
   og_image_url: string | null;
   published: boolean;
   sections: LPSectionsData | null;
+  /** Bila terisi, halaman dirender memakai komponen homepage asli (hasil duplikasi Home). */
+  homepage_config: unknown | null;
   /* ── Advanced SEO ── */
   custom_head: string | null;
   custom_robots: string | null;
