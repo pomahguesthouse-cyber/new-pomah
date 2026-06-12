@@ -488,8 +488,7 @@ function HomepageBuilder() {
               </div>
             </>
           )}
-              )}
-      
+
       {activeMenuTab === "GLOBAL" && (
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           <div
