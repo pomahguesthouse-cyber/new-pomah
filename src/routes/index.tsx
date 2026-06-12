@@ -269,7 +269,7 @@ export function PomahHomeView({
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
   const address = property?.address ?? "Pomah Guesthouse Semarang";
   const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
-  const cfg = mergeHomepageConfig(
+  const cfg = configOverride ?? mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
