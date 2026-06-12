@@ -2142,17 +2142,6 @@ function SiteMenu({
       )}
 
       {activeMenuTab === "PAGES" && (
-      <div className="border-b border-border p-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari halaman…" className="h-7 pl-7 text-xs" />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Home — present, can duplicate */}
-        <div className="relative">
           <div
             className={cn(
               "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
