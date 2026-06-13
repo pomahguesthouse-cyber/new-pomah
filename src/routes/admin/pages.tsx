@@ -180,6 +180,10 @@ function HomepageBuilder() {
     if (activeLp?.homepage_config) setPageCfg(mergeHomepageConfig(activeLp.homepage_config));
   }, [activeLp]);
 
+  useEffect(() => {
+    setSection("header");
+  }, [activePageId]);
+
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
   const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
