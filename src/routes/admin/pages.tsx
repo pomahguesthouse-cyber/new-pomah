@@ -330,6 +330,8 @@ function HomepageBuilder() {
     : SECTIONS.filter(s => s.key !== "bookingHero");
 
   const active = visibleSections.find((s) => s.key === section) || visibleSections[0];
+  const editingCfg = activeLp?.homepage_config ? pageCfg : cfg;
+  const setEditingCfg = activeLp?.homepage_config ? setPageCfg : setCfg;
 
   return (
     <div className="flex h-full flex-col bg-stone-100">
@@ -479,37 +481,37 @@ function HomepageBuilder() {
                 onSelect={(k) => setSection(k)}
               />
               {sectionSupportsLayout(section) && (
-                <SectionLayoutControls section={section} cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} />
+                <SectionLayoutControls section={section} cfg={editingCfg} setCfg={setEditingCfg} />
               )}
               <div className="flex-1 overflow-y-auto">
                 {isLoading ? (
                   <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
                 ) : section === "header" ? (
-                   <HeaderTab cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} activeMode={activeMode} />
+                   <HeaderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "hero" ? (
-                   <HeroTab cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} activeMode={activeMode} />
+                   <HeroTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "bookingHero" ? (
-                  <HeroTab cfg={cfg} setCfg={setCfg} isBooking activeMode={activeMode} />
+                   <HeroTab cfg={editingCfg} setCfg={setEditingCfg} isBooking activeMode={activeMode} />
                 ) : section === "datepicker" ? (
-                  <DatePickerTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <DatePickerTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "badges" ? (
-                  <BadgesTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <BadgesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "story" ? (
-                  <StoryTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <StoryTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "reviews" ? (
-                  <ReviewsTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <ReviewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "facilities" ? (
-                  <FacilitiesTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <FacilitiesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "lokasi" ? (
-                  <LokasiTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <LokasiTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "news" ? (
-                  <NewsTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <NewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "cta" ? (
-                  <CtaTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <CtaTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "order" ? (
-                  <OrderTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <OrderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : (
-                  <CarouselTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <CarouselTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 )}
               </div>
             </>
