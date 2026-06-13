@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 import { createClient } from "@supabase/supabase-js";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
@@ -214,7 +215,7 @@ export type SeoLandingPage = {
   published: boolean;
   sections: LPSectionsData | null;
   /** Bila terisi, halaman dirender memakai komponen homepage asli (hasil duplikasi Home). */
-  homepage_config: Record<string, unknown> | null;
+  homepage_config: Json | null;
   /* ── Advanced SEO ── */
   custom_head: string | null;
   custom_robots: string | null;
