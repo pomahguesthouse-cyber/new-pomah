@@ -91,7 +91,7 @@ import {
   type HomepageConfig,
   type HeroSlide,
 } from "@/admin/modules/homepage/homepage.functions";
-import { LAYER_MIN, LAYER_MAX, HOME_SECTION_LABELS } from "@/admin/modules/homepage/homepage.config";
+import { LAYER_MIN, LAYER_MAX, HOME_SECTION_LABELS, mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/admin/pages")({
   component: HomepageBuilder,
@@ -148,6 +148,7 @@ function HomepageBuilder() {
 
   const [section, setSection] = useState<SectionKey>("header");
   const [cfg, setCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
+  const [pageCfg, setPageCfg] = useState<HomepageConfig>(DEFAULT_HOMEPAGE_CONFIG);
   const [saving, setSaving] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -174,6 +175,10 @@ function HomepageBuilder() {
   useEffect(() => {
     if (activeLp && pageSectionsQuery.data) setLpSections(pageSectionsQuery.data.sections as LPSectionsData);
   }, [activeLp, pageSectionsQuery.data]);
+
+  useEffect(() => {
+    if (activeLp?.homepage_config) setPageCfg(mergeHomepageConfig(activeLp.homepage_config));
+  }, [activeLp]);
 
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
@@ -222,11 +227,17 @@ function HomepageBuilder() {
     setSaving(true);
     try {
       if (activeLp) {
-        await savePageSectionsFn({
-          data: { pageId: activeLp.id, sections: lpSections },
-        });
+        if (activeLp.homepage_config) {
+          await updateSeoLandingPage({
+            data: { id: activeLp.id, homepage_config: pageCfg },
+          });
+        } else {
+          await savePageSectionsFn({
+            data: { pageId: activeLp.id, sections: lpSections },
+          });
+          await pageSectionsQuery.refetch();
+        }
         toast.success("Landing page tersimpan");
-        await pageSectionsQuery.refetch();
         await lpQuery.refetch();
         setPreviewKey((k) => k + 1);
       } else {
@@ -433,7 +444,7 @@ function HomepageBuilder() {
 
         {/* ── Right: contextual editor ── */}
         <aside className="flex w-[400px] shrink-0 flex-col border-l border-border bg-card">
-          {activeLp ? (
+          {activeLp && !activeLp.homepage_config ? (
             <>
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="truncate text-sm font-semibold">Edit — {activeLp.title}</p>
@@ -451,7 +462,7 @@ function HomepageBuilder() {
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold">Edit — {active.label}</p>
-                  {activeMenuTab === "GLOBAL" && (
+                  {(activeMenuTab === "GLOBAL" || section === "header") && (
                     <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
                       Global
                     </span>
@@ -468,15 +479,15 @@ function HomepageBuilder() {
                 onSelect={(k) => setSection(k)}
               />
               {sectionSupportsLayout(section) && (
-                <SectionLayoutControls section={section} cfg={cfg} setCfg={setCfg} />
+                <SectionLayoutControls section={section} cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} />
               )}
               <div className="flex-1 overflow-y-auto">
                 {isLoading ? (
                   <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
                 ) : section === "header" ? (
-                  <HeaderTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <HeaderTab cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} activeMode={activeMode} />
                 ) : section === "hero" ? (
-                  <HeroTab cfg={cfg} setCfg={setCfg} activeMode={activeMode} />
+                   <HeroTab cfg={activeLp ? pageCfg : cfg} setCfg={activeLp ? setPageCfg : setCfg} activeMode={activeMode} />
                 ) : section === "bookingHero" ? (
                   <HeroTab cfg={cfg} setCfg={setCfg} isBooking activeMode={activeMode} />
                 ) : section === "datepicker" ? (
