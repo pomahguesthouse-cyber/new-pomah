@@ -837,6 +837,104 @@ export type Database = {
         }
         Relationships: []
       }
+      page_elements: {
+        Row: {
+          content: Json
+          created_at: string
+          desktop_style: Json
+          id: string
+          mobile_style: Json
+          page_id: string
+          section_id: string
+          sort_order: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          desktop_style?: Json
+          id?: string
+          mobile_style?: Json
+          page_id: string
+          section_id: string
+          sort_order?: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          desktop_style?: Json
+          id?: string
+          mobile_style?: Json
+          page_id?: string
+          section_id?: string
+          sort_order?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_elements_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "seo_landing_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "page_elements_section_page_fk"
+            columns: ["page_id", "section_id"]
+            isOneToOne: false
+            referencedRelation: "page_sections"
+            referencedColumns: ["page_id", "id"]
+          },
+        ]
+      }
+      page_sections: {
+        Row: {
+          created_at: string
+          desktop_config: Json
+          id: string
+          is_mobile_custom: boolean
+          mobile_config: Json
+          page_id: string
+          sort_order: number
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          desktop_config?: Json
+          id?: string
+          is_mobile_custom?: boolean
+          mobile_config?: Json
+          page_id: string
+          sort_order?: number
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          desktop_config?: Json
+          id?: string
+          is_mobile_custom?: boolean
+          mobile_config?: Json
+          page_id?: string
+          sort_order?: number
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_sections_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "seo_landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null

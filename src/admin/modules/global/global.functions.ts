@@ -1,28 +1,28 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { db } from "@/integrations/supabase/client";
-import { requireSupabaseAuth } from "@/admin/lib/auth-middleware";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type GlobalConfig, mergeGlobalConfig } from "./global.config";
+
+function db(client: unknown): SupabaseClient {
+  return client as SupabaseClient;
+}
 
 /**
  * Get the global configuration (header, footer, WA widget, cookie banner)
  * from the properties table.
  */
 export const getGlobalConfig = createServerFn({ method: "GET" })
-  .handler(async ({ context }) => {
-    // If auth is needed, this function should be updated. Usually global config is public.
-    const sb = db(context?.supabase); // Context may be undefined if called directly, wait, actually let's use the standard setup
-    // We'll use the service role if no context, or just standard anonymous fetch.
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const sb = db(supabaseAdmin);
     const { data, error } = await sb
       .from("properties")
       .select("id, global_config")
       .limit(1)
       .maybeSingle();
 
-    if (error) {
-      console.error("Error fetching global config:", error);
-      return { id: null, config: mergeGlobalConfig(null) };
-    }
+    if (error) return { id: null, config: mergeGlobalConfig(null) };
 
     return {
       id: data?.id ?? null,
@@ -52,7 +52,7 @@ export const updateGlobalConfig = createServerFn({ method: "POST" })
 
     const { error: updateErr } = await sb
       .from("properties")
-      .update({ global_config: data as any })
+      .update({ global_config: data as unknown as Record<string, unknown> })
       .eq("id", prop.id);
 
     if (updateErr) {

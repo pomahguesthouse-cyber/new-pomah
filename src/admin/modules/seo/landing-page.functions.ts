@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 import { createClient } from "@supabase/supabase-js";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 
@@ -214,8 +215,7 @@ export type SeoLandingPage = {
   published: boolean;
   sections: LPSectionsData | null;
   /** Bila terisi, halaman dirender memakai komponen homepage asli (hasil duplikasi Home). */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  homepage_config: any | null;
+  homepage_config: Json | null;
   /* ── Advanced SEO ── */
   custom_head: string | null;
   custom_robots: string | null;
@@ -241,11 +241,144 @@ const pageShape = z.object({
   page_type:        z.enum(["home", "booking", "landing"]).default("landing"),
   is_system:        z.boolean().default(false),
   sections:         z.union([z.array(z.record(z.string(), z.unknown())), z.record(z.string(), z.unknown())]).optional().nullable(),
+  homepage_config:  z.record(z.string(), z.unknown()).optional().nullable(),
   custom_head:      z.string().max(20000).optional().nullable(),
   custom_robots:    z.string().max(10000).optional().nullable(),
   json_ld_enabled:  z.boolean().optional(),
   custom_json_ld:   z.string().max(20000).optional().nullable(),
 });
+
+type PageSectionRow = {
+  id: string;
+  page_id: string;
+  type: LPSection["type"];
+  sort_order: number;
+  desktop_config: Record<string, unknown>;
+  mobile_config: Record<string, unknown>;
+  is_mobile_custom: boolean;
+};
+
+type PageElementRow = {
+  id: string;
+  page_id: string;
+  section_id: string;
+  type: LPSection["type"];
+  content: Record<string, unknown>;
+  desktop_style: LPElementStyles;
+  mobile_style: LPElementStyles;
+  sort_order: number;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? { ...value as Record<string, unknown> }
+    : {};
+}
+
+function buildSection(row: PageSectionRow, element: PageElementRow | undefined, mode: "desktop" | "mobile"): LPSection {
+  const config = mode === "mobile" && row.is_mobile_custom
+    ? row.mobile_config
+    : row.desktop_config;
+  const content = element?.content ?? config;
+  return {
+    ...asRecord(content),
+    ...asRecord(config),
+    id: row.id,
+    type: row.type,
+    styles: {
+      desktop: element?.desktop_style ?? {},
+      mobile: element?.mobile_style ?? {},
+    },
+  } as LPSection;
+}
+
+async function loadPageSections(client: SupabaseClient, pageId: string): Promise<LPSectionsData | null> {
+  const { data: sectionData, error: sectionError } = await client
+    .from("page_sections")
+    .select("id, page_id, type, sort_order, desktop_config, mobile_config, is_mobile_custom")
+    .eq("page_id", pageId)
+    .order("sort_order", { ascending: true });
+  if (sectionError) throw sectionError;
+  const rows = (sectionData ?? []) as unknown as PageSectionRow[];
+  if (rows.length === 0) return null;
+
+  const { data: elementData, error: elementError } = await client
+    .from("page_elements")
+    .select("id, page_id, section_id, type, content, desktop_style, mobile_style, sort_order")
+    .eq("page_id", pageId)
+    .order("sort_order", { ascending: true });
+  if (elementError) throw elementError;
+  const elements = (elementData ?? []) as unknown as PageElementRow[];
+  const bySection = new Map(elements.map((element) => [element.section_id, element]));
+  const desktop = rows.map((row) => buildSection(row, bySection.get(row.id), "desktop"));
+  if (!rows.some((row) => row.is_mobile_custom)) return desktop;
+  return {
+    split: true,
+    desktop,
+    mobile: rows.map((row) => buildSection(row, bySection.get(row.id), "mobile")),
+  };
+}
+
+async function replacePageSections(client: SupabaseClient, pageId: string, sections: LPSectionsData | null): Promise<void> {
+  const desktop = Array.isArray(sections) ? sections : sections?.desktop ?? [];
+  const mobile = Array.isArray(sections) ? [] : sections?.mobile ?? [];
+  const isSplit = !Array.isArray(sections) && sections?.split === true;
+  const mobileById = new Map(mobile.map((section) => [section.id, section]));
+
+  const { error: deleteError } = await client.from("page_sections").delete().eq("page_id", pageId);
+  if (deleteError) throw deleteError;
+  if (desktop.length === 0) return;
+
+  for (const [sortOrder, desktopSection] of desktop.entries()) {
+    const mobileSection = mobileById.get(desktopSection.id) ?? mobile[sortOrder];
+    const { id: _desktopId, type, styles, ...desktopConfig } = desktopSection;
+    const { id: _mobileId, type: _mobileType, styles: _mobileStyles, ...mobileConfig } = mobileSection ?? desktopSection;
+    const { data: inserted, error: sectionError } = await client
+      .from("page_sections")
+      .insert({
+        page_id: pageId,
+        type,
+        sort_order: sortOrder,
+        desktop_config: desktopConfig,
+        mobile_config: isSplit ? mobileConfig : {},
+        is_mobile_custom: isSplit,
+      })
+      .select("id")
+      .single();
+    if (sectionError || !inserted) throw sectionError ?? new Error("Section gagal dibuat");
+    const sectionId = (inserted as { id: string }).id;
+    const { error: elementError } = await client.from("page_elements").insert({
+      page_id: pageId,
+      section_id: sectionId,
+      type,
+      content: desktopConfig,
+      desktop_style: styles?.desktop ?? {},
+      mobile_style: (mobileSection?.styles?.mobile ?? styles?.mobile) ?? {},
+      sort_order: 0,
+    });
+    if (elementError) throw elementError;
+  }
+}
+
+/** Load only the selected page's independent section and element rows. */
+export const getPageBuilderSections = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ pageId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => ({
+    sections: (await loadPageSections(db(context.supabase), data.pageId)) ?? [],
+  }));
+
+/** Replace only the selected page's section tree. */
+export const savePageBuilderSections = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    pageId: z.string().uuid(),
+    sections: z.union([z.array(z.record(z.string(), z.unknown())), z.record(z.string(), z.unknown())]).nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await replacePageSections(db(context.supabase), data.pageId, data.sections as LPSectionsData | null);
+    return { ok: true };
+  });
 
 /** List all landing pages ordered by creation (newest first). */
 export const listSeoLandingPages = createServerFn({ method: "GET" })
@@ -256,7 +389,12 @@ export const listSeoLandingPages = createServerFn({ method: "GET" })
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { pages: (data ?? []) as unknown as SeoLandingPage[] };
+    const pages = (data ?? []) as unknown as SeoLandingPage[];
+    const hydrated = await Promise.all(pages.map(async (page) => ({
+      ...page,
+      sections: (await loadPageSections(db(context.supabase), page.id)) ?? page.sections,
+    })));
+    return { pages: hydrated };
   });
 
 /** Create a new landing page. */
@@ -435,7 +573,14 @@ export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
       .eq("slug", data.slug)
       .eq("published", true)
       .maybeSingle();
-    return { page: (row as unknown as SeoLandingPage) ?? null };
+    if (!row) return { page: null };
+    const page = row as unknown as SeoLandingPage;
+    return {
+      page: {
+        ...page,
+        sections: (await loadPageSections(client, page.id)) ?? page.sections,
+      },
+    };
   });
 
 /** Duplicate a landing page — deep-clone semua konfigurasi, buat slug unik. */
@@ -507,7 +652,6 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
 
     // 4. Deep-clone seluruh halaman — pastikan semua data terpisah dari aslinya
     const now = new Date().toISOString();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = original as Record<string, unknown>;
 
     // Deep-clone semua field JSONB/object agar tidak share referensi
@@ -537,7 +681,11 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
       .single();
     if (insertErr) throw insertErr;
 
-    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+    const insertedId = (inserted as { id: string }).id;
+    const sourceSections = (await loadPageSections(sb, data.id)) ?? (original.sections as LPSectionsData | null);
+    await replacePageSections(sb, insertedId, sourceSections);
+
+    return { ok: true, id: insertedId, slug: finalSlug };
   });
 
 /** Duplikasi halaman sistem (Home atau Booking) menghasilkan landing page baru. */
@@ -785,6 +933,9 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
       .single();
     if (insertErr) throw insertErr;
 
-    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+    const insertedId = (inserted as { id: string }).id;
+    await replacePageSections(sb, insertedId, lpSections);
+
+    return { ok: true, id: insertedId, slug: finalSlug };
   });
 
