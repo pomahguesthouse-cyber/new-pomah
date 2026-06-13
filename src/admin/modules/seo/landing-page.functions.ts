@@ -681,7 +681,11 @@ export const duplicateSeoLandingPage = createServerFn({ method: "POST" })
       .single();
     if (insertErr) throw insertErr;
 
-    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+    const insertedId = (inserted as { id: string }).id;
+    const sourceSections = (await loadPageSections(sb, data.id)) ?? (original.sections as LPSectionsData | null);
+    await replacePageSections(sb, insertedId, sourceSections);
+
+    return { ok: true, id: insertedId, slug: finalSlug };
   });
 
 /** Duplikasi halaman sistem (Home atau Booking) menghasilkan landing page baru. */
@@ -929,6 +933,9 @@ export const duplicateSystemPageToLandingPage = createServerFn({ method: "POST" 
       .single();
     if (insertErr) throw insertErr;
 
-    return { ok: true, id: (inserted as { id: string }).id, slug: finalSlug };
+    const insertedId = (inserted as { id: string }).id;
+    await replacePageSections(sb, insertedId, lpSections);
+
+    return { ok: true, id: insertedId, slug: finalSlug };
   });
 
