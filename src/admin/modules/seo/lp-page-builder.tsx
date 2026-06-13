@@ -311,9 +311,14 @@ export function LpPageBuilder({
       {active && (
         <div className="mt-2 rounded-xl border border-teal-200 bg-teal-50/40 p-4">
           <div className="mb-3 flex items-center justify-between border-b border-teal-150 pb-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-teal-600">
-              Edit: {typeMeta(active.type).label}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-bold uppercase tracking-wide text-teal-600">
+                Edit: {typeMeta(active.type).label}
+              </p>
+              <span className="rounded-full border border-teal-200 bg-teal-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-teal-700">
+                Page-specific
+              </span>
+            </div>
             <div className="flex rounded bg-stone-200/60 p-0.5">
               <button
                 type="button"
