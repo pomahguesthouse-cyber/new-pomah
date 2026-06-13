@@ -241,7 +241,7 @@ const pageShape = z.object({
   page_type:        z.enum(["home", "booking", "landing"]).default("landing"),
   is_system:        z.boolean().default(false),
   sections:         z.union([z.array(z.record(z.string(), z.unknown())), z.record(z.string(), z.unknown())]).optional().nullable(),
-  homepage_config:  z.record(z.string(), z.json()).optional().nullable(),
+  homepage_config:  z.record(z.string(), z.unknown()).optional().nullable(),
   custom_head:      z.string().max(20000).optional().nullable(),
   custom_robots:    z.string().max(10000).optional().nullable(),
   json_ld_enabled:  z.boolean().optional(),
