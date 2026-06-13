@@ -388,7 +388,12 @@ export const listSeoLandingPages = createServerFn({ method: "GET" })
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    return { pages: (data ?? []) as unknown as SeoLandingPage[] };
+    const pages = (data ?? []) as unknown as SeoLandingPage[];
+    const hydrated = await Promise.all(pages.map(async (page) => ({
+      ...page,
+      sections: (await loadPageSections(db(context.supabase), page.id)) ?? page.sections,
+    })));
+    return { pages: hydrated };
   });
 
 /** Create a new landing page. */
@@ -567,7 +572,14 @@ export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
       .eq("slug", data.slug)
       .eq("published", true)
       .maybeSingle();
-    return { page: (row as unknown as SeoLandingPage) ?? null };
+    if (!row) return { page: null };
+    const page = row as unknown as SeoLandingPage;
+    return {
+      page: {
+        ...page,
+        sections: (await loadPageSections(client, page.id)) ?? page.sections,
+      },
+    };
   });
 
 /** Duplicate a landing page — deep-clone semua konfigurasi, buat slug unik. */
