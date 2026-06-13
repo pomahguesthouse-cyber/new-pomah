@@ -59,6 +59,8 @@ import {
   deleteSeoLandingPage,
   duplicateSeoLandingPage,
   duplicateSystemPageToLandingPage,
+  getPageBuilderSections,
+  savePageBuilderSections,
   type SeoLandingPage,
   type LPSection,
   type LPSectionsData,
@@ -128,6 +130,8 @@ const SECTIONS: {
 function HomepageBuilder() {
   const getFn = useServerFn(getHomepageConfig);
   const updateFn = useServerFn(updateHomepageConfig);
+  const getPageSectionsFn = useServerFn(getPageBuilderSections);
+  const savePageSectionsFn = useServerFn(savePageBuilderSections);
 
   const { data, isLoading } = useQuery({
     queryKey: ["homepage-config"],
@@ -154,6 +158,13 @@ function HomepageBuilder() {
   const [activeMenuTab, setActiveMenuTab] = useState<"PAGES" | "GLOBAL">("PAGES");
   const activeLp = activePageId === "home" ? null : pages.find((p) => p.id === activePageId) ?? null;
 
+  const pageSectionsQuery = useQuery({
+    queryKey: ["page-builder-sections", activeLp?.id],
+    queryFn: () => getPageSectionsFn({ data: { pageId: activeLp?.id ?? "" } }),
+    enabled: Boolean(activeLp?.id),
+    refetchOnWindowFocus: false,
+  });
+
   // Duplicate / Rename state
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<SeoLandingPage | null>(null);
@@ -161,9 +172,8 @@ function HomepageBuilder() {
   // Sections of the active landing page (edited in the right panel).
   const [lpSections, setLpSections] = useState<LPSectionsData>([]);
   useEffect(() => {
-    if (activeLp) setLpSections((activeLp.sections ?? []) as LPSectionsData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLp?.id]);
+    if (activeLp && pageSectionsQuery.data) setLpSections(pageSectionsQuery.data.sections as LPSectionsData);
+  }, [activeLp, pageSectionsQuery.data]);
 
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
@@ -212,15 +222,11 @@ function HomepageBuilder() {
     setSaving(true);
     try {
       if (activeLp) {
-        await updateSeoLandingPage({
-          data: {
-            id: activeLp.id,
-            sections: lpSections ? (
-              Array.isArray(lpSections) ? (lpSections.length > 0 ? lpSections : null) : lpSections
-            ) : null
-          },
+        await savePageSectionsFn({
+          data: { pageId: activeLp.id, sections: lpSections },
         });
         toast.success("Landing page tersimpan");
+        await pageSectionsQuery.refetch();
         await lpQuery.refetch();
         setPreviewKey((k) => k + 1);
       } else {
