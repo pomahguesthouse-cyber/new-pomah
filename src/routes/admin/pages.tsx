@@ -449,7 +449,14 @@ function HomepageBuilder() {
           ) : (
             <>
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <p className="text-sm font-semibold">Edit — {active.label}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">Edit — {active.label}</p>
+                  {activeMenuTab === "GLOBAL" && (
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">
+                      Global
+                    </span>
+                  )}
+                </div>
                 <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
                   onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}>
                   <Settings2 className="h-3.5 w-3.5" /> SEO
