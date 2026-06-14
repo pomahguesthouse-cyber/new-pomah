@@ -320,6 +320,32 @@ export function matchAlternative(
   return null;
 }
 
+/** Temukan koreksi tipe kamar yang disebut tamu sebelum konfirmasi final. */
+export function detectRequestedRoomChange(
+  message: string,
+  rooms: Array<{ id: string; name: string; base_rate?: number | null }>,
+  currentRoomId?: string,
+): { id: string; name: string; pricePerNight: number } | null {
+  const normalizedMessage = message.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!normalizedMessage) return null;
+
+  const matches = rooms
+    .filter((room) => room.id !== currentRoomId)
+    .filter((room) => {
+      const normalizedName = room.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      return normalizedName.length > 1 && normalizedMessage.includes(normalizedName);
+    })
+    .sort((a, b) => b.name.length - a.name.length);
+
+  const selected = matches[0];
+  if (!selected) return null;
+  return {
+    id: selected.id,
+    name: selected.name,
+    pricePerNight: Number(selected.base_rate ?? 0),
+  };
+}
+
 
 /** Detect "tamu jelas-jelas memulai booking baru" — pakai untuk auto-reset stale states. */
 const NEW_BOOKING_INTENT_PATTERN =
@@ -641,6 +667,45 @@ export async function processBookingState(
   }
 
   if (state === "CONFIRMING_BOOKING") {
+    // Koreksi tipe kamar harus diproses sebelum kata konfirmasi. Pesan seperti
+    // "eh sorry Family Suite 100 ya" mengandung kata "ya", tetapi maksudnya
+    // mengganti kamar — bukan menyetujui ringkasan kamar sebelumnya.
+    const requestedRoom = detectRequestedRoomChange(message, ctx.rooms, context.roomId);
+    if (requestedRoom && context.checkIn && context.checkOut) {
+      const { data: availabilityRows, error: availabilityError } = await supabase.rpc(
+        "room_type_availability_detail",
+        { p_check_in: context.checkIn, p_check_out: context.checkOut },
+      );
+      const rows = Array.isArray(availabilityRows)
+        ? availabilityRows as Array<{ room_type_id?: unknown; available?: unknown }>
+        : [];
+      const availability = rows.find((row) => row.room_type_id === requestedRoom.id);
+      const availableCount = Number(availability?.available ?? 0);
+
+      if (availabilityError || availableCount < 1) {
+        return {
+          handled: true,
+          reply:
+            `Mohon maaf Kak, ${requestedRoom.name} sudah tidak tersedia untuk tanggal tersebut. ` +
+            `Ringkasan sebelumnya belum saya proses. Silakan pilih tipe kamar lain yang tersedia.`,
+        };
+      }
+
+      const nights = countNights(context.checkIn, context.checkOut);
+      context.roomId = requestedRoom.id;
+      context.roomName = requestedRoom.name;
+      context.pricePerNight = requestedRoom.pricePerNight;
+      context.totalPrice = requestedRoom.pricePerNight * nights;
+      context.rooms = [{
+        roomTypeId: requestedRoom.id,
+        roomTypeName: requestedRoom.name,
+        quantity: 1,
+        pricePerNight: requestedRoom.pricePerNight,
+      }];
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+      return buildBookingSummary(context);
+    }
+
     if (CONFIRM_PATTERN.test(message)) {
       // Create the booking deterministically with the data collected in context.
       const raw = await createBooking(
