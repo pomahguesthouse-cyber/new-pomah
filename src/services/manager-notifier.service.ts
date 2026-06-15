@@ -220,6 +220,7 @@ interface SendOptions {
     | "payment_proof"
     | "complaint"
     | "new_session"
+    | "new_message"
     | "bot_loop"
     | "zombie_timeout"
     | "booking_stuck";
