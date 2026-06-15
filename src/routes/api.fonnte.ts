@@ -130,6 +130,28 @@ export const Route = createFileRoute("/api/fonnte")({
           metadata: { intent_label: classifyMessageIntent(message), attachment_url: attachmentUrl ?? null },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
+        // ── NOTIFIKASI SUPER ADMIN: setiap pesan masuk ───────────────────
+        // Fire-and-forget — dedupe per messageId di dalam fungsi.
+        void (async () => {
+          try {
+            const { notifyIncomingMessage } = await import(
+              "@/services/manager-notifier.service"
+            );
+            await notifyIncomingMessage(supabaseAdmin as any, {
+              phone: customerPhone,
+              guestName: name || null,
+              body: message,
+              messageId,
+              threadId: null,
+              hasAttachment: !!attachmentUrl,
+            });
+          } catch (e) {
+            console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
+          }
+        })();
+
+
+
         // ── NEW SESSION DETECTION ─────────────────────────────────────────
         // Cek apakah ini sesi percakapan baru (gap >15 menit sejak pesan
         // terakhir, atau thread baru sama sekali). Jika ya, kirim notifikasi

@@ -220,6 +220,7 @@ interface SendOptions {
     | "payment_proof"
     | "complaint"
     | "new_session"
+    | "new_message"
     | "bot_loop"
     | "zombie_timeout"
     | "booking_stuck";
@@ -1044,4 +1045,73 @@ export async function fanOutAgentChannelsForMonitor(
     dedupeKeyFor: (agentKey, chatId) =>
       `conv_monitor:${alertId}:${agentKey}:${chatId}`,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. Notifikasi setiap pesan WhatsApp masuk                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Kirim notifikasi WhatsApp ke super admin SETIAP kali ada pesan baru
+ * masuk dari tamu. Berbeda dengan `notifyNewConversationSession` yang
+ * hanya memicu saat awal sesi (gap >15 menit), fungsi ini akan memicu
+ * untuk setiap pesan inbound.
+ *
+ * Dedupe per `messageId` sehingga walau dipanggil berulang untuk pesan
+ * yang sama (mis. retry webhook) tetap hanya 1 notif terkirim.
+ *
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyIncomingMessage(
+  db: Db,
+  opts: {
+    phone: string;
+    guestName: string | null;
+    body: string;
+    messageId: string;
+    threadId: string | null;
+    hasAttachment?: boolean;
+  },
+): Promise<void> {
+  try {
+    const { fonnteToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const targets = superAdmins.filter((m) => !!m.phone);
+    if (targets.length === 0) return;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const preview = opts.body.length > 300
+      ? opts.body.slice(0, 297) + "…"
+      : opts.body;
+
+    const message =
+      `📩 Pesan WhatsApp Baru\n\n` +
+      `👤 Tamu: ${opts.guestName ?? "Tidak dikenal"}\n` +
+      `📱 No HP: ${opts.phone}\n` +
+      `🕒 Waktu: ${wibTime}\n\n` +
+      `💬 Pesan:\n"${preview}"` +
+      (opts.hasAttachment ? `\n\n📎 Pesan ini berisi lampiran.` : ``);
+
+    const dedupeKey = `new_message:${opts.messageId}`;
+
+    await Promise.all(
+      targets.map((admin) =>
+        sendWithRetry(db, fonnteToken, {
+          eventType: "new_message",
+          message,
+          relatedId: opts.threadId,
+          recipient: admin,
+          channel: "wa",
+          dedupeKey: `${dedupeKey}:${admin.id}`,
+        }),
+      ),
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyIncomingMessage error (non-fatal):", e);
+  }
 }
