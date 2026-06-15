@@ -131,24 +131,32 @@ export const Route = createFileRoute("/api/fonnte")({
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
         // ── NOTIFIKASI SUPER ADMIN: setiap pesan masuk ───────────────────
-        // Fire-and-forget — dedupe per messageId di dalam fungsi.
-        void (async () => {
-          try {
-            const { notifyIncomingMessage } = await import(
-              "@/services/manager-notifier.service"
-            );
-            await notifyIncomingMessage(supabaseAdmin as any, {
-              phone: customerPhone,
-              guestName: name || null,
-              body: message,
-              messageId,
-              threadId: null,
-              hasAttachment: !!attachmentUrl,
-            });
-          } catch (e) {
-            console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
-          }
-        })();
+        // Cloudflare Worker akan menghentikan async setelah response dikirim
+        // kecuali didaftarkan via ctx.waitUntil. Tanpa ini notifikasi sering
+        // tidak terkirim. Dedupe per messageId ada di dalam fungsi.
+        {
+          const { getWaitUntil } = await import("@/lib/cf-context");
+          const notifyTask = (async () => {
+            try {
+              const { notifyIncomingMessage } = await import(
+                "@/services/manager-notifier.service"
+              );
+              await notifyIncomingMessage(supabaseAdmin as any, {
+                phone: customerPhone,
+                guestName: name || null,
+                body: message,
+                messageId,
+                threadId: null,
+                hasAttachment: !!attachmentUrl,
+              });
+            } catch (e) {
+              console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
+            }
+          })();
+          const waitUntil = getWaitUntil();
+          if (waitUntil) waitUntil(notifyTask);
+          // else: biarkan berjalan paralel (dev/test runtime), tidak perlu await.
+        }
 
 
 
