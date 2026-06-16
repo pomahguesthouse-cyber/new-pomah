@@ -241,7 +241,7 @@ export function WebchatWindow({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="wc-code">Kode booking (opsional)</Label>
+                <Label htmlFor="wc-code">Kode booking (opsional : isi jika anda sudah memiliki kode booking)</Label>
                 <Input
                   id="wc-code"
                   value={bookingCode}
