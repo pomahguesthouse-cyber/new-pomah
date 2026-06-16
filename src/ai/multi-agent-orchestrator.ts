@@ -179,6 +179,25 @@ async function runAgent(
     systemPrompt += `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
       `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
   }
+  if (agentCtx.chatSummaryJson) {
+    const s = agentCtx.chatSummaryJson;
+    const fmt = (v: string | number | null | undefined) =>
+      v === null || v === undefined || v === "" ? "-" : String(v);
+    const structuredLines = [
+      `- Tipe kamar terakhir: ${fmt(s.room_type)}`,
+      `- Topik terakhir: ${fmt(s.last_topic)}`,
+      `- Status booking: ${fmt(s.booking_status)}`,
+      `- Status pembayaran: ${fmt(s.payment_status)}`,
+      `- Check-in / out: ${fmt(s.check_in)} → ${fmt(s.check_out)}`,
+      `- Jumlah tamu: ${fmt(s.guest_count)}`,
+      `- Pertanyaan belum dijawab: ${fmt(s.unresolved_question)}`,
+      `- Komplain aktif: ${s.complaint_active ? "ya" : "tidak"}`,
+    ].join("\n");
+    systemPrompt +=
+      `\n\nKONTEKS TERSTRUKTUR DARI SESI SEBELUMNYA (pakai sebagai default, JANGAN konfirmasi ulang kecuali tamu menyebut data baru):\n` +
+      structuredLines +
+      `\nKalau pesan terakhir tamu menyebut tanggal / tipe kamar / jumlah tamu yang BERBEDA dengan data di atas, ABAIKAN nilai lama dan ikuti pesan terbaru.`;
+  }
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
     // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…
     // JANGAN reset" membuat Gemini menyimpulkan percakapan sudah selesai
