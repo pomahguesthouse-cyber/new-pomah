@@ -14,6 +14,7 @@ import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
@@ -29,6 +30,7 @@ import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
+import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -53,6 +55,7 @@ import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cro
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
+import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -77,6 +80,11 @@ const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -152,6 +160,11 @@ const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWebchatRoute = AdminWebchatRouteImport.update({
+  id: '/webchat',
+  path: '/webchat',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTrainingRoute = AdminTrainingRouteImport.update({
@@ -276,10 +289,16 @@ const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
   path: '/api/booking-invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => BookConfirmationIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
@@ -302,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -321,10 +341,12 @@ export interface FileRoutesByFullPath {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
@@ -347,6 +369,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -366,12 +389,14 @@ export interface FileRoutesByTo {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/chat': typeof ChatRoute
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
@@ -394,6 +419,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -413,13 +439,15 @@ export interface FileRoutesById {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
+    | '/chat'
     | '/explore'
     | '/llms.txt'
     | '/login'
@@ -442,6 +470,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -462,9 +491,11 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/chat'
     | '/explore'
     | '/llms.txt'
     | '/login'
@@ -487,6 +518,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -507,10 +539,12 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/chat'
     | '/explore'
     | '/llms.txt'
     | '/login'
@@ -533,6 +567,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -553,11 +588,13 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  ChatRoute: typeof ChatRoute
   ExploreRoute: typeof ExploreRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
@@ -579,7 +616,7 @@ export interface RootRouteChildren {
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
-  BookConfirmationIdRoute: typeof BookConfirmationIdRoute
+  BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -617,6 +654,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -722,6 +766,13 @@ declare module '@tanstack/react-router' {
       path: '/whatsapp'
       fullPath: '/admin/whatsapp'
       preLoaderRoute: typeof AdminWhatsappRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/webchat': {
+      id: '/admin/webchat'
+      path: '/webchat'
+      fullPath: '/admin/webchat'
+      preLoaderRoute: typeof AdminWebchatRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/training': {
@@ -892,6 +943,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/book/confirmation/$id/chat': {
+      id: '/book/confirmation/$id/chat'
+      path: '/chat'
+      fullPath: '/book/confirmation/$id/chat'
+      preLoaderRoute: typeof BookConfirmationIdChatRouteImport
+      parentRoute: typeof BookConfirmationIdRoute
+    }
   }
 }
 
@@ -913,6 +971,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTelegramRoute: typeof AdminTelegramRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
+  AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
@@ -935,6 +994,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTelegramRoute: AdminTelegramRoute,
   AdminTrainingRoute: AdminTrainingRoute,
+  AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
@@ -953,9 +1013,21 @@ const ApiTelegramRouteWithChildren = ApiTelegramRoute._addFileChildren(
   ApiTelegramRouteChildren,
 )
 
+interface BookConfirmationIdRouteChildren {
+  BookConfirmationIdChatRoute: typeof BookConfirmationIdChatRoute
+}
+
+const BookConfirmationIdRouteChildren: BookConfirmationIdRouteChildren = {
+  BookConfirmationIdChatRoute: BookConfirmationIdChatRoute,
+}
+
+const BookConfirmationIdRouteWithChildren =
+  BookConfirmationIdRoute._addFileChildren(BookConfirmationIdRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  ChatRoute: ChatRoute,
   ExploreRoute: ExploreRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
@@ -977,7 +1049,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
-  BookConfirmationIdRoute: BookConfirmationIdRoute,
+  BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

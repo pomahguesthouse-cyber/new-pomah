@@ -86,6 +86,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
     label: "Guests & Comms",
     items: [
       { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
+      { to: "/admin/webchat", label: "Web Chat", icon: MessageCircle },
       { to: "/admin/telegram", label: "Telegram", icon: Send },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
