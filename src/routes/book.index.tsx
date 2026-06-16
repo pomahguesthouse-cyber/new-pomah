@@ -259,7 +259,7 @@ function BookPage() {
               checkIn={form.checkIn || null}
               checkOut={form.checkOut || null}
               min={today}
-              onChange={({ checkIn: ci, checkOut: co }) => setForm({ ...form, checkIn: ci, checkOut: co })}
+              onChange={({ checkIn: ci, checkOut: co }: { checkIn: string; checkOut: string }) => setForm({ ...form, checkIn: ci, checkOut: co })}
               trigger={
                 <button
                   type="button"
@@ -278,7 +278,7 @@ function BookPage() {
               checkIn={form.checkIn || null}
               checkOut={form.checkOut || null}
               min={form.checkIn ? isoAddDays(form.checkIn, 1) : today}
-              onChange={({ checkIn: ci, checkOut: co }) => setForm({ ...form, checkIn: ci, checkOut: co })}
+              onChange={({ checkIn: ci, checkOut: co }: { checkIn: string; checkOut: string }) => setForm({ ...form, checkIn: ci, checkOut: co })}
               trigger={
                 <button
                   type="button"
