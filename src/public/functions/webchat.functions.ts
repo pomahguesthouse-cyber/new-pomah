@@ -515,15 +515,33 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     : "";
 
   // Tanggal hari ini di zona waktu Asia/Jakarta (WIB) agar AI tidak salah
-  // mengartikan "besok", "lusa", dsb.
-  const todayJakarta = new Intl.DateTimeFormat("id-ID", {
-    timeZone: "Asia/Jakarta",
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
-  const todayBlock = `\n[TANGGAL HARI INI]\n${todayJakarta} (WIB). Gunakan ini sebagai acuan saat tamu menyebut "hari ini", "besok", "lusa", "minggu depan", dsb. JANGAN menebak tahun.\n`;
+  // mengartikan "hari ini", "besok", "lusa", dsb.
+  const fmtJakarta = (d: Date) =>
+    new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  // ISO YYYY-MM-DD untuk tanggal WIB (offset +07:00, tanpa DST).
+  const isoJakarta = (d: Date) => {
+    const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+    return wib.toISOString().slice(0, 10);
+  };
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const dayAfter = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+  const todayBlock =
+    `\n[TANGGAL ACUAN — ZONA WIB / Asia/Jakarta]\n` +
+    `- Hari ini  : ${fmtJakarta(now)} (${isoJakarta(now)})\n` +
+    `- Besok     : ${fmtJakarta(tomorrow)} (${isoJakarta(tomorrow)})\n` +
+    `- Lusa      : ${fmtJakarta(dayAfter)} (${isoJakarta(dayAfter)})\n` +
+    `Selalu gunakan tanggal di atas saat tamu menyebut "hari ini", "besok", ` +
+    `"lusa", "minggu depan", "akhir pekan", dsb. JANGAN menebak tahun atau bulan; ` +
+    `pakai tahun & bulan dari blok ini. Bila tamu menyebut nama hari (mis. "Sabtu"), ` +
+    `hitung relatif terhadap "Hari ini" di atas.\n`;
+
 
   const systemPrompt =
     WEBCHAT_FALLBACK_PROMPT
