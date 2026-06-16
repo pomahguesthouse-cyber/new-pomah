@@ -433,6 +433,11 @@ export async function executeAutoreplyForPhone(
     : cfgModel || "gpt-4o-mini";
 
   const chatSummary = c.chat_summary || "";
+  const rawSummaryJson = c.chat_summary_json;
+  const chatSummaryJson =
+    rawSummaryJson && typeof rawSummaryJson === "object" && !Array.isArray(rawSummaryJson) && Object.keys(rawSummaryJson).length > 0
+      ? (rawSummaryJson as ChatSummaryStructured)
+      : undefined;
   const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
   const messages = c.messages ?? [];
 
