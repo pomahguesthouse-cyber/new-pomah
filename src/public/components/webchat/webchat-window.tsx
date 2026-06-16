@@ -24,6 +24,7 @@ import {
   type WebchatMessageRow,
   type BookingSummary,
 } from "@/public/functions/webchat.functions";
+import { getBranding } from "@/lib/branding.functions";
 
 const LS_THREAD_KEY = "pomah:webchat:threadId";
 
@@ -64,6 +65,14 @@ export function WebchatWindow({
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
+
+  const fetchBranding = useServerFn(getBranding);
+
+  // Branding (logo invoice).
+  const brandingQuery = useQuery({
+    queryKey: ["webchat-branding"],
+    queryFn: () => fetchBranding(),
+  });
 
   // Channel status banner.
   const statusQuery = useQuery({
@@ -200,7 +209,7 @@ export function WebchatWindow({
   if (!session) {
     return (
       <div className={"flex min-h-[100dvh] flex-col bg-stone-50 " + (className ?? "")}>
-        <ChatHeader compact />
+        <ChatHeader compact logoUrl={brandingQuery.data?.invoiceLogoUrl || brandingQuery.data?.logoUrl} />
         <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
           {isWaDown ? (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -271,7 +280,7 @@ export function WebchatWindow({
   // ─── Chat surface ─────────────────────────────────────────────────
   return (
     <div className={"flex min-h-[100dvh] flex-col bg-stone-50 " + (className ?? "")}>
-      <ChatHeader />
+      <ChatHeader logoUrl={brandingQuery.data?.invoiceLogoUrl || brandingQuery.data?.logoUrl} />
 
       {isWaDown && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-900">
@@ -368,14 +377,22 @@ export function WebchatWindow({
   );
 }
 
-function ChatHeader({ compact }: { compact?: boolean }) {
+function ChatHeader({ compact, logoUrl }: { compact?: boolean; logoUrl?: string | null }) {
   return (
     <header className="sticky top-0 z-10 border-b border-stone-200 bg-white">
       <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#1A3620] text-white">
-            <Home className="h-5 w-5" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Pomah Guesthouse"
+              className="h-9 w-9 rounded-md object-contain"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#1A3620] text-white">
+              <Home className="h-5 w-5" />
+            </div>
+          )}
           <div>
             <p className="text-sm font-semibold text-stone-900">Pomah Guesthouse</p>
             <p className="text-xs text-stone-500">
