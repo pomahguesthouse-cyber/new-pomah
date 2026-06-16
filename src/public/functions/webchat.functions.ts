@@ -354,12 +354,11 @@ export const uploadWebchatAttachment = createServerFn({ method: "POST" })
       try {
         const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
         await notifyPaymentProof(supabaseAdmin as any, {
-          messageId:   data.threadId,
-          phone:       thread.guest_phone ?? "",
-          guestName:   thread.guest_name,
-          bookingCode: null,
-          fileUrl:     url ?? "",
-          caption:     "Bukti transfer via Web Chat",
+          threadId:  thread.whatsapp_thread_id ?? null,
+          messageId: data.threadId,
+          phone:     thread.guest_phone ?? "",
+          guestName: thread.guest_name,
+          imageUrl:  url ?? "",
         });
       } catch (e) {
         console.warn("[Webchat] notify payment proof failed:", e);
