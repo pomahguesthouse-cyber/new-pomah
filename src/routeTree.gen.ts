@@ -30,6 +30,7 @@ import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
+import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -159,6 +160,11 @@ const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   id: '/whatsapp',
   path: '/whatsapp',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWebchatRoute = AdminWebchatRouteImport.update({
+  id: '/webchat',
+  path: '/webchat',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTrainingRoute = AdminTrainingRouteImport.update({
@@ -315,6 +321,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -411,6 +419,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
@@ -461,6 +470,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -508,6 +518,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -556,6 +567,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/webchat'
     | '/admin/whatsapp'
     | '/api/debug-db'
     | '/api/fonnte'
@@ -756,6 +768,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminWhatsappRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/webchat': {
+      id: '/admin/webchat'
+      path: '/webchat'
+      fullPath: '/admin/webchat'
+      preLoaderRoute: typeof AdminWebchatRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/training': {
       id: '/admin/training'
       path: '/training'
@@ -952,6 +971,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTelegramRoute: typeof AdminTelegramRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
+  AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
@@ -974,6 +994,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTelegramRoute: AdminTelegramRoute,
   AdminTrainingRoute: AdminTrainingRoute,
+  AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
