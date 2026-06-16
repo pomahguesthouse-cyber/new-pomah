@@ -1,84 +1,108 @@
-# Audit & Perbaikan Gap State Machine Booking
 
-## Ringkasan temuan audit
+# Upgrade Context Summary WhatsApp — Structured JSON
 
-Sistem **sudah punya** state machine + draft persisten (`wa_booking_states`: state enum, BookingContext JSON, slots, last_topic, last_entity, expires_at 15 menit) + interruption handling + stuck-state monitor. **Namun ada gap nyata** di fase awal percakapan — persis skenario yang Anda contohkan ("Ada kamar tanggal 20?" → "Deluxe" → "2 orang" → "Budi"):
+Tujuan: ganti chat_summary text-only menjadi pasangan `short_summary` (text) + `chat_summary_json` (structured fields) supaya bot dapat menjawab follow-up pendek ("kalau deluxe?", "berapa totalnya?") tanpa mengarang konteks, dengan UI admin untuk inspeksi/regenerate/clear.
 
-### Gap #1 — State `AWAITING_DATES` / `ROOM_SELECTED` / `AWAITING_DATES` di enum tapi tidak pernah di-set
-Booking machine hanya mulai dari `AWAITING_NAME` ke atas. Fase tanya tanggal / tipe kamar / jumlah tamu 100% diserahkan ke LLM Front Office Agent, yang baru memanggil tool `start_booking_details` ketika **semua** parameter sudah lengkap. Jika tamu menjawab bertahap ("Deluxe" lalu "2 orang"), agent harus menyusun ulang dari history tiap turn — rentan halusinasi tanggal.
+## 1. Migration database
 
-### Gap #2 — Slots hanya menyimpan `checkIn`/`checkOut`, tidak menyimpan `partialRoomType` / `partialAdults` / `partialChildren`
-Akibatnya jawaban tunggal "Deluxe" (saat state masih IDLE) dilihat classifier sebagai pesan general → bisa salah route ke agen lain.
+File: `supabase/migrations/<ts>_chat_summary_json.sql`
 
-### Gap #3 — Classifier short-affirmative hanya menangani "ya/oke"
-Tidak ada penanganan untuk reply pendek non-affirmatif yang jelas-jelas mengisi slot: angka jumlah orang ("2", "2 orang"), nama tipe kamar tunggal ("Deluxe", "Family"), atau tanggal lepas ("20 Juni") saat `last_topic ∈ {availability, pricing, booking}`.
+- `ALTER TABLE public.whatsapp_threads`
+  - `ADD COLUMN chat_summary_json jsonb NOT NULL DEFAULT '{}'::jsonb`
+  - `ADD COLUMN chat_summary_version integer NOT NULL DEFAULT 1`
+- `CREATE OR REPLACE FUNCTION public.get_autoreply_context(p_phone text)` — clone versi terbaru (lihat `20260525130000_restore_fonnte_autoreply_context.sql`), tambahkan field di SELECT thread: `chat_summary_json`, `chat_summary_version`, dan kembalikan di JSON output bersama `chat_summary` + `chat_summary_updated_at` + 30 messages terakhir (yang sudah ada). Tidak mengubah signature.
+- GRANT EXECUTE sama seperti versi sebelumnya (service_role).
 
-### Gap #4 — Mismatch timeout
-`last_topic` di-treat fresh selama state record belum auto-expire (15 menit), tapi `agreedDates` hanya di-inject jika `last_topic` ada. Setelah cron-cleanup, partial slots ikut hilang sementara booking_state mungkin masih hidup → tamu disuruh ulangi tanggal.
+## 2. Service summarizer (`src/services/wa-autoreply.service.ts`)
 
-### Gap #5 — `last_required_field` tidak eksplisit
-Sudah tersirat dari `state`, tapi tidak ada satu kolom yang bisa di-render di admin inbox untuk "tamu sedang ditanya: nomor HP". Akan membantu debugging & superadmin notification.
+- Update `generateSessionSummary` jadi mengembalikan:
+  ```ts
+  type StructuredSummary = {
+    short_summary: string;
+    guest_name: string | null;
+    last_topic: "pricing"|"availability"|"facility"|"booking"|"payment"|"complaint"|"location"|"general"|null;
+    room_type: string | null;
+    check_in: string | null;       // ISO YYYY-MM-DD
+    check_out: string | null;
+    guest_count: number | null;
+    booking_status: "none"|"pending"|"confirmed"|"cancelled"|"checked_in"|"checked_out"|null;
+    payment_status: "unpaid"|"down_payment"|"paid"|"pay_at_hotel"|null;
+    complaint_active: boolean;
+    unresolved_question: string | null;
+    needs_human: boolean;
+    handoff_reason: string | null;
+  };
+  ```
+- Prompt LLM eksplisit: "Jangan mengarang. Field yang tidak disebutkan tamu/admin → null. JSON valid saja, tanpa markdown." Gunakan Lovable AI Gateway (model yang sama dipakai sekarang) dengan `response_format: { type: "json_object" }` jika didukung; jika tidak, parse manual + ekstrak blok JSON.
+- Validasi:
+  - parse JSON → kalau gagal: log `summary failed invalid JSON`, fallback ke flow lama (simpan text mentah ke `chat_summary` saja, biarkan `chat_summary_json` tetap nilai sebelumnya).
+  - `short_summary` di-trim & dipotong maksimal 800 karakter.
+  - Enum field di-whitelist; nilai tak dikenal → null.
+- `updateThreadSummary(supabase, threadId, structured)`:
+  - update `chat_summary = short_summary`, `chat_summary_json = structured`, `chat_summary_updated_at = now()`, `chat_summary_version = chat_summary_version + 1`.
+  - Konstanta: `SUMMARY_MAX_CHARS = 800`.
+- Tetap dipanggil background (fire-and-forget via `getWaitUntil`) — tidak menambah latency reply ke tamu. Logging tambahan:
+  - "summary skipped: cooldown"
+  - "summary skipped: booking flow aktif"
+  - "summary generated" + threadId + version
+  - "summary failed invalid JSON" + sample
+- Tambahkan helper exported `regenerateThreadSummary(threadId)` & `clearThreadSummary(threadId)` untuk dipanggil admin function.
 
-### Gap #6 — `PAYMENT_PENDING` & `COMPLETED` tidak punya transisi balik kalau tamu tiba-tiba minta ubah
-State akan terjebak sampai 15 menit / sampai cancel keyword.
+## 3. Context resolver (`src/ai/router/context-resolver.ts`)
 
----
+- Ubah `seedEntityFromSummary` jadi menerima `{ chatSummary, chatSummaryJson, rooms }`:
+  - prioritas 1: `chatSummaryJson.room_type` → cari di rooms list (case-insensitive).
+  - prioritas 2: regex existing dari `chat_summary` text.
+- Update caller di `multi-agent-orchestrator.ts` (line ~536) mengoper kedua field.
 
-## Rencana perbaikan (fokus high-impact, minimal invasive)
+## 4. Multi-agent orchestrator (`src/ai/multi-agent-orchestrator.ts`)
 
-### Step 1 — Perluas slots untuk partial booking data
-File: `src/ai/state-machine/booking-machine.ts` + `src/ai/multi-agent-orchestrator.ts`
+- Perluas `AgentCtx` (di `src/ai/types.ts` jika ada — kalau tidak, di file orchestrator) dengan `chatSummaryJson?: StructuredSummary`.
+- Di builder system prompt (line 178): inject blok terstruktur jika tersedia, contoh:
+  ```
+  RINGKASAN PERCAKAPAN SEBELUMNYA:
+  <short_summary>
 
-Tambah field opsional di slots: `partialRoomType` (string), `partialAdults` (number), `partialChildren` (number) di samping `checkIn`/`checkOut` yang sudah ada. Front Office agent akan menulis ke slots tiap kali ekstrak salah satu, sehingga turn berikut tidak perlu re-derive.
+  KONTEKS TERSTRUKTUR (gunakan sebagai konteks, JANGAN konfirmasi ulang kecuali tamu menyebut data baru):
+  - Tipe kamar: <room_type|->
+  - Status booking: <booking_status|->
+  - Status pembayaran: <payment_status|->
+  - Check-in / out: <check_in> → <check_out>
+  - Pertanyaan belum terjawab: <unresolved_question|->
+  ```
+- Tambah instruksi: "Jika tamu menyebut tanggal/jenis kamar baru dalam pesan terakhir, ABAIKAN nilai lama di konteks terstruktur."
+- Propagasi `chatSummaryJson` dari `wa-autoreply.service.ts` saat membangun `agentCtx`.
 
-### Step 2 — Tool helper baru `update_booking_slots`
-File baru: `src/tools/booking-slots.tool.ts` + daftar di `src/tools/registry.ts`
+## 5. wa-autoreply context loading
 
-Tool ringan yang dipanggil agent ketika menangkap potongan data ("Deluxe" saja, "2 orang" saja). Menulis ke `wa_booking_states.slots` lewat RPC yang sudah ada (`update_booking_state` dipanggil dengan state IDLE + slots terbaru). Konsekuensi: jika tamu berikutnya bilang "ok pesan", agent sudah punya {checkIn, checkOut, roomType, adults} lengkap untuk memanggil `start_booking_details`.
+- Saat memetakan hasil RPC ke `agentCtx`, sertakan `chatSummaryJson` (default `{}` → undefined kalau kosong).
 
-### Step 3 — Perluas SHORT_AFFIRMATIVE classifier menjadi "slot-filling follow-up"
-File: `src/ai/router/intent-classifier.ts`
+## 6. Admin UI WhatsApp thread detail
 
-Tambah deteksi: jika `lastTopic ∈ {availability, pricing, booking, room_facilities}` DAN pesan match salah satu pola:
-- Angka pendek ("2", "3 orang", "2 dewasa 1 anak")
-- Nama tipe kamar tunggal (cocokkan dengan daftar `ctx.rooms` dari context)
-- Tanggal terisolasi ("20 Juni", "besok")
+- `src/admin/functions/whatsapp.functions.ts`: tambah 2 server fn (with `requireSupabaseAuth` + role check super_admin via has_role):
+  - `regenerateThreadSummaryFn({ threadId })` — load 30 msg terakhir, panggil generateSessionSummary, save.
+  - `clearThreadSummaryFn({ threadId })` — set chat_summary=null, chat_summary_json='{}', updated_at=now().
+- `src/routes/admin/whatsapp.tsx`: di panel detail thread tambahkan card "Context Summary":
+  - tampilkan `chat_summary` (short), `chat_summary_updated_at` (format DD/MM/YYYY HH:mm).
+  - badge grid: room_type, last_topic, booking_status, payment_status, unresolved_question, needs_human.
+  - tombol "Regenerate Summary" (loading state) dan "Clear Summary" (confirm dialog).
+  - invalidate React Query setelah mutasi.
 
-Maka inherit intent jadi `booking_inquiry` dengan confidence 0.8 (sama seperti SHORT_AFFIRMATIVE sekarang) supaya tidak salah-route ke agent lain.
+## 7. Types
 
-### Step 4 — Decouple `agreedDates` dari `last_topic`
-File: `src/ai/multi-agent-orchestrator.ts` (line 495-498)
+- `src/integrations/supabase/types.ts` akan ter-regenerate otomatis setelah migration approved.
+- Tambah type `StructuredSummary` di `src/services/wa-autoreply.service.ts` dan re-export untuk dipakai orchestrator + admin UI.
 
-Ubah guard: inject `agreedDates` jika slots berisi tanggal **DAN** state record belum kadaluarsa (cek `updated_at` vs 15 menit), tidak peduli `last_topic` masih ada. Hilangkan kelangkaan di Gap #4.
+## 8. Non-goals / jaminan
 
-### Step 5 — Tambah kolom display `last_required_field` (computed)
-File: `src/ai/state-machine/booking-machine.ts`
+- Tidak mengubah: queue worker, smart delay, booking state machine, routing agent, intent classifier.
+- Summarizer tetap fire-and-forget via `waitUntil` (sudah ada pattern).
+- Tidak menambah dependency baru.
 
-Fungsi derived helper `getRequiredField(state)` → string ("tanggal" | "tipe_kamar" | "jumlah_tamu" | "nama" | "email" | "nomor_hp" | "konfirmasi" | null). Dipakai oleh:
-- Stuck-state monitor notification (superadmin lihat "macet di field nomor_hp")
-- Admin WhatsApp inbox (optional badge, ditunda — bukan scope sekarang)
+## Acceptance criteria
 
-Tidak perlu migrasi DB, cukup derive di TS.
-
-### Step 6 — Reset otomatis dari `COMPLETED` / `PAYMENT_PENDING` saat detect intent baru
-File: `src/ai/state-machine/booking-machine.ts`
-
-Tambah cek: di `PAYMENT_PENDING`, jika classifier intent = `booking_inquiry` dengan confidence tinggi dan pesan jelas pemesanan baru (mengandung tanggal/tipe), reset ke IDLE dan biarkan flow baru jalan. Hindari guest stuck.
-
----
-
-## Yang TIDAK dikerjakan (tetap seperti sekarang)
-
-- **Tidak menambah kolom DB baru** di `wa_booking_states` / `whatsapp_threads` — semua kebutuhan tertutup oleh `state` + `slots` JSON existing.
-- **Tidak menambah state baru** di enum BookingState — `AWAITING_DATES` dan `ROOM_SELECTED` tetap unused (dead code akan dihapus di task lain, bukan sekarang).
-- **Tidak mengubah Front Office agent prompt** — perbaikan deterministik di state/slots/classifier sudah cukup untuk skenario yang Anda sebutkan.
-- **Visualisasi flowchart** — bukan scope (sudah Anda pilih audit, bukan dokumentasi).
-
----
-
-## Verifikasi setelah implementasi
-
-1. Jalankan AI Lab simulator dengan skenario: "ada kamar 20 desember?" → "deluxe" → "2 orang" → "ok pesan" → "Budi" → "budi@x.com" → "ya" → "ya konfirmasi". Pastikan tidak ada turn di mana agent re-ask data yang sudah disebut.
-2. Cek `wa_booking_states.slots` setelah turn ke-3 berisi `{checkIn, checkOut, partialRoomType: "Deluxe", partialAdults: 2}`.
-3. Cek classifier log: turn "deluxe" dan "2 orang" intent = `booking_inquiry` (bukan `general`).
-4. Cron stuck-monitor: paksa state CONFIRMING_PHONE > 10 detik, pastikan notifikasi superadmin menyebut `last_required_field = "nomor_hp"`.
+- Pesan baru tamu memicu reply tanpa tambahan latency (summary jalan di background).
+- Setelah summarizer sukses, `chat_summary_json` terisi sesuai schema; field tidak disebut tamu = null.
+- Follow-up "kalau deluxe?" diproses dengan `room_type` di prompt sehingga agent tidak menanyakan ulang tipe kamar.
+- Admin bisa melihat, regenerate, dan clear summary dari halaman WhatsApp.
+- JSON invalid → fallback aman, log tercatat, autoreply tetap berjalan.
