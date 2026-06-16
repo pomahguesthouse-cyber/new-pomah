@@ -223,7 +223,8 @@ interface SendOptions {
     | "new_message"
     | "bot_loop"
     | "zombie_timeout"
-    | "booking_stuck";
+    | "booking_stuck"
+    | "rpc_failure";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
