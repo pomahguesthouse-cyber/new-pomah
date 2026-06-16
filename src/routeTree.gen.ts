@@ -54,6 +54,7 @@ import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cro
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
+import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -282,6 +283,11 @@ const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
   path: '/api/booking-invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => BookConfirmationIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -328,7 +334,8 @@ export interface FileRoutesByFullPath {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -374,7 +381,8 @@ export interface FileRoutesByTo {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -422,7 +430,8 @@ export interface FileRoutesById {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
-  '/book/confirmation/$id': typeof BookConfirmationIdRoute
+  '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -472,6 +481,7 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -518,6 +528,7 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   id:
     | '__root__'
     | '/'
@@ -565,6 +576,7 @@ export interface FileRouteTypes {
     | '/api/cron/sync-explore'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/book/confirmation/$id/chat'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -592,7 +604,7 @@ export interface RootRouteChildren {
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
-  BookConfirmationIdRoute: typeof BookConfirmationIdRoute
+  BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -912,6 +924,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/book/confirmation/$id/chat': {
+      id: '/book/confirmation/$id/chat'
+      path: '/chat'
+      fullPath: '/book/confirmation/$id/chat'
+      preLoaderRoute: typeof BookConfirmationIdChatRouteImport
+      parentRoute: typeof BookConfirmationIdRoute
+    }
   }
 }
 
@@ -973,6 +992,17 @@ const ApiTelegramRouteWithChildren = ApiTelegramRoute._addFileChildren(
   ApiTelegramRouteChildren,
 )
 
+interface BookConfirmationIdRouteChildren {
+  BookConfirmationIdChatRoute: typeof BookConfirmationIdChatRoute
+}
+
+const BookConfirmationIdRouteChildren: BookConfirmationIdRouteChildren = {
+  BookConfirmationIdChatRoute: BookConfirmationIdChatRoute,
+}
+
+const BookConfirmationIdRouteWithChildren =
+  BookConfirmationIdRoute._addFileChildren(BookConfirmationIdRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
@@ -998,7 +1028,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
-  BookConfirmationIdRoute: BookConfirmationIdRoute,
+  BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
