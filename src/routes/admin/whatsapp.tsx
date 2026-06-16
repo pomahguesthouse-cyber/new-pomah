@@ -1171,6 +1171,16 @@ function WhatsappSummary({
   );
 }
 
+function SummaryField({ label, value }: { label: string; value: string | null | undefined }) {
+  const display = value && String(value).trim() ? String(value) : "—";
+  return (
+    <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="truncate text-[11px] font-medium">{display}</p>
+    </div>
+  );
+}
+
 function Row({
   icon: Icon,
   label,
