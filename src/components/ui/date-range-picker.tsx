@@ -225,10 +225,9 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
       setPendingOut(null);
       return;
     }
-    // Second pick → commit
+    // Second pick → commit (but keep dialog open)
     setPendingOut(d);
     onChange({ checkIn: toIso(pendingIn), checkOut: toIso(d) });
-    setOpen(false);
   }
 
   const nights = pendingIn && pendingOut ? diffDays(pendingIn, pendingOut) : 0;
@@ -263,7 +262,7 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
       >
         <div className="p-4 sm:p-5 sm:pb-4 max-w-[680px]">
           <div className="text-base sm:text-lg font-semibold text-stone-800 mb-3">
-            Pilih tanggal untuk melihat harga
+            Pilih tanggal Check-In dan Check-Out untuk melihat ketersediaan dan harga
           </div>
           <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs sm:text-sm text-amber-900 mb-4">
             {pendingIn && pendingOut ? (
@@ -302,7 +301,7 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
               <ChevronRight className="h-5 w-5 text-sky-600" />
             </Button>
           </div>
-          <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+          <div className="flex flex-col">
             <MonthGrid
               viewMonth={viewMonth}
               checkIn={pendingIn}
@@ -312,17 +311,6 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
               onPick={handlePick}
               onHover={setHover}
             />
-            <div className="hidden sm:block">
-              <MonthGrid
-                viewMonth={nextMonth}
-                checkIn={pendingIn}
-                checkOut={pendingOut}
-                minDate={minDate}
-                hover={hover}
-                onPick={handlePick}
-                onHover={setHover}
-              />
-            </div>
           </div>
         </div>
       </PopoverContent>
