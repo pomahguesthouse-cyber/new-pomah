@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_threads ADD COLUMN IF NOT EXISTS chat_summary_updated_at timestamptz;
