@@ -38,6 +38,9 @@ export async function saveInboundMessage(
   });
 
   if (error) {
+    void reportRpcFailure(client, "receive_whatsapp_message", error, {
+      phone: params.phone,
+    });
     return {
       messageId: null,
       error:     new Error(`receive_whatsapp_message: ${(error as any).message}`),
@@ -45,6 +48,22 @@ export async function saveInboundMessage(
   }
 
   return { messageId: data as string | null, error: null };
+}
+
+/** Helper internal: laporkan kegagalan RPC ke super_admin tanpa memblokir. */
+async function reportRpcFailure(
+  client: AnyClient,
+  rpcName: string,
+  error: unknown,
+  context?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { notifyRpcFailure } = await import("@/services/manager-notifier.service");
+    const message = (error as any)?.message ?? String(error);
+    await notifyRpcFailure(client, { rpcName, errorMessage: message, context });
+  } catch (_) {
+    // notifikasi tidak boleh mengganggu alur utama
+  }
 }
 
 // ─── Outbound ─────────────────────────────────────────────────────────────────
