@@ -223,7 +223,8 @@ interface SendOptions {
     | "new_message"
     | "bot_loop"
     | "zombie_timeout"
-    | "booking_stuck";
+    | "booking_stuck"
+    | "rpc_failure";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -1113,5 +1114,107 @@ export async function notifyIncomingMessage(
     );
   } catch (e) {
     console.warn("[ManagerNotifier] notifyIncomingMessage error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. RPC Failure Alerts                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Catat kegagalan RPC dan kirim notifikasi ke super_admin (WA + Telegram)
+ * dengan jumlah kejadian per jam terakhir.
+ *
+ * - Setiap kegagalan dicatat ke tabel `rpc_failure_events` (untuk audit).
+ * - Notifikasi di-dedupe per (rpc_name, window 1 jam) supaya tidak
+ *   banjir — hanya 1 alert per jam per RPC, tapi pesannya menyertakan
+ *   total kejadian dalam 1 jam terakhir.
+ *
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyRpcFailure(
+  db: Db,
+  opts: {
+    rpcName:      string;
+    errorMessage: string | null;
+    context?:     Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    // 1. Catat event kegagalan (selalu).
+    await db.from("rpc_failure_events").insert({
+      rpc_name:      opts.rpcName,
+      error_message: opts.errorMessage ?? null,
+      context:       opts.context ?? null,
+    });
+
+    // 2. Hitung kejadian dalam 1 jam terakhir.
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: hourlyCount } = await db
+      .from("rpc_failure_events")
+      .select("id", { count: "exact", head: true })
+      .eq("rpc_name", opts.rpcName)
+      .gte("created_at", oneHourAgo);
+
+    const total = hourlyCount ?? 1;
+
+    // 3. Resolve target super_admin.
+    const { fonnteToken, telegramToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    if (superAdmins.length === 0) {
+      console.info("[ManagerNotifier] notifyRpcFailure: no super_admin configured");
+      return;
+    }
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+    });
+
+    const errPreview = (opts.errorMessage ?? "(no error message)").slice(0, 280);
+    const ctxPreview = opts.context
+      ? JSON.stringify(opts.context).slice(0, 280)
+      : "";
+
+    const message =
+      `🛑 RPC FAILURE — Database Error\n\n` +
+      `🔧 RPC: ${opts.rpcName}\n` +
+      `📊 Kejadian 1 jam terakhir: ${total}×\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      `❌ Error:\n${errPreview}\n` +
+      (ctxPreview ? `\n📥 Konteks:\n${ctxPreview}\n` : "") +
+      `\nSilakan cek log/database — bot mungkin tidak bisa merespon tamu.`;
+
+    // Dedupe per jam supaya max 1 notif / jam / rpc.
+    const hourWindow = Math.floor(Date.now() / (60 * 60 * 1000));
+    const dedupeBase = `rpc_failure:${opts.rpcName}:${hourWindow}`;
+
+    const jobs: Promise<unknown>[] = [];
+    for (const admin of superAdmins) {
+      if (admin.phone) {
+        jobs.push(sendWithRetry(db, fonnteToken, {
+          eventType: "rpc_failure",
+          message,
+          recipient: admin,
+          channel:   "wa",
+          dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+        }));
+      }
+      if (telegramToken && admin.telegram_chat_id) {
+        jobs.push(sendWithRetry(db, null, {
+          eventType: "rpc_failure",
+          message,
+          recipient: admin,
+          channel:   "telegram",
+          dedupeKey: `${dedupeBase}:tg:${admin.id}`,
+        }));
+      }
+    }
+    await Promise.all(jobs);
+
+    console.warn(
+      `[ManagerNotifier] RPC failure logged: ${opts.rpcName} (${total}× / 1h)`,
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyRpcFailure error (non-fatal):", e);
   }
 }
