@@ -209,7 +209,7 @@ export function WebchatWindow({
   if (!session) {
     return (
       <div className={"flex min-h-[100dvh] flex-col bg-stone-50 " + (className ?? "")}>
-        <ChatHeader compact />
+        <ChatHeader compact logoUrl={brandingQuery.data?.invoiceLogoUrl || brandingQuery.data?.logoUrl} />
         <div className="mx-auto w-full max-w-md flex-1 px-4 py-6">
           {isWaDown ? (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
