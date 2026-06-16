@@ -377,14 +377,22 @@ export function WebchatWindow({
   );
 }
 
-function ChatHeader({ compact }: { compact?: boolean }) {
+function ChatHeader({ compact, logoUrl }: { compact?: boolean; logoUrl?: string | null }) {
   return (
     <header className="sticky top-0 z-10 border-b border-stone-200 bg-white">
       <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#1A3620] text-white">
-            <Home className="h-5 w-5" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Pomah Guesthouse"
+              className="h-9 w-9 rounded-md object-contain"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#1A3620] text-white">
+              <Home className="h-5 w-5" />
+            </div>
+          )}
           <div>
             <p className="text-sm font-semibold text-stone-900">Pomah Guesthouse</p>
             <p className="text-xs text-stone-500">
