@@ -122,28 +122,52 @@ export type AutoreplyOutcome =
 // ── Summarizer tuning knobs ─────────────────────────────────────────────────
 /** Minimum interval between two summary regenerations for the same thread. */
 const SUMMARY_REGEN_COOLDOWN_MS = 10 * 60 * 1000;
-/** Hard cap on persisted summary length (chars). Prevents prompt bloat. */
-const SUMMARY_MAX_CHARS = 1000;
+/** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
+const SUMMARY_MAX_CHARS = 800;
 /** Below this many messages, summarizing is pointless — skip. */
 const SUMMARY_MIN_MESSAGES = 3;
 // (SESSION_GAP_MS / findSessionStartIndex now live in reply-postprocess.ts
 //  so the AI Lab simulator can share the same windowing logic.)
 void SESSION_GAP_MS;
 
+/**
+ * Panggil LLM untuk menghasilkan ringkasan terstruktur JSON.
+ * Kalau LLM gagal/JSON invalid → return null (caller fallback ke text lama).
+ */
 export async function generateSessionSummary(
   history: Array<{ direction: string; body: string; sent_at?: string }>,
   existingSummary: string | null | undefined,
   config: { apiKey: string; baseUrl: string; model: string },
-): Promise<string | null> {
+): Promise<ChatSummaryStructured | null> {
   const historyText = history
     .map((m) => `${m.direction === "in" ? "Tamu" : "Bot"}: ${m.body}`)
     .join("\n");
 
-  const prompt = `Berikut adalah riwayat obrolan sebelumnya antara tamu dan bot di Pomah Guesthouse:\n\n${historyText}\n\n` +
-    (existingSummary ? `Ringkasan dari sesi sebelumnya:\n${existingSummary}\n\n` : "") +
-    `Buat ringkasan (resume) singkat, padat, dan jelas dari riwayat di atas dalam Bahasa Indonesia (maksimal 2-3 kalimat, total < 800 karakter). ` +
-    `Fokus pada detail penting seperti nama tamu (jika disebut), tipe kamar yang ditanyakan/dipesan, keluhan, atau status terakhir (misal: sukses booking, batal, atau pending). ` +
-    `Langsung berikan hasil ringkasannya secara polos tanpa kata pengantar atau tanda kutip.`;
+  const schemaHint = `{
+  "short_summary": string (maks ${SUMMARY_MAX_CHARS} karakter, 1-3 kalimat Bahasa Indonesia),
+  "guest_name": string|null,
+  "last_topic": "pricing"|"availability"|"facility"|"booking"|"payment"|"complaint"|"location"|"general"|null,
+  "room_type": string|null,
+  "check_in": string|null (YYYY-MM-DD),
+  "check_out": string|null (YYYY-MM-DD),
+  "guest_count": number|null,
+  "booking_status": "none"|"pending"|"confirmed"|"cancelled"|"checked_in"|"checked_out"|null,
+  "payment_status": "unpaid"|"down_payment"|"paid"|"pay_at_hotel"|null,
+  "complaint_active": boolean,
+  "unresolved_question": string|null,
+  "needs_human": boolean,
+  "handoff_reason": string|null
+}`;
+
+  const prompt =
+    `Riwayat obrolan tamu Pomah Guesthouse:\n\n${historyText}\n\n` +
+    (existingSummary ? `Ringkasan sesi sebelumnya:\n${existingSummary}\n\n` : "") +
+    `Ekstrak status percakapan ke JSON dengan schema:\n${schemaHint}\n\n` +
+    `ATURAN PENTING:\n` +
+    `- Jangan mengarang. Field yang TIDAK pernah disebut tamu/bot di transkrip → null (atau false untuk boolean).\n` +
+    `- short_summary: 1-3 kalimat fokus konteks aktif (tipe kamar, status booking, pertanyaan belum dijawab).\n` +
+    `- last_topic: pilih topik terakhir yang dibahas tamu.\n` +
+    `- Jawab HANYA JSON valid, tanpa code fence, tanpa kata pengantar.`;
 
   try {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
@@ -154,8 +178,9 @@ export async function generateSessionSummary(
       },
       body: JSON.stringify({
         model: config.model,
-        temperature: 0.3,
-        max_tokens: 500,
+        temperature: 0.2,
+        max_tokens: 700,
+        response_format: { type: "json_object" },
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -166,28 +191,159 @@ export async function generateSessionSummary(
     }
 
     const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() ?? null;
+    const raw: string = data.choices?.[0]?.message?.content?.trim() ?? "";
+    return parseStructuredSummary(raw);
   } catch (e) {
     console.error(`[SessionSummarizer] Failed to generate summary:`, e);
     return null;
   }
 }
 
+function parseStructuredSummary(raw: string): ChatSummaryStructured | null {
+  if (!raw) return null;
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  let obj: Record<string, unknown> | null = null;
+  try {
+    obj = JSON.parse(cleaned);
+  } catch {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) {
+      try {
+        obj = JSON.parse(m[0]);
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  if (!obj || typeof obj !== "object") {
+    console.warn(
+      `[SessionSummarizer] summary failed invalid JSON: ${cleaned.slice(0, 200)}`,
+    );
+    return null;
+  }
+
+  const pickEnum = <T extends string>(v: unknown, list: readonly T[]): T | null =>
+    typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : null;
+  const pickString = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  const pickNumber = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const pickBool = (v: unknown): boolean => v === true;
+
+  let shortSummary = pickString((obj as Record<string, unknown>).short_summary) ?? "";
+  if (shortSummary.length > SUMMARY_MAX_CHARS) {
+    shortSummary = shortSummary.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd() + "…";
+  }
+  if (!shortSummary) {
+    console.warn(`[SessionSummarizer] summary failed invalid JSON: empty short_summary`);
+    return null;
+  }
+
+  return {
+    short_summary: shortSummary,
+    guest_name: pickString(obj.guest_name),
+    last_topic: pickEnum(obj.last_topic, LAST_TOPIC_VALUES),
+    room_type: pickString(obj.room_type),
+    check_in: pickString(obj.check_in),
+    check_out: pickString(obj.check_out),
+    guest_count: pickNumber(obj.guest_count),
+    booking_status: pickEnum(obj.booking_status, BOOKING_STATUS_VALUES),
+    payment_status: pickEnum(obj.payment_status, PAYMENT_STATUS_VALUES),
+    complaint_active: pickBool(obj.complaint_active),
+    unresolved_question: pickString(obj.unresolved_question),
+    needs_human: pickBool(obj.needs_human),
+    handoff_reason: pickString(obj.handoff_reason),
+  };
+}
+
+/**
+ * Persist a structured summary ke whatsapp_threads. Memperbarui:
+ * - chat_summary (short_summary text, mirror untuk alur lama)
+ * - chat_summary_json (full structured object)
+ * - chat_summary_version (++)
+ * - chat_summary_updated_at (now)
+ */
 async function updateThreadSummary(
   client: any,
   threadId: string,
-  summary: string,
+  structured: ChatSummaryStructured,
 ): Promise<void> {
-  const capped = summary.length > SUMMARY_MAX_CHARS
-    ? summary.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd() + "…"
-    : summary;
+  const { data: prev } = await client
+    .from("whatsapp_threads")
+    .select("chat_summary_version")
+    .eq("id", threadId)
+    .maybeSingle();
+  const nextVersion =
+    ((prev as { chat_summary_version?: number } | null)?.chat_summary_version ?? 0) + 1;
+
   const { error } = await client
     .from("whatsapp_threads")
-    .update({ chat_summary: capped, chat_summary_updated_at: new Date().toISOString() })
+    .update({
+      chat_summary: structured.short_summary,
+      chat_summary_json: structured,
+      chat_summary_version: nextVersion,
+      chat_summary_updated_at: new Date().toISOString(),
+    })
     .eq("id", threadId);
   if (error) {
     console.error(`[SessionSummarizer] Database update failed:`, error.message);
   }
+}
+
+/**
+ * Helper publik: regenerate summary untuk satu thread (dipakai admin UI).
+ * Mengambil 30 pesan terakhir, memanggil LLM, lalu menyimpan hasilnya.
+ */
+export async function regenerateThreadSummary(
+  client: any,
+  threadId: string,
+  config: { apiKey: string; baseUrl: string; model: string },
+): Promise<{ ok: boolean; summary?: ChatSummaryStructured; error?: string }> {
+  const { data: rows } = await client
+    .from("whatsapp_messages")
+    .select("direction, body, sent_at")
+    .eq("thread_id", threadId)
+    .order("sent_at", { ascending: false })
+    .limit(30);
+  const history = ((rows ?? []) as Array<{ direction: string; body: string; sent_at?: string }>).reverse();
+  if (history.length < SUMMARY_MIN_MESSAGES) {
+    return { ok: false, error: "Belum cukup pesan untuk diringkas." };
+  }
+  const { data: existing } = await client
+    .from("whatsapp_threads")
+    .select("chat_summary")
+    .eq("id", threadId)
+    .maybeSingle();
+  const summary = await generateSessionSummary(
+    history,
+    (existing as { chat_summary?: string } | null)?.chat_summary ?? "",
+    config,
+  );
+  if (!summary) return { ok: false, error: "Gagal membuat ringkasan (JSON invalid)." };
+  await updateThreadSummary(client, threadId, summary);
+  console.info(`[SessionSummarizer] manual regen for thread ${threadId.slice(0, 8)}`);
+  return { ok: true, summary };
+}
+
+/**
+ * Helper publik: hapus context summary (semua field) — dipakai admin UI.
+ */
+export async function clearThreadSummary(
+  client: any,
+  threadId: string,
+): Promise<void> {
+  await client
+    .from("whatsapp_threads")
+    .update({
+      chat_summary: null,
+      chat_summary_json: {},
+      chat_summary_updated_at: null,
+    })
+    .eq("id", threadId);
 }
 
 export async function executeAutoreplyForPhone(
