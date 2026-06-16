@@ -306,6 +306,26 @@ export function WhatsAppPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const regenerateStructuredMut = useMutation({
+    mutationFn: () => regenerateStructuredFn({ data: { threadId: current! } }),
+    onSuccess: () => {
+      toast.success("Context Summary diperbarui");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const clearSummaryMut = useMutation({
+    mutationFn: () => clearSummaryFn({ data: { threadId: current! } }),
+    onSuccess: () => {
+      toast.success("Context Summary dihapus");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const takeoverMut = useMutation({
     mutationFn: (takeover: boolean) =>
       aiModeFn({ data: { threadId: current!, aiAuto: !takeover } }),
