@@ -50,6 +50,8 @@ import {
   setTrainingExample,
   updateChatSummary,
   summarizeThread,
+  regenerateStructuredSummary,
+  clearChatSummary,
   getConversationAlerts,
   dismissConversationAlert,
   triggerManualAlert,
