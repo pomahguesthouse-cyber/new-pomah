@@ -7,5 +7,6 @@ export const getBranding = createServerFn({ method: "GET" }).handler(async () =>
   return {
     faviconUrl: (prop.favicon_url as string | null) ?? null,
     logoUrl: (prop.logo_url as string | null) ?? null,
+    invoiceLogoUrl: (prop.invoice_logo_url as string | null) ?? null,
   };
 });
