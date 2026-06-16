@@ -102,7 +102,10 @@ export async function saveOutboundMessage(
     
     if (fallback.error) {
       console.warn("[MessageRepo] 2-arg RPC failed, trying direct insert...", fallback.error.message);
-      
+      void reportRpcFailure(client, "save_outbound_whatsapp", fallback.error, {
+        threadId: params.threadId,
+      });
+
       // Last resort: direct insert + update
       const insertRes = await (client as any).from("whatsapp_messages").insert({
         thread_id: params.threadId,
@@ -110,7 +113,7 @@ export async function saveOutboundMessage(
         body:      params.body,
         metadata:  params.metadata ?? null,
       });
-      
+
       if (insertRes.error) {
         console.error("[MessageRepo] Direct insert failed:", insertRes.error);
       } else {
@@ -139,6 +142,9 @@ export async function saveMessageMetadata(
   });
   if (error) {
     console.error("[MessageRepo] saveMetadata error:", error);
+    void reportRpcFailure(client, "save_message_metadata", error, {
+      messageId: params.messageId,
+    });
   }
 }
 
