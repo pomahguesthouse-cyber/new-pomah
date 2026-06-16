@@ -717,10 +717,13 @@ export async function executeAutoreplyForPhone(
   //   - enough messages to be worth summarizing
   //   - cooldown elapsed since last regen (rate limit)
   //   - guest not currently mid-booking (those messages aren't a "wrap-up")
-  if (
-    previousSession.length >= SUMMARY_MIN_MESSAGES &&
-    !cooldownActive(chatSummaryUpdatedAt)
-  ) {
+  if (previousSession.length < SUMMARY_MIN_MESSAGES) {
+    // not enough — silent skip
+  } else if (cooldownActive(chatSummaryUpdatedAt)) {
+    console.info(
+      `[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`,
+    );
+  } else {
     void (async () => {
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc(
@@ -728,7 +731,9 @@ export async function executeAutoreplyForPhone(
           { p_phone: phone },
         );
         if (bs && bs.state && bs.state !== "IDLE") {
-          console.info(`[SessionSummarizer] Skip — booking flow active (${bs.state})`);
+          console.info(
+            `[SessionSummarizer] summary skipped: booking flow active (${bs.state})`,
+          );
           return;
         }
         const summary = await generateSessionSummary(
@@ -739,7 +744,9 @@ export async function executeAutoreplyForPhone(
         if (summary) {
           await updateThreadSummary(supabaseAdmin, c.thread_id, summary);
           console.info(
-            `[SessionSummarizer] Updated for ${phone.slice(-6)} (${summary.length} chars)`,
+            `[SessionSummarizer] summary generated for ${phone.slice(-6)} ` +
+              `(thread ${c.thread_id.slice(0, 8)}, ${summary.short_summary.length} chars, ` +
+              `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"})`,
           );
         }
       } catch (e) {
