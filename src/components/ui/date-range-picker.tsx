@@ -104,10 +104,10 @@ function MonthGrid({ viewMonth, checkIn, checkOut, minDate, hover, onPick, onHov
     }
 
     cells.push(
-      <div key={i} className="relative flex flex-col items-center">
+      <div key={i} className={cn("relative flex flex-col items-center", (isStart || isEnd) && "pt-4")}>
         {/* Tooltip label above selected dates */}
         {isStart && (
-          <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
             <span className="text-[9px] font-semibold text-white bg-sky-500 px-1.5 py-0.5 rounded-[4px] whitespace-nowrap">
               Check-in
             </span>
@@ -115,7 +115,7 @@ function MonthGrid({ viewMonth, checkIn, checkOut, minDate, hover, onPick, onHov
           </div>
         )}
         {isEnd && (
-          <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
             <span className="text-[9px] font-semibold text-white bg-orange-500 px-1.5 py-0.5 rounded-[4px] whitespace-nowrap">
               Check-out
             </span>
