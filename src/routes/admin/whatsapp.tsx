@@ -896,6 +896,10 @@ export function WhatsAppPage() {
                 summarizing={summarizeMut.isPending}
                 onToggleTraining={(v) => trainingMut.mutate(v)}
                 togglingTraining={trainingMut.isPending}
+                onRegenerateStructured={() => regenerateStructuredMut.mutate()}
+                regenerating={regenerateStructuredMut.isPending}
+                onClearSummary={() => clearSummaryMut.mutate()}
+                clearing={clearSummaryMut.isPending}
               />
 
               <Separator />
