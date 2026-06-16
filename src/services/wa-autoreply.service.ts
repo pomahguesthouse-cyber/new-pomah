@@ -27,6 +27,12 @@ import {
   cleanReplyBody,
 } from "@/services/reply-postprocess";
 import { checkConversation } from "@/services/conversation-monitor.service";
+import {
+  type ChatSummaryStructured,
+  LAST_TOPIC_VALUES,
+  BOOKING_STATUS_VALUES,
+  PAYMENT_STATUS_VALUES,
+} from "@/ai/chat-summary.types";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
