@@ -457,14 +457,21 @@ function BookPage() {
                                    )}
                                  </div>
                               ) : (
-                                <Button 
-                                  type="button"
-                                  variant="outline"
-                                  className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12"
-                                  onClick={() => handleAddToCart(room.id)}
-                                >
-                                  Tambahkan kamar
-                                </Button>
+                                (() => {
+                                  const hasValidRange = !!form.checkIn && !!form.checkOut && form.checkIn < form.checkOut;
+                                  const isUnavailable = hasValidRange && !!availData && availableCount <= 0;
+                                  return (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isUnavailable}
+                                      className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12 disabled:opacity-60 disabled:cursor-not-allowed"
+                                      onClick={() => handleAddToCart(room.id)}
+                                    >
+                                      {isUnavailable ? "Tidak tersedia" : "Tambahkan kamar"}
+                                    </Button>
+                                  );
+                                })()
                               )}
                             </div>
                           </div>
