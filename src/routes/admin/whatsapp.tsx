@@ -172,6 +172,8 @@ export function WhatsAppPage() {
   const trainingFn = useServerFn(setTrainingExample);
   const updateSummaryFn = useServerFn(updateChatSummary);
   const summarizeFn = useServerFn(summarizeThread);
+  const regenerateStructuredFn = useServerFn(regenerateStructuredSummary);
+  const clearSummaryFn = useServerFn(clearChatSummary);
   const alertsFn = useServerFn(getConversationAlerts);
   const dismissFn = useServerFn(dismissConversationAlert);
   const manualAlertFn = useServerFn(triggerManualAlert);
