@@ -66,6 +66,14 @@ export function WebchatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
 
+  const fetchBranding = useServerFn(getBranding);
+
+  // Branding (logo invoice).
+  const brandingQuery = useQuery({
+    queryKey: ["webchat-branding"],
+    queryFn: () => fetchBranding(),
+  });
+
   // Channel status banner.
   const statusQuery = useQuery({
     queryKey: ["webchat-channel-status"],
