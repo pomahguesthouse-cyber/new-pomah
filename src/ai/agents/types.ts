@@ -9,6 +9,7 @@
 
 import type { ToolDefinition, AiClientConfig } from "@/ai/types";
 import type { PropertyRow, RoomTypeRow }        from "@/ai/context-builder";
+import type { ChatSummaryStructured }            from "@/ai/chat-summary.types";
 
 // ─── Agent keys ───────────────────────────────────────────────────────────────
 
