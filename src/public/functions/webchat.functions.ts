@@ -49,7 +49,7 @@ export interface WebchatThreadRow {
   handoff_status: "ai" | "human" | "paused";
   handoff_until: string | null;
   context_summary: string;
-  context_summary_json: Record<string, unknown>;
+  context_summary_json: any;
   last_message_at: string;
   created_at: string;
   updated_at: string;
