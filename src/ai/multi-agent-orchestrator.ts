@@ -552,7 +552,13 @@ export async function runMultiAgentOrchestration(
   //    new session still has continuity.
   const seededEntity = stateRecord.last_entity
     ? stateRecord.last_entity
-    : (seedEntityFromSummary(input.agentCtx.chatSummary, input.toolCtx.rooms) as Record<string, unknown> | undefined);
+    : (seedEntityFromSummary(
+        {
+          chatSummary: input.agentCtx.chatSummary,
+          chatSummaryJson: input.agentCtx.chatSummaryJson,
+        },
+        input.toolCtx.rooms,
+      ) as Record<string, unknown> | undefined);
   const resolved = resolveContext(
     lastUserMsg,
     {
