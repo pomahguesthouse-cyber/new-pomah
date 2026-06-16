@@ -63,7 +63,7 @@ export interface WebchatMessageRow {
   body: string | null;
   attachment_url: string | null;
   attachment_type: string | null;
-  metadata: Record<string, unknown>;
+  metadata: any;
   created_at: string;
 }
 
