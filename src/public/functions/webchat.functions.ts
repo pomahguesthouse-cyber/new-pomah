@@ -515,7 +515,7 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     : "";
 
   // Tanggal hari ini di zona waktu Asia/Jakarta (WIB) agar AI tidak salah
-  // mengartikan "hari ini", "besok", "lusa", dsb.
+  // mengartikan "hari ini", "besok", "lusa", "kemarin", "minggu depan", "bulan depan", dsb.
   const fmtJakarta = (d: Date) =>
     new Intl.DateTimeFormat("id-ID", {
       timeZone: "Asia/Jakarta",
@@ -530,17 +530,25 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     return wib.toISOString().slice(0, 10);
   };
   const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
   const dayAfter = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const todayBlock =
     `\n[TANGGAL ACUAN — ZONA WIB / Asia/Jakarta]\n` +
-    `- Hari ini  : ${fmtJakarta(now)} (${isoJakarta(now)})\n` +
-    `- Besok     : ${fmtJakarta(tomorrow)} (${isoJakarta(tomorrow)})\n` +
-    `- Lusa      : ${fmtJakarta(dayAfter)} (${isoJakarta(dayAfter)})\n` +
-    `Selalu gunakan tanggal di atas saat tamu menyebut "hari ini", "besok", ` +
-    `"lusa", "minggu depan", "akhir pekan", dsb. JANGAN menebak tahun atau bulan; ` +
-    `pakai tahun & bulan dari blok ini. Bila tamu menyebut nama hari (mis. "Sabtu"), ` +
-    `hitung relatif terhadap "Hari ini" di atas.\n`;
+    `- Kemarin      : ${fmtJakarta(yesterday)} (${isoJakarta(yesterday)})\n` +
+    `- Hari ini     : ${fmtJakarta(now)} (${isoJakarta(now)})\n` +
+    `- Besok        : ${fmtJakarta(tomorrow)} (${isoJakarta(tomorrow)})\n` +
+    `- Lusa         : ${fmtJakarta(dayAfter)} (${isoJakarta(dayAfter)})\n` +
+    `- Minggu depan : ${fmtJakarta(nextWeek)} (${isoJakarta(nextWeek)})\n` +
+    `- Bulan depan  : ${fmtJakarta(nextMonth)} (${isoJakarta(nextMonth)})\n` +
+    `Selalu gunakan tanggal di atas saat tamu menyebut "kemarin", "hari ini", "besok", ` +
+    `"lusa", "minggu depan", "bulan depan", "akhir pekan", dsb. ` +
+    `JANGAN menebak tahun atau bulan; pakai tahun & bulan dari blok ini. ` +
+    `Bila tamu menyebut nama hari (mis. "Sabtu"), hitung relatif terhadap "Hari ini" di atas. ` +
+    `"Minggu depan" = 7 hari setelah Hari ini. "Bulan depan" = ~30 hari setelah Hari ini.\n`;
+
 
 
   const systemPrompt =
