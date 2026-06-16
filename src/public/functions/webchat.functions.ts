@@ -89,9 +89,9 @@ export const getChannelStatus = createServerFn({ method: "GET" }).handler(async 
     .select("channel, status, fallback_enabled, last_ok_at, last_error_at, last_error_message");
   if (error) {
     console.warn("[Webchat] getChannelStatus error:", error.message);
-    return { channels: [] as Array<Record<string, unknown>> };
+    return { channels: [] as Array<any> };
   }
-  return { channels: (data ?? []) as Array<Record<string, unknown>> };
+  return { channels: (data ?? []) as Array<any> };
 });
 
 /* ----------------------------- 2. start session -------------------- */
