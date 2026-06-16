@@ -1,108 +1,131 @@
 
-# Upgrade Context Summary WhatsApp — Structured JSON
+# Web Chat Backup — Plan
 
-Tujuan: ganti chat_summary text-only menjadi pasangan `short_summary` (text) + `chat_summary_json` (structured fields) supaya bot dapat menjawab follow-up pendek ("kalau deluxe?", "berapa totalnya?") tanpa mengarang konteks, dengan UI admin untuk inspeksi/regenerate/clear.
+Kanal cadangan resmi saat WhatsApp/Fonnte bermasalah. Konteks WA dipakai ulang, tamu bisa unggah bukti transfer, admin bisa ambil alih. WhatsApp/Fonnte tetap utuh.
 
-## 1. Migration database
+## 1. Database (1 migration)
 
-File: `supabase/migrations/<ts>_chat_summary_json.sql`
+Tabel baru di `public`:
 
-- `ALTER TABLE public.whatsapp_threads`
-  - `ADD COLUMN chat_summary_json jsonb NOT NULL DEFAULT '{}'::jsonb`
-  - `ADD COLUMN chat_summary_version integer NOT NULL DEFAULT 1`
-- `CREATE OR REPLACE FUNCTION public.get_autoreply_context(p_phone text)` — clone versi terbaru (lihat `20260525130000_restore_fonnte_autoreply_context.sql`), tambahkan field di SELECT thread: `chat_summary_json`, `chat_summary_version`, dan kembalikan di JSON output bersama `chat_summary` + `chat_summary_updated_at` + 30 messages terakhir (yang sudah ada). Tidak mengubah signature.
-- GRANT EXECUTE sama seperti versi sebelumnya (service_role).
+- **`webchat_threads`** — sesuai spesifikasi user; FK ke `bookings` & `whatsapp_threads` (`ON DELETE SET NULL`); index pada `last_message_at DESC` dan `status`.
+- **`webchat_messages`** — FK ke `webchat_threads` (`ON DELETE CASCADE`); index `(thread_id, created_at)`.
+- **`channel_status`** — satu baris per channel (`whatsapp_fonnte`, `webchat`); seeded `online`.
 
-## 2. Service summarizer (`src/services/wa-autoreply.service.ts`)
+Kebijakan akses:
 
-- Update `generateSessionSummary` jadi mengembalikan:
-  ```ts
-  type StructuredSummary = {
-    short_summary: string;
-    guest_name: string | null;
-    last_topic: "pricing"|"availability"|"facility"|"booking"|"payment"|"complaint"|"location"|"general"|null;
-    room_type: string | null;
-    check_in: string | null;       // ISO YYYY-MM-DD
-    check_out: string | null;
-    guest_count: number | null;
-    booking_status: "none"|"pending"|"confirmed"|"cancelled"|"checked_in"|"checked_out"|null;
-    payment_status: "unpaid"|"down_payment"|"paid"|"pay_at_hotel"|null;
-    complaint_active: boolean;
-    unresolved_question: string | null;
-    needs_human: boolean;
-    handoff_reason: string | null;
-  };
-  ```
-- Prompt LLM eksplisit: "Jangan mengarang. Field yang tidak disebutkan tamu/admin → null. JSON valid saja, tanpa markdown." Gunakan Lovable AI Gateway (model yang sama dipakai sekarang) dengan `response_format: { type: "json_object" }` jika didukung; jika tidak, parse manual + ekstrak blok JSON.
-- Validasi:
-  - parse JSON → kalau gagal: log `summary failed invalid JSON`, fallback ke flow lama (simpan text mentah ke `chat_summary` saja, biarkan `chat_summary_json` tetap nilai sebelumnya).
-  - `short_summary` di-trim & dipotong maksimal 800 karakter.
-  - Enum field di-whitelist; nilai tak dikenal → null.
-- `updateThreadSummary(supabase, threadId, structured)`:
-  - update `chat_summary = short_summary`, `chat_summary_json = structured`, `chat_summary_updated_at = now()`, `chat_summary_version = chat_summary_version + 1`.
-  - Konstanta: `SUMMARY_MAX_CHARS = 800`.
-- Tetap dipanggil background (fire-and-forget via `getWaitUntil`) — tidak menambah latency reply ke tamu. Logging tambahan:
-  - "summary skipped: cooldown"
-  - "summary skipped: booking flow aktif"
-  - "summary generated" + threadId + version
-  - "summary failed invalid JSON" + sample
-- Tambahkan helper exported `regenerateThreadSummary(threadId)` & `clearThreadSummary(threadId)` untuk dipanggil admin function.
+- `GRANT ALL` ke `service_role` (semua tulisan lewat server functions / `supabaseAdmin`).
+- `GRANT SELECT` ke `anon` hanya untuk `channel_status` (homepage perlu baca status).
+- Tidak ada akses anon ke threads/messages — semua via server functions.
+- RLS aktif; policy admin read/write via `has_role(auth.uid(),'admin') OR is_staff(auth.uid())`.
+- Trigger `update_updated_at_column()` untuk `updated_at`.
 
-## 3. Context resolver (`src/ai/router/context-resolver.ts`)
+Storage:
 
-- Ubah `seedEntityFromSummary` jadi menerima `{ chatSummary, chatSummaryJson, rooms }`:
-  - prioritas 1: `chatSummaryJson.room_type` → cari di rooms list (case-insensitive).
-  - prioritas 2: regex existing dari `chat_summary` text.
-- Update caller di `multi-agent-orchestrator.ts` (line ~536) mengoper kedua field.
+- Bucket privat **`webchat-attachments`** (dibuat via `storage_create_bucket`); akses lewat signed URL dari server functions.
 
-## 4. Multi-agent orchestrator (`src/ai/multi-agent-orchestrator.ts`)
+## 2. Server functions (`src/public/functions/webchat.functions.ts`)
 
-- Perluas `AgentCtx` (di `src/ai/types.ts` jika ada — kalau tidak, di file orchestrator) dengan `chatSummaryJson?: StructuredSummary`.
-- Di builder system prompt (line 178): inject blok terstruktur jika tersedia, contoh:
-  ```
-  RINGKASAN PERCAKAPAN SEBELUMNYA:
-  <short_summary>
+Semua pakai `supabaseAdmin` (publik, tanpa login). Validasi Zod ketat, rate-limit per IP/phone via in-memory map (best-effort, non-critical):
 
-  KONTEKS TERSTRUKTUR (gunakan sebagai konteks, JANGAN konfirmasi ulang kecuali tamu menyebut data baru):
-  - Tipe kamar: <room_type|->
-  - Status booking: <booking_status|->
-  - Status pembayaran: <payment_status|->
-  - Check-in / out: <check_in> → <check_out>
-  - Pertanyaan belum terjawab: <unresolved_question|->
-  ```
-- Tambah instruksi: "Jika tamu menyebut tanggal/jenis kamar baru dalam pesan terakhir, ABAIKAN nilai lama di konteks terstruktur."
-- Propagasi `chatSummaryJson` dari `wa-autoreply.service.ts` saat membangun `agentCtx`.
+1. `getChannelStatus()` → baris `whatsapp_fonnte` + `webchat`, plus flag `fallback_enabled`.
+2. `startWebchatSession({ guestName, guestPhone, bookingCode? })`
+   - Normalize phone ke `62…` (reuse helper di `wa-autoreply` / repo).
+   - Cari `whatsapp_threads` dengan phone yang sama → link `whatsapp_thread_id` dan seed `context_summary` + `context_summary_json` dari `chat_summary` / `chat_summary_json`.
+   - Resolve `bookingCode` → set `booking_id` + `booking_code`.
+   - Reuse thread `status IN ('open','ai_active','waiting_admin')` untuk phone yang sama (tidak buat duplikat); else insert baru. Return thread + 50 pesan terakhir.
+3. `sendWebchatMessage({ threadId, body })`
+   - Insert pesan `sender_type='guest'`.
+   - Jika `handoff_status='human'` dan `handoff_until > now()` → set `status='waiting_admin'`, kirim notifikasi ke super_admin (reuse `manager-notifier`), return tanpa AI.
+   - Else: jalankan `runMultiAgentOrchestration` dengan system prompt khusus + konteks (booking, summary WA, pesan webchat terbaru). Simpan reply `sender_type='bot'`, update `last_message_at`, dan—bila tools menghasilkan summary baru—`context_summary_json`.
+4. `uploadWebchatAttachment({ threadId, fileName, contentType, base64 })`
+   - Upload ke bucket privat → signed URL 7 hari → insert message `attachment_url/type`.
+   - Heuristik: kalau `contentType` image atau body mengandung "transfer/bukti" dan thread punya booking → panggil pipeline `payment-proof.service` (existing) + `notifyPaymentProof` super_admin.
+5. `getWebchatMessages({ threadId, sinceId? })` → polling-friendly.
+6. `closeWebchatThread({ threadId })` → set `status='closed'`.
 
-## 5. wa-autoreply context loading
+Notifikasi baru ke super_admin saat sesi baru / handoff (reuse pola `notifyNewConversationSession`).
 
-- Saat memetakan hasil RPC ke `agentCtx`, sertakan `chatSummaryJson` (default `{}` → undefined kalau kosong).
+## 3. Health check (channel_status)
 
-## 6. Admin UI WhatsApp thread detail
+- `src/routes/api/cron.channel-healthcheck.ts` (cron 5 menit, ikut pola `apikey` di `pg_cron`):
+  - Ping Fonnte `device`/`validate` endpoint pakai token properti.
+  - Update `channel_status.whatsapp_fonnte` ke `online/degraded/offline`.
+- Hook tambahan: di `src/routes/api.fonnte.ts` dan `src/services/whatsapp.service.ts` (saat `sendWhatsAppMessage` gagal 2× berturut-turut) → set `degraded`, dan `online` saat sukses lagi.
 
-- `src/admin/functions/whatsapp.functions.ts`: tambah 2 server fn (with `requireSupabaseAuth` + role check super_admin via has_role):
-  - `regenerateThreadSummaryFn({ threadId })` — load 30 msg terakhir, panggil generateSessionSummary, save.
-  - `clearThreadSummaryFn({ threadId })` — set chat_summary=null, chat_summary_json='{}', updated_at=now().
-- `src/routes/admin/whatsapp.tsx`: di panel detail thread tambahkan card "Context Summary":
-  - tampilkan `chat_summary` (short), `chat_summary_updated_at` (format DD/MM/YYYY HH:mm).
-  - badge grid: room_type, last_topic, booking_status, payment_status, unresolved_question, needs_human.
-  - tombol "Regenerate Summary" (loading state) dan "Clear Summary" (confirm dialog).
-  - invalidate React Query setelah mutasi.
+## 4. UI publik — `/chat` (TanStack route)
 
-## 7. Types
+File rute:
 
-- `src/integrations/supabase/types.ts` akan ter-regenerate otomatis setelah migration approved.
-- Tambah type `StructuredSummary` di `src/services/wa-autoreply.service.ts` dan re-export untuk dipakai orchestrator + admin UI.
+- `src/routes/chat.tsx` (membaca search param `?booking=`).
+- `src/routes/book/confirmation/$id/chat.tsx` (membungkus chat dengan ringkasan booking).
 
-## 8. Non-goals / jaminan
+Komponen reusable di `src/public/components/webchat/`:
 
-- Tidak mengubah: queue worker, smart delay, booking state machine, routing agent, intent classifier.
-- Summarizer tetap fire-and-forget via `waitUntil` (sudah ada pattern).
-- Tidak menambah dependency baru.
+- `webchat-shell.tsx` — header sticky `Pomah Guesthouse — Web Chat Cadangan`, badge status (`WhatsApp Online/Degraded/Offline`, `Web Chat Active`, `Admin Online / AI Active`).
+- `webchat-banner.tsx` — banner amber saat WA degraded/offline.
+- `webchat-onboard-form.tsx` — Zod-validated: nama (3–60), phone (regex `08…|62…`), bookingCode opsional.
+- `webchat-window.tsx` — list bubble (guest/bot/admin/system), timestamp `HH:MM`, typing indicator, auto-scroll, react-markdown untuk bot, quick-action chips.
+- `webchat-composer.tsx` — textarea + tombol attach (pakai `uploadWebchatAttachment`).
+- `webchat-booking-card.tsx` — ringkasan booking (room, tanggal, total, status, link invoice).
 
-## Acceptance criteria
+State: localStorage menyimpan `threadId` + identitas tamu agar refresh tetap nyambung. Polling `getWebchatMessages` setiap 5 detik (atau Supabase Realtime kalau lebih ringan; default polling untuk keep it simple).
 
-- Pesan baru tamu memicu reply tanpa tambahan latency (summary jalan di background).
-- Setelah summarizer sukses, `chat_summary_json` terisi sesuai schema; field tidak disebut tamu = null.
-- Follow-up "kalau deluxe?" diproses dengan `room_type` di prompt sehingga agent tidak menanyakan ulang tipe kamar.
-- Admin bisa melihat, regenerate, dan clear summary dari halaman WhatsApp.
-- JSON invalid → fallback aman, log tercatat, autoreply tetap berjalan.
+Quick actions (chips kirim teks preset):
+- "Cek ketersediaan kamar", "Lanjutkan booking", "Upload bukti transfer" (membuka file picker), "Tanya lokasi", "Hubungi admin" (set `status='waiting_admin'` via fn dedicated), "Cek booking saya".
+
+Mobile-first: ikuti `responsive-layout-patterns` (grid `minmax(0,1fr)_auto` di header, `min-w-0`, `shrink-0`, `truncate`).
+
+## 5. Integrasi entry-point publik
+
+- **Homepage / booking pages**: tambahkan `<WebchatFallbackFab />` di `src/public/components/public-shell.tsx`. Fetch `getChannelStatus` (React Query, stale 30 dtk). Saat `whatsapp_fonnte != 'online' && fallback_enabled` → floating card kanan-bawah + tombol "Buka Web Chat" → `/chat`.
+- **Invoice `/book/confirmation/:referenceCode`**: tombol "Chat via Web Chat Cadangan" → `/book/confirmation/$id/chat`.
+
+## 6. AI prompt khusus
+
+`src/ai/agents/webchat-fallback.prompt.ts` (string export) — dipakai sebagai `systemOverride` saat orchestrator dipanggil dari webchat:
+
+- Identifikasi sebagai kanal fallback resmi.
+- Wajib pakai `context_summary_json`, data booking, dan tidak menanyakan ulang info yang sudah ada.
+- Prioritaskan panduan pembayaran kalau `payment_status='unpaid'`.
+- Saat ada lampiran/transfer: konfirmasi + escalate ke finance/admin.
+- Sensitif/tidak yakin → handoff (`status='waiting_admin'`).
+
+`runMultiAgentOrchestration` dikasih param baru `channel: 'webchat'` agar orchestrator memilih prompt ini sebelum agent routing biasa (customer-care default, finance untuk bukti transfer).
+
+## 7. Admin dashboard — `/admin/webchat`
+
+- Route baru `src/routes/admin/webchat.tsx` + functions `src/admin/functions/webchat.functions.ts` (pakai `requireSupabaseAuth` + `has_role admin/staff`).
+- List threads dengan filter tab: `open`, `waiting_admin`, `ai_active`, `closed`, plus filter "payment" (punya attachment payment_proof) dan "booking" (punya booking_id).
+- Panel detail:
+  - Data tamu, badge channel, link `whatsapp_threads` (kalau ada).
+  - Card booking (reuse komponen invoice ringkas).
+  - Context summary (read-only) + tombol Regenerate (panggil `generateSessionSummary` adapted untuk webchat).
+  - Daftar pesan + reply box (multi-line).
+  - Tombol: **Ambil alih** (set `handoff_status='human'`, `handoff_until=now()+30min`), **Serahkan ke AI** (`'ai'`, clear `handoff_until`), **Pause AI** (`'paused'`), **Tutup chat** (set `status='closed'`).
+- Saat admin reply: insert message `sender_type='admin', sender_name=auth user`, set `handoff_status='human'`, `handoff_until=now()+30min`, `status='waiting_admin'→'open'`.
+- Realtime invalidate via existing `useRealtimeInvalidate` (tabel `webchat_threads`, `webchat_messages`).
+- Tambah item sidebar admin "Web Chat".
+
+## 8. Notifikasi & logging
+
+- Reuse `notifyNewConversationSession` & `notifyPaymentProof` (kasih `channel='webchat'` di metadata).
+- Tambah handler `notifyWebchatHandoffRequested` ringan di `manager-notifier` (dedupe per thread per 10 menit).
+- Logging mengikuti pola existing (`console.info`/`warn`).
+
+## 9. Pengujian akhir
+
+- Script `scripts/test-webchat-flow.ts`: simulasi start session (dengan & tanpa booking), kirim pesan, upload bukti, admin handoff, AI return, dan banner status saat `whatsapp_fonnte` di-set degraded.
+- Manual smoke: `/chat`, `/chat?booking=PG-…`, `/book/confirmation/$id/chat`, dan banner di homepage saat status degraded.
+
+## Hal yang TIDAK diubah
+
+- `api.fonnte.ts`, `wa-autoreply.service.ts`, queue/worker, multi-agent orchestrator (hanya menerima param channel baru, default tetap `'whatsapp'`), booking-machine, dan halaman booking publik.
+
+## Detail teknis penting
+
+- Semua server fn di `src/public/functions/webchat.functions.ts` adalah **public** (tanpa auth) — validasi input ketat + rate-limit per phone, dan tidak pernah membocorkan kolom sensitif booking (`payment_account_number`, dsb.).
+- `supabaseAdmin` di-import **di dalam handler** (`await import('@/integrations/supabase/client.server')`).
+- Phone normalization & dedupe pakai helper yang sudah ada.
+- Polling fallback default; Realtime opsional jika user minta.
+- Channel `webchat` di tabel `notification_logs.event_type` cukup pakai `new_session`/`payment_proof` existing — tidak perlu ubah CHECK.
+
