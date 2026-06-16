@@ -514,13 +514,25 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     ? `\n[RINGKASAN KONTEKS DARI WHATSAPP]\n${thread.context_summary}\n`
     : "";
 
+  // Tanggal hari ini di zona waktu Asia/Jakarta (WIB) agar AI tidak salah
+  // mengartikan "besok", "lusa", dsb.
+  const todayJakarta = new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date());
+  const todayBlock = `\n[TANGGAL HARI INI]\n${todayJakarta} (WIB). Gunakan ini sebagai acuan saat tamu menyebut "hari ini", "besok", "lusa", "minggu depan", dsb. JANGAN menebak tahun.\n`;
+
   const systemPrompt =
     WEBCHAT_FALLBACK_PROMPT
       .replace("{{PROPERTY_NAME}}", String(p.name ?? "Pomah Guesthouse"))
       .replace("{{ROOM_DATA}}", roomLines || "(belum ada data kamar)")
       .replace("{{BOOKING_BLOCK}}", bookingBlock)
       .replace("{{PAYMENT_BLOCK}}", paymentBlock)
-      .replace("{{SUMMARY_BLOCK}}", summaryBlock);
+      .replace("{{SUMMARY_BLOCK}}", summaryBlock + todayBlock);
+
 
   // Transform pesan jadi format OpenAI Chat.
   const chatHistory = messages
