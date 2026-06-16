@@ -1303,6 +1303,30 @@ export type Database = {
           },
         ]
       }
+      rpc_failure_events: {
+        Row: {
+          context: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          rpc_name: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rpc_name: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rpc_name?: string
+        }
+        Relationships: []
+      }
       seasonal_rates: {
         Row: {
           created_at: string
