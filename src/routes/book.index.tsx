@@ -11,13 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Carousel,
   CarouselContent,
   CarouselItem,
@@ -297,15 +290,17 @@ function BookPage() {
               <Users className="w-5 h-5 text-stone-400 shrink-0" />
               <div className="min-w-0 flex flex-col w-full">
                 <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Tamu</span>
-                <select
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
                   value={form.adults}
-                  onChange={(e) => setForm({ ...form, adults: Number(e.target.value) })}
-                  className="text-sm font-semibold border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent appearance-none cursor-pointer w-full"
-                >
-                  {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => (
-                    <option key={n} value={n}>{n} Tamu</option>
-                  ))}
-                </select>
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setForm({ ...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val)) });
+                  }}
+                  className="text-sm font-semibold border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent w-full"
+                />
               </div>
             </div>
 
@@ -548,16 +543,18 @@ function BookPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-stone-700">Jumlah tamu <span className="text-red-500">*</span></Label>
-                    <Select value={form.adults.toString()} onValueChange={v => setForm({...form, adults: Number(v)})}>
-                      <SelectTrigger className="rounded-xl border-stone-200">
-                        <SelectValue placeholder="Pilih tamu" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => (
-                          <SelectItem key={n} value={n.toString()}>{n} Tamu</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      required
+                      className="rounded-xl border-stone-200"
+                      value={form.adults}
+                      onChange={e => {
+                        const val = parseInt(e.target.value, 10);
+                        setForm({...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val))});
+                      }}
+                    />
                   </div>
                 </div>
 
