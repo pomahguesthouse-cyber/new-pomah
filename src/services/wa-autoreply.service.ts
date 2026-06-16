@@ -358,7 +358,17 @@ export async function executeAutoreplyForPhone(
   );
 
   if (ctxErr || !ctx) {
-    console.error(`[Autoreply] Context failed for ${phone}`);
+    console.error(`[Autoreply] Context failed for ${phone}`, ctxErr);
+    try {
+      const { notifyRpcFailure } = await import("@/services/manager-notifier.service");
+      await notifyRpcFailure(supabaseAdmin as any, {
+        rpcName:      "get_autoreply_context",
+        errorMessage: ctxErr?.message ?? (ctx ? null : "empty context"),
+        context:      { phone, origin, queueEntryId },
+      });
+    } catch (_) {
+      // notifikasi tidak boleh mengganggu alur
+    }
     return "context_error";
   }
 
