@@ -311,7 +311,7 @@ export const uploadWebchatAttachment = createServerFn({ method: "POST" })
 
     const { data: thread } = await (supabaseAdmin as any)
       .from("webchat_threads")
-      .select("id, booking_id, guest_phone, guest_name")
+      .select("id, booking_id, guest_phone, guest_name, whatsapp_thread_id")
       .eq("id", data.threadId)
       .maybeSingle();
     if (!thread) throw new Error("Sesi tidak ditemukan");
