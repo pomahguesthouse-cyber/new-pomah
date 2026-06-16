@@ -254,7 +254,7 @@ function BookPage() {
         <div className="mx-auto max-w-[1440px] px-6">
 
           {/* Search Bar — 1 kolom vertikal */}
-          <div className="mt-10 bg-white rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-3 w-full max-w-md mx-auto md:mx-0">
+          <div className="mt-10 bg-white rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-3 w-full max-w-md mx-auto">
             <DateRangePickerID
               checkIn={form.checkIn || null}
               checkOut={form.checkOut || null}
