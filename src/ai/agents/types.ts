@@ -9,6 +9,7 @@
 
 import type { ToolDefinition, AiClientConfig } from "@/ai/types";
 import type { PropertyRow, RoomTypeRow }        from "@/ai/context-builder";
+import type { ChatSummaryStructured }            from "@/ai/chat-summary.types";
 
 // ─── Agent keys ───────────────────────────────────────────────────────────────
 
@@ -42,8 +43,10 @@ export interface AgentContext {
   /** Brochure/image files stored in the Brosur tab — name + public URL */
   brosurFiles?: { name: string; url: string }[];
   today:    string;
-  /** Summary of the previous chat session (idle > 5 min) */
+  /** Summary of the previous chat session (short text mirror, idle > 5 min) */
   chatSummary?: string;
+  /** Structured summary fields (room_type, booking_status, dll) untuk inject ke prompt */
+  chatSummaryJson?: ChatSummaryStructured;
   /**
    * Tanggal menginap yang sudah disepakati di percakapan ini (dari slots).
    * Diinject ke system prompt agar LLM tidak meng-reset ke hari ini saat
