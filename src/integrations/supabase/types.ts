@@ -2376,6 +2376,7 @@ export type Database = {
           assigned_to: string | null
           chat_summary: string | null
           chat_summary_json: Json
+          chat_summary_updated_at: string | null
           chat_summary_version: number
           created_at: string
           display_name: string | null
@@ -2397,6 +2398,7 @@ export type Database = {
           assigned_to?: string | null
           chat_summary?: string | null
           chat_summary_json?: Json
+          chat_summary_updated_at?: string | null
           chat_summary_version?: number
           created_at?: string
           display_name?: string | null
@@ -2418,6 +2420,7 @@ export type Database = {
           assigned_to?: string | null
           chat_summary?: string | null
           chat_summary_json?: Json
+          chat_summary_updated_at?: string | null
           chat_summary_version?: number
           created_at?: string
           display_name?: string | null
