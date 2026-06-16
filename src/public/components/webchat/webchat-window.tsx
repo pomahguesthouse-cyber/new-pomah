@@ -24,6 +24,7 @@ import {
   type WebchatMessageRow,
   type BookingSummary,
 } from "@/public/functions/webchat.functions";
+import { getBranding } from "@/lib/branding.functions";
 
 const LS_THREAD_KEY = "pomah:webchat:threadId";
 
