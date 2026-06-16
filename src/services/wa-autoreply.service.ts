@@ -481,6 +481,7 @@ export async function executeAutoreplyForPhone(
           today: todayWIB(),
           lastMessage,
           chatSummary,
+          chatSummaryJson,
           managerName: manager?.name,
           mode: manager ? "managerial" : undefined,
         },
