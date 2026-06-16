@@ -163,5 +163,8 @@ export async function updateThreadAutoReplyMeta(
   });
   if (error) {
     console.error("[MessageRepo] updateThreadMeta error:", error);
+    void reportRpcFailure(client, "update_thread_autoreply_meta", error, {
+      threadId: params.threadId,
+    });
   }
 }
