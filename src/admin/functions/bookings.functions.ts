@@ -451,6 +451,12 @@ export const updateBookingFull = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => updateBookingFullSchema.parse(d))
   .handler(async ({ data, context }) => {
+    // Snapshot sebelum mutasi untuk diff alert booking_updated.
+    const { snapshotBookingForDiff, notifyBookingUpdated } = await import(
+      "@/services/manager-notifier.service"
+    );
+    const beforeSnap = await snapshotBookingForDiff(context.supabase, data.id);
+
     const nights =
       (Date.parse(`${data.check_out}T00:00:00Z`) - Date.parse(`${data.check_in}T00:00:00Z`)) /
       86_400_000;
