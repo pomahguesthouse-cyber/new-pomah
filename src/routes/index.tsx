@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,7 +79,13 @@ export const Route = createFileRoute("/")({
     const desc =
       seo.metaDescription ||
       "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
-    const heroImage = cfg.hero.slides?.[0]?.imageUrl;
+    const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
+    const heroImage = heroImageRaw
+      ? buildStorageImageUrl(heroImageRaw, { width: 1600, quality: 75 })
+      : "";
+    const heroImageSrcSet = heroImageRaw
+      ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
+      : undefined;
     const domain = loaderData?.property?.public_domain || "pomahliving.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
     return {
@@ -92,7 +99,16 @@ export const Route = createFileRoute("/")({
       links: [
         { rel: "canonical", href: canonicalUrl },
         ...(heroImage
-          ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" as const }]
+          ? [
+              {
+                rel: "preload",
+                as: "image",
+                href: heroImage,
+                imagesrcset: heroImageSrcSet,
+                imagesizes: "100vw",
+                fetchpriority: "high" as const,
+              },
+            ]
           : []),
       ],
     };
