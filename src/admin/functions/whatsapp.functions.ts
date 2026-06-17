@@ -12,6 +12,7 @@ import {
   getLovableAiConfig,
   resolvePropertyAiConfig,
 } from "@/services/ai-client.service";
+import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 
 export const listThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -89,7 +90,6 @@ export const sendMessage = createServerFn({ method: "POST" })
     z.object({ threadId: z.string().uuid(), body: z.string().min(1).max(4000) }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    // 1. Get thread phone
     const { data: thread } = await context.supabase
       .from("whatsapp_threads")
       .select("phone")
@@ -97,33 +97,16 @@ export const sendMessage = createServerFn({ method: "POST" })
       .single();
     if (!thread) throw new Error("Thread not found");
 
-    // 2. Get Fonnte token
     const { data: prop } = await context.supabase
       .from("properties")
       .select("fonnte_token")
       .limit(1)
       .maybeSingle();
 
-    // 3. Send via Fonnte if token is available
     if (prop?.fonnte_token) {
-      try {
-        const formData = new URLSearchParams();
-        formData.append("target", thread.phone);
-        formData.append("message", data.body);
-
-        const res = await fetch("https://api.fonnte.com/send", {
-          method: "POST",
-          headers: {
-            Authorization: prop.fonnte_token,
-          },
-          body: formData,
-        });
-
-        if (!res.ok) {
-          console.error("Fonnte API Error:", await res.text());
-        }
-      } catch (err) {
-        console.error("Failed to send Fonnte message:", err);
+      const sendResult = await sendWhatsAppMessage(prop.fonnte_token, thread.phone, data.body);
+      if (!sendResult.ok) {
+        console.error("[Admin WhatsApp] Fonnte send failed:", sendResult.error);
       }
     }
 
