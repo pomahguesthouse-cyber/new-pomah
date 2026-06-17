@@ -9,7 +9,10 @@ export const getRouter = () => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    // Cache hasil preload selama 30 detik agar navigasi cepat tidak
+    // memicu refetch berulang. Query tetap mengelola staleness via
+    // useQuery/useSuspenseQuery.
+    defaultPreloadStaleTime: 30_000,
   });
 
   return router;
