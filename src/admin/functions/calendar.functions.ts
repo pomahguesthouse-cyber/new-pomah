@@ -161,6 +161,13 @@ export const updateBookingFromAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => updateBookingFromAdminSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { snapshotBookingForDiff, notifyBookingUpdated } = await import(
+      "@/services/manager-notifier.service"
+    );
+    const beforeSnap = data.roomId
+      ? await snapshotBookingForDiff(context.supabase, data.id)
+      : null;
+
     await updateBookingStatusWithLock({
       supabase: context.supabase,
       bookingId: data.id,
@@ -168,6 +175,22 @@ export const updateBookingFromAdmin = createServerFn({ method: "POST" })
       roomId: data.roomId ?? null,
       status: data.status,
     });
+
+    // Status changes punya flow notifikasinya sendiri; di sini hanya alert
+    // bila terjadi reassignment kamar.
+    if (data.roomId) {
+      const { runDeferred } = await import("@/lib/cf-context");
+      runDeferred("updateBookingFromAdmin.notifyBookingUpdated", async () => {
+        const afterSnap = await snapshotBookingForDiff(context.supabase, data.id);
+        await notifyBookingUpdated(
+          context.supabase,
+          data.id,
+          beforeSnap,
+          afterSnap,
+          "Admin (Calendar)",
+        );
+      });
+    }
 
     return { ok: true };
   });
