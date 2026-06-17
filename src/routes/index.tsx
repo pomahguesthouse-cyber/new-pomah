@@ -78,7 +78,13 @@ export const Route = createFileRoute("/")({
     const desc =
       seo.metaDescription ||
       "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
-    const heroImage = cfg.hero.slides?.[0]?.imageUrl;
+    const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
+    const heroImage = heroImageRaw
+      ? buildStorageImageUrl(heroImageRaw, { width: 1600, quality: 75 })
+      : "";
+    const heroImageSrcSet = heroImageRaw
+      ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
+      : undefined;
     const domain = loaderData?.property?.public_domain || "pomahliving.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
     return {
