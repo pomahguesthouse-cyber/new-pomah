@@ -546,6 +546,13 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       console.warn("[bookings] PDF regen failed (non-fatal):", err),
     );
 
+    // Alert ke manager bila tanggal / jumlah tamu / kamar berubah.
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("updateBookingFull.notifyBookingUpdated", async () => {
+      const afterSnap = await snapshotBookingForDiff(context.supabase, data.id);
+      await notifyBookingUpdated(context.supabase, data.id, beforeSnap, afterSnap, "Admin");
+    });
+
     return { ok: true, total_amount, nights };
   });
 
