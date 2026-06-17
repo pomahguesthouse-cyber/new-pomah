@@ -243,7 +243,7 @@ export function PomahHomeView({
     queryKey: ["public-site"],
     queryFn: () => fetchData(),
     initialData: initialData as never,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 60 * 1000,
   });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
