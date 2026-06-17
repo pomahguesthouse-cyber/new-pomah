@@ -5,9 +5,39 @@
  * All callers receive a typed result — never raw fetch responses.
  */
 
+const FONNTE_SEND_URL = "https://api.fonnte.com/send";
+
 export interface SendResult {
-  ok:    boolean;
+  ok: boolean;
   error: string | null;
+  status?: number;
+  raw?: unknown;
+}
+
+export interface SendWhatsAppMessageInput {
+  token: string;
+  phone: string;
+  message: string;
+  fileUrl?: string;
+  filename?: string;
+}
+
+function buildFonnteSendForm(input: SendWhatsAppMessageInput): URLSearchParams {
+  const form = new URLSearchParams();
+  form.append("target", input.phone);
+  form.append("message", input.message);
+  if (input.fileUrl) {
+    form.append("url", input.fileUrl);
+  }
+  if (input.filename) {
+    form.append("filename", input.filename);
+  }
+  return form;
+}
+
+function parseFonnteLogicalError(data: any): string | null {
+  if (!data || data.status !== false) return null;
+  return data.reason || data.detail || JSON.stringify(data);
 }
 
 /**
@@ -18,44 +48,49 @@ export interface SendResult {
  * @param message Text to send (plain text; Fonnte handles WhatsApp formatting)
  */
 export async function sendWhatsAppMessage(
-  token:   string,
-  phone:   string,
+  token: string,
+  phone: string,
   message: string,
   fileUrl?: string,
   filename?: string,
 ): Promise<SendResult> {
-  try {
-    const form = new URLSearchParams();
-    form.append("target",  phone);
-    form.append("message", message);
-    if (fileUrl) {
-      form.append("url", fileUrl);
-    }
-    if (filename) {
-      form.append("filename", filename);
-    }
+  return sendWhatsAppMessageWithOptions({ token, phone, message, fileUrl, filename });
+}
 
-    const res = await fetch("https://api.fonnte.com/send", {
-      method:  "POST",
-      headers: { Authorization: token },
-      body:    form,
+export async function sendWhatsAppMessageWithOptions(
+  input: SendWhatsAppMessageInput,
+): Promise<SendResult> {
+  try {
+    const res = await fetch(FONNTE_SEND_URL, {
+      method: "POST",
+      headers: { Authorization: input.token },
+      body: buildFonnteSendForm(input),
     });
 
+    const responseText = await res.text().catch(() => "");
+    let responseJson: any = null;
+    try {
+      responseJson = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      // Fonnte normally returns JSON; keep non-JSON body as text for diagnostics.
+    }
+
+    const raw = responseJson ?? responseText;
+
     if (!res.ok) {
-      const body = await res.text().catch(() => "(no body)");
+      const body = responseText || "(no body)";
       console.error("[WhatsApp] Fonnte send error:", res.status, body);
-      return { ok: false, error: `HTTP ${res.status}: ${body}` };
+      return { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
     }
 
-    // Fonnte always returns HTTP 200, even for logical errors. We must check the JSON body.
-    const data = await res.json().catch(() => null);
-    if (data && data.status === false) {
-      const reason = data.reason || data.detail || JSON.stringify(data);
-      console.error("[WhatsApp] Fonnte API logic error:", reason);
-      return { ok: false, error: `Fonnte API Error: ${reason}` };
+    // Fonnte may return HTTP 200 even for logical errors. Check the response body.
+    const logicalError = parseFonnteLogicalError(responseJson);
+    if (logicalError) {
+      console.error("[WhatsApp] Fonnte API logic error:", logicalError);
+      return { ok: false, status: res.status, error: `Fonnte API Error: ${logicalError}`, raw };
     }
 
-    return { ok: true, error: null };
+    return { ok: true, status: res.status, error: null, raw };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[WhatsApp] Fonnte fetch exception:", msg);
