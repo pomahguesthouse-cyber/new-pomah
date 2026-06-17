@@ -121,7 +121,27 @@ export type AutoreplyOutcome =
  */
 // ── Summarizer tuning knobs ─────────────────────────────────────────────────
 /** Minimum interval between two summary regenerations for the same thread. */
-const SUMMARY_REGEN_COOLDOWN_MS = 10 * 60 * 1000;
+const SUMMARY_REGEN_COOLDOWN_MS = 1 * 60 * 1000;
+
+/**
+ * Kata kunci penting yang memaksa regenerasi ringkasan walaupun cooldown
+ * masih aktif. Tujuannya: konteks WhatsApp tetap fresh untuk topik kritikal
+ * (booking, pembayaran, komplain) tanpa menambah latency balasan.
+ */
+const FORCE_SUMMARY_KEYWORDS: readonly string[] = [
+  "booking", "pesan", "reservasi",
+  "check in", "check-in", "check out", "check-out",
+  "transfer", "bayar", "bukti",
+  "komplain", "keluhan", "rusak", "kotor",
+  "deluxe", "family", "single",
+  "tanggal", "malam", "tamu",
+];
+
+function shouldForceSummary(lastMessage: string): boolean {
+  if (!lastMessage) return false;
+  const text = lastMessage.toLowerCase();
+  return FORCE_SUMMARY_KEYWORDS.some((kw) => text.includes(kw));
+}
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 const SUMMARY_MAX_CHARS = 800;
 /** Below this many messages, summarizing is pointless — skip. */
@@ -727,13 +747,20 @@ export async function executeAutoreplyForPhone(
   //   - enough messages to be worth summarizing
   //   - cooldown elapsed since last regen (rate limit)
   //   - guest not currently mid-booking (those messages aren't a "wrap-up")
+  const forced = shouldForceSummary(lastMessage);
   if (previousSession.length < SUMMARY_MIN_MESSAGES) {
     // not enough — silent skip
-  } else if (cooldownActive(chatSummaryUpdatedAt)) {
+  } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
     console.info(
       `[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`,
     );
   } else {
+    if (forced && cooldownActive(chatSummaryUpdatedAt)) {
+      console.info(
+        `[SessionSummarizer] cooldown di-override karena pesan penting ` +
+          `(thread ${c.thread_id.slice(0, 8)})`,
+      );
+    }
     void (async () => {
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc(
@@ -756,7 +783,7 @@ export async function executeAutoreplyForPhone(
           console.info(
             `[SessionSummarizer] summary generated for ${phone.slice(-6)} ` +
               `(thread ${c.thread_id.slice(0, 8)}, ${summary.short_summary.length} chars, ` +
-              `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"})`,
+              `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"}, forced=${forced})`,
           );
         }
       } catch (e) {
