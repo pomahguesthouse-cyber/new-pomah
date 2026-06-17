@@ -50,6 +50,8 @@ import {
   setTrainingExample,
   updateChatSummary,
   summarizeThread,
+  regenerateStructuredSummary,
+  clearChatSummary,
   getConversationAlerts,
   dismissConversationAlert,
   triggerManualAlert,
@@ -170,6 +172,8 @@ export function WhatsAppPage() {
   const trainingFn = useServerFn(setTrainingExample);
   const updateSummaryFn = useServerFn(updateChatSummary);
   const summarizeFn = useServerFn(summarizeThread);
+  const regenerateStructuredFn = useServerFn(regenerateStructuredSummary);
+  const clearSummaryFn = useServerFn(clearChatSummary);
   const alertsFn = useServerFn(getConversationAlerts);
   const dismissFn = useServerFn(dismissConversationAlert);
   const manualAlertFn = useServerFn(triggerManualAlert);
@@ -295,7 +299,27 @@ export function WhatsAppPage() {
     mutationFn: () =>
       summarizeFn({ data: { threadId: current! } }),
     onSuccess: () => {
-      toast.success("Context summary berhasil diperbarui");
+      toast.success("Ringkasan obrolan berhasil dibuat!");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const regenerateStructuredMut = useMutation({
+    mutationFn: () => regenerateStructuredFn({ data: { threadId: current! } }),
+    onSuccess: () => {
+      toast.success("Context Summary diperbarui");
+      qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+      qc.invalidateQueries({ queryKey: ["wa-threads"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const clearSummaryMut = useMutation({
+    mutationFn: () => clearSummaryFn({ data: { threadId: current! } }),
+    onSuccess: () => {
+      toast.success("Context Summary dihapus");
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
@@ -872,6 +896,10 @@ export function WhatsAppPage() {
                 summarizing={summarizeMut.isPending}
                 onToggleTraining={(v) => trainingMut.mutate(v)}
                 togglingTraining={trainingMut.isPending}
+                onRegenerateStructured={() => regenerateStructuredMut.mutate()}
+                regenerating={regenerateStructuredMut.isPending}
+                onClearSummary={() => clearSummaryMut.mutate()}
+                clearing={clearSummaryMut.isPending}
               />
 
               <Separator />
@@ -927,6 +955,10 @@ function WhatsappSummary({
   summarizing,
   onToggleTraining,
   togglingTraining,
+  onRegenerateStructured,
+  regenerating,
+  onClearSummary,
+  clearing,
 }: {
   thread: Record<string, any>;
   onSaveSummary: (summary: string) => void;
@@ -935,9 +967,38 @@ function WhatsappSummary({
   summarizing: boolean;
   onToggleTraining: (v: boolean) => void;
   togglingTraining: boolean;
+  onRegenerateStructured: () => void;
+  regenerating: boolean;
+  onClearSummary: () => void;
+  clearing: boolean;
 }) {
   const [summary, setSummary] = useState(thread.chat_summary || "");
   const isTraining = !!thread.is_training_example;
+  const structured = (thread.chat_summary_json && typeof thread.chat_summary_json === "object"
+    ? thread.chat_summary_json
+    : null) as null | {
+      short_summary?: string;
+      guest_name?: string | null;
+      last_topic?: string | null;
+      room_type?: string | null;
+      check_in?: string | null;
+      check_out?: string | null;
+      guest_count?: number | null;
+      booking_status?: string | null;
+      payment_status?: string | null;
+      complaint_active?: boolean;
+      unresolved_question?: string | null;
+      needs_human?: boolean;
+      handoff_reason?: string | null;
+    };
+  const hasStructured =
+    !!structured && Object.keys(structured as Record<string, unknown>).length > 0;
+  const updatedAt = thread.chat_summary_updated_at
+    ? new Date(thread.chat_summary_updated_at)
+    : null;
+  const updatedLabel = updatedAt
+    ? `${String(updatedAt.getDate()).padStart(2, "0")}/${String(updatedAt.getMonth() + 1).padStart(2, "0")}/${updatedAt.getFullYear()} ${String(updatedAt.getHours()).padStart(2, "0")}:${String(updatedAt.getMinutes()).padStart(2, "0")}`
+    : null;
 
   useEffect(() => {
     setSummary(thread.chat_summary || "");
@@ -947,10 +1008,95 @@ function WhatsappSummary({
 
   return (
     <div className="space-y-4">
+      {/* ── Context Summary terstruktur ──────────────────────────────── */}
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            Context Summary
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[10px]"
+              disabled={regenerating}
+              onClick={onRegenerateStructured}
+              title="Regenerate ringkasan terstruktur dari 30 pesan terakhir"
+            >
+              <RefreshCw className={cn("mr-1 h-3 w-3", regenerating && "animate-spin")} />
+              {regenerating ? "Memproses…" : "Regenerate"}
+            </Button>
+            {hasStructured && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px] text-rose-600 hover:text-rose-700"
+                disabled={clearing}
+                onClick={() => {
+                  if (window.confirm("Hapus Context Summary untuk thread ini?")) {
+                    onClearSummary();
+                  }
+                }}
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                {clearing ? "Menghapus…" : "Clear"}
+              </Button>
+            )}
+          </div>
+        </div>
+        {updatedLabel && (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Diperbarui: {updatedLabel}
+            {typeof thread.chat_summary_version === "number" && ` · v${thread.chat_summary_version}`}
+          </p>
+        )}
+        {hasStructured ? (
+          <div className="mt-2 grid grid-cols-2 gap-1.5 text-[10px]">
+            <SummaryField label="Tipe kamar" value={structured?.room_type} />
+            <SummaryField label="Topik" value={structured?.last_topic} />
+            <SummaryField label="Status booking" value={structured?.booking_status} />
+            <SummaryField label="Pembayaran" value={structured?.payment_status} />
+            <SummaryField label="Check-in" value={structured?.check_in} />
+            <SummaryField label="Check-out" value={structured?.check_out} />
+            <SummaryField label="Tamu" value={structured?.guest_name} />
+            <SummaryField
+              label="Jumlah tamu"
+              value={
+                typeof structured?.guest_count === "number"
+                  ? String(structured?.guest_count)
+                  : null
+              }
+            />
+            <div className="col-span-2">
+              <SummaryField
+                label="Pertanyaan belum dijawab"
+                value={structured?.unresolved_question}
+              />
+            </div>
+            {structured?.complaint_active && (
+              <div className="col-span-2 rounded bg-rose-500/10 px-2 py-1 text-[10px] text-rose-700 dark:text-rose-300">
+                Komplain aktif
+              </div>
+            )}
+            {structured?.needs_human && (
+              <div className="col-span-2 rounded bg-amber-500/10 px-2 py-1 text-[10px] text-amber-800 dark:text-amber-300">
+                Perlu dialihkan ke human
+                {structured?.handoff_reason ? ` — ${structured.handoff_reason}` : ""}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-[11px] italic text-muted-foreground">
+            Belum ada context summary terstruktur. Klik Regenerate untuk membuatnya.
+          </p>
+        )}
+      </div>
+
+      {/* ── Ringkasan teks manual (legacy) ──────────────────────────── */}
       <div>
         <div className="flex items-center justify-between">
           <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-            WhatsApp Summary
+            WhatsApp Summary (teks)
           </p>
           <Button
             size="sm"
@@ -958,7 +1104,7 @@ function WhatsappSummary({
             className="h-6 px-2 text-[10px] text-primary hover:text-primary/80"
             disabled={summarizing}
             onClick={onSummarize}
-            title="Buat ringkasan percakapan otomatis menggunakan AI"
+            title="Buat ringkasan teks pendek menggunakan AI"
           >
             <Sparkles className={cn("mr-1 h-3 w-3", summarizing && "animate-spin")} />
             {summarizing ? "Membuat..." : "Create Summary"}
@@ -967,7 +1113,7 @@ function WhatsappSummary({
         <div className="mt-2 space-y-2">
           <Textarea
             placeholder="Belum ada ringkasan obrolan. Chatbot akan merangkum otomatis setelah obrolan idle 5 menit, atau Anda dapat menulis ringkasan manual di sini..."
-            rows={5}
+            rows={4}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             className="resize-none text-xs leading-relaxed"
@@ -1021,6 +1167,16 @@ function WhatsappSummary({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SummaryField({ label, value }: { label: string; value: string | null | undefined }) {
+  const display = value && String(value).trim() ? String(value) : "—";
+  return (
+    <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
+      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="truncate text-[11px] font-medium">{display}</p>
     </div>
   );
 }

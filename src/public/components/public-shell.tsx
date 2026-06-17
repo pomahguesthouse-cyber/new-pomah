@@ -4,6 +4,11 @@ import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lu
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+
+// Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
+const HERO_WIDTHS = [640, 960, 1280, 1600, 1920];
+const HERO_SIZES = "100vw";
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -631,7 +636,9 @@ export function HeroSlider({
           />
         ) : active.imageUrl ? (
           <img
-            src={active.imageUrl}
+            src={buildStorageImageUrl(active.imageUrl, { width: 1600, quality: 75 })}
+            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: 75 })}
+            sizes={HERO_SIZES}
             alt={active.heading}
             loading={i === 0 ? "eager" : "lazy"}
             fetchPriority={i === 0 ? "high" : "auto"}

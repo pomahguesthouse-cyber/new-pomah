@@ -385,6 +385,39 @@ export type Database = {
           },
         ]
       }
+      channel_status: {
+        Row: {
+          channel: string
+          fallback_enabled: boolean
+          id: string
+          last_error_at: string | null
+          last_error_message: string | null
+          last_ok_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          fallback_enabled?: boolean
+          id?: string
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_ok_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          fallback_enabled?: boolean
+          id?: string
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_ok_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       competitor_prices: {
         Row: {
           city: string
@@ -1302,6 +1335,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rpc_failure_events: {
+        Row: {
+          context: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          rpc_name: string
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rpc_name: string
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          rpc_name?: string
+        }
+        Relationships: []
       }
       seasonal_rates: {
         Row: {
@@ -2328,6 +2385,122 @@ export type Database = {
           },
         ]
       }
+      webchat_messages: {
+        Row: {
+          attachment_type: string | null
+          attachment_url: string | null
+          body: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          sender_name: string | null
+          sender_type: string
+          thread_id: string
+        }
+        Insert: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender_name?: string | null
+          sender_type: string
+          thread_id: string
+        }
+        Update: {
+          attachment_type?: string | null
+          attachment_url?: string | null
+          body?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          sender_name?: string | null
+          sender_type?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "webchat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webchat_threads: {
+        Row: {
+          booking_code: string | null
+          booking_id: string | null
+          context_summary: string
+          context_summary_json: Json
+          created_at: string
+          guest_email: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          handoff_status: string
+          handoff_until: string | null
+          id: string
+          last_message_at: string
+          source: string
+          status: string
+          updated_at: string
+          whatsapp_thread_id: string | null
+        }
+        Insert: {
+          booking_code?: string | null
+          booking_id?: string | null
+          context_summary?: string
+          context_summary_json?: Json
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          handoff_status?: string
+          handoff_until?: string | null
+          id?: string
+          last_message_at?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          whatsapp_thread_id?: string | null
+        }
+        Update: {
+          booking_code?: string | null
+          booking_id?: string | null
+          context_summary?: string
+          context_summary_json?: Json
+          created_at?: string
+          guest_email?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          handoff_status?: string
+          handoff_until?: string | null
+          id?: string
+          last_message_at?: string
+          source?: string
+          status?: string
+          updated_at?: string
+          whatsapp_thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_threads_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_threads_whatsapp_thread_id_fkey"
+            columns: ["whatsapp_thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_messages: {
         Row: {
           ai_draft: boolean
@@ -2375,7 +2548,7 @@ export type Database = {
           ai_auto: boolean
           assigned_to: string | null
           chat_summary: string | null
-          chat_summary_json: Json | null
+          chat_summary_json: Json
           chat_summary_updated_at: string | null
           chat_summary_version: number
           created_at: string
@@ -2397,9 +2570,6 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
-          chat_summary_json?: Json | null
-          chat_summary_updated_at?: string | null
-          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
@@ -2419,9 +2589,6 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
-          chat_summary_json?: Json | null
-          chat_summary_updated_at?: string | null
-          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null

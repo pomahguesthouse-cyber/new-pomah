@@ -104,35 +104,54 @@ function MonthGrid({ viewMonth, checkIn, checkOut, minDate, hover, onPick, onHov
     }
 
     cells.push(
-      <div key={i} className="relative">
-        {/* Range middle band — full-width strip behind the day button */}
-        {isMiddle && (
-          <div className="absolute inset-y-1 inset-x-0 bg-sky-100" aria-hidden />
+      <div key={i} className={cn("relative flex flex-col items-center", (isStart || isEnd) && "pt-4")}>
+        {/* Tooltip label above selected dates */}
+        {isStart && (
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+            <span className="text-[9px] font-semibold text-white bg-sky-500 px-1.5 py-0.5 rounded-[4px] whitespace-nowrap">
+              Check-in
+            </span>
+            <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[3px] border-t-sky-500" />
+          </div>
         )}
-        {/* Range start/end half-band so the rounded button blends with the strip */}
-        {(isStart && rangeEnd) && (
-          <div className="absolute inset-y-1 right-0 left-1/2 bg-sky-100" aria-hidden />
+        {isEnd && (
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+            <span className="text-[9px] font-semibold text-white bg-orange-500 px-1.5 py-0.5 rounded-[4px] whitespace-nowrap">
+              Check-out
+            </span>
+            <div className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[3px] border-t-orange-500" />
+          </div>
         )}
-        {(isEnd && rangeStart) && (
-          <div className="absolute inset-y-1 left-0 right-1/2 bg-sky-100" aria-hidden />
-        )}
-        <button
-          type="button"
-          disabled={off || !inMonth}
-          onMouseEnter={() => inMonth && !off && onHover(d)}
-          onMouseLeave={() => onHover(null)}
-          onClick={() => inMonth && !off && onPick(d)}
-          className={cn(
-            "relative z-10 h-9 w-9 sm:h-10 sm:w-10 mx-auto block rounded-full text-sm tabular-nums transition-colors",
-            !inMonth && "invisible",
-            off && "cursor-not-allowed text-stone-300",
-            !off && inMonth && !isStart && !isEnd && "text-stone-800 hover:bg-sky-50",
-            (isStart || isEnd) && "bg-sky-600 text-white font-semibold shadow-sm",
-            isMiddle && "text-sky-900 font-medium",
+        <div className="relative w-full">
+          {/* Range middle band — full-width strip behind the day button */}
+          {isMiddle && (
+            <div className="absolute inset-y-1 inset-x-0 bg-sky-100" aria-hidden />
           )}
-        >
-          {d.getDate()}
-        </button>
+          {/* Range start/end half-band so the rounded button blends with the strip */}
+          {(isStart && rangeEnd) && (
+            <div className="absolute inset-y-1 right-0 left-1/2 bg-sky-100" aria-hidden />
+          )}
+          {(isEnd && rangeStart) && (
+            <div className="absolute inset-y-1 left-0 right-1/2 bg-sky-100" aria-hidden />
+          )}
+          <button
+            type="button"
+            disabled={off || !inMonth}
+            onMouseEnter={() => inMonth && !off && onHover(d)}
+            onMouseLeave={() => onHover(null)}
+            onClick={() => inMonth && !off && onPick(d)}
+            className={cn(
+              "relative z-10 h-9 w-9 sm:h-10 sm:w-10 mx-auto block rounded-full text-sm tabular-nums transition-colors",
+              !inMonth && "invisible",
+              off && "cursor-not-allowed text-stone-300",
+              !off && inMonth && !isStart && !isEnd && "text-stone-800 hover:bg-sky-50",
+              (isStart || isEnd) && "bg-sky-600 text-white font-semibold shadow-sm",
+              isMiddle && "text-sky-900 font-medium",
+            )}
+          >
+            {d.getDate()}
+          </button>
+        </div>
       </div>,
     );
   }
@@ -206,10 +225,9 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
       setPendingOut(null);
       return;
     }
-    // Second pick → commit
+    // Second pick → commit (but keep dialog open)
     setPendingOut(d);
     onChange({ checkIn: toIso(pendingIn), checkOut: toIso(d) });
-    setOpen(false);
   }
 
   const nights = pendingIn && pendingOut ? diffDays(pendingIn, pendingOut) : 0;
@@ -244,7 +262,7 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
       >
         <div className="p-4 sm:p-5 sm:pb-4 max-w-[680px]">
           <div className="text-base sm:text-lg font-semibold text-stone-800 mb-3">
-            Pilih tanggal untuk melihat harga
+            Pilih tanggal Check-In dan Check-Out untuk melihat ketersediaan dan harga
           </div>
           <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs sm:text-sm text-amber-900 mb-4">
             {pendingIn && pendingOut ? (
@@ -283,7 +301,7 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
               <ChevronRight className="h-5 w-5 text-sky-600" />
             </Button>
           </div>
-          <div className="flex flex-col sm:flex-row gap-6 sm:gap-8">
+          <div className="flex flex-col">
             <MonthGrid
               viewMonth={viewMonth}
               checkIn={pendingIn}
@@ -293,17 +311,6 @@ export function DateRangePickerID({ checkIn, checkOut, onChange, min, className,
               onPick={handlePick}
               onHover={setHover}
             />
-            <div className="hidden sm:block">
-              <MonthGrid
-                viewMonth={nextMonth}
-                checkIn={pendingIn}
-                checkOut={pendingOut}
-                minDate={minDate}
-                hover={hover}
-                onPick={handlePick}
-                onHover={setHover}
-              />
-            </div>
           </div>
         </div>
       </PopoverContent>

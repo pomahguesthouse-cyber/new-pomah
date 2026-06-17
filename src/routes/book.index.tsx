@@ -11,19 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Carousel,
   CarouselContent,
   CarouselItem,
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
+import { DateRangePickerID, addDaysIso as isoAddDays } from "@/components/ui/date-range-picker";
 import { 
   Users, 
   CalendarDays, 
@@ -252,56 +246,70 @@ function BookPage() {
       <section className="relative -mt-12 mb-12 z-20">
         <div className="mx-auto max-w-[1440px] px-6">
 
-          {/* Search Bar */}
-          <div className="mt-10 bg-white rounded-2xl p-4 shadow-xl flex flex-col md:flex-row items-center gap-4 max-w-4xl">
-            <div className="flex-1 w-full flex items-center gap-3 px-4 py-2 border-r-0 md:border-r border-stone-200">
-              <CalendarDays className="w-5 h-5 text-stone-400" />
-              <div className="flex flex-col w-full">
-                <span className="text-xs font-semibold text-stone-500 uppercase">Check-in</span>
-                <input 
-                  type="date" 
-                  value={form.checkIn}
-                  onChange={(e) => setForm({...form, checkIn: e.target.value})}
-                  className="text-sm font-medium border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent"
-                />
-              </div>
-            </div>
-            
-            <div className="flex-1 w-full flex items-center gap-3 px-4 py-2 border-r-0 md:border-r border-stone-200">
-              <CalendarDays className="w-5 h-5 text-stone-400" />
-              <div className="flex flex-col w-full">
-                <span className="text-xs font-semibold text-stone-500 uppercase">Check-out</span>
-                <input 
-                  type="date" 
-                  value={form.checkOut}
-                  onChange={(e) => setForm({...form, checkOut: e.target.value})}
-                  className="text-sm font-medium border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 w-full flex items-center gap-3 px-4 py-2">
-              <Users className="w-5 h-5 text-stone-400" />
-              <div className="flex flex-col w-full">
-                <span className="text-xs font-semibold text-stone-500 uppercase">Tamu</span>
-                <select 
-                  value={form.adults}
-                  onChange={(e) => setForm({...form, adults: Number(e.target.value)})}
-                  className="text-sm font-medium border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent appearance-none cursor-pointer"
+          {/* Search Bar — 1 kolom vertikal */}
+          <div className="mt-10 bg-white rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-3 w-full max-w-md mx-auto">
+            <DateRangePickerID
+              checkIn={form.checkIn || null}
+              checkOut={form.checkOut || null}
+              min={today}
+              onChange={({ checkIn: ci, checkOut: co }: { checkIn: string; checkOut: string }) => setForm({ ...form, checkIn: ci, checkOut: co })}
+              trigger={
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left hover:border-[#364935] transition"
                 >
-                  {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => (
-                    <option key={n} value={n}>{n} Tamu</option>
-                  ))}
-                </select>
+                  <CalendarDays className="w-5 h-5 text-stone-400 shrink-0" />
+                  <div className="min-w-0 flex flex-col">
+                    <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Check-in</span>
+                    <span className="text-sm font-semibold text-stone-800 truncate">{formatDate(form.checkIn)}</span>
+                  </div>
+                </button>
+              }
+            />
+
+            <DateRangePickerID
+              checkIn={form.checkIn || null}
+              checkOut={form.checkOut || null}
+              min={form.checkIn ? isoAddDays(form.checkIn, 1) : today}
+              onChange={({ checkIn: ci, checkOut: co }: { checkIn: string; checkOut: string }) => setForm({ ...form, checkIn: ci, checkOut: co })}
+              trigger={
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left hover:border-[#364935] transition"
+                >
+                  <CalendarDays className="w-5 h-5 text-stone-400 shrink-0" />
+                  <div className="min-w-0 flex flex-col">
+                    <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Check-out</span>
+                    <span className="text-sm font-semibold text-stone-800 truncate">{formatDate(form.checkOut)}</span>
+                  </div>
+                </button>
+              }
+            />
+
+            <div className="w-full flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3">
+              <Users className="w-5 h-5 text-stone-400 shrink-0" />
+              <div className="min-w-0 flex flex-col w-full">
+                <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Tamu</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={form.adults}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setForm({ ...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val)) });
+                  }}
+                  className="text-sm font-semibold border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent w-full"
+                />
               </div>
             </div>
 
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               onClick={handleSearchClick}
-              className="w-full md:w-auto bg-[#364935] hover:bg-[#2A3929] text-white rounded-xl px-8 h-12"
+              className="w-full bg-[#364935] hover:bg-[#2A3929] text-white rounded-xl h-12"
             >
-              Cari kamar
+              Cek Ketersediaan
             </Button>
           </div>
         </div>
@@ -449,14 +457,21 @@ function BookPage() {
                                    )}
                                  </div>
                               ) : (
-                                <Button 
-                                  type="button"
-                                  variant="outline"
-                                  className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12"
-                                  onClick={() => handleAddToCart(room.id)}
-                                >
-                                  Tambahkan kamar
-                                </Button>
+                                (() => {
+                                  const hasValidRange = !!form.checkIn && !!form.checkOut && form.checkIn < form.checkOut;
+                                  const isUnavailable = hasValidRange && !!availData && availableCount <= 0;
+                                  return (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isUnavailable}
+                                      className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12 disabled:opacity-60 disabled:cursor-not-allowed"
+                                      onClick={() => handleAddToCart(room.id)}
+                                    >
+                                      {isUnavailable ? "Tidak tersedia" : "Tambahkan kamar"}
+                                    </Button>
+                                  );
+                                })()
                               )}
                             </div>
                           </div>
@@ -535,16 +550,18 @@ function BookPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-stone-700">Jumlah tamu <span className="text-red-500">*</span></Label>
-                    <Select value={form.adults.toString()} onValueChange={v => setForm({...form, adults: Number(v)})}>
-                      <SelectTrigger className="rounded-xl border-stone-200">
-                        <SelectValue placeholder="Pilih tamu" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1,2,3,4,5,6,7,8,9,10,12,15,20].map(n => (
-                          <SelectItem key={n} value={n.toString()}>{n} Tamu</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={50}
+                      required
+                      className="rounded-xl border-stone-200"
+                      value={form.adults}
+                      onChange={e => {
+                        const val = parseInt(e.target.value, 10);
+                        setForm({...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val))});
+                      }}
+                    />
                   </div>
                 </div>
 

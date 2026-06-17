@@ -124,19 +124,36 @@ function extractSlots(text: string): PartialSlots {
 }
 
 /**
- * Best-effort extract of an EntityRef from a chat summary string.
+ * Best-effort extract of an EntityRef from a chat summary.
  *
- * Used to seed lastEntity when the per-phone state has been reset (new
- * session, topic timeout) but a summary of the prior session is still
- * available. Lets the first turn of a new session inherit "we were
- * talking about room X" without needing the user to repeat it.
+ * Prioritas:
+ *   1. `chatSummaryJson.room_type` (structured) — match exact ke nama room.
+ *   2. Regex/keyword dari `chatSummary` text (fallback alur lama).
+ *
+ * Dipakai untuk seed lastEntity ketika state per-phone sudah di-reset (sesi
+ * baru / topic timeout) tapi summary sebelumnya masih ada.
  */
 export function seedEntityFromSummary(
-  summary: string | null | undefined,
+  args: {
+    chatSummary?: string | null;
+    chatSummaryJson?: { room_type?: string | null } | null;
+  },
   rooms: RoomTypeRow[],
 ): EntityRef | undefined {
-  if (!summary) return undefined;
-  return extractRoomEntity(summary, rooms);
+  const roomTypeHint = args.chatSummaryJson?.room_type?.trim();
+  if (roomTypeHint) {
+    const hintLower = roomTypeHint.toLowerCase();
+    const direct = rooms.find((r) => r.name?.toLowerCase() === hintLower);
+    if (direct) return { kind: "room", id: direct.id, label: direct.name };
+    const partial = rooms.find(
+      (r) => r.name && (r.name.toLowerCase().includes(hintLower) || hintLower.includes(r.name.toLowerCase())),
+    );
+    if (partial) return { kind: "room", id: partial.id, label: partial.name };
+    // Hint ada tapi tidak match room manapun — tetap sediakan label.
+    return { kind: "room", label: roomTypeHint };
+  }
+  if (!args.chatSummary) return undefined;
+  return extractRoomEntity(args.chatSummary, rooms);
 }
 
 // ─── Main resolver ───────────────────────────────────────────────────────────

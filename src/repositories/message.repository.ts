@@ -38,6 +38,9 @@ export async function saveInboundMessage(
   });
 
   if (error) {
+    void reportRpcFailure(client, "receive_whatsapp_message", error, {
+      phone: params.phone,
+    });
     return {
       messageId: null,
       error:     new Error(`receive_whatsapp_message: ${(error as any).message}`),
@@ -45,6 +48,22 @@ export async function saveInboundMessage(
   }
 
   return { messageId: data as string | null, error: null };
+}
+
+/** Helper internal: laporkan kegagalan RPC ke super_admin tanpa memblokir. */
+async function reportRpcFailure(
+  client: AnyClient,
+  rpcName: string,
+  error: unknown,
+  context?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { notifyRpcFailure } = await import("@/services/manager-notifier.service");
+    const message = (error as any)?.message ?? String(error);
+    await notifyRpcFailure(client, { rpcName, errorMessage: message, context });
+  } catch (_) {
+    // notifikasi tidak boleh mengganggu alur utama
+  }
 }
 
 // ─── Outbound ─────────────────────────────────────────────────────────────────
@@ -83,7 +102,10 @@ export async function saveOutboundMessage(
     
     if (fallback.error) {
       console.warn("[MessageRepo] 2-arg RPC failed, trying direct insert...", fallback.error.message);
-      
+      void reportRpcFailure(client, "save_outbound_whatsapp", fallback.error, {
+        threadId: params.threadId,
+      });
+
       // Last resort: direct insert + update
       const insertRes = await (client as any).from("whatsapp_messages").insert({
         thread_id: params.threadId,
@@ -91,7 +113,7 @@ export async function saveOutboundMessage(
         body:      params.body,
         metadata:  params.metadata ?? null,
       });
-      
+
       if (insertRes.error) {
         console.error("[MessageRepo] Direct insert failed:", insertRes.error);
       } else {
@@ -120,6 +142,9 @@ export async function saveMessageMetadata(
   });
   if (error) {
     console.error("[MessageRepo] saveMetadata error:", error);
+    void reportRpcFailure(client, "save_message_metadata", error, {
+      messageId: params.messageId,
+    });
   }
 }
 
@@ -138,5 +163,8 @@ export async function updateThreadAutoReplyMeta(
   });
   if (error) {
     console.error("[MessageRepo] updateThreadMeta error:", error);
+    void reportRpcFailure(client, "update_thread_autoreply_meta", error, {
+      threadId: params.threadId,
+    });
   }
 }

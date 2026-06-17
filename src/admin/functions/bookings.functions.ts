@@ -407,6 +407,13 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       console.warn("[createMultiRoomBooking] Notifikasi invoice gagal (non-fatal):", err),
     );
 
+    // Alert ke manager (WhatsApp + Telegram) — sama seperti booking via web/admin calendar
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("createMultiRoomBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(context.supabase, booking.id);
+    });
+
     return { guest_id: guestId, booking, nights, grand_total: grandTotal };
   });
 
@@ -444,6 +451,12 @@ export const updateBookingFull = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => updateBookingFullSchema.parse(d))
   .handler(async ({ data, context }) => {
+    // Snapshot sebelum mutasi untuk diff alert booking_updated.
+    const { snapshotBookingForDiff, notifyBookingUpdated } = await import(
+      "@/services/manager-notifier.service"
+    );
+    const beforeSnap = await snapshotBookingForDiff(context.supabase, data.id);
+
     const nights =
       (Date.parse(`${data.check_out}T00:00:00Z`) - Date.parse(`${data.check_in}T00:00:00Z`)) /
       86_400_000;
@@ -532,6 +545,13 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     }).catch((err) =>
       console.warn("[bookings] PDF regen failed (non-fatal):", err),
     );
+
+    // Alert ke manager bila tanggal / jumlah tamu / kamar berubah.
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("updateBookingFull.notifyBookingUpdated", async () => {
+      const afterSnap = await snapshotBookingForDiff(context.supabase, data.id);
+      await notifyBookingUpdated(context.supabase, data.id, beforeSnap, afterSnap, "Admin");
+    });
 
     return { ok: true, total_amount, nights };
   });

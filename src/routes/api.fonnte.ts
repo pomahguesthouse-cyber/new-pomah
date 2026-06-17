@@ -130,6 +130,36 @@ export const Route = createFileRoute("/api/fonnte")({
           metadata: { intent_label: classifyMessageIntent(message), attachment_url: attachmentUrl ?? null },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
+        // ── NOTIFIKASI SUPER ADMIN: setiap pesan masuk ───────────────────
+        // Cloudflare Worker akan menghentikan async setelah response dikirim
+        // kecuali didaftarkan via ctx.waitUntil. Tanpa ini notifikasi sering
+        // tidak terkirim. Dedupe per messageId ada di dalam fungsi.
+        {
+          const { getWaitUntil } = await import("@/lib/cf-context");
+          const notifyTask = (async () => {
+            try {
+              const { notifyIncomingMessage } = await import(
+                "@/services/manager-notifier.service"
+              );
+              await notifyIncomingMessage(supabaseAdmin as any, {
+                phone: customerPhone,
+                guestName: name || null,
+                body: message,
+                messageId,
+                threadId: null,
+                hasAttachment: !!attachmentUrl,
+              });
+            } catch (e) {
+              console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
+            }
+          })();
+          const waitUntil = getWaitUntil();
+          if (waitUntil) waitUntil(notifyTask);
+          // else: biarkan berjalan paralel (dev/test runtime), tidak perlu await.
+        }
+
+
+
         // ── NEW SESSION DETECTION ─────────────────────────────────────────
         // Cek apakah ini sesi percakapan baru (gap >15 menit sejak pesan
         // terakhir, atau thread baru sama sekali). Jika ya, kirim notifikasi

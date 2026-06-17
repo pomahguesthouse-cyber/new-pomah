@@ -91,7 +91,12 @@ import {
   type HomepageConfig,
   type HeroSlide,
 } from "@/admin/modules/homepage/homepage.functions";
-import { LAYER_MIN, LAYER_MAX, HOME_SECTION_LABELS, mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import {
+  LAYER_MIN,
+  LAYER_MAX,
+  HOME_SECTION_LABELS,
+  mergeHomepageConfig,
+} from "@/admin/modules/homepage/homepage.config";
 
 export const Route = createFileRoute("/admin/pages")({
   component: HomepageBuilder,
@@ -100,26 +105,51 @@ export const Route = createFileRoute("/admin/pages")({
 const MEDIA_BUCKET = "room-images";
 const MEDIA_PREFIX = "media";
 
-type SectionKey = "header" | "hero" | "bookingHero" | "datepicker" | "badges" | "story" | "reviews" | "carousel" | "facilities" | "lokasi" | "news" | "cta" | "order";
+type SectionKey =
+  | "header"
+  | "hero"
+  | "bookingHero"
+  | "datepicker"
+  | "badges"
+  | "story"
+  | "reviews"
+  | "carousel"
+  | "facilities"
+  | "lokasi"
+  | "news"
+  | "cta"
+  | "order";
+type HomeOrderKey = HomepageConfig["sectionOrder"][number];
+
+const ALL_HOME_ORDER_KEYS: HomeOrderKey[] = [
+  "badges",
+  "story",
+  "reviews",
+  "rooms",
+  "facilities",
+  "lokasi",
+  "news",
+  "cta",
+];
 
 const SECTIONS: {
   key: SectionKey;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
-  { key: "header",        label: "Header",       icon: LayoutPanelTop     },
-  { key: "hero",          label: "Hero Slider",   icon: GalleryHorizontal  },
-  { key: "bookingHero",   label: "Booking Hero",  icon: GalleryHorizontal  },
-  { key: "datepicker",    label: "Date Picker",   icon: CalendarCheck      },
-  { key: "badges",        label: "Ikon Fitur",    icon: Star               },
-  { key: "story",         label: "Teks",          icon: Type               },
-  { key: "reviews",       label: "Google Rating", icon: MessageSquare      },
-  { key: "carousel",      label: "Our Room",      icon: RectangleHorizontal},
-  { key: "facilities",    label: "Fasilitas",     icon: LayoutPanelTop     },
-  { key: "lokasi",        label: "Lokasi",        icon: MapPin             },
-  { key: "news",          label: "Berita",        icon: FileText           },
-  { key: "cta",           label: "CTA Banner",    icon: Play               },
-  { key: "order",         label: "Urutan",        icon: ListOrdered        },
+  { key: "header", label: "Header", icon: LayoutPanelTop },
+  { key: "hero", label: "Hero Slider", icon: GalleryHorizontal },
+  { key: "bookingHero", label: "Booking Hero", icon: GalleryHorizontal },
+  { key: "datepicker", label: "Date Picker", icon: CalendarCheck },
+  { key: "badges", label: "Ikon Fitur", icon: Star },
+  { key: "story", label: "Teks", icon: Type },
+  { key: "reviews", label: "Google Rating", icon: MessageSquare },
+  { key: "carousel", label: "Our Room", icon: RectangleHorizontal },
+  { key: "facilities", label: "Fasilitas", icon: LayoutPanelTop },
+  { key: "lokasi", label: "Lokasi", icon: MapPin },
+  { key: "news", label: "Berita", icon: FileText },
+  { key: "cta", label: "CTA Banner", icon: Play },
+  { key: "order", label: "Urutan", icon: ListOrdered },
 ];
 
 /**
@@ -157,7 +187,7 @@ function HomepageBuilder() {
   // Active page in the Site Menu: "home" or a landing-page id.
   const [activePageId, setActivePageId] = useState<string>("home");
   const [activeMenuTab, setActiveMenuTab] = useState<"PAGES" | "GLOBAL">("PAGES");
-  const activeLp = activePageId === "home" ? null : pages.find((p) => p.id === activePageId) ?? null;
+  const activeLp = activePageId === "home" ? null : (pages.find((p) => p.id === activePageId) ?? null);
 
   const pageSectionsQuery = useQuery({
     queryKey: ["page-builder-sections", activeLp?.id],
@@ -186,10 +216,18 @@ function HomepageBuilder() {
 
   // "Site Pages and Menu" modal (Wix-style).
   const [pagesOpen, setPagesOpen] = useState(false);
-  const openPageSettings = (id: string) => { setActivePageId(id); setPagesOpen(true); };
-  
-  const activeName = activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
-  const previewSrc = activeLp ? `/lp/${activeLp.slug}?builder=1` : activePageId === "book" ? "/book?builder=1" : "/?builder=1";
+  const openPageSettings = (id: string) => {
+    setActivePageId(id);
+    setPagesOpen(true);
+  };
+
+  const activeName =
+    activePageId === "home" ? "Home" : activePageId === "book" ? "Booking Page" : (activeLp?.title ?? "Home");
+  const previewSrc = activeLp
+    ? `/lp/${activeLp.slug}?builder=1`
+    : activePageId === "book"
+      ? "/book?builder=1"
+      : "/?builder=1";
 
   // If the active LP vanished (deleted), fall back to home.
   useEffect(() => {
@@ -262,7 +300,12 @@ function HomepageBuilder() {
   const handleAddPage = async () => {
     const title = window.prompt("Judul halaman baru:", "Halaman Baru");
     if (!title || !title.trim()) return;
-    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 80);
     try {
       const res = await createSeoLandingPage({
         data: { title: title.trim(), slug, hero_cta_text: "Pesan Sekarang", hero_cta_url: "/book", published: false },
@@ -328,9 +371,10 @@ function HomepageBuilder() {
     }
   };
 
-  const visibleSections = activePageId === "book" 
-    ? SECTIONS.filter(s => ["header", "bookingHero"].includes(s.key))
-    : SECTIONS.filter(s => s.key !== "bookingHero");
+  const visibleSections =
+    activePageId === "book"
+      ? SECTIONS.filter((s) => ["header", "bookingHero"].includes(s.key))
+      : SECTIONS.filter((s) => s.key !== "bookingHero");
 
   const active = visibleSections.find((s) => s.key === section) || visibleSections[0];
   const editingCfg = activeLp?.homepage_config ? pageCfg : cfg;
@@ -348,9 +392,7 @@ function HomepageBuilder() {
             </Link>
           </Button>
           <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-              Homepage Builder
-            </p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Homepage Builder</p>
             <h1 className="text-lg font-semibold tracking-tight">Page Builder</h1>
           </div>
           {/* Page selector — opens the "Site Pages and Menu" modal */}
@@ -358,7 +400,9 @@ function HomepageBuilder() {
             <span className="text-xs text-muted-foreground">Page:</span>
             <button
               type="button"
-              onClick={() => { setPagesOpen(true); }}
+              onClick={() => {
+                setPagesOpen(true);
+              }}
               className="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
             >
               {activeName}
@@ -373,7 +417,9 @@ function HomepageBuilder() {
               onClick={() => setActiveMode("desktop")}
               className={cn(
                 "rounded-sm px-3 py-1.5 text-xs font-medium transition",
-                activeMode === "desktop" ? "bg-stone-200 text-stone-900 shadow-sm" : "text-muted-foreground hover:bg-stone-100 hover:text-foreground"
+                activeMode === "desktop"
+                  ? "bg-stone-200 text-stone-900 shadow-sm"
+                  : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
               )}
             >
               Desktop
@@ -383,7 +429,9 @@ function HomepageBuilder() {
               onClick={() => setActiveMode("mobile")}
               className={cn(
                 "rounded-sm px-3 py-1.5 text-xs font-medium transition",
-                activeMode === "mobile" ? "bg-stone-200 text-stone-900 shadow-sm" : "text-muted-foreground hover:bg-stone-100 hover:text-foreground"
+                activeMode === "mobile"
+                  ? "bg-stone-200 text-stone-900 shadow-sm"
+                  : "text-muted-foreground hover:bg-stone-100 hover:text-foreground",
               )}
             >
               Mobile
@@ -424,7 +472,7 @@ function HomepageBuilder() {
               "transition-all duration-300 overflow-hidden shadow-xl border border-border bg-white relative",
               activeMode === "mobile"
                 ? "w-[390px] h-[800px] border-[12px] border-stone-850 rounded-[36px]"
-                : "w-full max-w-5xl rounded-xl"
+                : "w-full max-w-5xl rounded-xl",
             )}
           >
             {activeMode === "mobile" && (
@@ -439,9 +487,7 @@ function HomepageBuilder() {
               src={previewSrc}
               className={cn(
                 "w-full transition-all duration-300",
-                activeMode === "mobile" 
-                  ? "h-[776px] pt-4" 
-                  : "h-[calc(100vh-9rem)]"
+                activeMode === "mobile" ? "h-[776px] pt-4" : "h-[calc(100vh-9rem)]",
               )}
             />
           </div>
@@ -453,13 +499,22 @@ function HomepageBuilder() {
             <>
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="truncate text-sm font-semibold">Edit — {activeLp.title}</p>
-                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
-                  onClick={() => openPageSettings(activeLp.id)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => openPageSettings(activeLp.id)}
+                >
                   <Settings2 className="h-3.5 w-3.5" /> SEO
                 </Button>
               </div>
               <div className="flex-1 overflow-y-auto p-3">
-                <LpPageBuilder sections={lpSections} onChange={setLpSections} activeMode={activeMode} setActiveMode={setActiveMode} />
+                <LpPageBuilder
+                  sections={lpSections}
+                  onChange={setLpSections}
+                  activeMode={activeMode}
+                  setActiveMode={setActiveMode}
+                />
               </div>
             </>
           ) : (
@@ -473,16 +528,16 @@ function HomepageBuilder() {
                     </span>
                   )}
                 </div>
-                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs"
-                  onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs"
+                  onClick={() => openPageSettings(activePageId === "book" ? "book" : "home")}
+                >
                   <Settings2 className="h-3.5 w-3.5" /> SEO
                 </Button>
               </div>
-              <SectionSlider
-                sections={visibleSections}
-                active={section}
-                onSelect={(k) => setSection(k)}
-              />
+              <SectionSlider sections={visibleSections} active={section} onSelect={(k) => setSection(k)} />
               {sectionSupportsLayout(section) && (
                 <SectionLayoutControls section={section} cfg={editingCfg} setCfg={setEditingCfg} />
               )}
@@ -490,31 +545,31 @@ function HomepageBuilder() {
                 {isLoading ? (
                   <p className="p-6 text-sm text-muted-foreground">Memuat…</p>
                 ) : section === "header" ? (
-                   <HeaderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <HeaderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "hero" ? (
-                   <HeroTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <HeroTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "bookingHero" ? (
-                   <HeroTab cfg={editingCfg} setCfg={setEditingCfg} isBooking activeMode={activeMode} />
+                  <HeroTab cfg={editingCfg} setCfg={setEditingCfg} isBooking activeMode={activeMode} />
                 ) : section === "datepicker" ? (
-                   <DatePickerTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <DatePickerTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "badges" ? (
-                   <BadgesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <BadgesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "story" ? (
-                   <StoryTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <StoryTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "reviews" ? (
-                   <ReviewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <ReviewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "facilities" ? (
-                   <FacilitiesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <FacilitiesTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "lokasi" ? (
-                   <LokasiTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <LokasiTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "news" ? (
-                   <NewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <NewsTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "cta" ? (
-                   <CtaTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <CtaTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : section === "order" ? (
-                   <OrderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <OrderTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 ) : (
-                   <CarouselTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
+                  <CarouselTab cfg={editingCfg} setCfg={setEditingCfg} activeMode={activeMode} />
                 )}
               </div>
             </>
@@ -530,13 +585,19 @@ function HomepageBuilder() {
         activePageId={activePageId}
         settingsPageId={null}
         onSettingsPage={() => {}}
-        onSelect={(id) => { setActivePageId(id); setPreviewKey((k) => k + 1); }}
+        onSelect={(id) => {
+          setActivePageId(id);
+          setPreviewKey((k) => k + 1);
+        }}
         onAdd={handleAddPage}
         onDelete={handleDeletePage}
         onDuplicate={handleDuplicatePage}
         onDuplicateSystem={handleDuplicateSystemPage}
         onRename={(p) => setRenameTarget(p)}
-        onSaved={() => { lpQuery.refetch(); setPreviewKey((k) => k + 1); }}
+        onSaved={() => {
+          lpQuery.refetch();
+          setPreviewKey((k) => k + 1);
+        }}
         homeCfg={cfg}
         propertyId={data?.id ?? null}
         duplicatingId={duplicating}
@@ -567,15 +628,7 @@ type TabProps = {
   activeMode?: "desktop" | "mobile";
 };
 
-function Section({
-  title,
-  desc,
-  children,
-}: {
-  title: string;
-  desc?: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-4 p-4">
       <div>
@@ -621,9 +674,7 @@ function LayerArrange({ value, onChange }: { value: number; onChange: (v: number
           </Button>
         ))}
       </div>
-      <p className="text-[10px] text-muted-foreground">
-        Atur bagian ini berada di depan atau di belakang bagian lain.
-      </p>
+      <p className="text-[10px] text-muted-foreground">Atur bagian ini berada di depan atau di belakang bagian lain.</p>
     </FieldRow>
   );
 }
@@ -694,11 +745,7 @@ function ColorField({ value, onChange }: { value: string; onChange: (v: string) 
         onChange={(e) => onChange(e.target.value)}
         className="h-9 w-10 shrink-0 cursor-pointer rounded border border-border"
       />
-      <Input
-        value={value}
-        className="font-mono text-sm"
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <Input value={value} className="font-mono text-sm" onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
@@ -724,8 +771,8 @@ function ImageField({
   kind?: "image" | "video";
 }) {
   const ref = useRef<HTMLInputElement>(null);
-  const [busy,        setBusy]        = useState(false);
-  const [pickerOpen,  setPickerOpen]  = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const isVideo = kind === "video";
 
   return (
@@ -774,8 +821,13 @@ function ImageField({
               }
             }}
           />
-          <Button size="sm" variant="outline" className="h-7 gap-1.5" disabled={busy}
-            onClick={() => ref.current?.click()}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5"
+            disabled={busy}
+            onClick={() => ref.current?.click()}
+          >
             {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
             {busy ? "Mengupload…" : "Upload"}
           </Button>
@@ -790,7 +842,10 @@ function ImageField({
       <MediaPicker
         open={pickerOpen}
         kind={isVideo ? "video" : "image"}
-        onPick={(url) => { onChange(url); setPickerOpen(false); }}
+        onPick={(url) => {
+          onChange(url);
+          setPickerOpen(false);
+        }}
         onClose={() => setPickerOpen(false)}
       />
     </div>
@@ -819,9 +874,7 @@ function SectionSlider({
 
   // Keep the active tab visible after a programmatic change.
   useEffect(() => {
-    const el = scrollRef.current?.querySelector<HTMLButtonElement>(
-      `button[data-section="${active}"]`,
-    );
+    const el = scrollRef.current?.querySelector<HTMLButtonElement>(`button[data-section="${active}"]`);
     el?.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
   }, [active]);
 
@@ -855,9 +908,7 @@ function SectionSlider({
             )}
           >
             <s.icon className="h-4 w-4" />
-            <span className="text-[8px] font-medium uppercase tracking-wide leading-tight text-center">
-              {s.label}
-            </span>
+            <span className="text-[8px] font-medium uppercase tracking-wide leading-tight text-center">{s.label}</span>
           </button>
         ))}
       </div>
@@ -932,17 +983,13 @@ function SectionLayoutControls({
     <div className="border-b border-border bg-muted/30 px-3 py-2">
       <div className="flex flex-wrap items-end gap-x-4 gap-y-2 text-xs">
         <div className="flex items-center gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Align
-          </span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Align</span>
           <Align val="left" icon={AlignLeft} label="Kiri" />
           <Align val="center" icon={AlignCenter} label="Tengah" />
           <Align val="right" icon={AlignRight} label="Kanan" />
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Padding atas
-          </label>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Padding atas</label>
           <input
             type="number"
             min={0}
@@ -959,9 +1006,7 @@ function SectionLayoutControls({
           <span className="text-[10px] text-muted-foreground">px</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Padding bawah
-          </label>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Padding bawah</label>
           <input
             type="number"
             min={0}
@@ -970,8 +1015,7 @@ function SectionLayoutControls({
             placeholder="auto"
             onChange={(e) =>
               update({
-                paddingBottom:
-                  e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)),
+                paddingBottom: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)),
               })
             }
             className="h-8 w-16 rounded-md border border-input bg-background px-2 text-xs"
@@ -979,14 +1023,14 @@ function SectionLayoutControls({
           <span className="text-[10px] text-muted-foreground">px</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            Background
-          </label>
+          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Background</label>
           <input
             type="color"
-            value={layout.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(layout.backgroundColor)
-              ? layout.backgroundColor
-              : "#ffffff"}
+            value={
+              layout.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(layout.backgroundColor)
+                ? layout.backgroundColor
+                : "#ffffff"
+            }
             onChange={(e) => update({ backgroundColor: e.target.value })}
             className="h-8 w-8 cursor-pointer rounded-md border border-input bg-background p-0.5"
             title="Pilih warna"
@@ -995,9 +1039,7 @@ function SectionLayoutControls({
             type="text"
             value={layout.backgroundColor ?? ""}
             placeholder="auto"
-            onChange={(e) =>
-              update({ backgroundColor: e.target.value.trim() || undefined })
-            }
+            onChange={(e) => update({ backgroundColor: e.target.value.trim() || undefined })}
             className="h-8 w-24 rounded-md border border-input bg-background px-2 text-xs font-mono"
           />
           {layout.backgroundColor && (
@@ -1018,9 +1060,7 @@ function SectionLayoutControls({
             onChange={(e) => update({ uppercase: e.target.checked ? true : undefined })}
             className="h-4 w-4 cursor-pointer accent-teal-700"
           />
-          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-            CAPSLOCK
-          </span>
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">CAPSLOCK</span>
         </label>
         {(layout.textAlign ||
           layout.paddingTop != null ||
@@ -1056,10 +1096,7 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
     setCfg((c) => ({ ...c, header: { ...c.header, ...patch } }));
 
   return (
-    <Section
-      title="Desain Header"
-      desc="Pilih gaya header, lalu sesuaikan warna, tombol, dan menu navigasi."
-    >
+    <Section title="Desain Header" desc="Pilih gaya header, lalu sesuaikan warna, tombol, dan menu navigasi.">
       <div className="space-y-2">
         <Label className="text-xs font-medium">Gaya header</Label>
         <div className="grid grid-cols-2 gap-2">
@@ -1110,9 +1147,7 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
         <div>
           <p className="text-sm font-medium">Header transparan</p>
-          <p className="text-xs text-muted-foreground">
-            Header tembus pandang dan menumpuk di atas hero.
-          </p>
+          <p className="text-xs text-muted-foreground">Header tembus pandang dan menumpuk di atas hero.</p>
         </div>
         <Switch checked={header.transparent} onCheckedChange={(v) => set({ transparent: v })} />
       </div>
@@ -1169,9 +1204,7 @@ function HeaderTab({ cfg, setCfg }: TabProps) {
               onClick={() => set({ scrollBehavior: value })}
               className={cn(
                 "rounded-lg border p-3 text-left transition",
-                header.scrollBehavior === value
-                  ? "border-teal-600 bg-teal-50"
-                  : "border-border hover:bg-muted",
+                header.scrollBehavior === value ? "border-teal-600 bg-teal-50" : "border-border hover:bg-muted",
               )}
             >
               <p className="text-xs font-semibold">{title}</p>
@@ -1274,24 +1307,13 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
   };
 
   return (
-    <Section
-      title="Desain Hero Slider"
-      desc="Banner berganti otomatis di bagian paling atas halaman."
-    >
+    <Section title="Desain Hero Slider" desc="Banner berganti otomatis di bagian paling atas halaman.">
       <div className="grid grid-cols-2 gap-3">
         <FieldRow label="Kecepatan slide (ms)">
-          <Input
-            type="number"
-            value={hero.autoplayMs}
-            onChange={(e) => set({ autoplayMs: Number(e.target.value) })}
-          />
+          <Input type="number" value={hero.autoplayMs} onChange={(e) => set({ autoplayMs: Number(e.target.value) })} />
         </FieldRow>
         <FieldRow label="Tinggi banner (px)">
-          <Input
-            type="number"
-            value={hero.height}
-            onChange={(e) => set({ height: Number(e.target.value) })}
-          />
+          <Input type="number" value={hero.height} onChange={(e) => set({ height: Number(e.target.value) })} />
         </FieldRow>
       </div>
 
@@ -1308,9 +1330,7 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
       <FieldRow label="Animasi transisi antar slide">
         <select
           value={hero.transition}
-          onChange={(e) =>
-            set({ transition: e.target.value as HomepageConfig["hero"]["transition"] })
-          }
+          onChange={(e) => set({ transition: e.target.value as HomepageConfig["hero"]["transition"] })}
           className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="fade">Fade — memudar</option>
@@ -1357,14 +1377,8 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
             </div>
             <Label className="text-[10px] text-muted-foreground">Gambar</Label>
             <ImageField value={slide.imageUrl} onChange={(url) => setSlide(i, { imageUrl: url })} />
-            <Label className="text-[10px] text-muted-foreground">
-              Video (opsional — diutamakan di atas gambar)
-            </Label>
-            <ImageField
-              kind="video"
-              value={slide.videoUrl}
-              onChange={(url) => setSlide(i, { videoUrl: url })}
-            />
+            <Label className="text-[10px] text-muted-foreground">Video (opsional — diutamakan di atas gambar)</Label>
+            <ImageField kind="video" value={slide.videoUrl} onChange={(url) => setSlide(i, { videoUrl: url })} />
             <Input
               value={slide.heading}
               placeholder="Judul"
@@ -1400,7 +1414,7 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
         maxSize={96}
         onFamilyChange={(v) => set({ fontFamily: v })}
         onStyleChange={(v) => set({ fontStyle: v })}
-        onSizeChange={(v) => activeMode === "mobile" ? set({ fontSizeMobile: v }) : set({ fontSize: v })}
+        onSizeChange={(v) => (activeMode === "mobile" ? set({ fontSizeMobile: v }) : set({ fontSize: v }))}
       />
 
       <FieldRow label="Warna Judul">
@@ -1422,10 +1436,7 @@ function DatePickerTab({ cfg, setCfg }: TabProps) {
     setCfg((c) => ({ ...c, datePicker: { ...c.datePicker, ...patch } }));
 
   return (
-    <Section
-      title="Widget Date Picker"
-      desc="Kotak pilih tanggal check-in / check-out untuk memulai pemesanan."
-    >
+    <Section title="Widget Date Picker" desc="Kotak pilih tanggal check-in / check-out untuk memulai pemesanan.">
       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
         <div>
           <p className="text-sm font-medium">Tampilkan widget</p>
@@ -1512,15 +1523,13 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
                 </Button>
               )}
             </div>
-            
+
             <FieldRow label="Pilih Ikon">
               <select
                 className="w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 value={item.iconName}
                 onChange={(e) =>
-                  setItems(
-                    badges.items.map((x, j) => (j === i ? { ...x, iconName: e.target.value } : x))
-                  )
+                  setItems(badges.items.map((x, j) => (j === i ? { ...x, iconName: e.target.value } : x)))
                 }
               >
                 <option value="Star">Bintang (Star)</option>
@@ -1539,11 +1548,7 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
               <FieldRow label="Gambar Ikon (Media Library)">
                 <ImageField
                   value={item.iconUrl || ""}
-                  onChange={(url) =>
-                    setItems(
-                      badges.items.map((x, j) => (j === i ? { ...x, iconUrl: url } : x))
-                    )
-                  }
+                  onChange={(url) => setItems(badges.items.map((x, j) => (j === i ? { ...x, iconUrl: url } : x)))}
                 />
               </FieldRow>
             )}
@@ -1551,22 +1556,14 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
             <FieldRow label="Nama Fitur">
               <Input
                 value={item.title}
-                onChange={(e) =>
-                  setItems(
-                    badges.items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x))
-                  )
-                }
+                onChange={(e) => setItems(badges.items.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
               />
             </FieldRow>
 
             <FieldRow label="Deskripsi">
               <Input
                 value={item.desc}
-                onChange={(e) =>
-                  setItems(
-                    badges.items.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x))
-                  )
-                }
+                onChange={(e) => setItems(badges.items.map((x, j) => (j === i ? { ...x, desc: e.target.value } : x)))}
               />
             </FieldRow>
           </div>
@@ -1596,8 +1593,7 @@ function BadgesTab({ cfg, setCfg }: TabProps) {
 
 function StoryTab({ cfg, setCfg }: TabProps) {
   const story = cfg.story;
-  const set = (patch: Partial<HomepageConfig["story"]>) =>
-    setCfg((c) => ({ ...c, story: { ...c.story, ...patch } }));
+  const set = (patch: Partial<HomepageConfig["story"]>) => setCfg((c) => ({ ...c, story: { ...c.story, ...patch } }));
   return (
     <Section title="Konten Teks" desc="Judul (H1) dan blok teks bagian 'Your Perfect Stay'.">
       <FieldRow label="Judul (H1)">
@@ -1661,9 +1657,11 @@ function StoryTab({ cfg, setCfg }: TabProps) {
 }
 
 function OrderTab({ cfg, setCfg }: TabProps) {
-  const order = cfg.sectionOrder;
+  const order = cfg.sectionOrder ?? [];
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+
+  const missingSections = ALL_HOME_ORDER_KEYS.filter((key) => !order.includes(key));
 
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= order.length || to >= order.length) return;
@@ -1673,10 +1671,31 @@ function OrderTab({ cfg, setCfg }: TabProps) {
     setCfg((c) => ({ ...c, sectionOrder: next }));
   };
 
+  const deleteSection = (key: HomeOrderKey) => {
+    if (!confirm(`Hapus section "${HOME_SECTION_LABELS[key]}" dari halaman ini?`)) return;
+
+    setCfg((c) => ({
+      ...c,
+      sectionOrder: (c.sectionOrder ?? []).filter((x) => x !== key),
+    }));
+
+    toast.success("Section berhasil dihapus. Klik Simpan untuk menyimpan perubahan.");
+  };
+
+  const addSection = (key: HomeOrderKey) => {
+    setCfg((c) => {
+      const current = c.sectionOrder ?? [];
+      if (current.includes(key)) return c;
+      return { ...c, sectionOrder: [...current, key] };
+    });
+
+    toast.success("Section ditambahkan. Klik Simpan untuk menyimpan perubahan.");
+  };
+
   return (
     <Section
       title="Urutan Section"
-      desc="Seret kartu untuk mengubah urutan tampil di halaman depan. Hero, date picker, dan footer tetap di posisinya."
+      desc="Seret kartu untuk mengubah urutan tampil. Gunakan tombol hapus untuk menyembunyikan section dari halaman aktif."
     >
       <div className="space-y-2">
         {order.map((key, i) => (
@@ -1708,12 +1727,47 @@ function OrderTab({ cfg, setCfg }: TabProps) {
             )}
           >
             <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium">
+            <span className="flex-1 text-sm font-medium">
               {i + 1}. {HOME_SECTION_LABELS[key]}
             </span>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              title={`Hapus ${HOME_SECTION_LABELS[key]}`}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteSection(key);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         ))}
       </div>
+
+      {missingSections.length > 0 && (
+        <div className="mt-5 space-y-2 border-t border-border pt-4">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tambah Section</Label>
+          <div className="grid grid-cols-1 gap-2">
+            {missingSections.map((key) => (
+              <Button
+                key={key}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="justify-start gap-1.5"
+                onClick={() => addSection(key)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {HOME_SECTION_LABELS[key]}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
     </Section>
   );
 }
@@ -1745,11 +1799,7 @@ function LokasiTab({ cfg, setCfg }: TabProps) {
         </FieldRow>
       </div>
       <FieldRow label="Teks di bawah judul">
-        <Textarea
-          rows={2}
-          value={lok.subheading}
-          onChange={(e) => set({ subheading: e.target.value })}
-        />
+        <Textarea rows={2} value={lok.subheading} onChange={(e) => set({ subheading: e.target.value })} />
       </FieldRow>
       <FieldRow label="Judul kartu lokasi terdekat">
         <Input value={lok.nearbyTitle} onChange={(e) => set({ nearbyTitle: e.target.value })} />
@@ -1788,7 +1838,9 @@ function LokasiTab({ cfg, setCfg }: TabProps) {
               <Input
                 placeholder="Jarak (mis. 8 km)"
                 value={n.distance}
-                onChange={(e) => setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, distance: e.target.value } : x)))}
+                onChange={(e) =>
+                  setNearby(lok.nearby.map((x, j) => (j === i ? { ...x, distance: e.target.value } : x)))
+                }
               />
               <Input
                 placeholder="Waktu (mis. ~13 menit)"
@@ -1822,11 +1874,7 @@ function FacilitiesTab({ cfg, setCfg }: TabProps) {
         <Input value={fac.heading} onChange={(e) => set({ heading: e.target.value })} />
       </FieldRow>
       <FieldRow label="Deskripsi">
-        <Textarea
-          rows={2}
-          value={fac.subheading}
-          onChange={(e) => set({ subheading: e.target.value })}
-        />
+        <Textarea rows={2} value={fac.subheading} onChange={(e) => set({ subheading: e.target.value })} />
       </FieldRow>
       <div className="border-t border-border my-4 pt-4 space-y-4">
         <FontStyleFields
@@ -1849,19 +1897,14 @@ function FacilitiesTab({ cfg, setCfg }: TabProps) {
 
 function NewsTab({ cfg, setCfg }: TabProps) {
   const news = cfg.news;
-  const set = (patch: Partial<HomepageConfig["news"]>) =>
-    setCfg((c) => ({ ...c, news: { ...c.news, ...patch } }));
+  const set = (patch: Partial<HomepageConfig["news"]>) => setCfg((c) => ({ ...c, news: { ...c.news, ...patch } }));
   return (
     <Section title="Berita & Acara" desc="Ubah judul dan teks penjelasan bagian Berita & Event.">
       <FieldRow label="Judul Section">
         <Input value={news.heading} onChange={(e) => set({ heading: e.target.value })} />
       </FieldRow>
       <FieldRow label="Deskripsi">
-        <Textarea
-          rows={2}
-          value={news.subheading}
-          onChange={(e) => set({ subheading: e.target.value })}
-        />
+        <Textarea rows={2} value={news.subheading} onChange={(e) => set({ subheading: e.target.value })} />
       </FieldRow>
       <div className="border-t border-border my-4 pt-4 space-y-4">
         <FontStyleFields
@@ -1912,8 +1955,7 @@ function ReviewsTab({ cfg, setCfg }: TabProps) {
 
 function CtaTab({ cfg, setCfg }: TabProps) {
   const cta = cfg.cta;
-  const set = (patch: Partial<HomepageConfig["cta"]>) =>
-    setCfg((c) => ({ ...c, cta: { ...c.cta, ...patch } }));
+  const set = (patch: Partial<HomepageConfig["cta"]>) => setCfg((c) => ({ ...c, cta: { ...c.cta, ...patch } }));
   return (
     <Section title="CTA Banner" desc="Ubah judul banner ajakan bertindak (CTA).">
       <FieldRow label="Judul Section">
@@ -1949,11 +1991,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
         <Input value={rc.heading} onChange={(e) => set({ heading: e.target.value })} />
       </FieldRow>
       <FieldRow label="Teks di bawah judul">
-        <Textarea
-          rows={2}
-          value={rc.subheading}
-          onChange={(e) => set({ subheading: e.target.value })}
-        />
+        <Textarea rows={2} value={rc.subheading} onChange={(e) => set({ subheading: e.target.value })} />
       </FieldRow>
       <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
         <div>
@@ -1973,11 +2011,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
         />
       </FieldRow>
       <FieldRow label="Kecepatan slider — waktu antar slide (ms)">
-        <Input
-          type="number"
-          value={rc.slideMs}
-          onChange={(e) => set({ slideMs: Number(e.target.value) })}
-        />
+        <Input type="number" value={rc.slideMs} onChange={(e) => set({ slideMs: Number(e.target.value) })} />
       </FieldRow>
       <FieldRow label="Warna latar belakang">
         <ColorField value={rc.bgColor ?? "#f3ece0"} onChange={(v) => set({ bgColor: v })} />
@@ -2024,12 +2058,22 @@ function RenamePageDialog({
   const [saving, setSaving] = useState(false);
 
   const handleSlugFromTitle = (t: string) => {
-    const s = t.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 80);
+    const s = t
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 80);
     setSlug(s);
   };
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Rename Halaman</DialogTitle>
@@ -2040,7 +2084,10 @@ function RenamePageDialog({
             <Label className="text-xs">Judul Halaman</Label>
             <Input
               value={title}
-              onChange={(e) => { setTitle(e.target.value); handleSlugFromTitle(e.target.value); }}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                handleSlugFromTitle(e.target.value);
+              }}
               placeholder="Judul halaman"
             />
           </div>
@@ -2056,7 +2103,9 @@ function RenamePageDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Batal</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Batal
+          </Button>
           <Button
             onClick={async () => {
               if (!title.trim() || !slug.trim()) return;
@@ -2114,14 +2163,16 @@ function SiteMenu({
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex p-2 bg-stone-100 border-b border-border">
-        <button 
+        <button
           onClick={() => onMenuTabChange("GLOBAL")}
-          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "GLOBAL" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}>
+          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "GLOBAL" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
+        >
           GLOBAL
         </button>
-        <button 
+        <button
           onClick={() => onMenuTabChange("PAGES")}
-          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "PAGES" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}>
+          className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition ${activeMenuTab === "PAGES" ? "bg-white shadow-sm text-stone-900" : "text-stone-500 hover:text-stone-700"}`}
+        >
           PAGES
         </button>
       </div>
@@ -2129,195 +2180,285 @@ function SiteMenu({
       {activeMenuTab === "PAGES" && (
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <p className="text-sm font-semibold">Site Menu</p>
-          <button type="button" onClick={onAdd}
-            className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900">
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900"
+          >
             <Plus className="h-3.5 w-3.5" /> Add Page
           </button>
         </div>
       )}
-      
+
       {activeMenuTab === "GLOBAL" && (
         <>
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <p className="text-sm font-semibold">Global Sections</p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-header" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-header")}>
-            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Header</span>
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <p className="text-sm font-semibold">Global Sections</p>
           </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-footer" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-footer")}>
-            <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Footer</span>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div
+              className={cn(
+                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                activePageId === "global-header" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+              )}
+              onClick={() => onSelect("global-header")}
+            >
+              <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+              <span className="flex-1 truncate text-xs font-medium text-stone-700">Header</span>
+            </div>
+            <div
+              className={cn(
+                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                activePageId === "global-footer" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+              )}
+              onClick={() => onSelect("global-footer")}
+            >
+              <LayoutPanelTop className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+              <span className="flex-1 truncate text-xs font-medium text-stone-700">Footer</span>
+            </div>
+            <div
+              className={cn(
+                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                activePageId === "global-whatsapp" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+              )}
+              onClick={() => onSelect("global-whatsapp")}
+            >
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+              <span className="flex-1 truncate text-xs font-medium text-stone-700">WhatsApp Float</span>
+            </div>
+            <div
+              className={cn(
+                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                activePageId === "global-cookie" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+              )}
+              onClick={() => onSelect("global-cookie")}
+            >
+              <Check className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+              <span className="flex-1 truncate text-xs font-medium text-stone-700">Cookie Banner</span>
+            </div>
           </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-whatsapp" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-whatsapp")}>
-            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">WhatsApp Float</span>
-          </div>
-          <div
-            className={cn("group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition", activePageId === "global-cookie" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted")}
-            onClick={() => onSelect("global-cookie")}>
-            <Check className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Cookie Banner</span>
-          </div>
-        </div>
         </>
       )}
 
       {activeMenuTab === "PAGES" && (
-      <>
-      <div className="border-b border-border p-2">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari halaman…" className="h-7 pl-7 text-xs" />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {/* Home — present, can duplicate */}
-        <div className="relative">
-          <div
-            className={cn(
-              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-              activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-            )}
-            onClick={() => { setOpenMenuId(null); onSelect("home"); }}>
-            <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
-            {duplicatingId === "home" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
-            <button
-              type="button"
-              title="Opsi halaman"
-              onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === "home" ? null : "home"); }}
-              className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
+        <>
+          <div className="border-b border-border p-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari halaman…"
+                className="h-7 pl-7 text-xs"
+              />
+            </div>
           </div>
-          {/* Dropdown menu */}
-          {openMenuId === "home" && (
-            <div
-              className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
-              onClick={(e) => e.stopPropagation()}>
-              <button type="button"
-                onClick={() => { setOpenMenuId(null); onSeo("home"); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
-                <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
-              </button>
-              <button type="button"
-                onClick={() => { setOpenMenuId(null); onDuplicateSystem("home"); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
-                disabled={!!duplicatingId}>
-                <Copy className="h-3.5 w-3.5" /> Duplicate
-              </button>
-            </div>
-          )}
-        </div>
 
-        {/* Booking Page */}
-        <div className="relative">
-          <div
-            className={cn(
-              "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-              activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-            )}
-            onClick={() => { setOpenMenuId(null); onSelect("book"); }}>
-            <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />
-            <span className="flex-1 truncate text-xs font-medium text-stone-700">Booking Page</span>
-            {duplicatingId === "book" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
-            <button
-              type="button"
-              title="Opsi halaman"
-              onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === "book" ? null : "book"); }}
-              className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          {/* Dropdown menu */}
-          {openMenuId === "book" && (
-            <div
-              className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
-              onClick={(e) => e.stopPropagation()}>
-              <button type="button"
-                onClick={() => { setOpenMenuId(null); onSeo("book"); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
-                <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
-              </button>
-              <button type="button"
-                onClick={() => { setOpenMenuId(null); onDuplicateSystem("book"); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
-                disabled={!!duplicatingId}>
-                <Copy className="h-3.5 w-3.5" /> Duplicate
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Landing pages */}
-        {filtered.map((p) => (
-          <div key={p.id} className="relative">
-            <div
-              className={cn(
-                "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
-                activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
-              )}
-              onClick={() => { setOpenMenuId(null); onSelect(p.id); }}>
-              <Globe className={cn("h-3.5 w-3.5 shrink-0", p.published ? "text-emerald-500" : "text-stone-300")} />
-              <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
-              {duplicatingId === p.id && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
-              <button
-                type="button"
-                title="Opsi halaman"
-                onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === p.id ? null : p.id); }}
-                className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {/* Dropdown menu */}
-            {openMenuId === p.id && (
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {/* Home — present, can duplicate */}
+            <div className="relative">
               <div
-                className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
-                onClick={(e) => e.stopPropagation()}>
-                <button type="button"
-                  onClick={() => { setOpenMenuId(null); onSeo(p.id); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
-                  <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
-                </button>
-                <button type="button"
-                  onClick={() => { setOpenMenuId(null); onDuplicate(p); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
-                  disabled={duplicatingId === p.id}>
-                  <Copy className="h-3.5 w-3.5" /> Duplicate
-                </button>
-                <button type="button"
-                  onClick={() => { setOpenMenuId(null); onRename(p); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
-                  <Pencil className="h-3.5 w-3.5" /> Rename
-                </button>
-                <div className="my-1 border-t border-stone-100" />
-                <button type="button"
-                  onClick={() => { setOpenMenuId(null); onDelete(p); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">
-                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                className={cn(
+                  "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                  activePageId === "home" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+                )}
+                onClick={() => {
+                  setOpenMenuId(null);
+                  onSelect("home");
+                }}
+              >
+                <Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+                <span className="flex-1 truncate text-xs font-medium text-stone-700">Home</span>
+                {duplicatingId === "home" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+                <button
+                  type="button"
+                  title="Opsi halaman"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(openMenuId === "home" ? null : "home");
+                  }}
+                  className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
               </div>
+              {/* Dropdown menu */}
+              {openMenuId === "home" && (
+                <div
+                  className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onSeo("home");
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onDuplicateSystem("home");
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    disabled={!!duplicatingId}
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Duplicate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Booking Page */}
+            <div className="relative">
+              <div
+                className={cn(
+                  "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                  activePageId === "book" ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+                )}
+                onClick={() => {
+                  setOpenMenuId(null);
+                  onSelect("book");
+                }}
+              >
+                <CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />
+                <span className="flex-1 truncate text-xs font-medium text-stone-700">Booking Page</span>
+                {duplicatingId === "book" && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+                <button
+                  type="button"
+                  title="Opsi halaman"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(openMenuId === "book" ? null : "book");
+                  }}
+                  className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {/* Dropdown menu */}
+              {openMenuId === "book" && (
+                <div
+                  className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onSeo("book");
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onDuplicateSystem("book");
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    disabled={!!duplicatingId}
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Duplicate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Landing pages */}
+            {filtered.map((p) => (
+              <div key={p.id} className="relative">
+                <div
+                  className={cn(
+                    "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
+                    activePageId === p.id ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
+                  )}
+                  onClick={() => {
+                    setOpenMenuId(null);
+                    onSelect(p.id);
+                  }}
+                >
+                  <Globe className={cn("h-3.5 w-3.5 shrink-0", p.published ? "text-emerald-500" : "text-stone-300")} />
+                  <span className="flex-1 truncate text-xs font-medium text-stone-700">{p.title}</span>
+                  {duplicatingId === p.id && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
+                  <button
+                    type="button"
+                    title="Opsi halaman"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuId(openMenuId === p.id ? null : p.id);
+                    }}
+                    className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {/* Dropdown menu */}
+                {openMenuId === p.id && (
+                  <div
+                    className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onSeo(p.id);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" /> Edit / SEO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onDuplicate(p);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                      disabled={duplicatingId === p.id}
+                    >
+                      <Copy className="h-3.5 w-3.5" /> Duplicate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onRename(p);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Rename
+                    </button>
+                    <div className="my-1 border-t border-stone-100" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenuId(null);
+                        onDelete(p);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {pages.length === 0 && (
+              <p className="px-2 py-3 text-center text-[11px] text-muted-foreground italic">
+                Belum ada halaman tambahan.
+              </p>
             )}
           </div>
-        ))}
-
-        {pages.length === 0 && (
-          <p className="px-2 py-3 text-center text-[11px] text-muted-foreground italic">
-            Belum ada halaman tambahan.
-          </p>
-        )}
-      </div>
-      </>
+        </>
       )}
     </aside>
   );
@@ -2355,15 +2496,15 @@ function PageSettingsPanel({
   const [tab, setTab] = useState<PageSettingsTab>("access");
   const [saving, setSaving] = useState(false);
 
-  const [slug, setSlug]           = useState("");
+  const [slug, setSlug] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
-  const [metaDesc, setMetaDesc]   = useState("");
-  const [targetKw, setTargetKw]   = useState("");
-  const [ogImage, setOgImage]     = useState("");
+  const [metaDesc, setMetaDesc] = useState("");
+  const [targetKw, setTargetKw] = useState("");
+  const [ogImage, setOgImage] = useState("");
   const [indexable, setIndexable] = useState(true);
-  const [customHead, setCustomHead]   = useState("");
+  const [customHead, setCustomHead] = useState("");
   const [customRobots, setCustomRobots] = useState("");
-  const [jsonLdOn, setJsonLdOn]       = useState(true);
+  const [jsonLdOn, setJsonLdOn] = useState(true);
   const [customJsonLd, setCustomJsonLd] = useState("");
 
   useEffect(() => {
@@ -2399,14 +2540,23 @@ function PageSettingsPanel({
     setSaving(true);
     try {
       if (target.kind === "home" || target.kind === "book") {
-        if (!target.propertyId) { toast.error("Properti belum tersedia."); setSaving(false); return; }
-        
+        if (!target.propertyId) {
+          toast.error("Properti belum tersedia.");
+          setSaving(false);
+          return;
+        }
+
         const newSeo = {
-          metaTitle: metaTitle, metaDescription: metaDesc, targetKeyword: targetKw,
-          ogImageUrl: ogImage, customHead, customRobots,
-          jsonLdEnabled: jsonLdOn, customJsonLd,
+          metaTitle: metaTitle,
+          metaDescription: metaDesc,
+          targetKeyword: targetKw,
+          ogImageUrl: ogImage,
+          customHead,
+          customRobots,
+          jsonLdEnabled: jsonLdOn,
+          customJsonLd,
         };
-        
+
         await updateHomepageConfig({
           data: {
             id: target.propertyId,
@@ -2417,21 +2567,28 @@ function PageSettingsPanel({
           },
         });
       } else {
-        const cleanSlug = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-        if (!cleanSlug) { toast.error("URL halaman (slug) tidak boleh kosong"); setSaving(false); return; }
+        const cleanSlug = slug
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, "");
+        if (!cleanSlug) {
+          toast.error("URL halaman (slug) tidak boleh kosong");
+          setSaving(false);
+          return;
+        }
         await updateSeoLandingPage({
           data: {
             id: target.page.id,
-            slug:             cleanSlug,
-            meta_title:       metaTitle || null,
-            meta_description: metaDesc  || null,
-            target_keyword:   targetKw  || null,
-            og_image_url:     ogImage   || null,
-            published:        indexable,
-            custom_head:      customHead   || null,
-            custom_robots:    customRobots || null,
-            json_ld_enabled:  jsonLdOn,
-            custom_json_ld:   customJsonLd || null,
+            slug: cleanSlug,
+            meta_title: metaTitle || null,
+            meta_description: metaDesc || null,
+            target_keyword: targetKw || null,
+            og_image_url: ogImage || null,
+            published: indexable,
+            custom_head: customHead || null,
+            custom_robots: customRobots || null,
+            json_ld_enabled: jsonLdOn,
+            custom_json_ld: customJsonLd || null,
           },
         });
       }
@@ -2445,10 +2602,10 @@ function PageSettingsPanel({
   };
 
   const tabs: { key: PageSettingsTab; label: string }[] = [
-    { key: "access",   label: "Access"       },
-    { key: "basics",   label: "SEO basics"   },
+    { key: "access", label: "Access" },
+    { key: "basics", label: "SEO basics" },
     { key: "advanced", label: "Advanced SEO" },
-    { key: "social",   label: "Social share" },
+    { key: "social", label: "Social share" },
   ];
 
   return (
@@ -2463,11 +2620,17 @@ function PageSettingsPanel({
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-stone-200 px-3">
         {tabs.map((t) => (
-          <button key={t.key} type="button" onClick={() => setTab(t.key)}
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
             className={cn(
               "px-3 py-2.5 text-xs font-medium transition",
-              tab === t.key ? "border-b-2 border-teal-600 text-teal-700" : "text-muted-foreground hover:text-foreground",
-            )}>
+              tab === t.key
+                ? "border-b-2 border-teal-600 text-teal-700"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
             {t.label}
           </button>
         ))}
@@ -2483,14 +2646,22 @@ function PageSettingsPanel({
                   <div className="flex items-center gap-1 rounded-md border border-input bg-muted px-3 py-2 text-sm">
                     <span className="font-mono text-stone-700">pomahguesthouse.com/{isBook ? "book" : ""}</span>
                   </div>
-                  <p className="mt-0.5 text-[10px] text-muted-foreground">URL halaman {isBook ? "booking" : "depan"} tidak dapat diubah.</p>
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    URL halaman {isBook ? "booking" : "depan"} tidak dapat diubah.
+                  </p>
                 </FieldRow>
                 <div className="rounded-lg border border-border bg-muted/40 px-3 py-2.5">
                   <p className="text-xs font-medium">Halaman selalu publik</p>
-                  <p className="text-[10px] text-muted-foreground">Halaman {isBook ? "booking" : "depan"} selalu dapat diakses & diindeks.</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Halaman {isBook ? "booking" : "depan"} selalu dapat diakses & diindeks.
+                  </p>
                 </div>
-                <a href={isBook ? "/book" : "/"} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
+                <a
+                  href={isBook ? "/book" : "/"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline"
+                >
                   <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
                 </a>
               </>
@@ -2517,8 +2688,12 @@ function PageSettingsPanel({
                   </div>
                   <Switch checked={indexable} onCheckedChange={setIndexable} />
                 </div>
-                <a href={`/lp/${pageSlug}`} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline">
+                <a
+                  href={`/lp/${pageSlug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-teal-700 hover:underline"
+                >
                   <ExternalLink className="h-3.5 w-3.5" /> Buka halaman di tab baru
                 </a>
               </>
@@ -2530,20 +2705,49 @@ function PageSettingsPanel({
         {tab === "basics" && (
           <div className="space-y-4">
             <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-              <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">Preview on Google</p>
-              <p className="text-[12px] text-stone-500">pomahguesthouse.com{isFixedPage ? (isBook ? " › book" : "") : ` › lp › ${pageSlug}`}</p>
-              <p className="text-[15px] font-medium text-blue-700 leading-snug">{metaTitle || pageTitle || "Title tag belum diisi"}</p>
+              <p className="mb-2 text-[10px] font-mono font-bold uppercase tracking-wider text-stone-400">
+                Preview on Google
+              </p>
+              <p className="text-[12px] text-stone-500">
+                pomahguesthouse.com{isFixedPage ? (isBook ? " › book" : "") : ` › lp › ${pageSlug}`}
+              </p>
+              <p className="text-[15px] font-medium text-blue-700 leading-snug">
+                {metaTitle || pageTitle || "Title tag belum diisi"}
+              </p>
               <p className="text-xs text-stone-600 leading-relaxed">
                 {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
               </p>
             </div>
             <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
-              <Input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="Judul di hasil pencarian" />
-              <p className={cn("mt-0.5 text-[10px]", metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground")}>Idealnya 50–60 karakter</p>
+              <Input
+                value={metaTitle}
+                onChange={(e) => setMetaTitle(e.target.value)}
+                placeholder="Judul di hasil pencarian"
+              />
+              <p
+                className={cn(
+                  "mt-0.5 text-[10px]",
+                  metaTitle.length >= 50 && metaTitle.length <= 60 ? "text-emerald-600" : "text-muted-foreground",
+                )}
+              >
+                Idealnya 50–60 karakter
+              </p>
             </FieldRow>
             <FieldRow label={`Meta description (${metaDesc.length}/160)`}>
-              <Textarea value={metaDesc} onChange={(e) => setMetaDesc(e.target.value)} rows={3} placeholder="Deskripsi singkat di hasil pencarian." />
-              <p className={cn("mt-0.5 text-[10px]", metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground")}>Idealnya 120–160 karakter</p>
+              <Textarea
+                value={metaDesc}
+                onChange={(e) => setMetaDesc(e.target.value)}
+                rows={3}
+                placeholder="Deskripsi singkat di hasil pencarian."
+              />
+              <p
+                className={cn(
+                  "mt-0.5 text-[10px]",
+                  metaDesc.length >= 120 && metaDesc.length <= 160 ? "text-emerald-600" : "text-muted-foreground",
+                )}
+              >
+                Idealnya 120–160 karakter
+              </p>
             </FieldRow>
           </div>
         )}
@@ -2552,16 +2756,30 @@ function PageSettingsPanel({
         {tab === "advanced" && (
           <div className="space-y-4">
             <FieldRow label="Kata kunci target">
-              <Input value={targetKw} onChange={(e) => setTargetKw(e.target.value)} placeholder="mis. penginapan wisuda unnes semarang" />
+              <Input
+                value={targetKw}
+                onChange={(e) => setTargetKw(e.target.value)}
+                placeholder="mis. penginapan wisuda unnes semarang"
+              />
             </FieldRow>
             <FieldRow label="Custom Head Scripts">
-              <Textarea value={customHead} onChange={(e) => setCustomHead(e.target.value)} rows={5} className="font-mono text-xs"
-                placeholder={'<meta name="..."> · <script>...</script> · tag verifikasi, analytics, dll.'} />
+              <Textarea
+                value={customHead}
+                onChange={(e) => setCustomHead(e.target.value)}
+                rows={5}
+                className="font-mono text-xs"
+                placeholder={'<meta name="..."> · <script>...</script> · tag verifikasi, analytics, dll.'}
+              />
               <p className="mt-0.5 text-[10px] text-muted-foreground">Disisipkan ke dalam &lt;head&gt; halaman ini.</p>
             </FieldRow>
             <FieldRow label="Custom robots.txt">
-              <Textarea value={customRobots} onChange={(e) => setCustomRobots(e.target.value)} rows={4} className="font-mono text-xs"
-                placeholder={"User-agent: *\nAllow: /"} />
+              <Textarea
+                value={customRobots}
+                onChange={(e) => setCustomRobots(e.target.value)}
+                rows={4}
+                className="font-mono text-xs"
+                placeholder={"User-agent: *\nAllow: /"}
+              />
             </FieldRow>
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
               <div>
@@ -2572,8 +2790,15 @@ function PageSettingsPanel({
             </div>
             {jsonLdOn && (
               <FieldRow label="Custom JSON-LD Schema">
-                <Textarea value={customJsonLd} onChange={(e) => setCustomJsonLd(e.target.value)} rows={8} className="font-mono text-xs"
-                  placeholder={'{\n  "@context": "https://schema.org",\n  "@type": "Hotel",\n  "name": "Pomah Guesthouse"\n}'} />
+                <Textarea
+                  value={customJsonLd}
+                  onChange={(e) => setCustomJsonLd(e.target.value)}
+                  rows={8}
+                  className="font-mono text-xs"
+                  placeholder={
+                    '{\n  "@context": "https://schema.org",\n  "@type": "Hotel",\n  "name": "Pomah Guesthouse"\n}'
+                  }
+                />
                 <p className="mt-0.5 text-[10px] text-muted-foreground">Harus JSON yang valid.</p>
               </FieldRow>
             )}
@@ -2589,7 +2814,11 @@ function PageSettingsPanel({
             </FieldRow>
             <div className="overflow-hidden rounded-lg border border-stone-200">
               <div className="flex h-36 items-center justify-center bg-stone-100">
-                {ogImage ? <img src={ogImage} alt="" className="h-full w-full object-cover" /> : <Images className="h-6 w-6 text-stone-300" />}
+                {ogImage ? (
+                  <img src={ogImage} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Images className="h-6 w-6 text-stone-300" />
+                )}
               </div>
               <div className="bg-white px-3 py-2">
                 <p className="text-[10px] uppercase text-stone-400">pomahguesthouse.com</p>
@@ -2603,7 +2832,17 @@ function PageSettingsPanel({
 
       <div className="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">
         <Button size="sm" className="bg-teal-700 text-white hover:bg-teal-800" disabled={saving} onClick={handleSave}>
-          {saving ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Menyimpan…</> : <><Save className="mr-1.5 h-3.5 w-3.5" />Simpan</>}
+          {saving ? (
+            <>
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              Menyimpan…
+            </>
+          ) : (
+            <>
+              <Save className="mr-1.5 h-3.5 w-3.5" />
+              Simpan
+            </>
+          )}
         </Button>
       </div>
     </div>
@@ -2653,12 +2892,15 @@ function SitePagesModal({
   duplicatingId: string | null;
 }) {
   const [rail, setRail] = useState<SitePagesRail>("menu");
-  const activeLp = activePageId !== "home"
-    ? pages.find((p) => p.id === activePageId) ?? null
-    : null;
+  const activeLp = activePageId !== "home" ? (pages.find((p) => p.id === activePageId) ?? null) : null;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="flex h-[80vh] max-w-5xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b border-stone-200 px-5 py-4">
           <DialogTitle className="text-base">Site Pages and Menu</DialogTitle>
@@ -2668,12 +2910,21 @@ function SitePagesModal({
         <div className="flex min-h-0 flex-1">
           {/* Left rail */}
           <div className="w-40 shrink-0 space-y-1 border-r border-stone-200 bg-stone-50/60 p-3">
-            {([["menu", "Site Menu"], ["dynamic", "Dynamic Pages"]] as const).map(([key, label]) => (
-              <button key={key} type="button" onClick={() => setRail(key)}
+            {(
+              [
+                ["menu", "Site Menu"],
+                ["dynamic", "Dynamic Pages"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRail(key)}
                 className={cn(
                   "w-full rounded-lg px-3 py-2 text-left text-xs font-medium transition",
                   rail === key ? "bg-teal-50 text-teal-800" : "text-stone-600 hover:bg-stone-100",
-                )}>
+                )}
+              >
                 {label}
               </button>
             ))}
@@ -2685,8 +2936,11 @@ function SitePagesModal({
               <>
                 <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
                   <p className="text-sm font-semibold">Site Menu</p>
-                  <button type="button" onClick={onAdd}
-                    className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900">
+                  <button
+                    type="button"
+                    onClick={onAdd}
+                    className="flex items-center gap-1 text-xs font-medium text-teal-700 hover:text-teal-900"
+                  >
                     <Plus className="h-3.5 w-3.5" /> Add Page
                   </button>
                 </div>
@@ -2694,7 +2948,8 @@ function SitePagesModal({
                   {/* Home */}
                   <PageRow
                     icon={<Home className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
-                    label="Home" active={activePageId === "home"}
+                    label="Home"
+                    active={activePageId === "home"}
                     onClick={() => onSelect("home")}
                     onDuplicate={() => onDuplicateSystem("home")}
                     duplicatingId={duplicatingId === "home"}
@@ -2702,15 +2957,18 @@ function SitePagesModal({
                   {/* Booking Page */}
                   <PageRow
                     icon={<CalendarCheck className="h-3.5 w-3.5 shrink-0 text-stone-500" />}
-                    label="Booking Page" active={activePageId === "book"}
+                    label="Booking Page"
+                    active={activePageId === "book"}
                     onClick={() => onSelect("book")}
                     onDuplicate={() => onDuplicateSystem("book")}
                     duplicatingId={duplicatingId === "book"}
                   />
                   {pages.map((p) => (
-                    <PageRow key={p.id}
+                    <PageRow
+                      key={p.id}
                       icon={<FileText className="h-3.5 w-3.5 shrink-0 text-stone-400" />}
-                      label={p.title} active={activePageId === p.id}
+                      label={p.title}
+                      active={activePageId === p.id}
                       published={p.published}
                       onClick={() => onSelect(p.id)}
                       onDelete={() => onDelete(p)}
@@ -2734,9 +2992,17 @@ function SitePagesModal({
           {activeLp ? (
             <PageSettingsPanel target={{ kind: "lp", page: activeLp }} onSaved={onSaved} onClose={onClose} />
           ) : activePageId === "home" ? (
-            <PageSettingsPanel target={{ kind: "home", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={onClose} />
+            <PageSettingsPanel
+              target={{ kind: "home", cfg: homeCfg, propertyId }}
+              onSaved={onSaved}
+              onClose={onClose}
+            />
           ) : activePageId === "book" ? (
-            <PageSettingsPanel target={{ kind: "book", cfg: homeCfg, propertyId }} onSaved={onSaved} onClose={onClose} />
+            <PageSettingsPanel
+              target={{ kind: "book", cfg: homeCfg, propertyId }}
+              onSaved={onSaved}
+              onClose={onClose}
+            />
           ) : null}
         </div>
       </DialogContent>
@@ -2746,9 +3012,19 @@ function SitePagesModal({
 
 /** A single row in the Site Menu list (page name + dropdown with actions). */
 function PageRow({
-  icon, label, active, published, onClick, onDelete, onDuplicate, onRename, duplicatingId,
+  icon,
+  label,
+  active,
+  published,
+  onClick,
+  onDelete,
+  onDuplicate,
+  onRename,
+  duplicatingId,
 }: {
-  icon: React.ReactNode; label: string; active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
   published?: boolean;
   onClick: () => void;
   onDelete?: () => void;
@@ -2766,17 +3042,27 @@ function PageRow({
           "group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition",
           active ? "bg-teal-50 border border-teal-200" : "hover:bg-muted",
         )}
-        onClick={() => { setMenuOpen(false); onClick(); }}>
+        onClick={() => {
+          setMenuOpen(false);
+          onClick();
+        }}
+      >
         {icon}
         <span className="flex-1 truncate text-xs font-medium text-stone-700">{label}</span>
-        {published === false && <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>}
+        {published === false && (
+          <span className="shrink-0 rounded bg-stone-100 px-1 text-[9px] text-stone-400">draft</span>
+        )}
         {duplicatingId && <Loader2 className="h-3 w-3 animate-spin text-teal-600" />}
         {hasActions && (
           <button
             type="button"
             title="Opsi halaman"
-            onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); }}
-            className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition">
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen((o) => !o);
+            }}
+            className="rounded p-0.5 text-stone-400 hover:text-stone-700 opacity-0 group-hover:opacity-100 transition"
+          >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
         )}
@@ -2784,28 +3070,44 @@ function PageRow({
       {menuOpen && hasActions && (
         <div
           className="absolute right-1 top-8 z-50 w-44 rounded-lg border border-border bg-white py-1 shadow-lg"
-          onClick={(e) => e.stopPropagation()}>
+          onClick={(e) => e.stopPropagation()}
+        >
           {onDuplicate && (
-            <button type="button"
-              onClick={() => { setMenuOpen(false); onDuplicate(); }}
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onDuplicate();
+              }}
               disabled={duplicatingId}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted disabled:opacity-50">
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted disabled:opacity-50"
+            >
               <Copy className="h-3.5 w-3.5" /> Duplicate
             </button>
           )}
           {onRename && (
-            <button type="button"
-              onClick={() => { setMenuOpen(false); onRename(); }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted">
+            <button
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onRename();
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-stone-700 hover:bg-muted"
+            >
               <Pencil className="h-3.5 w-3.5" /> Rename
             </button>
           )}
           {onDelete && (
             <>
               <div className="my-1 border-t border-stone-100" />
-              <button type="button"
-                onClick={() => { setMenuOpen(false); onDelete(); }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete();
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+              >
                 <Trash2 className="h-3.5 w-3.5" /> Delete
               </button>
             </>

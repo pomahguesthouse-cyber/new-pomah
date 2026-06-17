@@ -474,6 +474,59 @@ export const updateChatSummary = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/**
+ * Regenerate structured Context Summary (chat_summary_json) untuk satu thread.
+ * Memakai konfigurasi AI properti aktif (Lovable AI Gateway secara default).
+ */
+export const regenerateStructuredSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: prop } = await (supabaseAdmin as any)
+      .from("properties")
+      .select("ai_api_key, ai_base_url, ai_model")
+      .limit(1)
+      .maybeSingle();
+    const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
+    const explicitKey = p.ai_api_key?.trim();
+    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
+    const useLovable = !explicitKey && !!lovableKey;
+    const apiKey = explicitKey || lovableKey;
+    if (!apiKey) throw new Error("AI API key tidak tersedia.");
+    const baseUrl = useLovable
+      ? "https://ai.gateway.lovable.dev/v1"
+      : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+    const cfgModel = p.ai_model?.trim();
+    const model = useLovable
+      ? cfgModel?.includes("/")
+        ? cfgModel
+        : "google/gemini-2.5-flash"
+      : cfgModel || "gpt-4o-mini";
+
+    const { regenerateThreadSummary } = await import("@/services/wa-autoreply.service");
+    const result = await regenerateThreadSummary(supabaseAdmin, data.threadId, {
+      apiKey,
+      baseUrl,
+      model,
+    });
+    if (!result.ok) throw new Error(result.error ?? "Gagal regenerate summary.");
+    return { ok: true, summary: result.summary };
+  });
+
+/**
+ * Hapus context summary (short + structured) untuk satu thread.
+ */
+export const clearChatSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { clearThreadSummary } = await import("@/services/wa-autoreply.service");
+    await clearThreadSummary(supabaseAdmin, data.threadId);
+    return { ok: true };
+  });
+
 // ─── Conversation Monitor Functions ──────────────────────────────────────────
 
 export const getConversationAlerts = createServerFn({ method: "GET" })

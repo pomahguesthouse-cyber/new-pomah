@@ -217,12 +217,15 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
 interface SendOptions {
   eventType:
     | "new_booking"
+    | "booking_updated"
     | "payment_proof"
     | "complaint"
     | "new_session"
+    | "new_message"
     | "bot_loop"
     | "zombie_timeout"
-    | "booking_stuck";
+    | "booking_stuck"
+    | "rpc_failure";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -514,8 +517,145 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 }
 
 /* ------------------------------------------------------------------ */
-/* 2. Payment Proof (with optional Vision OCR enrichment)             */
+/* 1b. Booking Updated                                                */
 /* ------------------------------------------------------------------ */
+
+export interface BookingSnapshot {
+  checkIn: string | null;
+  checkOut: string | null;
+  adults: number | null;
+  children: number | null;
+  /** Daftar label kamar (mis. "Deluxe 101") atau room type bila nomor kosong. */
+  rooms: string[];
+}
+
+/**
+ * Ambil snapshot field yang dipantau untuk diff alert booking_updated.
+ * Caller dipanggil 2x: sebelum & sesudah mutasi.
+ */
+export async function snapshotBookingForDiff(
+  db: Db,
+  bookingId: string,
+): Promise<BookingSnapshot | null> {
+  const { data, error } = await db
+    .from("bookings")
+    .select(
+      "check_in, check_out, adults, children, booking_rooms(rooms(number), room_types(name))",
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const b = data as any;
+  const rooms: string[] = (b.booking_rooms ?? []).map((br: any) => {
+    const room = Array.isArray(br.rooms) ? br.rooms[0] : br.rooms;
+    const rt = Array.isArray(br.room_types) ? br.room_types[0] : br.room_types;
+    const number = room?.number ?? null;
+    const typeName = rt?.name ?? null;
+    if (number && typeName) return `${typeName} ${number}`;
+    return number ?? typeName ?? "Kamar";
+  });
+  rooms.sort();
+  return {
+    checkIn: b.check_in ?? null,
+    checkOut: b.check_out ?? null,
+    adults: typeof b.adults === "number" ? b.adults : null,
+    children: typeof b.children === "number" ? b.children : null,
+    rooms,
+  };
+}
+
+function diffArrays(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return true;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
+  return false;
+}
+
+function shortHash(s: string): string {
+  // FNV-1a 32-bit, cukup untuk dedupe.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(36);
+}
+
+export async function notifyBookingUpdated(
+  db: Db,
+  bookingId: string,
+  before: BookingSnapshot | null,
+  after: BookingSnapshot | null,
+  actor: string,
+): Promise<void> {
+  try {
+    if (!before || !after) return;
+
+    const lines: string[] = [];
+    if (before.checkIn !== after.checkIn || before.checkOut !== after.checkOut) {
+      lines.push(
+        `• Check-in: ${before.checkIn ? fmtDateID(before.checkIn) : "-"} → ${after.checkIn ? fmtDateID(after.checkIn) : "-"}`,
+      );
+      lines.push(
+        `• Check-out: ${before.checkOut ? fmtDateID(before.checkOut) : "-"} → ${after.checkOut ? fmtDateID(after.checkOut) : "-"}`,
+      );
+    }
+    if (before.adults !== after.adults || before.children !== after.children) {
+      lines.push(
+        `• Tamu: ${before.adults ?? "-"} dewasa / ${before.children ?? 0} anak → ${after.adults ?? "-"} dewasa / ${after.children ?? 0} anak`,
+      );
+    }
+    if (diffArrays(before.rooms, after.rooms)) {
+      lines.push(
+        `• Kamar: ${before.rooms.join(", ") || "-"} → ${after.rooms.join(", ") || "-"}`,
+      );
+    }
+
+    if (lines.length === 0) return; // tidak ada perubahan tracked
+
+    const { data: booking, error } = await db
+      .from("bookings")
+      .select("id, reference_code, source, guest_id, guests(full_name)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (error || !booking) return;
+    const b = booking as any;
+    const guestName = b.guests?.full_name ?? "Tamu";
+
+    const message =
+      "✏️ BOOKING UPDATED\n\n" +
+      `Guest: ${guestName}\n` +
+      `Booking: ${b.reference_code ?? b.id}\n` +
+      `Source: ${sourceLabel(b.source)}\n\n` +
+      "Perubahan:\n" +
+      lines.join("\n") +
+      `\n\nDiubah oleh: ${actor}`;
+
+    const { fonnteToken } = await getPropertyTokens(db);
+    const managers = await getActiveManagers(db);
+    if (managers.length === 0) return;
+
+    const changeHash = shortHash(lines.join("|"));
+
+    await Promise.all([
+      fanOut(db, fonnteToken, managers, {
+        eventType: "booking_updated",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (m) => `booking_updated:${b.id}:${changeHash}:${m.id}`,
+      }),
+      fanOutToAgentChannels(db, ["front-office", "manager"], {
+        eventType: "booking_updated",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (agent, chat) =>
+          `booking_updated:${b.id}:${changeHash}:agent:${agent}:${chat}`,
+      }),
+    ]);
+  } catch (e) {
+    console.error("[ManagerNotifier] notifyBookingUpdated error:", e);
+  }
+}
+
 
 import type { PaymentProofResult } from "./payment-proof.service";
 
@@ -1044,4 +1184,175 @@ export async function fanOutAgentChannelsForMonitor(
     dedupeKeyFor: (agentKey, chatId) =>
       `conv_monitor:${alertId}:${agentKey}:${chatId}`,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. Notifikasi setiap pesan WhatsApp masuk                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Kirim notifikasi WhatsApp ke super admin SETIAP kali ada pesan baru
+ * masuk dari tamu. Berbeda dengan `notifyNewConversationSession` yang
+ * hanya memicu saat awal sesi (gap >15 menit), fungsi ini akan memicu
+ * untuk setiap pesan inbound.
+ *
+ * Dedupe per `messageId` sehingga walau dipanggil berulang untuk pesan
+ * yang sama (mis. retry webhook) tetap hanya 1 notif terkirim.
+ *
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyIncomingMessage(
+  db: Db,
+  opts: {
+    phone: string;
+    guestName: string | null;
+    body: string;
+    messageId: string;
+    threadId: string | null;
+    hasAttachment?: boolean;
+  },
+): Promise<void> {
+  try {
+    const { fonnteToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    const targets = superAdmins.filter((m) => !!m.phone);
+    if (targets.length === 0) return;
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+    const preview = opts.body.length > 300
+      ? opts.body.slice(0, 297) + "…"
+      : opts.body;
+
+    const message =
+      `📩 Pesan WhatsApp Baru\n\n` +
+      `👤 Tamu: ${opts.guestName ?? "Tidak dikenal"}\n` +
+      `📱 No HP: ${opts.phone}\n` +
+      `🕒 Waktu: ${wibTime}\n\n` +
+      `💬 Pesan:\n"${preview}"` +
+      (opts.hasAttachment ? `\n\n📎 Pesan ini berisi lampiran.` : ``);
+
+    const dedupeKey = `new_message:${opts.messageId}`;
+
+    await Promise.all(
+      targets.map((admin) =>
+        sendWithRetry(db, fonnteToken, {
+          eventType: "new_message",
+          message,
+          relatedId: opts.threadId,
+          recipient: admin,
+          channel: "wa",
+          dedupeKey: `${dedupeKey}:${admin.id}`,
+        }),
+      ),
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyIncomingMessage error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. RPC Failure Alerts                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Catat kegagalan RPC dan kirim notifikasi ke super_admin (WA + Telegram)
+ * dengan jumlah kejadian per jam terakhir.
+ *
+ * - Setiap kegagalan dicatat ke tabel `rpc_failure_events` (untuk audit).
+ * - Notifikasi di-dedupe per (rpc_name, window 1 jam) supaya tidak
+ *   banjir — hanya 1 alert per jam per RPC, tapi pesannya menyertakan
+ *   total kejadian dalam 1 jam terakhir.
+ *
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyRpcFailure(
+  db: Db,
+  opts: {
+    rpcName:      string;
+    errorMessage: string | null;
+    context?:     Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    // 1. Catat event kegagalan (selalu).
+    await db.from("rpc_failure_events").insert({
+      rpc_name:      opts.rpcName,
+      error_message: opts.errorMessage ?? null,
+      context:       opts.context ?? null,
+    });
+
+    // 2. Hitung kejadian dalam 1 jam terakhir.
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: hourlyCount } = await db
+      .from("rpc_failure_events")
+      .select("id", { count: "exact", head: true })
+      .eq("rpc_name", opts.rpcName)
+      .gte("created_at", oneHourAgo);
+
+    const total = hourlyCount ?? 1;
+
+    // 3. Resolve target super_admin.
+    const { fonnteToken, telegramToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    if (superAdmins.length === 0) {
+      console.info("[ManagerNotifier] notifyRpcFailure: no super_admin configured");
+      return;
+    }
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+    });
+
+    const errPreview = (opts.errorMessage ?? "(no error message)").slice(0, 280);
+    const ctxPreview = opts.context
+      ? JSON.stringify(opts.context).slice(0, 280)
+      : "";
+
+    const message =
+      `🛑 RPC FAILURE — Database Error\n\n` +
+      `🔧 RPC: ${opts.rpcName}\n` +
+      `📊 Kejadian 1 jam terakhir: ${total}×\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      `❌ Error:\n${errPreview}\n` +
+      (ctxPreview ? `\n📥 Konteks:\n${ctxPreview}\n` : "") +
+      `\nSilakan cek log/database — bot mungkin tidak bisa merespon tamu.`;
+
+    // Dedupe per jam supaya max 1 notif / jam / rpc.
+    const hourWindow = Math.floor(Date.now() / (60 * 60 * 1000));
+    const dedupeBase = `rpc_failure:${opts.rpcName}:${hourWindow}`;
+
+    const jobs: Promise<unknown>[] = [];
+    for (const admin of superAdmins) {
+      if (admin.phone) {
+        jobs.push(sendWithRetry(db, fonnteToken, {
+          eventType: "rpc_failure",
+          message,
+          recipient: admin,
+          channel:   "wa",
+          dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+        }));
+      }
+      if (telegramToken && admin.telegram_chat_id) {
+        jobs.push(sendWithRetry(db, null, {
+          eventType: "rpc_failure",
+          message,
+          recipient: admin,
+          channel:   "telegram",
+          dedupeKey: `${dedupeBase}:tg:${admin.id}`,
+        }));
+      }
+    }
+    await Promise.all(jobs);
+
+    console.warn(
+      `[ManagerNotifier] RPC failure logged: ${opts.rpcName} (${total}× / 1h)`,
+    );
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyRpcFailure error (non-fatal):", e);
+  }
 }
