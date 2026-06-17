@@ -113,7 +113,7 @@ export const startWebchatSession = createServerFn({ method: "POST" })
     // 1. Cari WA thread untuk seed konteks.
     const { data: waThread } = await (supabaseAdmin as any)
       .from("whatsapp_threads")
-      .select("id, chat_summary, chat_summary_json, guest_name")
+      .select("id, chat_summary, chat_summary_json, display_name")
       .eq("phone", phone)
       .maybeSingle();
 
