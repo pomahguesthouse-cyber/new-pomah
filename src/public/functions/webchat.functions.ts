@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { WEBCHAT_FALLBACK_PROMPT } from "@/ai/agents/webchat-fallback.prompt";
+import { chatCompletionText, resolvePropertyAiConfig } from "@/services/ai-client.service";
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -458,7 +459,7 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
 
   const messages = await loadMessages(threadId);
 
-  // Load property settings + LLM key.
+  // Load property settings for prompt context.
   const { data: prop } = await (supabaseAdmin as any)
     .from("properties")
     .select("ai_api_key, ai_base_url, ai_model, name, payment_account_number, payment_bank_name, payment_account_holder")
@@ -466,22 +467,14 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     .limit(1)
     .maybeSingle();
   const p = (prop ?? {}) as Record<string, any>;
-  const explicitKey = (p.ai_api_key as string | undefined)?.trim();
-  const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
-  const useLovable  = !explicitKey && !!lovableKey;
-  const key         = explicitKey || lovableKey;
-  if (!key) {
+
+  const aiConfig = await resolvePropertyAiConfig(supabaseAdmin as any, {
+    lovableFallbackModel: "google/gemini-2.5-flash",
+  });
+  if (!aiConfig) {
     console.warn("[Webchat] No AI key configured, skipping AI reply");
     return null;
   }
-
-  const baseUrl = useLovable
-    ? "https://ai.gateway.lovable.dev/v1"
-    : ((p.ai_base_url as string | undefined) || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-  const configuredModel = (p.ai_model as string | undefined)?.trim();
-  const model = useLovable
-    ? (configuredModel && configuredModel.includes("/") ? configuredModel : "google/gemini-2.5-flash")
-    : (configuredModel || "gpt-4o-mini");
 
   // Build context.
   const { data: rooms } = await (supabaseAdmin as any)
@@ -549,8 +542,6 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
     `Bila tamu menyebut nama hari (mis. "Sabtu"), hitung relatif terhadap "Hari ini" di atas. ` +
     `"Minggu depan" = 7 hari setelah Hari ini. "Bulan depan" = ~30 hari setelah Hari ini.\n`;
 
-
-
   const systemPrompt =
     WEBCHAT_FALLBACK_PROMPT
       .replace("{{PROPERTY_NAME}}", String(p.name ?? "Pomah Guesthouse"))
@@ -558,7 +549,6 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
       .replace("{{BOOKING_BLOCK}}", bookingBlock)
       .replace("{{PAYMENT_BLOCK}}", paymentBlock)
       .replace("{{SUMMARY_BLOCK}}", summaryBlock + todayBlock);
-
 
   // Transform pesan jadi format OpenAI Chat.
   const chatHistory = messages
@@ -569,30 +559,13 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
       content: m.body ?? (m.attachment_url ? "(mengirim lampiran)" : ""),
     }));
 
-  try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...chatHistory,
-        ],
-        temperature: 0.5,
-        max_tokens:  600,
-      }),
-    });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      console.warn("[Webchat] LLM error:", res.status, txt.slice(0, 200));
-      return null;
-    }
-    const json: any = await res.json();
-    const reply = json?.choices?.[0]?.message?.content?.trim();
-    return reply || null;
-  } catch (e) {
-    console.warn("[Webchat] LLM call failed:", e);
-    return null;
-  }
+  const reply = await chatCompletionText(
+    aiConfig,
+    [
+      { role: "system", content: systemPrompt },
+      ...chatHistory,
+    ],
+    { temperature: 0.5, maxTokens: 600 },
+  );
+  return reply || null;
 }
