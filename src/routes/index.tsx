@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -52,13 +52,22 @@ import {
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions";
 import { getPublicExploreItems } from "@/public/functions/public.functions";
-import { BookingDialog, DEFAULT_HOTEL_POLICY, type RoomRow } from "@/routes/rooms.$slug";
+import type { RoomRow } from "@/routes/rooms.$slug";
+import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
+// Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
+// membuka dialog booking, sehingga tidak perlu masuk initial bundle.
+const BookingDialog = lazy(() =>
+  import("@/routes/rooms.$slug").then((m) => ({ default: m.BookingDialog })),
+);
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { DateRangePickerID } from "@/components/ui/date-range-picker";
 
 export const Route = createFileRoute("/")({
   loader: async () => getPublicSiteData(),
-  staleTime: 5 * 60 * 1000,
+  // Data property + room types jarang berubah; cache 1 jam mengurangi
+  // beban server dan mempercepat navigasi balik ke home.
+  staleTime: 60 * 60 * 1000,
+
 
   head: ({ loaderData }: any) => {
     const cfg = mergeHomepageConfig(
@@ -234,7 +243,7 @@ export function PomahHomeView({
     queryKey: ["public-site"],
     queryFn: () => fetchData(),
     initialData: initialData as never,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 60 * 1000,
   });
   const property = data?.property;
   const rooms = data?.roomTypes ?? [];
@@ -694,24 +703,26 @@ export function PomahHomeView({
       )}
 
       {dialogOpen && cartEntries.length === 1 && effCheckIn && effCheckOut && (
-        <BookingDialog
-          open={true}
-          onClose={() => setDialogOpen(false)}
-          room={cartEntries[0].room}
-          checkIn={effCheckIn}
-          checkOut={effCheckOut}
-          rooms={cartEntries[0].rooms}
-          extrabed={cartEntries[0].extrabed}
-          maxRooms={Math.max(
-            1,
-            Number(cartEntries[0].room.total_physical_rooms ?? 0) || 10,
-          )}
-          guests={guests}
-          hotelPolicy={
-            (property as { hotel_policy?: string | null } | null | undefined)?.hotel_policy ??
-            DEFAULT_HOTEL_POLICY
-          }
-        />
+        <Suspense fallback={null}>
+          <BookingDialog
+            open={true}
+            onClose={() => setDialogOpen(false)}
+            room={cartEntries[0].room}
+            checkIn={effCheckIn}
+            checkOut={effCheckOut}
+            rooms={cartEntries[0].rooms}
+            extrabed={cartEntries[0].extrabed}
+            maxRooms={Math.max(
+              1,
+              Number(cartEntries[0].room.total_physical_rooms ?? 0) || 10,
+            )}
+            guests={guests}
+            hotelPolicy={
+              (property as { hotel_policy?: string | null } | null | undefined)?.hotel_policy ??
+              DEFAULT_HOTEL_POLICY
+            }
+          />
+        </Suspense>
       )}
       {dialogOpen && cartEntries.length > 1 && effCheckIn && effCheckOut && (
         <CartBookingDialog
