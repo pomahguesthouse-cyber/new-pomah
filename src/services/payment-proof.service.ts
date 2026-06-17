@@ -10,6 +10,12 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  chatCompletion,
+  extractJsonObject,
+  resolvePropertyAiConfig,
+  type AiClientConfig,
+} from "@/services/ai-client.service";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -46,43 +52,10 @@ export interface PaymentProofResult {
 
 // ─── LLM Config resolver ─────────────────────────────────────────────────────
 
-interface LlmConfig {
-  apiKey:  string;
-  baseUrl: string;
-  model:   string;
-}
-
-/**
- * Resolve LLM configuration from the properties table,
- * mirroring the logic in wa-autoreply.service.ts.
- */
-async function resolveLlmConfig(db: Db): Promise<LlmConfig | null> {
-  const { data: prop } = await db
-    .from("properties")
-    .select("ai_api_key, ai_base_url, ai_model")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (!prop) return null;
-
-  const p = prop as Record<string, any>;
-  const explicitKey = p.ai_api_key?.trim();
-  const lovableKey  = process.env.LOVABLE_API_KEY?.trim();
-  const useLovable  = !explicitKey && !!lovableKey;
-  const apiKey      = explicitKey || lovableKey;
-  if (!apiKey) return null;
-
-  const baseUrl = useLovable
-    ? "https://ai.gateway.lovable.dev/v1"
-    : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-
-  const cfgModel = p.ai_model?.trim();
-  const model = useLovable
-    ? cfgModel?.includes("/") ? cfgModel : "google/gemini-2.5-flash"
-    : cfgModel || "gpt-4o-mini";
-
-  return { apiKey, baseUrl, model };
+async function resolveVisionConfig(db: Db): Promise<AiClientConfig | null> {
+  return resolvePropertyAiConfig(db, {
+    lovableFallbackModel: "google/gemini-2.5-flash",
+  });
 }
 
 // ─── Vision OCR prompt ────────────────────────────────────────────────────────
@@ -116,11 +89,8 @@ ATURAN PENTING:
 
 // ─── Vision LLM call ──────────────────────────────────────────────────────────
 
-async function callVisionLlm(
-  config:   LlmConfig,
-  imageUrl: string,
-): Promise<OcrData> {
-  const emptyOcr: OcrData = {
+function emptyOcr(rawText = ""): OcrData {
+  return {
     bank_pengirim:   null,
     bank_tujuan:     null,
     nominal:         null,
@@ -129,76 +99,67 @@ async function callVisionLlm(
     tanggal:         null,
     nama_pengirim:   null,
     nomor_referensi: null,
-    raw_text:        "",
+    raw_text:        rawText,
   };
+}
 
+function normalizeOcrData(parsed: Record<string, any>): OcrData {
+  const numOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    bank_pengirim:   parsed.bank_pengirim   ?? null,
+    bank_tujuan:     parsed.bank_tujuan     ?? null,
+    nominal:         numOrNull(parsed.nominal),
+    biaya_admin:     numOrNull(parsed.biaya_admin),
+    total_dibayar:   numOrNull(parsed.total_dibayar),
+    tanggal:         parsed.tanggal         ?? null,
+    nama_pengirim:   parsed.nama_pengirim   ?? null,
+    nomor_referensi: parsed.nomor_referensi ?? null,
+    raw_text:        parsed.raw_text        ?? "",
+  };
+}
+
+async function callVisionLlm(
+  config:   AiClientConfig,
+  imageUrl: string,
+): Promise<OcrData> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
+    const result = await chatCompletion(
+      { ...config, timeoutMs: 30_000 },
+      [
+        { role: "system", content: OCR_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: imageUrl },
+            },
+            {
+              type: "text",
+              text: "Ekstrak data dari bukti transfer ini.",
+            },
+          ],
+        } as any,
+      ],
+      { temperature: 0.1, maxTokens: 1000 },
+    );
 
-    const res = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: config.model,
-        temperature: 0.1,
-        max_tokens: 1000,
-        messages: [
-          { role: "system", content: OCR_SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: imageUrl },
-              },
-              {
-                type: "text",
-                text: "Ekstrak data dari bukti transfer ini.",
-              },
-            ],
-          },
-        ],
-      }),
-    });
-
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[PaymentProof] Vision LLM HTTP error:", res.status, errText);
-      return { ...emptyOcr, raw_text: `LLM error ${res.status}` };
+    if (!result.ok) {
+      console.error("[PaymentProof] Vision LLM HTTP error:", result.status, result.error);
+      return emptyOcr(`LLM error ${result.status ?? "unknown"}`);
     }
 
-    const json = (await res.json()) as any;
-    const content: string = json.choices?.[0]?.message?.content ?? "";
+    const jsonText = extractJsonObject(result.content);
+    if (!jsonText) {
+      console.error("[PaymentProof] Vision OCR returned empty/invalid JSON");
+      return emptyOcr("OCR error: invalid JSON");
+    }
 
-    // Strip markdown code fences if present
-    const cleaned = content
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-
-    const parsed = JSON.parse(cleaned);
-    const numOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-    return {
-      bank_pengirim:   parsed.bank_pengirim   ?? null,
-      bank_tujuan:     parsed.bank_tujuan     ?? null,
-      nominal:         numOrNull(parsed.nominal),
-      biaya_admin:     numOrNull(parsed.biaya_admin),
-      total_dibayar:   numOrNull(parsed.total_dibayar),
-      tanggal:         parsed.tanggal         ?? null,
-      nama_pengirim:   parsed.nama_pengirim   ?? null,
-      nomor_referensi: parsed.nomor_referensi ?? null,
-      raw_text:        parsed.raw_text        ?? "",
-    };
+    const parsed = JSON.parse(jsonText);
+    return normalizeOcrData(parsed);
   } catch (e: any) {
     console.error("[PaymentProof] Vision OCR error:", e);
-    return { ...emptyOcr, raw_text: `OCR error: ${e.message ?? e}` };
+    return emptyOcr(`OCR error: ${e.message ?? e}`);
   }
 }
 
@@ -358,17 +319,12 @@ export async function analyzePaymentProof(
   const tag = "[PaymentProof]";
 
   // 1. Resolve LLM config
-  const llmConfig = await resolveLlmConfig(db);
+  const llmConfig = await resolveVisionConfig(db);
   if (!llmConfig) {
     console.warn(`${tag} Tidak ada konfigurasi LLM — skip OCR`);
     return {
       ok: false,
-      ocr: {
-        bank_pengirim: null, bank_tujuan: null, nominal: null,
-        biaya_admin: null, total_dibayar: null,
-        tanggal: null, nama_pengirim: null, nomor_referensi: null,
-        raw_text: "",
-      },
+      ocr: emptyOcr(),
       match: {
         status: "no_pending_booking",
         booking_code: null, booking_amount: null, amount_diff: null,
@@ -425,16 +381,11 @@ export async function runOcrAndMatch(
   imageUrl: string,
   phone:    string,
 ): Promise<PaymentProofResult> {
-  const llmConfig = await resolveLlmConfig(db);
+  const llmConfig = await resolveVisionConfig(db);
   if (!llmConfig) {
     return {
       ok: false,
-      ocr: {
-        bank_pengirim: null, bank_tujuan: null, nominal: null,
-        biaya_admin: null, total_dibayar: null,
-        tanggal: null, nama_pengirim: null, nomor_referensi: null,
-        raw_text: "",
-      },
+      ocr: emptyOcr(),
       match: {
         status: "no_pending_booking",
         booking_code: null, booking_amount: null, amount_diff: null,
