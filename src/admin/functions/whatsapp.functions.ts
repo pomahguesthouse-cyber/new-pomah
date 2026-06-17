@@ -7,6 +7,11 @@ import {
   summaryIsMissing,
   clearWhatsappThreadSummary,
 } from "@/services/whatsapp-summary.service";
+import {
+  chatCompletionText,
+  getLovableAiConfig,
+  resolvePropertyAiConfig,
+} from "@/services/ai-client.service";
 
 export const listThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -211,22 +216,9 @@ export const simulateInbound = createServerFn({ method: "POST" })
   });
 
 async function callAI(messages: Array<{ role: string; content: string }>) {
-  const apiKey = process.env.LOVABLE_API_KEY;
-  if (!apiKey) return null;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: "google/gemini-3-flash-preview", messages }),
-  });
-  if (!res.ok) {
-    console.error("AI gateway error", res.status, await res.text());
-    return null;
-  }
-  const j = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  return j.choices?.[0]?.message?.content?.trim() ?? null;
+  const config = getLovableAiConfig();
+  if (!config) return null;
+  return chatCompletionText(config, messages, { temperature: 0.2 });
 }
 
 export const draftAiReply = createServerFn({ method: "POST" })
@@ -280,7 +272,6 @@ export const summarizeThread = createServerFn({ method: "POST" })
       .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
 
-    // 1. Generate plain text summary (fallback)
     const summary = await callAI([
       {
         role: "system",
@@ -293,7 +284,6 @@ export const summarizeThread = createServerFn({ method: "POST" })
     ]);
     const finalSummary = summary ?? "Belum ada ringkasan obrolan.";
 
-    // 2. Generate structured JSON summary
     let summaryJson: Record<string, unknown> | null = null;
     try {
       const jsonRaw = await callAI([
@@ -346,27 +336,19 @@ export const deleteThread = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    // Delete conversation memory in the correct dependency order so foreign-key
-    // constraints are not violated.
-    // 1. AI conversation logs referencing this thread
     await context.supabase
       .from("ai_conversation_logs")
       .delete()
       .eq("thread_id", data.threadId);
-
-    // 2. Individual messages
     await context.supabase
       .from("whatsapp_messages")
       .delete()
       .eq("thread_id", data.threadId);
-
-    // 3. The thread itself
     const { error } = await context.supabase
       .from("whatsapp_threads")
       .delete()
       .eq("id", data.threadId);
     if (error) throw error;
-
     return { ok: true };
   });
 
@@ -384,7 +366,6 @@ export const classifyIntent = createServerFn({ method: "POST" })
       .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
 
-    // Single LLM call that returns a structured JSON with all metadata.
     const raw = await callAI([
       {
         role: "system",
@@ -501,49 +482,22 @@ export const updateChatSummary = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/**
- * Regenerate structured Context Summary (chat_summary_json) untuk satu thread.
- * Memakai konfigurasi AI properti aktif (Lovable AI Gateway secara default).
- */
 export const regenerateStructuredSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: prop } = await (supabaseAdmin as any)
-      .from("properties")
-      .select("ai_api_key, ai_base_url, ai_model")
-      .limit(1)
-      .maybeSingle();
-    const p = (prop ?? {}) as { ai_api_key?: string; ai_base_url?: string; ai_model?: string };
-    const explicitKey = p.ai_api_key?.trim();
-    const lovableKey = process.env.LOVABLE_API_KEY?.trim();
-    const useLovable = !explicitKey && !!lovableKey;
-    const apiKey = explicitKey || lovableKey;
-    if (!apiKey) throw new Error("AI API key tidak tersedia.");
-    const baseUrl = useLovable
-      ? "https://ai.gateway.lovable.dev/v1"
-      : (p.ai_base_url || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-    const cfgModel = p.ai_model?.trim();
-    const model = useLovable
-      ? cfgModel?.includes("/")
-        ? cfgModel
-        : "google/gemini-2.5-flash"
-      : cfgModel || "gpt-4o-mini";
+    const config = await resolvePropertyAiConfig(supabaseAdmin as any, {
+      lovableFallbackModel: "google/gemini-2.5-flash",
+    });
+    if (!config) throw new Error("AI API key tidak tersedia.");
 
     const { regenerateThreadSummary } = await import("@/services/wa-autoreply.service");
-    const result = await regenerateThreadSummary(supabaseAdmin, data.threadId, {
-      apiKey,
-      baseUrl,
-      model,
-    });
+    const result = await regenerateThreadSummary(supabaseAdmin, data.threadId, config);
     if (!result.ok) throw new Error(result.error ?? "Gagal regenerate summary.");
     return { ok: true, summary: result.summary };
   });
 
-/**
- * Hapus context summary (short + structured) untuk satu thread.
- */
 export const clearChatSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
@@ -596,7 +550,6 @@ export const triggerManualAlert = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    // Ambil data thread
     const { data: thread } = await context.supabase
       .from("whatsapp_threads")
       .select("phone, display_name")
