@@ -452,6 +452,7 @@ export const Route = createFileRoute("/api/fonnte")({
                 auto_reply_enabled: boolean;
                 fonnte_token:       string;
                 chat_summary?:      string | null;
+                chat_summary_json?: Record<string, unknown> | null;
                 messages:           Array<{ direction: string; body: string; sent_at?: string }>;
               };
               result.auto_reply_enabled = c.auto_reply_enabled;

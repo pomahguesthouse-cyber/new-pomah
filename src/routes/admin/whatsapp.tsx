@@ -295,7 +295,7 @@ export function WhatsAppPage() {
     mutationFn: () =>
       summarizeFn({ data: { threadId: current! } }),
     onSuccess: () => {
-      toast.success("Ringkasan obrolan berhasil dibuat!");
+      toast.success("Context summary berhasil diperbarui");
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },

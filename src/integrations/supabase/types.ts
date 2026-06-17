@@ -2375,6 +2375,9 @@ export type Database = {
           ai_auto: boolean
           assigned_to: string | null
           chat_summary: string | null
+          chat_summary_json: Json | null
+          chat_summary_updated_at: string | null
+          chat_summary_version: number
           created_at: string
           display_name: string | null
           guest_id: string | null
@@ -2394,6 +2397,9 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
+          chat_summary_json?: Json | null
+          chat_summary_updated_at?: string | null
+          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
@@ -2413,6 +2419,9 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
+          chat_summary_json?: Json | null
+          chat_summary_updated_at?: string | null
+          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null

@@ -257,6 +257,8 @@ export const summarizeThread = createServerFn({ method: "POST" })
     const transcript = (messages ?? [])
       .map((m) => `${m.direction === "in" ? "Guest" : "Host"}: ${m.body}`)
       .join("\n");
+
+    // 1. Generate plain text summary (fallback)
     const summary = await callAI([
       {
         role: "system",
@@ -268,13 +270,54 @@ export const summarizeThread = createServerFn({ method: "POST" })
       { role: "user", content: transcript },
     ]);
     const finalSummary = summary ?? "Belum ada ringkasan obrolan.";
-    
+
+    // 2. Generate structured JSON summary
+    let summaryJson: Record<string, unknown> | null = null;
+    try {
+      const jsonRaw = await callAI([
+        {
+          role: "system",
+          content:
+            'Analisis percakapan hotel berikut dan balas HANYA dengan JSON (tanpa markdown, tanpa teks lain):\n' +
+            '{\n' +
+            '  "short_summary": "<ringkasan 1-2 kalimat dalam Bahasa Indonesia>",\n' +
+            '  "guest_name": "<nama tamu jika diketahui, atau null>",\n' +
+            '  "last_topic": "<topik terakhir yang dibahas>",\n' +
+            '  "room_type": "<tipe kamar yang ditanyakan/dipesan, atau null>",\n' +
+            '  "check_in": "<tanggal check-in jika diketahui, format YYYY-MM-DD, atau null>",\n' +
+            '  "check_out": "<tanggal check-out jika diketahui, format YYYY-MM-DD, atau null>",\n' +
+            '  "guest_count": "<jumlah tamu jika diketahui, atau null>",\n' +
+            '  "booking_status": "<confirmed|pending|cancelled|inquiry|null>",\n' +
+            '  "payment_status": "<paid|partial|unpaid|null>",\n' +
+            '  "complaint_active": <true jika ada keluhan aktif, false jika tidak>,\n' +
+            '  "needs_human": <true jika butuh eskalasi manusia, false jika tidak>,\n' +
+            '  "unresolved_question": "<pertanyaan tamu yang belum terjawab, atau null>"\n' +
+            '}',
+        },
+        { role: "user", content: transcript },
+      ]);
+      if (jsonRaw) {
+        const match = jsonRaw.match(/\{[\s\S]*\}/);
+        if (match) {
+          summaryJson = JSON.parse(match[0]);
+        }
+      }
+    } catch {
+      // JSON parse failed — summaryJson stays null, fallback to plain text
+    }
+
+    const now = new Date().toISOString();
     await context.supabase
       .from("whatsapp_threads")
-      .update({ chat_summary: finalSummary } as any)
+      .update({
+        chat_summary: finalSummary,
+        chat_summary_json: summaryJson,
+        chat_summary_updated_at: now,
+        chat_summary_version: (Date.now() % 2147483647),
+      } as any)
       .eq("id", data.threadId);
 
-    return { summary: finalSummary };
+    return { summary: finalSummary, summaryJson };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
@@ -493,5 +536,3 @@ export const triggerManualAlert = createServerFn({ method: "POST" })
     if (!result.ok) throw new Error(result.error ?? "Failed to trigger alert");
     return { ok: true, alertId: result.alertId };
   });
-
-

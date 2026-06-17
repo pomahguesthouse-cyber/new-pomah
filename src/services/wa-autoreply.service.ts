@@ -177,7 +177,10 @@ async function updateThreadSummary(
     : summary;
   const { error } = await client
     .from("whatsapp_threads")
-    .update({ chat_summary: capped, chat_summary_updated_at: new Date().toISOString() })
+    .update({
+      chat_summary: capped,
+      chat_summary_updated_at: new Date().toISOString(),
+    })
     .eq("id", threadId);
   if (error) {
     console.error(`[SessionSummarizer] Database update failed:`, error.message);
