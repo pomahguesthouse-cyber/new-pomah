@@ -217,6 +217,7 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
 interface SendOptions {
   eventType:
     | "new_booking"
+    | "booking_updated"
     | "payment_proof"
     | "complaint"
     | "new_session"
@@ -516,8 +517,145 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 }
 
 /* ------------------------------------------------------------------ */
-/* 2. Payment Proof (with optional Vision OCR enrichment)             */
+/* 1b. Booking Updated                                                */
 /* ------------------------------------------------------------------ */
+
+export interface BookingSnapshot {
+  checkIn: string | null;
+  checkOut: string | null;
+  adults: number | null;
+  children: number | null;
+  /** Daftar label kamar (mis. "Deluxe 101") atau room type bila nomor kosong. */
+  rooms: string[];
+}
+
+/**
+ * Ambil snapshot field yang dipantau untuk diff alert booking_updated.
+ * Caller dipanggil 2x: sebelum & sesudah mutasi.
+ */
+export async function snapshotBookingForDiff(
+  db: Db,
+  bookingId: string,
+): Promise<BookingSnapshot | null> {
+  const { data, error } = await db
+    .from("bookings")
+    .select(
+      "check_in, check_out, adults, children, booking_rooms(rooms(number), room_types(name))",
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !data) return null;
+  const b = data as any;
+  const rooms: string[] = (b.booking_rooms ?? []).map((br: any) => {
+    const room = Array.isArray(br.rooms) ? br.rooms[0] : br.rooms;
+    const rt = Array.isArray(br.room_types) ? br.room_types[0] : br.room_types;
+    const number = room?.number ?? null;
+    const typeName = rt?.name ?? null;
+    if (number && typeName) return `${typeName} ${number}`;
+    return number ?? typeName ?? "Kamar";
+  });
+  rooms.sort();
+  return {
+    checkIn: b.check_in ?? null,
+    checkOut: b.check_out ?? null,
+    adults: typeof b.adults === "number" ? b.adults : null,
+    children: typeof b.children === "number" ? b.children : null,
+    rooms,
+  };
+}
+
+function diffArrays(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return true;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true;
+  return false;
+}
+
+function shortHash(s: string): string {
+  // FNV-1a 32-bit, cukup untuk dedupe.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(36);
+}
+
+export async function notifyBookingUpdated(
+  db: Db,
+  bookingId: string,
+  before: BookingSnapshot | null,
+  after: BookingSnapshot | null,
+  actor: string,
+): Promise<void> {
+  try {
+    if (!before || !after) return;
+
+    const lines: string[] = [];
+    if (before.checkIn !== after.checkIn || before.checkOut !== after.checkOut) {
+      lines.push(
+        `• Check-in: ${before.checkIn ? fmtDateID(before.checkIn) : "-"} → ${after.checkIn ? fmtDateID(after.checkIn) : "-"}`,
+      );
+      lines.push(
+        `• Check-out: ${before.checkOut ? fmtDateID(before.checkOut) : "-"} → ${after.checkOut ? fmtDateID(after.checkOut) : "-"}`,
+      );
+    }
+    if (before.adults !== after.adults || before.children !== after.children) {
+      lines.push(
+        `• Tamu: ${before.adults ?? "-"} dewasa / ${before.children ?? 0} anak → ${after.adults ?? "-"} dewasa / ${after.children ?? 0} anak`,
+      );
+    }
+    if (diffArrays(before.rooms, after.rooms)) {
+      lines.push(
+        `• Kamar: ${before.rooms.join(", ") || "-"} → ${after.rooms.join(", ") || "-"}`,
+      );
+    }
+
+    if (lines.length === 0) return; // tidak ada perubahan tracked
+
+    const { data: booking, error } = await db
+      .from("bookings")
+      .select("id, reference_code, source, guest_id, guests(full_name)")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (error || !booking) return;
+    const b = booking as any;
+    const guestName = b.guests?.full_name ?? "Tamu";
+
+    const message =
+      "✏️ BOOKING UPDATED\n\n" +
+      `Guest: ${guestName}\n` +
+      `Booking: ${b.reference_code ?? b.id}\n` +
+      `Source: ${sourceLabel(b.source)}\n\n` +
+      "Perubahan:\n" +
+      lines.join("\n") +
+      `\n\nDiubah oleh: ${actor}`;
+
+    const { fonnteToken } = await getPropertyTokens(db);
+    const managers = await getActiveManagers(db);
+    if (managers.length === 0) return;
+
+    const changeHash = shortHash(lines.join("|"));
+
+    await Promise.all([
+      fanOut(db, fonnteToken, managers, {
+        eventType: "booking_updated",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (m) => `booking_updated:${b.id}:${changeHash}:${m.id}`,
+      }),
+      fanOutToAgentChannels(db, ["front-office", "manager"], {
+        eventType: "booking_updated",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (agent, chat) =>
+          `booking_updated:${b.id}:${changeHash}:agent:${agent}:${chat}`,
+      }),
+    ]);
+  } catch (e) {
+    console.error("[ManagerNotifier] notifyBookingUpdated error:", e);
+  }
+}
+
 
 import type { PaymentProofResult } from "./payment-proof.service";
 
