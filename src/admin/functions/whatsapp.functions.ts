@@ -1,6 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import {
+  persistThreadSummary,
+  seedMissingThreadSummary,
+  summaryIsMissing,
+  clearWhatsappThreadSummary,
+} from "@/services/whatsapp-summary.service";
 
 export const listThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -18,25 +24,41 @@ export const getThread = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: thread } = await context.supabase
+    const { data: thread, error: threadError } = await context.supabase
       .from("whatsapp_threads")
       .select("*")
       .eq("id", data.id)
       .single();
-    const { data: messages } = await context.supabase
+    if (threadError) throw threadError;
+
+    let currentThread = thread;
+    if (summaryIsMissing(currentThread as any)) {
+      const seedResult = await seedMissingThreadSummary(context.supabase as any, data.id);
+      if (seedResult.updated) {
+        const { data: refreshedThread } = await context.supabase
+          .from("whatsapp_threads")
+          .select("*")
+          .eq("id", data.id)
+          .single();
+        currentThread = refreshedThread ?? currentThread;
+      }
+    }
+
+    const { data: messages, error: messagesError } = await context.supabase
       .from("whatsapp_messages")
       .select("*")
       .eq("thread_id", data.id)
       .order("sent_at", { ascending: true });
+    if (messagesError) throw messagesError;
 
     // Look up guest context by phone (best-effort)
     let guest: any = null;
     let booking: any = null;
-    if (thread?.phone) {
+    if (currentThread?.phone) {
       const { data: g } = await context.supabase
         .from("guests")
         .select("*")
-        .eq("phone", thread.phone)
+        .eq("phone", currentThread.phone)
         .maybeSingle();
       guest = g;
       if (g) {
@@ -53,7 +75,7 @@ export const getThread = createServerFn({ method: "GET" })
       }
     }
 
-    return { thread, messages: messages ?? [], guest, booking };
+    return { thread: currentThread, messages: messages ?? [], guest, booking };
   });
 
 export const sendMessage = createServerFn({ method: "POST" })
@@ -83,7 +105,7 @@ export const sendMessage = createServerFn({ method: "POST" })
         const formData = new URLSearchParams();
         formData.append("target", thread.phone);
         formData.append("message", data.body);
-        
+
         const res = await fetch("https://api.fonnte.com/send", {
           method: "POST",
           headers: {
@@ -91,7 +113,7 @@ export const sendMessage = createServerFn({ method: "POST" })
           },
           body: formData,
         });
-        
+
         if (!res.ok) {
           console.error("Fonnte API Error:", await res.text());
         }
@@ -299,7 +321,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
       if (jsonRaw) {
         const match = jsonRaw.match(/\{[\s\S]*\}/);
         if (match) {
-          summaryJson = JSON.parse(match[0]);
+          summaryJson = { ...JSON.parse(match[0]), source: "llm" };
         }
       }
     } catch {
@@ -313,7 +335,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
         chat_summary: finalSummary,
         chat_summary_json: summaryJson,
         chat_summary_updated_at: now,
-        chat_summary_version: (Date.now() % 2147483647),
+        chat_summary_version: Date.now() % 2147483647,
       } as any)
       .eq("id", data.threadId);
 
@@ -371,13 +393,7 @@ export const classifyIntent = createServerFn({ method: "POST" })
           '{\n' +
           '  "intent": "<salah satu: booking_inquiry|service_request|complaint|recommendation|feedback|other>",\n' +
           '  "intent_label": "<label singkat 2-5 kata Bahasa Indonesia mendeskripsikan kebutuhan tamu>",\n' +
-          '  "agent": "<pilih agent yang PALING DOMINAN dalam percakapan ini:\n' +
-          '    - Pricing Agent: jika percakapan utamanya membahas harga/tarif/biaya kamar (meski ada booking juga)\n' +
-          '    - Front Office Agent: reservasi/check-in/check-out/pertanyaan umum\n' +
-          '    - Customer Care Agent: kebersihan/fasilitas/kesiapan kamar\n' +
-          '    - Maintenance Agent: kerusakan/perbaikan peralatan\n' +
-          '    - Finance Agent: pembayaran/tagihan/konfirmasi transfer\n' +
-          '    - Manager Agent: laporan/manajemen/eskalasi>",\n' +
+          '  "agent": "<pilih agent yang PALING DOMINAN dalam percakapan ini: Pricing Agent, Front Office Agent, Customer Care Agent, Maintenance Agent, Finance Agent, atau Manager Agent>",\n' +
           '  "confidence": <angka 0.0 sampai 1.0>\n' +
           '}',
       },
@@ -466,11 +482,22 @@ export const updateChatSummary = createServerFn({ method: "POST" })
     z.object({ threadId: z.string().uuid(), summary: z.string() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("whatsapp_threads")
-      .update({ chat_summary: data.summary } as any)
-      .eq("id", data.threadId);
-    if (error) throw error;
+    await persistThreadSummary(context.supabase as any, data.threadId, {
+      source: "manual",
+      short_summary: data.summary,
+      guest_name: null,
+      last_topic: "general",
+      room_type: null,
+      check_in: null,
+      check_out: null,
+      guest_count: null,
+      booking_status: null,
+      payment_status: null,
+      complaint_active: false,
+      unresolved_question: null,
+      needs_human: false,
+      handoff_reason: null,
+    });
     return { ok: true };
   });
 
@@ -520,10 +547,8 @@ export const regenerateStructuredSummary = createServerFn({ method: "POST" })
 export const clearChatSummary = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ threadId: z.string().uuid() }).parse(d))
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { clearThreadSummary } = await import("@/services/wa-autoreply.service");
-    await clearThreadSummary(supabaseAdmin, data.threadId);
+  .handler(async ({ data, context }) => {
+    await clearWhatsappThreadSummary(context.supabase as any, data.threadId);
     return { ok: true };
   });
 
