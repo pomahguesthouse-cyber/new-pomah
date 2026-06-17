@@ -99,7 +99,16 @@ export const Route = createFileRoute("/")({
       links: [
         { rel: "canonical", href: canonicalUrl },
         ...(heroImage
-          ? [{ rel: "preload", as: "image", href: heroImage, fetchpriority: "high" as const }]
+          ? [
+              {
+                rel: "preload",
+                as: "image",
+                href: heroImage,
+                imagesrcset: heroImageSrcSet,
+                imagesizes: "100vw",
+                fetchpriority: "high" as const,
+              },
+            ]
           : []),
       ],
     };
