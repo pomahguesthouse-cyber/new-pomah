@@ -407,6 +407,13 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       console.warn("[createMultiRoomBooking] Notifikasi invoice gagal (non-fatal):", err),
     );
 
+    // Alert ke manager (WhatsApp + Telegram) — sama seperti booking via web/admin calendar
+    const { runDeferred } = await import("@/lib/cf-context");
+    runDeferred("createMultiRoomBooking.notifyNewBooking", async () => {
+      const { notifyNewBooking } = await import("@/services/manager-notifier.service");
+      await notifyNewBooking(context.supabase, booking.id);
+    });
+
     return { guest_id: guestId, booking, nights, grand_total: grandTotal };
   });
 
