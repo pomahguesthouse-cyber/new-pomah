@@ -1,8 +1,23 @@
 export type AiChatRole = "system" | "user" | "assistant" | "tool" | string;
 
+export type AiTextContentPart = {
+  type: "text";
+  text: string;
+};
+
+export type AiImageUrlContentPart = {
+  type: "image_url";
+  image_url: {
+    url: string;
+    detail?: "auto" | "low" | "high";
+  };
+};
+
+export type AiChatContent = string | Array<AiTextContentPart | AiImageUrlContentPart>;
+
 export interface AiChatMessage {
   role: AiChatRole;
-  content: string;
+  content: AiChatContent;
 }
 
 export interface AiClientConfig {
@@ -57,6 +72,7 @@ export async function resolvePropertyAiConfig(
   const { data: prop } = await client
     .from("properties")
     .select("ai_api_key, ai_base_url, ai_model")
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
