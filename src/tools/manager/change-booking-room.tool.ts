@@ -73,6 +73,11 @@ export const changeBookingRoom: ToolHandler = async (
     });
   }
 
+  const { snapshotBookingForDiff, notifyBookingUpdated } = await import(
+    "@/services/manager-notifier.service"
+  );
+  const beforeSnap = await snapshotBookingForDiff(ctx.supabaseAdmin as any, booking.id);
+
   const { error: updateErr } = await (ctx.supabaseAdmin as any)
     .from("booking_rooms")
     .update({ room_id: room.id, room_type_id: room.room_type_id })
@@ -80,6 +85,19 @@ export const changeBookingRoom: ToolHandler = async (
 
   if (updateErr) {
     return JSON.stringify({ ok: false, error: updateErr.message });
+  }
+
+  try {
+    const afterSnap = await snapshotBookingForDiff(ctx.supabaseAdmin as any, booking.id);
+    await notifyBookingUpdated(
+      ctx.supabaseAdmin as any,
+      booking.id,
+      beforeSnap,
+      afterSnap,
+      "Manager (chat)",
+    );
+  } catch (e) {
+    console.error(`[change_booking_room] notifyBookingUpdated gagal untuk ${booking.id}:`, e);
   }
 
   return JSON.stringify({
