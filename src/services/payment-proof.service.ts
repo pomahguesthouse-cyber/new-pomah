@@ -139,7 +139,7 @@ async function callVisionLlm(
               text: "Ekstrak data dari bukti transfer ini.",
             },
           ],
-        } as any,
+        },
       ],
       { temperature: 0.1, maxTokens: 1000 },
     );
