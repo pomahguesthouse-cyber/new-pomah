@@ -636,7 +636,9 @@ export function HeroSlider({
           />
         ) : active.imageUrl ? (
           <img
-            src={active.imageUrl}
+            src={buildStorageImageUrl(active.imageUrl, { width: 1600, quality: 75 })}
+            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: 75 })}
+            sizes={HERO_SIZES}
             alt={active.heading}
             loading={i === 0 ? "eager" : "lazy"}
             fetchPriority={i === 0 ? "high" : "auto"}
