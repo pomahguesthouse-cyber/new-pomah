@@ -2570,6 +2570,9 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
+          chat_summary_json?: Json
+          chat_summary_updated_at?: string | null
+          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
@@ -2589,6 +2592,9 @@ export type Database = {
           ai_auto?: boolean
           assigned_to?: string | null
           chat_summary?: string | null
+          chat_summary_json?: Json
+          chat_summary_updated_at?: string | null
+          chat_summary_version?: number
           created_at?: string
           display_name?: string | null
           guest_id?: string | null
@@ -2868,6 +2874,7 @@ export type Database = {
         }
         Returns: string
       }
+      test_context_summary: { Args: never; Returns: string }
       update_booking_state: {
         Args: { p_context: Json; p_phone: string; p_state: string }
         Returns: undefined
