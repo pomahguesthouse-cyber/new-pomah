@@ -628,6 +628,25 @@ export async function processBookingState(
   if (state === "AWAITING_EMAIL") {
     const email = extractEmail(message);
     if (!email) {
+      // Escape hatch: jika pesan jelas BUKAN upaya mengetik email (mis.
+      // pertanyaan "untuk parkir mobil aman ya?", "boleh minta maps nya",
+      // atau link), serahkan ke LLM agar pertanyaan tamu dijawab. State
+      // AWAITING_EMAIL tetap dipertahankan, jadi giliran berikutnya tamu
+      // bisa kirim email dan flow lanjut. Tanpa ini, bot terjebak
+      // mengulang "format email tidak valid" tanpa henti.
+      const trimmed = message.trim();
+      const looksLikeEmailAttempt = /@/.test(trimmed) || /^[A-Za-z0-9._%+-]+$/.test(trimmed);
+      const looksLikeQuestionOrChat =
+        ROOM_PREFERENCE_OR_QUESTION.test(trimmed) ||
+        /^https?:\/\//i.test(trimmed) ||
+        /\b(maps|peta|lokasi|alamat|parkir|jarak|km|wifi|sarapan|breakfast|check ?in|check ?out|harga|berapa|bisa|boleh|gimana|bagaimana|kenapa|apakah|kapan|dimana|gmn)\b/i.test(trimmed);
+      if (!looksLikeEmailAttempt && looksLikeQuestionOrChat) {
+        console.info(
+          `[BookingState] AWAITING_EMAIL: non-email question detected ` +
+          `("${trimmed.slice(0, 60)}…") — deferring to LLM, keeping state.`,
+        );
+        return { handled: false };
+      }
       return { handled: true, reply: "Maaf, format email sepertinya tidak valid. Mohon pastikan ada tanda '@' dan '.com' (contoh: budi@email.com). Silakan ketik ulang email Kakak:" };
     }
     context.guestEmail = email;
