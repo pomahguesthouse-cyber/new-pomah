@@ -33,6 +33,7 @@ import {
   BOOKING_STATUS_VALUES,
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
+import { chatCompletionText } from "@/services/ai-client.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -190,29 +191,17 @@ export async function generateSessionSummary(
     `- Jawab HANYA JSON valid, tanpa code fence, tanpa kata pengantar.`;
 
   try {
-    const res = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
+    const raw = await chatCompletionText(
+      config,
+      [{ role: "user", content: prompt }],
+      {
         temperature: 0.2,
-        max_tokens: 700,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+        maxTokens: 700,
+        responseFormat: { type: "json_object" },
+      },
+    );
 
-    if (!res.ok) {
-      console.error(`[SessionSummarizer] LLM error:`, res.status, await res.text());
-      return null;
-    }
-
-    const data = await res.json();
-    const raw: string = data.choices?.[0]?.message?.content?.trim() ?? "";
-    return parseStructuredSummary(raw);
+    return parseStructuredSummary(raw ?? "");
   } catch (e) {
     console.error(`[SessionSummarizer] Failed to generate summary:`, e);
     return null;
