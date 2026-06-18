@@ -134,8 +134,15 @@ export const Route = createFileRoute("/api/fonnte")({
         // Cloudflare Worker akan menghentikan async setelah response dikirim
         // kecuali didaftarkan via ctx.waitUntil. Tanpa ini notifikasi sering
         // tidak terkirim. Dedupe per messageId ada di dalam fungsi.
+        const { getWaitUntil } = await import("@/lib/cf-context");
+        const waitUntil = getWaitUntil();
+        const runBackground = (task: Promise<void>) => {
+          if (waitUntil) {
+            waitUntil(task);
+          }
+        };
+
         {
-          const { getWaitUntil } = await import("@/lib/cf-context");
           const notifyTask = (async () => {
             try {
               const { notifyIncomingMessage } = await import(
@@ -153,9 +160,7 @@ export const Route = createFileRoute("/api/fonnte")({
               console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
             }
           })();
-          const waitUntil = getWaitUntil();
-          if (waitUntil) waitUntil(notifyTask);
-          // else: biarkan berjalan paralel (dev/test runtime), tidak perlu await.
+          runBackground(notifyTask);
         }
 
 
