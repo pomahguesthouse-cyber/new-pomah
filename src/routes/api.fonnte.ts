@@ -134,8 +134,15 @@ export const Route = createFileRoute("/api/fonnte")({
         // Cloudflare Worker akan menghentikan async setelah response dikirim
         // kecuali didaftarkan via ctx.waitUntil. Tanpa ini notifikasi sering
         // tidak terkirim. Dedupe per messageId ada di dalam fungsi.
+        const { getWaitUntil } = await import("@/lib/cf-context");
+        const waitUntil = getWaitUntil();
+        const runBackground = (task: Promise<void>) => {
+          if (waitUntil) {
+            waitUntil(task);
+          }
+        };
+
         {
-          const { getWaitUntil } = await import("@/lib/cf-context");
           const notifyTask = (async () => {
             try {
               const { notifyIncomingMessage } = await import(
@@ -153,9 +160,7 @@ export const Route = createFileRoute("/api/fonnte")({
               console.warn("[Webhook] notifyIncomingMessage failed (non-fatal):", e);
             }
           })();
-          const waitUntil = getWaitUntil();
-          if (waitUntil) waitUntil(notifyTask);
-          // else: biarkan berjalan paralel (dev/test runtime), tidak perlu await.
+          runBackground(notifyTask);
         }
 
 
@@ -164,7 +169,7 @@ export const Route = createFileRoute("/api/fonnte")({
         // Cek apakah ini sesi percakapan baru (gap >15 menit sejak pesan
         // terakhir, atau thread baru sama sekali). Jika ya, kirim notifikasi
         // ke super admin via Telegram secara fire-and-forget.
-        void (async () => {
+        runBackground((async () => {
           try {
             const SESSION_GAP_MS = 15 * 60 * 1000; // sama dengan reply-postprocess.ts
 
@@ -213,12 +218,12 @@ export const Route = createFileRoute("/api/fonnte")({
           } catch (e) {
             console.warn("[Webhook] New session notif failed (non-fatal):", e);
           }
-        })();
+        })());
 
         // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
         // → jalankan Vision OCR untuk ekstrak data, lalu teruskan ke super admin.
         if (attachmentUrl) {
-          void (async () => {
+          runBackground((async () => {
             try {
               // 1. Vision OCR — ekstrak data transfer
               const { analyzePaymentProof } = await import("@/services/payment-proof.service");
@@ -242,7 +247,7 @@ export const Route = createFileRoute("/api/fonnte")({
             } catch (err) {
               console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
             }
-          })();
+          })());
         }
 
         // ── 6. Load thread/context to see if auto reply is enabled/configured ──
