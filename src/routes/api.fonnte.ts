@@ -169,7 +169,7 @@ export const Route = createFileRoute("/api/fonnte")({
         // Cek apakah ini sesi percakapan baru (gap >15 menit sejak pesan
         // terakhir, atau thread baru sama sekali). Jika ya, kirim notifikasi
         // ke super admin via Telegram secara fire-and-forget.
-        void (async () => {
+        runBackground((async () => {
           try {
             const SESSION_GAP_MS = 15 * 60 * 1000; // sama dengan reply-postprocess.ts
 
@@ -218,7 +218,7 @@ export const Route = createFileRoute("/api/fonnte")({
           } catch (e) {
             console.warn("[Webhook] New session notif failed (non-fatal):", e);
           }
-        })();
+        })());
 
         // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
         // → jalankan Vision OCR untuk ekstrak data, lalu teruskan ke super admin.
