@@ -560,6 +560,18 @@ export async function processBookingState(
 
   if (state === "CONFIRMING_NAME") {
     const trimmed = message.trim();
+    // Guard pertama: jika pesan jelas berupa pertanyaan / preferensi kamar
+    // (mis. "untuk parkir mobil aman ya?", "kamar pojok ya"), JANGAN
+    // perlakukan kata "ya" di akhirnya sebagai konfirmasi nama. Serahkan ke
+    // LLM supaya pertanyaan tamu dijawab; state nama dipertahankan.
+    if (ROOM_PREFERENCE_OR_QUESTION.test(trimmed)) {
+      console.info(
+        `[BookingState] CONFIRMING_NAME: question/room-pref detected ` +
+        `("${trimmed.slice(0, 60)}…") — preserving guestName "${context.guestName}" ` +
+        `and deferring to LLM.`,
+      );
+      return { handled: false };
+    }
     // Explicit "use this name"
     if (USE_THIS_PATTERN.test(trimmed) && !USE_OTHER_PATTERN.test(trimmed)) {
       await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
