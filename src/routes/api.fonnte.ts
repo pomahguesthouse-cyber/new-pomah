@@ -223,7 +223,7 @@ export const Route = createFileRoute("/api/fonnte")({
         // Payment proof escalation: bila pesan mengandung lampiran (gambar/file)
         // → jalankan Vision OCR untuk ekstrak data, lalu teruskan ke super admin.
         if (attachmentUrl) {
-          void (async () => {
+          runBackground((async () => {
             try {
               // 1. Vision OCR — ekstrak data transfer
               const { analyzePaymentProof } = await import("@/services/payment-proof.service");
@@ -247,7 +247,7 @@ export const Route = createFileRoute("/api/fonnte")({
             } catch (err) {
               console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
             }
-          })();
+          })());
         }
 
         // ── 6. Load thread/context to see if auto reply is enabled/configured ──
