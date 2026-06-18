@@ -271,8 +271,14 @@ export const Route = createFileRoute("/api/fonnte")({
         const { resolveManagerByPhone } = await import(
           "@/services/wa-autoreply.service"
         );
-        const manager = await resolveManagerByPhone(customerPhone);
-        const isManager = !!manager;
+
+        let isManager = false;
+        try {
+          const manager = await resolveManagerByPhone(customerPhone);
+          isManager = !!manager;
+        } catch (e) {
+          console.warn(`[Webhook] resolveManagerByPhone failed (non-fatal): ${e} | ${logCtx}`);
+        }
 
         if (!isManager && !c.auto_reply_enabled) {
           console.log(`[Webhook] auto_reply_enabled=false — skipping | ${logCtx}`);
