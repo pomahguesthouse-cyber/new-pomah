@@ -79,7 +79,7 @@ export interface StateMachineResult {
   followUpRef?: string;
 }
 
-const CANCELLATION_PATTERNS = /\b(batal|cancel|nggak jadi|ga jadi|tidak jadi|berhenti)\b/i;
+const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi|berhenti)\b/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 
@@ -88,8 +88,6 @@ const USE_THIS_PATTERN = /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|p
 const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
 
 // Specific "use this phone number" phrases for CONFIRMING_PHONE state.
-// Must be checked BEFORE USE_THIS_PATTERN to guarantee "ya nomor ini" doesn't
-// get misrouted by the generic interruption-detection heuristics.
 const USE_THIS_PHONE_PATTERN =
   /^(ya|iya|yes)?\s*(pakai|gunakan|pake|nomor)?\s*(nomor)\s*(ini|sini|aja|saja|oke|ok|ya)\b/i;
 
@@ -97,19 +95,11 @@ const CONFIRM_PATTERN = /\b(ya|iya|yes|lanjut|benar|oke|ok|setuju|betul|lanjutka
 const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/i;
 
 /**
- * Looks-like-a-person-name heuristic. The state machine previously took
- * literally any non-confirm reply as "the new name" — so when a guest in
- * CONFIRMING_NAME typed "205/206 aja kak biar sebelahan" (actually a room
- * preference, not a name), it stored that whole sentence as guestName.
- *
- * Reject candidates that:
- *   - Contain digits, slashes, or @ (room numbers, emails, phone fragments).
- *   - Contain typical request/filler words ("aja", "biar", "buat", "tolong",
- *     "kalo", "yang", etc.).
- *   - Have more than 5 whitespace-separated tokens (real names rarely do).
- *   - End with "?" (it's a question, not a name).
+ * Token-token yang BUKAN nama orang — termasuk frasa frustrasi/kebingungan.
+ * Mencegah "saya pusing", "bingung", "embuh" tersimpan sebagai guestName.
  */
-const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast)\b/i;
+const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast|pusing|bingung|embuh|ribet|capek|cape|penipuan|scam|email|nomor|hp|bukan)\b/i;
+
 
 // Honorifik / panggilan umum yang sering ditempel di awal/akhir nama
 // (contoh: "Ratih Asmarani kak", "kak Budi", "mas Joko"). Dibersihkan
