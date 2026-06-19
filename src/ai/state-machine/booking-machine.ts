@@ -175,7 +175,10 @@ function countNights(checkIn: string, checkOut: string): number {
 }
 
 /** Build the pre-confirmation booking summary once all guest details are set. */
-function buildBookingSummary(context: BookingContext): StateMachineResult {
+function buildBookingSummary(
+  context: BookingContext,
+  roomsCatalog?: Array<{ id: string; name: string; extrabed_rate?: number | null }>,
+): StateMachineResult {
   // --- Room line ---
   let roomsDisplay: string;
   if (context.rooms && context.rooms.length > 0) {
@@ -216,21 +219,32 @@ function buildBookingSummary(context: BookingContext): StateMachineResult {
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
+  // --- Resolve extra-bed rate dari DB (room_types.extrabed_rate) ---
+  // Prioritas: lookup roomsCatalog by id/name → context.extraBedRate → 0.
+  const dbRoom = roomsCatalog?.find(
+    (r) =>
+      (context.roomId && r.id === context.roomId) ||
+      (context.roomName && r.name.toLowerCase() === context.roomName.toLowerCase()),
+  );
+  const dbExtraBedRate = Number(dbRoom?.extrabed_rate ?? 0);
+  const resolvedExtraBedRate = dbExtraBedRate > 0 ? dbExtraBedRate : (context.extraBedRate ?? 0);
+  if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
+
   // --- Extra bed (otomatis untuk Deluxe ketika tamu > kapasitas default) ---
   const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = computeExtraBeds(
     context.roomName,
     totalRooms,
     adults,
-    context.extraBedRate ?? 80_000,
+    resolvedExtraBedRate,
   );
   const extraBeds = context.extraBeds ?? eb.extraBeds;
-  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * (context.extraBedRate ?? 80_000) : 0;
+  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * resolvedExtraBedRate : 0;
   const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
   const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
 
   const extraBedLine = extraBeds > 0
-    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(context.extraBedRate ?? 80_000)}/malam = ${fmtRp(extraBedTotal)}\n`
+    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
     : "";
   const overCapLine = eb.overCapacity
     ? `\n⚠️ Kapasitas maksimum ${totalRooms} kamar Deluxe + extra bed adalah ${totalRooms * 3} tamu. ` +
