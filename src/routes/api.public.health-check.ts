@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
+
 
 // Endpoint health check ringan: verifikasi koneksi Supabase, ekstensi pgvector,
 // dan model embedding via Lovable AI Gateway. Dipakai webhook untuk pre-flight check
