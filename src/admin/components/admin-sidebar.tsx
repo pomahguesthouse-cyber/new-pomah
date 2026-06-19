@@ -90,6 +90,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/webchat", label: "Web Chat", icon: MessageCircle },
       { to: "/admin/telegram", label: "Telegram", icon: Send },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
+      { to: "/admin/handoff", label: "Human Handoff", icon: LifeBuoy },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
     ],
