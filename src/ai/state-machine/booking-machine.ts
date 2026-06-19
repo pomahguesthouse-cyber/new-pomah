@@ -834,14 +834,14 @@ export async function processBookingState(
     if (wantsThisPhone) {
       context.guestPhone = formatPhoneDisplay(phone);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
     // A phone number was typed directly → use it.
     const typedPhone = extractPhone(trimmed);
     if (typedPhone) {
       context.guestPhone = typedPhone;
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
     // "Use another number" without supplying one yet → ask for it.
     if (USE_OTHER_PATTERN.test(trimmed)) {
@@ -858,7 +858,7 @@ export async function processBookingState(
     }
     context.guestPhone = phoneNum || message.replace(/[^0-9+]/g, '');
     await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    return buildBookingSummary(context);
+    return buildBookingSummary(context, ctx.rooms);
   }
 
   if (state === "CONFIRMING_BOOKING") {
@@ -898,7 +898,7 @@ export async function processBookingState(
         pricePerNight: requestedRoom.pricePerNight,
       }];
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
 
     // Koreksi slot fleksibel: tamu kirim "jumlah tamu 5 kak", "tanggal 22 Juni",
@@ -1016,7 +1016,7 @@ export async function processBookingState(
     } else {
       // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
       // dengan petunjuk yang lebih ramah, jangan kaku.
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
   }
 
