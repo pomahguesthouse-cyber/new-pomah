@@ -37,16 +37,15 @@ export interface SmartDelayConfig {
 
 export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   enabled:      true,
-  // Default agresif untuk respon cepat — admin tetap bisa menaikkan via
-  // AI Lab → Smart Delay Settings bila ingin grouping lebih lama.
-  shortMs:      2_000,   // pesan pendek tunggal lazimnya satu kalimat → balas cepat
-  mediumMs:     2_000,
-  longMs:       1_500,   // pesan panjang biasanya sudah lengkap → balas cepat
-  waitSignalMs: 4_000,   // tamu bilang "bentar/tunggu" → beri ruang sedikit
-  // Hard cap from the first message. The delay now lives in the DB
-  // (process_after), not the request, so the old edge-timeout cap no longer
-  // applies — give multi-message bursts room to group fully.
-  maxWaitMs:    8_000,
+  // Default 5 detik untuk debounce/grouping beberapa pesan beruntun
+  // (mis. tamu kirim "kak", lalu "mau booking", lalu "tanggal 20"). Admin
+  // tetap bisa menurunkan via AI Lab → Smart Delay Settings bila perlu.
+  shortMs:      5_000,
+  mediumMs:     5_000,
+  longMs:       5_000,
+  waitSignalMs: 7_000,   // tamu bilang "bentar/tunggu" → tunggu sedikit lebih lama
+  // Hard cap dari pesan pertama dalam burst.
+  maxWaitMs:    12_000,
 };
 
 /** Keywords/patterns that indicate user is still typing */
