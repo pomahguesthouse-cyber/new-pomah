@@ -1,0 +1,1 @@
+UPDATE public.wa_booking_states SET state = 'IDLE', context = '{}'::jsonb, slots = '{}'::jsonb, updated_at = now() WHERE phone = '6282340486228' AND state <> 'IDLE';
