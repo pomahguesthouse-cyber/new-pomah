@@ -78,7 +78,7 @@ export function scoreFrustration(text: string): number {
 }
 
 /** Format ringkasan booking terakhir berdasarkan context state machine. */
-function summarizeBooking(context: any): string {
+export function summarizeBooking(context: any): string {
   if (!context || typeof context !== "object") return "";
   const parts: string[] = [];
   if (context.checkIn && context.checkOut) {
