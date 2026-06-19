@@ -607,7 +607,7 @@ export async function processBookingState(
       return { handled: true, reply: "Baik, silakan ketikkan nama yang ingin Kakak gunakan untuk pemesanan:" };
     }
     // Otherwise treat the message as the new name to use.
-    const newName = trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, "").trim();
+    const newName = cleanNameCandidate(trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, ""));
     if (newName.length < 2) {
       return { handled: true, reply: 'Mohon balas "Ya" untuk memakai nama sebelumnya, atau ketik nama lengkap yang ingin Kakak gunakan:' };
     }
