@@ -175,7 +175,10 @@ function countNights(checkIn: string, checkOut: string): number {
 }
 
 /** Build the pre-confirmation booking summary once all guest details are set. */
-function buildBookingSummary(context: BookingContext): StateMachineResult {
+function buildBookingSummary(
+  context: BookingContext,
+  roomsCatalog?: Array<{ id: string; name: string; extrabed_rate?: number | null }>,
+): StateMachineResult {
   // --- Room line ---
   let roomsDisplay: string;
   if (context.rooms && context.rooms.length > 0) {
@@ -216,21 +219,32 @@ function buildBookingSummary(context: BookingContext): StateMachineResult {
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
+  // --- Resolve extra-bed rate dari DB (room_types.extrabed_rate) ---
+  // Prioritas: lookup roomsCatalog by id/name → context.extraBedRate → 0.
+  const dbRoom = roomsCatalog?.find(
+    (r) =>
+      (context.roomId && r.id === context.roomId) ||
+      (context.roomName && r.name.toLowerCase() === context.roomName.toLowerCase()),
+  );
+  const dbExtraBedRate = Number(dbRoom?.extrabed_rate ?? 0);
+  const resolvedExtraBedRate = dbExtraBedRate > 0 ? dbExtraBedRate : (context.extraBedRate ?? 0);
+  if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
+
   // --- Extra bed (otomatis untuk Deluxe ketika tamu > kapasitas default) ---
   const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = computeExtraBeds(
     context.roomName,
     totalRooms,
     adults,
-    context.extraBedRate ?? 80_000,
+    resolvedExtraBedRate,
   );
   const extraBeds = context.extraBeds ?? eb.extraBeds;
-  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * (context.extraBedRate ?? 80_000) : 0;
+  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * resolvedExtraBedRate : 0;
   const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
   const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
 
   const extraBedLine = extraBeds > 0
-    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(context.extraBedRate ?? 80_000)}/malam = ${fmtRp(extraBedTotal)}\n`
+    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
     : "";
   const overCapLine = eb.overCapacity
     ? `\n⚠️ Kapasitas maksimum ${totalRooms} kamar Deluxe + extra bed adalah ${totalRooms * 3} tamu. ` +
@@ -820,14 +834,14 @@ export async function processBookingState(
     if (wantsThisPhone) {
       context.guestPhone = formatPhoneDisplay(phone);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
     // A phone number was typed directly → use it.
     const typedPhone = extractPhone(trimmed);
     if (typedPhone) {
       context.guestPhone = typedPhone;
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
     // "Use another number" without supplying one yet → ask for it.
     if (USE_OTHER_PATTERN.test(trimmed)) {
@@ -844,7 +858,7 @@ export async function processBookingState(
     }
     context.guestPhone = phoneNum || message.replace(/[^0-9+]/g, '');
     await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    return buildBookingSummary(context);
+    return buildBookingSummary(context, ctx.rooms);
   }
 
   if (state === "CONFIRMING_BOOKING") {
@@ -884,7 +898,7 @@ export async function processBookingState(
         pricePerNight: requestedRoom.pricePerNight,
       }];
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
 
     // Koreksi slot fleksibel: tamu kirim "jumlah tamu 5 kak", "tanggal 22 Juni",
@@ -915,18 +929,24 @@ export async function processBookingState(
             pricePerNight: Number(rt?.base_rate ?? context.pricePerNight ?? 0),
           }];
         }
-        // Recompute extra bed otomatis.
+        // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_rate).
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-        const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1);
+        const rtForRate = ctx.rooms.find(
+          (r) =>
+            (context.roomId && r.id === context.roomId) ||
+            (context.roomName && r.name.toLowerCase() === context.roomName.toLowerCase()),
+        );
+        const dbRate = Number(rtForRate?.extrabed_rate ?? 0);
+        if (dbRate > 0) context.extraBedRate = dbRate;
+        const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1, dbRate || undefined);
         context.extraBeds = eb.extraBeds;
-        context.extraBedRate = 80_000;
         // Recompute total
         if (context.checkIn && context.checkOut && context.pricePerNight) {
           const nights = countNights(context.checkIn, context.checkOut);
           context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
         }
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-        return buildBookingSummary(context);
+        return buildBookingSummary(context, ctx.rooms);
       }
     }
 
@@ -996,7 +1016,7 @@ export async function processBookingState(
     } else {
       // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
       // dengan petunjuk yang lebih ramah, jangan kaku.
-      return buildBookingSummary(context);
+      return buildBookingSummary(context, ctx.rooms);
     }
   }
 
