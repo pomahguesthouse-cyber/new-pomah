@@ -133,6 +133,33 @@ export async function executeTool(
         ),
       ),
     ]);
+
+    // ─── Post-success hooks ───────────────────────────────────────────────
+    // Setelah booking berhasil dibuat lewat tool (di luar state machine),
+    // reset wa_booking_states agar tidak macet di state lama (mis. AWAITING_NAME)
+    // pada percakapan berikutnya.
+    if (toolName === "create_booking" && ctx.phone && ctx.supabaseAdmin) {
+      try {
+        const parsed = JSON.parse(output) as { ok?: boolean; reference_code?: string };
+        if (parsed?.ok && parsed.reference_code) {
+          await ctx.supabaseAdmin
+            .from("wa_booking_states")
+            .upsert(
+              {
+                phone: ctx.phone,
+                state: "PAYMENT_PENDING",
+                context: { bookingCode: parsed.reference_code },
+                slots: {},
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "phone" },
+            );
+        }
+      } catch (hookErr) {
+        console.warn("[ToolExecutor] reset wa_booking_states failed:", hookErr);
+      }
+    }
+
     return { output, toolLabel: label };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

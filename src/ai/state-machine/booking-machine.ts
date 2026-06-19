@@ -109,7 +109,12 @@ const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/
  *   - Have more than 5 whitespace-separated tokens (real names rarely do).
  *   - End with "?" (it's a question, not a name).
  */
-const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|kak|kakak|mba|mbak|mas|pak|bu|nya|kamar|room|wifi|ac|sarapan|breakfast)\b/i;
+const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast)\b/i;
+
+// Honorifik / panggilan umum yang sering ditempel di awal/akhir nama
+// (contoh: "Ratih Asmarani kak", "kak Budi", "mas Joko"). Dibersihkan
+// sebelum validasi nama supaya tidak salah-tolak.
+const HONORIFIC_TOKEN = /\b(kak|kakak|mba|mbak|mas|pak|bu|bro|sis|bang|kk)\b/gi;
 
 /**
  * Detect "this looks like a request about the booking itself (room
@@ -120,6 +125,20 @@ const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|
  */
 const ROOM_PREFERENCE_OR_QUESTION =
   /(?:\d{2,3}\s*[\/\-]\s*\d{2,3})|\b(sebelahan|samping|sebelah|depan|belakang|atas|bawah|deket|dekat|view|pemandangan|pojok)\b|\?/i;
+
+/**
+ * Bersihkan kandidat nama: ambil baris pertama (tamu sering menulis
+ * "Ratih Asmarani\n28 Juni kak, single"), buang honorifik di awal/akhir,
+ * dan rapikan whitespace. Mengembalikan string siap-validasi.
+ */
+function cleanNameCandidate(candidate: string): string {
+  const firstLine = candidate.split(/\r?\n/)[0] ?? candidate;
+  return firstLine
+    .replace(HONORIFIC_TOKEN, " ")
+    .replace(/[,.\-–—!]+$/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
@@ -525,8 +544,10 @@ export async function processBookingState(
 
   
   if (state === "AWAITING_NAME") {
-    // We assume the user replied with their name.
-    const name = message.trim();
+    // We assume the user replied with their name. Bersihkan honorifik
+    // ("kak", "mas", dll.) dan ambil baris pertama sebelum validasi.
+    const raw = message.trim();
+    const name = cleanNameCandidate(raw);
     if (name.length < 2) {
       return { handled: true, reply: "Maaf, nama yang dimasukkan terlalu singkat. Silakan masukkan nama lengkap Kakak:" };
     }
@@ -535,9 +556,9 @@ export async function processBookingState(
       // Don't store the garbage as guestName.
       // If clearly a question/room-pref, defer to LLM so it can answer and
       // then re-ask for the name in the same turn.
-      if (ROOM_PREFERENCE_OR_QUESTION.test(name)) {
+      if (ROOM_PREFERENCE_OR_QUESTION.test(raw)) {
         console.info(
-          `[BookingState] AWAITING_NAME: question/room-pref detected ("${name.slice(0, 60)}…"). ` +
+          `[BookingState] AWAITING_NAME: question/room-pref detected ("${raw.slice(0, 60)}…"). ` +
           `Deferring to LLM.`,
         );
         return { handled: false };
@@ -586,7 +607,7 @@ export async function processBookingState(
       return { handled: true, reply: "Baik, silakan ketikkan nama yang ingin Kakak gunakan untuk pemesanan:" };
     }
     // Otherwise treat the message as the new name to use.
-    const newName = trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, "").trim();
+    const newName = cleanNameCandidate(trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, ""));
     if (newName.length < 2) {
       return { handled: true, reply: 'Mohon balas "Ya" untuk memakai nama sebelumnya, atau ketik nama lengkap yang ingin Kakak gunakan:' };
     }
