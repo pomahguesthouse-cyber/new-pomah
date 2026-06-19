@@ -486,7 +486,7 @@ export async function executeAutoreplyForPhone(
   // resmi, dan (kalau frustrasi) tandai handoff ke admin manusia.
   if (!manager && lastMessage) {
     try {
-      const { detectFrustration, buildFrustrationReply, markHumanHandoff } = await import(
+      const { detectFrustration, buildFrustrationReply, markHumanHandoff, createHandoffTicket } = await import(
         "@/services/frustration-detector"
       );
       const kind = detectFrustration(lastMessage);
@@ -500,6 +500,14 @@ export async function executeAutoreplyForPhone(
         reply = fReply;
         if (shouldHandoff) {
           await markHumanHandoff(supabaseAdmin, phone, bookingContext);
+          // Buat tiket admin (dengan ringkasan booking, skor frustrasi, status open).
+          const ticket = await createHandoffTicket(supabaseAdmin as any, {
+            phone,
+            threadId: c.thread_id ?? null,
+            kind,
+            triggerMessage: lastMessage,
+            context: bookingContext,
+          });
           // Notify super admin secara fire-and-forget.
           void (async () => {
             try {
@@ -509,8 +517,8 @@ export async function executeAutoreplyForPhone(
                 threadId: c.thread_id,
                 toolName: "human-handoff",
                 repeatCount: 1,
-                lastArgs: JSON.stringify({ trigger: lastMessage.slice(0, 200) }),
-                sampleOutput: "Frustration detected — tamu butuh admin manusia.",
+                lastArgs: JSON.stringify({ trigger: lastMessage.slice(0, 200), ticketId: ticket?.id }),
+                sampleOutput: "Frustration detected — tamu butuh admin manusia. Tiket dibuat.",
               });
             } catch (e) {
               console.warn("[Autoreply] handoff notify failed:", e);

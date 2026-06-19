@@ -54,8 +54,31 @@ export function detectFrustration(text: string): FrustrationKind {
   return null;
 }
 
+/**
+ * Skor frustrasi 0-100 berdasarkan jumlah pola yang cocok, kata kunci
+ * ekstrem (penipuan/scam), capslock, dan tanda seru berurutan.
+ * Dipakai admin untuk prioritisasi tiket handoff.
+ */
+export function scoreFrustration(text: string): number {
+  if (!text) return 0;
+  let score = 0;
+  const frustHits = FRUSTRATION_PATTERNS.filter((p) => p.test(text)).length;
+  const trustHits = TRUST_PATTERNS.filter((p) => p.test(text)).length;
+  score += frustHits * 18;
+  score += trustHits * 12;
+  if (/\b(penipuan|scam|nipu)\b/i.test(text)) score += 25;
+  if (/!{2,}/.test(text)) score += 10;
+  const letters = text.replace(/[^a-zA-Z]/g, "");
+  if (letters.length >= 6) {
+    const upperRatio = letters.replace(/[^A-Z]/g, "").length / letters.length;
+    if (upperRatio > 0.7) score += 15;
+  }
+  if (text.length > 160) score += 5;
+  return Math.max(0, Math.min(100, score));
+}
+
 /** Format ringkasan booking terakhir berdasarkan context state machine. */
-function summarizeBooking(context: any): string {
+export function summarizeBooking(context: any): string {
   if (!context || typeof context !== "object") return "";
   const parts: string[] = [];
   if (context.checkIn && context.checkOut) {
@@ -127,5 +150,81 @@ export async function markHumanHandoff(
     });
   } catch (e) {
     console.warn("[Frustration] failed to mark handoff:", e);
+  }
+}
+
+// ─── Handoff ticket creation ──────────────────────────────────────────────
+
+export interface CreateHandoffTicketInput {
+  phone: string;
+  threadId?: string | null;
+  kind: NonNullable<FrustrationKind>;
+  triggerMessage: string;
+  context: any;
+}
+
+/**
+ * Buat tiket admin di tabel `handoff_tickets`. Idempotent per (phone, open):
+ * jika sudah ada tiket open utk nomor ini, update saja agar tidak banjir.
+ */
+export async function createHandoffTicket(
+  supabase: any,
+  input: CreateHandoffTicketInput,
+): Promise<{ id: string } | null> {
+  try {
+    const score = scoreFrustration(input.triggerMessage);
+    const summary = summarizeBooking(input.context);
+    const bookingCode: string | null =
+      (input.context?.bookingCode as string | undefined) ?? null;
+
+    // Cari tiket open existing untuk nomor ini.
+    const { data: existing } = await supabase
+      .from("handoff_tickets")
+      .select("id, frustration_score")
+      .eq("phone", input.phone)
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase
+        .from("handoff_tickets")
+        .update({
+          frustration_kind: input.kind,
+          frustration_score: Math.max(existing.frustration_score ?? 0, score),
+          trigger_message: input.triggerMessage.slice(0, 1000),
+          booking_summary: summary,
+          booking_context: input.context ?? {},
+          booking_code: bookingCode,
+          thread_id: input.threadId ?? null,
+        })
+        .eq("id", existing.id);
+      return { id: existing.id as string };
+    }
+
+    const { data, error } = await supabase
+      .from("handoff_tickets")
+      .insert({
+        phone: input.phone,
+        thread_id: input.threadId ?? null,
+        booking_code: bookingCode,
+        booking_summary: summary,
+        booking_context: input.context ?? {},
+        frustration_kind: input.kind,
+        frustration_score: score,
+        trigger_message: input.triggerMessage.slice(0, 1000),
+        status: "open",
+      })
+      .select("id")
+      .single();
+    if (error) {
+      console.warn("[Handoff] insert ticket failed:", error);
+      return null;
+    }
+    return { id: data.id as string };
+  } catch (e) {
+    console.warn("[Handoff] createHandoffTicket error:", e);
+    return null;
   }
 }

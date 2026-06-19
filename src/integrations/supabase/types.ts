@@ -651,6 +651,60 @@ export type Database = {
         }
         Relationships: []
       }
+      handoff_tickets: {
+        Row: {
+          assigned_to: string | null
+          booking_code: string | null
+          booking_context: Json
+          booking_summary: string
+          created_at: string
+          frustration_kind: string
+          frustration_score: number
+          id: string
+          phone: string
+          resolution_note: string | null
+          resolved_at: string | null
+          status: Database["public"]["Enums"]["handoff_ticket_status"]
+          thread_id: string | null
+          trigger_message: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          booking_code?: string | null
+          booking_context?: Json
+          booking_summary?: string
+          created_at?: string
+          frustration_kind: string
+          frustration_score?: number
+          id?: string
+          phone: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["handoff_ticket_status"]
+          thread_id?: string | null
+          trigger_message?: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          booking_code?: string | null
+          booking_context?: Json
+          booking_summary?: string
+          created_at?: string
+          frustration_kind?: string
+          frustration_score?: number
+          id?: string
+          phone?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          status?: Database["public"]["Enums"]["handoff_ticket_status"]
+          thread_id?: string | null
+          trigger_message?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           booking_id: string
@@ -2971,6 +3025,12 @@ export type Database = {
         | "checked_in"
         | "checked_out"
         | "cancelled"
+      handoff_ticket_status:
+        | "open"
+        | "approved"
+        | "adjusted"
+        | "cancelled"
+        | "resolved"
       message_direction: "in" | "out"
       payment_status: "unpaid" | "partial" | "paid"
       room_status: "clean" | "dirty" | "maintenance" | "out_of_order"
@@ -3117,6 +3177,13 @@ export const Constants = {
         "checked_in",
         "checked_out",
         "cancelled",
+      ],
+      handoff_ticket_status: [
+        "open",
+        "approved",
+        "adjusted",
+        "cancelled",
+        "resolved",
       ],
       message_direction: ["in", "out"],
       payment_status: ["unpaid", "partial", "paid"],
