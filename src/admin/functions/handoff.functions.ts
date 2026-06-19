@@ -16,7 +16,7 @@ export interface HandoffTicket {
   thread_id: string | null;
   booking_code: string | null;
   booking_summary: string;
-  booking_context: unknown;
+  booking_context: Record<string, unknown> | null;
   frustration_kind: string;
   frustration_score: number;
   trigger_message: string;

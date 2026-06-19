@@ -40,6 +40,7 @@ import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
+import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
 import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
 import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
@@ -213,6 +214,11 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
   path: '/media',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminHandoffRoute = AdminHandoffRouteImport.update({
+  id: '/handoff',
+  path: '/handoff',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminExploreRoute = AdminExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
@@ -318,6 +324,7 @@ export interface FileRoutesByFullPath {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/handoff': typeof AdminHandoffRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
@@ -367,6 +374,7 @@ export interface FileRoutesByTo {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/handoff': typeof AdminHandoffRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
@@ -418,6 +426,7 @@ export interface FileRoutesById {
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/handoff': typeof AdminHandoffRoute
   '/admin/media': typeof AdminMediaRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/pages': typeof AdminPagesRoute
@@ -470,6 +479,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/handoff'
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
@@ -519,6 +529,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/handoff'
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
@@ -569,6 +580,7 @@ export interface FileRouteTypes {
     | '/admin/complaints'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/handoff'
     | '/admin/media'
     | '/admin/notifications'
     | '/admin/pages'
@@ -851,6 +863,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMediaRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/handoff': {
+      id: '/admin/handoff'
+      path: '/handoff'
+      fullPath: '/admin/handoff'
+      preLoaderRoute: typeof AdminHandoffRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/explore': {
       id: '/admin/explore'
       path: '/explore'
@@ -982,6 +1001,7 @@ interface AdminRouteChildren {
   AdminComplaintsRoute: typeof AdminComplaintsRoute
   AdminContentManagerRoute: typeof AdminContentManagerRoute
   AdminExploreRoute: typeof AdminExploreRoute
+  AdminHandoffRoute: typeof AdminHandoffRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
   AdminPagesRoute: typeof AdminPagesRoute
@@ -1005,6 +1025,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminComplaintsRoute: AdminComplaintsRoute,
   AdminContentManagerRoute: AdminContentManagerRoute,
   AdminExploreRoute: AdminExploreRoute,
+  AdminHandoffRoute: AdminHandoffRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
   AdminPagesRoute: AdminPagesRoute,
