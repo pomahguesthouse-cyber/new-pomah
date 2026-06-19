@@ -86,6 +86,18 @@ export interface AgentContext {
    * behavior is preserved.
    */
   mode?: "guest" | "managerial";
+  /**
+   * Contoh percakapan ideal yang sudah diretrieve dari
+   * `chatbot_training_examples` untuk pesan tamu terkini. Agent wajib
+   * mengikuti gaya & informasi ini bila konteks mirip.
+   */
+  trainingExamples?: Array<{
+    id: string;
+    intent: string | null;
+    stage: string | null;
+    user_message: string;
+    ideal_assistant_response: string;
+  }>;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

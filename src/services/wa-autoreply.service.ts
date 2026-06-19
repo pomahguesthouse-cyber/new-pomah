@@ -34,6 +34,7 @@ import {
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
 import { chatCompletionText } from "@/services/ai-client.service";
+import { findRelevantTrainingExamples } from "@/services/training-examples.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -540,6 +541,11 @@ export async function executeAutoreplyForPhone(
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     const tStart = Date.now();
+    const trainingExamples = await findRelevantTrainingExamples(
+      supabaseAdmin as any,
+      { userMessage: lastMessage ?? "" },
+      3,
+    );
     try {
       orchResult = await runMultiAgentOrchestration({
         phone,
@@ -556,6 +562,13 @@ export async function executeAutoreplyForPhone(
           chatSummaryJson,
           managerName: manager?.name,
           mode: manager ? "managerial" : undefined,
+          trainingExamples: trainingExamples.map((ex) => ({
+            id: ex.id,
+            intent: ex.intent,
+            stage: ex.stage,
+            user_message: ex.user_message,
+            ideal_assistant_response: ex.ideal_assistant_response,
+          })),
         },
         toolCtx: {
           supabasePublic: supabasePublic as any,
