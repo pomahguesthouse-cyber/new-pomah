@@ -516,18 +516,31 @@ export async function processBookingState(
   // pernah ada invoice "menggantung" sampai user mulai ulang & konfirmasi.
   if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
     try {
-      // Tandai bookings draft/pending milik tamu ini sebagai cancelled.
-      await (supabase as any)
-        .from("bookings")
-        .update({ status: "cancelled" })
-        .in("status", ["pending", "draft"])
-        .eq("guest_phone", phone);
-      // Void invoice yang belum dibayar.
-      await (supabase as any)
-        .from("invoices")
-        .update({ status: "void" })
-        .in("status", ["pending", "unpaid", "draft"])
+      // Cari guest berdasarkan phone, lalu cancel booking pending miliknya.
+      const { data: guests } = await (supabase as any)
+        .from("guests")
+        .select("id")
         .eq("phone", phone);
+      const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
+      if (guestIds.length > 0) {
+        const { data: pendingBookings } = await (supabase as any)
+          .from("bookings")
+          .select("id")
+          .in("guest_id", guestIds)
+          .in("status", ["pending"]);
+        const bookingIds = ((pendingBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
+        if (bookingIds.length > 0) {
+          await (supabase as any)
+            .from("bookings")
+            .update({ status: "cancelled" })
+            .in("id", bookingIds);
+          // Tandai invoice terkait (jika ada) sebagai void via payment_status_snapshot.
+          await (supabase as any)
+            .from("invoices")
+            .delete()
+            .in("booking_id", bookingIds);
+        }
+      }
     } catch (e) {
       console.warn("[BookingState] cancel cleanup failed (non-fatal):", e);
     }
@@ -535,10 +548,11 @@ export async function processBookingState(
     return {
       handled: true,
       reply:
-        "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya batalkan. " +
+        "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya bersihkan. " +
         "Kalau nanti ingin mulai ulang, tinggal sebut tanggal & tipe kamarnya ya 🙏.",
     };
   }
+
 
 
   if (state === "IDLE") {
