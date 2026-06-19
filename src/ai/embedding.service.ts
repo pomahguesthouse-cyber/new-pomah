@@ -19,7 +19,7 @@ export async function generateEmbedding(
         Authorization: `Bearer ${config.apiKey}`,
       },
       body: JSON.stringify({
-        model: "text-embedding-3-small", // Standard fast embedding model
+        model: "openai/text-embedding-3-small", // Lovable AI Gateway requires provider prefix
         input: text.trim(),
       }),
     });
