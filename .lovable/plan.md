@@ -1,123 +1,152 @@
-Ringkasan: Halaman beranda membutuhkan 5,8 detik sebelum konten pertama muncul (FCP) dan 7,7 detik untuk muat penuh. TTFB mencapai 4 detik. Database menunjukkan 743.182 transaksi rollback dan 634.000+ panggilan webhook/WA yang memakan 23 menit total eksekusi. Plan ini menargetkan backend, bundle frontend, dan rendering secara berurutan.
 
-Hasil analisis performa saat ini
---------------------------------
+# Perbaikan Alur Chatbot Booking Pomah Guesthouse
 
-TTFB:        4.041 ms (sangat lambat — server membutuhkan 4 detik untuk merespons)
-FCP:         5.880 ms (pengunjung melihat layar kosong selama 6 detik)
-Full Load:   7.762 ms
-DOM Nodes:   4.158 (cukup berat)
-JS Scripts:  220 file, total 2,4 MB
+Sebelum mulai mengubah ratusan baris di state machine dan webhook, saya ingin konfirmasi rencana di bawah karena cakupannya besar dan menyentuh logika pembayaran.
 
-Resource paling lambat:
-  - recharts.js          220 KB   1.380 ms
-  - lucide-react.js      179 KB   1.142 ms
-  - react-dom_client.js  166 KB   1.375 ms
-  - admin/seo.tsx        116 KB   1.335 ms  (file admin di-load di halaman publik)
-  - Hero image (Storage)          1.489 ms
+## Tujuan
 
-Database:
-  - net.http_post  dipanggil 633.965 kali = 1.392.449 ms total (~23 menit)
-  - Transaksi rollback: 743.182 kali
-  - Memori database: 69%
-  - Query booking dengan nested JSON aggregation lambat
+Membuat chatbot WhatsApp Pomah:
+- Menerima koreksi slot (tamu, tanggal, tipe, jumlah kamar, nama) tanpa minta "Ya/Batal" kaku.
+- Menghitung extra bed Deluxe otomatis (kapasitas 2, max 3 dengan +Rp100.000/malam).
+- Membatalkan draft & invoice ketika user menulis "Batal".
+- Mendeteksi frustrasi dan menawarkan handoff ke admin.
+- Tidak pernah menyimpan kalimat frustrasi sebagai nama.
+- Menggabungkan pesan beruntun (debounce 5 detik) dan mengunci per nomor agar tidak ada dua balasan paralel.
+- Hanya menerbitkan invoice setelah semua slot valid + konfirmasi final.
 
-1. Percepat respons server (TTFB) — dampak terbesar
-----------------------------------------------------
-TTFB 4 detik adalah masalah utama. Pengunjung menunggu server sebelum browser bisa mulai merender apa pun.
+## Perubahan Utama
 
-1a. Optimasi `getPublicSiteData`
-  - Saat ini `getPublicSiteData` memanggil `supabasePublic.rpc("get_public_property")` dan `room_types.select(...)` secara parallel.
-  - Query `room_types` menggunakan `.select("..., rooms(id)")` — nested select ini bisa jadi N+1 jika Supabase tidak mengoptimalkannya.
-  - Ganti nested select dengan `count` exact atau pindahkan perhitungan `total_physical_rooms` ke RPC/function database.
-  - Tambahkan `staleTime` lebih agresif pada loader router (bukan hanya pada `useQuery`).
+### 1. State machine baru (`src/ai/state-machine/booking-machine.ts`)
+Ganti state lama menjadi:
+```
+IDLE
+  → COLLECTING_DATES
+  → SELECTING_ROOM
+  → COLLECTING_GUEST_COUNT
+  → VALIDATING_CAPACITY        (auto, hitung extra bed)
+  → COLLECTING_NAME
+  → COLLECTING_EMAIL
+  → COLLECTING_PHONE
+  → CONFIRMING_SUMMARY         (terima koreksi slot)
+  → AWAITING_PAYMENT
+CANCELLED
+HUMAN_HANDOFF_REQUIRED
+```
 
-1b. Cache SSR dengan `staleTime` + `preloadStaleTime`
-  - Di `src/router.tsx`, `defaultPreloadStaleTime: 0` membuat setiap navigasi memaksa refetch.
-  - Naikkan ke `30_000` (30 detik) untuk data publik yang jarang berubah.
-  - Di route `/`, naikkan `staleTime` dari `5 * 60 * 1000` ke `60 * 60 * 1000` (1 jam) karena property data & room types sangat jarang berubah.
+Tambah helper:
+- `parseSlotCorrection(input)` → deteksi pola "jumlah tamu 5", "tanggal 20 des", "nama saya …", "ganti deluxe", dll. Dipakai di setiap state lanjut (terutama CONFIRMING_SUMMARY).
+- `computeExtraBeds(roomType, rooms, guests)` → khusus Deluxe: `extra = max(0, guests - rooms*2)`, valid jika `extra ≤ rooms` (max 3/kamar). Harga `extra * nights * 100_000`.
+- `validateName(input)` → tolak kalimat frustrasi & pertanyaan; reject jika cocok daftar `FRUSTRATION_PHRASES` atau berisi tanda tanya/diawali "saya pusing", dsb.
 
-1c. Reduksi query WhatsApp/Webhook
-  - `net.http_post` dipanggil hampir 634.000 kali — ini menandakan cron job atau queue worker berjalan terlalu sering / tidak efisien.
-  - Kurangi frekuensi cron `process-wa-queue` dan `booking-stuck-monitor` jika intervalnya terlalu rapat.
-  - Pastikan queue worker memakai batching, bukan satu per satu.
+### 2. Extra bed Deluxe
+- Saat `VALIDATING_CAPACITY`, jika `guests > rooms*2` dan `roomType=deluxe`:
+  - Jika butuh extra ≤ jumlah kamar → tawarkan otomatis ("Untuk 2 kamar Deluxe & 5 tamu, kami tambahkan 1 extra bed (Rp100.000/malam). Total kamar Rp500.000 + extra bed Rp100.000 = **Rp600.000** untuk 1 malam. Lanjut?").
+  - Jika melebihi (mis. 7 tamu di 2 kamar) → tawarkan tambah kamar.
+- Simpan `extraBeds` & `extraBedTotal` di `wa_booking_states.context` dan masuk ke invoice.
 
-2. Kurangi ukuran JavaScript bundle — frontend
--------------------------------------------------
-2a. Split `index.tsx` (2.615 baris) menjadi komponen lazy
-  - `index.tsx` memiliki 2.615 baris kode. Semua section (Hero, Testimoni, Fasilitas, Explore, Booking Dialog, dll) di-render sekaligus.
-  - Pindahkan section below-the-fold (testimonials, explore, facilities, rooms list) ke file komponen terpisah dengan `React.lazy()` atau `.lazy.tsx` route splitting.
-  - Gunakan `React.Suspense` dengan fallback skeleton ringan.
+### 3. Cancel handler
+- Tambah `BOOKING_CANCEL_PATTERNS` (`/^batal/i`, `/cancel/i`, `/batalkan/i`).
+- Saat terdeteksi di state manapun:
+  - Set state `CANCELLED`.
+  - Hapus draft & pending invoice (`bookings` status `draft|pending` untuk nomor itu → `cancelled`; invoice terkait → `void`).
+  - Balas konfirmasi pembatalan + cara mulai ulang.
+- Tidak buat invoice baru sampai user memulai ulang lewat alur normal.
 
-2b. Hapus import langsung `rooms.$slug.tsx` dari `index.tsx`
-  - Baris 55: `import { BookingDialog, ... } from "@/routes/rooms.$slug"`
-  - Ini menarik seluruh file `rooms.$slug.tsx` (39.657 baris) ke dalam bundle beranda.
-  - Duplikat atau pindahkan `BookingDialog` ke `src/public/components/` agar bisa di-import tanpa menarik route lain.
+### 4. Frustration detection (`src/services/frustration-detector.ts` baru)
+- Daftar pola: `saya pusing`, `embuh`, `bukan email`, `ini benar\??`, `penipuan`, `tidak ai kan`, `apakah ini ai`, `ribet`, `bingung`, `gak ngerti`, dll.
+- Fungsi `detectFrustration(text)` dipanggil di webhook sebelum routing AI.
+- Jika hit:
+  - Set state `HUMAN_HANDOFF_REQUIRED`.
+  - Bot kirim ringkasan booking terakhir (tanggal, kamar, tamu, total estimasi) + verifikasi resmi: "Website resmi kami **pomahguesthouse.com**, invoice resmi otomatis terkirim setelah konfirmasi. Saya teruskan ke admin manusia 🙏."
+  - Notify admin via `manager-notifier.service.ts`.
 
-2c. Pisahkan `recharts` dari bundle publik
-  - `recharts.js` (220 KB) di-load di halaman publik. Library chart ini seharusnya hanya digunakan di halaman admin (analytics, SEO).
-  - Jika `src/components/ui/chart.tsx` di-import oleh komponen publik, ganti dengan dynamic import atau pindahkan komponen chart ke `src/admin/components/`.
+### 5. Trust/penipuan response
+- Pola `penipuan|scam|tidak ai kan|benar gak|amankah` → balas template trust:
+  - Domain resmi `pomahguesthouse.com`
+  - Invoice resmi otomatis
+  - Tombol/teks hubungi admin (nomor admin dari env)
+- Tidak otomatis handoff jika cuma tanya (kecuali kata frustrasi).
 
-2d. Optimasi `lucide-react`
-  - File lucide-react 179 KB. Meskipun Vite melakukan tree-shaking, import 39+ icon dari root package bisa memaksa bundler menyertakan banyak modul.
-  - Konfirmasi build production menggunakan `lucide-react` tree-shaking. Di development profil tetap besar, tapi di production seharusnya lebih kecil.
-  - Alternatif: gunakan `@lucide/lab` atau import per-icon (`lucide-react/dist/esm/icons/wifi`).
+### 6. Name validation
+- `validateName(input)` cek:
+  - panjang 2–60
+  - bukan match `FRUSTRATION_PHRASES`
+  - tidak mengandung `?`, `!`, kata `pusing|embuh|bingung|penipuan|email|nomor`
+  - lulus `cleanNameCandidate` yang sudah ada
+- Jika gagal: tanyakan ulang dengan sopan, jangan lanjut state.
 
-2e. Hapus admin/seo.tsx dari chunk publik
-  - File `admin/seo.tsx` (116 KB) terlihat di network halaman publik.
-  - Periksa apakah ada import chain dari komponen publik ke admin module (misalnya `mergeHomepageConfig`, `listActivePublicEvents`, dll yang mungkin menarik modul admin).
-  - Pindahkan fungsi/util yang dibutuhkan publik ke `src/public/` atau `src/lib/` agar tidak menarik seluruh file admin.
+### 7. Debounce 5 detik & lock per nomor
+- Tambah `src/services/message-debouncer.service.ts`:
+  - Gunakan tabel baru `wa_message_buffer` (phone, messages[], scheduled_at) atau in-memory + flush via cron 1-detik. **Karena worker stateless**, pakai tabel Supabase.
+  - Saat webhook menerima pesan: insert ke buffer, set `scheduled_at = now()+5s`.
+  - Cron `api.cron.process-wa-queue` (sudah ada) ambil buffer yang `scheduled_at <= now()` dan tidak ada pesan baru 5 detik terakhir → gabungkan jadi satu `combinedText` → proses.
+- Lock: gunakan kolom `processing_lock` (timestamp) di `wa_booking_states`. Saat mulai memproses, `UPDATE ... SET processing_lock = now() WHERE phone=? AND (processing_lock IS NULL OR processing_lock < now()-30s)` — jika 0 row affected, skip (sudah ada worker lain).
+- Release lock saat selesai/error.
 
-3. Optimasi gambar dan aset
-----------------------------
-3a. Hero image preload sudah ada — pertahankan
-  - `head()` route sudah menambahkan `<link rel="preload" as="image">` untuk hero slide pertama.
-  - Tetapi image dari Supabase Storage membutuhkan 1.489 ms. Pertimbangkan:
-    - Gunakan CDN atau image transformer (Cloudflare Images) untuk resize otomatis.
-    - Kompresi WebP/AVIF untuk hero image.
-    - Jika ukuran file besar, pertimbangkan lazy-loading slide ke-2 dan seterusnya.
+### 8. Invoice gating
+Di `confirming_summary`:
+- Hanya transisi ke `AWAITING_PAYMENT` & buat invoice jika:
+  - `checkIn`, `checkOut` valid & tersedia (`check_room_availability` RPC)
+  - `roomType` & `rooms` valid
+  - `guests` valid & kapasitas terpenuhi (dgn extra bed bila perlu)
+  - `name` valid, `email` valid (regex), `phone` valid (E.164 ID)
+  - Konfirmasi final `Ya|Lanjut|OK|Setuju` (regex eksak)
+- Koreksi parsial (mis. "jumlah tamu 5 kak") → update slot, jalankan `VALIDATING_CAPACITY` ulang, tampilkan ringkasan baru, tetap di `CONFIRMING_SUMMARY`.
 
-3b. Lazy-load gambar di bawah fold
-  - Semua gambar room types, explore items, dan testimonial seharusnya memakai `loading="lazy"`.
-  - Tambahkan `decoding="async"` pada `<img>` untuk menghindari blocking main thread.
+### 9. Front-office prompt
+Update `src/ai/agents/front-office.agent.ts`:
+- Instruksi eksplisit: terima koreksi slot, tawarkan extra bed Deluxe, jangan paksa Ya/Batal, sebut domain resmi saat ditanya trust.
 
-3c. Google Reviews script
-  - Script Google Reviews di-inject via `document.createElement("script")` di useEffect.
-  - Pindahkan ke `async`/`defer` script tag di `head()` route, atau tunda inisialisasi sampai after interactive.
+## File yang Akan Diubah / Dibuat
 
-4. Optimasi database — kurangi rollback & webhook
----------------------------------------------------
-4a. Index untuk query booking
-  - Query booking dengan `LEFT JOIN LATERAL` + `json_agg` membutuhkan 5-27 ms rata-rata (total 30-33 detik).
-  - Pastikan index ada pada: `bookings.status`, `bookings.check_in`, `bookings.check_out`, `booking_rooms.booking_id`, `booking_rooms.room_id`.
-  - Jika query ini hanya untuk kalender/dashboard, pertimbangkan materialized view atau cache Redis/Lovable Cloud.
+Diubah:
+- `src/ai/state-machine/booking-machine.ts` — state baru + parser koreksi + extra bed + name guard.
+- `src/services/wa-autoreply.service.ts` — integrasi debounce, lock, cancel, frustration, trust template.
+- `src/ai/agents/front-office.agent.ts` — prompt baru.
+- `src/services/reply-postprocess.ts` — tambah rule trust.
+- `src/routes/api.fonnte.ts` — masuk ke buffer/debouncer alih-alih proses langsung.
+- `src/routes/api.cron.process-wa-queue.ts` — flush buffer + lock.
+- `src/tools/executor.ts` — pastikan cancel hook membersihkan invoice.
 
-4b. Batch webhook calls
-  - 634.000 panggilan `net.http_post` menandakan setiap notifikasi dikirim satu per satu.
-  - Implementasi batch: kumpulkan notifikasi selama X detik, lalu kirim sekali.
-  - Gunakan `pg_cron` dengan interval lebih jarang jika real-time tidak kritikal.
+Dibuat:
+- `src/services/frustration-detector.ts`
+- `src/services/message-debouncer.service.ts`
+- `src/lib/booking-slot-parser.ts`
+- Migration: tabel `wa_message_buffer` + kolom `processing_lock`, `extra_beds`, `extra_bed_total` di `wa_booking_states` (atau di context jsonb).
 
-4c. Kurangi transaksi rollback
-  - 743.182 rollback sejak boot menandakan banyak query gagal (timeout, constraint violation, atau deadlock).
-  - Periksa log query untuk error berulang. Tambahkan timeout dan retry dengan exponential backoff.
+## Migrasi Database (perlu approval)
 
-5. Code splitting konkret — file target
------------------------------------------
-File yang perlu diubah:
+```sql
+-- buffer pesan untuk debounce 5 detik
+CREATE TABLE public.wa_message_buffer (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone text NOT NULL,
+  message text NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  scheduled_at timestamptz NOT NULL,
+  processed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX ON public.wa_message_buffer (phone, processed_at, scheduled_at);
+GRANT ALL ON public.wa_message_buffer TO service_role;
+ALTER TABLE public.wa_message_buffer ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service only" ON public.wa_message_buffer
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
 
-  - `src/routes/index.tsx`       → pecah jadi `HomeHero.tsx`, `HomeRooms.tsx`, `HomeTestimonials.tsx`, `HomeExplore.tsx`, `HomeFacilities.tsx`, `HomeBookingDialog.tsx`
-  - `src/routes/index.tsx`       → hapus `import { BookingDialog } from "@/routes/rooms.$slug"`
-  - `src/public/components/`     → tambahkan `BookingDialog.tsx` (duplikat/ekstrak dari rooms.$slug)
-  - `src/components/ui/chart.tsx` → pindahkan ke `src/admin/components/` atau gunakan dynamic import
-  - `src/router.tsx`             → ubah `defaultPreloadStaleTime: 0` jadi `30_000`
-  - `src/routes/index.tsx`       → `staleTime: 5 * 60 * 1000` jadi `60 * 60 * 1000`
-  - `src/routes/index.tsx`       → tambahkan `loading="lazy"` dan `decoding="async"` pada semua `<img>` below-fold
+ALTER TABLE public.wa_booking_states
+  ADD COLUMN IF NOT EXISTS processing_lock timestamptz;
+```
 
-Urutan implementasi yang direkomendasikan
-------------------------------------------
-1. Langkah 1a + 1b — optimasi loader & cache SSR (paling cepat implementasi, dampak besar pada TTFB)
-2. Langkah 2b — hapus import `rooms.$slug` dari `index.tsx` (mengurangi bundle size signifikan)
-3. Langkah 2c — pisahkan recharts dari publik (mengurangi 220 KB)
-4. Langkah 5 — pecah `index.tsx` jadi komponen lazy (mengurangi initial JS parse & DOM)
-5. Langkah 3 — optimasi gambar & lazy loading (dampak visual pada FCP/LCP)
-6. Langkah 4 — optimasi database & webhook (memperbaiki backend secara menyeluruh)
+## Out of Scope
+
+- Tidak mengubah skema invoice/payment provider.
+- Tidak mengubah UI admin.
+- Tidak menyentuh route lain di luar list di atas.
+
+## Risiko
+
+- Debounce 5 detik akan menambah latency balasan ~5 detik (sesuai permintaan).
+- Lock berbasis DB; jika worker crash setelah ambil lock, lock kedaluwarsa 30 detik.
+- Buffer butuh cron yang sudah ada (`api.cron.process-wa-queue`) berjalan minimal tiap 5–10 detik. Saat ini biasanya per menit — saya akan tambahkan endpoint yang aman dipanggil lebih sering, dan dokumentasikan agar pg_cron/Fonnte memanggil tiap 10 detik.
+
+Setuju saya lanjut implementasi semuanya, atau ada bagian yang ingin dilewati/diprioritaskan dulu?
