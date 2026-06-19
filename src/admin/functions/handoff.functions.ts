@@ -10,13 +10,21 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const STATUS_VALUES = ["open", "approved", "adjusted", "cancelled", "resolved"] as const;
 export type HandoffStatus = (typeof STATUS_VALUES)[number];
 
+export type HandoffJson =
+  | string
+  | number
+  | boolean
+  | null
+  | HandoffJson[]
+  | { [key: string]: HandoffJson };
+
 export interface HandoffTicket {
   id: string;
   phone: string;
   thread_id: string | null;
   booking_code: string | null;
   booking_summary: string;
-  booking_context: Record<string, unknown> | null;
+  booking_context: HandoffJson;
   frustration_kind: string;
   frustration_score: number;
   trigger_message: string;
