@@ -509,7 +509,7 @@ export async function executeAutoreplyForPhone(
                 threadId: c.thread_id,
                 toolName: "human-handoff",
                 repeatCount: 1,
-                lastArgs: { trigger: lastMessage.slice(0, 200) },
+                lastArgs: JSON.stringify({ trigger: lastMessage.slice(0, 200) }),
                 sampleOutput: "Frustration detected — tamu butuh admin manusia.",
               });
             } catch (e) {
