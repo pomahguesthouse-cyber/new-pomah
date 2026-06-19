@@ -267,7 +267,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
     ]);
     const finalSummary = summary ?? "Belum ada ringkasan obrolan.";
 
-    let summaryJson: Record<string, unknown> | null = null;
+    let summaryJson: Record<string, string | number | boolean | null> | null = null;
     try {
       const jsonRaw = await callAI([
         {
@@ -312,7 +312,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
       } as any)
       .eq("id", data.threadId);
 
-    return { summary: finalSummary, summaryJson: (summaryJson ?? null) as unknown };
+    return { summary: finalSummary, summaryJson };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })
