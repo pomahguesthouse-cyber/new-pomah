@@ -73,6 +73,18 @@ async function handle(): Promise<Response> {
     threadByPhone.set(t.phone, t.id);
   }
 
+  // Hindari notifikasi macet untuk nomor yang sudah di-handoff ke manusia.
+  const { data: handoffRows } = await (supabaseAdmin as any)
+    .from("handoff_tickets")
+    .select("phone, status")
+    .in("phone", phones)
+    .eq("status", "open");
+
+  const handoffPhones = new Set<string>();
+  for (const h of (handoffRows ?? []) as Array<{ phone: string; status: string }>) {
+    handoffPhones.add(h.phone);
+  }
+
   let alerted = 0;
   const now = Date.now();
 
@@ -80,6 +92,9 @@ async function handle(): Promise<Response> {
     candidates.map(async (c) => {
       const threadId = threadByPhone.get(c.phone) ?? null;
       if (!threadId) return;
+
+      // Lewati notifikasi jika tiket handoff masih terbuka untuk nomor ini.
+      if (handoffPhones.has(c.phone)) return;
 
       // Ambil 1 pesan terakhir di thread ini.
       const { data: lastMsgRows } = await (supabaseAdmin as any)
