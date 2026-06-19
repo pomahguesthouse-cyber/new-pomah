@@ -312,7 +312,7 @@ export const summarizeThread = createServerFn({ method: "POST" })
       } as any)
       .eq("id", data.threadId);
 
-    return { summary: finalSummary, summaryJson };
+    return { summary: finalSummary, summaryJson: (summaryJson ?? null) as unknown };
   });
 
 export const deleteThread = createServerFn({ method: "POST" })

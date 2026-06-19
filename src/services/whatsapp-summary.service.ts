@@ -165,7 +165,12 @@ export async function generateAndPersistThreadSummary(args: {
 }): Promise<{ ok: true; summary: ChatSummaryStructured; source: "llm" | "seed" } | { ok: false; error: string }> {
   try {
     const { thread, messages } = await fetchThreadSummaryInput(args.client, args.threadId);
-    const generated = await args.generator(messages, thread.chat_summary, args.config);
+    const normalizedHistory = messages.map((m) => ({
+      direction: m.direction,
+      body: m.body,
+      sent_at: m.sent_at ?? undefined,
+    }));
+    const generated = await args.generator(normalizedHistory, thread.chat_summary, args.config);
     const summary = generated
       ? { ...generated, source: "llm" as const }
       : args.fallbackToSeed === false
