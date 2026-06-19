@@ -480,7 +480,52 @@ export async function executeAutoreplyForPhone(
   let reply: string | null = null;
   let orchResult: any = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  // ── Frustration / trust detection ──────────────────────────────────────
+  // Tamu nulis "saya pusing", "ini benar?", "penipuan", "tidak AI kan?" dll.
+  // Short-circuit sebelum AI dijalankan — kirim ringkasan booking + verifikasi
+  // resmi, dan (kalau frustrasi) tandai handoff ke admin manusia.
+  if (!manager && lastMessage) {
+    try {
+      const { detectFrustration, buildFrustrationReply, markHumanHandoff } = await import(
+        "@/services/frustration-detector"
+      );
+      const kind = detectFrustration(lastMessage);
+      if (kind) {
+        const { data: bs } = await (supabaseAdmin as any).rpc(
+          "get_active_booking_state",
+          { p_phone: phone },
+        );
+        const bookingContext = (bs as { context?: unknown } | null)?.context ?? {};
+        const { reply: fReply, shouldHandoff } = buildFrustrationReply(kind, bookingContext);
+        reply = fReply;
+        if (shouldHandoff) {
+          await markHumanHandoff(supabaseAdmin, phone, bookingContext);
+          // Notify super admin secara fire-and-forget.
+          void (async () => {
+            try {
+              const { notifyBotLoop } = await import("@/services/manager-notifier.service");
+              await notifyBotLoop(supabaseAdmin as any, {
+                phone,
+                threadId: c.thread_id,
+                toolName: "human-handoff",
+                repeatCount: 1,
+                lastArgs: JSON.stringify({ trigger: lastMessage.slice(0, 200) }),
+                sampleOutput: "Frustration detected — tamu butuh admin manusia.",
+              });
+            } catch (e) {
+              console.warn("[Autoreply] handoff notify failed:", e);
+            }
+          })();
+        }
+        console.info(`[Autoreply] Frustration short-circuit (${kind}) for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] Frustration detector failed (non-fatal):", e);
+    }
+  }
+
+
+  for (let attempt = 1; attempt <= 3 && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
