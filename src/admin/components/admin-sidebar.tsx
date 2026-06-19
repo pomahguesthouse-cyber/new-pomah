@@ -21,6 +21,7 @@ import {
   Newspaper,
   TrendingUp,
   LifeBuoy,
+  Brain,
   GripVertical,
 } from "lucide-react";
 import {
@@ -93,6 +94,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/handoff", label: "Human Handoff", icon: LifeBuoy },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
+      { to: "/admin/chatbot-training", label: "Chatbot Training", icon: Brain },
     ],
   },
   {
