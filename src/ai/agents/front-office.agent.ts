@@ -67,7 +67,18 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 // ─── Guest mode (the heavy path) ─────────────────────────────────────────────
 
 function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
-  const { sopText, brosurFiles, bookingInProgress, today } = ctx;
+  const { sopText, brosurFiles, bookingInProgress, today, trainingExamples } = ctx;
+  const trainingBlock =
+    trainingExamples && trainingExamples.length > 0
+      ? [
+          "CONTOH PERCAKAPAN BENAR (WAJIB diikuti gaya & isinya bila konteks mirip; jangan menyalin huruf demi huruf — sesuaikan data tamu saat ini):",
+          ...trainingExamples.map((ex, i) => {
+            const meta = [ex.intent, ex.stage].filter(Boolean).join(" / ");
+            const header = meta ? `Contoh ${i + 1} (${meta})` : `Contoh ${i + 1}`;
+            return `${header}\nTamu: ${ex.user_message.trim()}\nJawaban ideal: ${ex.ideal_assistant_response.trim()}`;
+          }),
+        ].join("\n\n")
+      : "";
   return [
     `Anda adalah ${s.persona} yang bertugas sebagai Front Office Agent untuk ${s.propName}. ` +
       "Anda menangani pertanyaan kamar, reservasi, dan info umum hotel via WhatsApp. " +
@@ -207,6 +218,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
         "pengisian data. JANGAN panggil `start_booking_details` / `create_booking` lagi, " +
         "JANGAN tanya nama/email/HP — proses sudah jalan."
       : "",
+
+    trainingBlock,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");
