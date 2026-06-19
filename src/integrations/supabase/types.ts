@@ -418,6 +418,54 @@ export type Database = {
         }
         Relationships: []
       }
+      chatbot_training_examples: {
+        Row: {
+          created_at: string | null
+          id: string
+          ideal_assistant_response: string
+          intent: string | null
+          is_active: boolean | null
+          language: string | null
+          slot_updates: Json | null
+          source_file: string | null
+          stage: string | null
+          state_before: string | null
+          training_type: string | null
+          updated_at: string | null
+          user_message: string
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          ideal_assistant_response: string
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          ideal_assistant_response?: string
+          intent?: string | null
+          is_active?: boolean | null
+          language?: string | null
+          slot_updates?: Json | null
+          source_file?: string | null
+          stage?: string | null
+          state_before?: string | null
+          training_type?: string | null
+          updated_at?: string | null
+          user_message?: string
+        }
+        Relationships: []
+      }
       competitor_prices: {
         Row: {
           city: string
