@@ -6,13 +6,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+export type TrainingJson =
+  | string
+  | number
+  | boolean
+  | null
+  | TrainingJson[]
+  | { [key: string]: TrainingJson };
+
 export interface TrainingExampleRow {
   id: string;
   stage: string | null;
   state_before: string | null;
   user_message: string;
   intent: string | null;
-  slot_updates: unknown;
+  slot_updates: TrainingJson;
   ideal_assistant_response: string;
   source_file: string | null;
   training_type: string | null;
@@ -51,7 +59,10 @@ const exampleSchema = z.object({
   state_before: z.string().nullable().optional(),
   user_message: z.string().min(1, "user_message wajib"),
   intent: z.string().nullable().optional(),
-  slot_updates: z.unknown().optional(),
+  slot_updates: z
+    .unknown()
+    .optional()
+    .transform((v) => (v === undefined ? null : (v as TrainingJson))),
   ideal_assistant_response: z.string().min(1, "ideal_assistant_response wajib"),
   source_file: z.string().nullable().optional(),
   training_type: z.string().nullable().optional(),

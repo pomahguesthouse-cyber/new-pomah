@@ -45,6 +45,7 @@ import { Route as AdminExploreRouteImport } from './routes/admin/explore'
 import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
 import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
 import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/competitor-prices'
+import { Route as AdminChatbotTrainingRouteImport } from './routes/admin/chatbot-training'
 import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
@@ -239,6 +240,11 @@ const AdminCompetitorPricesRoute = AdminCompetitorPricesRouteImport.update({
   path: '/competitor-prices',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminChatbotTrainingRoute = AdminChatbotTrainingRouteImport.update({
+  id: '/chatbot-training',
+  path: '/chatbot-training',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminCalendarRoute = AdminCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -320,6 +326,7 @@ export interface FileRoutesByFullPath {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
@@ -370,6 +377,7 @@ export interface FileRoutesByTo {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
+  '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
@@ -475,6 +484,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
     | '/admin/content-manager'
@@ -525,6 +535,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
     | '/admin/content-manager'
@@ -576,6 +587,7 @@ export interface FileRouteTypes {
     | '/admin/analytics'
     | '/admin/bookings'
     | '/admin/calendar'
+    | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
     | '/admin/content-manager'
@@ -898,6 +910,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCompetitorPricesRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/chatbot-training': {
+      id: '/admin/chatbot-training'
+      path: '/chatbot-training'
+      fullPath: '/admin/chatbot-training'
+      preLoaderRoute: typeof AdminChatbotTrainingRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/calendar': {
       id: '/admin/calendar'
       path: '/calendar'
@@ -997,6 +1016,7 @@ interface AdminRouteChildren {
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCalendarRoute: typeof AdminCalendarRoute
+  AdminChatbotTrainingRoute: typeof AdminChatbotTrainingRoute
   AdminCompetitorPricesRoute: typeof AdminCompetitorPricesRoute
   AdminComplaintsRoute: typeof AdminComplaintsRoute
   AdminContentManagerRoute: typeof AdminContentManagerRoute
@@ -1021,6 +1041,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCalendarRoute: AdminCalendarRoute,
+  AdminChatbotTrainingRoute: AdminChatbotTrainingRoute,
   AdminCompetitorPricesRoute: AdminCompetitorPricesRoute,
   AdminComplaintsRoute: AdminComplaintsRoute,
   AdminContentManagerRoute: AdminContentManagerRoute,
