@@ -407,7 +407,7 @@ const DEFAULT_SOPS: { agentKey: string; name: string; content: string }[] = [
 1. TARIF DASAR
 - Tarif mengacu pada rate sheet yang ditetapkan manajemen di sistem
 - Harga sudah termasuk sarapan untuk 2 orang
-- Extra bed: Rp100.000/malam (termasuk sarapan 1 orang)
+- Extra bed: Rp80.000/malam (termasuk sarapan 1 orang)
 
 2. STRUKTUR DISKON MENGINAP
 - 3–4 malam: diskon 5%

@@ -176,8 +176,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "ringkasan baru. State machine sudah menangani ini secara otomatis di state CONFIRMING_BOOKING.",
 
     "EXTRA BED DELUXE: Kapasitas Deluxe = 2 orang/kamar (default), max 3 orang/kamar dengan " +
-      "1 extra bed (Rp100.000/malam). Untuk 2 kamar Deluxe & 5 tamu: tawarkan 1 extra bed " +
-      "otomatis, total = (2 × tarif kamar + 1 × Rp100.000) × jumlah malam. JANGAN tolak " +
+      "1 extra bed (Rp80.000/malam). Untuk 2 kamar Deluxe & 5 tamu: tawarkan 1 extra bed " +
+      "otomatis, total = (2 × tarif kamar + 1 × Rp80.000) × jumlah malam. JANGAN tolak " +
       "kapasitas selama tamu masih ≤ 3 × jumlah kamar.",
 
     "VERIFIKASI / KEPERCAYAAN: Bila tamu bertanya 'ini benar?', 'penipuan?', 'apakah ini AI?', " +
