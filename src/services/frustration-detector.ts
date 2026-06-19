@@ -54,6 +54,29 @@ export function detectFrustration(text: string): FrustrationKind {
   return null;
 }
 
+/**
+ * Skor frustrasi 0-100 berdasarkan jumlah pola yang cocok, kata kunci
+ * ekstrem (penipuan/scam), capslock, dan tanda seru berurutan.
+ * Dipakai admin untuk prioritisasi tiket handoff.
+ */
+export function scoreFrustration(text: string): number {
+  if (!text) return 0;
+  let score = 0;
+  const frustHits = FRUSTRATION_PATTERNS.filter((p) => p.test(text)).length;
+  const trustHits = TRUST_PATTERNS.filter((p) => p.test(text)).length;
+  score += frustHits * 18;
+  score += trustHits * 12;
+  if (/\b(penipuan|scam|nipu)\b/i.test(text)) score += 25;
+  if (/!{2,}/.test(text)) score += 10;
+  const letters = text.replace(/[^a-zA-Z]/g, "");
+  if (letters.length >= 6) {
+    const upperRatio = letters.replace(/[^A-Z]/g, "").length / letters.length;
+    if (upperRatio > 0.7) score += 15;
+  }
+  if (text.length > 160) score += 5;
+  return Math.max(0, Math.min(100, score));
+}
+
 /** Format ringkasan booking terakhir berdasarkan context state machine. */
 function summarizeBooking(context: any): string {
   if (!context || typeof context !== "object") return "";
