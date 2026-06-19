@@ -50,7 +50,14 @@ export interface BookingContext {
   selectedRoomType?: string;
   /** Daftar alternatif yang ditawarkan saat requested room penuh. */
   availableAlternatives?: AlternativeRoomOption[];
+  /** Jumlah extra bed yang sudah disepakati (Deluxe: max 1/kamar). */
+  extraBeds?: number;
+  /** Tarif extra bed per malam (default Rp100.000). */
+  extraBedRate?: number;
+  /** Flag bahwa tamu sudah handoff ke admin manusia. */
+  handoff?: boolean;
 }
+
 
 export interface StateRecord {
   phone: string;
