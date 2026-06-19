@@ -399,6 +399,76 @@ const INTERRUPT_INTENTS = new Set([
 ]);
 
 /**
+ * Parser koreksi slot saat tamu menjawab di state akhir (CONFIRMING_BOOKING).
+ * Mendukung pola umum berbahasa Indonesia. Mengembalikan patch parsial untuk
+ * digabungkan ke BookingContext + bool apakah ada perubahan.
+ */
+export function parseSlotCorrection(input: string): {
+  patch: Partial<BookingContext>;
+  changed: boolean;
+} {
+  const text = input.toLowerCase();
+  const patch: Partial<BookingContext> = {};
+  let changed = false;
+
+  // Jumlah tamu: "5 tamu", "tamu 5", "jumlah tamu 5", "kami 5 orang"
+  const guestsMatch = text.match(
+    /(?:jumlah\s+)?(?:tamu|orang|pax|dewasa|guest)s?\s*(?:nya|:)?\s*(\d{1,2})|(?:\d{1,2})\s*(?:tamu|orang|pax|dewasa|guest)s?/i,
+  );
+  if (guestsMatch) {
+    const n = Number(guestsMatch[1] ?? guestsMatch[0].match(/\d{1,2}/)?.[0]);
+    if (n && n >= 1 && n <= 16) {
+      patch.adults = n;
+      changed = true;
+    }
+  }
+
+  // Tipe kamar: deluxe / family / single
+  if (/\bdeluxe\b/i.test(input)) { patch.roomName = "Deluxe"; changed = true; }
+  else if (/\bfamily(?:\s+suite)?\b/i.test(input)) { patch.roomName = "Family Suite"; changed = true; }
+  else if (/\bsingle\b/i.test(input)) { patch.roomName = "Single"; changed = true; }
+
+  // Jumlah kamar: "2 kamar deluxe"
+  const roomsCountMatch = input.match(/(\d+)\s*kamar\b/i);
+  if (roomsCountMatch && patch.roomName) {
+    const qty = Number(roomsCountMatch[1]);
+    if (qty >= 1 && qty <= 10) {
+      patch.rooms = [{
+        roomTypeId: "",
+        roomTypeName: patch.roomName,
+        quantity: qty,
+        pricePerNight: 0,
+      }];
+      changed = true;
+    }
+  }
+
+  return { patch, changed };
+}
+
+/**
+ * Hitung extra bed untuk Deluxe (atau tipe lain yang ditandai support).
+ * Aturan: kapasitas default 2/kamar, max 3/kamar dengan extra bed.
+ * Harga extra bed = Rp100.000/malam/extra bed (default fallback).
+ */
+export function computeExtraBeds(
+  roomType: string | undefined,
+  roomCount: number,
+  guests: number,
+  extraBedRate = 100_000,
+): { extraBeds: number; overCapacity: boolean; ratePerNight: number } {
+  if (!roomType || roomCount <= 0) return { extraBeds: 0, overCapacity: false, ratePerNight: extraBedRate };
+  const isDeluxe = /deluxe/i.test(roomType);
+  const baseCap = isDeluxe ? 2 : 2;
+  const maxCap = isDeluxe ? 3 : baseCap; // hanya Deluxe yang dukung extra bed per spec
+  const totalDefault = baseCap * roomCount;
+  if (guests <= totalDefault) return { extraBeds: 0, overCapacity: false, ratePerNight: extraBedRate };
+  const need = guests - totalDefault;
+  const overCapacity = need > (maxCap - baseCap) * roomCount;
+  return { extraBeds: Math.min(need, (maxCap - baseCap) * roomCount), overCapacity, ratePerNight: extraBedRate };
+}
+
+/**
  * Evaluates the message against the current state and returns whether the state machine handled it.
  */
 export async function processBookingState(
@@ -410,11 +480,34 @@ export async function processBookingState(
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
 
-  // Interruption Check (Cancellation) — explicit "batal" resets the flow.
+  // Cancellation: bersihkan draft booking + pending invoice agar tidak
+  // pernah ada invoice "menggantung" sampai user mulai ulang & konfirmasi.
   if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
+    try {
+      // Tandai bookings draft/pending milik tamu ini sebagai cancelled.
+      await (supabase as any)
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .in("status", ["pending", "draft"])
+        .eq("guest_phone", phone);
+      // Void invoice yang belum dibayar.
+      await (supabase as any)
+        .from("invoices")
+        .update({ status: "void" })
+        .in("status", ["pending", "unpaid", "draft"])
+        .eq("phone", phone);
+    } catch (e) {
+      console.warn("[BookingState] cancel cleanup failed (non-fatal):", e);
+    }
     await updateBookingState(supabase, phone, "IDLE", {});
-    return { handled: true, reply: "Baik Kak, proses reservasi telah dibatalkan. Ada hal lain yang bisa saya bantu?" };
+    return {
+      handled: true,
+      reply:
+        "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya batalkan. " +
+        "Kalau nanti ingin mulai ulang, tinggal sebut tanggal & tipe kamarnya ya 🙏.",
+    };
   }
+
 
   if (state === "IDLE") {
     return { handled: false }; // Handled by LLM via normal AI workflow
