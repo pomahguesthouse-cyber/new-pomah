@@ -873,7 +873,69 @@ export async function processBookingState(
       return buildBookingSummary(context);
     }
 
+    // Koreksi slot fleksibel: tamu kirim "jumlah tamu 5 kak", "tanggal 22 Juni",
+    // "deluxe 2 kamar", dll. JANGAN paksa Ya/Batal — update slot, validasi
+    // ulang (terutama extra bed Deluxe), lalu tampilkan ringkasan baru.
+    // Trigger HANYA jika pesan TIDAK murni konfirmasi/kanselasi singkat.
+    const isPureConfirm = /^(ya|iya|yes|lanjut|ok|oke|setuju|betul|benar)[\s.!]*$/i.test(message.trim());
+    const isPureCancel  = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
+    if (!isPureConfirm && !isPureCancel) {
+      const { patch, changed } = parseSlotCorrection(message);
+      if (changed) {
+        if (patch.adults) context.adults = patch.adults;
+        if (patch.roomName) {
+          context.roomName = patch.roomName;
+          // Cari room di ctx.rooms agar harga ikut update.
+          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === patch.roomName!.toLowerCase());
+          if (rt) {
+            context.roomId = rt.id;
+            context.pricePerNight = Number(rt.base_rate ?? 0);
+          }
+        }
+        if (patch.rooms && context.roomName) {
+          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === context.roomName!.toLowerCase());
+          context.rooms = [{
+            roomTypeId: rt?.id ?? "",
+            roomTypeName: context.roomName,
+            quantity: patch.rooms[0].quantity,
+            pricePerNight: Number(rt?.base_rate ?? context.pricePerNight ?? 0),
+          }];
+        }
+        // Recompute extra bed otomatis.
+        const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+        const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1);
+        context.extraBeds = eb.extraBeds;
+        context.extraBedRate = 100_000;
+        // Recompute total
+        if (context.checkIn && context.checkOut && context.pricePerNight) {
+          const nights = countNights(context.checkIn, context.checkOut);
+          context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
+        }
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return buildBookingSummary(context);
+      }
+    }
+
     if (CONFIRM_PATTERN.test(message)) {
+      // GATING INVOICE: validasi semua slot wajib sebelum buat booking.
+      const missing: string[] = [];
+      if (!context.checkIn || !context.checkOut) missing.push("tanggal");
+      if (!context.roomName) missing.push("tipe kamar");
+      if (!context.guestName) missing.push("nama");
+      if (!context.guestEmail || !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
+      if (!context.guestPhone || !PHONE_PATTERN.test(context.guestPhone.replace(/[^0-9+]/g, ""))) missing.push("nomor HP");
+      const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+      const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1);
+      if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
+      if (missing.length > 0) {
+        return {
+          handled: true,
+          reply:
+            `Sebelum saya buat invoice, ada data yang masih perlu diperbaiki: ${missing.join(", ")}. ` +
+            `Mohon dilengkapi dulu ya, Kak 🙏.`,
+        };
+      }
+
       // Create the booking deterministically with the data collected in context.
       const raw = await createBooking(
         {
@@ -904,9 +966,6 @@ export async function processBookingState(
       context.bookingCode = result.reference_code;
       await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
 
-      // Short ack only — the Finance Agent owns invoice delivery and will
-      // append the bank details + invoice link as the second half of this
-      // turn's reply (orchestrator stitches the two together).
       return {
         handled: true,
         reply:
@@ -916,13 +975,17 @@ export async function processBookingState(
         followUp: "send_invoice",
         followUpRef: result.reference_code,
       };
-    } else if (CANCEL_PATTERN.test(message)) {
-      await updateBookingState(supabase, phone, "AWAITING_NAME", context);
-      return { handled: true, reply: "Baik, mari kita ulangi pengisian datanya. Mohon ketik nama lengkap Kakak:" };
+    } else if (isPureCancel) {
+      // Ditangani oleh handler CANCELLATION_PATTERNS di awal, tapi safety net.
+      await updateBookingState(supabase, phone, "IDLE", {});
+      return { handled: true, reply: "Baik Kak, reservasi dibatalkan. Kalau ingin mulai ulang, sebut saja tanggalnya ya." };
     } else {
-      return { handled: true, reply: 'Mohon konfirmasi dengan mengetik "Ya" jika benar, atau "Batal" jika ingin mengulang.' };
+      // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
+      // dengan petunjuk yang lebih ramah, jangan kaku.
+      return buildBookingSummary(context);
     }
   }
+
   
   if (state === "PAYMENT_PENDING") {
     // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar
