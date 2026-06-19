@@ -138,14 +138,66 @@ export function pickAttachment(
 }
 
 /**
+ * Rule engine: sapaan / frasa terlarang yang tidak boleh muncul di balasan
+ * bot. Tambahkan aturan baru di sini untuk memblokir frasa lain.
+ *
+ * - `pattern`     : regex case-insensitive untuk frasa terlarang.
+ * - `replacement` : teks netral pengganti bila frasa muncul di awal kalimat.
+ *                   Di tengah kalimat, frasa cukup dihapus.
+ */
+interface ForbiddenPhraseRule {
+  readonly pattern: RegExp;
+  readonly replacement: string;
+}
+
+const FORBIDDEN_PHRASE_RULES: ForbiddenPhraseRule[] = [
+  // Sapaan waktu (selamat pagi/siang/sore/malam) — diganti "Halo".
+  {
+    pattern: /\bselamat\s+(?:pagi|siang|sore|malam)\b[\s,!.\-–—]*/gi,
+    replacement: "Halo",
+  },
+];
+
+/**
+ * Hapus / ganti frasa terlarang dari balasan bot. Idempotent — aman dipanggil
+ * berkali-kali. Selalu dipanggil oleh `cleanReplyBody` sehingga semua jalur
+ * pengiriman (WhatsApp autoreply + AI Lab simulator) terkena efeknya.
+ */
+export function sanitizeForbiddenPhrases(reply: string): string {
+  let out = reply;
+  for (const rule of FORBIDDEN_PHRASE_RULES) {
+    out = out.replace(rule.pattern, (match, ...args: unknown[]) => {
+      const offset = args[args.length - 2] as number;
+      const full = args[args.length - 1] as string;
+      const after = full.slice(offset + match.length);
+      const startsSentence =
+        offset === 0 || /[.\n!?]\s*$/.test(full.slice(0, offset));
+      const followedByKak = /^\s*kak\b/i.test(after);
+      // Awal kalimat + diikuti "Kak": cukup "Halo Kak".
+      if (startsSentence && followedByKak) return `${rule.replacement} `;
+      // Awal kalimat tanpa "Kak": tetap pakai pengganti netral + koma.
+      if (startsSentence) return `${rule.replacement}, `;
+      // Di tengah kalimat: hapus saja.
+      return "";
+    });
+  }
+  return out
+    .replace(/^[\s,!.\-–—]+/, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.!?])/g, "$1");
+}
+
+/**
  * Clean a reply body before sending to WhatsApp:
  *   - Remove the PDF URL we just turned into an attachment (if any).
  *   - Strip bare image URLs so WA doesn't render a photo unexpectedly.
+ *   - Strip/replace forbidden phrases (e.g. "Selamat siang").
  *   - Collapse trailing-whitespace lines and triple+ newlines.
  */
 export function cleanReplyBody(reply: string, attachedPdfUrl?: string): string {
   let out = reply;
   if (attachedPdfUrl) out = out.replace(attachedPdfUrl, "");
+  out = sanitizeForbiddenPhrases(out);
   return out
     .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")
     .replace(/[ \t]+\n/g, "\n")
