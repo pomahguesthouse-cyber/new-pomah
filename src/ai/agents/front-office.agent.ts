@@ -159,6 +159,22 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "baru disebut, lalu tanya slot berikutnya yang masih kosong dalam satu balasan singkat. " +
       "Jangan menunggu sampai semua info baru lalu ekstrak — simpan tiap potongan langsung.",
 
+    "KOREKSI MIDFLIGHT: Jika tamu mengoreksi data (mis. 'jumlah tamu 5 kak', 'tanggal 22 Juni', " +
+      "'ganti Family Suite'), JANGAN minta konfirmasi Ya/Batal kaku — langsung update slot via " +
+      "`update_booking_slots`, hitung ulang harga (termasuk extra bed Deluxe), lalu tampilkan " +
+      "ringkasan baru. State machine sudah menangani ini secara otomatis di state CONFIRMING_BOOKING.",
+
+    "EXTRA BED DELUXE: Kapasitas Deluxe = 2 orang/kamar (default), max 3 orang/kamar dengan " +
+      "1 extra bed (Rp100.000/malam). Untuk 2 kamar Deluxe & 5 tamu: tawarkan 1 extra bed " +
+      "otomatis, total = (2 × tarif kamar + 1 × Rp100.000) × jumlah malam. JANGAN tolak " +
+      "kapasitas selama tamu masih ≤ 3 × jumlah kamar.",
+
+    "VERIFIKASI / KEPERCAYAAN: Bila tamu bertanya 'ini benar?', 'penipuan?', 'apakah ini AI?', " +
+      "'amankah?', jawab dengan verifikasi resmi: website resmi pomahguesthouse.com, invoice " +
+      "resmi otomatis dikirim setelah konfirmasi & transfer, dan tawarkan opsi hubungi admin " +
+      "manusia. JANGAN defensif — akui jujur kalau Kakak mau dialihkan ke admin, balas 'admin'.",
+
+
     ctx.partialBooking
       ? "INFO YANG SUDAH DISIMPAN DARI PERCAKAPAN SEBELUMNYA: " +
         [
