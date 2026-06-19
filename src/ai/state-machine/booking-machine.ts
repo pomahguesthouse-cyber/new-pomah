@@ -544,8 +544,10 @@ export async function processBookingState(
 
   
   if (state === "AWAITING_NAME") {
-    // We assume the user replied with their name.
-    const name = message.trim();
+    // We assume the user replied with their name. Bersihkan honorifik
+    // ("kak", "mas", dll.) dan ambil baris pertama sebelum validasi.
+    const raw = message.trim();
+    const name = cleanNameCandidate(raw);
     if (name.length < 2) {
       return { handled: true, reply: "Maaf, nama yang dimasukkan terlalu singkat. Silakan masukkan nama lengkap Kakak:" };
     }
@@ -554,9 +556,9 @@ export async function processBookingState(
       // Don't store the garbage as guestName.
       // If clearly a question/room-pref, defer to LLM so it can answer and
       // then re-ask for the name in the same turn.
-      if (ROOM_PREFERENCE_OR_QUESTION.test(name)) {
+      if (ROOM_PREFERENCE_OR_QUESTION.test(raw)) {
         console.info(
-          `[BookingState] AWAITING_NAME: question/room-pref detected ("${name.slice(0, 60)}…"). ` +
+          `[BookingState] AWAITING_NAME: question/room-pref detected ("${raw.slice(0, 60)}…"). ` +
           `Deferring to LLM.`,
         );
         return { handled: false };
