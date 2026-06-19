@@ -216,6 +216,27 @@ function buildBookingSummary(context: BookingContext): StateMachineResult {
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
+  // --- Extra bed (otomatis untuk Deluxe ketika tamu > kapasitas default) ---
+  const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+  const eb = computeExtraBeds(
+    context.roomName,
+    totalRooms,
+    adults,
+    context.extraBedRate ?? 100_000,
+  );
+  const extraBeds = context.extraBeds ?? eb.extraBeds;
+  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * (context.extraBedRate ?? 100_000) : 0;
+  const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
+  const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
+
+  const extraBedLine = extraBeds > 0
+    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(context.extraBedRate ?? 100_000)}/malam = ${fmtRp(extraBedTotal)}\n`
+    : "";
+  const overCapLine = eb.overCapacity
+    ? `\n⚠️ Kapasitas maksimum ${totalRooms} kamar Deluxe + extra bed adalah ${totalRooms * 3} tamu. ` +
+      `Mohon tambah kamar atau kurangi jumlah tamu.\n`
+    : "";
+
   const summary =
     `Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n` +
     `- Nama: ${context.guestName ?? "—"}\n` +
@@ -227,11 +248,15 @@ function buildBookingSummary(context: BookingContext): StateMachineResult {
     `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
     `- Jumlah tamu: ${adultLine}\n` +
     `- Harga: ${pricePerNight ? `${fmtRp(pricePerNight)}/malam` : "—"}\n` +
-    `- Total: ${total ? fmtRp(total) : "—"}\n\n` +
-    `Apakah data di atas sudah benar dan Kakak ingin melanjutkan ke Booking & Pembayaran? ` +
-    `Ketik "Ya", "Lanjut", atau "Batal".`;
+    extraBedLine +
+    `- Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
+    overCapLine +
+    `\n\nApakah data di atas sudah benar dan Kakak ingin melanjutkan ke Booking & Pembayaran? ` +
+    `Ketik "Ya" atau "Lanjut" untuk konfirmasi, atau langsung sebutkan data yang ingin dikoreksi ` +
+    `(misal: "jumlah tamu 5", "tanggal 22 Juni", "ganti Family Suite"). Ketik "Batal" untuk membatalkan.`;
   return { handled: true, reply: summary };
 }
+
 
 export async function getBookingState(supabase: SupabaseClient, phone: string): Promise<StateRecord> {
   const { data, error } = await supabase.rpc("get_active_booking_state", { p_phone: phone });
