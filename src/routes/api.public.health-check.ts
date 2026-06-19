@@ -30,18 +30,13 @@ async function timed<T>(fn: () => Promise<T>): Promise<{ value: T; ms: number }>
 }
 
 async function checkSupabase(): Promise<CheckResult> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) {
-    return { status: "fail", latencyMs: 0, detail: "missing SUPABASE env" };
-  }
   try {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
     const { ms } = await timed(async () => {
-      const client = createClient<Database>(url, key, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      // Query sangat ringan ke tabel publik; hanya verifikasi konektivitas Data API.
-      const { error } = await client
+      // Query sangat ringan; hanya verifikasi konektivitas Data API.
+      const { error } = await supabaseAdmin
         .from("whatsapp_conversations")
         .select("id", { count: "exact", head: true })
         .limit(1);
@@ -56,6 +51,7 @@ async function checkSupabase(): Promise<CheckResult> {
     };
   }
 }
+
 
 async function checkPgvector(): Promise<CheckResult> {
   try {
