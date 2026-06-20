@@ -1,6 +1,11 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { createBooking } from "@/tools/booking.tool";
+import {
+  getDailyRatesForRange,
+  resolveRoomNightlyRates,
+} from "@/services/pricing/daily-rate.service";
+import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 
 export type BookingState =
