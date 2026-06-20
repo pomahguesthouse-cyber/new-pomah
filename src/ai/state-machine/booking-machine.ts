@@ -240,35 +240,43 @@ export function resolveRoomExtraBedPolicy(
   };
 }
 
-/** Build the pre-confirmation booking summary once all guest details are set. */
+/**
+ * Build the pre-confirmation booking summary once all guest details are set.
+ * Versi sync — fallback ketika daily-rate dynamic tidak bisa di-resolve.
+ */
 function buildBookingSummary(
   context: BookingContext,
   roomsCatalog?: RoomCatalogEntry[],
+  overrides?: {
+    rooms?: BookingRoomItem[];
+    roomSubtotal?: number;
+    displayRatePerNight?: number;
+    hasDynamicBreakdown?: boolean;
+  },
 ): StateMachineResult {
   // --- Room line ---
+  const summaryRooms = overrides?.rooms ?? context.rooms;
   let roomsDisplay: string;
-  if (context.rooms && context.rooms.length > 0) {
-    roomsDisplay = context.rooms
+  if (summaryRooms && summaryRooms.length > 0) {
+    roomsDisplay = summaryRooms
       .map((r) => `${r.quantity}x ${r.roomTypeName}`)
       .join(", ");
   } else {
     roomsDisplay = context.roomName ?? "—";
   }
 
-  // --- Price per night ---
+  // --- Price per night (prefer dynamic average bila tersedia) ---
   const pricePerNight =
-    context.rooms && context.rooms.length > 0
-      ? context.rooms[0].pricePerNight
-      : (context.pricePerNight ?? 0);
+    overrides?.displayRatePerNight ??
+    (summaryRooms && summaryRooms.length > 0
+      ? summaryRooms[0].pricePerNight
+      : (context.pricePerNight ?? 0));
 
   // --- Nights & total ---
   const nights =
     context.checkIn && context.checkOut
       ? countNights(context.checkIn, context.checkOut)
       : null;
-  const total =
-    context.totalPrice ??
-    (nights && pricePerNight ? nights * pricePerNight : null);
 
   // --- Dates with check-in / check-out times ---
   const checkInDisplay = context.checkIn
@@ -290,14 +298,19 @@ function buildBookingSummary(
   const resolvedExtraBedRate = policy.extrabedRate;
   if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
 
-  const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+  const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = computeExtraBeds(policy, totalRooms, adults);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
   const extraBedTotal =
     nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
-  const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
-  const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
+
+  // Subtotal kamar: pakai dynamic (jika tersedia), kalau tidak fallback rata.
+  const fallbackSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
+  const roomSubtotal = overrides?.roomSubtotal ?? context.totalPrice ?? fallbackSubtotal;
+  const grandTotal = roomSubtotal + extraBedTotal;
+
+  const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
 
   const extraBedLine = extraBeds > 0
     ? (hasRate
@@ -322,7 +335,7 @@ function buildBookingSummary(
     `- Check-out: ${checkOutDisplay}\n` +
     `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
     `- Jumlah tamu: ${adultLine}\n` +
-    `- Harga: ${pricePerNight ? `${fmtRp(pricePerNight)}/malam` : "—"}\n` +
+    `- Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
     extraBedLine +
     `- Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
     overCapLine +
@@ -330,6 +343,127 @@ function buildBookingSummary(
     `Ketik "Ya" atau "Lanjut" untuk konfirmasi, atau langsung sebutkan data yang ingin dikoreksi ` +
     `(misal: "jumlah tamu 5", "tanggal 22 Juni", "ganti Family Suite"). Ketik "Batal" untuk membatalkan.`;
   return { handled: true, reply: summary };
+}
+
+/**
+ * Resolve nightly rates dinamis dari `room_daily_rates` (fallback `base_rate`)
+ * untuk seluruh tipe kamar dalam booking. Mengembalikan subtotal kamar,
+ * tarif tampilan, dan flag dynamic breakdown sehingga ringkasan selaras
+ * dengan harga final yang dipakai create_booking.
+ */
+export async function resolveBookingSummaryRates(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<{
+  rooms: BookingRoomItem[];
+  roomSubtotal: number;
+  displayRatePerNight: number;
+  hasDynamicBreakdown: boolean;
+  stopSellDates: string[];
+} | null> {
+  if (!context.checkIn || !context.checkOut) return null;
+  const items = context.rooms ?? [];
+  if (items.length === 0) return null;
+
+  const roomTypeIds = Array.from(
+    new Set(items.map((r) => r.roomTypeId).filter((id): id is string => !!id)),
+  );
+  if (roomTypeIds.length === 0) return null;
+
+  const overrides = await getDailyRatesForRange(
+    ctx.supabasePublic,
+    roomTypeIds,
+    context.checkIn,
+    context.checkOut,
+  );
+
+  const nights = countNights(context.checkIn, context.checkOut);
+  const resolvedRooms: BookingRoomItem[] = [];
+  const stopSellDates: string[] = [];
+  let roomSubtotal = 0;
+  let hasDynamicBreakdown = false;
+  let firstAvg: number | null = null;
+  let sameRate = true;
+  let avgSum = 0;
+  let avgCount = 0;
+
+  for (const item of items) {
+    const rt = ctx.rooms.find((r) => r.id === item.roomTypeId) as
+      | RoomTypeRow
+      | undefined;
+    if (!rt) {
+      resolvedRooms.push(item);
+      roomSubtotal += item.pricePerNight * item.quantity * nights;
+      continue;
+    }
+    const resolved = resolveRoomNightlyRates(
+      rt,
+      context.checkIn,
+      context.checkOut,
+      overrides.get(item.roomTypeId),
+    );
+    if (resolved.has_stop_sell) stopSellDates.push(...resolved.stop_sell_dates);
+    if (!resolved.all_base) hasDynamicBreakdown = true;
+    roomSubtotal += resolved.total * item.quantity;
+    const avg = resolved.nights
+      ? Math.round(resolved.total / resolved.nights)
+      : item.pricePerNight;
+    resolvedRooms.push({ ...item, pricePerNight: avg });
+    avgSum += avg;
+    avgCount += 1;
+    if (firstAvg === null) firstAvg = avg;
+    else if (avg !== firstAvg) sameRate = false;
+  }
+
+  const displayRatePerNight = sameRate
+    ? (firstAvg ?? 0)
+    : Math.round(avgSum / Math.max(1, avgCount));
+
+  return {
+    rooms: resolvedRooms,
+    roomSubtotal,
+    displayRatePerNight,
+    hasDynamicBreakdown,
+    stopSellDates: Array.from(new Set(stopSellDates)),
+  };
+}
+
+/**
+ * Versi async: pakai daily-rate dynamic. Jika ada stop_sell pada salah satu
+ * malam, balas pesan minta pilih tanggal/tipe lain alih-alih ringkasan final.
+ * Fallback ke versi sync bila resolve gagal (mis. data context tidak lengkap).
+ */
+async function buildBookingSummaryAsync(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<StateMachineResult> {
+  try {
+    const resolved = await resolveBookingSummaryRates(ctx, context);
+    if (resolved && resolved.stopSellDates.length > 0) {
+      const tanggalList = resolved.stopSellDates
+        .map((d) => formatDateId(d))
+        .join(", ");
+      const roomLabel =
+        context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
+      return {
+        handled: true,
+        reply:
+          `Mohon maaf Kak, ${roomLabel} tidak dijual untuk tanggal ${tanggalList}. ` +
+          `Silakan pilih tanggal lain atau tipe kamar lain ya 🙏.`,
+      };
+    }
+    if (resolved) {
+      return buildBookingSummary(context, ctx.rooms, {
+        rooms: resolved.rooms,
+        roomSubtotal: resolved.roomSubtotal,
+        displayRatePerNight: resolved.displayRatePerNight,
+        hasDynamicBreakdown: resolved.hasDynamicBreakdown,
+      });
+    }
+  } catch (e) {
+    console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
+  }
+  return buildBookingSummary(context, ctx.rooms);
 }
 
 
