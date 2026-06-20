@@ -32,6 +32,14 @@ export interface UnifiedTrainingExample {
   similarity: number;
 }
 
+export interface NegativeTrainingExample {
+  id: string;
+  user_message: string;
+  bad_response: string;
+  correction: string | null;
+  similarity: number;
+}
+
 interface FindInput {
   userMessage: string;
   intent?: string | null;
