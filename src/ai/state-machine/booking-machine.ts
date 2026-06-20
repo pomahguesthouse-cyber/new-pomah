@@ -174,10 +174,71 @@ function countNights(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
 }
 
+/**
+ * Struktur policy extra bed per tipe kamar. Selalu berasal dari DB
+ * (`room_types`), tidak boleh hardcode per nama kamar.
+ */
+export interface RoomExtraBedPolicy {
+  roomTypeId?: string;
+  roomTypeName?: string;
+  /** Kapasitas default tanpa extra bed. Fallback 1 bila DB kosong. */
+  capacity: number;
+  /** Berapa extra bed maksimum yang boleh ditambahkan per kamar. */
+  extrabedCapacity: number;
+  /** Tarif extra bed per malam dalam Rupiah. 0 = belum dikonfigurasi. */
+  extrabedRate: number;
+}
+
+/** Bentuk minimal entri katalog kamar yang dibutuhkan untuk extra bed. */
+interface RoomCatalogEntry {
+  id: string;
+  name: string;
+  capacity?: number | null;
+  extrabed_capacity?: number | null;
+  extrabed_rate?: number | null;
+}
+
+/**
+ * Pilih policy extra bed berdasarkan konteks booking + katalog kamar dari DB.
+ * Prioritas pencarian: roomId → roomName → context.rooms[0].
+ */
+export function resolveRoomExtraBedPolicy(
+  context: BookingContext,
+  roomsCatalog?: RoomCatalogEntry[],
+): RoomExtraBedPolicy {
+  const list = roomsCatalog ?? [];
+  let match: RoomCatalogEntry | undefined;
+
+  if (context.roomId) {
+    match = list.find((r) => r.id === context.roomId);
+  }
+  if (!match && context.roomName) {
+    const target = context.roomName.toLowerCase();
+    match = list.find((r) => r.name.toLowerCase() === target);
+  }
+  if (!match && context.rooms && context.rooms.length > 0) {
+    const first = context.rooms[0];
+    const firstName = first.roomTypeName?.toLowerCase();
+    match = list.find(
+      (r) =>
+        r.id === first.roomTypeId ||
+        (firstName != null && r.name.toLowerCase() === firstName),
+    );
+  }
+
+  return {
+    roomTypeId: match?.id,
+    roomTypeName: match?.name,
+    capacity: Number(match?.capacity ?? 0) || 1,
+    extrabedCapacity: Number(match?.extrabed_capacity ?? 0) || 0,
+    extrabedRate: Number(match?.extrabed_rate ?? 0) || 0,
+  };
+}
+
 /** Build the pre-confirmation booking summary once all guest details are set. */
 function buildBookingSummary(
   context: BookingContext,
-  roomsCatalog?: Array<{ id: string; name: string; extrabed_rate?: number | null }>,
+  roomsCatalog?: RoomCatalogEntry[],
 ): StateMachineResult {
   // --- Room line ---
   let roomsDisplay: string;
@@ -219,35 +280,30 @@ function buildBookingSummary(
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
-  // --- Resolve extra-bed rate dari DB (room_types.extrabed_rate) ---
-  // Prioritas: lookup roomsCatalog by id/name → context.extraBedRate → 0.
-  const dbRoom = roomsCatalog?.find(
-    (r) =>
-      (context.roomId && r.id === context.roomId) ||
-      (context.roomName && r.name.toLowerCase() === context.roomName.toLowerCase()),
-  );
-  const dbExtraBedRate = Number(dbRoom?.extrabed_rate ?? 0);
-  const resolvedExtraBedRate = dbExtraBedRate > 0 ? dbExtraBedRate : (context.extraBedRate ?? 0);
+  // --- Resolve extra-bed policy & jumlah extra bed dari DB ---
+  const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
+  const resolvedExtraBedRate = policy.extrabedRate;
   if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
 
-  // --- Extra bed (otomatis untuk Deluxe ketika tamu > kapasitas default) ---
   const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-  const eb = computeExtraBeds(
-    context.roomName,
-    totalRooms,
-    adults,
-    resolvedExtraBedRate,
-  );
+  const eb = computeExtraBeds(policy, totalRooms, adults);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
-  const extraBedTotal = nights && extraBeds > 0 ? nights * extraBeds * resolvedExtraBedRate : 0;
+  const hasRate = resolvedExtraBedRate > 0;
+  const extraBedTotal =
+    nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
   const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
   const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
 
   const extraBedLine = extraBeds > 0
-    ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
+    ? (hasRate
+        ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
+        : `- Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`)
     : "";
+
+  const roomLabel = policy.roomTypeName ?? context.roomName ?? "kamar";
+  const totalMaxGuests = (policy.capacity + policy.extrabedCapacity) * totalRooms;
   const overCapLine = eb.overCapacity
-    ? `\n⚠️ Kapasitas maksimum ${totalRooms} kamar Deluxe + extra bed adalah ${totalRooms * 3} tamu. ` +
+    ? `\n⚠️ Kapasitas maksimum ${totalRooms} kamar ${roomLabel} adalah ${totalMaxGuests} tamu. ` +
       `Mohon tambah kamar atau kurangi jumlah tamu.\n`
     : "";
 
@@ -270,6 +326,7 @@ function buildBookingSummary(
     `(misal: "jumlah tamu 5", "tanggal 22 Juni", "ganti Family Suite"). Ketik "Batal" untuk membatalkan.`;
   return { handled: true, reply: summary };
 }
+
 
 
 export async function getBookingState(supabase: SupabaseClient, phone: string): Promise<StateRecord> {
