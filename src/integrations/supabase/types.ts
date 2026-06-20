@@ -421,11 +421,14 @@ export type Database = {
       chatbot_training_examples: {
         Row: {
           created_at: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
           id: string
           ideal_assistant_response: string
           intent: string | null
           is_active: boolean | null
           language: string | null
+          promoted_from_log_id: string | null
           slot_updates: Json | null
           source_file: string | null
           stage: string | null
@@ -436,11 +439,14 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           id: string
           ideal_assistant_response: string
           intent?: string | null
           is_active?: boolean | null
           language?: string | null
+          promoted_from_log_id?: string | null
           slot_updates?: Json | null
           source_file?: string | null
           stage?: string | null
@@ -451,11 +457,14 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
           id?: string
           ideal_assistant_response?: string
           intent?: string | null
           is_active?: boolean | null
           language?: string | null
+          promoted_from_log_id?: string | null
           slot_updates?: Json | null
           source_file?: string | null
           stage?: string | null
@@ -2916,6 +2925,21 @@ export type Database = {
         Returns: undefined
       }
       mark_queue_done: { Args: { p_entry_id: string }; Returns: undefined }
+      match_chatbot_training_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          ideal_assistant_response: string
+          intent: string
+          similarity: number
+          stage: string
+          user_message: string
+        }[]
+      }
       match_sop_chunks: {
         Args: {
           match_count: number
