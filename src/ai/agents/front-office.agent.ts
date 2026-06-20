@@ -25,7 +25,8 @@ const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "update_booking_slots",
   "offer_alternative_rooms",
   "start_booking_details",
-  "create_booking",
+  // Intentionally NOT exposed in guest mode. Final booking creation is handled
+  // by the deterministic booking state machine after explicit confirmation.
 ] as const);
 
 const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
@@ -202,7 +203,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "`start_booking_details` (sertakan parameter `rooms` array berisi objek `{ room_type, quantity }` jika tamu memesan lebih dari satu tipe kamar atau lebih dari satu kamar dari tipe yang sama, atau sertakan `room_type` jika hanya memesan satu kamar; sertakan juga check_in, check_out, adults/children, dan guest_name bila ada). " +
       "JANGAN tanya nama/email/HP sendiri — tool ini yang ambil alih. " +
       "Setelah panggil, sampaikan `message` dari hasil tool VERBATIM. " +
-      "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool.",
+      "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool. " +
+      "PENTING: di mode tamu, Front Office TIDAK memiliki tool `create_booking`. Booking final hanya boleh dibuat oleh state machine setelah tamu eksplisit konfirmasi ringkasan.",
 
     "SLOT-FILL PARTIAL: jika tamu hanya menyebut SEBAGIAN info booking di satu pesan " +
       "(mis. cuma 'Deluxe', cuma '2 orang', atau cuma tanggal) DAN data lain masih kurang " +
@@ -256,7 +258,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     bookingInProgress
       ? "TAMU SEDANG MENGISI DATA BOOKING: jawab pertanyaannya SINGKAT, ingatkan akan lanjut " +
-        "pengisian data. JANGAN panggil `start_booking_details` / `create_booking` lagi, " +
+        "pengisian data. JANGAN panggil `start_booking_details` lagi, " +
         "JANGAN tanya nama/email/HP — proses sudah jalan."
       : "",
 
