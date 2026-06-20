@@ -18,7 +18,7 @@ const STOPWORDS = new Set([
   "yang", "dan", "atau", "untuk", "dengan", "saya", "kak", "halo", "kakak",
   "di", "ke", "dari", "ini", "itu", "ada", "apa", "bisa", "tolong", "mau",
   "sudah", "belum", "ya", "tidak", "lagi", "juga", "saja", "aja", "dong",
-  "kalau", "kalo", "jadi", "biar", "agar", "sih", "deh", "nya", "saya",
+  "kalau", "kalo", "jadi", "biar", "agar", "sih", "deh", "nya",
 ]);
 
 function tokenize(text: string): Set<string> {
