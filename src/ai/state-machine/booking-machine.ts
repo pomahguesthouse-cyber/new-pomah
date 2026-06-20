@@ -571,24 +571,58 @@ export function matchAlternative(
   return null;
 }
 
+/** Normalisasi nama kamar untuk perbandingan: lowercase, trim, buang prefix umum. */
+export function normalizeRoomName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b(kamar|room|tipe|type)\b/g, " ")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Temukan tipe kamar yang disebut tamu di pesan bebas. Dynamic — tidak
+ * hardcode daftar nama kamar. Kalau ada lebih dari satu match dengan
+ * panjang nama yang sama (ambigu), return null agar bot minta klarifikasi.
+ */
+export function findMentionedRoomType<
+  R extends { id: string; name: string; base_rate?: number | null },
+>(input: string, rooms: R[]): R | null {
+  const normInput = normalizeRoomName(input);
+  if (!normInput || rooms.length === 0) return null;
+
+  // Exact match terhadap seluruh input.
+  const exact = rooms.find((r) => normalizeRoomName(r.name) === normInput);
+  if (exact) return exact;
+
+  // Partial: nama room muncul sebagai substring token-bounded.
+  const matches = rooms
+    .map((r) => ({ room: r, norm: normalizeRoomName(r.name) }))
+    .filter(({ norm }) => norm.length >= 2)
+    .filter(({ norm }) => {
+      const re = new RegExp(
+        `(^|\\s)${norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(\\s|$)`,
+      );
+      return re.test(normInput);
+    })
+    .sort((a, b) => b.norm.length - a.norm.length);
+
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0].room;
+  // Ambigu bila top-2 punya panjang nama sama.
+  if (matches[0].norm.length === matches[1].norm.length) return null;
+  return matches[0].room;
+}
+
 /** Temukan koreksi tipe kamar yang disebut tamu sebelum konfirmasi final. */
 export function detectRequestedRoomChange(
   message: string,
   rooms: Array<{ id: string; name: string; base_rate?: number | null }>,
   currentRoomId?: string,
 ): { id: string; name: string; pricePerNight: number } | null {
-  const normalizedMessage = message.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (!normalizedMessage) return null;
-
-  const matches = rooms
-    .filter((room) => room.id !== currentRoomId)
-    .filter((room) => {
-      const normalizedName = room.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      return normalizedName.length > 1 && normalizedMessage.includes(normalizedName);
-    })
-    .sort((a, b) => b.name.length - a.name.length);
-
-  const selected = matches[0];
+  const candidates = rooms.filter((room) => room.id !== currentRoomId);
+  const selected = findMentionedRoomType(message, candidates);
   if (!selected) return null;
   return {
     id: selected.id,
