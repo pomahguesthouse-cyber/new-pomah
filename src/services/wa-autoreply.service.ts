@@ -541,23 +541,18 @@ export async function executeAutoreplyForPhone(
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     const tStart = Date.now();
-    const [trainingExamples, negativeExamples] = await Promise.all([
-      findTrainingContext(
-        supabaseAdmin as any,
-        {
-          userMessage: lastMessage ?? "",
-          stage: (chatSummaryJson?.last_topic ?? null) as string | null,
-        },
-        { apiKey, baseUrl, model },
-        { limit: 3 },
-      ),
-      findNegativeExamples(
-        supabaseAdmin as any,
-        lastMessage ?? "",
-        { apiKey, baseUrl, model },
-        { limit: 2 },
-      ),
-    ]);
+    const trainingSignals = await findTrainingSignals(
+      supabaseAdmin as any,
+      {
+        userMessage: lastMessage ?? "",
+        stage: (chatSummaryJson?.last_topic ?? null) as string | null,
+      },
+      { apiKey, baseUrl, model },
+      { positiveLimit: 3, negativeLimit: 2 },
+    );
+    const trainingExamples = trainingSignals.positiveExamples;
+    const negativeExamples = trainingSignals.negativeExamples;
+
     if (trainingExamples.length > 0) {
       const top = trainingExamples[0];
       console.info(
