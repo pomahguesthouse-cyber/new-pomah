@@ -774,6 +774,8 @@ export async function executeAutoreplyForPhone(
       routing_confidence: orchResult?.routingConfidence,
       escalated: orchResult?.escalated,
       is_fallback: isFallback,
+      training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
+      training_example_ids: orchResult?.trainingExampleIds ?? [],
     } as any,
   });
 
