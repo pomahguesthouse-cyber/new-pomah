@@ -34,7 +34,7 @@ import {
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
 import { chatCompletionText } from "@/services/ai-client.service";
-import { findTrainingContext, findNegativeExamples } from "@/services/training-retrieval.service";
+import { findTrainingSignals } from "@/services/training-retrieval.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
