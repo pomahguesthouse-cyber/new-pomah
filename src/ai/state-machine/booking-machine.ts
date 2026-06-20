@@ -1,6 +1,11 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { createBooking } from "@/tools/booking.tool";
+import {
+  getDailyRatesForRange,
+  resolveRoomNightlyRates,
+} from "@/services/pricing/daily-rate.service";
+import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 
 export type BookingState =
@@ -235,35 +240,43 @@ export function resolveRoomExtraBedPolicy(
   };
 }
 
-/** Build the pre-confirmation booking summary once all guest details are set. */
+/**
+ * Build the pre-confirmation booking summary once all guest details are set.
+ * Versi sync — fallback ketika daily-rate dynamic tidak bisa di-resolve.
+ */
 function buildBookingSummary(
   context: BookingContext,
   roomsCatalog?: RoomCatalogEntry[],
+  overrides?: {
+    rooms?: BookingRoomItem[];
+    roomSubtotal?: number;
+    displayRatePerNight?: number;
+    hasDynamicBreakdown?: boolean;
+  },
 ): StateMachineResult {
   // --- Room line ---
+  const summaryRooms = overrides?.rooms ?? context.rooms;
   let roomsDisplay: string;
-  if (context.rooms && context.rooms.length > 0) {
-    roomsDisplay = context.rooms
+  if (summaryRooms && summaryRooms.length > 0) {
+    roomsDisplay = summaryRooms
       .map((r) => `${r.quantity}x ${r.roomTypeName}`)
       .join(", ");
   } else {
     roomsDisplay = context.roomName ?? "—";
   }
 
-  // --- Price per night ---
+  // --- Price per night (prefer dynamic average bila tersedia) ---
   const pricePerNight =
-    context.rooms && context.rooms.length > 0
-      ? context.rooms[0].pricePerNight
-      : (context.pricePerNight ?? 0);
+    overrides?.displayRatePerNight ??
+    (summaryRooms && summaryRooms.length > 0
+      ? summaryRooms[0].pricePerNight
+      : (context.pricePerNight ?? 0));
 
   // --- Nights & total ---
   const nights =
     context.checkIn && context.checkOut
       ? countNights(context.checkIn, context.checkOut)
       : null;
-  const total =
-    context.totalPrice ??
-    (nights && pricePerNight ? nights * pricePerNight : null);
 
   // --- Dates with check-in / check-out times ---
   const checkInDisplay = context.checkIn
@@ -285,14 +298,19 @@ function buildBookingSummary(
   const resolvedExtraBedRate = policy.extrabedRate;
   if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
 
-  const totalRooms = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+  const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = computeExtraBeds(policy, totalRooms, adults);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
   const extraBedTotal =
     nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
-  const roomSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
-  const grandTotal = (total ?? roomSubtotal) + extraBedTotal;
+
+  // Subtotal kamar: pakai dynamic (jika tersedia), kalau tidak fallback rata.
+  const fallbackSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
+  const roomSubtotal = overrides?.roomSubtotal ?? context.totalPrice ?? fallbackSubtotal;
+  const grandTotal = roomSubtotal + extraBedTotal;
+
+  const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
 
   const extraBedLine = extraBeds > 0
     ? (hasRate
@@ -317,7 +335,7 @@ function buildBookingSummary(
     `- Check-out: ${checkOutDisplay}\n` +
     `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
     `- Jumlah tamu: ${adultLine}\n` +
-    `- Harga: ${pricePerNight ? `${fmtRp(pricePerNight)}/malam` : "—"}\n` +
+    `- Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
     extraBedLine +
     `- Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
     overCapLine +
@@ -325,6 +343,127 @@ function buildBookingSummary(
     `Ketik "Ya" atau "Lanjut" untuk konfirmasi, atau langsung sebutkan data yang ingin dikoreksi ` +
     `(misal: "jumlah tamu 5", "tanggal 22 Juni", "ganti Family Suite"). Ketik "Batal" untuk membatalkan.`;
   return { handled: true, reply: summary };
+}
+
+/**
+ * Resolve nightly rates dinamis dari `room_daily_rates` (fallback `base_rate`)
+ * untuk seluruh tipe kamar dalam booking. Mengembalikan subtotal kamar,
+ * tarif tampilan, dan flag dynamic breakdown sehingga ringkasan selaras
+ * dengan harga final yang dipakai create_booking.
+ */
+export async function resolveBookingSummaryRates(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<{
+  rooms: BookingRoomItem[];
+  roomSubtotal: number;
+  displayRatePerNight: number;
+  hasDynamicBreakdown: boolean;
+  stopSellDates: string[];
+} | null> {
+  if (!context.checkIn || !context.checkOut) return null;
+  const items = context.rooms ?? [];
+  if (items.length === 0) return null;
+
+  const roomTypeIds = Array.from(
+    new Set(items.map((r) => r.roomTypeId).filter((id): id is string => !!id)),
+  );
+  if (roomTypeIds.length === 0) return null;
+
+  const overrides = await getDailyRatesForRange(
+    ctx.supabasePublic,
+    roomTypeIds,
+    context.checkIn,
+    context.checkOut,
+  );
+
+  const nights = countNights(context.checkIn, context.checkOut);
+  const resolvedRooms: BookingRoomItem[] = [];
+  const stopSellDates: string[] = [];
+  let roomSubtotal = 0;
+  let hasDynamicBreakdown = false;
+  let firstAvg: number | null = null;
+  let sameRate = true;
+  let avgSum = 0;
+  let avgCount = 0;
+
+  for (const item of items) {
+    const rt = ctx.rooms.find((r) => r.id === item.roomTypeId) as
+      | RoomTypeRow
+      | undefined;
+    if (!rt) {
+      resolvedRooms.push(item);
+      roomSubtotal += item.pricePerNight * item.quantity * nights;
+      continue;
+    }
+    const resolved = resolveRoomNightlyRates(
+      rt,
+      context.checkIn,
+      context.checkOut,
+      overrides.get(item.roomTypeId),
+    );
+    if (resolved.has_stop_sell) stopSellDates.push(...resolved.stop_sell_dates);
+    if (!resolved.all_base) hasDynamicBreakdown = true;
+    roomSubtotal += resolved.total * item.quantity;
+    const avg = resolved.nights
+      ? Math.round(resolved.total / resolved.nights)
+      : item.pricePerNight;
+    resolvedRooms.push({ ...item, pricePerNight: avg });
+    avgSum += avg;
+    avgCount += 1;
+    if (firstAvg === null) firstAvg = avg;
+    else if (avg !== firstAvg) sameRate = false;
+  }
+
+  const displayRatePerNight = sameRate
+    ? (firstAvg ?? 0)
+    : Math.round(avgSum / Math.max(1, avgCount));
+
+  return {
+    rooms: resolvedRooms,
+    roomSubtotal,
+    displayRatePerNight,
+    hasDynamicBreakdown,
+    stopSellDates: Array.from(new Set(stopSellDates)),
+  };
+}
+
+/**
+ * Versi async: pakai daily-rate dynamic. Jika ada stop_sell pada salah satu
+ * malam, balas pesan minta pilih tanggal/tipe lain alih-alih ringkasan final.
+ * Fallback ke versi sync bila resolve gagal (mis. data context tidak lengkap).
+ */
+async function buildBookingSummaryAsync(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<StateMachineResult> {
+  try {
+    const resolved = await resolveBookingSummaryRates(ctx, context);
+    if (resolved && resolved.stopSellDates.length > 0) {
+      const tanggalList = resolved.stopSellDates
+        .map((d) => formatDateId(d))
+        .join(", ");
+      const roomLabel =
+        context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
+      return {
+        handled: true,
+        reply:
+          `Mohon maaf Kak, ${roomLabel} tidak dijual untuk tanggal ${tanggalList}. ` +
+          `Silakan pilih tanggal lain atau tipe kamar lain ya 🙏.`,
+      };
+    }
+    if (resolved) {
+      return buildBookingSummary(context, ctx.rooms, {
+        rooms: resolved.rooms,
+        roomSubtotal: resolved.roomSubtotal,
+        displayRatePerNight: resolved.displayRatePerNight,
+        hasDynamicBreakdown: resolved.hasDynamicBreakdown,
+      });
+    }
+  } catch (e) {
+    console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
+  }
+  return await buildBookingSummaryAsync(ctx, context);
 }
 
 
@@ -432,24 +571,58 @@ export function matchAlternative(
   return null;
 }
 
+/** Normalisasi nama kamar untuk perbandingan: lowercase, trim, buang prefix umum. */
+export function normalizeRoomName(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\b(kamar|room|tipe|type)\b/g, " ")
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Temukan tipe kamar yang disebut tamu di pesan bebas. Dynamic — tidak
+ * hardcode daftar nama kamar. Kalau ada lebih dari satu match dengan
+ * panjang nama yang sama (ambigu), return null agar bot minta klarifikasi.
+ */
+export function findMentionedRoomType<
+  R extends { id: string; name: string; base_rate?: number | null },
+>(input: string, rooms: R[]): R | null {
+  const normInput = normalizeRoomName(input);
+  if (!normInput || rooms.length === 0) return null;
+
+  // Exact match terhadap seluruh input.
+  const exact = rooms.find((r) => normalizeRoomName(r.name) === normInput);
+  if (exact) return exact;
+
+  // Partial: nama room muncul sebagai substring token-bounded.
+  const matches = rooms
+    .map((r) => ({ room: r, norm: normalizeRoomName(r.name) }))
+    .filter(({ norm }) => norm.length >= 2)
+    .filter(({ norm }) => {
+      const re = new RegExp(
+        `(^|\\s)${norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(\\s|$)`,
+      );
+      return re.test(normInput);
+    })
+    .sort((a, b) => b.norm.length - a.norm.length);
+
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0].room;
+  // Ambigu bila top-2 punya panjang nama sama.
+  if (matches[0].norm.length === matches[1].norm.length) return null;
+  return matches[0].room;
+}
+
 /** Temukan koreksi tipe kamar yang disebut tamu sebelum konfirmasi final. */
 export function detectRequestedRoomChange(
   message: string,
   rooms: Array<{ id: string; name: string; base_rate?: number | null }>,
   currentRoomId?: string,
 ): { id: string; name: string; pricePerNight: number } | null {
-  const normalizedMessage = message.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  if (!normalizedMessage) return null;
-
-  const matches = rooms
-    .filter((room) => room.id !== currentRoomId)
-    .filter((room) => {
-      const normalizedName = room.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-      return normalizedName.length > 1 && normalizedMessage.includes(normalizedName);
-    })
-    .sort((a, b) => b.name.length - a.name.length);
-
-  const selected = matches[0];
+  const candidates = rooms.filter((room) => room.id !== currentRoomId);
+  const selected = findMentionedRoomType(message, candidates);
   if (!selected) return null;
   return {
     id: selected.id,
@@ -506,7 +679,10 @@ const INTERRUPT_INTENTS = new Set([
  * Mendukung pola umum berbahasa Indonesia. Mengembalikan patch parsial untuk
  * digabungkan ke BookingContext + bool apakah ada perubahan.
  */
-export function parseSlotCorrection(input: string): {
+export function parseSlotCorrection(
+  input: string,
+  rooms?: Array<{ id: string; name: string; base_rate?: number | null }>,
+): {
   patch: Partial<BookingContext>;
   changed: boolean;
 } {
@@ -526,23 +702,27 @@ export function parseSlotCorrection(input: string): {
     }
   }
 
-  // Tipe kamar: deluxe / family / single
-  if (/\bdeluxe\b/i.test(input)) { patch.roomName = "Deluxe"; changed = true; }
-  else if (/\bfamily(?:\s+suite)?\b/i.test(input)) { patch.roomName = "Family Suite"; changed = true; }
-  else if (/\bsingle\b/i.test(input)) { patch.roomName = "Single"; changed = true; }
+  // Tipe kamar: dinamis dari katalog DB (tanpa hardcode nama kamar).
+  const mentionedRoom = rooms?.length
+    ? findMentionedRoomType(input, rooms)
+    : null;
+  if (mentionedRoom) {
+    patch.roomName = mentionedRoom.name;
+    patch.roomId = mentionedRoom.id;
+    changed = true;
 
-  // Jumlah kamar: "2 kamar deluxe"
-  const roomsCountMatch = input.match(/(\d+)\s*kamar\b/i);
-  if (roomsCountMatch && patch.roomName) {
-    const qty = Number(roomsCountMatch[1]);
-    if (qty >= 1 && qty <= 10) {
-      patch.rooms = [{
-        roomTypeId: "",
-        roomTypeName: patch.roomName,
-        quantity: qty,
-        pricePerNight: 0,
-      }];
-      changed = true;
+    // Jumlah kamar: "2 kamar", "ganti deluxe 3 kamar"
+    const roomsCountMatch = input.match(/(\d+)\s*kamar\b/i);
+    if (roomsCountMatch) {
+      const qty = Number(roomsCountMatch[1]);
+      if (qty >= 1 && qty <= 10) {
+        patch.rooms = [{
+          roomTypeId: mentionedRoom.id,
+          roomTypeName: mentionedRoom.name,
+          quantity: qty,
+          pricePerNight: Number(mentionedRoom.base_rate ?? 0),
+        }];
+      }
     }
   }
 
@@ -898,14 +1078,14 @@ export async function processBookingState(
     if (wantsThisPhone) {
       context.guestPhone = formatPhoneDisplay(phone);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context, ctx.rooms);
+      return await buildBookingSummaryAsync(ctx, context);
     }
     // A phone number was typed directly → use it.
     const typedPhone = extractPhone(trimmed);
     if (typedPhone) {
       context.guestPhone = typedPhone;
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context, ctx.rooms);
+      return await buildBookingSummaryAsync(ctx, context);
     }
     // "Use another number" without supplying one yet → ask for it.
     if (USE_OTHER_PATTERN.test(trimmed)) {
@@ -922,7 +1102,7 @@ export async function processBookingState(
     }
     context.guestPhone = phoneNum || message.replace(/[^0-9+]/g, '');
     await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    return buildBookingSummary(context, ctx.rooms);
+    return await buildBookingSummaryAsync(ctx, context);
   }
 
   if (state === "CONFIRMING_BOOKING") {
@@ -962,7 +1142,7 @@ export async function processBookingState(
         pricePerNight: requestedRoom.pricePerNight,
       }];
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummary(context, ctx.rooms);
+      return await buildBookingSummaryAsync(ctx, context);
     }
 
     // Koreksi slot fleksibel: tamu kirim "jumlah tamu 5 kak", "tanggal 22 Juni",
@@ -972,26 +1152,19 @@ export async function processBookingState(
     const isPureConfirm = /^(ya|iya|yes|lanjut|ok|oke|setuju|betul|benar)[\s.!]*$/i.test(message.trim());
     const isPureCancel  = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
     if (!isPureConfirm && !isPureCancel) {
-      const { patch, changed } = parseSlotCorrection(message);
+      const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
         if (patch.adults) context.adults = patch.adults;
         if (patch.roomName) {
           context.roomName = patch.roomName;
-          // Cari room di ctx.rooms agar harga ikut update.
-          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === patch.roomName!.toLowerCase());
-          if (rt) {
-            context.roomId = rt.id;
-            context.pricePerNight = Number(rt.base_rate ?? 0);
+          if (patch.roomId) {
+            context.roomId = patch.roomId;
+            const rt = ctx.rooms.find((r) => r.id === patch.roomId);
+            context.pricePerNight = Number(rt?.base_rate ?? context.pricePerNight ?? 0);
           }
         }
-        if (patch.rooms && context.roomName) {
-          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === context.roomName!.toLowerCase());
-          context.rooms = [{
-            roomTypeId: rt?.id ?? "",
-            roomTypeName: context.roomName,
-            quantity: patch.rooms[0].quantity,
-            pricePerNight: Number(rt?.base_rate ?? context.pricePerNight ?? 0),
-          }];
+        if (patch.rooms && patch.rooms.length > 0) {
+          context.rooms = patch.rooms;
         }
         // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_*).
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
@@ -1006,7 +1179,7 @@ export async function processBookingState(
           context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
         }
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-        return buildBookingSummary(context, ctx.rooms);
+        return await buildBookingSummaryAsync(ctx, context);
       }
     }
 
@@ -1081,7 +1254,7 @@ export async function processBookingState(
     } else {
       // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
       // dengan petunjuk yang lebih ramah, jangan kaku.
-      return buildBookingSummary(context, ctx.rooms);
+      return await buildBookingSummaryAsync(ctx, context);
     }
   }
 
