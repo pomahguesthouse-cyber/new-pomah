@@ -98,6 +98,17 @@ export interface AgentContext {
     user_message: string;
     ideal_assistant_response: string;
   }>;
+  /**
+   * Contoh jawaban yang sudah ditandai admin sebagai 'bad' beserta
+   * koreksinya bila ada. Diinject sebagai blok "JANGAN tiru" agar agent
+   * menghindari pola yang gagal pada konteks serupa.
+   */
+  negativeExamples?: Array<{
+    id: string;
+    user_message: string;
+    bad_response: string;
+    correction: string | null;
+  }>;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

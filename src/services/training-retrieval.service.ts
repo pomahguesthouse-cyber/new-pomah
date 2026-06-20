@@ -171,3 +171,57 @@ function keywordToUnified(ex: KeywordExample, fakeSim: number): UnifiedTrainingE
 function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
+
+/**
+ * Cari contoh "jawaban buruk" yang serupa dengan pesan tamu saat ini.
+ * Sumber: `ai_conversation_logs` dengan `rating = 'bad'`. Bila admin
+ * sudah memberi `correction`, sertakan agar agent tahu jawaban yang
+ * benar untuk konteks tersebut.
+ */
+export async function findNegativeExamples(
+  supabase: SupabaseClient,
+  userMessage: string,
+  llmConfig: AiClientConfig | null,
+  options: { limit?: number; minSimilarity?: number } = {},
+): Promise<NegativeTrainingExample[]> {
+  const trimmed = (userMessage ?? "").trim();
+  if (!trimmed || !llmConfig?.apiKey) return [];
+  const limit = options.limit ?? 2;
+  const minSim = options.minSimilarity ?? DEFAULT_MIN_SIM;
+
+  const queryEmbedding = await generateEmbedding(llmConfig, trimmed).catch(() => null);
+  if (!queryEmbedding) return [];
+
+  try {
+    const { data, error } = await supabase.rpc("match_bad_training_examples", {
+      query_embedding: queryEmbedding as unknown as string,
+      match_threshold: minSim,
+      match_count: limit,
+    });
+    if (error || !Array.isArray(data)) return [];
+    return (data as NegativeTrainingExample[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** Format contoh negatif sebagai blok teks untuk system prompt. */
+export function formatNegativeExamplesBlock(examples: NegativeTrainingExample[]): string {
+  if (examples.length === 0) return "";
+  const lines = examples.map((ex, i) => {
+    const parts = [
+      `Contoh ${i + 1}`,
+      `Tamu: ${ex.user_message.trim()}`,
+      `JANGAN balas seperti ini: ${ex.bad_response.trim()}`,
+    ];
+    if (ex.correction && ex.correction.trim()) {
+      parts.push(`Balasan yang benar: ${ex.correction.trim()}`);
+    }
+    return parts.join("\n");
+  });
+  return [
+    "CONTOH JAWABAN BURUK (admin sudah menandai 'bad' — JANGAN tiru gaya, isi, atau pendekatan ini):",
+    ...lines,
+    "Bila konteks tamu mirip dengan contoh di atas, hindari pola jawaban tersebut. Bila ada 'Balasan yang benar', ikuti pendekatan itu.",
+  ].join("\n\n");
+}
