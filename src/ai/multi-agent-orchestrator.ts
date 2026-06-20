@@ -678,9 +678,18 @@ export async function runMultiAgentOrchestration(
   // 4b. Retrieve training examples (RAG di ai_conversation_logs).
   //     Skip saat tamu sedang di tengah pengisian data booking — di sana
   //     jawaban harus mengikuti state machine, bukan few-shot.
+  //     Skip juga bila pemanggil (wa-autoreply) sudah melakukan unified
+  //     retrieval & menaruh hasilnya di `agentCtx.trainingExamples` —
+  //     hindari fetch ganda.
   let trainingExamples: TrainingExample[] = [];
   let trainingBlock: string | undefined;
-  if (!input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
+  const alreadyProvided =
+    (input.agentCtx.trainingExamples?.length ?? 0) > 0;
+  if (
+    !alreadyProvided &&
+    !input.agentCtx.bookingInProgress &&
+    lastUserMsg.trim().length > 0
+  ) {
     try {
       const { readTrainingRagConfig } = await import(
         "@/admin/modules/ai-lab/ai-lab.functions"
