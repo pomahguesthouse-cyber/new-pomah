@@ -993,17 +993,13 @@ export async function processBookingState(
             pricePerNight: Number(rt?.base_rate ?? context.pricePerNight ?? 0),
           }];
         }
-        // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_rate).
+        // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_*).
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-        const rtForRate = ctx.rooms.find(
-          (r) =>
-            (context.roomId && r.id === context.roomId) ||
-            (context.roomName && r.name.toLowerCase() === context.roomName.toLowerCase()),
-        );
-        const dbRate = Number(rtForRate?.extrabed_rate ?? 0);
-        if (dbRate > 0) context.extraBedRate = dbRate;
-        const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1, dbRate || undefined);
+        const recomputePolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
+        if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
+        const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, context.adults ?? 1);
         context.extraBeds = eb.extraBeds;
+
         // Recompute total
         if (context.checkIn && context.checkOut && context.pricePerNight) {
           const nights = countNights(context.checkIn, context.checkOut);
