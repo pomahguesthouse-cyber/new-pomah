@@ -26,6 +26,7 @@ function requireTool(name: string): ToolDefinition {
   return t;
 }
 const checkRoomAvailabilityTool = requireTool("check_room_availability");
+const getRoomSpecificationsTool = requireTool("get_room_specifications");
 const updateRoomRateTool        = requireTool("update_room_rate");
 const setDailyRoomRateTool      = requireTool("set_daily_room_rate");
 const getDailyRoomRatesTool     = requireTool("get_daily_room_rates");
@@ -66,10 +67,14 @@ const scrapeCompetitorPricesTool: ToolDefinition = {
   },
 };
 
-const PRICING_GUEST_TOOLS: ToolDefinition[] = [checkRoomAvailabilityTool];
+const PRICING_GUEST_TOOLS: ToolDefinition[] = [
+  checkRoomAvailabilityTool,
+  getRoomSpecificationsTool,
+];
 
 const PRICING_MANAGER_TOOLS: ToolDefinition[] = [
   checkRoomAvailabilityTool,
+  getRoomSpecificationsTool,
   updateRoomRateTool,
   setDailyRoomRateTool,
   getDailyRoomRatesTool,
@@ -87,15 +92,32 @@ interface Scaffold {
   roomSummary: string;
 }
 
+function formatCurrency(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString("id-ID") : "0";
+}
+
+function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
+  const capacity = Number(room.extrabed_capacity ?? 0);
+  const rate = Number(room.extrabed_rate ?? 0);
+  if (capacity > 0 && rate > 0) {
+    return `, extra bed max ${capacity}/kamar Rp ${formatCurrency(rate)}/malam`;
+  }
+  if (capacity > 0) return `, extra bed max ${capacity}/kamar`;
+  if (rate > 0) return `, extra bed Rp ${formatCurrency(rate)}/malam`;
+  return "";
+}
+
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
   const persona  = managerName?.trim() || "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const roomLines = rooms.map(
     (r) =>
-      `• ${r.name}: Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam` +
+      `• ${r.name}: Rp ${formatCurrency(r.base_rate)}/malam` +
       (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
       (r.bed_type  ? `, ${r.bed_type}` : "") +
+      formatExtraBedInfo(r) +
       (r.description ? ` — ${r.description}` : ""),
   );
   return {
@@ -139,13 +161,20 @@ function buildGuestPrompt(s: Scaffold): string {
       "harga per malam real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk " +
       "tanggal tertentu — jangan menebak tarif dari data statis.",
 
+    "EXTRA BED & KAPASITAS: Bila tamu bertanya tarif extra bed, kapasitas detail, atau " +
+      "total menginap dengan jumlah tamu melebihi kapasitas standar, panggil `get_room_specifications` " +
+      "dan gunakan `extrabed_capacity` serta `extrabed_rate` dari hasil tool / data `room_types`. " +
+      "JANGAN hardcode tarif extra bed. Jika data extra bed tidak tersedia, katakan perlu dicek " +
+      "ke Front Office/admin, bukan menebak nominal.",
+
     "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dari hari ini (" + s.todayRaw + "): " +
       "'hari ini' → " + s.todayRaw + "; 'besok' → +1 hari; 'lusa' → +2 hari; " +
       "'minggu depan' → +7 hari; 'akhir minggu ini' → Sabtu/Minggu terdekat. " +
       "Perhatikan batas akhir bulan. Bila hanya satu tanggal disebut, anggap menginap 1 malam.",
 
     "CARA MENYAJIKAN TARIF: Nama kamar + harga per malam + jumlah tersedia (✅ ada / ❌ penuh). " +
-      "Hitung total untuk jumlah malam bila tamu menyebut durasi. Sebutkan kamar penuh agar " +
+      "Hitung total untuk jumlah malam bila tamu menyebut durasi. Jika ada biaya extra bed, " +
+      "hitung dari `extrabed_rate` aktual dan sebutkan sebagai komponen terpisah. Sebutkan kamar penuh agar " +
       "tamu bisa pilih alternatif.",
 
     "DISKON & PAKET: Bila ada promo di SOP, sampaikan dengan antusias. Bila tidak ada, " +
@@ -226,6 +255,10 @@ function buildManagerialPrompt(s: Scaffold): string {
 
     "CEK TARIF + AVAILABILITY: Pakai `check_room_availability` saat manajer minta status " +
       "harga + ketersediaan untuk tanggal tertentu. Sajikan ringkas, no fluff.",
+
+    "SPESIFIKASI / EXTRA BED: Pakai `get_room_specifications` bila manajer menanyakan " +
+      "kapasitas, tarif extra bed, fasilitas, atau detail kamar. Gunakan `extrabed_rate` " +
+      "dan `extrabed_capacity` dari data kamar — jangan hardcode nominal di prompt.",
 
     "FORMAT TANGGAL: Bahasa Indonesia ('17–18 Juli 2026'), JANGAN ISO ke manajer. " +
       "Pakai YYYY-MM-DD hanya untuk argumen tool.",
