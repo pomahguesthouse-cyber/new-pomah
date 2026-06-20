@@ -34,7 +34,7 @@ import {
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
 import { chatCompletionText } from "@/services/ai-client.service";
-import { findTrainingContext } from "@/services/training-retrieval.service";
+import { findTrainingContext, findNegativeExamples } from "@/services/training-retrieval.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -541,20 +541,34 @@ export async function executeAutoreplyForPhone(
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     const tStart = Date.now();
-    const trainingExamples = await findTrainingContext(
-      supabaseAdmin as any,
-      {
-        userMessage: lastMessage ?? "",
-        stage: (chatSummaryJson?.last_topic ?? null) as string | null,
-      },
-      { apiKey, baseUrl, model },
-      { limit: 3 },
-    );
+    const [trainingExamples, negativeExamples] = await Promise.all([
+      findTrainingContext(
+        supabaseAdmin as any,
+        {
+          userMessage: lastMessage ?? "",
+          stage: (chatSummaryJson?.last_topic ?? null) as string | null,
+        },
+        { apiKey, baseUrl, model },
+        { limit: 3 },
+      ),
+      findNegativeExamples(
+        supabaseAdmin as any,
+        lastMessage ?? "",
+        { apiKey, baseUrl, model },
+        { limit: 2 },
+      ),
+    ]);
     if (trainingExamples.length > 0) {
       const top = trainingExamples[0];
       console.info(
         `[Autoreply] Training retrieval: ${trainingExamples.length} contoh ` +
           `(top ${top.source}/${top.similarity.toFixed(2)})`,
+      );
+    }
+    if (negativeExamples.length > 0) {
+      console.info(
+        `[Autoreply] Negative retrieval: ${negativeExamples.length} contoh buruk ` +
+          `(top sim ${negativeExamples[0].similarity.toFixed(2)})`,
       );
     }
     try {
@@ -579,6 +593,12 @@ export async function executeAutoreplyForPhone(
             stage: ex.stage,
             user_message: ex.user_message,
             ideal_assistant_response: ex.ideal_assistant_response,
+          })),
+          negativeExamples: negativeExamples.map((ex) => ({
+            id: ex.id,
+            user_message: ex.user_message,
+            bad_response: ex.bad_response,
+            correction: ex.correction,
           })),
         },
         toolCtx: {
