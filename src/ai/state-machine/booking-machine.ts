@@ -679,7 +679,10 @@ const INTERRUPT_INTENTS = new Set([
  * Mendukung pola umum berbahasa Indonesia. Mengembalikan patch parsial untuk
  * digabungkan ke BookingContext + bool apakah ada perubahan.
  */
-export function parseSlotCorrection(input: string): {
+export function parseSlotCorrection(
+  input: string,
+  rooms?: Array<{ id: string; name: string; base_rate?: number | null }>,
+): {
   patch: Partial<BookingContext>;
   changed: boolean;
 } {
@@ -699,23 +702,27 @@ export function parseSlotCorrection(input: string): {
     }
   }
 
-  // Tipe kamar: deluxe / family / single
-  if (/\bdeluxe\b/i.test(input)) { patch.roomName = "Deluxe"; changed = true; }
-  else if (/\bfamily(?:\s+suite)?\b/i.test(input)) { patch.roomName = "Family Suite"; changed = true; }
-  else if (/\bsingle\b/i.test(input)) { patch.roomName = "Single"; changed = true; }
+  // Tipe kamar: dinamis dari katalog DB (tanpa hardcode nama kamar).
+  const mentionedRoom = rooms?.length
+    ? findMentionedRoomType(input, rooms)
+    : null;
+  if (mentionedRoom) {
+    patch.roomName = mentionedRoom.name;
+    patch.roomId = mentionedRoom.id;
+    changed = true;
 
-  // Jumlah kamar: "2 kamar deluxe"
-  const roomsCountMatch = input.match(/(\d+)\s*kamar\b/i);
-  if (roomsCountMatch && patch.roomName) {
-    const qty = Number(roomsCountMatch[1]);
-    if (qty >= 1 && qty <= 10) {
-      patch.rooms = [{
-        roomTypeId: "",
-        roomTypeName: patch.roomName,
-        quantity: qty,
-        pricePerNight: 0,
-      }];
-      changed = true;
+    // Jumlah kamar: "2 kamar", "ganti deluxe 3 kamar"
+    const roomsCountMatch = input.match(/(\d+)\s*kamar\b/i);
+    if (roomsCountMatch) {
+      const qty = Number(roomsCountMatch[1]);
+      if (qty >= 1 && qty <= 10) {
+        patch.rooms = [{
+          roomTypeId: mentionedRoom.id,
+          roomTypeName: mentionedRoom.name,
+          quantity: qty,
+          pricePerNight: Number(mentionedRoom.base_rate ?? 0),
+        }];
+      }
     }
   }
 
