@@ -1,17 +1,17 @@
 # Alur Chatbot WhatsApp (Fonnte)
 
-Dokumen ini menggambarkan alur runtime chatbot, berdasarkan kode di
-[`src/routes/api.fonnte.ts`](../src/routes/api.fonnte.ts),
-[`src/services/wa-autoreply.service.ts`](../src/services/wa-autoreply.service.ts),
-[`src/ai/multi-agent-orchestrator.ts`](../src/ai/multi-agent-orchestrator.ts),
-dan agent di [`src/ai/agents/`](../src/ai/agents).
+Dokumen ini menggambarkan alur runtime chatbot WhatsApp/Fonnte yang aktif di production, berdasarkan kode di:
 
-## 1. Pipeline Webhook (penerimaan & penjadwalan balasan)
+- `src/routes/api.fonnte.ts`
+- `src/services/queue.service.ts`
+- `src/services/wa-autoreply.service.ts`
+- `src/ai/multi-agent-orchestrator.ts`
+- `src/ai/agents/`
+- `src/ai/state-machine/booking-machine.ts`
 
-Webhook membalas `200` ke Fonnte **segera** setelah pesan masuk disimpan;
-pipeline berat (debounce + LLM + kirim) berjalan di background lewat
-`ctx.waitUntil` sehingga timeout webhook Fonnte yang singkat tidak mematikan
-proses balasan. Di dev lokal (tanpa `waitUntil`) proses tetap di-`await`.
+## 1. Pipeline Webhook → DB Queue
+
+Webhook `/api/fonnte` dibuat ringan. Tugas utamanya adalah menerima payload Fonnte, menyimpan pesan inbound, menjalankan notifikasi ringan secara background, lalu memasukkan pesan ke `wa_conversation_queue`. Webhook tidak menjalankan LLM langsung, sehingga bisa return `200 OK` cepat ke Fonnte.
 
 ```mermaid
 flowchart TD
@@ -26,203 +26,173 @@ flowchart TD
     F -- tidak --> G[saveInboundMessage]
     G -- gagal --> ERR([Return 500])
     G -- ok --> H[Simpan intent badge<br/>fire-and-forget]
-    H --> I[get_autoreply_context p_phone]
-    I --> J{auto_reply aktif?<br/>fonnte_token ada?}
+    H --> N[Notifikasi incoming / payment proof<br/>via waitUntil bila tersedia]
+    N --> I[get_autoreply_context p_phone]
+    I --> J{auto_reply aktif / manager?<br/>fonnte_token ada?}
     J -- tidak --> Z
-    J -- ya --> R200([Return 200 ke Fonnte — SEGERA])
-    R200 -. waitUntil background .-> K[Debounce delayMs<br/>resolveQueueTiming]
-    K --> L{Ada pesan masuk lebih baru?<br/>superseded}
-    L -- ya --> STOP([Stop background])
-    L -- tidak --> M[[executeAutoreplyForPhone]]
+    J -- ya --> K[resolveQueueTiming]
+    K --> L[queueCleanupZombies]
+    L --> M[wa_queue_upsert]
+    M --> Z
 ```
 
-> Catatan: ada juga jalur **queue-worker** (`processWaQueueEntry` di
-> `src/services/wa-queue-processor.ts`) yang memproses `wa_conversation_queue`
-> dengan logika identik (debounce → claim → AI → kirim). Jalur webhook di atas
-> adalah jalur utama yang aktif.
+Catatan penting:
 
-## 2. executeAutoreplyForPhone (inti balasan)
+- Smart delay/debounce tidak lagi dilakukan dengan sleep di webhook.
+- Idle batching dilakukan oleh database lewat `wa_queue_upsert` dengan `process_after` dan `max_wait_until`.
+- Worker terpisah (`/api/queue-worker` / `/api/cron/process-wa-queue`) mengambil queue yang sudah ready.
+
+## 2. Queue Worker
+
+Queue worker memproses item yang sudah melewati idle window.
 
 ```mermaid
 flowchart TD
-    A[Load context + property + rooms] --> B{auto_reply & token ok?}
+    A[Worker / cron jalan] --> B[wa_queue_claim_next]
+    B --> C{Ada entry ready?}
+    C -- tidak --> Z([Selesai])
+    C -- ya --> D[Claim atomic<br/>FOR UPDATE SKIP LOCKED]
+    D --> E[Heartbeat lock]
+    E --> F[executeAutoreplyForPhone]
+    F --> G{Outcome}
+    G -- ok / skipped_config / no_api_key --> H[wa_queue_complete]
+    G -- send_failed / context_error / fatal --> I[wa_queue_fail<br/>retry/backoff]
+    H --> B
+    I --> B
+```
+
+Queue memberi jaminan:
+
+- Satu conversation hanya diproses satu worker pada satu waktu.
+- Burst pesan tamu dibalas sekali setelah idle window.
+- Worker zombie dibersihkan saat lock expired.
+- Error sementara bisa retry dengan backoff.
+
+## 3. executeAutoreplyForPhone
+
+Fungsi ini adalah inti balasan WhatsApp. Ia memuat konteks thread, data properti, tipe kamar, SOP, brosur, model AI, ringkasan chat, contoh training, lalu menjalankan orchestrator.
+
+```mermaid
+flowchart TD
+    A[Load get_autoreply_context] --> B{auto_reply aktif / manager<br/>dan token Fonnte ada?}
     B -- tidak --> X1([skipped_config])
-    B -- ya --> C{SOP enabled?}
-    C -- ya --> D[Load sop_documents cache 10mnt<br/>pisah: sopText + brosurFiles<br/>via isBrosurDoc]
-    C -- tidak --> E
-    D --> E{API key ada?<br/>explicit / Lovable}
-    E -- tidak --> X2([no_api_key])
-    E -- ya --> F[[Retry maks 3x:<br/>runMultiAgentOrchestration<br/>timeout AI 22 dtk]]
-    F --> G{Dapat reply?}
-    G -- ya --> H[finalReply = reply]
-    G -- tidak --> H2[finalReply = FALLBACK_MESSAGE<br/>isFallback = true]
-    H --> I[[Penanganan brosur / lampiran]]
-    H2 --> J
-    I --> J[Strip URL gambar telanjang]
-    J --> K[sendWhatsAppMessage + lampiran]
-    K --> L{Terkirim?}
-    L -- tidak & ada lampiran --> M[Retry teks-only]
-    M --> N
-    L -- ya --> N[Simpan outbound + update meta]
-    L -- tidak --> X3([send_failed])
-    N --> OK([ok])
+    B -- ya --> C[Load property + room_types]
+    C --> D{SOP enabled?}
+    D -- ya --> E[Load sop_documents cache 10mnt<br/>pisah SOP text + brosur files]
+    D -- tidak --> F
+    E --> F{AI key ada?}
+    F -- tidak --> X2([no_api_key])
+    F -- ya --> G[Training retrieval<br/>positive + negative examples]
+    G --> H[runMultiAgentOrchestration<br/>timeout AI 22 dtk]
+    H --> I{Ada reply?}
+    I -- ya --> J[finalReply = reply]
+    I -- tidak --> K[finalReply = FALLBACK_MESSAGE]
+    J --> L[pickAttachment / cleanReplyBody]
+    K --> L
+    L --> M[sendWhatsAppMessage]
+    M --> N{Terkirim?}
+    N -- gagal + lampiran --> O[Retry text-only + link]
+    O --> P{Terkirim?}
+    N -- ya --> Q[Simpan outbound + metadata]
+    P -- ya --> Q
+    P -- tidak --> X3([send_failed])
+    Q --> R[Conversation monitor + summarizer background]
+    R --> OK([ok])
 ```
 
-## 3. Penanganan brosur (langkah "Penanganan brosur / lampiran")
+## 4. Penanganan Brosur / Lampiran
 
-Brosur disimpan di tabel `sop_documents` dengan `doc_category = 'brosur'` dan
-di-upload lewat tab **Brosur** di Knowledge & SOP. File berada di bucket publik
-`brosur` agar URL-nya bisa diunduh Fonnte (SOP/Knowledge tetap privat di
-`sop-documents`).
+Brosur disimpan di `sop_documents` dengan kategori `brosur` / `brochure`, dan file publiknya berada di bucket publik agar Fonnte bisa mengambil lampiran.
 
 ```mermaid
 flowchart TD
-    A[finalReply siap] --> B{isBrochureRequest lastMessage?<br/>& ada brosurFiles & bukan fallback}
-    B -- ya --> C[attachUrl = PDF brosur<br/>?? brosurFiles pertama]
-    B -- tidak --> D{LLM sebut nama file brosur?}
-    C --> E
-    D -- ya --> C2[attachUrl = file itu] --> E
-    D -- tidak --> F{Ada URL .pdf di teks?<br/>mis. invoice}
-    F -- ya --> G[attachUrl = pdf, hapus dari teks] --> E
-    F -- tidak --> E[Strip URL gambar telanjang]
-    E --> H{Brosur diminta?}
-    H -- ya --> I[Tambahkan link tautan brosur<br/>ke akhir pesan — agar tetap bisa dibuka<br/>walau lampiran gagal]
-    H -- tidak --> J[Kirim]
-    I --> J
+    A[Reply AI siap] --> B{Tamu minta brosur?}
+    B -- ya --> C[pickAttachment dari brosurFiles]
+    B -- tidak --> D{Reply sebut PDF / file?}
+    D -- ya --> C
+    D -- tidak --> E[Clean reply body]
+    C --> F[Kirim teks + lampiran]
+    F --> G{Lampiran gagal?}
+    G -- ya --> H[Retry teks-only + link]
+    G -- tidak --> I[Simpan outbound]
+    H --> I
 ```
 
-> **Kenapa link + lampiran:** URL lampiran yang tidak terjangkau membuat Fonnte
-> menolak seluruh pengiriman (tamu tidak menerima apa pun). Karena itu kode
-> me-retry teks-only bila lampiran gagal, dan **selalu menyertakan link** brosur
-> di badan pesan saat tamu meminta brosur.
+## 5. Multi-Agent Orchestration
 
-## 4. Multi-Agent Orchestration (1 attempt)
-
-Orchestration memakai **kontrak tiga-status** (`MultiAgentResult.status`):
-
-- `reply` → kirim balasan, berhenti retry.
-- `noop` → sengaja diam: tidak kirim apa pun, tidak retry (cadangan).
-- `error` → gagal: webhook retry, lalu pakai `FALLBACK_MESSAGE`.
-
-Hanya `error` yang memicu retry, sehingga user tidak pernah menerima respons
-kosong dan retry tidak membuang side-effect.
+Orchestrator memakai kontrak tiga status: `reply`, `noop`, dan `error`.
 
 ```mermaid
 flowchart TD
     A[Input: phone + messages + ctx] --> B{isManager?}
-    B -- ya --> M[Manager Agent<br/>+ ask_agent loop ke sub-agent<br/>tools: get_bookings, update/change] --> OUT
-    B -- tidak --> C[getBookingState<br/>dari wa_booking_states]
+    B -- ya --> M[Manager Agent<br/>deterministic command / ask_agent] --> OUT
+    B -- tidak --> C[getBookingState]
     C --> D{State != IDLE?}
-    D -- ya --> E[processBookingState<br/>state machine deterministik]
+    D -- ya --> E[processBookingState]
     E --> F{handled & reply?}
-    F -- ya --> OUT["Return reply<br/>(booking_state_machine)"]
-    F -- tidak --> G[Set bookingInProgress=true<br/>bila masih isi data]
+    F -- ya --> OUT[Return reply dari state machine]
+    F -- tidak --> G[bookingInProgress=true bila data entry]
     D -- tidak --> H
-    G --> H[classifyIntent]
-    H --> I[routeToAgent + escalation]
-    I --> J[[runAgent: system prompt + tools<br/>tool loop maks 5 turn]]
-    J --> K{Dapat reply teks?}
-    K -- ya --> OUT
-    K -- tidak & agent != front-office --> L[Fallback Front Office Agent<br/>1x + tool loop sendiri] --> OUT
-    K -- tidak & front-office --> OUT2["status=error → fallback webhook"]
-    OUT["Return { status, reply, agentKey, intent, ... }"]
+    G --> H[resolveContext + rewriteQuery]
+    H --> I[classifyIntent]
+    I --> J[routeToAgent]
+    J --> K[runAgent + tool loop max 5]
+    K --> L{Reply ada?}
+    L -- ya --> OUT
+    L -- tidak & agent != front-office --> N[Fallback Front Office]
+    N --> OUT
+    L -- tidak & front-office --> ERR[status=error]
 ```
 
-**Agent & tools utama:**
+Agent utama:
 
-- **Front Office** — `check_room_availability`, `start_booking_details`, `create_booking`
-- **Pricing** — tarif dinamis & promo
-- **Customer Care** — status & kesiapan kamar
-- **Maintenance** — perbaikan & fasilitas
-- **Finance** — pembayaran & tagihan
-- **Manager** — `ask_agent` (delegasi ke sub-agent)
+- **Front Office** — greeting, cek kamar, availability, start booking detail.
+- **Pricing** — tarif, promo, harga.
+- **Customer Care** — status kamar dan layanan tamu.
+- **Maintenance** — fasilitas rusak/keluhan teknis.
+- **Finance** — invoice, pembayaran, tagihan.
+- **Manager** — command internal dan delegasi `ask_agent`.
 
-## 5. Alur percakapan Front Office
+## 6. Booking Flow Tamu
+
+Mode tamu sengaja tidak memberi tool `create_booking` ke Front Office Agent. LLM hanya boleh memulai pengumpulan data lewat `start_booking_details`. Booking final dibuat oleh state machine setelah tamu konfirmasi ringkasan.
 
 ```mermaid
 flowchart TD
-    A[Pesan tamu masuk] --> B{Sapaan & nama belum diketahui?}
-    B -- ya --> C[Balas ramah + tanya nama<br/>'Dengan siapa saya berbicara?']
-    C --> D{Tamu jawab nama?}
-    D -- ya --> E[Sapa pakai nama di pesan berikutnya]
-    D -- tidak, tanya hal lain --> F[Abaikan nama, lanjut bantu]
-    B -- tidak --> G{Jenis pertanyaan?}
-    E --> G
-    F --> G
-
-    G -- Tanya kamar umum<br/>tanpa tanggal --> H[check_room_availability hari ini<br/>sebut tipe kamar + status hari ini<br/>tanya tanggal & jumlah orang]
-    G -- Sebut tanggal /<br/>'sold tanggal X?' --> I[check_room_availability tanggal itu<br/>jawab tersedia/penuh akurat]
-    G -- Mau booking --> J[Cek ketersediaan → start_booking_details<br/>→ state machine kumpulkan data]
-    G -- Info umum/SOP/brosur --> K[Jawab dari data kamar / SOP<br/>+ kirim file & link brosur]
-
-    H --> L{Tamu pilih tanggal & pax?}
-    L -- ya --> I
-    I --> N{Tamu pilih kamar?}
-    N -- ya --> J
-    J --> O[Konfirmasi: kode booking,<br/>total harga, instruksi transfer]
+    A[Tamu tanya kamar / booking] --> B[Front Office cek availability]
+    B --> C{Tamu pilih kamar + tanggal?}
+    C -- belum --> D[update_booking_slots / tanya slot kurang]
+    C -- ya --> E[start_booking_details]
+    E --> F[Booking State Machine]
+    F --> G[AWAITING_NAME]
+    G --> H[CONFIRMING_NAME]
+    H --> I[AWAITING_EMAIL]
+    I --> J[CONFIRMING_PHONE]
+    J --> K[CONFIRMING_BOOKING]
+    K --> L{Tamu Ya/Lanjut?}
+    L -- ya --> M[create_booking langsung dari state machine]
+    L -- koreksi --> N[update slot + ringkasan ulang]
+    L -- batal --> O[Reset state]
+    M --> P[PAYMENT_PENDING + invoice/payment info]
 ```
 
-## Pengumpulan data booking — alur hybrid
+Interupsi aman: bila tamu bertanya fasilitas, harga, lokasi, refund, komplain, atau pembayaran saat sedang isi data booking, state machine tidak menghapus progres. Orchestrator menjawab pertanyaan lewat agent lalu melanjutkan state yang sama pada pesan berikutnya.
 
-Sapaan, cek ketersediaan, pilih kamar, dan tanya umum tetap ditangani LLM
-(Front Office Agent). Begitu tamu memilih tipe kamar + tanggal dan ingin
-booking, agent memanggil tool **`start_booking_details`** yang **memindahkan
-kontrol** ke state machine deterministik (`src/ai/state-machine/booking-machine.ts`).
-Sejak itu, setiap pesan tamu diintersep oleh state machine (state != IDLE),
-bukan LLM — sehingga langkahnya konsisten.
+## 7. Debug Endpoint
 
-State disimpan per-nomor di tabel `wa_booking_states` (RPC
-`get_active_booking_state` / `update_booking_state`), berfungsi sebagai memory
-temporer percakapan yang auto-reset 15 menit.
+Endpoint GET mendukung:
 
-Langkah deterministik:
+- `?debug=1` untuk cek env, RPC context, queue, LLM reachability, dan pesan terakhir.
+- `?test_reply=1&phone=628xxx` untuk menjalankan orchestrator tanpa harus menunggu webhook/queue.
+- `?test_reply=1&phone=628xxx&sop=1` untuk mirror produksi dengan SOP dan brosur.
+- `?test_reply=1&phone=628xxx&send=1` untuk mengirim hasil test ke WhatsApp.
 
-- **`start_booking_details`** → set `CONFIRMING_NAME` (bila nama sudah diketahui
-  dari percakapan) atau `AWAITING_NAME`. Menyimpan kamar, tanggal, harga,
-  jumlah tamu ke context.
-- **`AWAITING_NAME` → `CONFIRMING_NAME`**: tamu mengetik nama → bot bertanya
-  pakai nama itu atau nama lain. "Ya" untuk memakai, ketik nama lain untuk
-  mengganti.
-- **`CONFIRMING_NAME` → `AWAITING_EMAIL`**: minta email.
-- **`AWAITING_EMAIL` → `CONFIRMING_PHONE`**: bot menampilkan nomor WhatsApp yang
-  sedang dipakai chat (dari `phone` payload, diformat `0xxxx`) dan menanyakan
-  pakai nomor itu atau nomor lain. "Ya" → pakai nomor chat; ketik nomor lain →
-  pakai itu; minta nomor lain → `AWAITING_PHONE`.
-- **`CONFIRMING_PHONE`/`AWAITING_PHONE` → `CONFIRMING_BOOKING`**: tampilkan
-  ringkasan.
-- **`CONFIRMING_BOOKING`**: bila tamu setuju, state machine memanggil
-  `create_booking` **langsung** (bukan via LLM), lalu membalas kode booking,
-  total, dan instruksi transfer → `PAYMENT_PENDING`.
+Debug endpoint wajib diberi token melalui query `token=` atau `Authorization: Bearer ...`.
 
-`ToolContext.phone` & `AgentContext.chatPhone` diisi orchestrator dari
-`input.phone` agar tool dan state machine tahu nomor chat tamu.
+## 8. Catatan Robustness
 
-### Penanganan interupsi di tengah pengisian data
-
-Bila tamu menanyakan hal lain saat sedang mengisi data booking (mis. "fasilitas
-deluxe apa saja?", "AC nya dingin ga?"), state machine TIDAK menghapus progres:
-
-1. `isExpectedAnswer(state, message)` mengecek apakah pesan adalah jawaban yang
-   sedang ditunggu (email valid, nomor, "Ya", dll). Bila ya → diproses normal.
-2. Bila bukan jawaban DAN terdeteksi pertanyaan (`QUESTION_PATTERN`) atau intent
-   eskalasi (`INTERRUPT_INTENTS`: complaint, maintenance, customer-care, pricing,
-   payment, availability, booking) → `processBookingState` mengembalikan
-   `handled: false` **tanpa mengubah state**.
-3. Orchestrator melanjutkan ke LLM untuk menjawab, dan menyetel
-   `AgentContext.bookingInProgress = true` sehingga Front Office Agent menjawab
-   singkat lalu mengingatkan untuk melanjutkan — tanpa memanggil
-   `start_booking_details`/`create_booking` lagi.
-4. Pesan tamu berikutnya kembali diintersep state machine pada state yang sama,
-   sehingga pengisian data lanjut dari titik terakhir. Hanya "batal/cancel"
-   (`CANCELLATION_PATTERNS`) yang benar-benar mereset ke `IDLE`; selain itu
-   state auto-reset 15 menit bila percakapan ditinggalkan.
-
-## Catatan robustness
-
-- **create_booking** memilih kamar fisik (`pickAvailableRoom`) *sebelum* menulis
-  apa pun. Bila tak ada kamar bebas, booking ditolak — menghindari record tamu/
-  booking yatim dan mencegah `booking_rooms.room_id = null` secara diam-diam.
-- **Brosur** disimpan di bucket publik terpisah (`brosur`) agar Fonnte dapat
-  mengunduhnya; bila lampiran gagal, balasan teks + link tetap terkirim.
-- Untuk jaminan anti-overbooking penuh di bawah konkurensi tinggi, idealnya
-  ditambah lock transaksional / constraint unik di level database.
+- Queue claim dilakukan atomic di database untuk menghindari double reply.
+- `create_booking` harus memilih kamar fisik sebelum menulis booking final.
+- Lampiran brosur punya fallback text-only agar tamu tetap menerima link.
+- Bot-loop / repeated tool `need_dates` dipantau dan bisa men-trigger notifikasi manager.
+- Untuk anti-overbooking di beban tinggi, tetap ideal menambah lock transaksional atau constraint unik di level database.
