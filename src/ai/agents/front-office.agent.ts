@@ -239,6 +239,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     trainingBlock,
 
+    negativeBlock,
+
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");
 }
