@@ -48,12 +48,32 @@ interface Scaffold {
   roomSummary: string;
 }
 
+function formatCurrency(value: unknown): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toLocaleString("id-ID") : "0";
+}
+
+function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
+  const capacity = Number(room.extrabed_capacity ?? 0);
+  const rate = Number(room.extrabed_rate ?? 0);
+  if (capacity > 0 && rate > 0) {
+    return `, extra bed max ${capacity}/kamar Rp ${formatCurrency(rate)}/malam`;
+  }
+  if (capacity > 0) return `, extra bed max ${capacity}/kamar`;
+  if (rate > 0) return `, extra bed Rp ${formatCurrency(rate)}/malam`;
+  return "";
+}
+
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
   const persona  = managerName?.trim() || "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const roomSummary = rooms
-    .map((r) => `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam`)
+    .map((r) =>
+      `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
+      (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
+      formatExtraBedInfo(r),
+    )
     .join("\n");
   return {
     persona,
@@ -171,8 +191,10 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "memandu pemilihan kamar pengganti.",
 
     "EXTRA BED: Bila jumlah tamu > kapasitas default kamar yang dipilih, panggil " +
-      "`get_room_specifications`, dan bila extra bed tersedia, tawarkan. Hitung total " +
-      "akurat: (tarif kamar + extrabed_rate × jumlah) × malam.",
+      "`get_room_specifications` dulu dan gunakan `extrabed_capacity` serta `extrabed_rate` " +
+      "dari hasil tool / data `room_types`. JANGAN hardcode tarif extra bed di prompt. " +
+      "Bila extra bed tersedia, tawarkan dan hitung total akurat: " +
+      "(tarif kamar × jumlah kamar + extrabed_rate × jumlah extra bed) × malam.",
 
     "BOOKING VIA CHAT: " +
       "(1) cek availability dulu, " +
@@ -190,13 +212,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "KOREKSI MIDFLIGHT: Jika tamu mengoreksi data (mis. 'jumlah tamu 5 kak', 'tanggal 22 Juni', " +
       "'ganti Family Suite'), JANGAN minta konfirmasi Ya/Batal kaku — langsung update slot via " +
-      "`update_booking_slots`, hitung ulang harga (termasuk extra bed Deluxe), lalu tampilkan " +
+      "`update_booking_slots`, hitung ulang harga memakai kapasitas dan `extrabed_rate` dari data kamar / `get_room_specifications`, lalu tampilkan " +
       "ringkasan baru. State machine sudah menangani ini secara otomatis di state CONFIRMING_BOOKING.",
 
-    "EXTRA BED DELUXE: Kapasitas Deluxe = 2 orang/kamar (default), max 3 orang/kamar dengan " +
-      "1 extra bed (Rp80.000/malam). Untuk 2 kamar Deluxe & 5 tamu: tawarkan 1 extra bed " +
-      "otomatis, total = (2 × tarif kamar + 1 × Rp80.000) × jumlah malam. JANGAN tolak " +
-      "kapasitas selama tamu masih ≤ 3 × jumlah kamar.",
+    "EXTRA BED MULTI-KAMAR: Untuk pesanan lebih dari satu kamar, hitung kapasitas standar " +
+      "sebagai kapasitas kamar × jumlah kamar. Jika jumlah tamu melebihi kapasitas standar tetapi " +
+      "masih dalam batas extra bed (`extrabed_capacity` × jumlah kamar), tawarkan jumlah extra bed " +
+      "yang diperlukan dan gunakan `extrabed_rate` dari data kamar. Jika data extra bed tidak ada " +
+      "atau tidak cukup, jangan menebak — tawarkan tipe kamar lain atau eskalasi ke admin.",
 
     "VERIFIKASI / KEPERCAYAAN: Bila tamu bertanya 'ini benar?', 'penipuan?', 'apakah ini AI?', " +
       "'amankah?', jawab dengan verifikasi resmi: website resmi pomahguesthouse.com, invoice " +
