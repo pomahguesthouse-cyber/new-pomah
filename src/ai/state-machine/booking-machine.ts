@@ -1152,26 +1152,19 @@ export async function processBookingState(
     const isPureConfirm = /^(ya|iya|yes|lanjut|ok|oke|setuju|betul|benar)[\s.!]*$/i.test(message.trim());
     const isPureCancel  = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
     if (!isPureConfirm && !isPureCancel) {
-      const { patch, changed } = parseSlotCorrection(message);
+      const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
         if (patch.adults) context.adults = patch.adults;
         if (patch.roomName) {
           context.roomName = patch.roomName;
-          // Cari room di ctx.rooms agar harga ikut update.
-          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === patch.roomName!.toLowerCase());
-          if (rt) {
-            context.roomId = rt.id;
-            context.pricePerNight = Number(rt.base_rate ?? 0);
+          if (patch.roomId) {
+            context.roomId = patch.roomId;
+            const rt = ctx.rooms.find((r) => r.id === patch.roomId);
+            context.pricePerNight = Number(rt?.base_rate ?? context.pricePerNight ?? 0);
           }
         }
-        if (patch.rooms && context.roomName) {
-          const rt = ctx.rooms.find((r) => r.name.toLowerCase() === context.roomName!.toLowerCase());
-          context.rooms = [{
-            roomTypeId: rt?.id ?? "",
-            roomTypeName: context.roomName,
-            quantity: patch.rooms[0].quantity,
-            pricePerNight: Number(rt?.base_rate ?? context.pricePerNight ?? 0),
-          }];
+        if (patch.rooms && patch.rooms.length > 0) {
+          context.rooms = patch.rooms;
         }
         // Recompute extra bed otomatis + tarif dari DB (room_types.extrabed_*).
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
