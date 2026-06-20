@@ -2925,6 +2925,20 @@ export type Database = {
         Returns: undefined
       }
       mark_queue_done: { Args: { p_entry_id: string }; Returns: undefined }
+      match_bad_training_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          bad_response: string
+          correction: string
+          id: string
+          similarity: number
+          user_message: string
+        }[]
+      }
       match_chatbot_training_examples: {
         Args: {
           match_count?: number
