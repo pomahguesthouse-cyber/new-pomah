@@ -550,26 +550,33 @@ export function parseSlotCorrection(input: string): {
 }
 
 /**
- * Hitung extra bed untuk Deluxe (atau tipe lain yang ditandai support).
- * Aturan: kapasitas default 2/kamar, max 3/kamar dengan extra bed.
- * Harga extra bed = Rp80.000/malam/extra bed (default fallback).
+ * Hitung extra bed berbasis policy DB. Tidak hardcode tipe kamar/tarif.
+ *
+ * - totalDefaultCapacity = policy.capacity * roomCount
+ * - totalExtraBedCapacity = policy.extrabedCapacity * roomCount
+ * - overCapacity = guests > (totalDefaultCapacity + totalExtraBedCapacity)
  */
 export function computeExtraBeds(
-  roomType: string | undefined,
+  policy: RoomExtraBedPolicy,
   roomCount: number,
   guests: number,
-  extraBedRate = 80_000,
 ): { extraBeds: number; overCapacity: boolean; ratePerNight: number } {
-  if (!roomType || roomCount <= 0) return { extraBeds: 0, overCapacity: false, ratePerNight: extraBedRate };
-  const isDeluxe = /deluxe/i.test(roomType);
-  const baseCap = isDeluxe ? 2 : 2;
-  const maxCap = isDeluxe ? 3 : baseCap; // hanya Deluxe yang dukung extra bed per spec
-  const totalDefault = baseCap * roomCount;
-  if (guests <= totalDefault) return { extraBeds: 0, overCapacity: false, ratePerNight: extraBedRate };
+  const ratePerNight = policy.extrabedRate;
+  if (roomCount <= 0) return { extraBeds: 0, overCapacity: false, ratePerNight };
+
+  const totalDefault = policy.capacity * roomCount;
+  const totalExtra = policy.extrabedCapacity * roomCount;
+  const totalMax = totalDefault + totalExtra;
+
+  if (guests <= totalDefault) {
+    return { extraBeds: 0, overCapacity: false, ratePerNight };
+  }
   const need = guests - totalDefault;
-  const overCapacity = need > (maxCap - baseCap) * roomCount;
-  return { extraBeds: Math.min(need, (maxCap - baseCap) * roomCount), overCapacity, ratePerNight: extraBedRate };
+  const extraBeds = Math.min(need, totalExtra);
+  const overCapacity = guests > totalMax;
+  return { extraBeds, overCapacity, ratePerNight };
 }
+
 
 /**
  * Evaluates the message against the current state and returns whether the state machine handled it.
