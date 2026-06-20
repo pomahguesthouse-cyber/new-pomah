@@ -67,7 +67,7 @@ function buildScaffold(ctx: AgentContext): Scaffold {
 // ─── Guest mode (the heavy path) ─────────────────────────────────────────────
 
 function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
-  const { sopText, brosurFiles, bookingInProgress, today, trainingExamples } = ctx;
+  const { sopText, brosurFiles, bookingInProgress, today, trainingExamples, negativeExamples } = ctx;
   const trainingBlock =
     trainingExamples && trainingExamples.length > 0
       ? [
@@ -77,6 +77,24 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
             const header = meta ? `Contoh ${i + 1} (${meta})` : `Contoh ${i + 1}`;
             return `${header}\nTamu: ${ex.user_message.trim()}\nJawaban ideal: ${ex.ideal_assistant_response.trim()}`;
           }),
+        ].join("\n\n")
+      : "";
+  const negativeBlock =
+    negativeExamples && negativeExamples.length > 0
+      ? [
+          "CONTOH JAWABAN BURUK (admin sudah menandai 'bad' — JANGAN tiru gaya, isi, atau pendekatan ini):",
+          ...negativeExamples.map((ex, i) => {
+            const parts = [
+              `Contoh ${i + 1}`,
+              `Tamu: ${ex.user_message.trim()}`,
+              `JANGAN balas seperti ini: ${ex.bad_response.trim()}`,
+            ];
+            if (ex.correction && ex.correction.trim()) {
+              parts.push(`Balasan yang benar: ${ex.correction.trim()}`);
+            }
+            return parts.join("\n");
+          }),
+          "Bila konteks tamu mirip dengan contoh di atas, hindari pola jawaban tersebut. Bila ada 'Balasan yang benar', ikuti pendekatan itu.",
         ].join("\n\n")
       : "";
   return [
@@ -220,6 +238,8 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       : "",
 
     trainingBlock,
+
+    negativeBlock,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");

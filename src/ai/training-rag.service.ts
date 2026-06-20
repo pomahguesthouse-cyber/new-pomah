@@ -18,12 +18,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbedding } from "./embedding.service";
 import type { AiClientConfig } from "./types";
 
-export interface TrainingExample {
+export interface LogTrainingExample {
   id: string;
   user_message: string;
   effective_answer: string;
   similarity: number;
 }
+
+/** @deprecated gunakan `LogTrainingExample` — alias dipertahankan untuk kompatibilitas. */
+export type TrainingExample = LogTrainingExample;
 
 /** Susun teks gabungan yang di-embed: pertanyaan + jawaban final yang dipakai. */
 function composeEmbeddingText(userMessage: string, effectiveAnswer: string): string {
