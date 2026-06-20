@@ -1019,8 +1019,13 @@ export async function processBookingState(
       if (!context.guestEmail || !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
       if (!context.guestPhone || !PHONE_PATTERN.test(context.guestPhone.replace(/[^0-9+]/g, ""))) missing.push("nomor HP");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-      const eb = computeExtraBeds(context.roomName, totalRoomsCount, context.adults ?? 1);
+      const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
+      const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, context.adults ?? 1);
       if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
+      if (eb.extraBeds > 0) {
+        context.extraBeds = eb.extraBeds;
+        if (confirmPolicy.extrabedRate > 0) context.extraBedRate = confirmPolicy.extrabedRate;
+      }
       if (missing.length > 0) {
         return {
           handled: true,
