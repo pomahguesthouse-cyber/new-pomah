@@ -942,11 +942,12 @@ export async function drainQueue(
     }
 
     if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
+      const completionResult = outcome === "ok" ? "sent" : outcome;
       await queueComplete(
         supabaseAdmin,
         claim.entryId,
         workerId,
-        outcome === "ok" ? "sent" : outcome,
+        completionResult,
       );
     } else {
       // send_failed / context_error / fatal → retry with backoff (or fail).
