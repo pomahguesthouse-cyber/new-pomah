@@ -107,11 +107,19 @@ AS $$
 DECLARE
   v_booking_id uuid;
 BEGIN
-  v_booking_id := COALESCE(NEW.booking_id, OLD.booking_id);
+  IF TG_OP = 'DELETE' THEN
+    v_booking_id := OLD.booking_id;
+    IF v_booking_id IS NOT NULL THEN
+      PERFORM public.recompute_booking_total_with_extrabed(v_booking_id);
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  v_booking_id := NEW.booking_id;
   IF v_booking_id IS NOT NULL THEN
     PERFORM public.recompute_booking_total_with_extrabed(v_booking_id);
   END IF;
-  RETURN COALESCE(NEW, OLD);
+  RETURN NEW;
 END;
 $$;
 
@@ -127,9 +135,15 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS booking_rooms_recompute_total_extrabed ON public.booking_rooms;
-CREATE TRIGGER booking_rooms_recompute_total_extrabed
-  AFTER INSERT OR UPDATE OF booking_id, room_type_id, nightly_rate OR DELETE ON public.booking_rooms
+DROP TRIGGER IF EXISTS booking_rooms_recompute_total_extrabed_insert_delete ON public.booking_rooms;
+CREATE TRIGGER booking_rooms_recompute_total_extrabed_insert_delete
+  AFTER INSERT OR DELETE ON public.booking_rooms
+  FOR EACH ROW
+  EXECUTE FUNCTION public.recompute_booking_total_with_extrabed_from_booking_rooms();
+
+DROP TRIGGER IF EXISTS booking_rooms_recompute_total_extrabed_update ON public.booking_rooms;
+CREATE TRIGGER booking_rooms_recompute_total_extrabed_update
+  AFTER UPDATE OF booking_id, room_type_id, nightly_rate ON public.booking_rooms
   FOR EACH ROW
   EXECUTE FUNCTION public.recompute_booking_total_with_extrabed_from_booking_rooms();
 
