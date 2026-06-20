@@ -264,25 +264,30 @@ export async function queueHeartbeat(
 }
 
 /**
- * Mark the entry as successfully sent.
- * Persists the reply text for analytics.
+ * Mark the entry as completed. Persists a completion marker/result note
+ * (mis. "sent", "skipped_config") untuk analitik queue. Ini BUKAN body
+ * balasan WhatsApp — outbound text disimpan terpisah di whatsapp_messages.
+ *
+ * Catatan: parameter RPC tetap `p_reply` agar kompatibel dengan kolom
+ * lama di Postgres function `wa_queue_complete`.
  */
 export async function queueComplete(
-  supabase:  AnySupabase,
-  entryId:   string,
-  workerId:  string,
-  reply:     string,
+  supabase:          AnySupabase,
+  entryId:           string,
+  workerId:          string,
+  completionResult:  string,
 ): Promise<void> {
   const { error } = await supabase.rpc("wa_queue_complete", {
     p_entry_id:  entryId,
     p_worker_id: workerId,
-    p_reply:     reply,
+    p_reply:     completionResult,
   });
 
   if (error) {
     console.error("[Queue] complete error:", error.message, "| entry:", entryId);
   }
 }
+
 
 /**
  * Mark the entry as failed.

@@ -34,7 +34,7 @@ import {
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
 import { chatCompletionText } from "@/services/ai-client.service";
-import { findTrainingContext, findNegativeExamples } from "@/services/training-retrieval.service";
+import { findTrainingSignals } from "@/services/training-retrieval.service";
 
 const FALLBACK_MESSAGE =
   "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
@@ -541,23 +541,18 @@ export async function executeAutoreplyForPhone(
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
     const tStart = Date.now();
-    const [trainingExamples, negativeExamples] = await Promise.all([
-      findTrainingContext(
-        supabaseAdmin as any,
-        {
-          userMessage: lastMessage ?? "",
-          stage: (chatSummaryJson?.last_topic ?? null) as string | null,
-        },
-        { apiKey, baseUrl, model },
-        { limit: 3 },
-      ),
-      findNegativeExamples(
-        supabaseAdmin as any,
-        lastMessage ?? "",
-        { apiKey, baseUrl, model },
-        { limit: 2 },
-      ),
-    ]);
+    const trainingSignals = await findTrainingSignals(
+      supabaseAdmin as any,
+      {
+        userMessage: lastMessage ?? "",
+        stage: (chatSummaryJson?.last_topic ?? null) as string | null,
+      },
+      { apiKey, baseUrl, model },
+      { positiveLimit: 3, negativeLimit: 2 },
+    );
+    const trainingExamples = trainingSignals.positiveExamples;
+    const negativeExamples = trainingSignals.negativeExamples;
+
     if (trainingExamples.length > 0) {
       const top = trainingExamples[0];
       console.info(
@@ -947,11 +942,12 @@ export async function drainQueue(
     }
 
     if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
+      const completionResult = outcome === "ok" ? "sent" : outcome;
       await queueComplete(
         supabaseAdmin,
         claim.entryId,
         workerId,
-        outcome === "ok" ? "sent" : outcome,
+        completionResult,
       );
     } else {
       // send_failed / context_error / fatal → retry with backoff (or fail).

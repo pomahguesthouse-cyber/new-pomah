@@ -205,6 +205,41 @@ export async function findNegativeExamples(
   }
 }
 
+/**
+ * Gabungan sinyal training (positif + negatif) yang dipakai autoreply.
+ * Disatukan di satu helper supaya jalur retrieval mudah dilacak dan
+ * orchestrator tidak perlu me-retrieve ulang bila `agentCtx.trainingExamples`
+ * sudah terisi.
+ */
+export interface TrainingSignals {
+  positiveExamples: UnifiedTrainingExample[];
+  negativeExamples: NegativeTrainingExample[];
+}
+
+export async function findTrainingSignals(
+  supabase: SupabaseClient,
+  input: FindInput,
+  llmConfig: AiClientConfig | null,
+  options: {
+    positiveLimit?: number;
+    negativeLimit?: number;
+    minSimilarity?: number;
+  } = {},
+): Promise<TrainingSignals> {
+  const [positiveExamples, negativeExamples] = await Promise.all([
+    findTrainingContext(supabase, input, llmConfig, {
+      limit: options.positiveLimit,
+      minSimilarity: options.minSimilarity,
+    }),
+    findNegativeExamples(supabase, input.userMessage, llmConfig, {
+      limit: options.negativeLimit,
+      minSimilarity: options.minSimilarity,
+    }),
+  ]);
+  return { positiveExamples, negativeExamples };
+}
+
+
 /** Format contoh negatif sebagai blok teks untuk system prompt. */
 export function formatNegativeExamplesBlock(examples: NegativeTrainingExample[]): string {
   if (examples.length === 0) return "";
