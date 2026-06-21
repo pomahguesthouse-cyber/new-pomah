@@ -154,9 +154,9 @@ function BabooLandingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.08)_1px,transparent_0)] [background-size:32px_32px]" />
       </div>
 
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#06131f]/75 backdrop-blur-xl">
+      <header className="fixed inset-x-0 top-0 z-50 bg-transparent">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-          <a href="#hero" className="flex items-center gap-3">
+          <a href="#hero" className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-300 text-[#06131f] shadow-lg shadow-cyan-300/20">
               <Sparkles className="h-5 w-5" />
             </div>
@@ -166,7 +166,7 @@ function BabooLandingPage() {
             </div>
           </a>
 
-          <nav className="hidden items-center gap-7 text-sm text-white/70 md:flex">
+          <nav className="hidden items-center gap-7 rounded-full border border-white/10 bg-white/5 px-6 py-3 text-sm text-white/70 backdrop-blur-md md:flex">
             <a className="transition hover:text-cyan-200" href="#agent">
               Agent
             </a>
@@ -183,7 +183,7 @@ function BabooLandingPage() {
 
           <a
             href="#kontak"
-            className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-5 py-2 text-sm font-semibold text-cyan-100 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-300 hover:text-[#06131f]"
+            className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-5 py-2 text-sm font-semibold text-cyan-100 shadow-lg shadow-cyan-500/10 backdrop-blur-md transition hover:bg-cyan-300 hover:text-[#06131f]"
           >
             Coba Baboo
           </a>
@@ -192,7 +192,7 @@ function BabooLandingPage() {
 
       <section
         id="hero"
-        className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-16 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-28 lg:pt-24"
+        className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-28 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:pb-28 lg:pt-36"
       >
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-white/5 px-4 py-2 text-sm text-cyan-100 backdrop-blur">
