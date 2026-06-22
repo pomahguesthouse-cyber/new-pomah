@@ -50,8 +50,17 @@ async function handle(request: Request): Promise<Response> {
   const origin = new URL(request.url).origin;
   const { processed } = await drainQueue(origin);
 
+  // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
+  // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
+  let notified = 0;
+  try {
+    ({ notified } = await sendFailureFallbackToGuests());
+  } catch (e) {
+    console.warn("[Cron] sendFailureFallbackToGuests failed:", e);
+  }
+
   return new Response(
-    JSON.stringify({ processed, zombies_reset: count }, null, 2),
+    JSON.stringify({ processed, zombies_reset: count, fallback_notified: notified }, null, 2),
     {
       status: 200,
       headers: { "Content-Type": "application/json" },
