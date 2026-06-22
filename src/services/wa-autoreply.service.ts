@@ -1055,3 +1055,117 @@ export async function drainQueue(
 
   return { processed };
 }
+
+/**
+ * Kirim pesan fallback ke tamu untuk entry antrian yang sudah habis semua
+ * percobaan (status='failed', biasanya akibat zombie_timeout berulang).
+ *
+ * Tanpa ini, tamu tidak menerima balasan apapun ketika orchestrator gagal
+ * tiga kali — chatbot terlihat "diam". Helper ini menjamin minimal ada
+ * acknowledgement, lalu menandai entry agar tidak dikirim ulang.
+ *
+ * Idempotent: melewati entry yang sudah ada outbound setelah completed_at
+ * atau yang last_error-nya sudah berisi marker [fallback_sent].
+ */
+export async function sendFailureFallbackToGuests(): Promise<{
+  notified: number;
+}> {
+  const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const { data: failedEntries } = await (supabaseAdmin as any)
+    .from("wa_conversation_queue")
+    .select("id, phone, thread_id, completed_at, last_error")
+    .eq("status", "failed")
+    .gte("completed_at", sinceIso)
+    .limit(20);
+
+  if (!failedEntries || failedEntries.length === 0) {
+    return { notified: 0 };
+  }
+
+  let notified = 0;
+  for (const entry of failedEntries as any[]) {
+    if (typeof entry.last_error === "string" && entry.last_error.includes("[fallback_sent]")) {
+      continue;
+    }
+
+    // Lewati kalau ada outbound terkirim setelah entry selesai (mis. operator manual).
+    try {
+      const { data: existingOut } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", entry.thread_id)
+        .eq("direction", "out")
+        .gte("sent_at", entry.completed_at)
+        .limit(1);
+      if ((existingOut ?? []).length > 0) {
+        await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .update({ last_error: `${entry.last_error ?? ""} [fallback_sent]`.slice(0, 500) })
+          .eq("id", entry.id);
+        continue;
+      }
+    } catch (e) {
+      console.warn("[Fallback] outbound lookup failed:", e);
+    }
+
+    // Ambil token Fonnte via context RPC.
+    let fonnteToken: string | null = null;
+    let autoReplyEnabled = false;
+    try {
+      const { data: ctx } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
+        p_phone: entry.phone,
+      });
+      fonnteToken = (ctx as any)?.fonnte_token ?? null;
+      autoReplyEnabled = !!(ctx as any)?.auto_reply_enabled;
+    } catch (e) {
+      console.warn("[Fallback] context fetch failed:", e);
+    }
+
+    if (!fonnteToken || !autoReplyEnabled) {
+      // Tandai tetap supaya tidak dicek terus-menerus.
+      await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .update({ last_error: `${entry.last_error ?? ""} [fallback_sent:skipped]`.slice(0, 500) })
+        .eq("id", entry.id);
+      continue;
+    }
+
+    const { ok, error: sendErr } = await sendWhatsAppMessage(
+      fonnteToken,
+      entry.phone,
+      FALLBACK_MESSAGE,
+    );
+
+    if (!ok) {
+      console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
+      continue;
+    }
+
+    try {
+      await saveOutboundMessage(supabaseAdmin, {
+        threadId: entry.thread_id,
+        body: FALLBACK_MESSAGE,
+        metadata: {
+          agent: "system",
+          agent_key: "fallback",
+          is_fallback: true,
+          queue_entry_id: entry.id,
+          send_status: "sent",
+          reason: "queue_terminal_failure",
+        } as any,
+      });
+    } catch (e) {
+      console.warn("[Fallback] save outbound failed:", e);
+    }
+
+    await (supabaseAdmin as any)
+      .from("wa_conversation_queue")
+      .update({ last_error: `${entry.last_error ?? ""} [fallback_sent]`.slice(0, 500) })
+      .eq("id", entry.id);
+
+    notified++;
+    console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
+  }
+
+  return { notified };
+}
