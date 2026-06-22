@@ -32,8 +32,8 @@ import {
   type LPRoomSliderSection,
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
-import { PomahHomeView } from "@/routes/index";
-import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
+// NOTE: Home-page duplication via landing page (PomahHomeView) sementara
+// dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
 /* ─── Shared booking-date state (date picker → room slider) ───────── */
 type BookingDates = {
