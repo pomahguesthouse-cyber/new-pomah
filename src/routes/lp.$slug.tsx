@@ -85,10 +85,10 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
   const { page } = Route.useLoaderData() as { page: SeoLandingPage };
-  // Bila halaman ini hasil duplikasi Home, render dengan komponen homepage asli.
-  if (page.homepage_config && typeof page.homepage_config === "object") {
-    return <PomahHomeView configOverride={mergeHomepageConfig(page.homepage_config)} />;
-  }
+  // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
+  // standar di bawah agar build tidak gagal.
+  // if (page.homepage_config && typeof page.homepage_config === "object") { ... }
+
 
   const sectionsData = page.sections;
   const isSplit = !!(sectionsData && !Array.isArray(sectionsData) && (sectionsData as any).split);
