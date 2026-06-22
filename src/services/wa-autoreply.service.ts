@@ -733,6 +733,66 @@ export async function executeAutoreplyForPhone(
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
   let finalReply = cleanReplyBody(rawReply, pdfToStrip);
 
+  // ── Duplicate-send guard ────────────────────────────────────────────────
+  // Worker bisa mati setelah Fonnte sukses tapi sebelum sempat menyimpan
+  // outbound + memanggil queueComplete (zombie_timeout). Retry berikutnya
+  // akan mencoba mengirim ulang → tamu menerima pesan dobel.
+  // Dua lapis pengaman:
+  //   (a) metadata.queue_entry_id sama → entry ini sudah pernah dikirim
+  //   (b) body identik & dikirim <120 detik terakhir → kemungkinan besar
+  //       duplikat akibat retry. Aman karena jeda tamu vs. bot >> 2 menit.
+  try {
+    const sinceIso = new Date(Date.now() - 120_000).toISOString();
+    const { data: recentOut } = await (supabaseAdmin as any)
+      .from("whatsapp_messages")
+      .select("id, body, metadata, sent_at")
+      .eq("thread_id", c.thread_id)
+      .eq("direction", "out")
+      .gte("sent_at", sinceIso)
+      .order("sent_at", { ascending: false })
+      .limit(5);
+    const dup = (recentOut ?? []).find((m: any) => {
+      const sameEntry =
+        queueEntryId &&
+        (m.metadata as any)?.queue_entry_id === queueEntryId;
+      const sameBody = (m.body ?? "").trim() === finalReply.trim();
+      return sameEntry || sameBody;
+    });
+    if (dup) {
+      console.warn(
+        `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
+          `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, ` +
+          `match=${(dup.metadata as any)?.queue_entry_id === queueEntryId ? "entry" : "body"})`,
+      );
+      return "ok";
+    }
+  } catch (e) {
+    console.warn("[Autoreply] Dedup check failed (continuing):", e);
+  }
+
+  const agentKey = orchResult?.agentKey ?? "front-office";
+
+  // Persist outbound BEFORE calling Fonnte. Kalau worker mati setelah Fonnte
+  // sukses, baris ini sudah ada dan dedup-guard di atas akan mencegah
+  // pengiriman ulang pada retry berikutnya.
+  const outboundRowId = await saveOutboundMessage(supabaseAdmin, {
+    threadId: c.thread_id,
+    body: finalReply,
+    metadata: {
+      agent: deriveAgentLabelFromKey(agentKey),
+      tools_used: orchResult?.toolsUsed ?? [],
+      agent_key: agentKey,
+      intent: orchResult?.intent,
+      routing_confidence: orchResult?.routingConfidence,
+      escalated: orchResult?.escalated,
+      is_fallback: isFallback,
+      training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
+      training_example_ids: orchResult?.trainingExampleIds ?? [],
+      queue_entry_id: queueEntryId ?? null,
+      send_status: "pending",
+    } as any,
+  });
+
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,
     phone,
@@ -754,25 +814,43 @@ export async function executeAutoreplyForPhone(
 
   if (!sent) {
     console.error(`[Autoreply] Send failed ${phone}: ${sendErr}`);
+    // Tandai outbound row sebagai gagal kirim supaya retry tahu boleh kirim ulang
+    // (dedup-guard mengandalkan body+window, jadi tetap aman dari double-send).
+    if (outboundRowId) {
+      try {
+        await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .update({ metadata: { send_status: "failed", error: String(sendErr) } as any })
+          .eq("id", outboundRowId);
+      } catch {/* non-fatal */}
+    }
     return "send_failed";
   }
 
-  const agentKey = orchResult?.agentKey ?? "front-office";
-  await saveOutboundMessage(supabaseAdmin, {
-    threadId: c.thread_id,
-    body: finalReply,
-    metadata: {
-      agent: deriveAgentLabelFromKey(agentKey),
-      tools_used: orchResult?.toolsUsed ?? [],
-      agent_key: agentKey,
-      intent: orchResult?.intent,
-      routing_confidence: orchResult?.routingConfidence,
-      escalated: orchResult?.escalated,
-      is_fallback: isFallback,
-      training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
-      training_example_ids: orchResult?.trainingExampleIds ?? [],
-    } as any,
-  });
+  if (outboundRowId) {
+    try {
+      await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: {
+            agent: deriveAgentLabelFromKey(agentKey),
+            tools_used: orchResult?.toolsUsed ?? [],
+            agent_key: agentKey,
+            intent: orchResult?.intent,
+            routing_confidence: orchResult?.routingConfidence,
+            escalated: orchResult?.escalated,
+            is_fallback: isFallback,
+            training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
+            training_example_ids: orchResult?.trainingExampleIds ?? [],
+            queue_entry_id: queueEntryId ?? null,
+            send_status: "sent",
+          } as any,
+        })
+        .eq("id", outboundRowId);
+    } catch (e) {
+      console.warn("[Autoreply] Failed to update send_status (non-fatal):", e);
+    }
+  }
 
   void updateThreadAutoReplyMeta(supabaseAdmin, {
     threadId: c.thread_id,
