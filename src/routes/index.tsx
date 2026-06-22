@@ -1,3 +1,6 @@
+// LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
+// JANGAN mengganti file ini dengan landing lain (mis. Baboo / template generik)
+// kecuali diminta eksplisit oleh pemilik. Lihat mem://constraints/homepage-pomah-lock.
 import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
