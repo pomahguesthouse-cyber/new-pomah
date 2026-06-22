@@ -738,31 +738,48 @@ export async function executeAutoreplyForPhone(
   // outbound + memanggil queueComplete (zombie_timeout). Retry berikutnya
   // akan mencoba mengirim ulang → tamu menerima pesan dobel.
   // Dua lapis pengaman:
-  //   (a) metadata.queue_entry_id sama → entry ini sudah pernah dikirim
-  //   (b) body identik & dikirim <120 detik terakhir → kemungkinan besar
-  //       duplikat akibat retry. Aman karena jeda tamu vs. bot >> 2 menit.
+  //   (a) metadata.queue_entry_id sama → entry ini SUDAH pernah menghasilkan
+  //       outbound. Cek TANPA batas waktu karena retry zombie bisa jalan
+  //       beberapa menit setelah attempt pertama (lock TTL ~2 menit, dan
+  //       jendela 120s ternyata kependekan sehingga retry lolos).
+  //   (b) body identik & dikirim <300 detik terakhir → safety net untuk
+  //       kasus queue_entry_id tidak tersimpan / berbeda tapi pesan sama.
   try {
-    const sinceIso = new Date(Date.now() - 120_000).toISOString();
+    // (a) Cek by queue_entry_id TANPA filter waktu.
+    if (queueEntryId) {
+      const { data: existingForEntry } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "out")
+        .filter("metadata->>queue_entry_id", "eq", queueEntryId)
+        .limit(1);
+      if ((existingForEntry ?? []).length > 0) {
+        console.warn(
+          `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
+            `(entry=${queueEntryId.slice(0, 8)}, match=entry)`,
+        );
+        return "ok";
+      }
+    }
+
+    // (b) Cek body identik dalam 300 detik terakhir.
+    const sinceIso = new Date(Date.now() - 300_000).toISOString();
     const { data: recentOut } = await (supabaseAdmin as any)
       .from("whatsapp_messages")
-      .select("id, body, metadata, sent_at")
+      .select("id, body, sent_at")
       .eq("thread_id", c.thread_id)
       .eq("direction", "out")
       .gte("sent_at", sinceIso)
       .order("sent_at", { ascending: false })
       .limit(5);
-    const dup = (recentOut ?? []).find((m: any) => {
-      const sameEntry =
-        queueEntryId &&
-        (m.metadata as any)?.queue_entry_id === queueEntryId;
-      const sameBody = (m.body ?? "").trim() === finalReply.trim();
-      return sameEntry || sameBody;
-    });
+    const dup = (recentOut ?? []).find(
+      (m: any) => (m.body ?? "").trim() === finalReply.trim(),
+    );
     if (dup) {
       console.warn(
         `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
-          `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, ` +
-          `match=${(dup.metadata as any)?.queue_entry_id === queueEntryId ? "entry" : "body"})`,
+          `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, match=body)`,
       );
       return "ok";
     }
