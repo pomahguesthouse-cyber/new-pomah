@@ -1070,7 +1070,7 @@ export async function drainQueue(
 export async function sendFailureFallbackToGuests(): Promise<{
   notified: number;
 }> {
-  const sinceIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   const { data: failedEntries } = await (supabaseAdmin as any)
     .from("wa_conversation_queue")
     .select("id, phone, thread_id, completed_at, last_error")
