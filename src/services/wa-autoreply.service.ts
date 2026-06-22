@@ -1073,7 +1073,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
   const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   const { data: failedEntries } = await (supabaseAdmin as any)
     .from("wa_conversation_queue")
-    .select("id, phone, thread_id, completed_at, last_error")
+    .select("id, phone, thread_id, created_at, completed_at, last_error")
     .eq("status", "failed")
     .gte("completed_at", sinceIso)
     .limit(20);
@@ -1088,25 +1088,51 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    // Lewati kalau ada outbound terkirim setelah entry selesai (mis. operator manual).
+    // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
+    // atau ada queue lain yang sudah membalas thread ini.
     try {
-      const { data: existingOut } = await (supabaseAdmin as any)
+      // (a) outbound yang sama queue_entry_id-nya → reply asli sudah terkirim.
+      const { data: sameQid } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
         .select("id")
         .eq("thread_id", entry.thread_id)
         .eq("direction", "out")
-        .gte("sent_at", entry.completed_at)
+        .eq("metadata->>queue_entry_id", entry.id)
         .limit(1);
-      if ((existingOut ?? []).length > 0) {
+
+      // (b) outbound apa pun setelah queue entry dibuat → percakapan sudah dilayani
+      // (entah oleh worker yang sama sebelum zombie, queue lain, atau operator).
+      const { data: anyOut } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", entry.thread_id)
+        .eq("direction", "out")
+        .gte("sent_at", entry.created_at)
+        .limit(1);
+
+      // (c) queue lain yang lebih baru di thread sama → guest sudah lanjut, jangan ganggu.
+      const { data: newerQueue } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .select("id")
+        .eq("thread_id", entry.thread_id)
+        .gt("created_at", entry.created_at)
+        .limit(1);
+
+      if (
+        (sameQid ?? []).length > 0 ||
+        (anyOut ?? []).length > 0 ||
+        (newerQueue ?? []).length > 0
+      ) {
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
-          .update({ last_error: `${entry.last_error ?? ""} [fallback_sent]`.slice(0, 500) })
+          .update({ last_error: `${entry.last_error ?? ""} [fallback_sent:skipped]`.slice(0, 500) })
           .eq("id", entry.id);
         continue;
       }
     } catch (e) {
       console.warn("[Fallback] outbound lookup failed:", e);
     }
+
 
     // Ambil token Fonnte via context RPC.
     let fonnteToken: string | null = null;
