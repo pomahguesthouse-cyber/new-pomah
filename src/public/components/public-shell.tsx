@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lucide-react";
+import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home, Facebook, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
