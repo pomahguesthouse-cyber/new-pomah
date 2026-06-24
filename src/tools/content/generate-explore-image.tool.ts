@@ -105,6 +105,13 @@ export const generateExploreImage: ToolHandler = async (
   args: Record<string, unknown>,
   ctx: ToolContext,
 ): Promise<string> => {
+  if (ctx.isManager !== true) {
+    return JSON.stringify({
+      ok: false,
+      error: "Hanya manajer/super admin yang boleh generate dan menyimpan gambar city guide.",
+    });
+  }
+
   const idArg = str(args.id);
   const titleArg = str(args.title);
   const overwrite = args.overwrite === true;

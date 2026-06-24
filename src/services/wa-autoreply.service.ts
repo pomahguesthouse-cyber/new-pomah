@@ -1215,5 +1215,8 @@ function countConsecutiveInbound(messages: Array<{ direction: string; body: stri
 }
 
 function getLastNInboundMessages(messages: Array<{ direction: string; body: string }>, n: number): string[] {
-  return messages.slice(-n).map((m) => m.body);
+  return messages
+    .filter((m) => m.direction === "in")
+    .slice(-n)
+    .map((m) => m.body);
 }

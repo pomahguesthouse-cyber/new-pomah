@@ -60,6 +60,7 @@ const SKIP_EMAIL_RE =
 
 /** Nomor telepon Indonesia */
 const PHONE_RE = /(?:\+62|62|0)[2-9][0-9]{7,11}/;
+const PHONE_WITH_SEPARATORS_RE = /(?:\+62|62|0)[\s\-().]*[2-9](?:[\s\-().]*[0-9]){7,11}/g;
 
 /** Bulan Indonesia → index (0-based) */
 const BULAN_MAP: Record<string, number> = {
@@ -195,6 +196,10 @@ export function extractAllSlots(
   if (phoneMatch) {
     result.phone = phoneMatch[0];
   }
+  const phoneSpans = Array.from(text.matchAll(PHONE_WITH_SEPARATORS_RE)).map((m) => ({
+    start: m.index ?? 0,
+    end: (m.index ?? 0) + m[0].length,
+  }));
 
   // ── 4. Jumlah tamu ────────────────────────────────────────────────────────
   // "dewasa 5", "5 orang dewasa", "5 dewasa", "orang dewasa 5"
@@ -260,6 +265,11 @@ export function extractAllSlots(
   const slashRe = /\b(\d{1,2})[/\-](\d{1,2})(?:[/\-](\d{2,4}))?\b/g;
   let slashMatch;
   while ((slashMatch = slashRe.exec(text)) !== null) {
+    const matchStart = slashMatch.index;
+    const matchEnd = slashMatch.index + slashMatch[0].length;
+    if (phoneSpans.some((span) => matchStart >= span.start && matchEnd <= span.end)) {
+      continue;
+    }
     const day = Number(slashMatch[1]);
     const month = Number(slashMatch[2]);
     let year = slashMatch[3] ? Number(slashMatch[3]) : undefined;

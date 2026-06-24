@@ -40,7 +40,6 @@ export type IntentCategory =
   | "room_detail_question"       // "ada wifi?", "fasilitas apa aja?"
   | "checkin_policy_question"    // "jam check-in?", "early check-in?"
   | "early_arrival_guest_question" // "datang lebih awal", "titip koper"
-  | "booking_recovery"           // recovery: 3 pesan beruntun tanpa balasan
   | "general";           // pertanyaan umum, info hotel, lokasi
 
 // ─── Context injected into every agent's prompt builder ──────────────────────

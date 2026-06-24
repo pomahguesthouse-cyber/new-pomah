@@ -37,7 +37,6 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   room_detail_question:         "front-office",
   checkin_policy_question:      "front-office",
   early_arrival_guest_question: "front-office",
-  booking_recovery:             "front-office",
   general:            "front-office",
 };
 

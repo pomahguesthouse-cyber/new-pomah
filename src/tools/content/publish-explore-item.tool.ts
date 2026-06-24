@@ -23,6 +23,13 @@ export const publishExploreItem: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
+  if (ctx.isManager !== true) {
+    return JSON.stringify({
+      ok: false,
+      error: "Hanya manajer/super admin yang boleh publish atau unpublish entri city guide.",
+    });
+  }
+
   const id = str(args.id);
   const titleSubstring = str(args.title_substring);
   const publish = args.publish !== false; // default true
@@ -75,6 +82,13 @@ export const publishExploreItemsByCategory: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
+  if (ctx.isManager !== true) {
+    return JSON.stringify({
+      ok: false,
+      error: "Hanya manajer/super admin yang boleh publish atau unpublish entri city guide.",
+    });
+  }
+
   const category = str(args.category).toLowerCase();
   const publish = args.publish !== false;
   if (!["event", "destinasi", "kuliner", "tips"].includes(category)) {

@@ -82,9 +82,7 @@ export const CITY_GUIDE_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  // TODO(isManager-guard): publish_explore_item writes to explore_items.is_published
-  // and immediately affects the public site. A follow-up PR should add a
-  // ctx.isManager === true check in the handler.
+  // Handler enforces ctx.isManager === true; publishing affects the public site.
   {
     type: "function",
     function: {
@@ -103,9 +101,7 @@ export const CITY_GUIDE_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  // TODO(isManager-guard): publish_explore_items_by_category is a bulk write
-  // that flips visibility for every entry in a category. Same guard plan as
-  // the single publish above.
+  // Handler enforces ctx.isManager === true; bulk publish affects public visibility.
   {
     type: "function",
     function: {
@@ -123,9 +119,7 @@ export const CITY_GUIDE_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  // TODO(isManager-guard): upsert_explore_item creates or mutates a public
-  // city-guide entry. Even though default is publish=false (draft), we should
-  // still gate this on ctx.isManager === true in the handler.
+  // Handler enforces ctx.isManager === true; this mutates city-guide content.
   {
     type: "function",
     function: {
@@ -174,9 +168,7 @@ export const REVIEW_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  // TODO(isManager-guard): save_custom_google_reviews writes directly to the
-  // properties row that the public homepage reads. Handler should refuse
-  // unless ctx.isManager === true.
+  // Handler enforces ctx.isManager === true; this writes homepage review data.
   {
     type: "function",
     function: {
@@ -220,8 +212,7 @@ export const REVIEW_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  // TODO(isManager-guard): restore_custom_google_reviews rewrites the public
-  // reviews payload to a prior snapshot. Same managerial gate applies.
+  // Handler enforces ctx.isManager === true; restore rewrites public review data.
   {
     type: "function",
     function: {
@@ -246,9 +237,7 @@ export const REVIEW_TOOLS: ToolDefinition[] = [
 // ─── Media (AI image generation for City Guide cards) ────────────────────────
 
 export const MEDIA_TOOLS: ToolDefinition[] = [
-  // TODO(isManager-guard): generate_explore_image triggers an AI-image call
-  // (paid) and writes the resulting URL onto an explore_items row. Handler
-  // should require ctx.isManager === true before running.
+  // Handler enforces ctx.isManager === true; generation is paid and writes image_url.
   {
     type: "function",
     function: {

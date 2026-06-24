@@ -24,6 +24,13 @@ export const upsertExploreItem: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
+  if (ctx.isManager !== true) {
+    return JSON.stringify({
+      ok: false,
+      error: "Hanya manajer/super admin yang boleh membuat atau mengubah entri city guide.",
+    });
+  }
+
   const title       = str(args.title);
   const category    = str(args.category)?.toLowerCase();
   const description = str(args.description);

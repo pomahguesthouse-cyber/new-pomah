@@ -460,7 +460,25 @@ export async function classifyIntent(
           const parsed = JSON.parse(match[0]);
           if (parsed.category && typeof parsed.confidence === "number") {
             const category = parsed.category.toLowerCase().trim();
-            const VALID_CATEGORIES: IntentCategory[] = [\r\n              "greeting",\r\n              "booking_inquiry",\r\n              "availability_check",\r\n              "pricing_inquiry",\r\n              "customer-care",\r\n              "maintenance",\r\n              "payment",\r\n              "complaint",\r\n              "booking_start",\r\n              "guest_count_input",\r\n              "payment_policy_question",\r\n              "bank_account_request",\r\n              "invoice_request",\r\n              "room_detail_question",\r\n              "checkin_policy_question",\r\n              "early_arrival_guest_question",\r\n              "booking_recovery",\r\n              "general"\r\n            ];
+            const VALID_CATEGORIES: IntentCategory[] = [
+              "greeting",
+              "booking_inquiry",
+              "availability_check",
+              "pricing_inquiry",
+              "customer-care",
+              "maintenance",
+              "payment",
+              "complaint",
+              "booking_start",
+              "guest_count_input",
+              "payment_policy_question",
+              "bank_account_request",
+              "invoice_request",
+              "room_detail_question",
+              "checkin_policy_question",
+              "early_arrival_guest_question",
+              "general",
+            ];
             if (VALID_CATEGORIES.includes(category as IntentCategory)) {
               console.info(`[classifyIntent] LLM Fallback Success: mapped "${text}" to "${category}" (confidence: ${parsed.confidence})`);
               return {

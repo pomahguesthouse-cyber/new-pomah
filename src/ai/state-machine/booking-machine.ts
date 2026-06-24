@@ -25,6 +25,7 @@ export type BookingState =
   | "CONFIRMING_PHONE"
   | "AWAITING_PHONE"
   | "CONFIRMING_BOOKING"
+  | "AWAITING_CANCEL_CONFIRMATION"
   | "PAYMENT_PENDING"
   | "COMPLETED";
 
@@ -67,6 +68,12 @@ export interface BookingContext {
   extraBedRate?: number;
   /** Flag bahwa tamu sudah handoff ke admin manusia. */
   handoff?: boolean;
+  /** Tamu sudah pernah ditanya email opsional, termasuk saat memilih skip. */
+  email_clarification_asked?: boolean;
+  /** Tamu minta invoice meski email/flow belum lengkap. */
+  invoice_requested?: boolean;
+  /** State sebelumnya saat bot sedang menunggu konfirmasi cancel dua langkah. */
+  cancelPreviousState?: BookingState;
 }
 
 
@@ -97,7 +104,9 @@ export interface StateMachineResult {
   followUpRef?: string;
 }
 
-const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi|berhenti)\b/i;
+const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi)\b/i;
+const CANCEL_CONFIRM_PATTERN = /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
+const CANCEL_DECLINE_PATTERN = /^(tidak|nggak|ngga|gak|ga|jangan|bukan|lanjut booking|lanjutkan booking)[\s.!]*$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 
@@ -473,6 +482,45 @@ async function buildBookingSummaryAsync(
 
 
 
+function clearCancelConfirmation(context: BookingContext): BookingContext {
+  const { cancelPreviousState: _cancelPreviousState, ...rest } = context;
+  return rest;
+}
+
+async function cleanupPendingBookingAndInvoice(
+  supabase: SupabaseClient,
+  phone: string,
+): Promise<void> {
+  try {
+    const { data: guests } = await (supabase as any)
+      .from("guests")
+      .select("id")
+      .eq("phone", phone);
+    const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
+    if (guestIds.length === 0) return;
+
+    const { data: bookings } = await (supabase as any)
+      .from("bookings")
+      .select("id")
+      .in("guest_id", guestIds)
+      .in("status", ["pending", "confirmed"]);
+    const bookingIds = ((bookings ?? []) as Array<{ id: string }>).map((b) => b.id);
+    if (bookingIds.length === 0) return;
+
+    await (supabase as any)
+      .from("bookings")
+      .update({ status: "cancelled" })
+      .in("id", bookingIds)
+      .in("status", ["pending", "confirmed"]);
+    await (supabase as any)
+      .from("invoices")
+      .delete()
+      .in("booking_id", bookingIds);
+  } catch (e) {
+    console.warn("[BookingState] cancel cleanup failed (non-fatal):", e);
+  }
+}
+
 export async function getBookingState(supabase: SupabaseClient, phone: string): Promise<StateRecord> {
   const { data, error } = await supabase.rpc("get_active_booking_state", { p_phone: phone });
   if (error || !data) {
@@ -777,44 +825,40 @@ export async function processBookingState(
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
 
-  // Cancellation: bersihkan draft booking + pending invoice agar tidak
-  // pernah ada invoice "menggantung" sampai user mulai ulang & konfirmasi.
-  if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
-    try {
-      // Cari guest berdasarkan phone, lalu cancel booking pending miliknya.
-      const { data: guests } = await (supabase as any)
-        .from("guests")
-        .select("id")
-        .eq("phone", phone);
-      const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
-      if (guestIds.length > 0) {
-        const { data: pendingBookings } = await (supabase as any)
-          .from("bookings")
-          .select("id")
-          .in("guest_id", guestIds)
-          .in("status", ["pending"]);
-        const bookingIds = ((pendingBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
-        if (bookingIds.length > 0) {
-          await (supabase as any)
-            .from("bookings")
-            .update({ status: "cancelled" })
-            .in("id", bookingIds);
-          // Tandai invoice terkait (jika ada) sebagai void via payment_status_snapshot.
-          await (supabase as any)
-            .from("invoices")
-            .delete()
-            .in("booking_id", bookingIds);
-        }
-      }
-    } catch (e) {
-      console.warn("[BookingState] cancel cleanup failed (non-fatal):", e);
+  if (state === "AWAITING_CANCEL_CONFIRMATION") {
+    const previousState = context.cancelPreviousState ?? "COLLECTING_DATA";
+    const restoredContext = clearCancelConfirmation(context);
+
+    if (CANCEL_CONFIRM_PATTERN.test(message)) {
+      await cleanupPendingBookingAndInvoice(supabase, phone);
+      await updateBookingState(supabase, phone, "IDLE", {});
+      return {
+        handled: true,
+        reply:
+          "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya bersihkan. " +
+          "Kalau nanti ingin mulai ulang, tinggal sebut tanggal & tipe kamarnya ya 🙏.",
+      };
     }
-    await updateBookingState(supabase, phone, "IDLE", {});
+
+    await updateBookingState(supabase, phone, previousState, restoredContext);
+    if (CANCEL_DECLINE_PATTERN.test(message)) {
+      return {
+        handled: true,
+        reply: "Siap Kak, reservasinya tidak saya batalkan. Kita lanjutkan dari data terakhir ya.",
+      };
+    }
+    return { handled: false };
+  }
+
+  // Cancellation is destructive, so ask for explicit confirmation first.
+  if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
+    context.cancelPreviousState = state;
+    await updateBookingState(supabase, phone, "AWAITING_CANCEL_CONFIRMATION", context);
     return {
       handled: true,
       reply:
-        "Baik Kak, proses reservasi sudah dibatalkan dan draft invoice juga sudah saya bersihkan. " +
-        "Kalau nanti ingin mulai ulang, tinggal sebut tanggal & tipe kamarnya ya 🙏.",
+        "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
+        "Untuk memastikan, balas \"Ya, batalkan\". Kalau tidak jadi batal, balas \"Jangan\".",
     };
   }
 
@@ -1029,12 +1073,12 @@ export async function processBookingState(
     
     // Additional slots
     if (extracted.is_invoice_request) {
-      (context as any).invoice_requested = true;
+      context.invoice_requested = true;
     }
     
     if (extracted.is_skip_email) {
       context.guestEmail = undefined;
-      (context as any).email_clarification_asked = true;
+      context.email_clarification_asked = true;
     }
 
     // Mid-booking interruption signals check
@@ -1059,13 +1103,13 @@ export async function processBookingState(
 
     if (hasDates && hasRoom && hasName && hasPhone) {
       // Prompt for optional email if not yet filled and not yet clarified
-      if (!context.guestEmail && !(context as any).email_clarification_asked) {
+      if (!context.guestEmail && !context.email_clarification_asked) {
         // Special case: if user typed skip email or skipped in the message, we skip
         const isSkipInput = /^(lewati|skip|no|tidak|tanpa|-)$/i.test(message.trim());
         if (isSkipInput) {
-          (context as any).email_clarification_asked = true;
+          context.email_clarification_asked = true;
         } else {
-          (context as any).email_clarification_asked = true;
+          context.email_clarification_asked = true;
           await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
           return {
             handled: true,
@@ -1258,9 +1302,14 @@ export async function processBookingState(
         followUpRef: result.reference_code,
       };
     } else if (isPureCancel) {
-      // Ditangani oleh handler CANCELLATION_PATTERNS di awal, tapi safety net.
-      await updateBookingState(supabase, phone, "IDLE", {});
-      return { handled: true, reply: "Baik Kak, reservasi dibatalkan. Kalau ingin mulai ulang, sebut saja tanggalnya ya." };
+      context.cancelPreviousState = "CONFIRMING_BOOKING";
+      await updateBookingState(supabase, phone, "AWAITING_CANCEL_CONFIRMATION", context);
+      return {
+        handled: true,
+        reply:
+          "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
+          "Untuk memastikan, balas \"Ya, batalkan\". Kalau tidak jadi batal, balas \"Jangan\".",
+      };
     } else {
       // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
       // dengan petunjuk yang lebih ramah, jangan kaku.
