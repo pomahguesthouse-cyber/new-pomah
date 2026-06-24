@@ -264,9 +264,10 @@ export const createBooking: ToolHandler = async (
   if (!fullName) {
     return JSON.stringify({ ok: false, error: "Nama tamu wajib diisi." });
   }
-  if (!managerialDirect && (!emailRaw || !phoneRaw)) {
-    return JSON.stringify({ ok: false, error: "Data tamu belum lengkap (nama, email, HP)." });
+  if (!managerialDirect && !phoneRaw) {
+    return JSON.stringify({ ok: false, error: "Nomor HP tamu belum diisi." });
   }
+
   if (emailRaw && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw)) {
     return JSON.stringify({ ok: false, error: "Format email tidak valid." });
   }
