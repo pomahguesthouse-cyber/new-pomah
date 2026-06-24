@@ -26,6 +26,7 @@ import {
   Send,
   BellOff,
   Bell,
+  Share2,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
