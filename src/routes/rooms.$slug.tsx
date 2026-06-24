@@ -524,6 +524,8 @@ function RoomBookingPage() {
         room={displayRoom || room}
         checkIn={checkIn}
         checkOut={checkOut}
+        onCheckInChange={handleCheckInChange}
+        onCheckOutChange={setCheckOut}
         rooms={rooms}
         maxRooms={maxRooms}
         guests={guests}
