@@ -817,6 +817,48 @@ export async function processBookingState(
     return { handled: false }; // Handled by LLM via normal AI workflow
   }
 
+  // Guard: jika state masih di tahap pengumpulan data tamu (AWAITING_*/CONFIRMING_*)
+  // padahal SUDAH ada booking aktif (pending/confirmed) untuk nomor ini yang
+  // dibuat dalam 90 menit terakhir, berarti flow sebenarnya sudah lewat fase
+  // booking — kemungkinan invoice sudah dikirim. Tanpa guard ini, jawaban tamu
+  // seperti "sudah bayar / sudah transfer" akan terus dibaca sebagai email
+  // tidak valid sehingga bot mengulang "format email tidak valid" tanpa henti.
+  // Reset state ke PAYMENT_PENDING dan serahkan ke Finance Agent.
+  if (isDataEntryState(state)) {
+    try {
+      const { data: guests } = await (supabase as any)
+        .from("guests")
+        .select("id")
+        .eq("phone", phone)
+        .limit(10);
+      const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
+      if (guestIds.length > 0) {
+        const cutoff = new Date(Date.now() - 90 * 60 * 1000).toISOString();
+        const { data: activeBooking } = await (supabase as any)
+          .from("bookings")
+          .select("reference_code, created_at, status")
+          .in("guest_id", guestIds)
+          .in("status", ["pending", "confirmed"])
+          .gte("created_at", cutoff)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (activeBooking?.reference_code) {
+          console.info(
+            `[BookingState] ${state} → PAYMENT_PENDING: booking aktif ` +
+            `${activeBooking.reference_code} sudah ada, hentikan loop data-entry.`,
+          );
+          context.bookingCode = activeBooking.reference_code;
+          await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+          return { handled: false };
+        }
+      }
+    } catch (e) {
+      console.warn("[BookingState] active-booking guard failed (non-fatal):", e);
+    }
+  }
+
+
   // Mid-booking interruption: the guest asks something unrelated instead of
   // answering the current prompt. Hand the turn to the LLM / specialist agents
   // to answer, but KEEP the booking state so the flow resumes on the next
