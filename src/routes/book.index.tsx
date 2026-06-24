@@ -744,7 +744,7 @@ function BookPage() {
         </div>
       </section>
 
-      <PomahFooter name={propertyName} />
+      <PomahFooter name={propertyName} property={data?.property ?? null} />
     </div>
   );
 }
