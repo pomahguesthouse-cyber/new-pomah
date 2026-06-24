@@ -12,7 +12,6 @@ import { isDateString } from "@/lib/date";
 import {
   updateBookingState,
   type BookingContext,
-  type BookingState,
 } from "@/ai/state-machine/booking-machine";
 import type { ToolContext, ToolHandler } from "./types";
 
@@ -204,21 +203,26 @@ export const startBookingDetails: ToolHandler = async (
 
   ctx.lastDates = { checkIn, checkOut };
 
-  let state: BookingState;
+  // Masuk ke state COLLECTING_DATA (flexible slot-filling).
+  // Semua data yang sudah tersedia (tanggal, kamar, nama jika ada) sudah
+  // tersimpan di context. Pesan selanjutnya akan diekstrak oleh extractor
+  // untuk mengisi slot yang masih kosong.
   let message: string;
-
   if (guestName.length >= 2) {
     context.guestName = guestName;
-    state = "CONFIRMING_NAME";
-    message =
-      `Baik, untuk pemesanan kamar ${roomsDescription} apakah Kakak ingin memakai nama "${guestName}", ` +
-      `atau menggunakan nama lain? Balas "Ya" untuk memakai nama ini, atau ketik langsung nama lain yang Kakak inginkan.`;
+    // Cek apakah sudah punya nomor HP juga (dari summary)
+    const hasPhone = !!(context.guestPhone && context.guestPhone.length >= 8);
+    if (hasPhone) {
+      // Semua mandatory slots sudah ada — langsung minta konfirmasi
+      message = `Baik, data sementara booking ${roomsDescription} sudah saya catat atas nama "${guestName}". Mohon konfirmasi untuk melanjutkan pemesanan.`;
+    } else {
+      message = `Baik Kak, untuk pemesanan ${roomsDescription} atas nama "${guestName}", mohon lengkapi nomor WhatsApp/HP yang bisa dihubungi:`;
+    }
   } else {
-    state = "AWAITING_NAME";
-    message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak:`;
+    message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak (bisa langsung sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789"):`;
   }
 
-  await updateBookingState(ctx.supabasePublic, ctx.phone, state, context);
+  await updateBookingState(ctx.supabasePublic, ctx.phone, "COLLECTING_DATA", context);
 
   // The orchestrator's state machine will own every subsequent message. Tell the
   // agent to relay `message` to the guest verbatim for this transition turn.

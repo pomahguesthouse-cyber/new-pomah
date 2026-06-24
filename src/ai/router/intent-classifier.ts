@@ -111,6 +111,90 @@ const RULES: IntentRule[] = [
     ],
   },
 
+  // ── Booking start (explicit booking intent — lebih spesifik dari booking_inquiry)
+  {
+    category: "booking_start",
+    weight:   6,
+    patterns: [
+      /\b(mau booking|mau pesan|booking dong|pesan kamar|reservasi dong|book kamar)\b/i,
+      /\b(saya (mau|ingin) (booking|pesan|reservasi|menginap|nginap))\b/i,
+    ],
+  },
+
+  // ── Guest count input
+  {
+    category: "guest_count_input",
+    weight:   5,
+    patterns: [
+      /\b(dewasa|orang dewasa|adult)\s*\d+/i,
+      /\d+\s*(dewasa|orang dewasa|adult)/i,
+      /\b(anak|children|child|kids?)\s*\d+/i,
+      /\d+\s*(anak|children|child|kids?)/i,
+      /\b(kami|kita)\s+(?:ber)?\d+\b/i,
+    ],
+  },
+
+  // ── Payment policy question
+  {
+    category: "payment_policy_question",
+    weight:   7,
+    patterns: [
+      /\b(bisa dp|dp dulu|bayar berapa dulu|uang muka|down ?payment|dp minimal|dp berapa|cara bayar|metode (?:pembayaran|bayar))\b/i,
+      /\b(bayar(?:nya)? (?:gimana|bagaimana|berapa)|kebijakan (?:pembayaran|bayar))\b/i,
+    ],
+  },
+
+  // ── Bank account request
+  {
+    category: "bank_account_request",
+    weight:   7,
+    patterns: [
+      /\b(norek|no\.?\s*rek|nomor rekening|nomer rekening)\b/i,
+      /\b(transfer (?:ke ?mana|kemana|ke bank apa))\b/i,
+      /\b(rekening (?:apa|bank|mana)|minta.{0,10}(?:norek|rekening))\b/i,
+    ],
+  },
+
+  // ── Invoice request
+  {
+    category: "invoice_request",
+    weight:   7,
+    patterns: [
+      /\b(minta invoice|kirim(?:kan)? invoice|butuh invoice|invoice(?:nya)?|kwitansi|bukti (?:booking|pemesanan|reservasi))\b/i,
+    ],
+  },
+
+  // ── Room detail question
+  {
+    category: "room_detail_question",
+    weight:   5,
+    patterns: [
+      /\b(wifi|wi-fi|parkir|sarapan|breakfast|kolam|pool|fasilitas|amenities|lantai berapa|view|pemandangan|kamar mandi|bathroom)\b.*\?/i,
+      /\b(ada (?:wifi|parkir|sarapan|kolam|breakfast|ac))\b/i,
+      /\b(kamar(?:nya)? (?:ada|punya|include|termasuk))\b/i,
+    ],
+  },
+
+  // ── Check-in policy question
+  {
+    category: "checkin_policy_question",
+    weight:   5,
+    patterns: [
+      /\b(jam check[ -]?in|check[ -]?in jam|early check[ -]?in|late check[ -]?out|jam berapa (?:check|cek)|checkout jam)\b/i,
+      /\b(bisa check[ -]?in (?:lebih awal|pagi|jam)|boleh late)\b/i,
+    ],
+  },
+
+  // ── Early arrival question
+  {
+    category: "early_arrival_guest_question",
+    weight:   5,
+    patterns: [
+      /\b(datang lebih awal|sampai (?:lebih )?awal|titip (?:koper|barang|tas)|nitip (?:koper|barang)|sebelum (?:jam )?check[ -]?in)\b/i,
+      /\b(tiba (?:pagi|sebelum)|arrival (?:pagi|awal))\b/i,
+    ],
+  },
+
   // ── Greetings
   {
     category: "greeting",
@@ -376,17 +460,7 @@ export async function classifyIntent(
           const parsed = JSON.parse(match[0]);
           if (parsed.category && typeof parsed.confidence === "number") {
             const category = parsed.category.toLowerCase().trim();
-            const VALID_CATEGORIES: IntentCategory[] = [
-              "greeting",
-              "booking_inquiry",
-              "availability_check",
-              "pricing_inquiry",
-              "customer-care",
-              "maintenance",
-              "payment",
-              "complaint",
-              "general"
-            ];
+            const VALID_CATEGORIES: IntentCategory[] = [\r\n              "greeting",\r\n              "booking_inquiry",\r\n              "availability_check",\r\n              "pricing_inquiry",\r\n              "customer-care",\r\n              "maintenance",\r\n              "payment",\r\n              "complaint",\r\n              "booking_start",\r\n              "guest_count_input",\r\n              "payment_policy_question",\r\n              "bank_account_request",\r\n              "invoice_request",\r\n              "room_detail_question",\r\n              "checkin_policy_question",\r\n              "early_arrival_guest_question",\r\n              "booking_recovery",\r\n              "general"\r\n            ];
             if (VALID_CATEGORIES.includes(category as IntentCategory)) {
               console.info(`[classifyIntent] LLM Fallback Success: mapped "${text}" to "${category}" (confidence: ${parsed.confidence})`);
               return {

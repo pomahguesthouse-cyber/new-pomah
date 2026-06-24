@@ -25,6 +25,7 @@ import { executeTool }                       from "@/tools/executor";
 import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
 import type { ToolContext }                  from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
+import { getMissingSlots, formatPartialBookingSummary } from "./state-machine/flexible-slot-extractor";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
 import { rewriteQuery }   from "./router/query-rewriter";
 import {
@@ -211,6 +212,24 @@ async function runAgent(
       `Pakai tanggal ini sebagai default kalau tamu jelas melanjutkan topik kamar/booking ` +
       `yang sama (misal "harganya?", "yang deluxe gimana?", "oke booking"). ` +
       `Kalau tamu memulai topik baru atau menyebut tanggal lain, abaikan default ini.`;
+  }
+
+  if (agentCtx.bookingInProgress) {
+    systemPrompt += `\n\n[INFO BOOKING INTERRUPT]`;
+    systemPrompt += `\nSaat ini tamu sedang berada di tengah-tengah proses booking (fase pengumpulan data).`;
+    if (agentCtx.pendingBookingSlots && agentCtx.pendingBookingSlots.length > 0) {
+      systemPrompt += `\nData yang masih kosong: ${agentCtx.pendingBookingSlots.join(", ")}.`;
+    }
+    systemPrompt += `\nJawablah pertanyaan/permintaan terakhir dari tamu dengan singkat & ramah, lalu tambahkan ajakan sopan untuk melanjutkan pengisian data booking yang masih kurang tersebut.`;
+  }
+
+  if (agentCtx.recoveryMode) {
+    systemPrompt += `\n\n[RECOVERY MODE ACTIVE]`;
+    systemPrompt += `\nTamu mengirimkan beberapa pesan cepat berturut-turut tanpa balasan.`;
+    if (agentCtx.unansweredMessages && agentCtx.unansweredMessages.length > 0) {
+      systemPrompt += `\nPesan-pesan tamu yang belum terjawab:\n` + agentCtx.unansweredMessages.map((m, i) => `${i + 1}. "${m}"`).join("\n");
+    }
+    systemPrompt += `\nAnda WAJIB memulai jawaban Anda dengan sapaan recovery: "Maaf Kak, saya bantu lanjutkan ya..." atau sejenisnya, lalu jawab semua poin pertanyaan/pesan di atas secara komprehensif dalam satu balasan terintegrasi.`;
   }
 
   const messages: AiMessage[] = [
@@ -541,6 +560,7 @@ export async function runMultiAgentOrchestration(
     // does not restart the flow (the state machine resumes on the next reply).
     if (isDataEntryState(stateRecord.state)) {
       input.agentCtx.bookingInProgress = true;
+      input.agentCtx.pendingBookingSlots = getMissingSlots(stateRecord.context);
     }
   }
 

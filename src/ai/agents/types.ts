@@ -32,6 +32,15 @@ export type IntentCategory =
   | "maintenance"        // AC rusak, lampu mati, kran bocor
   | "payment"            // tanya cara bayar, transfer, invoice
   | "complaint"          // keluhan, kecewa, tidak puas
+  | "booking_start"              // eksplisit: "mau booking", "pesan kamar"
+  | "guest_count_input"          // "dewasa 5 anak 2", "3 orang"
+  | "payment_policy_question"    // "bisa dp?", "bayar berapa dulu?"
+  | "bank_account_request"       // "minta norek", "nomor rekening"
+  | "invoice_request"            // "minta invoice", "kirim invoice"
+  | "room_detail_question"       // "ada wifi?", "fasilitas apa aja?"
+  | "checkin_policy_question"    // "jam check-in?", "early check-in?"
+  | "early_arrival_guest_question" // "datang lebih awal", "titip koper"
+  | "booking_recovery"           // recovery: 3 pesan beruntun tanpa balasan
   | "general";           // pertanyaan umum, info hotel, lokasi
 
 // ─── Context injected into every agent's prompt builder ──────────────────────
@@ -109,6 +118,12 @@ export interface AgentContext {
     bad_response: string;
     correction: string | null;
   }>;
+  /** True when recovery mode is active (3+ consecutive inbound without outbound) */
+  recoveryMode?: boolean;
+  /** The unanswered inbound messages that triggered recovery */
+  unansweredMessages?: string[];
+  /** List of missing booking slots for context during interrupts */
+  pendingBookingSlots?: string[];
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

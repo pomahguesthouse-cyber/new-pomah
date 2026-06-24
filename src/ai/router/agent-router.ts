@@ -28,6 +28,16 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   maintenance:        "customer-care",
   payment:            "finance",
   complaint:          "front-office",
+  // ── New intents ──────────────────────────────────────────────────────────
+  booking_start:                "front-office",
+  guest_count_input:            "front-office",
+  payment_policy_question:      "finance",
+  bank_account_request:         "finance",
+  invoice_request:              "finance",
+  room_detail_question:         "front-office",
+  checkin_policy_question:      "front-office",
+  early_arrival_guest_question: "front-office",
+  booking_recovery:             "front-office",
   general:            "front-office",
 };
 

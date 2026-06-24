@@ -7,12 +7,18 @@ import {
 } from "@/services/pricing/daily-rate.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
+import {
+  extractAllSlots,
+  getMissingSlots,
+  formatPartialBookingSummary,
+} from "./flexible-slot-extractor";
 
 export type BookingState =
   | "IDLE"
   | "AWAITING_DATES"
   | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
+  | "COLLECTING_DATA"      // Flexible slot-filling (replaces old linear states)
   | "AWAITING_NAME"
   | "CONFIRMING_NAME"
   | "AWAITING_EMAIL"
@@ -142,14 +148,13 @@ function cleanNameCandidate(candidate: string): string {
     .trim();
 }
 
-function looksLikePersonName(candidate: string): boolean {
+export function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
   if (t.length < 2 || t.length > 80) return false;
   if (/[\d/@]/.test(t)) return false;          // numbers, slashes, @ → not a name
   if (t.endsWith("?")) return false;
-  if (NON_NAME_TOKENS.test(t)) return false;
   const tokens = t.split(/\s+/);
-  if (tokens.length > 5) return false;          // names rarely > 5 tokens
+  if (tokens.length > 8) return false;          // names rarely > 8 tokens
   // Must contain at least one alphabetic word of length ≥ 2.
   if (!tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w))) return false;
   return true;
@@ -463,7 +468,7 @@ async function buildBookingSummaryAsync(
   } catch (e) {
     console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
   }
-  return await buildBookingSummaryAsync(ctx, context);
+  return buildBookingSummary(context, ctx.rooms);
 }
 
 
@@ -509,6 +514,7 @@ function extractPhone(text: string): string | null {
 // States in which the bot is collecting/confirming guest data and can be
 // interrupted by an unrelated question.
 const DATA_ENTRY_STATES: BookingState[] = [
+  "COLLECTING_DATA",
   "AWAITING_NAME",
   "CONFIRMING_NAME",
   "AWAITING_EMAIL",
@@ -528,6 +534,7 @@ export function isDataEntryState(state: BookingState): boolean {
  */
 export function getRequiredField(state: BookingState): string | null {
   switch (state) {
+    case "COLLECTING_DATA":                 return "data_booking";
     case "AWAITING_DATES":                  return "tanggal";
     case "AWAITING_ALTERNATIVE_ROOM_TYPE":  return "tipe_kamar_alternatif";
     case "ROOM_SELECTED":                   return "tipe_kamar";
@@ -972,208 +979,138 @@ export async function processBookingState(
   // (Transition from IDLE to ROOM_SELECTED is handled by the AI Front Office Agent when tool is called)
 
   
-  if (state === "AWAITING_NAME") {
-    // We assume the user replied with their name. Bersihkan honorifik
-    // ("kak", "mas", dll.) dan ambil baris pertama sebelum validasi.
-    const raw = message.trim();
-    const name = cleanNameCandidate(raw);
-    if (name.length < 2) {
-      return { handled: true, reply: "Maaf, nama yang dimasukkan terlalu singkat. Silakan masukkan nama lengkap Kakak:" };
-    }
-    if (!looksLikePersonName(name)) {
-      // Looks like the guest typed a question or a room preference instead.
-      // Don't store the garbage as guestName.
-      // If clearly a question/room-pref, defer to LLM so it can answer and
-      // then re-ask for the name in the same turn.
-      if (ROOM_PREFERENCE_OR_QUESTION.test(raw)) {
-        console.info(
-          `[BookingState] AWAITING_NAME: question/room-pref detected ("${raw.slice(0, 60)}…"). ` +
-          `Deferring to LLM.`,
-        );
-        return { handled: false };
-      }
-      return {
-        handled: true,
-        reply:
-          "Sepertinya itu belum berupa nama. Mohon ketikkan nama lengkap " +
-          "yang akan dipakai pada pemesanan ya, Kak (contoh: 'Budi Santoso').",
-      };
-    }
-    // Record as a candidate name and confirm before locking it in for the booking.
-    context.guestName = name;
-    await updateBookingState(supabase, phone, "CONFIRMING_NAME", context);
-    return {
-      handled: true,
-      reply: `Baik, nama "${name}". Apakah Kakak ingin memakai nama ini untuk pemesanan, atau menggunakan nama lain?\n\nBalas "Ya" untuk memakai nama ini, atau ketik langsung nama lain yang Kakak inginkan.`,
-    };
-  }
+  if (state === "COLLECTING_DATA" ||
+      state === "AWAITING_NAME" ||
+      state === "CONFIRMING_NAME" ||
+      state === "AWAITING_EMAIL" ||
+      state === "CONFIRMING_PHONE" ||
+      state === "AWAITING_PHONE") {
+    
+    const roomsList = ctx.rooms || [];
+    const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
+    const extracted = extractAllSlots(message, roomsList, phone, todayStr);
 
-  if (state === "CONFIRMING_NAME") {
-    const trimmed = message.trim();
-    // Guard pertama: jika pesan jelas berupa pertanyaan / preferensi kamar
-    // (mis. "untuk parkir mobil aman ya?", "kamar pojok ya"), JANGAN
-    // perlakukan kata "ya" di akhirnya sebagai konfirmasi nama. Serahkan ke
-    // LLM supaya pertanyaan tamu dijawab; state nama dipertahankan.
-    if (ROOM_PREFERENCE_OR_QUESTION.test(trimmed)) {
-      console.info(
-        `[BookingState] CONFIRMING_NAME: question/room-pref detected ` +
-        `("${trimmed.slice(0, 60)}…") — preserving guestName "${context.guestName}" ` +
-        `and deferring to LLM.`,
-      );
+    // Merge extracted values to context
+    if (extracted.check_in) context.checkIn = extracted.check_in;
+    if (extracted.check_out) context.checkOut = extracted.check_out;
+    
+    if (extracted.room_type) {
+      context.roomName = extracted.room_type;
+      context.roomId = extracted.room_type_id;
+      const rt = roomsList.find((r) => r.id === extracted.room_type_id);
+      if (rt) {
+        context.pricePerNight = Number(rt.base_rate ?? 0);
+      }
+    }
+    
+    if (extracted.room_quantity) {
+      if (context.roomId && context.roomName) {
+        context.rooms = [{
+          roomTypeId: context.roomId,
+          roomTypeName: context.roomName,
+          quantity: extracted.room_quantity,
+          pricePerNight: context.pricePerNight ?? 0,
+        }];
+      }
+    } else if (context.roomId && context.roomName && (!context.rooms || context.rooms.length === 0)) {
+      context.rooms = [{
+        roomTypeId: context.roomId,
+        roomTypeName: context.roomName,
+        quantity: 1,
+        pricePerNight: context.pricePerNight ?? 0,
+      }];
+    }
+
+    if (extracted.guest_name) context.guestName = extracted.guest_name;
+    if (extracted.email) context.guestEmail = extracted.email;
+    if (extracted.phone) context.guestPhone = extracted.phone;
+    if (extracted.adults) context.adults = extracted.adults;
+    if (extracted.children) context.children = extracted.children;
+    
+    // Additional slots
+    if (extracted.is_invoice_request) {
+      (context as any).invoice_requested = true;
+    }
+    
+    if (extracted.is_skip_email) {
+      context.guestEmail = undefined;
+      (context as any).email_clarification_asked = true;
+    }
+
+    // Mid-booking interruption signals check
+    if (
+      extracted.is_payment_question ||
+      extracted.is_bank_account_request ||
+      extracted.is_invoice_request ||
+      extracted.is_checkin_policy ||
+      extracted.is_room_detail_question ||
+      extracted.is_early_arrival
+    ) {
+      console.info(`[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`);
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
       return { handled: false };
     }
-    // Explicit "use this name"
-    if (USE_THIS_PATTERN.test(trimmed) && !USE_OTHER_PATTERN.test(trimmed)) {
-      await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
-      return {
-        handled: true,
-        reply: `Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (contoh: budi@email.com). Email ini opsional — balas "lewati" atau "-" jika tidak ingin mengisi:`,
-      };
-    }
 
-    // "Use another name" without supplying a new one yet → ask for it.
-    if (USE_OTHER_PATTERN.test(trimmed) && trimmed.replace(USE_OTHER_PATTERN, "").trim().length < 2) {
-      await updateBookingState(supabase, phone, "AWAITING_NAME", context);
-      return { handled: true, reply: "Baik, silakan ketikkan nama yang ingin Kakak gunakan untuk pemesanan:" };
-    }
-    // Otherwise treat the message as the new name to use.
-    const newName = cleanNameCandidate(trimmed.replace(/^(pakai|gunakan|pake|nama)\s+/i, ""));
-    if (newName.length < 2) {
-      return { handled: true, reply: 'Mohon balas "Ya" untuk memakai nama sebelumnya, atau ketik nama lengkap yang ingin Kakak gunakan:' };
-    }
-    if (!looksLikePersonName(newName)) {
-      // Guest sent something like "205/206 aja kak biar sebelahan" — a room
-      // preference or unrelated question, not a name. CRITICAL: do NOT
-      // overwrite the existing guestName (the previous version of this
-      // code did, corrupting the booking record).
-      //
-      // If it looks like a room preference / question, defer to the LLM so
-      // it can acknowledge ("kamar 205/206 bersebelahan dicatat ya, nanti
-      // tim assign saat check-in") AND re-ask for the name. The booking
-      // state is preserved so the flow resumes on the next reply.
-      if (ROOM_PREFERENCE_OR_QUESTION.test(trimmed)) {
-        console.info(
-          `[BookingState] CONFIRMING_NAME: room-preference/question detected ` +
-          `("${trimmed.slice(0, 60)}…") — preserving existing guestName "${context.guestName}" ` +
-          `and deferring to LLM.`,
-        );
-        return { handled: false };
+    // Check mandatory fields: Dates, Room type, guest name, guest phone
+    const hasDates = !!context.checkIn && !!context.checkOut;
+    const hasRoom = !!context.roomName;
+    const hasName = !!context.guestName && context.guestName.length >= 2;
+    const hasPhone = !!context.guestPhone && context.guestPhone.length >= 8;
+
+    if (hasDates && hasRoom && hasName && hasPhone) {
+      // Prompt for optional email if not yet filled and not yet clarified
+      if (!context.guestEmail && !(context as any).email_clarification_asked) {
+        // Special case: if user typed skip email or skipped in the message, we skip
+        const isSkipInput = /^(lewati|skip|no|tidak|tanpa|-)$/i.test(message.trim());
+        if (isSkipInput) {
+          (context as any).email_clarification_asked = true;
+        } else {
+          (context as any).email_clarification_asked = true;
+          await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+          return {
+            handled: true,
+            reply: `Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (opsional, balas "lewati" atau "-" jika tidak ingin mengisi):`,
+          };
+        }
       }
-      // Otherwise treat as a confused reply and politely re-ask, still
-      // without overwriting guestName.
-      return {
-        handled: true,
-        reply:
-          `Sepertinya pesan tadi bukan nama. Balas "Ya" untuk memakai nama ` +
-          `"${context.guestName}", atau ketik nama lengkap baru yang ingin Kakak gunakan.`,
-      };
-    }
-    context.guestName = newName;
-    await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
-    return {
-      handled: true,
-      reply: `Siap, nama pemesanan diatur menjadi "${newName}". Jika berkenan, mohon ketikkan alamat email Kakak (contoh: budi@email.com). Email ini opsional — balas "lewati" atau "-" jika tidak ingin mengisi:`,
-    };
 
-  }
+      // Recompute extra bed policy
+      const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
+      const recomputePolicy = resolveRoomExtraBedPolicy(context, roomsList);
+      if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
+      const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, context.adults ?? 1);
+      context.extraBeds = eb.extraBeds;
 
-  if (state === "AWAITING_EMAIL") {
-    const trimmed = message.trim();
-
-    // Helper: lanjut ke step nomor HP tanpa mengisi email.
-    const advanceWithoutEmail = async (prefix: string): Promise<StateMachineResult> => {
-      context.guestEmail = undefined;
-      await updateBookingState(supabase, phone, "CONFIRMING_PHONE", context);
-      const chatNumber = formatPhoneDisplay(phone);
-      return {
-        handled: true,
-        reply: `${prefix}Terakhir untuk nomor kontak: nomor WhatsApp yang sedang Kakak gunakan ini adalah ${chatNumber}.\n\nApakah ingin memakai nomor ini untuk pemesanan, atau menggunakan nomor lain? Balas "Ya" untuk memakai nomor ini, atau ketik nomor lain yang Kakak inginkan.`,
-      };
-    };
-
-    // Skip patterns — email tidak wajib, biarkan tamu melewati.
-    const SKIP_EMAIL_PATTERN =
-      /^(?:-+|lewati|skip|skipp?ed|nanti(?: saja| aja)?|tidak(?: ada| punya| usah|)?|gak(?: ada| punya|)?|ga(?: ada| punya|)?|ngga(?: ada| punya|)?|engga(?: ada| punya|)?|enggak|kosong|no(?:ne)?|tidak mau|tidak perlu|tanpa email)\.?$/i;
-    if (SKIP_EMAIL_PATTERN.test(trimmed)) {
-      console.info(`[BookingState] AWAITING_EMAIL: tamu skip email ("${trimmed}").`);
-      return await advanceWithoutEmail("Baik Kak, email dilewati. ");
-    }
-
-    const email = extractEmail(message);
-    if (!email) {
-      // Escape hatch: jika pesan jelas BUKAN upaya mengetik email (mis.
-      // pertanyaan "untuk parkir mobil aman ya?", "boleh minta maps nya",
-      // atau link), serahkan ke LLM agar pertanyaan tamu dijawab. State
-      // AWAITING_EMAIL tetap dipertahankan, jadi giliran berikutnya tamu
-      // bisa kirim email dan flow lanjut. Tanpa ini, bot terjebak
-      // mengulang "format email tidak valid" tanpa henti.
-      const looksLikeEmailAttempt = /@/.test(trimmed) || /^[A-Za-z0-9._%+-]+$/.test(trimmed);
-      const looksLikeQuestionOrChat =
-        ROOM_PREFERENCE_OR_QUESTION.test(trimmed) ||
-        /^https?:\/\//i.test(trimmed) ||
-        /\b(maps|peta|lokasi|alamat|parkir|jarak|km|wifi|sarapan|breakfast|check ?in|check ?out|harga|berapa|bisa|boleh|gimana|bagaimana|kenapa|apakah|kapan|dimana|gmn)\b/i.test(trimmed);
-      if (!looksLikeEmailAttempt && looksLikeQuestionOrChat) {
-        console.info(
-          `[BookingState] AWAITING_EMAIL: non-email question detected ` +
-          `("${trimmed.slice(0, 60)}…") — deferring to LLM, keeping state.`,
-        );
-        return { handled: false };
+      if (context.checkIn && context.checkOut && context.pricePerNight) {
+        const nights = countNights(context.checkIn, context.checkOut);
+        context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
       }
-      // Format tidak valid — tetap email opsional, tawarkan lewati.
-      return {
-        handled: true,
-        reply:
-          `Maaf, format email sepertinya tidak valid (perlu ada '@' dan '.com', contoh: budi@email.com). ` +
-          `Silakan ketik ulang email Kakak, atau balas "lewati" / "-" untuk melanjutkan tanpa email.`,
-      };
-    }
-    context.guestEmail = email;
-    await updateBookingState(supabase, phone, "CONFIRMING_PHONE", context);
-    const chatNumber = formatPhoneDisplay(phone);
-    return {
-      handled: true,
-      reply: `Email ${email} telah dicatat. Terakhir untuk nomor kontak: nomor WhatsApp yang sedang Kakak gunakan ini adalah ${chatNumber}.\n\nApakah ingin memakai nomor ini untuk pemesanan, atau menggunakan nomor lain? Balas "Ya" untuk memakai nomor ini, atau ketik nomor lain yang Kakak inginkan.`,
-    };
-  }
 
-
-  if (state === "CONFIRMING_PHONE") {
-    const trimmed = message.trim();
-    // Explicit "use this (chat) number" — check phrase-specific pattern first
-    // to handle "ya nomor ini", "pakai nomor ini", "nomor ini aja", etc.
-    // BEFORE the generic USE_THIS_PATTERN so the word "nomor" doesn't confuse
-    // the interruption detector into thinking it's a phone question.
-    const wantsThisPhone =
-      USE_THIS_PHONE_PATTERN.test(trimmed) ||
-      (USE_THIS_PATTERN.test(trimmed) && !USE_OTHER_PATTERN.test(trimmed) && !extractPhone(trimmed));
-    if (wantsThisPhone) {
-      context.guestPhone = formatPhoneDisplay(phone);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return await buildBookingSummaryAsync(ctx, context);
     }
-    // A phone number was typed directly → use it.
-    const typedPhone = extractPhone(trimmed);
-    if (typedPhone) {
-      context.guestPhone = typedPhone;
-      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return await buildBookingSummaryAsync(ctx, context);
-    }
-    // "Use another number" without supplying one yet → ask for it.
-    if (USE_OTHER_PATTERN.test(trimmed)) {
-      await updateBookingState(supabase, phone, "AWAITING_PHONE", context);
-      return { handled: true, reply: "Baik, silakan masukkan nomor handphone / WhatsApp lain yang bisa dihubungi (contoh: 08123456789):" };
-    }
-    return { handled: true, reply: 'Mohon balas "Ya" untuk memakai nomor yang sedang dipakai chat ini, atau ketik nomor lain (contoh: 08123456789):' };
-  }
 
-  if (state === "AWAITING_PHONE") {
-    const phoneNum = extractPhone(message);
-    if (!phoneNum && message.trim().length < 8) {
-      return { handled: true, reply: "Format nomor handphone sepertinya kurang tepat. Mohon masukkan nomor yang valid (contoh: 08123456789):" };
-    }
-    context.guestPhone = phoneNum || message.replace(/[^0-9+]/g, '');
-    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    return await buildBookingSummaryAsync(ctx, context);
+    // Still missing details: update state to COLLECTING_DATA
+    await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+
+    const missing: string[] = [];
+    if (!hasDates) missing.push("Tanggal check-in & check-out");
+    if (!hasRoom) missing.push("Tipe kamar");
+    if (!hasName) missing.push("Nama lengkap tamu");
+    if (!hasPhone) missing.push("Nomor WhatsApp/HP kontak");
+
+    const summary = formatPartialBookingSummary(context);
+    let reply = `Data booking sementara:\n${summary}\n\n`;
+    reply += `Mohon lengkapi data berikut untuk melanjutkan reservasi:\n`;
+    missing.forEach((item, idx) => {
+      reply += `${idx + 1}. ${item}\n`;
+    });
+    reply += `\nKakak bisa mengetikkan data di atas sekaligus (contoh: "booking Deluxe, atas nama: Budi, tanggal 25-27 Juni, no hp: 08123456789").`;
+
+    return {
+      handled: true,
+      reply,
+    };
   }
 
   if (state === "CONFIRMING_BOOKING") {

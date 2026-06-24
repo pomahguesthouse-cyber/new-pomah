@@ -567,6 +567,10 @@ export async function executeAutoreplyForPhone(
       );
     }
     try {
+      const consecutiveInbound = countConsecutiveInbound(rollingMessages);
+      const recoveryMode = consecutiveInbound >= 3;
+      const unansweredMessages = recoveryMode ? getLastNInboundMessages(rollingMessages, consecutiveInbound) : undefined;
+
       orchResult = await runMultiAgentOrchestration({
         phone,
         isManager: !!manager,
@@ -582,6 +586,8 @@ export async function executeAutoreplyForPhone(
           chatSummaryJson,
           managerName: manager?.name,
           mode: manager ? "managerial" : undefined,
+          recoveryMode,
+          unansweredMessages,
           trainingExamples: trainingExamples.map((ex) => ({
             id: ex.id,
             intent: ex.intent,
@@ -1194,4 +1200,20 @@ export async function sendFailureFallbackToGuests(): Promise<{
   }
 
   return { notified };
+}
+
+function countConsecutiveInbound(messages: Array<{ direction: string; body: string }>): number {
+  let count = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].direction === "in") {
+      count++;
+    } else {
+      break;
+    }
+  }
+  return count;
+}
+
+function getLastNInboundMessages(messages: Array<{ direction: string; body: string }>, n: number): string[] {
+  return messages.slice(-n).map((m) => m.body);
 }

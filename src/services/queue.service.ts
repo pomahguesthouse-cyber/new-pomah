@@ -37,13 +37,13 @@ export interface SmartDelayConfig {
 
 export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   enabled:      true,
-  // Default 5 detik untuk debounce/grouping beberapa pesan beruntun
-  // (mis. tamu kirim "kak", lalu "mau booking", lalu "tanggal 20"). Admin
-  // tetap bisa menurunkan via AI Lab → Smart Delay Settings bila perlu.
-  shortMs:      5_000,
-  mediumMs:     5_000,
+  // Default 8 detik untuk pesan pendek — pesan singkat seperti "kak", "mau
+  // booking" sangat mungkin diikuti pesan lain, sehingga perlu delay lebih
+  // lama agar ter-batch. Admin tetap bisa menurunkan via AI Lab.
+  shortMs:      8_000,
+  mediumMs:     6_000,
   longMs:       5_000,
-  waitSignalMs: 7_000,   // tamu bilang "bentar/tunggu" → tunggu sedikit lebih lama
+  waitSignalMs: 10_000,  // tamu bilang "bentar/tunggu" → tunggu 10 detik
   // Hard cap dari pesan pertama dalam burst.
   maxWaitMs:    12_000,
 };
