@@ -579,7 +579,7 @@ export function PomahNav({
   );
 }
 
-export function PomahFooter({ name }: { name: string }) {
+export function PomahFooter({ name, property }: { name: string; property?: SocialProperty | null }) {
   return (
     <footer className="bg-teal-900 text-teal-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
