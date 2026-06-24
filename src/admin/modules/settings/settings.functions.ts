@@ -499,3 +499,59 @@ export const getNotificationLogs = createServerFn({ method: "GET" })
     if (error) throw error;
     return data ?? [];
   });
+
+/* ------------------------------------------------------------------ */
+/* Sosial Media — Instagram, TikTok, YouTube, Facebook                 */
+/* ------------------------------------------------------------------ */
+
+const SOCIAL_FIELDS = [
+  "instagram_url",
+  "tiktok_url",
+  "youtube_url",
+  "facebook_url",
+] as const;
+
+export const getSocialSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("properties")
+      .select(`id, ${SOCIAL_FIELDS.join(", ")}`)
+      .limit(1)
+      .maybeSingle();
+    const row = (data ?? {}) as Record<string, unknown>;
+    return {
+      id: (row.id as string | undefined) ?? null,
+      instagram_url: (row.instagram_url as string | null) ?? null,
+      tiktok_url: (row.tiktok_url as string | null) ?? null,
+      youtube_url: (row.youtube_url as string | null) ?? null,
+      facebook_url: (row.facebook_url as string | null) ?? null,
+    };
+  });
+
+export const updateSocialSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        instagram_url: z.string().max(500).nullable().optional(),
+        tiktok_url: z.string().max(500).nullable().optional(),
+        youtube_url: z.string().max(500).nullable().optional(),
+        facebook_url: z.string().max(500).nullable().optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const patch: Record<string, unknown> = {};
+    for (const k of SOCIAL_FIELDS) {
+      if ((data as Record<string, unknown>)[k] !== undefined) {
+        const v = (data as Record<string, unknown>)[k] as string | null;
+        patch[k] = v && v.trim() ? v.trim() : null;
+      }
+    }
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    if (error) throw error;
+    return { ok: true };
+  });
+

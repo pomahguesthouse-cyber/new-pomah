@@ -26,6 +26,7 @@ import {
   Send,
   BellOff,
   Bell,
+  Share2,
 } from "lucide-react";
 import { getPublicSiteData } from "@/public/functions/public.functions";
 import {
@@ -43,6 +44,8 @@ import {
   togglePropertyManagerActive,
   deletePropertyManager,
   togglePropertyManagerMute,
+  getSocialSettings,
+  updateSocialSettings,
 } from "@/admin/modules/settings/settings.functions";
 import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -82,6 +85,7 @@ function SettingsPage() {
         <TabsList>
           <TabsTrigger value="properti">Properti</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
+          <TabsTrigger value="sosial">Sosial Media</TabsTrigger>
           <TabsTrigger value="integrasi">Integrasi</TabsTrigger>
           <TabsTrigger value="kredensial">Kredensial</TabsTrigger>
           <TabsTrigger value="domain">Domain</TabsTrigger>
@@ -94,6 +98,10 @@ function SettingsPage() {
 
         <TabsContent value="branding">
           <BrandingTab />
+        </TabsContent>
+
+        <TabsContent value="sosial">
+          <SocialTab />
         </TabsContent>
 
         <TabsContent value="integrasi">
@@ -112,6 +120,78 @@ function SettingsPage() {
           <ManagerTab />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sosial Media tab                                                    */
+/* ------------------------------------------------------------------ */
+
+function SocialTab() {
+  const getFn = useServerFn(getSocialSettings);
+  const updateFn = useServerFn(updateSocialSettings);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["social-settings"],
+    queryFn: () => getFn(),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (v: {
+      id: string;
+      instagram_url?: string | null;
+      tiktok_url?: string | null;
+      youtube_url?: string | null;
+      facebook_url?: string | null;
+    }) => updateFn({ data: v }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["social-settings"] });
+      qc.invalidateQueries({ queryKey: ["public-site"] });
+      toast.success("Tersimpan");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
+  const id = data?.id ?? null;
+
+  const fields: Array<{
+    key: "instagram_url" | "tiktok_url" | "youtube_url" | "facebook_url";
+    label: string;
+    placeholder: string;
+  }> = [
+    { key: "instagram_url", label: "Instagram", placeholder: "https://instagram.com/akun-anda" },
+    { key: "tiktok_url", label: "TikTok", placeholder: "https://tiktok.com/@akun-anda" },
+    { key: "youtube_url", label: "YouTube", placeholder: "https://youtube.com/@channel-anda" },
+    { key: "facebook_url", label: "Facebook", placeholder: "https://facebook.com/halaman-anda" },
+  ];
+
+  return (
+    <div className="max-w-2xl space-y-4">
+      {!id && (
+        <p className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+          Data properti belum ada — media sosial belum bisa disimpan.
+        </p>
+      )}
+      <Card className="divide-y divide-border p-0">
+        {fields.map((f) => (
+          <InlinePropertyRow
+            key={f.key}
+            label={f.label}
+            value={(data as Record<string, string | null> | undefined)?.[f.key] ?? null}
+            disabled={!id || mutation.isPending}
+            onSave={(v) => id && mutation.mutate({ id, [f.key]: v })}
+          />
+        ))}
+      </Card>
+      <p className="text-xs text-muted-foreground">
+        Masukkan URL lengkap (termasuk https://). Kosongkan untuk menyembunyikan tautan di halaman publik.
+      </p>
+      <p className="text-[11px] text-muted-foreground/70 flex items-center gap-1">
+        <Share2 className="h-3 w-3" /> Tautan akan tampil di footer halaman publik.
+      </p>
     </div>
   );
 }

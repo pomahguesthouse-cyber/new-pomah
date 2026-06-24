@@ -1121,6 +1121,7 @@ export type Database = {
           description: string | null
           email: string | null
           explore_config: Json
+          facebook_url: string | null
           favicon_url: string | null
           fonnte_token: string | null
           google_analytics_id: string | null
@@ -1132,6 +1133,7 @@ export type Database = {
           homepage_config: Json
           hotel_policy: string | null
           id: string
+          instagram_url: string | null
           invoice_logo_url: string | null
           logo_url: string | null
           name: string
@@ -1147,9 +1149,11 @@ export type Database = {
           telegram_bot_token: string | null
           telegram_bot_username: string | null
           telegram_webhook_secret: string | null
+          tiktok_url: string | null
           timezone: string
           updated_at: string
           whatsapp_number: string | null
+          youtube_url: string | null
         }
         Insert: {
           address?: string | null
@@ -1168,6 +1172,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           explore_config?: Json
+          facebook_url?: string | null
           favicon_url?: string | null
           fonnte_token?: string | null
           google_analytics_id?: string | null
@@ -1179,6 +1184,7 @@ export type Database = {
           homepage_config?: Json
           hotel_policy?: string | null
           id?: string
+          instagram_url?: string | null
           invoice_logo_url?: string | null
           logo_url?: string | null
           name: string
@@ -1194,9 +1200,11 @@ export type Database = {
           telegram_bot_token?: string | null
           telegram_bot_username?: string | null
           telegram_webhook_secret?: string | null
+          tiktok_url?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
+          youtube_url?: string | null
         }
         Update: {
           address?: string | null
@@ -1215,6 +1223,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           explore_config?: Json
+          facebook_url?: string | null
           favicon_url?: string | null
           fonnte_token?: string | null
           google_analytics_id?: string | null
@@ -1226,6 +1235,7 @@ export type Database = {
           homepage_config?: Json
           hotel_policy?: string | null
           id?: string
+          instagram_url?: string | null
           invoice_logo_url?: string | null
           logo_url?: string | null
           name?: string
@@ -1241,9 +1251,11 @@ export type Database = {
           telegram_bot_token?: string | null
           telegram_bot_username?: string | null
           telegram_webhook_secret?: string | null
+          tiktok_url?: string | null
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
+          youtube_url?: string | null
         }
         Relationships: []
       }
