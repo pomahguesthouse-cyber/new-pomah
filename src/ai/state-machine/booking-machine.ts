@@ -1260,7 +1260,9 @@ export async function processBookingState(
       if (!context.checkIn || !context.checkOut) missing.push("tanggal");
       if (!context.roomName) missing.push("tipe kamar");
       if (!context.guestName) missing.push("nama");
-      if (!context.guestEmail || !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
+      // Email opsional: hanya validasi format jika tamu mengisinya.
+      if (context.guestEmail && !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
+
       if (!context.guestPhone || !PHONE_PATTERN.test(context.guestPhone.replace(/[^0-9+]/g, ""))) missing.push("nomor HP");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
