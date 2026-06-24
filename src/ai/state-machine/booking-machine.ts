@@ -328,7 +328,7 @@ function buildBookingSummary(
   const summary =
     `Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n` +
     `- Nama: ${context.guestName ?? "—"}\n` +
-    `- Email: ${context.guestEmail ?? "—"}\n` +
+    `- Email: ${context.guestEmail ?? "(tidak diisi)"}\n` +
     `- No. HP: ${context.guestPhone ?? "—"}\n` +
     `- Kamar: ${roomsDisplay}\n` +
     `- Check-in: ${checkInDisplay}\n` +
