@@ -729,6 +729,8 @@ export function PomahHomeView({
             room={cartEntries[0].room}
             checkIn={effCheckIn}
             checkOut={effCheckOut}
+            onCheckInChange={(v) => setCheckIn(v)}
+            onCheckOutChange={(v) => setCheckOut(v)}
             rooms={cartEntries[0].rooms}
             extrabed={cartEntries[0].extrabed}
             maxRooms={Math.max(
