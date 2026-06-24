@@ -43,6 +43,8 @@ import {
   togglePropertyManagerActive,
   deletePropertyManager,
   togglePropertyManagerMute,
+  getSocialSettings,
+  updateSocialSettings,
 } from "@/admin/modules/settings/settings.functions";
 import { Switch } from "@/components/ui/switch";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
