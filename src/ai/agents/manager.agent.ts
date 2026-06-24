@@ -16,6 +16,7 @@ import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
+import { normalizeAssistantName } from "./persona";
 
 /** Delegation tool — intercepted by the multi-agent orchestrator */
 export const ASK_AGENT_TOOL_NAME = "ask_agent" as const;
@@ -80,7 +81,7 @@ export const managerAgent: AgentDefinition = {
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, today, managerName } = ctx;
-    const persona = managerName?.trim() || "Asisten Manajer";
+    const persona = normalizeAssistantName(managerName, "Asisten Manajer");
     const propName = property.name ?? "Pomah Guesthouse";
 
     return [
@@ -140,7 +141,7 @@ export const managerAgent: AgentDefinition = {
         "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
 
       "HAPUS / BATALKAN BOOKING: Bila manajer bilang 'batalkan booking PG-XXXX', " +
-        "'hapus booking atas nama Faizal', 'cancel reservasi X', panggil `delete_booking`.\n" +
+        "'hapus booking atas nama Budi', 'cancel reservasi X', panggil `delete_booking`.\n" +
         "- Default mode='cancel' (soft, status → cancelled, slot bebas). JANGAN kirim " +
         "  mode='hard' kecuali manajer eksplisit minta 'hapus permanen' / 'delete data'.\n" +
         "- Tool boleh dipanggil dengan reference_code ATAU guest_name (substring).\n" +

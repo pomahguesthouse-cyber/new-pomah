@@ -16,6 +16,7 @@ import { fmtDateID } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
+import { normalizeAssistantName } from "./persona";
 
 // Pricing agent tools — split by mode.
 // Guest only sees availability/rate lookup; rate updates and competitor
@@ -110,7 +111,7 @@ function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
-  const persona  = managerName?.trim() || "Rani";
+  const persona  = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const roomLines = rooms.map(
     (r) =>

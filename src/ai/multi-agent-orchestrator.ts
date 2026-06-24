@@ -33,8 +33,17 @@ import {
   formatTrainingExamplesForPrompt,
   type TrainingExample,
 } from "./training-rag.service";
+import { normalizeAssistantName } from "./agents/persona";
 
 const DEFAULT_MAX_TURNS = 5;
+
+function normalizeAgentInstruction(value: unknown): string | undefined {
+  return typeof value === "string" ? normalizeAssistantName(value, "") : undefined;
+}
+
+function normalizeAgentManagerName(value: unknown): string | undefined {
+  return typeof value === "string" ? normalizeAssistantName(value, "") : undefined;
+}
 
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
@@ -454,7 +463,7 @@ export async function runMultiAgentOrchestration(
     const agentResult = await runAgent(
       agent,
       input.messages,
-      { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["manager"]?.instructions },
+      { ...input.agentCtx, customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["manager"]?.instructions) },
       input.toolCtx,
       input.llmConfig,
       maxTurns,
@@ -518,7 +527,7 @@ export async function runMultiAgentOrchestration(
         const financeResult = await runAgent(
           financeAgent,
           [{ direction: "in", body: synthesized }],
-          { ...input.agentCtx, customInstructions: input.aiLabConfig?.agents?.["finance"]?.instructions },
+          { ...input.agentCtx, customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["finance"]?.instructions) },
           input.toolCtx,
           input.llmConfig,
           Math.max(2, (input.maxTurns ?? DEFAULT_MAX_TURNS) - 1),
@@ -766,8 +775,8 @@ export async function runMultiAgentOrchestration(
           syntheticMessages,
           { 
             ...input.agentCtx, 
-            customInstructions: input.aiLabConfig?.agents?.[subKey]?.instructions,
-            managerName:        input.aiLabConfig?.agents?.[subKey]?.managerName,
+            customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.[subKey]?.instructions),
+            managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.[subKey]?.managerName),
           },
           input.toolCtx,
           input.llmConfig,
@@ -792,8 +801,8 @@ export async function runMultiAgentOrchestration(
     input.messages,
     { 
       ...input.agentCtx, 
-      customInstructions: input.aiLabConfig?.agents?.[routing.agentKey]?.instructions,
-      managerName:        input.aiLabConfig?.agents?.[routing.agentKey]?.managerName,
+      customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.[routing.agentKey]?.instructions),
+      managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.[routing.agentKey]?.managerName),
     },
     input.toolCtx,
     input.llmConfig,
@@ -838,8 +847,8 @@ export async function runMultiAgentOrchestration(
       input.messages,
       { 
         ...input.agentCtx, 
-        customInstructions: input.aiLabConfig?.agents?.["front-office"]?.instructions,
-        managerName:        input.aiLabConfig?.agents?.["front-office"]?.managerName,
+        customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["front-office"]?.instructions),
+        managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.["front-office"]?.managerName),
       },
       input.toolCtx,
       input.llmConfig,

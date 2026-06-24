@@ -13,6 +13,7 @@ import { fmtDateID } from "@/lib/date";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
+import { normalizeAssistantName } from "./persona";
 
 const CUSTOMER_CARE_TOOLS: ToolDefinition[] = [
   // reply_to_guest is shared from the registry — the same tool the Manager
@@ -106,7 +107,7 @@ interface Scaffold {
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, today, managerName } = ctx;
   return {
-    persona:   managerName?.trim() || "Rani",
+    persona:   normalizeAssistantName(managerName),
     propName:  property.name ?? "Pomah Guesthouse",
     todayLine: `Hari ini tanggal ${fmtDateID(today)}.`,
   };

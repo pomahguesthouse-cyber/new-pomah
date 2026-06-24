@@ -248,7 +248,7 @@ export const createBooking: ToolHandler = async (
   const phoneRaw      = str(args.phone);
   const checkIn       = isDateString(args.check_in)  ? args.check_in  : "";
   // Default check_out = check_in + 1 day (1 malam) when omitted — useful for
-  // managerial direct entry where staff says "Faizal, Single, hari ini, 1 malam".
+  // managerial direct entry where staff says "Budi, Single, hari ini, 1 malam".
   let checkOut        = isDateString(args.check_out) ? args.check_out : "";
   if (!checkOut && checkIn) {
     checkOut = new Date(new Date(checkIn).getTime() + 86_400_000).toISOString().slice(0, 10);

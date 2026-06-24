@@ -1755,7 +1755,7 @@ function CartBookingDialog({
             <Label className="mb-1 block text-xs font-medium">
               Nama Lengkap <span className="text-red-500">*</span>
             </Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Faizal" />
+            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Budi" />
           </div>
           <div>
             <Label className="mb-1 block text-xs font-medium">

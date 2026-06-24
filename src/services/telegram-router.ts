@@ -22,6 +22,7 @@ import {
 } from "./telegram.service";
 import { todayWIB } from "@/lib/date";
 import { deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
+import { normalizeAssistantName } from "@/ai/agents/persona";
 
 interface ManagerRow {
   id: string;
@@ -495,8 +496,8 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
 
   // Load the agent's persona name from AI Lab config.
   const aiLabConfig = (p.ai_lab_config ?? {}) as any;
-  const managerName: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.managerName;
-  const customInstructions: string | undefined = aiLabConfig?.agents?.[mapping.agent_key]?.instructions;
+  const managerName: string | undefined = normalizeAssistantName(aiLabConfig?.agents?.[mapping.agent_key]?.managerName, "");
+  const customInstructions: string | undefined = normalizeAssistantName(aiLabConfig?.agents?.[mapping.agent_key]?.instructions, "");
 
   // Load prior conversation history for this (chat, thread, agent)
   // so the agent has memory across messages instead of treating each

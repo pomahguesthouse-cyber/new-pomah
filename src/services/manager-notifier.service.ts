@@ -22,6 +22,7 @@ import {
   sendPhoto   as tgSendPhoto,
   type ReplyMarkup,
 } from "./telegram.service";
+import { normalizeAssistantName } from "@/ai/agents/persona";
 
 type Db = SupabaseClient<any, any, any>;
 
@@ -85,7 +86,7 @@ async function loadAgentPersonas(db: Db): Promise<Record<string, string>> {
       .maybeSingle();
     const agents = ((data?.ai_lab_config as any)?.agents ?? {}) as Record<string, any>;
     for (const key of Object.keys(personas)) {
-      const name = agents?.[key]?.managerName?.trim();
+      const name = normalizeAssistantName(agents?.[key]?.managerName, "");
       if (name) personas[key] = name;
     }
   } catch (e) {

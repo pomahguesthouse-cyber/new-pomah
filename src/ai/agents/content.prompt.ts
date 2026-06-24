@@ -17,6 +17,7 @@
 
 import { fmtDateID } from "@/lib/date";
 import type { AgentContext } from "./types";
+import { normalizeAssistantName } from "./persona";
 
 // ─── Section 1: intro / tone / today / gaya penulisan ───────────────────────
 
@@ -189,7 +190,7 @@ function buildRestoreReviewsSection(): string[] {
  */
 export function buildContentSystemPrompt(ctx: AgentContext): string {
   const { property, today, managerName } = ctx;
-  const persona      = managerName?.trim() || "Rara";
+  const persona      = normalizeAssistantName(managerName, "Rara");
   const propertyName = property.name ?? "Pomah Guesthouse";
 
   const sections: string[] = [

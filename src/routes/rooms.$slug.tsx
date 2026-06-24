@@ -758,7 +758,7 @@ export function BookingDialog({
             required
             value={fullName}
             onChange={setFullName}
-            placeholder="Faizal"
+            placeholder="Budi"
           />
           <Input2
             label="Email"

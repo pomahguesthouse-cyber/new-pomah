@@ -22,6 +22,7 @@ import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
+import { normalizeAssistantName } from "./persona";
 
 const FINANCE_TOOLS: ToolDefinition[] = [
   ...TOOL_DEFINITIONS.filter((t) => t.function.name === "get_bookings"),
@@ -131,7 +132,7 @@ interface Scaffold {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, today, managerName } = ctx;
-  const persona  = managerName?.trim() || "Rani";
+  const persona  = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const prop     = property as Record<string, unknown>;
   const bankInfo = [

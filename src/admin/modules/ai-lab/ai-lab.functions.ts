@@ -7,6 +7,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { normalizeAssistantName } from "@/ai/agents/persona";
 
 /** Untyped client view — `ai_lab_config` is not in the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -51,7 +52,7 @@ export const AGENT_DIVISION_NAMES: Record<string, string> = {
  */
 export function formatAgentBadge(key: string, agents: Record<string, AgentConfig>): string {
   const division = AGENT_DIVISION_NAMES[key] ?? key;
-  const name     = agents?.[key]?.managerName?.trim();
+  const name     = normalizeAssistantName(agents?.[key]?.managerName, "");
   return name ? `${division} ➜ ${name}` : division;
 }
 
@@ -233,8 +234,10 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
     agents[k] = {
       enabled:     a?.enabled     ?? true,
       autoReply:   a?.autoReply   ?? false,
-      instructions: a?.instructions?.trim() ? a.instructions : (AGENT_DEFAULTS[k] ?? ""),
-      managerName: a?.managerName ?? "",
+      instructions: a?.instructions?.trim()
+        ? normalizeAssistantName(a.instructions, "")
+        : (AGENT_DEFAULTS[k] ?? ""),
+      managerName: normalizeAssistantName(a?.managerName, ""),
       avatarUrl:   a?.avatarUrl   ?? "",
     };
   }
@@ -288,7 +291,7 @@ export const updateAiLabConfig = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { error } = await db(context.supabase)
       .from("properties")
-      .update({ ai_lab_config: data.config } as never)
+      .update({ ai_lab_config: mergeAiLabConfig(data.config) } as never)
       .eq("id", data.id);
     if (error) throw error;
     return { ok: true };

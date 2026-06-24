@@ -896,7 +896,7 @@ function IntegrationTab() {
         icon={<Landmark className="h-4 w-4" />}
         label="Pembayaran — Atas Nama"
         description="Nama pemilik rekening."
-        placeholder="contoh: Faizal Abdurachman"
+        placeholder="contoh: Budi Santoso"
         value={data?.payment_account_holder ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, payment_account_holder: v })}

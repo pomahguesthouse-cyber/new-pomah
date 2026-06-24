@@ -15,6 +15,7 @@ import { fmtDateID, greetingWIB, clockWIB } from "@/lib/date";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
+import { normalizeAssistantName } from "./persona";
 
 const pickTools = (toolNames: readonly string[]) =>
   TOOL_DEFINITIONS.filter((tool) => toolNames.includes(tool.function.name));
@@ -67,7 +68,7 @@ function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
-  const persona  = managerName?.trim() || "Rani";
+  const persona  = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const roomSummary = rooms
     .map((r) =>
