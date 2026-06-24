@@ -1078,6 +1078,27 @@ export async function processBookingState(
   }
 
   if (state === "AWAITING_EMAIL") {
+    const trimmed = message.trim();
+
+    // Helper: lanjut ke step nomor HP tanpa mengisi email.
+    const advanceWithoutEmail = async (prefix: string): Promise<StateMachineResult> => {
+      context.guestEmail = undefined;
+      await updateBookingState(supabase, phone, "CONFIRMING_PHONE", context);
+      const chatNumber = formatPhoneDisplay(phone);
+      return {
+        handled: true,
+        reply: `${prefix}Terakhir untuk nomor kontak: nomor WhatsApp yang sedang Kakak gunakan ini adalah ${chatNumber}.\n\nApakah ingin memakai nomor ini untuk pemesanan, atau menggunakan nomor lain? Balas "Ya" untuk memakai nomor ini, atau ketik nomor lain yang Kakak inginkan.`,
+      };
+    };
+
+    // Skip patterns — email tidak wajib, biarkan tamu melewati.
+    const SKIP_EMAIL_PATTERN =
+      /^(?:-+|lewati|skip|skipp?ed|nanti(?: saja| aja)?|tidak(?: ada| punya| usah|)?|gak(?: ada| punya|)?|ga(?: ada| punya|)?|ngga(?: ada| punya|)?|engga(?: ada| punya|)?|enggak|kosong|no(?:ne)?|tidak mau|tidak perlu|tanpa email)\.?$/i;
+    if (SKIP_EMAIL_PATTERN.test(trimmed)) {
+      console.info(`[BookingState] AWAITING_EMAIL: tamu skip email ("${trimmed}").`);
+      return await advanceWithoutEmail("Baik Kak, email dilewati. ");
+    }
+
     const email = extractEmail(message);
     if (!email) {
       // Escape hatch: jika pesan jelas BUKAN upaya mengetik email (mis.
@@ -1086,7 +1107,6 @@ export async function processBookingState(
       // AWAITING_EMAIL tetap dipertahankan, jadi giliran berikutnya tamu
       // bisa kirim email dan flow lanjut. Tanpa ini, bot terjebak
       // mengulang "format email tidak valid" tanpa henti.
-      const trimmed = message.trim();
       const looksLikeEmailAttempt = /@/.test(trimmed) || /^[A-Za-z0-9._%+-]+$/.test(trimmed);
       const looksLikeQuestionOrChat =
         ROOM_PREFERENCE_OR_QUESTION.test(trimmed) ||
@@ -1099,7 +1119,13 @@ export async function processBookingState(
         );
         return { handled: false };
       }
-      return { handled: true, reply: "Maaf, format email sepertinya tidak valid. Mohon pastikan ada tanda '@' dan '.com' (contoh: budi@email.com). Silakan ketik ulang email Kakak:" };
+      // Format tidak valid — tetap email opsional, tawarkan lewati.
+      return {
+        handled: true,
+        reply:
+          `Maaf, format email sepertinya tidak valid (perlu ada '@' dan '.com', contoh: budi@email.com). ` +
+          `Silakan ketik ulang email Kakak, atau balas "lewati" / "-" untuk melanjutkan tanpa email.`,
+      };
     }
     context.guestEmail = email;
     await updateBookingState(supabase, phone, "CONFIRMING_PHONE", context);
@@ -1109,6 +1135,7 @@ export async function processBookingState(
       reply: `Email ${email} telah dicatat. Terakhir untuk nomor kontak: nomor WhatsApp yang sedang Kakak gunakan ini adalah ${chatNumber}.\n\nApakah ingin memakai nomor ini untuk pemesanan, atau menggunakan nomor lain? Balas "Ya" untuk memakai nomor ini, atau ketik nomor lain yang Kakak inginkan.`,
     };
   }
+
 
   if (state === "CONFIRMING_PHONE") {
     const trimmed = message.trim();
