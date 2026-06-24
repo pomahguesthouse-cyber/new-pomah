@@ -190,6 +190,10 @@ export type PublicProperty = {
   explore_config?: Json;
   currency?: string | null;
   timezone?: string | null;
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  youtube_url?: string | null;
+  facebook_url?: string | null;
 };
 
 export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {

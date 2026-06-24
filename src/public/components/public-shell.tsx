@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home } from "lucide-react";
+import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home, Facebook, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
@@ -162,18 +162,87 @@ export function PublicNav({
 }
 
 /* ------------------------------------------------------------------ */
+/* Social links — render from property config                           */
+/* ------------------------------------------------------------------ */
+
+type SocialProperty = {
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  youtube_url?: string | null;
+  facebook_url?: string | null;
+  whatsapp_number?: string | null;
+};
+
+function TiktokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M16.5 3a5.5 5.5 0 0 0 4.5 4.5v2.7a8.2 8.2 0 0 1-4.5-1.4v6.7a6.1 6.1 0 1 1-6.1-6.1c.3 0 .6 0 .9.1v2.8a3.3 3.3 0 1 0 2.4 3.2V3h2.8z" />
+    </svg>
+  );
+}
+
+export function SocialLinks({
+  property,
+  variant = "footer",
+}: {
+  property?: SocialProperty | null;
+  variant?: "footer" | "compact";
+}) {
+  const items: Array<{ key: string; href: string; label: string; icon: React.ReactNode }> = [];
+  if (property?.instagram_url) {
+    items.push({ key: "ig", href: property.instagram_url, label: "Instagram", icon: <Instagram className="h-4 w-4" /> });
+  }
+  if (property?.tiktok_url) {
+    items.push({ key: "tt", href: property.tiktok_url, label: "TikTok", icon: <TiktokIcon className="h-4 w-4" /> });
+  }
+  if (property?.youtube_url) {
+    items.push({ key: "yt", href: property.youtube_url, label: "YouTube", icon: <Youtube className="h-4 w-4" /> });
+  }
+  if (property?.facebook_url) {
+    items.push({ key: "fb", href: property.facebook_url, label: "Facebook", icon: <Facebook className="h-4 w-4" /> });
+  }
+  if (property?.whatsapp_number) {
+    items.push({
+      key: "wa",
+      href: `https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`,
+      label: "WhatsApp",
+      icon: <MessageCircle className="h-4 w-4" />,
+    });
+  }
+  if (items.length === 0) return null;
+
+  const sizeCls = variant === "compact" ? "h-8 w-8" : "h-9 w-9";
+  return (
+    <div className="flex items-center gap-3">
+      {items.map((it) => (
+        <a
+          key={it.key}
+          href={it.href}
+          aria-label={it.label}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex ${sizeCls} items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400`}
+        >
+          {it.icon}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Public Footer                                                        */
 /* ------------------------------------------------------------------ */
 export function PublicFooter({
   property,
 }: {
-  property?: {
+  property?: ({
     name?: string;
     address?: string | null;
     city?: string | null;
     whatsapp_number?: string | null;
     email?: string | null;
-  } | null;
+  } & SocialProperty) | null;
 }) {
   const fullName = property?.name || "Pomah Guesthouse";
   const parts = fullName.split(" ");
@@ -196,23 +265,8 @@ export function PublicFooter({
               Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
               istimewa.
             </p>
-            <div className="mt-5 flex items-center gap-3">
-              <a
-                href="#"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
-              >
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a
-                href={
-                  property?.whatsapp_number
-                    ? `https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`
-                    : "#"
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </a>
+            <div className="mt-5">
+              <SocialLinks property={property ?? null} variant="compact" />
             </div>
           </div>
 
@@ -525,7 +579,7 @@ export function PomahNav({
   );
 }
 
-export function PomahFooter({ name }: { name: string }) {
+export function PomahFooter({ name, property }: { name: string; property?: SocialProperty | null }) {
   return (
     <footer className="bg-teal-900 text-teal-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
@@ -566,13 +620,9 @@ export function PomahFooter({ name }: { name: string }) {
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
             Follow Us
           </p>
-          <a
-            href="#"
-            aria-label="Instagram"
-            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-700 text-teal-200 transition hover:border-white hover:text-white"
-          >
-            <Instagram className="h-4 w-4" />
-          </a>
+          <div className="mt-4">
+            <SocialLinks property={property ?? null} />
+          </div>
         </div>
       </div>
       <div className="border-t border-teal-800/60 py-5 text-center text-xs text-teal-300/70">

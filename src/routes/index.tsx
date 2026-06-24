@@ -703,7 +703,7 @@ export function PomahHomeView({
         <Fragment key={key}>{renderHomeSection(key)}</Fragment>
       ))}
 
-      <PomahFooter name={propertyName} />
+      <PomahFooter name={propertyName} property={property} />
 
       {wa && (
         <a
