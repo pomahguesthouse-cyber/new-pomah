@@ -524,6 +524,8 @@ function RoomBookingPage() {
         room={displayRoom || room}
         checkIn={checkIn}
         checkOut={checkOut}
+        onCheckInChange={handleCheckInChange}
+        onCheckOutChange={setCheckOut}
         rooms={rooms}
         maxRooms={maxRooms}
         guests={guests}
@@ -543,6 +545,8 @@ export function BookingDialog({
   room,
   checkIn,
   checkOut,
+  onCheckInChange,
+  onCheckOutChange,
   rooms: initialRooms,
   extrabed: initialExtrabed = 0,
   maxRooms,
@@ -554,6 +558,8 @@ export function BookingDialog({
   room: RoomRow;
   checkIn: string;
   checkOut: string;
+  onCheckInChange: (v: string) => void;
+  onCheckOutChange: (v: string) => void;
   rooms: number;
   extrabed?: number;
   maxRooms: number;
@@ -632,10 +638,27 @@ export function BookingDialog({
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Dates */}
+          {/* Dates — editable */}
           <div className="grid grid-cols-2 gap-3">
-            <ReadOnlyDate label="Check-in" value={checkIn} />
-            <ReadOnlyDate label="Check-out" value={checkOut} />
+            <div>
+              <p className="mb-1 font-semibold">Check-in</p>
+              <DateField
+                value={checkIn}
+                min={todayISO()}
+                onChange={(v) => {
+                  onCheckInChange(v);
+                  if (!checkOut || checkOut <= v) onCheckOutChange(isoAddDays(v, 1));
+                }}
+              />
+            </div>
+            <div>
+              <p className="mb-1 font-semibold">Check-out</p>
+              <DateField
+                value={checkOut}
+                min={checkIn ? isoAddDays(checkIn, 1) : todayISO()}
+                onChange={onCheckOutChange}
+              />
+            </div>
           </div>
 
           {/* Rooms */}
