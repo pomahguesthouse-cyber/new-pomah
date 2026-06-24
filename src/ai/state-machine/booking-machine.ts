@@ -1072,8 +1072,9 @@ export async function processBookingState(
     await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
     return {
       handled: true,
-      reply: `Siap, nama pemesanan diatur menjadi "${newName}". Selanjutnya, mohon ketikkan alamat email Kakak (contoh: budi@email.com):`,
+      reply: `Siap, nama pemesanan diatur menjadi "${newName}". Jika berkenan, mohon ketikkan alamat email Kakak (contoh: budi@email.com). Email ini opsional — balas "lewati" atau "-" jika tidak ingin mengisi:`,
     };
+
   }
 
   if (state === "AWAITING_EMAIL") {
