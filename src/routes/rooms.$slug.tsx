@@ -545,6 +545,8 @@ export function BookingDialog({
   room,
   checkIn,
   checkOut,
+  onCheckInChange,
+  onCheckOutChange,
   rooms: initialRooms,
   extrabed: initialExtrabed = 0,
   maxRooms,
@@ -556,6 +558,8 @@ export function BookingDialog({
   room: RoomRow;
   checkIn: string;
   checkOut: string;
+  onCheckInChange: (v: string) => void;
+  onCheckOutChange: (v: string) => void;
   rooms: number;
   extrabed?: number;
   maxRooms: number;
