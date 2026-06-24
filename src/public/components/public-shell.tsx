@@ -265,23 +265,8 @@ export function PublicFooter({
               Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
               istimewa.
             </p>
-            <div className="mt-5 flex items-center gap-3">
-              <a
-                href="#"
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
-              >
-                <Instagram className="h-4 w-4" />
-              </a>
-              <a
-                href={
-                  property?.whatsapp_number
-                    ? `https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`
-                    : "#"
-                }
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </a>
+            <div className="mt-5">
+              <SocialLinks property={property ?? null} variant="compact" />
             </div>
           </div>
 
