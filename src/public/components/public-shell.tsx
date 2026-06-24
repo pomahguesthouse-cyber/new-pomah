@@ -620,13 +620,9 @@ export function PomahFooter({ name, property }: { name: string; property?: Socia
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
             Follow Us
           </p>
-          <a
-            href="#"
-            aria-label="Instagram"
-            className="mt-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-teal-700 text-teal-200 transition hover:border-white hover:text-white"
-          >
-            <Instagram className="h-4 w-4" />
-          </a>
+          <div className="mt-4">
+            <SocialLinks property={property ?? null} />
+          </div>
         </div>
       </div>
       <div className="border-t border-teal-800/60 py-5 text-center text-xs text-teal-300/70">
