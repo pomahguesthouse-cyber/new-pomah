@@ -162,18 +162,87 @@ export function PublicNav({
 }
 
 /* ------------------------------------------------------------------ */
+/* Social links — render from property config                           */
+/* ------------------------------------------------------------------ */
+
+type SocialProperty = {
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
+  youtube_url?: string | null;
+  facebook_url?: string | null;
+  whatsapp_number?: string | null;
+};
+
+function TiktokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M16.5 3a5.5 5.5 0 0 0 4.5 4.5v2.7a8.2 8.2 0 0 1-4.5-1.4v6.7a6.1 6.1 0 1 1-6.1-6.1c.3 0 .6 0 .9.1v2.8a3.3 3.3 0 1 0 2.4 3.2V3h2.8z" />
+    </svg>
+  );
+}
+
+export function SocialLinks({
+  property,
+  variant = "footer",
+}: {
+  property?: SocialProperty | null;
+  variant?: "footer" | "compact";
+}) {
+  const items: Array<{ key: string; href: string; label: string; icon: React.ReactNode }> = [];
+  if (property?.instagram_url) {
+    items.push({ key: "ig", href: property.instagram_url, label: "Instagram", icon: <Instagram className="h-4 w-4" /> });
+  }
+  if (property?.tiktok_url) {
+    items.push({ key: "tt", href: property.tiktok_url, label: "TikTok", icon: <TiktokIcon className="h-4 w-4" /> });
+  }
+  if (property?.youtube_url) {
+    items.push({ key: "yt", href: property.youtube_url, label: "YouTube", icon: <Youtube className="h-4 w-4" /> });
+  }
+  if (property?.facebook_url) {
+    items.push({ key: "fb", href: property.facebook_url, label: "Facebook", icon: <Facebook className="h-4 w-4" /> });
+  }
+  if (property?.whatsapp_number) {
+    items.push({
+      key: "wa",
+      href: `https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`,
+      label: "WhatsApp",
+      icon: <MessageCircle className="h-4 w-4" />,
+    });
+  }
+  if (items.length === 0) return null;
+
+  const sizeCls = variant === "compact" ? "h-8 w-8" : "h-9 w-9";
+  return (
+    <div className="flex items-center gap-3">
+      {items.map((it) => (
+        <a
+          key={it.key}
+          href={it.href}
+          aria-label={it.label}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex ${sizeCls} items-center justify-center rounded-full border border-teal-800 text-teal-200/80 transition hover:border-amber-400 hover:text-amber-400`}
+        >
+          {it.icon}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Public Footer                                                        */
 /* ------------------------------------------------------------------ */
 export function PublicFooter({
   property,
 }: {
-  property?: {
+  property?: ({
     name?: string;
     address?: string | null;
     city?: string | null;
     whatsapp_number?: string | null;
     email?: string | null;
-  } | null;
+  } & SocialProperty) | null;
 }) {
   const fullName = property?.name || "Pomah Guesthouse";
   const parts = fullName.split(" ");
