@@ -1027,9 +1027,10 @@ export async function processBookingState(
       await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
       return {
         handled: true,
-        reply: `Terima kasih Kak ${context.guestName}. Selanjutnya, mohon ketikkan alamat email Kakak (contoh: budi@email.com):`,
+        reply: `Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (contoh: budi@email.com). Email ini opsional — balas "lewati" atau "-" jika tidak ingin mengisi:`,
       };
     }
+
     // "Use another name" without supplying a new one yet → ask for it.
     if (USE_OTHER_PATTERN.test(trimmed) && trimmed.replace(USE_OTHER_PATTERN, "").trim().length < 2) {
       await updateBookingState(supabase, phone, "AWAITING_NAME", context);
