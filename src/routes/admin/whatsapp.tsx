@@ -603,12 +603,20 @@ export function WhatsAppPage() {
       </aside>
 
       {/* CONVERSATION */}
-      <section className="flex min-h-0 flex-col">
+      <section className={cn("min-h-0 flex-col flex-1 w-full lg:flex", activeId ? "flex" : "hidden lg:flex")}>
         {current && thread?.thread ? (
           <>
-            <header className="flex items-center justify-between border-b border-border bg-card px-5 py-3">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
+            <header className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveId(null)}
+                  className="lg:hidden -ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/10"
+                  aria-label="Kembali ke daftar"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <Avatar className="h-9 w-9 md:h-10 md:w-10 shrink-0">
                   <AvatarFallback className="text-xs font-semibold">
                     {initials(thread.thread.display_name, thread.thread.phone)}
                   </AvatarFallback>
