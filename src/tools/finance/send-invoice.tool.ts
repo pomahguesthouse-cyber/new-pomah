@@ -32,6 +32,31 @@ function buildInvoiceUrl(refOrId: string, ctx: ToolContext): string {
   return `${base.replace(/\/+$/, "")}/book/confirmation/${encodeURIComponent(refOrId)}`;
 }
 
+const BOOKING_SELECT =
+  "id, reference_code, status, total_amount, paid_amount, payment_status, check_in, check_out, nights, " +
+  "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate, room_types(name))";
+
+function phoneVariants(phone: string): string[] {
+  const raw = phone.trim();
+  const digits = raw.replace(/\D/g, "");
+  const variants = new Set<string>([raw]);
+
+  if (digits) {
+    variants.add(digits);
+    variants.add(`+${digits}`);
+
+    if (digits.startsWith("62")) {
+      variants.add(`0${digits.slice(2)}`);
+      variants.add(`+${digits}`);
+    } else if (digits.startsWith("0")) {
+      variants.add(`62${digits.slice(1)}`);
+      variants.add(`+62${digits.slice(1)}`);
+    }
+  }
+
+  return [...variants].filter(Boolean);
+}
+
 export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
   const refCode = str(args.reference_code);
 
@@ -39,25 +64,25 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   let bookingRow: any = null;
   try {
     if (refCode) {
-      const { data } = await (ctx.supabaseAdmin as any)
+      const { data, error } = await (ctx.supabaseAdmin as any)
         .from("bookings")
-        .select(
-          "id, reference_code, status, total_amount, check_in, check_out, nights, " +
-            "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate)",
-        )
+        .select(BOOKING_SELECT)
         .ilike("reference_code", refCode)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (error) throw error;
       bookingRow = data;
     } else if (ctx.phone) {
       // Find guests for this phone, then their newest pending/confirmed booking.
-      const { data: guests } = await (ctx.supabaseAdmin as any)
+      const variants = phoneVariants(ctx.phone);
+      const { data: guests, error: guestErr } = await (ctx.supabaseAdmin as any)
         .from("guests")
         .select("id")
-        .eq("phone", ctx.phone)
+        .in("phone", variants)
         .order("created_at", { ascending: false })
         .limit(5);
+      if (guestErr) throw guestErr;
       const ids = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
       if (ids.length === 0) {
         return JSON.stringify({
@@ -65,17 +90,15 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
           error: "Tidak menemukan booking untuk nomor ini.",
         });
       }
-      const { data } = await (ctx.supabaseAdmin as any)
+      const { data, error } = await (ctx.supabaseAdmin as any)
         .from("bookings")
-        .select(
-          "id, reference_code, status, total_amount, check_in, check_out, nights, " +
-            "guests(full_name, email, phone), booking_rooms(room_type_id, nightly_rate)",
-        )
+        .select(BOOKING_SELECT)
         .in("guest_id", ids)
         .in("status", ["pending", "confirmed"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+      if (error) throw error;
       bookingRow = data;
     } else {
       return JSON.stringify({
@@ -102,6 +125,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
   const br = Array.isArray(b.booking_rooms) ? b.booking_rooms[0] : b.booking_rooms;
   const rt = ctx.rooms.find((r) => r.id === br?.room_type_id);
+  const roomTypeName = br?.room_types?.name ?? rt?.name ?? "Kamar";
 
   const prop = ctx.property as Record<string, unknown>;
   const total = Number(b.total_amount ?? 0);
@@ -114,7 +138,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
     booking: {
       reference_code: b.reference_code,
       status: b.status,
-      room_type: rt?.name ?? "Kamar",
+      room_type: roomTypeName,
       check_in: b.check_in,
       check_out: b.check_out,
       check_in_tampil: fmtDateID(String(b.check_in ?? "")),
