@@ -401,6 +401,54 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
+  // ── Zombie rescue: kirim ulang pesan outbound yang tersangkut 'pending' ──
+  // Skenario: worker sebelumnya mati setelah menyimpan pesan ke DB
+  // (send_status='pending') tapi sebelum memanggil Fonnte API. Pesan itu
+  // tersimpan di DB tapi tidak pernah sampai ke tamu. Attempt berikutnya
+  // (ini) harus mengirim ulang pesan itu alih-alih memanggil AI lagi —
+  // lebih hemat dan mencegah dua balasan berbeda untuk pesan yang sama.
+  try {
+    const fiveMinsAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const { data: pendingMsgs } = await (supabaseAdmin as any)
+      .from("whatsapp_messages")
+      .select("id, body, metadata")
+      .eq("thread_id", c.thread_id)
+      .eq("direction", "out")
+      .filter("metadata->>'send_status'", "eq", "pending")
+      .lt("sent_at", fiveMinsAgo) // sudah pending > 5 menit = benar-benar zombie
+      .order("sent_at", { ascending: false })
+      .limit(1);
+
+    const stuckMsg = (pendingMsgs ?? [])[0] as
+      | { id: string; body: string; metadata: Record<string, unknown> }
+      | undefined;
+
+    if (stuckMsg?.body) {
+      console.warn(
+        `[Autoreply] 🧟 Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
+      );
+      const { ok: reSent, error: reErr } = await (
+        await import("@/services/whatsapp.service")
+      ).sendWhatsAppMessage(c.fonnte_token, phone, stuckMsg.body);
+
+      if (reSent) {
+        await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .update({
+            metadata: { ...stuckMsg.metadata, send_status: "sent", zombie_rescued: true },
+          })
+          .eq("id", stuckMsg.id);
+        console.info(`[Autoreply] ✅ Zombie rescue berhasil untuk ${phone.slice(-6)}`);
+        return "sent";
+      }
+      console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
+      // Kalau resend juga gagal (Fonnte down), lanjutkan ke AI normal
+      // supaya tamu tetap dapat respons dari attempt ini.
+    }
+  } catch (e) {
+    console.warn("[Autoreply] Zombie rescue check error (non-fatal):", e);
+  }
+
   const { data: prop } = await (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle();
   const p = (prop ?? {}) as any;
   const { data: rooms } = await (supabasePublic as any)
