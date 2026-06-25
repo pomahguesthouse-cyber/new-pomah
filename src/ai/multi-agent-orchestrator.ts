@@ -17,17 +17,17 @@
 
 import type { AiMessage, LlmResponse, AiClientConfig } from "./types";
 import type { MultiAgentResult, AgentDefinition, AgentContext, AgentKey } from "./agents/types";
-import { classifyIntent }                    from "./router/intent-classifier";
-import { routeToAgent }                      from "./router/agent-router";
-import { getAgent }                          from "./agents/registry";
-import { ASK_AGENT_TOOL_NAME }              from "./agents/manager.agent";
-import { executeTool }                       from "@/tools/executor";
+import { classifyIntent } from "./router/intent-classifier";
+import { routeToAgent } from "./router/agent-router";
+import { getAgent } from "./agents/registry";
+import { ASK_AGENT_TOOL_NAME } from "./agents/manager.agent";
+import { executeTool } from "@/tools/executor";
 import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
-import type { ToolContext }                  from "@/tools/types";
+import type { ToolContext } from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
 import { getMissingSlots, formatPartialBookingSummary } from "./state-machine/flexible-slot-extractor";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
-import { rewriteQuery }   from "./router/query-rewriter";
+import { rewriteQuery } from "./router/query-rewriter";
 import {
   retrieveTrainingExamples,
   formatTrainingExamplesForPrompt,
@@ -47,17 +47,27 @@ function normalizeAgentManagerName(value: unknown): string | undefined {
 
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
-/** Hard timeout per panggilan LLM agar tidak pernah menggantung worker. */
-const LLM_CALL_TIMEOUT_MS = 18_000;
+/**
+ * Hard timeout per panggilan LLM agar tidak pernah menggantung worker.
+ *
+ * PENTING: nilai ini harus cukup kecil agar beberapa ronde tool-call
+ * (klasifikasi intent → panggil tool → balas) muat di dalam AI_TIMEOUT_MS
+ * (controller luar di wa-autoreply.service.ts). Dengan 12s per panggilan +
+ * 1 retry internal, satu ronde maksimal ~24.5s; dua ronde "happy path"
+ * (tanpa retry) ~24s — keduanya muat di anggaran luar 40s. Sebelumnya 18s,
+ * yang membuat retry internal mustahil selesai dan multi-turn hampir selalu
+ * dipotong oleh controller luar → balasan fallback "sistem sedang sibuk".
+ */
+const LLM_CALL_TIMEOUT_MS = 12_000;
 /** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
 const LLM_MAX_RETRIES = 1;
 
 async function callLlmOnce(
-  config:   AiClientConfig,
+  config: AiClientConfig,
   messages: AiMessage[],
-  agent:    AgentDefinition,
-  tools:    AgentDefinition["tools"],
-  signal?:  AbortSignal,
+  agent: AgentDefinition,
+  tools: AgentDefinition["tools"],
+  signal?: AbortSignal,
 ): Promise<{ ok: true; data: LlmResponse } | { ok: false; retriable: boolean; reason: string }> {
   // Gabungkan signal pemanggil dengan timeout internal kita.
   const timeoutCtrl = new AbortController();
@@ -67,18 +77,18 @@ async function callLlmOnce(
 
   try {
     const res = await fetch(`${config.baseUrl}/chat/completions`, {
-      method:  "POST",
+      method: "POST",
       headers: {
-        "Content-Type":  "application/json",
-        Authorization:   `Bearer ${config.apiKey}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
       },
       signal: timeoutCtrl.signal,
       body: JSON.stringify({
-        model:       config.model,
+        model: config.model,
         temperature: 0.6,
-        max_tokens:  2000,
+        max_tokens: 2000,
         messages,
-        tools:       tools.length > 0 ? tools  : undefined,
+        tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? "auto" : undefined,
       }),
     });
@@ -94,9 +104,7 @@ async function callLlmOnce(
     return { ok: true, data: (await res.json()) as LlmResponse };
   } catch (e) {
     const aborted = (e as { name?: string })?.name === "AbortError";
-    const reason = aborted
-      ? (signal?.aborted ? "caller_abort" : "timeout")
-      : "fetch_error";
+    const reason = aborted ? (signal?.aborted ? "caller_abort" : "timeout") : "fetch_error";
     if (reason !== "caller_abort") {
       console.error(`[MultiAgent][${agent.key}] LLM ${reason}:`, e);
     }
@@ -109,11 +117,11 @@ async function callLlmOnce(
 }
 
 async function callLlm(
-  config:   AiClientConfig,
+  config: AiClientConfig,
   messages: AiMessage[],
-  agent:    AgentDefinition,
-  tools:    AgentDefinition["tools"],
-  signal?:  AbortSignal,
+  agent: AgentDefinition,
+  tools: AgentDefinition["tools"],
+  signal?: AbortSignal,
 ): Promise<{ response: LlmResponse | null; retries: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
   const retries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
   for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
@@ -154,17 +162,23 @@ async function callLlm(
  * @param onAskAgent     Callback when `ask_agent` is called (manager only)
  */
 async function runAgent(
-  agent:            AgentDefinition,
+  agent: AgentDefinition,
   conversationMsgs: Array<{ direction: string; body: string }>,
-  agentCtx:         AgentContext,
-  toolCtx:          ToolContext,
-  llmConfig:        AiClientConfig,
-  maxTurns:         number,
-  onAskAgent?:      (agentKey: AgentKey, question: string) => Promise<string>,
-  signal?:          AbortSignal,
+  agentCtx: AgentContext,
+  toolCtx: ToolContext,
+  llmConfig: AiClientConfig,
+  maxTurns: number,
+  onAskAgent?: (agentKey: AgentKey, question: string) => Promise<string>,
+  signal?: AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
-): Promise<{ reply: string | null; toolsUsed: string[]; error?: string; retries?: Array<{ attempt: number; reason: string; latency_ms: number }>; loopAlert?: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string } }> {
+): Promise<{
+  reply: string | null;
+  toolsUsed: string[];
+  error?: string;
+  retries?: Array<{ attempt: number; reason: string; latency_ms: number }>;
+  loopAlert?: { toolName: string; repeatCount: number; lastArgs?: string; sampleOutput?: string };
+}> {
   const toolsUsed = new Set<string>();
   const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
   // Track per-tool need_dates repeats — surfaces loop pattern to caller.
@@ -186,7 +200,8 @@ async function runAgent(
   // and are clearly labelled as guidance, not as part of the persona.
   let systemPrompt = agent.buildSystemPrompt(agentCtx);
   if (agentCtx.chatSummary) {
-    systemPrompt += `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
+    systemPrompt +=
+      `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
       `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
   }
   if (agentCtx.chatSummaryJson) {
@@ -236,18 +251,18 @@ async function runAgent(
     systemPrompt += `\n\n[RECOVERY MODE ACTIVE]`;
     systemPrompt += `\nTamu mengirimkan beberapa pesan cepat berturut-turut tanpa balasan.`;
     if (agentCtx.unansweredMessages && agentCtx.unansweredMessages.length > 0) {
-      systemPrompt += `\nPesan-pesan tamu yang belum terjawab:\n` + agentCtx.unansweredMessages.map((m, i) => `${i + 1}. "${m}"`).join("\n");
+      systemPrompt +=
+        `\nPesan-pesan tamu yang belum terjawab:\n` +
+        agentCtx.unansweredMessages.map((m, i) => `${i + 1}. "${m}"`).join("\n");
     }
     systemPrompt += `\nAnda WAJIB memulai jawaban Anda dengan sapaan recovery: "Maaf Kak, saya bantu lanjutkan ya..." atau sejenisnya, lalu jawab semua poin pertanyaan/pesan di atas secara komprehensif dalam satu balasan terintegrasi.`;
   }
 
   const messages: AiMessage[] = [
     { role: "system", content: systemPrompt },
-    ...(trainingExamplesBlock
-      ? [{ role: "system" as const, content: trainingExamplesBlock }]
-      : []),
+    ...(trainingExamplesBlock ? [{ role: "system" as const, content: trainingExamplesBlock }] : []),
     ...history.map((m) => ({
-      role:    (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
+      role: (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
       content: m.body,
     })),
   ];
@@ -257,11 +272,16 @@ async function runAgent(
     if (retries.length) allRetries.push(...retries);
 
     if (!json) {
-      return { reply: null, toolsUsed: Array.from(toolsUsed), error: "LLM gateway error", ...(allRetries.length ? { retries: allRetries } : {}) };
+      return {
+        reply: null,
+        toolsUsed: Array.from(toolsUsed),
+        error: "LLM gateway error",
+        ...(allRetries.length ? { retries: allRetries } : {}),
+      };
     }
 
     const assistantMsg = json.choices?.[0]?.message;
-    const toolCalls    = assistantMsg?.tool_calls ?? [];
+    const toolCalls = assistantMsg?.tool_calls ?? [];
 
     // ── Text reply — done ────────────────────────────────────────────────────
     if (toolCalls.length === 0) {
@@ -269,7 +289,12 @@ async function runAgent(
       if (!reply) {
         const detail = json.error?.message ?? "Empty LLM response";
         console.error(`[MultiAgent][${agent.key}] No reply:`, detail);
-        return { reply: null, toolsUsed: Array.from(toolsUsed), error: detail, ...(allRetries.length ? { retries: allRetries } : {}) };
+        return {
+          reply: null,
+          toolsUsed: Array.from(toolsUsed),
+          error: detail,
+          ...(allRetries.length ? { retries: allRetries } : {}),
+        };
       }
       return { reply, toolsUsed: Array.from(toolsUsed), ...(allRetries.length ? { retries: allRetries } : {}) };
     }
@@ -279,7 +304,7 @@ async function runAgent(
 
     for (const tc of toolCalls) {
       const toolName = tc.function?.name ?? "";
-      const rawArgs  = tc.function?.arguments ?? "{}";
+      const rawArgs = tc.function?.arguments ?? "{}";
 
       let output: string;
       let toolLabel: string | null = null;
@@ -287,11 +312,15 @@ async function runAgent(
       // Intercept `ask_agent` — delegate to sub-agent
       if (toolName === ASK_AGENT_TOOL_NAME && onAskAgent) {
         let parsed: { agent_key?: string; question?: string } = {};
-        try { parsed = JSON.parse(rawArgs); } catch { /* ignore */ }
+        try {
+          parsed = JSON.parse(rawArgs);
+        } catch {
+          /* ignore */
+        }
 
-        const subKey      = (parsed.agent_key ?? "front-office") as AgentKey;
-        const question    = parsed.question ?? "";
-        toolLabel         = `ask_agent → ${subKey}`;
+        const subKey = (parsed.agent_key ?? "front-office") as AgentKey;
+        const question = parsed.question ?? "";
+        toolLabel = `ask_agent → ${subKey}`;
 
         console.info(`[MultiAgent][manager] Delegating to ${subKey}: "${question.slice(0, 80)}"`);
         try {
@@ -307,7 +336,7 @@ async function runAgent(
       } else {
         // Standard tool execution
         const result = await executeTool(toolName, rawArgs, toolCtx);
-        output    = result.output;
+        output = result.output;
         toolLabel = result.toolLabel;
       }
 
@@ -326,13 +355,15 @@ async function runAgent(
               lastOutput: output,
             });
           }
-        } catch { /* ignore non-JSON */ }
+        } catch {
+          /* ignore non-JSON */
+        }
       }
 
       messages.push({
-        role:         "tool",
+        role: "tool",
         tool_call_id: tc.id,
-        content:      output,
+        content: output,
       });
     }
     // next turn: send tool results back to agent LLM
@@ -347,7 +378,13 @@ async function runAgent(
   }
 
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
-  return { reply: null, toolsUsed: Array.from(toolsUsed), error: "Max turns exceeded", ...(allRetries.length ? { retries: allRetries } : {}), ...(loopAlert ? { loopAlert } : {}) };
+  return {
+    reply: null,
+    toolsUsed: Array.from(toolsUsed),
+    error: "Max turns exceeded",
+    ...(allRetries.length ? { retries: allRetries } : {}),
+    ...(loopAlert ? { loopAlert } : {}),
+  };
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
@@ -358,11 +395,11 @@ export interface MultiAgentInput {
   /** Is the user an authenticated property manager? */
   isManager?: boolean;
   /** Full conversation history (ascending) */
-  messages:  Array<{ direction: string; body: string }>;
+  messages: Array<{ direction: string; body: string }>;
   /** Pre-fetched context for agents */
-  agentCtx:  AgentContext;
+  agentCtx: AgentContext;
   /** Supabase clients + room data for tool execution */
-  toolCtx:   ToolContext;
+  toolCtx: ToolContext;
   /** AI gateway credentials */
   llmConfig: AiClientConfig;
   /** AI Lab Dashboard Configuration */
@@ -377,9 +414,7 @@ export interface MultiAgentInput {
  * Run the full multi-agent pipeline:
  *   classify → route → run agent → (manager delegates if needed) → return
  */
-export async function runMultiAgentOrchestration(
-  input: MultiAgentInput,
-): Promise<MultiAgentResult> {
+export async function runMultiAgentOrchestration(input: MultiAgentInput): Promise<MultiAgentResult> {
   const maxTurns = input.maxTurns ?? DEFAULT_MAX_TURNS;
 
   // Make the guest's chat number available to every agent's prompt builder
@@ -391,16 +426,13 @@ export async function runMultiAgentOrchestration(
   if (input.isManager) input.toolCtx.isManager = true;
 
   // 1. Extract last user message for classification
-  const lastUserMsg = [...input.messages]
-    .reverse()
-    .find((m) => m.direction === "in")
-    ?.body ?? "";
+  const lastUserMsg = [...input.messages].reverse().find((m) => m.direction === "in")?.body ?? "";
 
   // 2. Classify intent
   // 2. Manager Bypass
   if (input.isManager) {
     console.info(`[MultiAgent] Manager authenticated — routing directly to Manager Agent`);
-    
+
     // Intercept deterministic commands
     const parsedCommand = parseManagerCommand(lastUserMsg);
     if (parsedCommand) {
@@ -410,13 +442,13 @@ export async function runMultiAgentOrchestration(
       if (parsedCommand.toolName === "list_room_rates") {
         const reply = formatRoomRatesList(input.toolCtx.rooms as any);
         return {
-          status:            "reply",
+          status: "reply",
           reply,
-          toolsUsed:         [],
-          agentKey:          "manager",
-          intent:            "general",
+          toolsUsed: [],
+          agentKey: "manager",
+          intent: "general",
           routingConfidence: 1.0,
-          escalated:         false,
+          escalated: false,
         };
       }
 
@@ -426,25 +458,22 @@ export async function runMultiAgentOrchestration(
       });
       const reply = formatManagerCommandResult(parsedCommand, result.output);
       return {
-        status:            "reply",
+        status: "reply",
         reply,
-        toolsUsed:         [parsedCommand.toolName],
-        agentKey:          "manager",
-        intent:            "general",
+        toolsUsed: [parsedCommand.toolName],
+        agentKey: "manager",
+        intent: "general",
         routingConfidence: 1.0,
-        escalated:         false,
+        escalated: false,
       };
     }
 
     const agent = getAgent("manager");
-    
+
     // For manager agent, we still need the onAskAgent callback
     const onAskAgent = async (subKey: AgentKey, question: string): Promise<string> => {
       const subAgent = getAgent(subKey);
-      const syntheticMessages = [
-        ...input.messages,
-        { direction: "in", body: question },
-      ];
+      const syntheticMessages = [...input.messages, { direction: "in", body: question }];
       const result = await runAgent(
         subAgent,
         syntheticMessages,
@@ -456,14 +485,17 @@ export async function runMultiAgentOrchestration(
         input.signal,
       );
       return result.reply
-        ? JSON.stringify({ ok: true,  response: result.reply })
-        : JSON.stringify({ ok: false, error:    result.error ?? "Sub-agent returned no reply" });
+        ? JSON.stringify({ ok: true, response: result.reply })
+        : JSON.stringify({ ok: false, error: result.error ?? "Sub-agent returned no reply" });
     };
 
     const agentResult = await runAgent(
       agent,
       input.messages,
-      { ...input.agentCtx, customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["manager"]?.instructions) },
+      {
+        ...input.agentCtx,
+        customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["manager"]?.instructions),
+      },
       input.toolCtx,
       input.llmConfig,
       maxTurns,
@@ -472,29 +504,24 @@ export async function runMultiAgentOrchestration(
     );
 
     return {
-      status:            agentResult.reply ? "reply" : "error",
-      reply:             agentResult.reply,
-      toolsUsed:         agentResult.toolsUsed,
-      agentKey:          "manager",
-      intent:            "general", // irrelevant for manager
+      status: agentResult.reply ? "reply" : "error",
+      reply: agentResult.reply,
+      toolsUsed: agentResult.toolsUsed,
+      agentKey: "manager",
+      intent: "general", // irrelevant for manager
       routingConfidence: 1.0,
-      escalated:         false,
-      error:             agentResult.error,
-      retries:           agentResult.retries,
+      escalated: false,
+      error: agentResult.error,
+      retries: agentResult.retries,
     };
   }
 
   // 3. State Machine Interception
   const stateRecord = await getBookingState(input.toolCtx.supabaseAdmin, input.phone);
-  
+
   if (stateRecord.state !== "IDLE") {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
-    const stateResult = await processBookingState(
-      input.toolCtx,
-      input.phone,
-      lastUserMsg,
-      stateRecord
-    );
+    const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord);
 
     if (stateResult.handled && stateResult.reply) {
       let combinedReply = stateResult.reply;
@@ -513,13 +540,15 @@ export async function runMultiAgentOrchestration(
         const bookingCtx = stateRecord.context;
         const ctxLines = [
           refCode ? `Kode booking: ${refCode}` : null,
-          bookingCtx.guestName  ? `Nama tamu: ${bookingCtx.guestName}`   : null,
-          bookingCtx.guestPhone ? `Nomor HP: ${bookingCtx.guestPhone}`   : null,
-          bookingCtx.guestEmail ? `Email: ${bookingCtx.guestEmail}`      : null,
-          bookingCtx.checkIn    ? `Check-in: ${bookingCtx.checkIn}`      : null,
-          bookingCtx.checkOut   ? `Check-out: ${bookingCtx.checkOut}`    : null,
-          bookingCtx.roomName   ? `Kamar: ${bookingCtx.roomName}`        : null,
-        ].filter(Boolean).join("\n");
+          bookingCtx.guestName ? `Nama tamu: ${bookingCtx.guestName}` : null,
+          bookingCtx.guestPhone ? `Nomor HP: ${bookingCtx.guestPhone}` : null,
+          bookingCtx.guestEmail ? `Email: ${bookingCtx.guestEmail}` : null,
+          bookingCtx.checkIn ? `Check-in: ${bookingCtx.checkIn}` : null,
+          bookingCtx.checkOut ? `Check-out: ${bookingCtx.checkOut}` : null,
+          bookingCtx.roomName ? `Kamar: ${bookingCtx.roomName}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
         const synthesized = refCode
           ? `Mohon kirimkan detail invoice dan info pembayaran untuk booking berikut:\n${ctxLines}`
           : `Mohon kirimkan detail invoice dan info pembayaran untuk booking saya yang baru.`;
@@ -527,7 +556,10 @@ export async function runMultiAgentOrchestration(
         const financeResult = await runAgent(
           financeAgent,
           [{ direction: "in", body: synthesized }],
-          { ...input.agentCtx, customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["finance"]?.instructions) },
+          {
+            ...input.agentCtx,
+            customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["finance"]?.instructions),
+          },
           input.toolCtx,
           input.llmConfig,
           Math.max(2, (input.maxTurns ?? DEFAULT_MAX_TURNS) - 1),
@@ -554,14 +586,14 @@ export async function runMultiAgentOrchestration(
       }
 
       return {
-        status:            "reply",
-        reply:             combinedReply,
+        status: "reply",
+        reply: combinedReply,
         toolsUsed,
-        agentKey:          stateResult.followUp === "send_invoice" ? "finance" : "front-office",
-        intent:            "general",
+        agentKey: stateResult.followUp === "send_invoice" ? "finance" : "front-office",
+        intent: "general",
         routingConfidence: 1.0,
-        escalated:         false,
-        retries:           financeRetries,
+        escalated: false,
+        retries: financeRetries,
       };
     }
     // Not handled = the guest interrupted the booking with an unrelated question.
@@ -591,9 +623,9 @@ export async function runMultiAgentOrchestration(
   const resolved = resolveContext(
     lastUserMsg,
     {
-      lastTopic:  stateRecord.last_topic,
+      lastTopic: stateRecord.last_topic,
       lastEntity: seededEntity ?? null,
-      slots:      stateRecord.slots,
+      slots: stateRecord.slots,
     },
     input.toolCtx.rooms,
   );
@@ -604,7 +636,7 @@ export async function runMultiAgentOrchestration(
   // tanggal lama dianggap basi: men-inject-nya hanya mengelabui Gemini
   // sehingga membalas dengan sapaan terakhir (lihat regresi simulator).
   const priorSlots = (stateRecord.slots ?? {}) as Record<string, unknown>;
-  const priorCheckIn  = typeof priorSlots.checkIn  === "string" ? priorSlots.checkIn  : undefined;
+  const priorCheckIn = typeof priorSlots.checkIn === "string" ? priorSlots.checkIn : undefined;
   const priorCheckOut = typeof priorSlots.checkOut === "string" ? priorSlots.checkOut : undefined;
 
   // Decouple agreedDates dari last_topic — slots fresh selama record itu
@@ -618,12 +650,12 @@ export async function runMultiAgentOrchestration(
   // Inject partial booking slots (room type / jumlah tamu) ke prompt agent
   // supaya tidak re-ask info yang sudah disebut tamu di turn sebelumnya.
   const partialRoomType = typeof priorSlots.partialRoomType === "string" ? priorSlots.partialRoomType : undefined;
-  const partialAdults   = typeof priorSlots.partialAdults   === "number" ? priorSlots.partialAdults   : undefined;
+  const partialAdults = typeof priorSlots.partialAdults === "number" ? priorSlots.partialAdults : undefined;
   const partialChildren = typeof priorSlots.partialChildren === "number" ? priorSlots.partialChildren : undefined;
   if (partialRoomType || partialAdults !== undefined || partialChildren !== undefined) {
     input.agentCtx.partialBooking = {
       roomType: partialRoomType,
-      adults:   partialAdults,
+      adults: partialAdults,
       children: partialChildren,
     };
   }
@@ -632,7 +664,7 @@ export async function runMultiAgentOrchestration(
   if (rewrite.rewritten_applied) {
     console.info(
       `[MultiAgent] Resolver: topic=${resolved.topic} entity=${resolved.entity?.label ?? "-"} ` +
-      `| rewrite: "${rewrite.original}" → "${rewrite.rewritten}" | reasons: ${resolved.reasons.join("; ")}`,
+        `| rewrite: "${rewrite.original}" → "${rewrite.rewritten}" | reasons: ${resolved.reasons.join("; ")}`,
     );
   }
 
@@ -640,19 +672,14 @@ export async function runMultiAgentOrchestration(
   //    Pass conversation context so short follow-ups ("ya", "oke") inherit the
   //    prior intent instead of degrading to "general".
   const queryForClassifier = rewrite.rewritten_applied ? rewrite.rewritten : lastUserMsg;
-  const classified = await classifyIntent(
-    queryForClassifier,
-    input.toolCtx.supabaseAdmin,
-    input.llmConfig,
-    {
-      bookingActive: stateRecord.state !== "IDLE",
-      lastTopic:     resolved.topic ?? stateRecord.last_topic ?? null,
-      roomTypeNames: input.toolCtx.rooms.map((r) => r.name),
-    },
-  );
+  const classified = await classifyIntent(queryForClassifier, input.toolCtx.supabaseAdmin, input.llmConfig, {
+    bookingActive: stateRecord.state !== "IDLE",
+    lastTopic: resolved.topic ?? stateRecord.last_topic ?? null,
+    roomTypeNames: input.toolCtx.rooms.map((r) => r.name),
+  });
   console.info(
     `[MultiAgent] Intent: ${classified.category} (confidence: ${classified.confidence.toFixed(2)}) ` +
-    `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
+      `| terms: ${classified.matchedTerms.slice(0, 3).join(", ")}`,
   );
 
   // 4a. Eskalasi komplain: jika intent komplain/maintenance dgn confidence > 0.7,
@@ -712,25 +739,16 @@ export async function runMultiAgentOrchestration(
   //     hindari fetch ganda.
   let trainingExamples: TrainingExample[] = [];
   let trainingBlock: string | undefined;
-  const alreadyProvided =
-    (input.agentCtx.trainingExamples?.length ?? 0) > 0;
-  if (
-    !alreadyProvided &&
-    !input.agentCtx.bookingInProgress &&
-    lastUserMsg.trim().length > 0
-  ) {
+  const alreadyProvided = (input.agentCtx.trainingExamples?.length ?? 0) > 0;
+  if (!alreadyProvided && !input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
     try {
-      const { readTrainingRagConfig } = await import(
-        "@/admin/modules/ai-lab/ai-lab.functions"
-      );
+      const { readTrainingRagConfig } = await import("@/admin/modules/ai-lab/ai-lab.functions");
       const ragCfg = await readTrainingRagConfig(input.toolCtx.supabaseAdmin);
       if (ragCfg.enabled) {
-        trainingExamples = await retrieveTrainingExamples(
-          input.toolCtx.supabaseAdmin,
-          lastUserMsg,
-          input.llmConfig,
-          { matchCount: ragCfg.matchCount, minSimilarity: ragCfg.minSimilarity },
-        );
+        trainingExamples = await retrieveTrainingExamples(input.toolCtx.supabaseAdmin, lastUserMsg, input.llmConfig, {
+          matchCount: ragCfg.matchCount,
+          minSimilarity: ragCfg.minSimilarity,
+        });
         if (trainingExamples.length > 0) {
           trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
           console.info(
@@ -773,10 +791,10 @@ export async function runMultiAgentOrchestration(
         const result = await runAgent(
           subAgent,
           syntheticMessages,
-          { 
-            ...input.agentCtx, 
+          {
+            ...input.agentCtx,
             customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.[subKey]?.instructions),
-            managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.[subKey]?.managerName),
+            managerName: normalizeAgentManagerName(input.aiLabConfig?.agents?.[subKey]?.managerName),
           },
           input.toolCtx,
           input.llmConfig,
@@ -791,18 +809,18 @@ export async function runMultiAgentOrchestration(
         }
 
         return result.reply
-          ? JSON.stringify({ ok: true,  response: result.reply })
-          : JSON.stringify({ ok: false, error:    result.error ?? "Sub-agent returned no reply" });
+          ? JSON.stringify({ ok: true, response: result.reply })
+          : JSON.stringify({ ok: false, error: result.error ?? "Sub-agent returned no reply" });
       }
     : undefined;
 
   const agentResult = await runAgent(
     agent,
     input.messages,
-    { 
-      ...input.agentCtx, 
+    {
+      ...input.agentCtx,
       customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.[routing.agentKey]?.instructions),
-      managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.[routing.agentKey]?.managerName),
+      managerName: normalizeAgentManagerName(input.aiLabConfig?.agents?.[routing.agentKey]?.managerName),
     },
     input.toolCtx,
     input.llmConfig,
@@ -817,21 +835,21 @@ export async function runMultiAgentOrchestration(
   // slots agar turn berikutnya tetap memakai tanggal yang sama.
   const finalSlots: Record<string, unknown> = { ...(resolved.slots ?? {}) };
   if (input.toolCtx.lastDates) {
-    finalSlots.checkIn  = input.toolCtx.lastDates.checkIn;
+    finalSlots.checkIn = input.toolCtx.lastDates.checkIn;
     finalSlots.checkOut = input.toolCtx.lastDates.checkOut;
   } else if (priorCheckIn && priorCheckOut) {
     // Pertahankan tanggal sebelumnya kalau tool tanggal tidak dipanggil di turn ini.
-    finalSlots.checkIn  = priorCheckIn;
+    finalSlots.checkIn = priorCheckIn;
     finalSlots.checkOut = priorCheckOut;
   }
   // Fire-and-forget — failure here must not break the reply path.
   if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
     void input.toolCtx.supabaseAdmin
       .rpc("update_conversation_topic", {
-        p_phone:       input.phone,
-        p_last_topic:  resolved.topic ?? null,
+        p_phone: input.phone,
+        p_last_topic: resolved.topic ?? null,
         p_last_entity: resolved.entity ?? null,
-        p_slots:       finalSlots,
+        p_slots: finalSlots,
       })
       .then(({ error }: { error: unknown }) => {
         if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
@@ -845,10 +863,10 @@ export async function runMultiAgentOrchestration(
     const foResult = await runAgent(
       foAgent,
       input.messages,
-      { 
-        ...input.agentCtx, 
+      {
+        ...input.agentCtx,
         customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.["front-office"]?.instructions),
-        managerName:        normalizeAgentManagerName(input.aiLabConfig?.agents?.["front-office"]?.managerName),
+        managerName: normalizeAgentManagerName(input.aiLabConfig?.agents?.["front-office"]?.managerName),
       },
       input.toolCtx,
       input.llmConfig,
@@ -859,33 +877,39 @@ export async function runMultiAgentOrchestration(
     );
 
     return {
-      status:               foResult.reply ? "reply" : "error",
-      reply:                foResult.reply,
-      toolsUsed:            foResult.toolsUsed,
-      agentKey:             "front-office",
-      intent:               classified.category,
-      routingConfidence:    routing.confidence,
-      escalated:            routing.escalated,
-      error:                foResult.error,
+      status: foResult.reply ? "reply" : "error",
+      reply: foResult.reply,
+      toolsUsed: foResult.toolsUsed,
+      agentKey: "front-office",
+      intent: classified.category,
+      routingConfidence: routing.confidence,
+      escalated: routing.escalated,
+      error: foResult.error,
       trainingExamplesUsed: trainingExamples.length,
-      trainingExampleIds:   trainingExamples.map((ex) => ex.id),
-      retries:              foResult.retries || managerSubAgentRetries.length ? [...(foResult.retries ?? []), ...managerSubAgentRetries] : undefined,
+      trainingExampleIds: trainingExamples.map((ex) => ex.id),
+      retries:
+        foResult.retries || managerSubAgentRetries.length
+          ? [...(foResult.retries ?? []), ...managerSubAgentRetries]
+          : undefined,
     };
   }
 
   return {
-    status:               agentResult.reply ? "reply" : "error",
-    reply:                agentResult.reply,
-    toolsUsed:            agentResult.toolsUsed,
-    agentKey:             routing.agentKey,
-    intent:               classified.category,
-    routingConfidence:    routing.confidence,
-    escalated:            routing.escalated,
-    error:                agentResult.error,
+    status: agentResult.reply ? "reply" : "error",
+    reply: agentResult.reply,
+    toolsUsed: agentResult.toolsUsed,
+    agentKey: routing.agentKey,
+    intent: classified.category,
+    routingConfidence: routing.confidence,
+    escalated: routing.escalated,
+    error: agentResult.error,
     trainingExamplesUsed: trainingExamples.length,
-    trainingExampleIds:   trainingExamples.map((ex) => ex.id),
-    retries:              agentResult.retries || managerSubAgentRetries.length ? [...(agentResult.retries ?? []), ...managerSubAgentRetries] : undefined,
-    loopAlert:            agentResult.loopAlert,
+    trainingExampleIds: trainingExamples.map((ex) => ex.id),
+    retries:
+      agentResult.retries || managerSubAgentRetries.length
+        ? [...(agentResult.retries ?? []), ...managerSubAgentRetries]
+        : undefined,
+    loopAlert: agentResult.loopAlert,
   };
 }
 
@@ -895,11 +919,11 @@ export async function runMultiAgentOrchestration(
 export function deriveAgentLabelFromKey(agentKey: string): string {
   const labels: Record<string, string> = {
     "front-office": "Front Office Agent",
-    pricing:        "Pricing Agent",
+    pricing: "Pricing Agent",
     "customer-care": "Customer Care Agent",
-    finance:        "Finance Agent",
-    content:        "Content Manager Agent",
-    manager:        "Manager Agent",
+    finance: "Finance Agent",
+    content: "Content Manager Agent",
+    manager: "Manager Agent",
   };
   return labels[agentKey] ?? "Front Office Agent";
 }
