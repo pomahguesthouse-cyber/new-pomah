@@ -260,7 +260,7 @@ function TelegramPage() {
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Memuat…</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-2 px-2"><table className="w-full min-w-[520px] text-sm">
             <thead className="text-xs text-muted-foreground border-b">
               <tr>
                 <th className="text-left py-2">Nama</th>
@@ -331,7 +331,7 @@ function TelegramPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 
@@ -354,7 +354,7 @@ function TelegramPage() {
         {(channelsData?.channels ?? []).length === 0 ? (
           <div className="text-xs text-muted-foreground">Belum ada channel terdaftar.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-2 px-2"><table className="w-full min-w-[520px] text-sm">
             <thead className="text-xs text-muted-foreground border-b">
               <tr>
                 <th className="text-left py-2">Agent</th>
@@ -386,7 +386,7 @@ function TelegramPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
 

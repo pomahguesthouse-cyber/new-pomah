@@ -275,7 +275,7 @@ function CompetitorPricesPage() {
         ) : (data?.rows?.length ?? 0) === 0 ? (
           <div className="text-sm text-muted-foreground">Belum ada data — klik "Run Scrape" untuk mulai.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-2 px-2"><table className="w-full min-w-[520px] text-sm">
             <thead className="text-xs text-muted-foreground border-b">
               <tr>
                 <th className="text-left py-2">Hotel</th>
@@ -312,7 +312,7 @@ function CompetitorPricesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </Card>
     </div>
