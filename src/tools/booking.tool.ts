@@ -23,31 +23,34 @@ async function pickAvailableRooms(
   checkOut: string,
   skipRoomIds?: Set<string>,
 ): Promise<string | null> {
-  const { data: rooms } = await (ctx.supabaseAdmin as any)
+  const { data: rooms, error: roomsErr } = await (ctx.supabaseAdmin as any)
     .from("rooms")
     .select("id, number")
     .eq("room_type_id", roomTypeId)
     .order("number");
+  if (roomsErr) throw roomsErr;
 
   const roomRows = (rooms ?? []) as Array<{ id: string; number: string }>;
   if (roomRows.length === 0) return null;
 
-  const { data: activeBookings } = await (ctx.supabaseAdmin as any)
+  const { data: activeBookings, error: activeErr } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .select("id")
     .in("status", ["pending", "confirmed", "checked_in"])
     .lt("check_in", checkOut)
     .gt("check_out", checkIn);
+  if (activeErr) throw activeErr;
 
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
 
   let taken = new Set<string>();
   if (activeIds.length > 0) {
-    const { data: occ } = await (ctx.supabaseAdmin as any)
+    const { data: occ, error: occErr } = await (ctx.supabaseAdmin as any)
       .from("booking_rooms")
       .select("room_id")
       .not("room_id", "is", null)
       .in("booking_id", activeIds);
+    if (occErr) throw occErr;
     taken = new Set(((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id));
   }
 
@@ -72,15 +75,16 @@ async function pickAvailableRooms(
  * either time).
  */
 async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<string | null> {
-  const { data: b } = await (ctx.supabaseAdmin as any)
+  const { data: b, error } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .select(
-      "id, reference_code, check_in, check_out, nights, total_amount, " +
+      "id, reference_code, check_in, check_out, nights, total_amount, paid_amount, payment_status, " +
         "guests(full_name, email, phone), " +
-        "booking_rooms(room_type_id, nightly_rate, rooms(number))",
+        "booking_rooms(room_type_id, nightly_rate, rooms(number), room_types(name))",
     )
     .eq("idempotency_key", idemKey)
     .maybeSingle();
+  if (error) throw error;
 
   if (!b) return null;
 
@@ -96,8 +100,9 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
     if (!tid) continue;
     const rt = ctx.rooms.find((r) => r.id === tid);
     const num = (Array.isArray(br.rooms) ? br.rooms[0]?.number : br.rooms?.number) ?? null;
+    const roomTypeName = (Array.isArray(br.room_types) ? br.room_types[0]?.name : br.room_types?.name) ?? rt?.name ?? "";
     const slot = byType.get(tid) ?? {
-      name: rt?.name ?? "",
+      name: roomTypeName,
       rate: Number(br.nightly_rate ?? 0),
       count: 0,
       numbers: [],
@@ -116,6 +121,8 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
   const roomTypeDisplay = rooms.length > 0 ? rooms.map((r) => `${r.quantity}x ${r.room_type}`).join(", ") : "";
   const firstRate = rooms[0]?.rate_per_night ?? 0;
   const roomCount = rooms.reduce((sum, r) => sum + r.quantity, 0);
+  const paidAmount = Number(b.paid_amount ?? 0);
+  const paymentStatus = String(b.payment_status ?? "unpaid");
 
   return JSON.stringify({
     ok: true,
@@ -130,6 +137,9 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
     nights,
     nightly_rate: firstRate,
     total: Number(b.total_amount ?? 0),
+    paid_amount: paidAmount,
+    payment_status: paymentStatus,
+    remaining_amount: Math.max(0, Number(b.total_amount ?? 0) - paidAmount),
     guest: { full_name: g?.full_name, email: g?.email, phone: g?.phone },
     pembayaran: {
       bank: ctx.property.payment_bank_name ?? null,
@@ -196,21 +206,23 @@ async function detectRoomConflicts(
 ): Promise<string[]> {
   if (ourRoomIds.length === 0) return [];
   // Find active bookings overlapping our date range (excluding ourselves).
-  const { data: activeBookings } = await (ctx.supabaseAdmin as any)
+  const { data: activeBookings, error: activeErr } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .select("id")
     .in("status", ["pending", "confirmed", "checked_in"])
     .neq("id", ourBookingId)
     .lt("check_in", checkOut)
     .gt("check_out", checkIn);
+  if (activeErr) throw activeErr;
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
   if (activeIds.length === 0) return [];
 
-  const { data: occ } = await (ctx.supabaseAdmin as any)
+  const { data: occ, error: occErr } = await (ctx.supabaseAdmin as any)
     .from("booking_rooms")
     .select("room_id")
     .in("booking_id", activeIds)
     .in("room_id", ourRoomIds);
+  if (occErr) throw occErr;
   return ((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id);
 }
 
@@ -304,11 +316,12 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       if (!rt) {
         // Fallback: Check if cleanName is a physical room number in the DB
         try {
-          const { data: physicalRoom } = await (ctx.supabaseAdmin as any)
+          const { data: physicalRoom, error: physicalRoomErr } = await (ctx.supabaseAdmin as any)
             .from("rooms")
             .select("room_type_id")
             .eq("number", cleanName.toUpperCase())
             .maybeSingle();
+          if (physicalRoomErr) throw physicalRoomErr;
 
           if (physicalRoom?.room_type_id) {
             rt = ctx.rooms.find((r) => r.id === physicalRoom.room_type_id);
@@ -334,10 +347,16 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     }
   }
 
-  const { data: availRows } = await (ctx.supabasePublic as any).rpc("room_type_availability_detail", {
+  const { data: availRows, error: availErr } = await (ctx.supabasePublic as any).rpc("room_type_availability_detail", {
     p_check_in: checkIn,
     p_check_out: checkOut,
   });
+  if (availErr) {
+    return JSON.stringify({
+      ok: false,
+      error: `Gagal mengecek ketersediaan kamar: ${availErr.message}`,
+    });
+  }
   const availMap = new Map(((availRows ?? []) as any[]).map((r) => [r.room_type_id, r.available]));
 
   const skipRoomIds = new Set<string>();
@@ -399,11 +418,12 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     if (!rt) {
       // Fallback: Check if cleanTypeName is a physical room number in the DB
       try {
-        const { data: physicalRoom } = await (ctx.supabaseAdmin as any)
+        const { data: physicalRoom, error: physicalRoomErr } = await (ctx.supabaseAdmin as any)
           .from("rooms")
           .select("room_type_id")
           .eq("number", cleanTypeName.toUpperCase())
           .maybeSingle();
+        if (physicalRoomErr) throw physicalRoomErr;
 
         if (physicalRoom?.room_type_id) {
           rt = ctx.rooms.find((r) => r.id === physicalRoom.room_type_id);
@@ -534,9 +554,10 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // args.dp_amount    = nominal DP (jika payment_type='dp')
   const paymentType = str(args.payment_type).toLowerCase();
   const isDP = paymentType === "dp";
-  const dpAmount = isDP ? Math.max(0, Number(args.dp_amount) || 0) : 0;
-  const initialPaidAmount = isDP ? dpAmount : 0;
-  const initialPaymentStatus = isDP && dpAmount > 0 ? "partial" : "unpaid";
+  const requestedDpAmount = isDP ? Math.max(0, Number(args.dp_amount) || 0) : 0;
+  const initialPaidAmount = isDP ? Math.min(requestedDpAmount, total) : 0;
+  const initialPaymentStatus =
+    initialPaidAmount >= total && total > 0 ? "paid" : initialPaidAmount > 0 ? "partial" : "unpaid";
 
   async function insertBooking(srcValue: string) {
     return await (ctx.supabaseAdmin as any)
@@ -628,13 +649,23 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   // call could have observed the same rooms as free and inserted them too.
   // Without a DB-level exclusion constraint, we detect post-write and roll
   // back if we lost the race.
-  const conflictRoomIds = await detectRoomConflicts(
-    ctx,
-    booking.id,
-    assignments.map((a) => a.roomId),
-    checkIn,
-    checkOut,
-  );
+  let conflictRoomIds: string[];
+  try {
+    conflictRoomIds = await detectRoomConflicts(
+      ctx,
+      booking.id,
+      assignments.map((a) => a.roomId),
+      checkIn,
+      checkOut,
+    );
+  } catch (e) {
+    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
+    const msg = e instanceof Error ? e.message : String(e);
+    return JSON.stringify({
+      ok: false,
+      error: `Gagal memverifikasi konflik kamar setelah booking dibuat: ${msg}`,
+    });
+  }
   if (conflictRoomIds.length > 0) {
     await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
     const conflictNames = assignments.filter((a) => conflictRoomIds.includes(a.roomId)).map((a) => a.roomTypeName);
@@ -722,6 +753,9 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     nights,
     nightly_rate: assignments[0].rate,
     total,
+    paid_amount: initialPaidAmount,
+    payment_status: initialPaymentStatus,
+    remaining_amount: Math.max(0, total - initialPaidAmount),
     guest: { full_name: fullName, email, phone },
     pembayaran: {
       bank: ctx.property.payment_bank_name ?? null,
