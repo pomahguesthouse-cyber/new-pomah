@@ -9,10 +9,7 @@
  */
 
 import { isDateString } from "@/lib/date";
-import {
-  updateBookingState,
-  type BookingContext,
-} from "@/ai/state-machine/booking-machine";
+import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
 import type { ToolContext, ToolHandler } from "./types";
 
 function str(v: unknown): string {
@@ -48,14 +45,17 @@ export const startBookingDetails: ToolHandler = async (
     checkOut,
     adults,
     children,
+    // Nomor WA tamu sudah diketahui dari sesi — isi otomatis agar state machine
+    // tidak memintanya lagi. Tamu booking via WhatsApp, tidak masuk akal
+    // meminta nomor HP yang sudah kita punya.
+    guestPhone: ctx.phone,
   };
 
   // Dynamic nightly rate passed by the LLM from check_room_availability result.
   // When provided, ALWAYS prefer this over base_rate so the review summary and
   // the invoice show the same number (the pricing engine's authoritative value).
-  const dynamicRate = typeof args.price_per_night === "number" && args.price_per_night > 0
-    ? args.price_per_night
-    : null;
+  const dynamicRate =
+    typeof args.price_per_night === "number" && args.price_per_night > 0 ? args.price_per_night : null;
 
   // Compute nights count for totalPrice calculation.
   function calcNights(ci: string, co: string): number {
@@ -118,9 +118,7 @@ export const startBookingDetails: ToolHandler = async (
         // Per-room price_per_night (from rooms array item) takes priority;
         // then top-level dynamic rate; then base_rate fallback.
         pricePerNight:
-          (typeof item.price_per_night === "number" && item.price_per_night > 0
-            ? item.price_per_night
-            : null) ??
+          (typeof item.price_per_night === "number" && item.price_per_night > 0 ? item.price_per_night : null) ??
           dynamicRate ??
           Number(rt.base_rate ?? 0),
       });
@@ -138,10 +136,7 @@ export const startBookingDetails: ToolHandler = async (
     roomsDescription = context.roomName;
     // Compute total: sum(rate × qty × nights) across all room items.
     const nights = calcNights(checkIn, checkOut);
-    context.totalPrice = parsedRooms.reduce(
-      (sum, r) => sum + r.pricePerNight * r.quantity * nights,
-      0,
-    );
+    context.totalPrice = parsedRooms.reduce((sum, r) => sum + r.pricePerNight * r.quantity * nights, 0);
   } else {
     const roomTypeName = str(args.room_type).toLowerCase();
     if (!roomTypeName) {
@@ -189,12 +184,14 @@ export const startBookingDetails: ToolHandler = async (
     context.roomName = rt.name;
     // Use dynamic rate from availability result when provided; fall back to base_rate.
     context.pricePerNight = dynamicRate ?? Number(rt.base_rate ?? 0);
-    context.rooms = [{
-      roomTypeId: rt.id,
-      roomTypeName: rt.name,
-      quantity: 1,
-      pricePerNight: context.pricePerNight,
-    }];
+    context.rooms = [
+      {
+        roomTypeId: rt.id,
+        roomTypeName: rt.name,
+        quantity: 1,
+        pricePerNight: context.pricePerNight,
+      },
+    ];
     // Persist total so summary and invoice are always consistent.
     const nights = calcNights(checkIn, checkOut);
     context.totalPrice = context.pricePerNight * nights;
@@ -210,14 +207,8 @@ export const startBookingDetails: ToolHandler = async (
   let message: string;
   if (guestName.length >= 2) {
     context.guestName = guestName;
-    // Cek apakah sudah punya nomor HP juga (dari summary)
-    const hasPhone = !!(context.guestPhone && context.guestPhone.length >= 8);
-    if (hasPhone) {
-      // Semua mandatory slots sudah ada — langsung minta konfirmasi
-      message = `Baik, data sementara booking ${roomsDescription} sudah saya catat atas nama "${guestName}". Mohon konfirmasi untuk melanjutkan pemesanan.`;
-    } else {
-      message = `Baik Kak, untuk pemesanan ${roomsDescription} atas nama "${guestName}", mohon lengkapi nomor WhatsApp/HP yang bisa dihubungi:`;
-    }
+    // guestPhone sudah terisi dari ctx.phone — langsung ke konfirmasi.
+    message = `Baik, data booking ${roomsDescription} sudah saya catat atas nama "${guestName}". Mohon konfirmasi untuk melanjutkan pemesanan.`;
   } else {
     message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak (bisa langsung sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789"):`;
   }
