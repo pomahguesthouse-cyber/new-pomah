@@ -1095,7 +1095,11 @@ export async function notifyBookingStuck(
     requiredField?: string | null;
     stuckSeconds: number;
     lastInboundBody: string | null;
-    lastInboundAt: string; // ISO
+    lastInboundAt: string;
+    /** Timestamp inbound PERTAMA sejak outbound terakhir — anchor episode.
+     *  Selama belum ada balasan baru, key ini tidak berubah → notif sekali.
+     *  Begitu bot/human balas, monitor berhenti sendiri (direction check). */
+    episodeStartAt: string;
     threadId: string | null;
     guestName?: string | null;
   },
@@ -1124,18 +1128,14 @@ export async function notifyBookingStuck(
       (inboundPreview ? `📥 Pesan terakhir tamu:\n"${inboundPreview}"\n\n` : "") +
       `Bot belum membalas pesan tamu. Mohon cek log percakapan & bantu balas manual jika perlu.`;
 
-    // Dedupe per (phone, state, inbound timestamp) — alert sekali per pesan
-    // Dedup per (phone, state, window 30 menit). SEBELUMNYA dedup memakai
-    // timestamp pesan inbound terakhir (`inboundKey`), sehingga setiap pesan
-    // BARU dari tamu menghasilkan dedupeKey baru → manager dibanjiri notif
-    // (di produksi: 1 tamu memicu 12 notif dalam 30 menit karena tamu aktif
-    // mengetik sambil flow macet). Sekarang kunci dedup memakai bucket waktu
-    // 30 menit: satu kemacetan = maksimal 1 notif per 30 menit, berapapun
-    // banyak pesan yang tamu kirim. Kemacetan baru di state lain, atau yang
-    // masih berlangsung > 30 menit, tetap memicu alarm berikutnya.
-    const STUCK_NOTIFY_WINDOW_MS = 30 * 60 * 1000;
-    const windowBucket = Math.floor(Date.now() / STUCK_NOTIFY_WINDOW_MS);
-    const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${windowBucket}`;
+    // DedupeKey berbasis EPISODE — bukan window waktu.
+    // episodeStartAt = inbound pertama sejak outbound terakhir. Selama
+    // bot/human belum membalas, key ini tidak berubah → notif hanya sekali.
+    // Begitu ada balasan (outbound baru), monitor tidak menemukan kondisi
+    // macet sama sekali karena direction check di cron gagal → berhenti
+    // otomatis tanpa perlu timer atau window. Episode baru = key baru.
+    const episodeKey = Date.parse(opts.episodeStartAt) || 0;
+    const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${episodeKey}`;
 
     await Promise.all(
       targets.flatMap((admin) => {
