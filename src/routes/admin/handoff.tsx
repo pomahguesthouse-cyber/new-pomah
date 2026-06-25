@@ -86,7 +86,7 @@ function HandoffPage() {
   });
 
   return (
-    <div className="space-y-4 p-6">
+    <div className="space-y-4 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold">

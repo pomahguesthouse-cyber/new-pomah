@@ -35,6 +35,7 @@ import {
   ShieldAlert,
   BellOff,
   SendHorizonal,
+  ArrowLeft,
 } from "lucide-react";
 import {
   listThreads,
@@ -382,9 +383,9 @@ export function WhatsAppPage() {
   });
 
   return (
-    <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[300px_1fr_320px] bg-background">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-background lg:grid lg:grid-cols-[300px_1fr_320px]">
       {/* THREADS LIST */}
-      <aside className="flex min-h-0 flex-col border-r border-border bg-white">
+      <aside className={cn("min-h-0 flex-col border-r border-border bg-white w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
         <div className="border-b border-border p-4">
           {/* Tab switcher: Inbox | Monitor */}
           <div className="flex gap-1 mb-3">
@@ -602,12 +603,20 @@ export function WhatsAppPage() {
       </aside>
 
       {/* CONVERSATION */}
-      <section className="flex min-h-0 flex-col">
+      <section className={cn("min-h-0 flex-col flex-1 w-full lg:flex", activeId ? "flex" : "hidden lg:flex")}>
         {current && thread?.thread ? (
           <>
-            <header className="flex items-center justify-between border-b border-border bg-card px-5 py-3">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
+            <header className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 md:px-5 md:py-3">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveId(null)}
+                  className="lg:hidden -ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/10"
+                  aria-label="Kembali ke daftar"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <Avatar className="h-9 w-9 md:h-10 md:w-10 shrink-0">
                   <AvatarFallback className="text-xs font-semibold">
                     {initials(thread.thread.display_name, thread.thread.phone)}
                   </AvatarFallback>
@@ -788,7 +797,7 @@ export function WhatsAppPage() {
       </section>
 
       {/* GUEST CONTEXT */}
-      <aside className="flex min-h-0 flex-col border-l border-border bg-sidebar">
+      <aside className="hidden lg:flex min-h-0 flex-col border-l border-border bg-sidebar">
         {current && thread?.thread ? (
           <ScrollArea className="flex-1">
             <div className="space-y-5 p-5">
