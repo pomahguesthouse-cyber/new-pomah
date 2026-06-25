@@ -25,7 +25,7 @@ import { executeTool } from "@/tools/executor";
 import { parseManagerCommand, formatManagerCommandResult, formatRoomRatesList } from "./manager-command-parser";
 import type { ToolContext } from "@/tools/types";
 import { getBookingState, processBookingState, isDataEntryState } from "./state-machine/booking-machine";
-import { getMissingSlots, formatPartialBookingSummary } from "./state-machine/flexible-slot-extractor";
+import { getMissingSlots, formatPartialBookingSummary, extractAllSlots } from "./state-machine/flexible-slot-extractor";
 import { resolveContext, seedEntityFromSummary } from "./router/context-resolver";
 import { rewriteQuery } from "./router/query-rewriter";
 import {
@@ -660,6 +660,43 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     };
   }
 
+  // ── Slot persistence saat IDLE (Opsi B) ────────────────────────────────────
+  // Saat tamu hanya bertanya-tanya (state IDLE, belum masuk booking flow),
+  // state machine tidak menyimpan slot apa pun — sehingga tanggal/jumlah tamu/
+  // tipe kamar yang sudah disebut bisa "terlupa" oleh agent LLM dan ditanyakan
+  // ulang. Di sini kita jalankan extractor deterministik pada pesan tamu
+  // terakhir dan MERGE hasilnya ke agreedDates / partialBooking, lalu nanti
+  // dipersist ke finalSlots agar bertahan ke turn berikutnya. Slot baru yang
+  // disebut tamu menimpa nilai lama; slot yang tidak disebut dipertahankan.
+  const liveSlots = lastUserMsg.trim()
+    ? extractAllSlots(
+        lastUserMsg,
+        (input.toolCtx.rooms ?? []) as Array<{ id: string; name: string; base_rate?: number | null }>,
+        input.phone,
+        input.toolCtx.today as string | undefined,
+      )
+    : {};
+
+  // Tanggal: kalau tamu menyebut check-in & check-out baru di pesan ini, pakai
+  // itu; kalau tidak, pertahankan agreedDates yang sudah ada.
+  const mergedCheckIn = liveSlots.check_in ?? input.agentCtx.agreedDates?.checkIn;
+  const mergedCheckOut = liveSlots.check_out ?? input.agentCtx.agreedDates?.checkOut;
+  if (mergedCheckIn && mergedCheckOut) {
+    input.agentCtx.agreedDates = { checkIn: mergedCheckIn, checkOut: mergedCheckOut };
+  }
+
+  // Tipe kamar / jumlah tamu: merge live extraction di atas nilai prior.
+  const mergedRoomType = liveSlots.room_type ?? input.agentCtx.partialBooking?.roomType;
+  const mergedAdults = liveSlots.adults ?? input.agentCtx.partialBooking?.adults;
+  const mergedChildren = liveSlots.children ?? input.agentCtx.partialBooking?.children;
+  if (mergedRoomType || mergedAdults !== undefined || mergedChildren !== undefined) {
+    input.agentCtx.partialBooking = {
+      roomType: mergedRoomType,
+      adults: mergedAdults,
+      children: mergedChildren,
+    };
+  }
+
   const rewrite = rewriteQuery(lastUserMsg, resolved);
   if (rewrite.rewritten_applied) {
     console.info(
@@ -837,10 +874,24 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   if (input.toolCtx.lastDates) {
     finalSlots.checkIn = input.toolCtx.lastDates.checkIn;
     finalSlots.checkOut = input.toolCtx.lastDates.checkOut;
+  } else if (input.agentCtx.agreedDates) {
+    // Pertahankan tanggal yang sudah disepakati (dari slot tersimpan ATAU hasil
+    // ekstraksi live di turn ini) walau tool tanggal tidak dipanggil.
+    finalSlots.checkIn = input.agentCtx.agreedDates.checkIn;
+    finalSlots.checkOut = input.agentCtx.agreedDates.checkOut;
   } else if (priorCheckIn && priorCheckOut) {
-    // Pertahankan tanggal sebelumnya kalau tool tanggal tidak dipanggil di turn ini.
     finalSlots.checkIn = priorCheckIn;
     finalSlots.checkOut = priorCheckOut;
+  }
+  // Persist partial booking slots (tipe kamar / jumlah tamu) hasil merge live
+  // extraction, supaya turn berikutnya tidak menanyakan ulang.
+  if (input.agentCtx.partialBooking) {
+    if (input.agentCtx.partialBooking.roomType !== undefined)
+      finalSlots.partialRoomType = input.agentCtx.partialBooking.roomType;
+    if (input.agentCtx.partialBooking.adults !== undefined)
+      finalSlots.partialAdults = input.agentCtx.partialBooking.adults;
+    if (input.agentCtx.partialBooking.children !== undefined)
+      finalSlots.partialChildren = input.agentCtx.partialBooking.children;
   }
   // Fire-and-forget — failure here must not break the reply path.
   if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
