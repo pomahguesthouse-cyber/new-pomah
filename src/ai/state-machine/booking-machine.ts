@@ -1,24 +1,17 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { createBooking } from "@/tools/booking.tool";
-import {
-  getDailyRatesForRange,
-  resolveRoomNightlyRates,
-} from "@/services/pricing/daily-rate.service";
+import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
-import {
-  extractAllSlots,
-  getMissingSlots,
-  formatPartialBookingSummary,
-} from "./flexible-slot-extractor";
+import { extractAllSlots, getMissingSlots, formatPartialBookingSummary } from "./flexible-slot-extractor";
 
 export type BookingState =
   | "IDLE"
   | "AWAITING_DATES"
   | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
-  | "COLLECTING_DATA"      // Flexible slot-filling (replaces old linear states)
+  | "COLLECTING_DATA" // Flexible slot-filling (replaces old linear states)
   | "AWAITING_NAME"
   | "CONFIRMING_NAME"
   | "AWAITING_EMAIL"
@@ -76,7 +69,6 @@ export interface BookingContext {
   cancelPreviousState?: BookingState;
 }
 
-
 export interface StateRecord {
   phone: string;
   state: BookingState;
@@ -105,14 +97,17 @@ export interface StateMachineResult {
 }
 
 const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi)\b/i;
-const CANCEL_CONFIRM_PATTERN = /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
+const CANCEL_CONFIRM_PATTERN =
+  /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
 const CANCEL_DECLINE_PATTERN = /^(tidak|nggak|ngga|gak|ga|jangan|bukan|lanjut booking|lanjutkan booking)[\s.!]*$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 
 // Affirm = "use this one"; Decline/Other = "use a different one".
-const USE_THIS_PATTERN = /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|pake ini|betul|benar|oke|ok|sip|setuju|lanjut)\b/i;
-const USE_OTHER_PATTERN = /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
+const USE_THIS_PATTERN =
+  /\b(ya|iya|yes|pakai ini|gunakan ini|ini saja|ini aja|pake ini|betul|benar|oke|ok|sip|setuju|lanjut)\b/i;
+const USE_OTHER_PATTERN =
+  /\b(lain|lainnya|beda|berbeda|ganti|bukan|tidak|nggak|ngga|enggak|gak|ubah|nama lain|nomor lain|no lain)\b/i;
 
 // Specific "use this phone number" phrases for CONFIRMING_PHONE state.
 const USE_THIS_PHONE_PATTERN =
@@ -125,8 +120,8 @@ const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/
  * Token-token yang BUKAN nama orang — termasuk frasa frustrasi/kebingungan.
  * Mencegah "saya pusing", "bingung", "embuh" tersimpan sebagai guestName.
  */
-const NON_NAME_TOKENS = /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast|pusing|bingung|embuh|ribet|capek|cape|penipuan|scam|email|nomor|hp|bukan)\b/i;
-
+const NON_NAME_TOKENS =
+  /\b(aja|biar|buat|tolong|kalo|kalau|yang|sama|sebelahan|samping|atas|bawah|deket|dekat|atau|tapi|cuma|sih|nih|dong|deh|nya|kamar|room|wifi|ac|sarapan|breakfast|pusing|bingung|embuh|ribet|capek|cape|penipuan|scam|email|nomor|hp|bukan)\b/i;
 
 // Honorifik / panggilan umum yang sering ditempel di awal/akhir nama
 // (contoh: "Ratih Asmarani kak", "kak Budi", "mas Joko"). Dibersihkan
@@ -160,10 +155,10 @@ function cleanNameCandidate(candidate: string): string {
 export function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
   if (t.length < 2 || t.length > 80) return false;
-  if (/[\d/@]/.test(t)) return false;          // numbers, slashes, @ → not a name
+  if (/[\d/@]/.test(t)) return false; // numbers, slashes, @ → not a name
   if (t.endsWith("?")) return false;
   const tokens = t.split(/\s+/);
-  if (tokens.length > 8) return false;          // names rarely > 8 tokens
+  if (tokens.length > 8) return false; // names rarely > 8 tokens
   // Must contain at least one alphabetic word of length ≥ 2.
   if (!tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w))) return false;
   return true;
@@ -179,8 +174,18 @@ function formatPhoneDisplay(raw: string): string {
 /** Format YYYY-MM-DD ke "10 Juni 2026" dalam bahasa Indonesia. */
 function formatDateId(iso: string): string {
   const months = [
-    "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-    "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember",
   ];
   const [year, month, day] = iso.split("-").map(Number);
   return `${day} ${months[month - 1]} ${year}`;
@@ -238,11 +243,7 @@ export function resolveRoomExtraBedPolicy(
   if (!match && context.rooms && context.rooms.length > 0) {
     const first = context.rooms[0];
     const firstName = first.roomTypeName?.toLowerCase();
-    match = list.find(
-      (r) =>
-        r.id === first.roomTypeId ||
-        (firstName != null && r.name.toLowerCase() === firstName),
-    );
+    match = list.find((r) => r.id === first.roomTypeId || (firstName != null && r.name.toLowerCase() === firstName));
   }
 
   return {
@@ -272,9 +273,7 @@ function buildBookingSummary(
   const summaryRooms = overrides?.rooms ?? context.rooms;
   let roomsDisplay: string;
   if (summaryRooms && summaryRooms.length > 0) {
-    roomsDisplay = summaryRooms
-      .map((r) => `${r.quantity}x ${r.roomTypeName}`)
-      .join(", ");
+    roomsDisplay = summaryRooms.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ");
   } else {
     roomsDisplay = context.roomName ?? "—";
   }
@@ -282,23 +281,14 @@ function buildBookingSummary(
   // --- Price per night (prefer dynamic average bila tersedia) ---
   const pricePerNight =
     overrides?.displayRatePerNight ??
-    (summaryRooms && summaryRooms.length > 0
-      ? summaryRooms[0].pricePerNight
-      : (context.pricePerNight ?? 0));
+    (summaryRooms && summaryRooms.length > 0 ? summaryRooms[0].pricePerNight : (context.pricePerNight ?? 0));
 
   // --- Nights & total ---
-  const nights =
-    context.checkIn && context.checkOut
-      ? countNights(context.checkIn, context.checkOut)
-      : null;
+  const nights = context.checkIn && context.checkOut ? countNights(context.checkIn, context.checkOut) : null;
 
   // --- Dates with check-in / check-out times ---
-  const checkInDisplay = context.checkIn
-    ? `${formatDateId(context.checkIn)}, 14.00`
-    : "—";
-  const checkOutDisplay = context.checkOut
-    ? `${formatDateId(context.checkOut)}, 12.00`
-    : "—";
+  const checkInDisplay = context.checkIn ? `${formatDateId(context.checkIn)}, 14.00` : "—";
+  const checkOutDisplay = context.checkOut ? `${formatDateId(context.checkOut)}, 12.00` : "—";
 
   // --- Adults ---
   const adults = context.adults ?? 1;
@@ -316,8 +306,7 @@ function buildBookingSummary(
   const eb = computeExtraBeds(policy, totalRooms, adults);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
-  const extraBedTotal =
-    nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
+  const extraBedTotal = nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
 
   // Subtotal kamar: pakai dynamic (jika tersedia), kalau tidak fallback rata.
   const fallbackSubtotal = nights && pricePerNight ? nights * pricePerNight * totalRooms : 0;
@@ -326,11 +315,12 @@ function buildBookingSummary(
 
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
 
-  const extraBedLine = extraBeds > 0
-    ? (hasRate
+  const extraBedLine =
+    extraBeds > 0
+      ? hasRate
         ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
-        : `- Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`)
-    : "";
+        : `- Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`
+      : "";
 
   const roomLabel = policy.roomTypeName ?? context.roomName ?? "kamar";
   const totalMaxGuests = (policy.capacity + policy.extrabedCapacity) * totalRooms;
@@ -379,17 +369,10 @@ export async function resolveBookingSummaryRates(
   const items = context.rooms ?? [];
   if (items.length === 0) return null;
 
-  const roomTypeIds = Array.from(
-    new Set(items.map((r) => r.roomTypeId).filter((id): id is string => !!id)),
-  );
+  const roomTypeIds = Array.from(new Set(items.map((r) => r.roomTypeId).filter((id): id is string => !!id)));
   if (roomTypeIds.length === 0) return null;
 
-  const overrides = await getDailyRatesForRange(
-    ctx.supabasePublic,
-    roomTypeIds,
-    context.checkIn,
-    context.checkOut,
-  );
+  const overrides = await getDailyRatesForRange(ctx.supabasePublic, roomTypeIds, context.checkIn, context.checkOut);
 
   const nights = countNights(context.checkIn, context.checkOut);
   const resolvedRooms: BookingRoomItem[] = [];
@@ -402,26 +385,17 @@ export async function resolveBookingSummaryRates(
   let avgCount = 0;
 
   for (const item of items) {
-    const rt = ctx.rooms.find((r) => r.id === item.roomTypeId) as
-      | RoomTypeRow
-      | undefined;
+    const rt = ctx.rooms.find((r) => r.id === item.roomTypeId) as RoomTypeRow | undefined;
     if (!rt) {
       resolvedRooms.push(item);
       roomSubtotal += item.pricePerNight * item.quantity * nights;
       continue;
     }
-    const resolved = resolveRoomNightlyRates(
-      rt,
-      context.checkIn,
-      context.checkOut,
-      overrides.get(item.roomTypeId),
-    );
+    const resolved = resolveRoomNightlyRates(rt, context.checkIn, context.checkOut, overrides.get(item.roomTypeId));
     if (resolved.has_stop_sell) stopSellDates.push(...resolved.stop_sell_dates);
     if (!resolved.all_base) hasDynamicBreakdown = true;
     roomSubtotal += resolved.total * item.quantity;
-    const avg = resolved.nights
-      ? Math.round(resolved.total / resolved.nights)
-      : item.pricePerNight;
+    const avg = resolved.nights ? Math.round(resolved.total / resolved.nights) : item.pricePerNight;
     resolvedRooms.push({ ...item, pricePerNight: avg });
     avgSum += avg;
     avgCount += 1;
@@ -429,9 +403,7 @@ export async function resolveBookingSummaryRates(
     else if (avg !== firstAvg) sameRate = false;
   }
 
-  const displayRatePerNight = sameRate
-    ? (firstAvg ?? 0)
-    : Math.round(avgSum / Math.max(1, avgCount));
+  const displayRatePerNight = sameRate ? (firstAvg ?? 0) : Math.round(avgSum / Math.max(1, avgCount));
 
   return {
     rooms: resolvedRooms,
@@ -447,18 +419,12 @@ export async function resolveBookingSummaryRates(
  * malam, balas pesan minta pilih tanggal/tipe lain alih-alih ringkasan final.
  * Fallback ke versi sync bila resolve gagal (mis. data context tidak lengkap).
  */
-async function buildBookingSummaryAsync(
-  ctx: ToolContext,
-  context: BookingContext,
-): Promise<StateMachineResult> {
+async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContext): Promise<StateMachineResult> {
   try {
     const resolved = await resolveBookingSummaryRates(ctx, context);
     if (resolved && resolved.stopSellDates.length > 0) {
-      const tanggalList = resolved.stopSellDates
-        .map((d) => formatDateId(d))
-        .join(", ");
-      const roomLabel =
-        context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
+      const tanggalList = resolved.stopSellDates.map((d) => formatDateId(d)).join(", ");
+      const roomLabel = context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
       return {
         handled: true,
         reply:
@@ -480,22 +446,14 @@ async function buildBookingSummaryAsync(
   return buildBookingSummary(context, ctx.rooms);
 }
 
-
-
 function clearCancelConfirmation(context: BookingContext): BookingContext {
   const { cancelPreviousState: _cancelPreviousState, ...rest } = context;
   return rest;
 }
 
-async function cleanupPendingBookingAndInvoice(
-  supabase: SupabaseClient,
-  phone: string,
-): Promise<void> {
+async function cleanupPendingBookingAndInvoice(supabase: SupabaseClient, phone: string): Promise<void> {
   try {
-    const { data: guests } = await (supabase as any)
-      .from("guests")
-      .select("id")
-      .eq("phone", phone);
+    const { data: guests } = await (supabase as any).from("guests").select("id").eq("phone", phone);
     const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
     if (guestIds.length === 0) return;
 
@@ -512,10 +470,7 @@ async function cleanupPendingBookingAndInvoice(
       .update({ status: "cancelled" })
       .in("id", bookingIds)
       .in("status", ["pending", "confirmed"]);
-    await (supabase as any)
-      .from("invoices")
-      .delete()
-      .in("booking_id", bookingIds);
+    await (supabase as any).from("invoices").delete().in("booking_id", bookingIds);
   } catch (e) {
     console.warn("[BookingState] cancel cleanup failed (non-fatal):", e);
   }
@@ -535,7 +490,7 @@ export async function updateBookingState(
   supabase: SupabaseClient,
   phone: string,
   state: BookingState,
-  context: BookingContext
+  context: BookingContext,
 ): Promise<void> {
   await supabase.rpc("update_booking_state", {
     p_phone: phone,
@@ -554,7 +509,7 @@ function extractEmail(text: string): string | null {
 }
 
 function extractPhone(text: string): string | null {
-  const cleaned = text.replace(/[^0-9+]/g, '');
+  const cleaned = text.replace(/[^0-9+]/g, "");
   if (PHONE_PATTERN.test(cleaned)) return cleaned;
   return null;
 }
@@ -582,33 +537,40 @@ export function isDataEntryState(state: BookingState): boolean {
  */
 export function getRequiredField(state: BookingState): string | null {
   switch (state) {
-    case "COLLECTING_DATA":                 return "data_booking";
-    case "AWAITING_DATES":                  return "tanggal";
-    case "AWAITING_ALTERNATIVE_ROOM_TYPE":  return "tipe_kamar_alternatif";
-    case "ROOM_SELECTED":                   return "tipe_kamar";
-    case "AWAITING_NAME":                   return "nama";
-    case "CONFIRMING_NAME":                 return "konfirmasi_nama";
-    case "AWAITING_EMAIL":                  return "email";
-    case "CONFIRMING_PHONE":                return "konfirmasi_nomor_hp";
-    case "AWAITING_PHONE":                  return "nomor_hp";
-    case "CONFIRMING_BOOKING":              return "konfirmasi_booking";
-    case "PAYMENT_PENDING":                 return "bukti_pembayaran";
-    default:                                return null;
+    case "COLLECTING_DATA":
+      return "data_booking";
+    case "AWAITING_DATES":
+      return "tanggal";
+    case "AWAITING_ALTERNATIVE_ROOM_TYPE":
+      return "tipe_kamar_alternatif";
+    case "ROOM_SELECTED":
+      return "tipe_kamar";
+    case "AWAITING_NAME":
+      return "nama";
+    case "CONFIRMING_NAME":
+      return "konfirmasi_nama";
+    case "AWAITING_EMAIL":
+      return "email";
+    case "CONFIRMING_PHONE":
+      return "konfirmasi_nomor_hp";
+    case "AWAITING_PHONE":
+      return "nomor_hp";
+    case "CONFIRMING_BOOKING":
+      return "konfirmasi_booking";
+    case "PAYMENT_PENDING":
+      return "bukti_pembayaran";
+    default:
+      return null;
   }
 }
 
 /** Format daftar alternatif sebagai numbered list untuk ditampilkan ke tamu. */
 export function formatAlternativesList(alts: AlternativeRoomOption[]): string {
-  return alts
-    .map((a, i) => `${i + 1}. ${a.name} - Rp${a.pricePerNight.toLocaleString("id-ID")}/malam`)
-    .join("\n");
+  return alts.map((a, i) => `${i + 1}. ${a.name} - Rp${a.pricePerNight.toLocaleString("id-ID")}/malam`).join("\n");
 }
 
 /** Cocokkan jawaban tamu dengan salah satu alternatif (nama / nomor urut). */
-export function matchAlternative(
-  message: string,
-  alts: AlternativeRoomOption[],
-): AlternativeRoomOption | null {
+export function matchAlternative(message: string, alts: AlternativeRoomOption[]): AlternativeRoomOption | null {
   const t = message.trim().toLowerCase();
   if (!t) return null;
   // Pilihan nomor: "1", "2", "pilih 2", "no 3"
@@ -641,9 +603,10 @@ export function normalizeRoomName(text: string): string {
  * hardcode daftar nama kamar. Kalau ada lebih dari satu match dengan
  * panjang nama yang sama (ambigu), return null agar bot minta klarifikasi.
  */
-export function findMentionedRoomType<
-  R extends { id: string; name: string; base_rate?: number | null },
->(input: string, rooms: R[]): R | null {
+export function findMentionedRoomType<R extends { id: string; name: string; base_rate?: number | null }>(
+  input: string,
+  rooms: R[],
+): R | null {
   const normInput = normalizeRoomName(input);
   if (!normInput || rooms.length === 0) return null;
 
@@ -656,9 +619,7 @@ export function findMentionedRoomType<
     .map((r) => ({ room: r, norm: normalizeRoomName(r.name) }))
     .filter(({ norm }) => norm.length >= 2)
     .filter(({ norm }) => {
-      const re = new RegExp(
-        `(^|\\s)${norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(\\s|$)`,
-      );
+      const re = new RegExp(`(^|\\s)${norm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}(\\s|$)`);
       return re.test(normInput);
     })
     .sort((a, b) => b.norm.length - a.norm.length);
@@ -686,7 +647,6 @@ export function detectRequestedRoomChange(
   };
 }
 
-
 /** Detect "tamu jelas-jelas memulai booking baru" — pakai untuk auto-reset stale states. */
 const NEW_BOOKING_INTENT_PATTERN =
   /\b(booking|pesan|reservasi|mau (nginap|menginap|pesan|booking)|cek (kamar|ketersediaan)|ada kamar|kamar (kosong|tersedia))\b/i;
@@ -706,7 +666,12 @@ function isExpectedAnswer(state: BookingState, message: string): boolean {
       return !!extractEmail(message);
     case "AWAITING_PHONE":
     case "CONFIRMING_PHONE":
-      return !!extractPhone(message) || USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message) || USE_THIS_PHONE_PATTERN.test(message);
+      return (
+        !!extractPhone(message) ||
+        USE_THIS_PATTERN.test(message) ||
+        USE_OTHER_PATTERN.test(message) ||
+        USE_THIS_PHONE_PATTERN.test(message)
+      );
     case "CONFIRMING_NAME":
       return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
     case "CONFIRMING_BOOKING":
@@ -758,9 +723,7 @@ export function parseSlotCorrection(
   }
 
   // Tipe kamar: dinamis dari katalog DB (tanpa hardcode nama kamar).
-  const mentionedRoom = rooms?.length
-    ? findMentionedRoomType(input, rooms)
-    : null;
+  const mentionedRoom = rooms?.length ? findMentionedRoomType(input, rooms) : null;
   if (mentionedRoom) {
     patch.roomName = mentionedRoom.name;
     patch.roomId = mentionedRoom.id;
@@ -771,12 +734,14 @@ export function parseSlotCorrection(
     if (roomsCountMatch) {
       const qty = Number(roomsCountMatch[1]);
       if (qty >= 1 && qty <= 10) {
-        patch.rooms = [{
-          roomTypeId: mentionedRoom.id,
-          roomTypeName: mentionedRoom.name,
-          quantity: qty,
-          pricePerNight: Number(mentionedRoom.base_rate ?? 0),
-        }];
+        patch.rooms = [
+          {
+            roomTypeId: mentionedRoom.id,
+            roomTypeName: mentionedRoom.name,
+            quantity: qty,
+            pricePerNight: Number(mentionedRoom.base_rate ?? 0),
+          },
+        ];
       }
     }
   }
@@ -812,7 +777,6 @@ export function computeExtraBeds(
   return { extraBeds, overCapacity, ratePerNight };
 }
 
-
 /**
  * Evaluates the message against the current state and returns whether the state machine handled it.
  */
@@ -820,7 +784,7 @@ export async function processBookingState(
   ctx: ToolContext,
   phone: string,
   message: string,
-  currentStateRecord: StateRecord
+  currentStateRecord: StateRecord,
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
@@ -858,11 +822,9 @@ export async function processBookingState(
       handled: true,
       reply:
         "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
-        "Untuk memastikan, balas \"Ya, batalkan\". Kalau tidak jadi batal, balas \"Jangan\".",
+        'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi batal, balas "Jangan".',
     };
   }
-
-
 
   if (state === "IDLE") {
     return { handled: false }; // Handled by LLM via normal AI workflow
@@ -877,11 +839,7 @@ export async function processBookingState(
   // Reset state ke PAYMENT_PENDING dan serahkan ke Finance Agent.
   if (isDataEntryState(state)) {
     try {
-      const { data: guests } = await (supabase as any)
-        .from("guests")
-        .select("id")
-        .eq("phone", phone)
-        .limit(10);
+      const { data: guests } = await (supabase as any).from("guests").select("id").eq("phone", phone).limit(10);
       const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
       if (guestIds.length > 0) {
         const cutoff = new Date(Date.now() - 90 * 60 * 1000).toISOString();
@@ -897,7 +855,7 @@ export async function processBookingState(
         if (activeBooking?.reference_code) {
           console.info(
             `[BookingState] ${state} → PAYMENT_PENDING: booking aktif ` +
-            `${activeBooking.reference_code} sudah ada, hentikan loop data-entry.`,
+              `${activeBooking.reference_code} sudah ada, hentikan loop data-entry.`,
           );
           context.bookingCode = activeBooking.reference_code;
           await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
@@ -909,14 +867,13 @@ export async function processBookingState(
     }
   }
 
-
   // Mid-booking interruption: the guest asks something unrelated instead of
   // answering the current prompt. Hand the turn to the LLM / specialist agents
   // to answer, but KEEP the booking state so the flow resumes on the next
   // relevant reply (the state auto-resets after 15 min if truly abandoned).
   if (isDataEntryState(state) && !isExpectedAnswer(state, message)) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
-    const interruptByIntent   = INTERRUPT_INTENTS.has((await classifyIntent(message, supabase)).category);
+    const interruptByIntent = INTERRUPT_INTENTS.has((await classifyIntent(message, supabase)).category);
     if (interruptByQuestion || interruptByIntent) {
       console.info(`[BookingState] Interruption during ${state} — preserving state, deferring to LLM`);
       return { handled: false };
@@ -945,12 +902,14 @@ export async function processBookingState(
       context.roomId = picked.roomTypeId;
       context.roomName = picked.name;
       context.pricePerNight = picked.pricePerNight;
-      context.rooms = [{
-        roomTypeId:    picked.roomTypeId,
-        roomTypeName:  picked.name,
-        quantity:      1,
-        pricePerNight: picked.pricePerNight,
-      }];
+      context.rooms = [
+        {
+          roomTypeId: picked.roomTypeId,
+          roomTypeName: picked.name,
+          quantity: 1,
+          pricePerNight: picked.pricePerNight,
+        },
+      ];
       // Lanjut ke slot berikutnya yang masih kosong.
       if (context.guestName && looksLikePersonName(context.guestName)) {
         await updateBookingState(supabase, phone, "CONFIRMING_NAME", context);
@@ -994,8 +953,7 @@ export async function processBookingState(
     if (USE_THIS_PATTERN.test(trimmed) && !matchAlternative(trimmed, alts)) {
       return {
         handled: true,
-        reply:
-          `Siap Kak. Karena ${requested} penuh, silakan pilih salah satu kamar yang tersedia:\n${altListText}`,
+        reply: `Siap Kak. Karena ${requested} penuh, silakan pilih salah satu kamar yang tersedia:\n${altListText}`,
       };
     }
 
@@ -1004,9 +962,7 @@ export async function processBookingState(
       context.guestName = trimmed;
       await updateBookingState(supabase, phone, state, context);
       const firstName = trimmed.split(/\s+/)[0];
-      return reAskWithPrefix(
-        `Baik Kak ${firstName}, saya catat namanya. Karena ${requested} penuh, `,
-      );
+      return reAskWithPrefix(`Baik Kak ${firstName}, saya catat namanya. Karena ${requested} penuh, `);
     }
 
     // 6) Tidak jelas → tampilkan ulang opsi.
@@ -1022,14 +978,14 @@ export async function processBookingState(
   // State: ROOM_SELECTED -> AWAITING_NAME
   // (Transition from IDLE to ROOM_SELECTED is handled by the AI Front Office Agent when tool is called)
 
-  
-  if (state === "COLLECTING_DATA" ||
-      state === "AWAITING_NAME" ||
-      state === "CONFIRMING_NAME" ||
-      state === "AWAITING_EMAIL" ||
-      state === "CONFIRMING_PHONE" ||
-      state === "AWAITING_PHONE") {
-    
+  if (
+    state === "COLLECTING_DATA" ||
+    state === "AWAITING_NAME" ||
+    state === "CONFIRMING_NAME" ||
+    state === "AWAITING_EMAIL" ||
+    state === "CONFIRMING_PHONE" ||
+    state === "AWAITING_PHONE"
+  ) {
     const roomsList = ctx.rooms || [];
     const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
@@ -1037,7 +993,7 @@ export async function processBookingState(
     // Merge extracted values to context
     if (extracted.check_in) context.checkIn = extracted.check_in;
     if (extracted.check_out) context.checkOut = extracted.check_out;
-    
+
     if (extracted.room_type) {
       context.roomName = extracted.room_type;
       context.roomId = extracted.room_type_id;
@@ -1046,23 +1002,27 @@ export async function processBookingState(
         context.pricePerNight = Number(rt.base_rate ?? 0);
       }
     }
-    
+
     if (extracted.room_quantity) {
       if (context.roomId && context.roomName) {
-        context.rooms = [{
-          roomTypeId: context.roomId,
-          roomTypeName: context.roomName,
-          quantity: extracted.room_quantity,
-          pricePerNight: context.pricePerNight ?? 0,
-        }];
+        context.rooms = [
+          {
+            roomTypeId: context.roomId,
+            roomTypeName: context.roomName,
+            quantity: extracted.room_quantity,
+            pricePerNight: context.pricePerNight ?? 0,
+          },
+        ];
       }
     } else if (context.roomId && context.roomName && (!context.rooms || context.rooms.length === 0)) {
-      context.rooms = [{
-        roomTypeId: context.roomId,
-        roomTypeName: context.roomName,
-        quantity: 1,
-        pricePerNight: context.pricePerNight ?? 0,
-      }];
+      context.rooms = [
+        {
+          roomTypeId: context.roomId,
+          roomTypeName: context.roomName,
+          quantity: 1,
+          pricePerNight: context.pricePerNight ?? 0,
+        },
+      ];
     }
 
     if (extracted.guest_name) context.guestName = extracted.guest_name;
@@ -1070,12 +1030,12 @@ export async function processBookingState(
     if (extracted.phone) context.guestPhone = extracted.phone;
     if (extracted.adults) context.adults = extracted.adults;
     if (extracted.children) context.children = extracted.children;
-    
+
     // Additional slots
     if (extracted.is_invoice_request) {
       context.invoice_requested = true;
     }
-    
+
     if (extracted.is_skip_email) {
       context.guestEmail = undefined;
       context.email_clarification_asked = true;
@@ -1090,16 +1050,23 @@ export async function processBookingState(
       extracted.is_room_detail_question ||
       extracted.is_early_arrival
     ) {
-      console.info(`[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`);
+      console.info(
+        `[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`,
+      );
       await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
       return { handled: false };
     }
 
-    // Check mandatory fields: Dates, Room type, guest name, guest phone
+    // Check mandatory fields: Dates, Room type, guest name
+    // guestPhone diisi otomatis dari nomor WA sesi (ctx.phone) bila kosong —
+    // tidak perlu memintanya ke tamu yang sudah menghubungi via WhatsApp.
+    if (!context.guestPhone || context.guestPhone.length < 8) {
+      context.guestPhone = phone;
+    }
     const hasDates = !!context.checkIn && !!context.checkOut;
     const hasRoom = !!context.roomName;
     const hasName = !!context.guestName && context.guestName.length >= 2;
-    const hasPhone = !!context.guestPhone && context.guestPhone.length >= 8;
+    const hasPhone = true; // selalu true — sudah diisi otomatis di atas
 
     if (hasDates && hasRoom && hasName && hasPhone) {
       // Prompt for optional email if not yet filled and not yet clarified
@@ -1141,7 +1108,7 @@ export async function processBookingState(
     if (!hasDates) missing.push("Tanggal check-in & check-out");
     if (!hasRoom) missing.push("Tipe kamar");
     if (!hasName) missing.push("Nama lengkap tamu");
-    if (!hasPhone) missing.push("Nomor WhatsApp/HP kontak");
+    // guestPhone otomatis dari nomor WA — tidak perlu diminta ke tamu
 
     const summary = formatPartialBookingSummary(context);
     let reply = `Data booking sementara:\n${summary}\n\n`;
@@ -1163,12 +1130,12 @@ export async function processBookingState(
     // mengganti kamar — bukan menyetujui ringkasan kamar sebelumnya.
     const requestedRoom = detectRequestedRoomChange(message, ctx.rooms, context.roomId);
     if (requestedRoom && context.checkIn && context.checkOut) {
-      const { data: availabilityRows, error: availabilityError } = await supabase.rpc(
-        "room_type_availability_detail",
-        { p_check_in: context.checkIn, p_check_out: context.checkOut },
-      );
+      const { data: availabilityRows, error: availabilityError } = await supabase.rpc("room_type_availability_detail", {
+        p_check_in: context.checkIn,
+        p_check_out: context.checkOut,
+      });
       const rows = Array.isArray(availabilityRows)
-        ? availabilityRows as Array<{ room_type_id?: unknown; available?: unknown }>
+        ? (availabilityRows as Array<{ room_type_id?: unknown; available?: unknown }>)
         : [];
       const availability = rows.find((row) => row.room_type_id === requestedRoom.id);
       const availableCount = Number(availability?.available ?? 0);
@@ -1187,12 +1154,14 @@ export async function processBookingState(
       context.roomName = requestedRoom.name;
       context.pricePerNight = requestedRoom.pricePerNight;
       context.totalPrice = requestedRoom.pricePerNight * nights;
-      context.rooms = [{
-        roomTypeId: requestedRoom.id,
-        roomTypeName: requestedRoom.name,
-        quantity: 1,
-        pricePerNight: requestedRoom.pricePerNight,
-      }];
+      context.rooms = [
+        {
+          roomTypeId: requestedRoom.id,
+          roomTypeName: requestedRoom.name,
+          quantity: 1,
+          pricePerNight: requestedRoom.pricePerNight,
+        },
+      ];
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return await buildBookingSummaryAsync(ctx, context);
     }
@@ -1202,7 +1171,7 @@ export async function processBookingState(
     // ulang (terutama extra bed Deluxe), lalu tampilkan ringkasan baru.
     // Trigger HANYA jika pesan TIDAK murni konfirmasi/kanselasi singkat.
     const isPureConfirm = /^(ya|iya|yes|lanjut|ok|oke|setuju|betul|benar)[\s.!]*$/i.test(message.trim());
-    const isPureCancel  = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
+    const isPureCancel = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
     if (!isPureConfirm && !isPureCancel) {
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
@@ -1237,14 +1206,16 @@ export async function processBookingState(
 
     if (CONFIRM_PATTERN.test(message)) {
       // GATING INVOICE: validasi semua slot wajib sebelum buat booking.
+      // guestPhone diisi otomatis dari nomor WA sesi — tidak perlu divalidasi di sini.
+      if (!context.guestPhone || context.guestPhone.length < 8) {
+        context.guestPhone = phone;
+      }
       const missing: string[] = [];
       if (!context.checkIn || !context.checkOut) missing.push("tanggal");
       if (!context.roomName) missing.push("tipe kamar");
       if (!context.guestName) missing.push("nama");
       // Email opsional: hanya validasi format jika tamu mengisinya.
       if (context.guestEmail && !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
-
-      if (!context.guestPhone || !PHONE_PATTERN.test(context.guestPhone.replace(/[^0-9+]/g, ""))) missing.push("nomor HP");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, context.adults ?? 1);
@@ -1265,21 +1236,25 @@ export async function processBookingState(
       // Create the booking deterministically with the data collected in context.
       const raw = await createBooking(
         {
-          room_type:  context.roomName,
-          rooms:      context.rooms,
-          full_name:  context.guestName,
-          email:      context.guestEmail,
-          phone:      context.guestPhone,
-          check_in:   context.checkIn,
-          check_out:  context.checkOut,
-          adults:     context.adults ?? 1,
-          children:   context.children ?? 0,
+          room_type: context.roomName,
+          rooms: context.rooms,
+          full_name: context.guestName,
+          email: context.guestEmail,
+          phone: context.guestPhone,
+          check_in: context.checkIn,
+          check_out: context.checkOut,
+          adults: context.adults ?? 1,
+          children: context.children ?? 0,
         },
         ctx,
       );
 
       let result: any = {};
-      try { result = JSON.parse(raw); } catch { /* ignore */ }
+      try {
+        result = JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
 
       if (!result.ok) {
         await updateBookingState(supabase, phone, "IDLE", {});
@@ -1308,7 +1283,7 @@ export async function processBookingState(
         handled: true,
         reply:
           "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
-          "Untuk memastikan, balas \"Ya, batalkan\". Kalau tidak jadi batal, balas \"Jangan\".",
+          'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi batal, balas "Jangan".',
       };
     } else {
       // Tidak dikenali sebagai konfirmasi maupun koreksi — tampilkan ulang ringkasan
@@ -1317,7 +1292,6 @@ export async function processBookingState(
     }
   }
 
-  
   if (state === "PAYMENT_PENDING") {
     // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar
     // lagi tanggal 25", "ada kamar deluxe 30 Juni?"). Tanpa ini, state
