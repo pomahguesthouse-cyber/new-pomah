@@ -7,10 +7,7 @@
  */
 
 import { isDateString, fmtDateID } from "@/lib/date";
-import {
-  getDailyRatesForRange,
-  resolveRoomNightlyRates,
-} from "@/services/pricing/daily-rate.service";
+import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import type { ToolContext, ToolHandler } from "./types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -20,10 +17,10 @@ function str(v: unknown): string {
 }
 
 async function pickAvailableRooms(
-  ctx:        ToolContext,
+  ctx: ToolContext,
   roomTypeId: string,
-  checkIn:    string,
-  checkOut:   string,
+  checkIn: string,
+  checkOut: string,
   skipRoomIds?: Set<string>,
 ): Promise<string | null> {
   const { data: rooms } = await (ctx.supabaseAdmin as any)
@@ -39,7 +36,7 @@ async function pickAvailableRooms(
     .from("bookings")
     .select("id")
     .in("status", ["pending", "confirmed", "checked_in"])
-    .lt("check_in",  checkOut)
+    .lt("check_in", checkOut)
     .gt("check_out", checkIn);
 
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
@@ -60,7 +57,7 @@ async function pickAvailableRooms(
     }
   }
 
-  const free  = roomRows.find((r) => !taken.has(r.id));
+  const free = roomRows.find((r) => !taken.has(r.id));
   return free ? free.id : null;
 }
 
@@ -74,25 +71,20 @@ async function pickAvailableRooms(
  * into a single-room view (callers can format the confirmation the same way
  * either time).
  */
-async function findBookingByIdemKey(
-  ctx:     ToolContext,
-  idemKey: string,
-): Promise<string | null> {
+async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<string | null> {
   const { data: b } = await (ctx.supabaseAdmin as any)
     .from("bookings")
     .select(
       "id, reference_code, check_in, check_out, nights, total_amount, " +
-      "guests(full_name, email, phone), " +
-      "booking_rooms(room_type_id, nightly_rate, rooms(number))",
+        "guests(full_name, email, phone), " +
+        "booking_rooms(room_type_id, nightly_rate, rooms(number))",
     )
     .eq("idempotency_key", idemKey)
     .maybeSingle();
 
   if (!b) return null;
 
-  const bookingRoomsList: any[] = Array.isArray(b.booking_rooms)
-    ? b.booking_rooms
-    : [b.booking_rooms].filter(Boolean);
+  const bookingRoomsList: any[] = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
   const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
   const nights = Number(b.nights ?? 0);
 
@@ -115,36 +107,34 @@ async function findBookingByIdemKey(
     byType.set(tid, slot);
   }
   const rooms = Array.from(byType.values()).map((s) => ({
-    room_type:      s.name,
-    quantity:       s.count,
+    room_type: s.name,
+    quantity: s.count,
     rate_per_night: s.rate,
-    subtotal:       s.rate * s.count * nights,
-    room_numbers:   s.numbers,
+    subtotal: s.rate * s.count * nights,
+    room_numbers: s.numbers,
   }));
-  const roomTypeDisplay = rooms.length > 0
-    ? rooms.map((r) => `${r.quantity}x ${r.room_type}`).join(", ")
-    : "";
+  const roomTypeDisplay = rooms.length > 0 ? rooms.map((r) => `${r.quantity}x ${r.room_type}`).join(", ") : "";
   const firstRate = rooms[0]?.rate_per_night ?? 0;
   const roomCount = rooms.reduce((sum, r) => sum + r.quantity, 0);
 
   return JSON.stringify({
-    ok:               true,
-    reference_code:   b.reference_code,
-    room_type:        roomTypeDisplay,
+    ok: true,
+    reference_code: b.reference_code,
+    room_type: roomTypeDisplay,
     rooms,
-    room_count:       roomCount,
-    check_in:         b.check_in,
-    check_out:        b.check_out,
-    check_in_tampil:  fmtDateID(b.check_in),
+    room_count: roomCount,
+    check_in: b.check_in,
+    check_out: b.check_out,
+    check_in_tampil: fmtDateID(b.check_in),
     check_out_tampil: fmtDateID(b.check_out),
     nights,
-    nightly_rate:     firstRate,
-    total:            Number(b.total_amount ?? 0),
-    guest:            { full_name: g?.full_name, email: g?.email, phone: g?.phone },
+    nightly_rate: firstRate,
+    total: Number(b.total_amount ?? 0),
+    guest: { full_name: g?.full_name, email: g?.email, phone: g?.phone },
     pembayaran: {
-      bank:        ctx.property.payment_bank_name      ?? null,
+      bank: ctx.property.payment_bank_name ?? null,
       no_rekening: ctx.property.payment_account_number ?? null,
-      atas_nama:   ctx.property.payment_account_holder  ?? null,
+      atas_nama: ctx.property.payment_account_holder ?? null,
     },
     invoice_url: (() => {
       const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
@@ -166,10 +156,7 @@ async function findBookingByIdemKey(
 // littering the DB with orphans. Each step swallows errors and just logs —
 // missing rows on cleanup are fine, but a hard throw would mask the original
 // failure we're already reporting.
-async function rollbackBooking(
-  ctx: ToolContext,
-  refs: { bookingId?: string; guestId?: string },
-): Promise<void> {
+async function rollbackBooking(ctx: ToolContext, refs: { bookingId?: string; guestId?: string }): Promise<void> {
   if (refs.bookingId) {
     try {
       // booking_rooms cascades via FK ON DELETE CASCADE on most schemas; if
@@ -214,7 +201,7 @@ async function detectRoomConflicts(
     .select("id")
     .in("status", ["pending", "confirmed", "checked_in"])
     .neq("id", ourBookingId)
-    .lt("check_in",  checkOut)
+    .lt("check_in", checkOut)
     .gt("check_out", checkIn);
   const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
   if (activeIds.length === 0) return [];
@@ -229,10 +216,7 @@ async function detectRoomConflicts(
 
 // ─── Tool handler ─────────────────────────────────────────────────────────────
 
-export const createBooking: ToolHandler = async (
-  args: Record<string, unknown>,
-  ctx:  ToolContext,
-): Promise<string> => {
+export const createBooking: ToolHandler = async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
   // ── Idempotency short-circuit ────────────────────────────────────────────────
   // If a prior webhook retry already created this booking, return it as-is
   // instead of creating a duplicate.
@@ -243,18 +227,18 @@ export const createBooking: ToolHandler = async (
   }
 
   // ── Validate inputs ────────────────────────────────────────────────────────
-  const fullName      = str(args.full_name);
-  const emailRaw      = str(args.email);
-  const phoneRaw      = str(args.phone);
-  const checkIn       = isDateString(args.check_in)  ? args.check_in  : "";
+  const fullName = str(args.full_name);
+  const emailRaw = str(args.email);
+  const phoneRaw = str(args.phone);
+  const checkIn = isDateString(args.check_in) ? args.check_in : "";
   // Default check_out = check_in + 1 day (1 malam) when omitted — useful for
   // managerial direct entry where staff says "Budi, Single, hari ini, 1 malam".
-  let checkOut        = isDateString(args.check_out) ? args.check_out : "";
+  let checkOut = isDateString(args.check_out) ? args.check_out : "";
   if (!checkOut && checkIn) {
     checkOut = new Date(new Date(checkIn).getTime() + 86_400_000).toISOString().slice(0, 10);
   }
-  const adults        = Math.max(1, Math.min(8, Number(args.adults)   || 1));
-  const children      = Math.max(0, Math.min(8, Number(args.children) || 0));
+  const adults = Math.max(1, Math.min(8, Number(args.adults) || 1));
+  const children = Math.max(0, Math.min(8, Number(args.children) || 0));
 
   // Managerial direct entry: nama wajib, email/HP opsional (staff isi belakangan
   // via admin UI). Guest WA flow tetap strict — semua data wajib karena harus
@@ -350,10 +334,10 @@ export const createBooking: ToolHandler = async (
     }
   }
 
-  const { data: availRows } = await (ctx.supabasePublic as any).rpc(
-    "room_type_availability_detail",
-    { p_check_in: checkIn, p_check_out: checkOut },
-  );
+  const { data: availRows } = await (ctx.supabasePublic as any).rpc("room_type_availability_detail", {
+    p_check_in: checkIn,
+    p_check_out: checkOut,
+  });
   const availMap = new Map(((availRows ?? []) as any[]).map((r) => [r.room_type_id, r.available]));
 
   const skipRoomIds = new Set<string>();
@@ -452,9 +436,10 @@ export const createBooking: ToolHandler = async (
       });
     }
 
-    const singleRate = (typeof args.price_per_night === "number" && args.price_per_night > 0)
-      ? args.price_per_night
-      : Number(rt.base_rate ?? 0);
+    const singleRate =
+      typeof args.price_per_night === "number" && args.price_per_night > 0
+        ? args.price_per_night
+        : Number(rt.base_rate ?? 0);
 
     assignments.push({
       roomTypeId: rt.id,
@@ -468,9 +453,7 @@ export const createBooking: ToolHandler = async (
   const propId = (ctx.property as Record<string, unknown>).id as string | undefined;
   if (!propId) return JSON.stringify({ ok: false, error: "Properti belum dikonfigurasi." });
 
-  const nights = Math.round(
-    (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000,
-  );
+  const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
 
   // ── Resolve dynamic daily rates ───────────────────────────────────────────
   // Bookings yang sudah ada di DB tidak disentuh (sesuai keputusan
@@ -484,25 +467,15 @@ export const createBooking: ToolHandler = async (
   // average per malam (total/nights) supaya invariant lama (rate × nights
   // = subtotal) tetap berlaku di RPC invoice & laporan.
   const uniqueRoomTypeIds = Array.from(new Set(assignments.map((a) => a.roomTypeId)));
-  const overridesByRoom = await getDailyRatesForRange(
-    ctx.supabasePublic,
-    uniqueRoomTypeIds,
-    checkIn,
-    checkOut,
-  );
+  const overridesByRoom = await getDailyRatesForRange(ctx.supabasePublic, uniqueRoomTypeIds, checkIn, checkOut);
   const resolvedByRoomType = new Map<string, { avgRate: number; stopSellDates: string[] }>();
   for (const rtId of uniqueRoomTypeIds) {
     const rt = ctx.rooms.find((r) => r.id === rtId);
     if (!rt) continue;
-    const resolved = resolveRoomNightlyRates(
-      rt,
-      checkIn,
-      checkOut,
-      overridesByRoom.get(rtId),
-    );
+    const resolved = resolveRoomNightlyRates(rt, checkIn, checkOut, overridesByRoom.get(rtId));
     const avg = resolved.nights > 0 ? resolved.total / resolved.nights : Number(rt.base_rate ?? 0);
     resolvedByRoomType.set(rtId, {
-      avgRate:       avg,
+      avgRate: avg,
       stopSellDates: resolved.stop_sell_dates,
     });
   }
@@ -511,7 +484,7 @@ export const createBooking: ToolHandler = async (
     .find(({ info }) => info && info.stopSellDates.length > 0);
   if (stopSellHit && stopSellHit.info) {
     return JSON.stringify({
-      ok:    false,
+      ok: false,
       error:
         `${stopSellHit.a.roomTypeName} tidak dijual untuk tanggal ` +
         `${stopSellHit.info.stopSellDates.map(fmtDateID).join(", ")}. ` +
@@ -545,7 +518,7 @@ export const createBooking: ToolHandler = async (
 
   if (gErr || !guest) {
     return JSON.stringify({
-      ok:    false,
+      ok: false,
       error: `Gagal menyimpan data tamu: ${gErr?.message ?? "tidak diketahui"}`,
     });
   }
@@ -556,20 +529,31 @@ export const createBooking: ToolHandler = async (
   // checkout flow (public.functions.ts) which sets source='direct' itself.
   const desiredSource: "manager_chat" | "whatsapp" = managerialDirect ? "manager_chat" : "whatsapp";
 
+  // Skema pembayaran DP vs lunas.
+  // args.payment_type = 'dp' | 'full' (dikirim dari booking-machine via context)
+  // args.dp_amount    = nominal DP (jika payment_type='dp')
+  const paymentType = str(args.payment_type).toLowerCase();
+  const isDP = paymentType === "dp";
+  const dpAmount = isDP ? Math.max(0, Number(args.dp_amount) || 0) : 0;
+  const initialPaidAmount = isDP ? dpAmount : 0;
+  const initialPaymentStatus = isDP && dpAmount > 0 ? "partial" : "unpaid";
+
   async function insertBooking(srcValue: string) {
     return await (ctx.supabaseAdmin as any)
       .from("bookings")
       .insert({
-        property_id:  propId,
-        guest_id:     guest.id,
-        check_in:     checkIn,
-        check_out:    checkOut,
+        property_id: propId,
+        guest_id: guest.id,
+        check_in: checkIn,
+        check_out: checkOut,
         nights,
         adults,
         children,
         total_amount: total,
-        source:       srcValue,
-        status:       "pending",
+        paid_amount: initialPaidAmount,
+        payment_status: initialPaymentStatus,
+        source: srcValue,
+        status: "pending",
         idempotency_key: idemKey ?? null,
       })
       .select("id, reference_code")
@@ -582,7 +566,9 @@ export const createBooking: ToolHandler = async (
   // 'manager_chat' as a booking_source enum value (22P02 invalid_text_representation).
   // Retry once with 'direct' so the booking still lands, and log a warning.
   if (bErr && desiredSource === "manager_chat" && (bErr as any)?.code === "22P02") {
-    console.warn("[create_booking] enum 'manager_chat' not in DB — apply migration 20260602010000_booking_source_manager_chat.sql. Falling back to 'direct'.");
+    console.warn(
+      "[create_booking] enum 'manager_chat' not in DB — apply migration 20260602010000_booking_source_manager_chat.sql. Falling back to 'direct'.",
+    );
     ({ data: booking, error: bErr } = await insertBooking("direct"));
   }
 
@@ -601,21 +587,19 @@ export const createBooking: ToolHandler = async (
     // Hard failure: roll back the guest we inserted so it doesn't sit orphaned.
     await rollbackBooking(ctx, { guestId: guest.id });
     return JSON.stringify({
-      ok:    false,
+      ok: false,
       error: `Gagal membuat booking: ${bErr?.message ?? "tidak diketahui"}`,
     });
   }
 
   // ── Assign rooms (resolved above, guaranteed non-null) ────────────────────────
   const brRows = assignments.map((a) => ({
-    booking_id:   booking.id,
-    room_id:      a.roomId,
+    booking_id: booking.id,
+    room_id: a.roomId,
     room_type_id: a.roomTypeId,
     nightly_rate: a.rate,
   }));
-  const { error: brErr } = await (ctx.supabaseAdmin as any)
-    .from("booking_rooms")
-    .insert(brRows);
+  const { error: brErr } = await (ctx.supabaseAdmin as any).from("booking_rooms").insert(brRows);
 
   if (brErr) {
     // Partial state: booking row landed, booking_rooms didn't. Roll back so we
@@ -627,14 +611,14 @@ export const createBooking: ToolHandler = async (
     // our pickAvailableRooms() and this insert. Surface as a retry hint.
     if ((brErr as any)?.code === "23P01") {
       return JSON.stringify({
-        ok:    false,
+        ok: false,
         error:
           "Kamar baru saja diambil booking lain di tanggal yang sama. " +
           "Coba ulangi — tool akan memilih kamar lain yang masih kosong.",
       });
     }
     return JSON.stringify({
-      ok:    false,
+      ok: false,
       error: `Gagal menyimpan detail kamar: ${brErr.message}`,
     });
   }
@@ -653,11 +637,9 @@ export const createBooking: ToolHandler = async (
   );
   if (conflictRoomIds.length > 0) {
     await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
-    const conflictNames = assignments
-      .filter((a) => conflictRoomIds.includes(a.roomId))
-      .map((a) => a.roomTypeName);
+    const conflictNames = assignments.filter((a) => conflictRoomIds.includes(a.roomId)).map((a) => a.roomTypeName);
     return JSON.stringify({
-      ok:    false,
+      ok: false,
       error:
         `Kamar ${conflictNames.join(", ")} baru saja diambil booking lain saat ` +
         `kita mau finalisasi. Coba ulangi — tool akan memilih kamar yang masih kosong.`,
@@ -671,13 +653,11 @@ export const createBooking: ToolHandler = async (
   // future email channel) — only the duplicate WA message is suppressed.
   const upsertInvoiceRecord = async () => {
     try {
-      const { generateAndSendInvoiceNotification } = await import(
-        "@/services/invoice-notification.service"
-      );
+      const { generateAndSendInvoiceNotification } = await import("@/services/invoice-notification.service");
       const res = await generateAndSendInvoiceNotification({
-        supabase:     ctx.supabaseAdmin as any,
-        bookingId:    booking.id,
-        origin:       ctx.origin,
+        supabase: ctx.supabaseAdmin as any,
+        bookingId: booking.id,
+        origin: ctx.origin,
         skipWhatsApp: true,
       });
       if (!res.ok) {
@@ -706,9 +686,10 @@ export const createBooking: ToolHandler = async (
   else void notifyManager();
 
   // Format room type display for returned JSON
-  const finalRoomTypeDisplay = roomsToBook.length > 0 
-    ? roomsToBook.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ")
-    : assignments[0].roomTypeName;
+  const finalRoomTypeDisplay =
+    roomsToBook.length > 0
+      ? roomsToBook.map((r) => `${r.quantity}x ${r.roomTypeName}`).join(", ")
+      : assignments[0].roomTypeName;
 
   // ── Return success payload ─────────────────────────────────────────────────
   // Backwards-compat: single-room callers still get `room_type` (joined string)
@@ -716,37 +697,36 @@ export const createBooking: ToolHandler = async (
   // a structured `rooms` array + `room_count`.
   const roomsByType = new Map<string, { name: string; rate: number; count: number }>();
   for (const a of assignments) {
-    const slot = roomsByType.get(a.roomTypeId)
-      ?? { name: a.roomTypeName, rate: a.rate, count: 0 };
+    const slot = roomsByType.get(a.roomTypeId) ?? { name: a.roomTypeName, rate: a.rate, count: 0 };
     slot.count += 1;
     roomsByType.set(a.roomTypeId, slot);
   }
   const roomsPayload = Array.from(roomsByType.values()).map((s) => ({
-    room_type:      s.name,
-    quantity:       s.count,
+    room_type: s.name,
+    quantity: s.count,
     rate_per_night: s.rate,
-    subtotal:       s.rate * s.count * nights,
+    subtotal: s.rate * s.count * nights,
   }));
   const roomCount = assignments.length;
 
   return JSON.stringify({
-    ok:               true,
-    reference_code:   booking.reference_code,
-    room_type:        finalRoomTypeDisplay,
-    rooms:            roomsPayload,
-    room_count:       roomCount,
-    check_in:         checkIn,
-    check_out:        checkOut,
-    check_in_tampil:  fmtDateID(checkIn),
+    ok: true,
+    reference_code: booking.reference_code,
+    room_type: finalRoomTypeDisplay,
+    rooms: roomsPayload,
+    room_count: roomCount,
+    check_in: checkIn,
+    check_out: checkOut,
+    check_in_tampil: fmtDateID(checkIn),
     check_out_tampil: fmtDateID(checkOut),
     nights,
-    nightly_rate:     assignments[0].rate,
+    nightly_rate: assignments[0].rate,
     total,
-    guest:            { full_name: fullName, email, phone },
+    guest: { full_name: fullName, email, phone },
     pembayaran: {
-      bank:       ctx.property.payment_bank_name      ?? null,
+      bank: ctx.property.payment_bank_name ?? null,
       no_rekening: ctx.property.payment_account_number ?? null,
-      atas_nama:  ctx.property.payment_account_holder  ?? null,
+      atas_nama: ctx.property.payment_account_holder ?? null,
     },
     invoice_url: (() => {
       const pDom = (ctx.property?.public_domain as string | undefined)?.trim();
