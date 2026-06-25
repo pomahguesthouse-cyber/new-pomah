@@ -3,22 +3,11 @@
  * Runs inside waitUntil from the webhook (not HTTP self-fetch).
  */
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  saveOutboundMessage,
-  updateThreadAutoReplyMeta,
-} from "@/repositories/message.repository";
+import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
-import {
-  runMultiAgentOrchestration,
-  deriveAgentLabelFromKey,
-} from "@/ai/multi-agent-orchestrator";
+import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { todayWIB } from "@/lib/date";
-import {
-  queueClaimNext,
-  queueComplete,
-  queueFail,
-  queueHeartbeat,
-} from "@/services/queue.service";
+import { queueClaimNext, queueComplete, queueFail, queueHeartbeat } from "@/services/queue.service";
 import {
   SESSION_GAP_MS,
   findSessionStartIndex,
@@ -36,10 +25,22 @@ import {
 import { chatCompletionText } from "@/services/ai-client.service";
 import { findTrainingSignals } from "@/services/training-retrieval.service";
 
-const FALLBACK_MESSAGE =
-  "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
+const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 
-const AI_TIMEOUT_MS = 22_000;
+/**
+ * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent →
+ * route → jalankan agent → tool calls → balasan teks). Harus lebih besar dari
+ * LLM_CALL_TIMEOUT_MS (12s) dikali jumlah ronde tool-call yang wajar, jika
+ * tidak orchestrasi multi-turn akan dipotong di tengah dan menghasilkan
+ * balasan fallback. 40s menampung ~2-3 ronde. (Sebelumnya 22s — terlalu
+ * pendek; satu panggilan LLM yang timeout saja sudah menghabiskan anggaran
+ * sebelum ronde kedua sempat jalan.)
+ *
+ * Catatan Cloudflare Workers: pastikan ini masih di bawah batas wall-time
+ * sub-request/worker pada paket yang dipakai. 40s aman untuk Workers berbayar
+ * (CPU time terpisah dari wall time selama menunggu I/O LLM).
+ */
+const AI_TIMEOUT_MS = 40_000;
 
 interface SopCache {
   docs: any[];
@@ -82,10 +83,8 @@ export async function resolveManagerByPhone(
   if (error) {
     console.error("[Autoreply] Error fetching managers:", error);
     // If it's a column not found error, try without is_active
-    if (error.code === 'PGRST106' || String(error.message).includes('is_active')) {
-      const fallback = await (supabaseAdmin as any)
-        .from("property_managers")
-        .select("id, name, role, phone");
+    if (error.code === "PGRST106" || String(error.message).includes("is_active")) {
+      const fallback = await (supabaseAdmin as any).from("property_managers").select("id, name, role, phone");
       if (!fallback.error && fallback.data) {
         for (const m of fallback.data) {
           if (m.phone && normalizePhone(m.phone) === needle) return m as any;
@@ -103,7 +102,6 @@ export async function resolveManagerByPhone(
   }
   return null;
 }
-
 
 export type AutoreplyOutcome =
   | "ok"
@@ -131,12 +129,26 @@ const SUMMARY_REGEN_COOLDOWN_MS = 1 * 60 * 1000;
  * (booking, pembayaran, komplain) tanpa menambah latency balasan.
  */
 const FORCE_SUMMARY_KEYWORDS: readonly string[] = [
-  "booking", "pesan", "reservasi",
-  "check in", "check-in", "check out", "check-out",
-  "transfer", "bayar", "bukti",
-  "komplain", "keluhan", "rusak", "kotor",
-  "deluxe", "family", "single",
-  "tanggal", "malam", "tamu",
+  "booking",
+  "pesan",
+  "reservasi",
+  "check in",
+  "check-in",
+  "check out",
+  "check-out",
+  "transfer",
+  "bayar",
+  "bukti",
+  "komplain",
+  "keluhan",
+  "rusak",
+  "kotor",
+  "deluxe",
+  "family",
+  "single",
+  "tanggal",
+  "malam",
+  "tamu",
 ];
 
 function shouldForceSummary(lastMessage: string): boolean {
@@ -161,9 +173,7 @@ export async function generateSessionSummary(
   existingSummary: string | null | undefined,
   config: { apiKey: string; baseUrl: string; model: string },
 ): Promise<ChatSummaryStructured | null> {
-  const historyText = history
-    .map((m) => `${m.direction === "in" ? "Tamu" : "Bot"}: ${m.body}`)
-    .join("\n");
+  const historyText = history.map((m) => `${m.direction === "in" ? "Tamu" : "Bot"}: ${m.body}`).join("\n");
 
   const schemaHint = `{
   "short_summary": string (maks ${SUMMARY_MAX_CHARS} karakter, 1-3 kalimat Bahasa Indonesia),
@@ -192,15 +202,11 @@ export async function generateSessionSummary(
     `- Jawab HANYA JSON valid, tanpa code fence, tanpa kata pengantar.`;
 
   try {
-    const raw = await chatCompletionText(
-      config,
-      [{ role: "user", content: prompt }],
-      {
-        temperature: 0.2,
-        maxTokens: 700,
-        responseFormat: { type: "json_object" },
-      },
-    );
+    const raw = await chatCompletionText(config, [{ role: "user", content: prompt }], {
+      temperature: 0.2,
+      maxTokens: 700,
+      responseFormat: { type: "json_object" },
+    });
 
     return parseStructuredSummary(raw ?? "");
   } catch (e) {
@@ -230,18 +236,14 @@ function parseStructuredSummary(raw: string): ChatSummaryStructured | null {
     }
   }
   if (!obj || typeof obj !== "object") {
-    console.warn(
-      `[SessionSummarizer] summary failed invalid JSON: ${cleaned.slice(0, 200)}`,
-    );
+    console.warn(`[SessionSummarizer] summary failed invalid JSON: ${cleaned.slice(0, 200)}`);
     return null;
   }
 
   const pickEnum = <T extends string>(v: unknown, list: readonly T[]): T | null =>
     typeof v === "string" && (list as readonly string[]).includes(v) ? (v as T) : null;
-  const pickString = (v: unknown): string | null =>
-    typeof v === "string" && v.trim() ? v.trim() : null;
-  const pickNumber = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const pickString = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const pickNumber = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const pickBool = (v: unknown): boolean => v === true;
 
   let shortSummary = pickString((obj as Record<string, unknown>).short_summary) ?? "";
@@ -277,18 +279,13 @@ function parseStructuredSummary(raw: string): ChatSummaryStructured | null {
  * - chat_summary_version (++)
  * - chat_summary_updated_at (now)
  */
-async function updateThreadSummary(
-  client: any,
-  threadId: string,
-  structured: ChatSummaryStructured,
-): Promise<void> {
+async function updateThreadSummary(client: any, threadId: string, structured: ChatSummaryStructured): Promise<void> {
   const { data: prev } = await client
     .from("whatsapp_threads")
     .select("chat_summary_version")
     .eq("id", threadId)
     .maybeSingle();
-  const nextVersion =
-    ((prev as { chat_summary_version?: number } | null)?.chat_summary_version ?? 0) + 1;
+  const nextVersion = ((prev as { chat_summary_version?: number } | null)?.chat_summary_version ?? 0) + 1;
 
   const { error } = await client
     .from("whatsapp_threads")
@@ -342,10 +339,7 @@ export async function regenerateThreadSummary(
 /**
  * Helper publik: hapus context summary (semua field) — dipakai admin UI.
  */
-export async function clearThreadSummary(
-  client: any,
-  threadId: string,
-): Promise<void> {
+export async function clearThreadSummary(client: any, threadId: string): Promise<void> {
   await client
     .from("whatsapp_threads")
     .update({
@@ -362,19 +356,16 @@ export async function executeAutoreplyForPhone(
   onBeforeAttempt?: () => Promise<void>,
   queueEntryId?: string,
 ): Promise<AutoreplyOutcome> {
-  const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
-    "get_autoreply_context",
-    { p_phone: phone },
-  );
+  const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc("get_autoreply_context", { p_phone: phone });
 
   if (ctxErr || !ctx) {
     console.error(`[Autoreply] Context failed for ${phone}`, ctxErr);
     try {
       const { notifyRpcFailure } = await import("@/services/manager-notifier.service");
       await notifyRpcFailure(supabaseAdmin as any, {
-        rpcName:      "get_autoreply_context",
+        rpcName: "get_autoreply_context",
         errorMessage: ctxErr?.message ?? (ctx ? null : "empty context"),
-        context:      { phone, origin, queueEntryId },
+        context: { phone, origin, queueEntryId },
       });
     } catch (_) {
       // notifikasi tidak boleh mengganggu alur
@@ -389,15 +380,13 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
-  const { data: prop } = await (supabaseAdmin as any)
-    .from("properties")
-    .select("*")
-    .limit(1)
-    .maybeSingle();
+  const { data: prop } = await (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle();
   const p = (prop ?? {}) as any;
   const { data: rooms } = await (supabasePublic as any)
     .from("room_types")
-    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate")
+    .select(
+      "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate",
+    )
     .order("base_rate");
 
   const aiCfgRaw = p.ai_lab_config as any;
@@ -455,7 +444,10 @@ export async function executeAutoreplyForPhone(
   const chatSummary = c.chat_summary || "";
   const rawSummaryJson = c.chat_summary_json;
   const chatSummaryJson =
-    rawSummaryJson && typeof rawSummaryJson === "object" && !Array.isArray(rawSummaryJson) && Object.keys(rawSummaryJson).length > 0
+    rawSummaryJson &&
+    typeof rawSummaryJson === "object" &&
+    !Array.isArray(rawSummaryJson) &&
+    Object.keys(rawSummaryJson).length > 0
       ? (rawSummaryJson as ChatSummaryStructured)
       : undefined;
   const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
@@ -475,8 +467,7 @@ export async function executeAutoreplyForPhone(
   const rollingMessages = currentSessionMessages.slice(-20);
 
   const lastMessage =
-    [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")
-      ?.body ?? "";
+    [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
 
   let reply: string | null = null;
   let orchResult: any = null;
@@ -487,15 +478,11 @@ export async function executeAutoreplyForPhone(
   // resmi, dan (kalau frustrasi) tandai handoff ke admin manusia.
   if (!manager && lastMessage) {
     try {
-      const { detectFrustration, buildFrustrationReply, markHumanHandoff, createHandoffTicket } = await import(
-        "@/services/frustration-detector"
-      );
+      const { detectFrustration, buildFrustrationReply, markHumanHandoff, createHandoffTicket } =
+        await import("@/services/frustration-detector");
       const kind = detectFrustration(lastMessage);
       if (kind) {
-        const { data: bs } = await (supabaseAdmin as any).rpc(
-          "get_active_booking_state",
-          { p_phone: phone },
-        );
+        const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingContext = (bs as { context?: unknown } | null)?.context ?? {};
         const { reply: fReply, shouldHandoff } = buildFrustrationReply(kind, bookingContext);
         reply = fReply;
@@ -533,7 +520,6 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-
   for (let attempt = 1; attempt <= 3 && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
@@ -569,7 +555,9 @@ export async function executeAutoreplyForPhone(
     try {
       const consecutiveInbound = countConsecutiveInbound(rollingMessages);
       const recoveryMode = consecutiveInbound >= 3;
-      const unansweredMessages = recoveryMode ? getLastNInboundMessages(rollingMessages, consecutiveInbound) : undefined;
+      const unansweredMessages = recoveryMode
+        ? getLastNInboundMessages(rollingMessages, consecutiveInbound)
+        : undefined;
 
       orchResult = await runMultiAgentOrchestration({
         phone,
@@ -659,17 +647,19 @@ export async function executeAutoreplyForPhone(
         if (orchResult?.error && (!orchResult.retries || orchResult.retries.length === 0)) {
           const latency = Date.now() - tStart;
           try {
-            await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-              thread_id: c.thread_id,
-              phone,
-              agent_key: orchResult.agentKey ?? "front-office",
-              attempt: 1,
-              reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
-              model,
-              latency_ms: latency,
-              resolved: false,
-              queue_entry_id: queueEntryId || null,
-            }]);
+            await (supabaseAdmin as any).from("ai_retry_audit").insert([
+              {
+                thread_id: c.thread_id,
+                phone,
+                agent_key: orchResult.agentKey ?? "front-office",
+                attempt: 1,
+                reason: orchResult.error === "Max turns exceeded" ? "max_turns_exceeded" : "orch_error",
+                model,
+                latency_ms: latency,
+                resolved: false,
+                queue_entry_id: queueEntryId || null,
+              },
+            ]);
           } catch (err) {
             console.warn("[Autoreply] Failed to log orch error:", err);
           }
@@ -699,20 +689,25 @@ export async function executeAutoreplyForPhone(
     } catch (e) {
       console.error(`[Autoreply] AI attempt ${attempt}:`, e);
       const latency = Date.now() - tStart;
-      const isTimeout = (e as { name?: string })?.name === "AbortError" || String(e).includes("aborted") || String(e).includes("timeout");
+      const isTimeout =
+        (e as { name?: string })?.name === "AbortError" ||
+        String(e).includes("aborted") ||
+        String(e).includes("timeout");
       const reason = isTimeout ? "timeout" : "fetch_error";
       try {
-        await (supabaseAdmin as any).from("ai_retry_audit").insert([{
-          thread_id: c.thread_id,
-          phone,
-          agent_key: "front-office",
-          attempt: 1,
-          reason,
-          model,
-          latency_ms: latency,
-          resolved: false,
-          queue_entry_id: queueEntryId || null,
-        }]);
+        await (supabaseAdmin as any).from("ai_retry_audit").insert([
+          {
+            thread_id: c.thread_id,
+            phone,
+            agent_key: "front-office",
+            attempt: 1,
+            reason,
+            model,
+            latency_ms: latency,
+            resolved: false,
+            queue_entry_id: queueEntryId || null,
+          },
+        ]);
       } catch (err) {
         console.warn("[Autoreply] Failed to log caught exception retry audit:", err);
       }
@@ -723,6 +718,10 @@ export async function executeAutoreplyForPhone(
 
   const rawReply = reply ?? FALLBACK_MESSAGE;
   const isFallback = !reply;
+  // Saat fallback dikirim, catat ALASAN-nya supaya dashboard/Activity Log bisa
+  // membedakan timeout vs. max-turns vs. gateway-error vs. balasan kosong —
+  // tanpa ini kita cuma tahu "fallback terjadi" tapi tidak tahu kenapa.
+  const fallbackReason = isFallback ? (orchResult?.error ?? "no_reply_after_retries") : undefined;
   let attachUrl: string | undefined;
   let attachName: string | undefined;
 
@@ -779,9 +778,7 @@ export async function executeAutoreplyForPhone(
       .gte("sent_at", sinceIso)
       .order("sent_at", { ascending: false })
       .limit(5);
-    const dup = (recentOut ?? []).find(
-      (m: any) => (m.body ?? "").trim() === finalReply.trim(),
-    );
+    const dup = (recentOut ?? []).find((m: any) => (m.body ?? "").trim() === finalReply.trim());
     if (dup) {
       console.warn(
         `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
@@ -809,6 +806,7 @@ export async function executeAutoreplyForPhone(
       routing_confidence: orchResult?.routingConfidence,
       escalated: orchResult?.escalated,
       is_fallback: isFallback,
+      fallback_reason: fallbackReason,
       training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
       training_example_ids: orchResult?.trainingExampleIds ?? [],
       queue_entry_id: queueEntryId ?? null,
@@ -845,7 +843,9 @@ export async function executeAutoreplyForPhone(
           .from("whatsapp_messages")
           .update({ metadata: { send_status: "failed", error: String(sendErr) } as any })
           .eq("id", outboundRowId);
-      } catch {/* non-fatal */}
+      } catch {
+        /* non-fatal */
+      }
     }
     return "send_failed";
   }
@@ -863,6 +863,7 @@ export async function executeAutoreplyForPhone(
             routing_confidence: orchResult?.routingConfidence,
             escalated: orchResult?.escalated,
             is_fallback: isFallback,
+            fallback_reason: fallbackReason,
             training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
             training_example_ids: orchResult?.trainingExampleIds ?? [],
             queue_entry_id: queueEntryId ?? null,
@@ -935,33 +936,21 @@ export async function executeAutoreplyForPhone(
   if (previousSession.length < SUMMARY_MIN_MESSAGES) {
     // not enough — silent skip
   } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
-    console.info(
-      `[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`,
-    );
+    console.info(`[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`);
   } else {
     if (forced && cooldownActive(chatSummaryUpdatedAt)) {
       console.info(
-        `[SessionSummarizer] cooldown di-override karena pesan penting ` +
-          `(thread ${c.thread_id.slice(0, 8)})`,
+        `[SessionSummarizer] cooldown di-override karena pesan penting ` + `(thread ${c.thread_id.slice(0, 8)})`,
       );
     }
     void (async () => {
       try {
-        const { data: bs } = await (supabaseAdmin as any).rpc(
-          "get_active_booking_state",
-          { p_phone: phone },
-        );
+        const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         if (bs && bs.state && bs.state !== "IDLE") {
-          console.info(
-            `[SessionSummarizer] summary skipped: booking flow active (${bs.state})`,
-          );
+          console.info(`[SessionSummarizer] summary skipped: booking flow active (${bs.state})`);
           return;
         }
-        const summary = await generateSessionSummary(
-          previousSession,
-          chatSummary,
-          { apiKey, baseUrl, model },
-        );
+        const summary = await generateSessionSummary(previousSession, chatSummary, { apiKey, baseUrl, model });
         if (summary) {
           await updateThreadSummary(supabaseAdmin, c.thread_id, summary);
           console.info(
@@ -988,10 +977,7 @@ function cooldownActive(updatedAt: string | null | undefined): boolean {
 
 // Outcomes that must NOT be retried — they are config/permanent, so retrying
 // just burns attempts and delays the 'failed' terminal state.
-const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set([
-  "skipped_config",
-  "no_api_key",
-]);
+const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set(["skipped_config", "no_api_key"]);
 
 /**
  * Poll-based worker: drain all currently-ready queue entries.
@@ -1005,13 +991,8 @@ const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set([
  *
  * Returns how many entries were processed in this invocation.
  */
-export async function drainQueue(
-  origin: string,
-  maxBatch = 10,
-): Promise<{ processed: number }> {
-  const workerId = `w-${
-    globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
-  }`;
+export async function drainQueue(origin: string, maxBatch = 10): Promise<{ processed: number }> {
+  const workerId = `w-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
   let processed = 0;
 
   for (let i = 0; i < maxBatch; i++) {
@@ -1033,7 +1014,7 @@ export async function drainQueue(
         claim.phone,
         origin,
         () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
-        claim.entryId
+        claim.entryId,
       );
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
@@ -1044,12 +1025,7 @@ export async function drainQueue(
 
     if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
       const completionResult = outcome === "ok" ? "sent" : outcome;
-      await queueComplete(
-        supabaseAdmin,
-        claim.entryId,
-        workerId,
-        completionResult,
-      );
+      await queueComplete(supabaseAdmin, claim.entryId, workerId, completionResult);
     } else {
       // send_failed / context_error / fatal → retry with backoff (or fail).
       await queueFail(supabaseAdmin, claim.entryId, workerId, outcome);
@@ -1124,11 +1100,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gt("created_at", entry.created_at)
         .limit(1);
 
-      if (
-        (sameQid ?? []).length > 0 ||
-        (anyOut ?? []).length > 0 ||
-        (newerQueue ?? []).length > 0
-      ) {
+      if ((sameQid ?? []).length > 0 || (anyOut ?? []).length > 0 || (newerQueue ?? []).length > 0) {
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
           .update({ last_error: `${entry.last_error ?? ""} [fallback_sent:skipped]`.slice(0, 500) })
@@ -1138,7 +1110,6 @@ export async function sendFailureFallbackToGuests(): Promise<{
     } catch (e) {
       console.warn("[Fallback] outbound lookup failed:", e);
     }
-
 
     // Ambil token Fonnte via context RPC.
     let fonnteToken: string | null = null;
@@ -1162,11 +1133,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(
-      fonnteToken,
-      entry.phone,
-      FALLBACK_MESSAGE,
-    );
+    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
