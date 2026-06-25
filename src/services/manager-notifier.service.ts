@@ -17,11 +17,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fmtDateID } from "@/lib/date";
 import { sendWhatsAppMessage } from "./whatsapp.service";
-import {
-  sendMessage as tgSendMessage,
-  sendPhoto   as tgSendPhoto,
-  type ReplyMarkup,
-} from "./telegram.service";
+import { sendMessage as tgSendMessage, sendPhoto as tgSendPhoto, type ReplyMarkup } from "./telegram.service";
 import { normalizeAssistantName } from "@/ai/agents/persona";
 
 type Db = SupabaseClient<any, any, any>;
@@ -37,7 +33,7 @@ interface ManagerContact {
 type Channel = "wa" | "telegram";
 
 interface PropertyTokens {
-  fonnteToken:   string | null;
+  fonnteToken: string | null;
   telegramToken: string | null;
 }
 
@@ -49,7 +45,7 @@ async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
     .limit(1)
     .maybeSingle();
   return {
-    fonnteToken:   (data?.fonnte_token       as string | null) ?? null,
+    fonnteToken: (data?.fonnte_token as string | null) ?? null,
     telegramToken: (data?.telegram_bot_token as string | null) ?? null,
   };
 }
@@ -59,20 +55,20 @@ async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
 /** Default persona names (mirror src/routes/admin/ai-lab.tsx). */
 const DEFAULT_PERSONA: Record<string, string> = {
   "front-office": "Rania",
-  "pricing":      "Julia",
+  pricing: "Julia",
   "customer-care": "Dewi",
-  "finance":      "Santi",
-  "content":      "Rara",
-  "manager":      "Alexandria",
+  finance: "Santi",
+  content: "Rara",
+  manager: "Alexandria",
 };
 
 const AGENT_LABEL: Record<string, string> = {
   "front-office": "Front Office",
-  "pricing":      "Pricing",
+  pricing: "Pricing",
   "customer-care": "Customer Care",
-  "finance":      "Finance",
-  "content":      "Content Manager",
-  "manager":      "Manager",
+  finance: "Finance",
+  content: "Content Manager",
+  manager: "Manager",
 };
 
 async function loadAgentPersonas(db: Db): Promise<Record<string, string>> {
@@ -102,9 +98,9 @@ function signature(agentKey: string, personas: Record<string, string>): string {
 }
 
 interface AgentChannelRow {
-  chat_id:           string;
-  agent_key:         string;
-  label:             string | null;
+  chat_id: string;
+  agent_key: string;
+  label: string | null;
   message_thread_id: string | null;
 }
 
@@ -133,43 +129,42 @@ async function fanOutToAgentChannels(
   agentKeys: string[],
   base: {
     eventType: SendOptions["eventType"];
-    message:    string;
-    fileUrl?:   string;
+    message: string;
+    fileUrl?: string;
     replyMarkup?: ReplyMarkup;
     relatedId?: string | null;
     dedupeKeyFor: (agentKey: string, chatId: string) => string;
   },
 ): Promise<void> {
-  const [channels, personas] = await Promise.all([
-    loadAgentChannels(db, agentKeys),
-    loadAgentPersonas(db),
-  ]);
+  const [channels, personas] = await Promise.all([loadAgentChannels(db, agentKeys), loadAgentPersonas(db)]);
   if (channels.length === 0) return;
 
-  const tasks = await Promise.all(channels.map(async (ch) => {
-    const messageWithSig = base.message + signature(ch.agent_key, personas);
-    const dedupSuffix = ch.message_thread_id ? `${ch.chat_id}:t${ch.message_thread_id}` : ch.chat_id;
-    // Resolve per-agent bot token; falls back to property-wide token.
-    const agentBotToken = await getAgentBotToken(db, ch.agent_key);
-    return sendWithRetry(db, null, {
-      eventType: base.eventType,
-      message:   messageWithSig,
-      fileUrl:   base.fileUrl,
-      relatedId: base.relatedId,
-      channel:   "telegram",
-      dedupeKey: base.dedupeKeyFor(ch.agent_key, dedupSuffix),
-      replyMarkup: base.replyMarkup,
-      messageThreadId: ch.message_thread_id ?? undefined,
-      agentBotToken,
-      recipient: {
-        id: `agent:${ch.agent_key}:${ch.chat_id}${ch.message_thread_id ? ":t" + ch.message_thread_id : ""}`,
-        name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
-        phone: "",
-        role: "agent_channel",
-        telegram_chat_id: ch.chat_id,
-      },
-    });
-  }));
+  const tasks = await Promise.all(
+    channels.map(async (ch) => {
+      const messageWithSig = base.message + signature(ch.agent_key, personas);
+      const dedupSuffix = ch.message_thread_id ? `${ch.chat_id}:t${ch.message_thread_id}` : ch.chat_id;
+      // Resolve per-agent bot token; falls back to property-wide token.
+      const agentBotToken = await getAgentBotToken(db, ch.agent_key);
+      return sendWithRetry(db, null, {
+        eventType: base.eventType,
+        message: messageWithSig,
+        fileUrl: base.fileUrl,
+        relatedId: base.relatedId,
+        channel: "telegram",
+        dedupeKey: base.dedupeKeyFor(ch.agent_key, dedupSuffix),
+        replyMarkup: base.replyMarkup,
+        messageThreadId: ch.message_thread_id ?? undefined,
+        agentBotToken,
+        recipient: {
+          id: `agent:${ch.agent_key}:${ch.chat_id}${ch.message_thread_id ? ":t" + ch.message_thread_id : ""}`,
+          name: ch.label || `${AGENT_LABEL[ch.agent_key] ?? ch.agent_key} channel`,
+          phone: "",
+          role: "agent_channel",
+          telegram_chat_id: ch.chat_id,
+        },
+      });
+    }),
+  );
   await Promise.all(tasks);
 }
 
@@ -188,18 +183,14 @@ async function getFonnteToken(db: Db): Promise<string | null> {
 }
 
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {
-  let query = db
-    .from("property_managers")
-    .select("id, name, phone, role, telegram_chat_id, is_active");
-  
+  let query = db.from("property_managers").select("id, name, phone, role, telegram_chat_id, is_active");
+
   if (role) query = query.eq("role", role);
   let { data, error } = await query;
 
-  if (error && (error.code === 'PGRST106' || String(error.message).includes('is_active'))) {
+  if (error && (error.code === "PGRST106" || String(error.message).includes("is_active"))) {
     console.warn("[ManagerNotifier] Failed with is_active, falling back");
-    let fallbackQuery = db
-      .from("property_managers")
-      .select("id, name, phone, role, telegram_chat_id");
+    let fallbackQuery = db.from("property_managers").select("id, name, phone, role, telegram_chat_id");
     if (role) fallbackQuery = fallbackQuery.eq("role", role);
     const fallback = await fallbackQuery;
     data = fallback.data as any;
@@ -210,7 +201,7 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
     console.error("[ManagerNotifier] Gagal memuat manager:", error.message);
     return [];
   }
-  
+
   // Filter active managers in JS
   return (data ?? []).filter((m: any) => m.is_active !== false) as ManagerContact[];
 }
@@ -272,9 +263,10 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
       .from("notification_logs")
       .insert({
         event_type: opts.eventType,
-        recipient_phone: opts.channel === "telegram"
-          ? opts.recipient.telegram_chat_id ?? opts.recipient.phone
-          : opts.recipient.phone,
+        recipient_phone:
+          opts.channel === "telegram"
+            ? (opts.recipient.telegram_chat_id ?? opts.recipient.phone)
+            : opts.recipient.phone,
         recipient_role: opts.recipient.role,
         message: opts.message,
         attachment_url: opts.fileUrl ?? null,
@@ -332,10 +324,7 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
     );
   }
 
-  await db
-    .from("notification_logs")
-    .update({ status: "failed", attempts: 3, error: lastError })
-    .eq("id", logId);
+  await db.from("notification_logs").update({ status: "failed", attempts: 3, error: lastError }).eq("id", logId);
 }
 
 async function dispatchByChannel(
@@ -348,7 +337,7 @@ async function dispatchByChannel(
     return { ok: r.ok, error: r.error ?? undefined };
   }
   // telegram
-  const tgToken = opts.agentBotToken ?? await getTelegramTokenCached();
+  const tgToken = opts.agentBotToken ?? (await getTelegramTokenCached());
   if (!tgToken) return { ok: false, error: "no telegram token" };
   if (!opts.recipient.telegram_chat_id) return { ok: false, error: "no telegram chat_id" };
   const sendOpts: any = {};
@@ -386,7 +375,7 @@ async function getAgentBotToken(db: Db, agentKey: string): Promise<string | null
     .select("bot_token, is_active")
     .eq("agent_key", agentKey)
     .maybeSingle();
-  const token = (data?.is_active && data?.bot_token) ? (data.bot_token as string) : null;
+  const token = data?.is_active && data?.bot_token ? (data.bot_token as string) : null;
   cachedAgentBots.set(agentKey, { token, at: Date.now() });
   return token;
 }
@@ -410,27 +399,31 @@ async function fanOut(
   for (const m of managers) {
     const baseDedup = base.dedupeKeyFor(m);
     if (m.phone) {
-      tasks.push(sendWithRetry(db, fonnteToken, {
-        eventType: base.eventType,
-        message:   base.message,
-        fileUrl:   base.fileUrl,
-        relatedId: base.relatedId,
-        recipient: m,
-        channel:   "wa",
-        dedupeKey: baseDedup,
-      }));
+      tasks.push(
+        sendWithRetry(db, fonnteToken, {
+          eventType: base.eventType,
+          message: base.message,
+          fileUrl: base.fileUrl,
+          relatedId: base.relatedId,
+          recipient: m,
+          channel: "wa",
+          dedupeKey: baseDedup,
+        }),
+      );
     }
     if (m.telegram_chat_id) {
-      tasks.push(sendWithRetry(db, fonnteToken, {
-        eventType: base.eventType,
-        message:   base.telegramOnly?.message ?? base.message,
-        fileUrl:   base.telegramOnly?.fileUrl ?? base.fileUrl,
-        relatedId: base.relatedId,
-        recipient: m,
-        channel:   "telegram",
-        dedupeKey: baseDedup,
-        replyMarkup: base.telegramOnly?.replyMarkup,
-      }));
+      tasks.push(
+        sendWithRetry(db, fonnteToken, {
+          eventType: base.eventType,
+          message: base.telegramOnly?.message ?? base.message,
+          fileUrl: base.telegramOnly?.fileUrl ?? base.fileUrl,
+          relatedId: base.relatedId,
+          recipient: m,
+          channel: "telegram",
+          dedupeKey: baseDedup,
+          replyMarkup: base.telegramOnly?.replyMarkup,
+        }),
+      );
     }
   }
   await Promise.all(tasks);
@@ -476,8 +469,7 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 
     const b = booking as any;
     const guestName = b.guests?.full_name ?? "Tamu";
-    const roomName =
-      b.booking_rooms?.[0]?.room_types?.name ?? "Kamar belum ditentukan";
+    const roomName = b.booking_rooms?.[0]?.room_types?.name ?? "Kamar belum ditentukan";
     const message =
       "🏨 NEW BOOKING ALERT\n\n" +
       `Guest: ${guestName}\n` +
@@ -534,15 +526,10 @@ export interface BookingSnapshot {
  * Ambil snapshot field yang dipantau untuk diff alert booking_updated.
  * Caller dipanggil 2x: sebelum & sesudah mutasi.
  */
-export async function snapshotBookingForDiff(
-  db: Db,
-  bookingId: string,
-): Promise<BookingSnapshot | null> {
+export async function snapshotBookingForDiff(db: Db, bookingId: string): Promise<BookingSnapshot | null> {
   const { data, error } = await db
     .from("bookings")
-    .select(
-      "check_in, check_out, adults, children, booking_rooms(rooms(number), room_types(name))",
-    )
+    .select("check_in, check_out, adults, children, booking_rooms(rooms(number), room_types(name))")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !data) return null;
@@ -606,9 +593,7 @@ export async function notifyBookingUpdated(
       );
     }
     if (diffArrays(before.rooms, after.rooms)) {
-      lines.push(
-        `• Kamar: ${before.rooms.join(", ") || "-"} → ${after.rooms.join(", ") || "-"}`,
-      );
+      lines.push(`• Kamar: ${before.rooms.join(", ") || "-"} → ${after.rooms.join(", ") || "-"}`);
     }
 
     if (lines.length === 0) return; // tidak ada perubahan tracked
@@ -648,15 +633,13 @@ export async function notifyBookingUpdated(
         eventType: "booking_updated",
         message,
         relatedId: b.id,
-        dedupeKeyFor: (agent, chat) =>
-          `booking_updated:${b.id}:${changeHash}:agent:${agent}:${chat}`,
+        dedupeKeyFor: (agent, chat) => `booking_updated:${b.id}:${changeHash}:agent:${agent}:${chat}`,
       }),
     ]);
   } catch (e) {
     console.error("[ManagerNotifier] notifyBookingUpdated error:", e);
   }
 }
-
 
 import type { PaymentProofResult } from "./payment-proof.service";
 
@@ -672,11 +655,16 @@ export interface PaymentProofInput {
 
 function matchStatusEmoji(status: string): string {
   switch (status) {
-    case "matched":            return "✅ COCOK";
-    case "unmatched":          return "❌ TIDAK COCOK";
-    case "ambiguous":          return "⚠️ PERLU DICEK";
-    case "no_pending_booking": return "ℹ️ TIDAK ADA BOOKING PENDING";
-    default:                   return "❓ " + status;
+    case "matched":
+      return "✅ COCOK";
+    case "unmatched":
+      return "❌ TIDAK COCOK";
+    case "ambiguous":
+      return "⚠️ PERLU DICEK";
+    case "no_pending_booking":
+      return "ℹ️ TIDAK ADA BOOKING PENDING";
+    default:
+      return "❓ " + status;
   }
 }
 
@@ -685,10 +673,7 @@ function fmtRp(value: number | null | undefined): string {
   return "Rp " + value.toLocaleString("id-ID");
 }
 
-export async function notifyPaymentProof(
-  db: Db,
-  input: PaymentProofInput,
-): Promise<void> {
+export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Promise<void> {
   try {
     // Cari booking aktif terbaru untuk phone tsb (best effort) jika belum ada dari OCR
     let bookingCode: string | null = input.ocrResult?.match.booking_code ?? null;
@@ -725,21 +710,25 @@ export async function notifyPaymentProof(
     if (ocr && input.ocrResult?.ok) {
       // Enriched notification with OCR data
       const ocrLines = [
-        ocr.bank_pengirim   ? `  Bank Pengirim: ${ocr.bank_pengirim}`   : null,
-        ocr.bank_tujuan     ? `  Bank Tujuan: ${ocr.bank_tujuan}`       : null,
-        ocr.nominal != null ? `  Nominal: ${fmtRp(ocr.nominal)}`        : null,
-        ocr.tanggal         ? `  Tanggal: ${ocr.tanggal}`               : null,
-        ocr.nama_pengirim   ? `  Nama Pengirim: ${ocr.nama_pengirim}`   : null,
+        ocr.bank_pengirim ? `  Bank Pengirim: ${ocr.bank_pengirim}` : null,
+        ocr.bank_tujuan ? `  Bank Tujuan: ${ocr.bank_tujuan}` : null,
+        ocr.nominal != null ? `  Nominal: ${fmtRp(ocr.nominal)}` : null,
+        ocr.tanggal ? `  Tanggal: ${ocr.tanggal}` : null,
+        ocr.nama_pengirim ? `  Nama Pengirim: ${ocr.nama_pengirim}` : null,
         ocr.nomor_referensi ? `  No. Referensi: ${ocr.nomor_referensi}` : null,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const matchLines = match
         ? [
             `  Status: ${matchStatusEmoji(match.status)}`,
-            match.booking_code   ? `  Kode Booking: ${match.booking_code}`       : null,
+            match.booking_code ? `  Kode Booking: ${match.booking_code}` : null,
             match.booking_amount != null ? `  Total Tagihan: ${fmtRp(match.booking_amount)}` : null,
-            match.amount_diff != null    ? `  Selisih: ${fmtRp(match.amount_diff)}`          : null,
-          ].filter(Boolean).join("\n")
+            match.amount_diff != null ? `  Selisih: ${fmtRp(match.amount_diff)}` : null,
+          ]
+            .filter(Boolean)
+            .join("\n")
         : "  Status: ℹ️ Belum dicocokkan";
 
       message =
@@ -771,10 +760,12 @@ export async function notifyPaymentProof(
     // code. WA can't render inline buttons, so it gets text + image only.
     const tgMarkup = bookingCode
       ? {
-          inline_keyboard: [[
-            { text: "✅ Mark Paid",  callback_data: `mark_paid:${bookingCode}` },
-            { text: "❌ Reject",     callback_data: `reject_proof:${bookingCode}` },
-          ]],
+          inline_keyboard: [
+            [
+              { text: "✅ Mark Paid", callback_data: `mark_paid:${bookingCode}` },
+              { text: "❌ Reject", callback_data: `reject_proof:${bookingCode}` },
+            ],
+          ],
         }
       : undefined;
 
@@ -872,7 +863,7 @@ export async function notifyNewConversationSession(
     phone: string;
     guestName: string | null;
     firstMessage: string;
-    isNewThread: boolean;   // true = tamu baru sama sekali, false = sesi baru dari tamu lama
+    isNewThread: boolean; // true = tamu baru sama sekali, false = sesi baru dari tamu lama
     threadId: string | null;
   },
 ): Promise<void> {
@@ -887,9 +878,7 @@ export async function notifyNewConversationSession(
     }
 
     const sessionLabel = opts.isNewThread ? "🆕 TAMU BARU" : "🔄 SESI BARU";
-    const preview = opts.firstMessage.length > 200
-      ? opts.firstMessage.slice(0, 197) + "…"
-      : opts.firstMessage;
+    const preview = opts.firstMessage.length > 200 ? opts.firstMessage.slice(0, 197) + "…" : opts.firstMessage;
     const wibTime = new Date().toLocaleString("id-ID", {
       timeZone: "Asia/Jakarta",
       dateStyle: "short",
@@ -977,7 +966,9 @@ export async function notifyBotLoop(
     if (targets.length === 0) return;
 
     const wibTime = new Date().toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
     });
 
     const message =
@@ -1031,12 +1022,15 @@ export async function notifyZombieTimeout(
     if (targets.length === 0) return;
 
     const wibTime = new Date().toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
     });
 
-    const sampleLines = opts.samples.slice(0, 5).map((s) =>
-      `• ${s.phone ?? "?"} — entry ${s.entryId.slice(0, 8)} (${s.lastError ?? "zombie_timeout"})`,
-    ).join("\n");
+    const sampleLines = opts.samples
+      .slice(0, 5)
+      .map((s) => `• ${s.phone ?? "?"} — entry ${s.entryId.slice(0, 8)} (${s.lastError ?? "zombie_timeout"})`)
+      .join("\n");
 
     const message =
       `🧟 ZOMBIE WORKER — Queue Reset\n\n` +
@@ -1064,7 +1058,6 @@ export async function notifyZombieTimeout(
     console.warn("[ManagerNotifier] notifyZombieTimeout error (non-fatal):", e);
   }
 }
-
 
 /* ------------------------------------------------------------------ */
 /* Booking-flow stuck alert                                           */
@@ -1099,7 +1092,9 @@ export async function notifyBookingStuck(
     if (targets.length === 0) return;
 
     const wibTime = new Date().toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
     });
 
     const inboundPreview = (opts.lastInboundBody ?? "").slice(0, 200);
@@ -1115,9 +1110,17 @@ export async function notifyBookingStuck(
       `Bot belum membalas pesan tamu. Mohon cek log percakapan & bantu balas manual jika perlu.`;
 
     // Dedupe per (phone, state, inbound timestamp) — alert sekali per pesan
-    // tamu yang nyangkut, tapi tetap alarm untuk macet baru selanjutnya.
-    const inboundKey = Date.parse(opts.lastInboundAt) || 0;
-    const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${inboundKey}`;
+    // Dedup per (phone, state, window 30 menit). SEBELUMNYA dedup memakai
+    // timestamp pesan inbound terakhir (`inboundKey`), sehingga setiap pesan
+    // BARU dari tamu menghasilkan dedupeKey baru → manager dibanjiri notif
+    // (di produksi: 1 tamu memicu 12 notif dalam 30 menit karena tamu aktif
+    // mengetik sambil flow macet). Sekarang kunci dedup memakai bucket waktu
+    // 30 menit: satu kemacetan = maksimal 1 notif per 30 menit, berapapun
+    // banyak pesan yang tamu kirim. Kemacetan baru di state lain, atau yang
+    // masih berlangsung > 30 menit, tetap memicu alarm berikutnya.
+    const STUCK_NOTIFY_WINDOW_MS = 30 * 60 * 1000;
+    const windowBucket = Math.floor(Date.now() / STUCK_NOTIFY_WINDOW_MS);
+    const dedupeBase = `booking_stuck:${opts.phone}:${opts.state}:${windowBucket}`;
 
     await Promise.all(
       targets.flatMap((admin) => {
@@ -1179,11 +1182,10 @@ export async function fanOutAgentChannelsForMonitor(
 ): Promise<void> {
   if (agentKeys.length === 0) return;
   await fanOutToAgentChannels(db, agentKeys, {
-    eventType: "complaint",          // tipe terdekat yang sudah ada di enum
+    eventType: "complaint", // tipe terdekat yang sudah ada di enum
     message,
     relatedId: alertId,
-    dedupeKeyFor: (agentKey, chatId) =>
-      `conv_monitor:${alertId}:${agentKey}:${chatId}`,
+    dedupeKeyFor: (agentKey, chatId) => `conv_monitor:${alertId}:${agentKey}:${chatId}`,
   });
 }
 
@@ -1225,9 +1227,7 @@ export async function notifyIncomingMessage(
       timeStyle: "short",
     });
 
-    const preview = opts.body.length > 300
-      ? opts.body.slice(0, 297) + "…"
-      : opts.body;
+    const preview = opts.body.length > 300 ? opts.body.slice(0, 297) + "…" : opts.body;
 
     const message =
       `📩 Pesan WhatsApp Baru\n\n` +
@@ -1274,17 +1274,17 @@ export async function notifyIncomingMessage(
 export async function notifyRpcFailure(
   db: Db,
   opts: {
-    rpcName:      string;
+    rpcName: string;
     errorMessage: string | null;
-    context?:     Record<string, unknown>;
+    context?: Record<string, unknown>;
   },
 ): Promise<void> {
   try {
     // 1. Catat event kegagalan (selalu).
     await db.from("rpc_failure_events").insert({
-      rpc_name:      opts.rpcName,
+      rpc_name: opts.rpcName,
       error_message: opts.errorMessage ?? null,
-      context:       opts.context ?? null,
+      context: opts.context ?? null,
     });
 
     // 2. Hitung kejadian dalam 1 jam terakhir.
@@ -1306,13 +1306,13 @@ export async function notifyRpcFailure(
     }
 
     const wibTime = new Date().toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short",
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
     });
 
     const errPreview = (opts.errorMessage ?? "(no error message)").slice(0, 280);
-    const ctxPreview = opts.context
-      ? JSON.stringify(opts.context).slice(0, 280)
-      : "";
+    const ctxPreview = opts.context ? JSON.stringify(opts.context).slice(0, 280) : "";
 
     const message =
       `🛑 RPC FAILURE — Database Error\n\n` +
@@ -1330,29 +1330,31 @@ export async function notifyRpcFailure(
     const jobs: Promise<unknown>[] = [];
     for (const admin of superAdmins) {
       if (admin.phone) {
-        jobs.push(sendWithRetry(db, fonnteToken, {
-          eventType: "rpc_failure",
-          message,
-          recipient: admin,
-          channel:   "wa",
-          dedupeKey: `${dedupeBase}:wa:${admin.id}`,
-        }));
+        jobs.push(
+          sendWithRetry(db, fonnteToken, {
+            eventType: "rpc_failure",
+            message,
+            recipient: admin,
+            channel: "wa",
+            dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+          }),
+        );
       }
       if (telegramToken && admin.telegram_chat_id) {
-        jobs.push(sendWithRetry(db, null, {
-          eventType: "rpc_failure",
-          message,
-          recipient: admin,
-          channel:   "telegram",
-          dedupeKey: `${dedupeBase}:tg:${admin.id}`,
-        }));
+        jobs.push(
+          sendWithRetry(db, null, {
+            eventType: "rpc_failure",
+            message,
+            recipient: admin,
+            channel: "telegram",
+            dedupeKey: `${dedupeBase}:tg:${admin.id}`,
+          }),
+        );
       }
     }
     await Promise.all(jobs);
 
-    console.warn(
-      `[ManagerNotifier] RPC failure logged: ${opts.rpcName} (${total}× / 1h)`,
-    );
+    console.warn(`[ManagerNotifier] RPC failure logged: ${opts.rpcName} (${total}× / 1h)`);
   } catch (e) {
     console.warn("[ManagerNotifier] notifyRpcFailure error (non-fatal):", e);
   }
