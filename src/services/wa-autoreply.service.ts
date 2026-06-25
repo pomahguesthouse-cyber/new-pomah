@@ -120,8 +120,15 @@ export type AutoreplyOutcome =
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
  */
 // ── Summarizer tuning knobs ─────────────────────────────────────────────────
-/** Minimum interval between two summary regenerations for the same thread. */
-const SUMMARY_REGEN_COOLDOWN_MS = 1 * 60 * 1000;
+/**
+ * Minimum interval between two summary regenerations for the same thread.
+ * Dinaikkan dari 1 menit → 3 menit karena summarizer kini berjalan setiap
+ * turn (bukan hanya di batas sesi). Cooldown ini yang menjaga biaya LLM tetap
+ * terkendali: tanpa ini, percakapan cepat 20 pesan bisa memicu belasan
+ * panggilan summary ekstra ke gateway. Kata kunci penting (FORCE_SUMMARY_KEYWORDS)
+ * tetap bisa meng-override cooldown agar konteks kritikal selalu fresh.
+ */
+const SUMMARY_REGEN_COOLDOWN_MS = 3 * 60 * 1000;
 
 /**
  * Kata kunci penting yang memaksa regenerasi ringkasan walaupun cooldown
@@ -279,7 +286,12 @@ function parseStructuredSummary(raw: string): ChatSummaryStructured | null {
  * - chat_summary_version (++)
  * - chat_summary_updated_at (now)
  */
-async function updateThreadSummary(client: any, threadId: string, structured: ChatSummaryStructured): Promise<void> {
+async function updateThreadSummary(
+  client: any,
+  threadId: string,
+  structured: ChatSummaryStructured,
+  opts?: { jsonOnly?: boolean },
+): Promise<void> {
   const { data: prev } = await client
     .from("whatsapp_threads")
     .select("chat_summary_version")
@@ -287,15 +299,24 @@ async function updateThreadSummary(client: any, threadId: string, structured: Ch
     .maybeSingle();
   const nextVersion = ((prev as { chat_summary_version?: number } | null)?.chat_summary_version ?? 0) + 1;
 
-  const { error } = await client
-    .from("whatsapp_threads")
-    .update({
-      chat_summary: structured.short_summary,
-      chat_summary_json: structured,
-      chat_summary_version: nextVersion,
-      chat_summary_updated_at: new Date().toISOString(),
-    })
-    .eq("id", threadId);
+  // jsonOnly: perbarui HANYA context terstruktur (tipe kamar, status booking,
+  // dll.) tanpa menyentuh `chat_summary` teks. Dipakai saat tamu sedang di
+  // tengah alur booking — admin tetap melihat konteks terkini, tapi ringkasan
+  // teks "wrap-up" tidak ditimpa dengan rangkuman setengah jadi yang cepat basi.
+  const patch: Record<string, unknown> = opts?.jsonOnly
+    ? {
+        chat_summary_json: structured,
+        chat_summary_version: nextVersion,
+        chat_summary_updated_at: new Date().toISOString(),
+      }
+    : {
+        chat_summary: structured.short_summary,
+        chat_summary_json: structured,
+        chat_summary_version: nextVersion,
+        chat_summary_updated_at: new Date().toISOString(),
+      };
+
+  const { error } = await client.from("whatsapp_threads").update(patch).eq("id", threadId);
   if (error) {
     console.error(`[SessionSummarizer] Database update failed:`, error.message);
   }
@@ -927,13 +948,19 @@ export async function executeAutoreplyForPhone(
   })();
 
   // Background summarizer: run AFTER the reply is sent so it never adds
-  // latency to the user-visible turn. Guards:
-  //   - session boundary actually detected (previousSession non-empty)
-  //   - enough messages to be worth summarizing
-  //   - cooldown elapsed since last regen (rate limit)
-  //   - guest not currently mid-booking (those messages aren't a "wrap-up")
+  // latency to the user-visible turn. Perilaku (per keputusan produk):
+  //   - Merangkum SESI BERJALAN setiap turn (bukan menunggu batas sesi 15 mnt),
+  //     supaya panel admin terisi cepat begitu ada ≥3 pesan.
+  //   - Butuh cukup pesan untuk layak dirangkum (SUMMARY_MIN_MESSAGES).
+  //   - Cooldown (3 mnt) membatasi biaya; kata kunci penting meng-override-nya.
+  //   - Saat tamu sedang mid-booking: TETAP perbarui context JSON (tipe kamar,
+  //     status booking) tapi JANGAN timpa ringkasan TEKS — teks "wrap-up" baru
+  //     ditulis setelah booking selesai agar tidak basi.
+  // Pakai sesi yang sedang berjalan; fallback ke sesi sebelumnya bila perlu.
+  const summarizableMessages =
+    currentSessionMessages.length >= SUMMARY_MIN_MESSAGES ? currentSessionMessages : previousSession;
   const forced = shouldForceSummary(lastMessage);
-  if (previousSession.length < SUMMARY_MIN_MESSAGES) {
+  if (summarizableMessages.length < SUMMARY_MIN_MESSAGES) {
     // not enough — silent skip
   } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
     console.info(`[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`);
@@ -946,17 +973,19 @@ export async function executeAutoreplyForPhone(
     void (async () => {
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
-        if (bs && bs.state && bs.state !== "IDLE") {
-          console.info(`[SessionSummarizer] summary skipped: booking flow active (${bs.state})`);
-          return;
-        }
-        const summary = await generateSessionSummary(previousSession, chatSummary, { apiKey, baseUrl, model });
+        const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
+        const summary = await generateSessionSummary(summarizableMessages, chatSummary, { apiKey, baseUrl, model });
         if (summary) {
-          await updateThreadSummary(supabaseAdmin, c.thread_id, summary);
+          // Saat booking aktif → jsonOnly (jangan timpa teks). Selain itu → full.
+          await updateThreadSummary(supabaseAdmin, c.thread_id, summary, {
+            jsonOnly: bookingActive,
+          });
           console.info(
-            `[SessionSummarizer] summary generated for ${phone.slice(-6)} ` +
+            `[SessionSummarizer] summary ${bookingActive ? "json-only " : ""}` +
+              `generated for ${phone.slice(-6)} ` +
               `(thread ${c.thread_id.slice(0, 8)}, ${summary.short_summary.length} chars, ` +
-              `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"}, forced=${forced})`,
+              `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"}, ` +
+              `forced=${forced}, bookingActive=${bookingActive})`,
           );
         }
       } catch (e) {
