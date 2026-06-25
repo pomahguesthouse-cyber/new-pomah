@@ -67,6 +67,10 @@ export interface BookingContext {
   invoice_requested?: boolean;
   /** State sebelumnya saat bot sedang menunggu konfirmasi cancel dua langkah. */
   cancelPreviousState?: BookingState;
+  /** Skema pembayaran yang dipilih tamu: 'full' = lunas, 'dp' = uang muka dulu. */
+  paymentType?: "full" | "dp";
+  /** Jumlah DP yang disepakati (nominal, bukan persen). Diisi saat paymentType='dp'. */
+  dpAmount?: number;
 }
 
 export interface StateRecord {
@@ -1204,6 +1208,36 @@ export async function processBookingState(
       }
     }
 
+    // Deteksi preferensi pembayaran DP dari pesan tamu (bisa muncul kapan saja
+    // di CONFIRMING_BOOKING, termasuk bersamaan dengan konfirmasi "ya, DP dulu").
+    const dpMatch = message.match(/\b(dp|down\s*payment|uang\s*muka|dp\s*dulu|bayar\s*sebagian)\b/i);
+    const fullPayMatch = message.match(/\b(lunas|full\s*pay|bayar\s*penuh|langsung\s*lunas)\b/i);
+    if (dpMatch && !fullPayMatch) {
+      context.paymentType = "dp";
+      // Coba ekstrak nominal DP kalau disebut (mis. "DP 200rb", "DP 50%").
+      const nominalMatch = message.match(/dp\s+(?:rp\.?\s*)?(\d[\d.,]*(?:rb|ribu|jt|juta)?)/i);
+      if (nominalMatch) {
+        let raw = nominalMatch[1].replace(/[.,]/g, "");
+        if (/rb|ribu/i.test(nominalMatch[1])) raw = String(parseFloat(raw) * 1000);
+        if (/jt|juta/i.test(nominalMatch[1])) raw = String(parseFloat(raw) * 1_000_000);
+        const parsed = parseInt(raw, 10);
+        if (!isNaN(parsed) && parsed > 0) context.dpAmount = parsed;
+      }
+      const pctMatch = message.match(/dp\s+(\d+)\s*%/i);
+      if (pctMatch && context.totalPrice) {
+        context.dpAmount = Math.round((parseInt(pctMatch[1], 10) / 100) * context.totalPrice);
+      }
+      // Kalau tidak ada nominal spesifik, default 50% dari total.
+      if (!context.dpAmount && context.totalPrice) {
+        context.dpAmount = Math.round(context.totalPrice * 0.5);
+      }
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    } else if (fullPayMatch) {
+      context.paymentType = "full";
+      context.dpAmount = undefined;
+      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    }
+
     if (CONFIRM_PATTERN.test(message)) {
       // GATING INVOICE: validasi semua slot wajib sebelum buat booking.
       // guestPhone diisi otomatis dari nomor WA sesi — tidak perlu divalidasi di sini.
@@ -1245,6 +1279,8 @@ export async function processBookingState(
           check_out: context.checkOut,
           adults: context.adults ?? 1,
           children: context.children ?? 0,
+          payment_type: context.paymentType ?? "full",
+          dp_amount: context.dpAmount ?? 0,
         },
         ctx,
       );
