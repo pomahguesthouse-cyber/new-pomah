@@ -383,9 +383,9 @@ export function WhatsAppPage() {
   });
 
   return (
-    <div className="grid h-[calc(100vh-3.5rem)] grid-cols-[300px_1fr_320px] bg-background">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-background lg:grid lg:grid-cols-[300px_1fr_320px]">
       {/* THREADS LIST */}
-      <aside className="flex min-h-0 flex-col border-r border-border bg-white">
+      <aside className={cn("min-h-0 flex-col border-r border-border bg-white w-full lg:w-auto lg:flex", activeId ? "hidden lg:flex" : "flex")}>
         <div className="border-b border-border p-4">
           {/* Tab switcher: Inbox | Monitor */}
           <div className="flex gap-1 mb-3">
