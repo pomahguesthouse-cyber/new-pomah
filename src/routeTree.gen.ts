@@ -59,6 +59,7 @@ import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.pro
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
+import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -312,6 +313,11 @@ const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => BookConfirmationIdRoute,
 } as any)
+const ApiBookingInvoiceIdSendRoute = ApiBookingInvoiceIdSendRouteImport.update({
+  id: '/send',
+  path: '/send',
+  getParentRoute: () => ApiBookingInvoiceIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -355,7 +361,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
-  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -363,6 +369,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesByTo {
@@ -406,7 +413,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
-  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -414,6 +421,7 @@ export interface FileRoutesByTo {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesById {
@@ -459,7 +467,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
-  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRoute
+  '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -467,6 +475,7 @@ export interface FileRoutesById {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRouteTypes {
@@ -521,6 +530,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/api/booking-invoice/$id/send'
     | '/book/confirmation/$id/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -572,6 +582,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/api/booking-invoice/$id/send'
     | '/book/confirmation/$id/chat'
   id:
     | '__root__'
@@ -624,6 +635,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/api/booking-invoice/$id/send'
     | '/book/confirmation/$id/chat'
   fileRoutesById: FileRoutesById
 }
@@ -647,7 +659,7 @@ export interface RootRouteChildren {
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
-  ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRoute
+  ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
@@ -1008,6 +1020,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookConfirmationIdChatRouteImport
       parentRoute: typeof BookConfirmationIdRoute
     }
+    '/api/booking-invoice/$id/send': {
+      id: '/api/booking-invoice/$id/send'
+      path: '/send'
+      fullPath: '/api/booking-invoice/$id/send'
+      preLoaderRoute: typeof ApiBookingInvoiceIdSendRouteImport
+      parentRoute: typeof ApiBookingInvoiceIdRoute
+    }
   }
 }
 
@@ -1075,6 +1094,17 @@ const ApiTelegramRouteWithChildren = ApiTelegramRoute._addFileChildren(
   ApiTelegramRouteChildren,
 )
 
+interface ApiBookingInvoiceIdRouteChildren {
+  ApiBookingInvoiceIdSendRoute: typeof ApiBookingInvoiceIdSendRoute
+}
+
+const ApiBookingInvoiceIdRouteChildren: ApiBookingInvoiceIdRouteChildren = {
+  ApiBookingInvoiceIdSendRoute: ApiBookingInvoiceIdSendRoute,
+}
+
+const ApiBookingInvoiceIdRouteWithChildren =
+  ApiBookingInvoiceIdRoute._addFileChildren(ApiBookingInvoiceIdRouteChildren)
+
 interface BookConfirmationIdRouteChildren {
   BookConfirmationIdChatRoute: typeof BookConfirmationIdChatRoute
 }
@@ -1106,7 +1136,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
-  ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRoute,
+  ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,

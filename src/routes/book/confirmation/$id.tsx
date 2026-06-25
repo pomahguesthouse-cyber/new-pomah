@@ -7,7 +7,7 @@
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Printer, Loader2, Download, MessageCircle } from "lucide-react";
+import { CheckCircle2, Printer, Loader2, Download, Send } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 
 const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
@@ -83,6 +83,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 function ConfirmationPage() {
   const { id } = Route.useParams();
+  const [sendState, setSendState] = React.useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sendError, setSendError] = React.useState<string | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ["booking-invoice", id],
     queryFn: async () => {
@@ -169,6 +171,24 @@ function ConfirmationPage() {
   const hasPayment = paidAmount > 0 || paymentStatus === "paid" || paymentStatus === "partial";
   const isPaid = paymentStatus === "paid" || (totalAmount > 0 && paidAmount >= totalAmount);
   const isPartial = !isPaid && (paymentStatus === "partial" || paidAmount > 0);
+
+  async function handleSendInvoice() {
+    setSendState("sending");
+    setSendError(null);
+    try {
+      const res = await fetch(`/api/booking-invoice/${encodeURIComponent(id)}/send`, {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error ?? "Gagal mengirim invoice.");
+      }
+      setSendState("sent");
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : String(error));
+      setSendState("error");
+    }
+  }
 
   return (
     <div className="min-h-screen bg-stone-50 print:bg-white print:min-h-0 print:py-0">
@@ -375,20 +395,34 @@ function ConfirmationPage() {
                 <Printer className="h-4 w-4" />
                 Cetak Invoice
               </button>
-              <Link
-                to="/book/confirmation/$id/chat"
-                params={{ id }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700"
+              <button
+                type="button"
+                onClick={handleSendInvoice}
+                disabled={sendState === "sending"}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-600/70"
               >
-                <MessageCircle className="h-4 w-4" />
-                Hubungi via Web Chat
-              </Link>
+                {sendState === "sending" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {sendState === "sending"
+                  ? "Mengirim Invoice..."
+                  : sendState === "sent"
+                    ? "Invoice Terkirim"
+                    : "Kirim Invoice ke Tamu"}
+              </button>
               <Link
                 to="/"
                 className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
               >
                 Kembali ke Beranda
               </Link>
+              {sendState === "error" && sendError && (
+                <p className="basis-full text-center text-xs font-medium text-red-600">
+                  {sendError}
+                </p>
+              )}
             </div>
 
           </>
