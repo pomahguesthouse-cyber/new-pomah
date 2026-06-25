@@ -797,7 +797,7 @@ export function WhatsAppPage() {
       </section>
 
       {/* GUEST CONTEXT */}
-      <aside className="flex min-h-0 flex-col border-l border-border bg-sidebar">
+      <aside className="hidden lg:flex min-h-0 flex-col border-l border-border bg-sidebar">
         {current && thread?.thread ? (
           <ScrollArea className="flex-1">
             <div className="space-y-5 p-5">
