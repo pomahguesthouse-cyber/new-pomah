@@ -320,37 +320,40 @@ function ConfirmationPage() {
                 <p className="font-semibold">Pembayaran</p>
                 {isPaid ? (
                   <p className="mt-1 font-medium text-emerald-700">
-                    Pembayaran sudah lunas. Terima kasih.
-                  </p>
-                ) : isPartial ? (
-                  <p className="mt-1 font-medium text-amber-700">
-                    DP sudah diterima sebesar {formatIDR(paidAmount)}. Sisa pelunasan {formatIDR(remainingAmount)}.
+                    Terima kasih, anda telah melakukan pembayaran atas pemesanan anda di Pomah Guesthouse.
                   </p>
                 ) : (
-                  <p className="mt-1 font-medium text-stone-700">
-                    Status pembayaran: belum dibayar.
-                  </p>
-                )}
-                {inv.payment_method === "onsite" ? (
-                  <p className="mt-1 text-stone-600">
-                    Bayar di tempat saat check-in. Reservasi dikonfirmasi admin via WhatsApp.
-                  </p>
-                ) : inv.property.bank ? (
-                  <div className="mt-1 space-y-0.5 text-stone-600">
-                    {!isPaid && <p>Silakan transfer ke:</p>}
-                    <p>🏦 {inv.property.bank}</p>
-                    <p>💳 No. Rek: {inv.property.account_number}</p>
-                    <p>👤 a.n. {inv.property.account_holder}</p>
-                    {!isPaid && (
-                      <p className="mt-1 text-xs text-stone-500">
-                        Setelah transfer, kirim bukti pembayaran ke kami ya.
+                  <>
+                    {isPartial ? (
+                      <p className="mt-1 font-medium text-amber-700">
+                        DP sudah diterima sebesar {formatIDR(paidAmount)}. Sisa pelunasan {formatIDR(remainingAmount)}.
+                      </p>
+                    ) : (
+                      <p className="mt-1 font-medium text-stone-700">
+                        Status pembayaran: belum dibayar.
                       </p>
                     )}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-stone-600">
-                    Detail pembayaran akan dikirim oleh staf kami.
-                  </p>
+
+                    {inv.payment_method === "onsite" ? (
+                      <p className="mt-1 text-stone-600">
+                        Bayar di tempat saat check-in. Reservasi dikonfirmasi admin via WhatsApp.
+                      </p>
+                    ) : inv.property.bank ? (
+                      <div className="mt-1 space-y-0.5 text-stone-600">
+                        <p>Silakan transfer ke:</p>
+                        <p>🏦 {inv.property.bank}</p>
+                        <p>💳 No. Rek: {inv.property.account_number}</p>
+                        <p>👤 a.n. {inv.property.account_holder}</p>
+                        <p className="mt-1 text-xs text-stone-500">
+                          Setelah transfer, kirim bukti pembayaran ke kami ya.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-stone-600">
+                        Detail pembayaran akan dikirim oleh staf kami.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
