@@ -98,7 +98,14 @@ export async function generateAndSendInvoiceNotification({
     if (brErr) {
       console.warn("[InvoiceNotification] Error fetching booking rooms:", brErr);
     }
-    const roomTypeName = (bookingRooms as any)?.[0]?.room_types?.name ?? "Kamar";
+    const roomCounts = new Map<string, number>();
+    for (const br of ((bookingRooms as any[]) ?? [])) {
+      const name = br?.room_types?.name ?? "Kamar";
+      roomCounts.set(name, (roomCounts.get(name) ?? 0) + 1);
+    }
+    const roomTypeName = roomCounts.size
+      ? Array.from(roomCounts.entries()).map(([name, count]) => `${name} × ${count} kamar`).join(", ")
+      : "Kamar";
 
     // ── 3. Build the public invoice (confirmation page) link ────────────
     const rawDomain = property?.public_domain ?? origin ?? null;

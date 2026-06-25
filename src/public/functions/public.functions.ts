@@ -603,6 +603,14 @@ export type BookingInvoice = {
   rooms: number;
   room_type: string;
   nightly_rate: number;
+  room_details?: {
+    id: string;
+    room_id: string | null;
+    room_number: string | null;
+    room_type_id: string | null;
+    room_type: string;
+    nightly_rate: number;
+  }[];
   total_amount: number;
   payment_status: "unpaid" | "partial" | "paid" | null;
   paid_amount: number;
@@ -730,18 +738,18 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       try {
         const { data: brRows } = await sb
           .from("booking_rooms")
-          .select("room_type_id, nightly_rate")
-          .eq("booking_id", bookingId);
+          .select("id, room_id, room_type_id, nightly_rate, room_types(name), rooms(number)")
+          .eq("booking_id", bookingId)
+          .order("created_at", { ascending: true });
         rows = (brRows ?? []) as Record<string, unknown>[];
-        const typeId = rows[0]?.room_type_id as string | undefined;
-        if (typeId) {
-          const { data: rt } = await sb
-            .from("room_types")
-            .select("name")
-            .eq("id", typeId)
-            .maybeSingle();
-          roomType = ((rt as Record<string, unknown> | null)?.name as string) ?? "Kamar";
-        }
+        const roomTypeNames = [
+          ...new Set(
+            rows
+              .map((row) => ((row.room_types as Record<string, unknown> | null)?.name as string | undefined) ?? "")
+              .filter(Boolean),
+          ),
+        ];
+        roomType = roomTypeNames.length ? roomTypeNames.join(", ") : "Kamar";
       } catch (err) {
         console.warn("[getBookingInvoice] Failed to fetch booking rooms or room type:", err);
       }
@@ -797,6 +805,15 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         }
       }
 
+      const roomDetails = rows.map((row, idx) => ({
+        id: String(row.id ?? `room-${idx + 1}`),
+        room_id: row.room_id ? String(row.room_id) : null,
+        room_number: ((row.rooms as Record<string, unknown> | null)?.number as string | undefined) ?? null,
+        room_type_id: row.room_type_id ? String(row.room_type_id) : null,
+        room_type: ((row.room_types as Record<string, unknown> | null)?.name as string | undefined) ?? "Kamar",
+        nightly_rate: Number(row.nightly_rate ?? 0),
+      }));
+
       const invoice: BookingInvoice = {
         reference_code: String(b.reference_code ?? ""),
         status: String(b.status ?? "pending"),
@@ -810,6 +827,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         rooms: rows.length || 1,
         room_type: roomType,
         nightly_rate: Number(rows[0]?.nightly_rate ?? 0),
+        room_details: roomDetails,
         total_amount: Number(b.total_amount ?? 0),
         payment_status: (b.payment_status as any) ?? null,
         paid_amount: Number(b.paid_amount ?? 0),

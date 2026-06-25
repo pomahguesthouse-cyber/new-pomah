@@ -81,6 +81,42 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Dibatalkan",
 };
 
+type InvoiceRoomDetail = {
+  id?: string | null;
+  room_id?: string | null;
+  room_number?: string | null;
+  room_type_id?: string | null;
+  room_type?: string | null;
+  nightly_rate?: number | string | null;
+};
+
+function normalizeRoomDetails(inv: any): InvoiceRoomDetail[] {
+  if (Array.isArray(inv?.room_details) && inv.room_details.length > 0) {
+    return inv.room_details;
+  }
+
+  const count = Math.max(1, Number(inv?.rooms ?? 1) || 1);
+  return Array.from({ length: count }).map((_, idx) => ({
+    id: `room-${idx + 1}`,
+    room_id: null,
+    room_number: null,
+    room_type_id: null,
+    room_type: inv?.room_type ?? "Kamar",
+    nightly_rate: Number(inv?.nightly_rate ?? 0),
+  }));
+}
+
+function buildRoomSummary(rooms: InvoiceRoomDetail[]): string {
+  const counts = new Map<string, number>();
+  for (const room of rooms) {
+    const name = String(room.room_type || "Kamar");
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([name, count]) => `${name} × ${count} kamar`)
+    .join(", ");
+}
+
 function ConfirmationPage() {
   const { id } = Route.useParams();
   const [sendState, setSendState] = React.useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -106,6 +142,8 @@ function ConfirmationPage() {
     },
   });
   const inv = data?.invoice ?? null;
+  const roomDetails = React.useMemo(() => normalizeRoomDetails(inv), [inv]);
+  const roomSummary = React.useMemo(() => buildRoomSummary(roomDetails), [roomDetails]);
 
   const mappedBooking = React.useMemo(() => {
     if (!inv) return null;
@@ -123,16 +161,17 @@ function ConfirmationPage() {
         email: inv.guest.email,
         phone: inv.guest.phone,
       },
-      booking_rooms: Array.from({ length: inv.rooms }).map((_, idx) => ({
-        id: `room-${idx}`,
-        room_id: null,
-        nightly_rate: inv.nightly_rate,
+      booking_rooms: roomDetails.map((room, idx) => ({
+        id: room.id ?? `room-${idx + 1}`,
+        room_id: room.room_id ?? null,
+        nightly_rate: Number(room.nightly_rate ?? 0),
         room_types: {
-          name: inv.room_type,
+          name: room.room_type ?? "Kamar",
         },
+        rooms: room.room_number ? { number: room.room_number } : null,
       })),
     };
-  }, [inv, id]);
+  }, [inv, id, roomDetails]);
 
   React.useEffect(() => {
     if (typeof window !== "undefined" && inv) {
@@ -260,7 +299,7 @@ function ConfirmationPage() {
 
               {/* Details */}
               <div className="space-y-3 px-6 py-5 text-sm">
-                <Row label="Tipe Kamar" value={`${inv.room_type} × ${inv.rooms} kamar`} />
+                <Row label="Tipe Kamar" value={roomSummary || `${inv.room_type} × ${inv.rooms} kamar`} />
                 <Row
                   label="Check-in"
                   value={`${fmtDateID(inv.check_in)}${
@@ -287,12 +326,35 @@ function ConfirmationPage() {
 
               {/* Price */}
                <div className="border-t border-stone-200 px-6 py-5 text-sm print:px-0">
-                <div className="flex justify-between text-stone-600 print:text-stone-700">
-                  <span>
-                    {formatIDR(inv.nightly_rate)} × {inv.nights} malam × {inv.rooms} kamar
-                  </span>
-                  <span>{formatIDR(totalAmount)}</span>
-                </div>
+                {roomDetails.length > 1 ? (
+                  <div className="space-y-2 text-stone-600 print:text-stone-700">
+                    <p className="font-semibold text-stone-700 print:text-black">Rincian Kamar</p>
+                    {roomDetails.map((room, idx) => {
+                      const nightlyRate = Number(room.nightly_rate ?? 0);
+                      const subtotal = nightlyRate * Number(inv.nights ?? 1);
+                      const roomName = room.room_type || "Kamar";
+                      const roomNumber = room.room_number ? ` No. ${room.room_number}` : "";
+                      return (
+                        <div key={room.id ?? `${roomName}-${idx}`} className="flex justify-between gap-4 border-t border-stone-100 pt-2 first:border-t-0 first:pt-0">
+                          <span>
+                            Kamar {idx + 1}: {roomName}{roomNumber}
+                            <span className="block text-xs text-stone-500">
+                              {formatIDR(nightlyRate)} × {inv.nights} malam
+                            </span>
+                          </span>
+                          <span>{formatIDR(subtotal)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-stone-600 print:text-stone-700">
+                    <span>
+                      {formatIDR(Number(roomDetails[0]?.nightly_rate ?? inv.nightly_rate ?? 0))} × {inv.nights} malam × {roomDetails.length || inv.rooms} kamar
+                    </span>
+                    <span>{formatIDR(totalAmount)}</span>
+                  </div>
+                )}
                 <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
                   <span className="text-base font-bold print:text-black">Total</span>
                   <span className="text-xl font-bold text-amber-700 print:text-black">{formatIDR(totalAmount, "text-xl text-amber-700 print:text-black", "font-sans font-bold tabular-nums")}</span>
