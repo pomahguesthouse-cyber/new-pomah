@@ -34,7 +34,13 @@ const STUCK_STATES = [
   "COLLECTING_DATA",
 ] as const;
 
-const STUCK_THRESHOLD_MS = 10_000;
+// Ambang "macet": pesan inbound terakhir sudah lebih lama dari ini tanpa
+// balasan. Harus jelas DI ATAS window balasan normal bot — smart delay
+// menunggu hingga maxWaitMs (12 detik) untuk mengumpulkan burst, lalu butuh
+// waktu antrian + pemanggilan LLM (bisa belasan detik). Threshold 10 detik
+// yang lama memicu banyak false-positive "macet" untuk balasan yang sebenarnya
+// hanya lambat. 90 detik memastikan ini benar-benar kemacetan, bukan latency.
+const STUCK_THRESHOLD_MS = 90_000;
 
 async function handle(): Promise<Response> {
   const cutoffIso = new Date(Date.now() - STUCK_THRESHOLD_MS).toISOString();
@@ -105,9 +111,7 @@ async function handle(): Promise<Response> {
         .order("sent_at", { ascending: false })
         .limit(1);
 
-      const last = (lastMsgRows ?? [])[0] as
-        | { direction: string; body: string | null; sent_at: string }
-        | undefined;
+      const last = (lastMsgRows ?? [])[0] as { direction: string; body: string | null; sent_at: string } | undefined;
 
       // Hanya alert bila pesan terakhir adalah inbound (tamu menunggu balasan)
       // dan sudah > 10 detik. Kalau pesan terakhir outbound, bot sudah balas
@@ -120,8 +124,7 @@ async function handle(): Promise<Response> {
       const stuckMs = now - inboundAtMs;
       if (stuckMs < STUCK_THRESHOLD_MS) return;
 
-      const guestName =
-        typeof c.context?.guestName === "string" ? c.context.guestName : null;
+      const guestName = typeof c.context?.guestName === "string" ? c.context.guestName : null;
 
       await notifyBookingStuck(supabaseAdmin as any, {
         phone: c.phone,
