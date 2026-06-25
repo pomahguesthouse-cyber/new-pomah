@@ -43,7 +43,8 @@ export async function generateAndSendInvoiceNotification({
     // ── 1. Fetch booking, guest, and property ───────────────────────────
     const { data: booking, error: bErr } = await supabase
       .from("bookings")
-      .select(`
+      .select(
+        `
         id,
         reference_code,
         check_in,
@@ -66,12 +67,18 @@ export async function generateAndSendInvoiceNotification({
           payment_account_number,
           payment_account_holder
         )
-      `)
+      `,
+      )
       .eq("id", bookingId)
       .single();
 
     if (bErr || !booking) {
-      return { ok: false, error: `Failed to fetch booking: ${bErr?.message ?? "Not found"}`, pdf_url: null, wa_sent: false };
+      return {
+        ok: false,
+        error: `Failed to fetch booking: ${bErr?.message ?? "Not found"}`,
+        pdf_url: null,
+        wa_sent: false,
+      };
     }
 
     const guest = booking.guests as any;
@@ -94,9 +101,7 @@ export async function generateAndSendInvoiceNotification({
 
     // ── 3. Build the public invoice (confirmation page) link ────────────
     const rawDomain = property?.public_domain ?? origin ?? null;
-    const propertyWebsite = rawDomain
-      ? rawDomain.startsWith("http") ? rawDomain : `https://${rawDomain}`
-      : null;
+    const propertyWebsite = rawDomain ? (rawDomain.startsWith("http") ? rawDomain : `https://${rawDomain}`) : null;
     const cleanDomain = (propertyWebsite ?? "https://pomahguesthouse.com").replace(/\/+$/, "");
     // Use the human-friendly booking code in the URL when available.
     const invoiceRef = booking.reference_code ?? bookingId;
@@ -106,19 +111,17 @@ export async function generateAndSendInvoiceNotification({
     // ── 4. Upsert invoices record (keeps admin/reporting in sync) ───────
     const invoiceNumber = `INV-${booking.reference_code ?? booking.id.slice(0, 8)}`;
     const now = new Date().toISOString();
-    await (supabase as any)
-      .from("invoices")
-      .upsert(
-        {
-          booking_id: bookingId,
-          invoice_number: invoiceNumber,
-          pdf_url: invoiceUrl,
-          payment_status_snapshot: booking.payment_status ?? "unpaid",
-          issued_at: now,
-          regenerated_at: now,
-        },
-        { onConflict: "booking_id" },
-      );
+    await (supabase as any).from("invoices").upsert(
+      {
+        booking_id: bookingId,
+        invoice_number: invoiceNumber,
+        pdf_url: invoiceUrl,
+        payment_status_snapshot: booking.payment_status ?? "unpaid",
+        issued_at: now,
+        regenerated_at: now,
+      },
+      { onConflict: "booking_id" },
+    );
 
     // ── 5. WhatsApp send (optional, skipped gracefully) ─────────────────
     let waSent = false;
@@ -137,10 +140,27 @@ export async function generateAndSendInvoiceNotification({
     if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
 
     const totalFormatted = `Rp ${Number(booking.total_amount ?? 0).toLocaleString("id-ID")}`;
+    const paidAmount = Number((booking as any).paid_amount ?? 0);
+    const paymentStatus: string = (booking as any).payment_status ?? "unpaid";
+    const isDP = paymentStatus === "partial" && paidAmount > 0;
+    const remainingAmount = Math.max(0, Number(booking.total_amount ?? 0) - paidAmount);
 
     let bankDetails = "";
     if (property.payment_bank_name && property.payment_account_number) {
       bankDetails = `\n\nTransfer Pembayaran:\n🏦 Bank: ${property.payment_bank_name}\n💳 No. Rekening: ${property.payment_account_number}\n👤 Atas Nama: ${property.payment_account_holder ?? "-"}`;
+    }
+
+    let paymentLines = "";
+    if (isDP) {
+      paymentLines =
+        `• Status Pembayaran: SUDAH DP 🔄\n` +
+        `• DP Dibayar: Rp ${paidAmount.toLocaleString("id-ID")}\n` +
+        `• Sisa Pelunasan: Rp ${remainingAmount.toLocaleString("id-ID")}` +
+        bankDetails;
+    } else if (paymentStatus === "paid") {
+      paymentLines = `• Status Pembayaran: LUNAS ✅`;
+    } else {
+      paymentLines = `• Total yang Harus Dibayar: ${totalFormatted}` + bankDetails;
     }
 
     const messageBody = `Halo ${guest.full_name},
@@ -152,19 +172,15 @@ Berikut ringkasan pemesanan Anda:
 • Tipe Kamar: ${roomTypeName}
 • Check-in: ${fmtDateID(booking.check_in)}
 • Check-out: ${fmtDateID(booking.check_out)}
-• Total: ${totalFormatted}${bankDetails}
+• Total: ${totalFormatted}
+${paymentLines}
 
 Untuk melihat dan mengunduh invoice resmi serta memantau status pembayaran, silakan buka tautan berikut:
 ${invoiceUrl}
 
 Terima kasih.`;
-
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
-    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-      fonnte_token,
-      cleanedPhone,
-      messageBody,
-    );
+    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(fonnte_token, cleanedPhone, messageBody);
 
     if (sent) {
       waSent = true;
@@ -185,7 +201,13 @@ Terima kasih.`;
       if (!threadId) {
         const { data: newThread } = await supabase
           .from("whatsapp_threads")
-          .insert({ phone: cleanedPhone, display_name: guest.full_name, guest_id: guest.id, status: "open", unread_count: 0 })
+          .insert({
+            phone: cleanedPhone,
+            display_name: guest.full_name,
+            guest_id: guest.id,
+            status: "open",
+            unread_count: 0,
+          })
           .select("id")
           .single();
         threadId = newThread?.id;
