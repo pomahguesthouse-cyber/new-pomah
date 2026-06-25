@@ -51,6 +51,7 @@ export async function generateAndSendInvoiceNotification({
         check_out,
         total_amount,
         payment_status,
+        paid_amount,
         guests (
           id,
           full_name,
@@ -111,7 +112,7 @@ export async function generateAndSendInvoiceNotification({
     // ── 4. Upsert invoices record (keeps admin/reporting in sync) ───────
     const invoiceNumber = `INV-${booking.reference_code ?? booking.id.slice(0, 8)}`;
     const now = new Date().toISOString();
-    await (supabase as any).from("invoices").upsert(
+    const { error: invoiceErr } = await (supabase as any).from("invoices").upsert(
       {
         booking_id: bookingId,
         invoice_number: invoiceNumber,
@@ -122,6 +123,14 @@ export async function generateAndSendInvoiceNotification({
       },
       { onConflict: "booking_id" },
     );
+    if (invoiceErr) {
+      return {
+        ok: false,
+        error: `Failed to upsert invoice: ${invoiceErr.message}`,
+        pdf_url: invoiceUrl,
+        wa_sent: false,
+      };
+    }
 
     // ── 5. WhatsApp send (optional, skipped gracefully) ─────────────────
     let waSent = false;
@@ -160,7 +169,7 @@ export async function generateAndSendInvoiceNotification({
     } else if (paymentStatus === "paid") {
       paymentLines = `• Status Pembayaran: LUNAS ✅`;
     } else {
-      paymentLines = `• Total yang Harus Dibayar: ${totalFormatted}` + bankDetails;
+      paymentLines = `• Status Pembayaran: Belum dibayar` + bankDetails;
     }
 
     const messageBody = `Halo ${guest.full_name},
@@ -230,6 +239,7 @@ Terima kasih.`;
       }
     } else {
       console.warn(`[InvoiceNotification] WhatsApp send failed: ${sendErr}`);
+      return { ok: false, error: sendErr ?? "WhatsApp send failed", pdf_url: invoiceUrl, wa_sent: false };
     }
 
     return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: waSent };
