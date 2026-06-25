@@ -43,10 +43,10 @@ const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
 
 interface Scaffold {
-  persona:     string;
-  propName:    string;
-  todayLine:   string;
-  todayRaw:    string;
+  persona: string;
+  propName: string;
+  todayLine: string;
+  todayRaw: string;
   roomSummary: string;
 }
 
@@ -68,20 +68,21 @@ function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
 
 function buildScaffold(ctx: AgentContext): Scaffold {
   const { property, rooms, today, managerName } = ctx;
-  const persona  = normalizeAssistantName(managerName);
+  const persona = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const roomSummary = rooms
-    .map((r) =>
-      `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
-      (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
-      formatExtraBedInfo(r),
+    .map(
+      (r) =>
+        `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
+        (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
+        formatExtraBedInfo(r),
     )
     .join("\n");
   return {
     persona,
     propName,
     todayLine: `Hari ini tanggal ${fmtDateID(today)} (format YYYY-MM-DD: ${today}).`,
-    todayRaw:  today,
+    todayRaw: today,
     roomSummary: roomSummary ? `Daftar tipe kamar yang tersedia di properti:\n${roomSummary}` : "",
   };
 }
@@ -143,7 +144,6 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "tersebut izinkan saya cek dulu dengan tim ya, Kak.' atau alihkan ke divisi yang tepat " +
       "(Finance untuk DP/refund/invoice).",
 
-
     "POLICY & FAQ: Cek SOP/property data dulu. Bila ada, sampaikan tegas. Bila TIDAK ada, " +
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
       "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, arahkan ke Finance.",
@@ -169,7 +169,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "berapa? 📅'). Setelah tamu menjawab, baru panggil tool. " +
       "ATURAN UTAMA: begitu tamu menyebut tanggal APAPUN, LANGSUNG panggil " +
       "`check_room_availability` SEBELUM balas teks. JANGAN tanya jumlah orang dulu. " +
-      "KONVERSI tanggal relatif dari hari ini (" + today + "): 'hari ini' → " + today + "; " +
+      "KONVERSI tanggal relatif dari hari ini (" +
+      today +
+      "): 'hari ini' → " +
+      today +
+      "; " +
       "'besok' → +1; 'lusa' → +2; 'minggu depan' → +7; 'akhir minggu ini' → Sab/Min terdekat. " +
       "Bila hanya satu tanggal disebut, anggap 1 malam. " +
       "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan dan JANGAN bilang " +
@@ -229,17 +233,24 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "resmi otomatis dikirim setelah konfirmasi & transfer, dan tawarkan opsi hubungi admin " +
       "manusia. JANGAN defensif — akui jujur kalau Kakak mau dialihkan ke admin, balas 'admin'.",
 
+    ctx.agreedDates
+      ? "TANGGAL SUDAH DISEPAKATI DI PERCAKAPAN INI: check-in " +
+        `${ctx.agreedDates.checkIn}, check-out ${ctx.agreedDates.checkOut}. ` +
+        "JANGAN PERNAH menanyakan ulang tanggal menginap — pakai tanggal ini langsung. " +
+        "Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru."
+      : "",
 
     ctx.partialBooking
       ? "INFO YANG SUDAH DISIMPAN DARI PERCAKAPAN SEBELUMNYA: " +
         [
           ctx.partialBooking.roomType ? `tipe kamar = ${ctx.partialBooking.roomType}` : null,
-          ctx.partialBooking.adults   !== undefined ? `dewasa = ${ctx.partialBooking.adults}` : null,
+          ctx.partialBooking.adults !== undefined ? `dewasa = ${ctx.partialBooking.adults}` : null,
           ctx.partialBooking.children !== undefined ? `anak = ${ctx.partialBooking.children}` : null,
-        ].filter(Boolean).join(", ") +
+        ]
+          .filter(Boolean)
+          .join(", ") +
         ". JANGAN tanya ulang info ini — gunakan langsung saat memanggil tool."
       : "",
-
 
     "Setelah proses booking berhasil: sapa nama tamu, kode booking, total harga, instruksi " +
       "transfer (bila info rekening ada), minta bukti pembayaran, dan berikan link invoice bila tersedia.",
@@ -268,7 +279,9 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
     negativeBlock,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function buildManagerialPrompt(s: Scaffold): string {
@@ -303,26 +316,24 @@ function buildManagerialPrompt(s: Scaffold): string {
     "FORMAT PESAN: Telegram — teks polos, baris baru untuk daftar, hindari Markdown (*, _, #) dan tabel kompleks.",
 
     BOOKING_LIST_FORMAT_BLOCK,
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 export const frontOfficeAgent: AgentDefinition = {
-  key:         "front-office",
-  name:        "Front Office Agent",
+  key: "front-office",
+  name: "Front Office Agent",
   description: "Greetings + room inquiries + booking flow (guest), operational queries (managerial).",
-  handles:     ["greeting", "booking_inquiry", "availability_check", "general"],
-  tools:       FRONT_OFFICE_GUEST_TOOLS,
+  handles: ["greeting", "booking_inquiry", "availability_check", "general"],
+  tools: FRONT_OFFICE_GUEST_TOOLS,
 
   getTools(ctx: AgentContext) {
-    return ctx.mode === "managerial"
-      ? FRONT_OFFICE_MANAGER_TOOLS
-      : FRONT_OFFICE_GUEST_TOOLS;
+    return ctx.mode === "managerial" ? FRONT_OFFICE_MANAGER_TOOLS : FRONT_OFFICE_GUEST_TOOLS;
   },
 
   buildSystemPrompt(ctx: AgentContext): string {
     const scaffold = buildScaffold(ctx);
-    return ctx.mode === "managerial"
-      ? buildManagerialPrompt(scaffold)
-      : buildGuestPrompt(scaffold, ctx);
+    return ctx.mode === "managerial" ? buildManagerialPrompt(scaffold) : buildGuestPrompt(scaffold, ctx);
   },
 };
