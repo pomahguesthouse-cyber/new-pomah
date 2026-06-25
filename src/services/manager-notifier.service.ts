@@ -251,9 +251,24 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
     .eq("channel", opts.channel)
     .maybeSingle();
 
-  if (existing && (existing as any).status === "sent") {
-    console.info(`[ManagerNotifier] Skip — sudah terkirim: ${opts.dedupeKey}`);
-    return;
+  if (existing) {
+    const status = (existing as any).status as string;
+    if (status === "sent") {
+      console.info(`[ManagerNotifier] Skip — sudah terkirim: ${opts.dedupeKey}`);
+      return;
+    }
+    if (status === "pending") {
+      // Pengiriman sedang dalam proses (atau baru saja di-insert oleh cron
+      // menit sebelumnya dan belum selesai) — jangan kirim ganda.
+      console.info(`[ManagerNotifier] Skip — sedang pending: ${opts.dedupeKey}`);
+      return;
+    }
+    if (status === "failed") {
+      // Sudah dicoba 3x dan gagal dalam window 30 menit ini (Fonnte down?).
+      // Biarkan window berikutnya yang retry agar tidak spam tiap menit.
+      console.info(`[ManagerNotifier] Skip — gagal di window ini, tunggu window berikutnya: ${opts.dedupeKey}`);
+      return;
+    }
   }
 
   // Insert/upsert log row sebagai pending.
