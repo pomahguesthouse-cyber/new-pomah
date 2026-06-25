@@ -35,6 +35,7 @@ import {
   ShieldAlert,
   BellOff,
   SendHorizonal,
+  ArrowLeft,
 } from "lucide-react";
 import {
   listThreads,
