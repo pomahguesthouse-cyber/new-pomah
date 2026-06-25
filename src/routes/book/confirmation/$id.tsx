@@ -162,6 +162,13 @@ function ConfirmationPage() {
       ? siteData.property.public_domain
       : `https://${siteData.property.public_domain}`
     : undefined;
+  const totalAmount = Number(inv?.total_amount ?? 0);
+  const paidAmount = Number(inv?.paid_amount ?? 0);
+  const remainingAmount = Math.max(0, totalAmount - paidAmount);
+  const paymentStatus = String(inv?.payment_status ?? "unpaid");
+  const hasPayment = paidAmount > 0 || paymentStatus === "paid" || paymentStatus === "partial";
+  const isPaid = paymentStatus === "paid" || (totalAmount > 0 && paidAmount >= totalAmount);
+  const isPartial = !isPaid && (paymentStatus === "partial" || paidAmount > 0);
 
   return (
     <div className="min-h-screen bg-stone-50 print:bg-white print:min-h-0 print:py-0">
@@ -264,30 +271,61 @@ function ConfirmationPage() {
                   <span>
                     {formatIDR(inv.nightly_rate)} × {inv.nights} malam × {inv.rooms} kamar
                   </span>
-                  <span>{formatIDR(inv.total_amount)}</span>
+                  <span>{formatIDR(totalAmount)}</span>
                 </div>
                 <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
                   <span className="text-base font-bold print:text-black">Total</span>
-                  <span className="text-xl font-bold text-amber-700 print:text-black">{formatIDR(inv.total_amount, "text-xl text-amber-700 print:text-black", "font-sans font-bold tabular-nums")}</span>
+                  <span className="text-xl font-bold text-amber-700 print:text-black">{formatIDR(totalAmount, "text-xl text-amber-700 print:text-black", "font-sans font-bold tabular-nums")}</span>
                 </div>
+                {hasPayment && (
+                  <>
+                    <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2 text-stone-600 print:text-stone-700">
+                      <span>{isPaid ? "Pembayaran Diterima" : "DP Dibayar"}</span>
+                      <span>{formatIDR(paidAmount)}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-stone-100 pt-2">
+                      <span className="font-semibold text-stone-700 print:text-black">
+                        {isPaid ? "Status Pembayaran" : "Sisa Pelunasan"}
+                      </span>
+                      <span className={isPaid ? "font-bold text-emerald-700 print:text-black" : "font-bold text-amber-700 print:text-black"}>
+                        {isPaid ? "LUNAS" : formatIDR(remainingAmount)}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Payment */}
               <div className="border-t border-stone-200 bg-stone-50 px-6 py-5 text-sm">
                 <p className="font-semibold">Pembayaran</p>
+                {isPaid ? (
+                  <p className="mt-1 font-medium text-emerald-700">
+                    Pembayaran sudah lunas. Terima kasih.
+                  </p>
+                ) : isPartial ? (
+                  <p className="mt-1 font-medium text-amber-700">
+                    DP sudah diterima sebesar {formatIDR(paidAmount)}. Sisa pelunasan {formatIDR(remainingAmount)}.
+                  </p>
+                ) : (
+                  <p className="mt-1 font-medium text-stone-700">
+                    Status pembayaran: belum dibayar.
+                  </p>
+                )}
                 {inv.payment_method === "onsite" ? (
                   <p className="mt-1 text-stone-600">
                     Bayar di tempat saat check-in. Reservasi dikonfirmasi admin via WhatsApp.
                   </p>
                 ) : inv.property.bank ? (
                   <div className="mt-1 space-y-0.5 text-stone-600">
-                    <p>Silakan transfer ke:</p>
+                    {!isPaid && <p>Silakan transfer ke:</p>}
                     <p>🏦 {inv.property.bank}</p>
                     <p>💳 No. Rek: {inv.property.account_number}</p>
                     <p>👤 a.n. {inv.property.account_holder}</p>
-                    <p className="mt-1 text-xs text-stone-500">
-                      Setelah transfer, kirim bukti pembayaran ke kami ya.
-                    </p>
+                    {!isPaid && (
+                      <p className="mt-1 text-xs text-stone-500">
+                        Setelah transfer, kirim bukti pembayaran ke kami ya.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="mt-1 text-stone-600">
@@ -363,7 +401,7 @@ function ConfirmationPage() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
       <span className="text-stone-400 print:text-stone-600">{label}</span>
