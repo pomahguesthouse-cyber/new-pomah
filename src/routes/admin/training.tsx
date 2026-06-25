@@ -44,7 +44,7 @@ export const Route = createFileRoute("/admin/training")({
 
 function TrainingPage() {
   return (
-    <div className="space-y-6 p-6 md:p-10">
+    <div className="space-y-6 p-4 md:p-8 lg:p-10">
       <header>
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Chatbot training

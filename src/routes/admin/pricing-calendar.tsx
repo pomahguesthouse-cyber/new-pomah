@@ -436,7 +436,7 @@ function PricingCalendarPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 md:p-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Pricing Calendar</h1>
         <p className="text-sm text-muted-foreground">

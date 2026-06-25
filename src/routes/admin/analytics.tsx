@@ -37,7 +37,7 @@ function AnalyticsPage() {
   const sourceData = Object.entries(data.sourceMix).map(([source, count]) => ({ source, count }));
 
   return (
-    <div className="space-y-8 p-6 md:p-10">
+    <div className="space-y-8 p-4 md:p-8 lg:p-10">
       <header>
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
           Analytics

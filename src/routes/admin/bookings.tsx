@@ -252,7 +252,7 @@ function BookingsPage() {
   const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setSearchInput(""); setSearch(""); setPage(1); };
 
   return (
-    <div className="space-y-6 p-6 md:p-10">
+    <div className="space-y-6 p-4 md:p-8 lg:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1></div>
         <div className="flex items-center gap-2">
