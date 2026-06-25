@@ -103,25 +103,58 @@ async function handle(): Promise<Response> {
       // Lewati notifikasi jika tiket handoff masih terbuka untuk nomor ini.
       if (handoffPhones.has(c.phone)) return;
 
-      // Ambil 1 pesan terakhir di thread ini.
-      const { data: lastMsgRows } = await (supabaseAdmin as any)
+      // Ambil 20 pesan terakhir untuk menentukan "episode kemacetan":
+      // - Kalau pesan paling akhir adalah OUTBOUND → bot/human sudah balas
+      //   → bukan macet, skip.
+      // - Kalau paling akhir INBOUND, cari outbound terakhir sebelumnya,
+      //   lalu ambil inbound PERTAMA setelah outbound itu sebagai anchor
+      //   episode. Ini menjadi dedupeKey episode — notif hanya dikirim sekali
+      //   per episode (bukan per pesan atau per window waktu).
+      // Begitu ada balasan outbound baru, episode selesai dan monitor berhenti
+      // secara otomatis — tidak butuh timer atau window.
+      const { data: recentMsgs } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
-        .select("direction, body, sent_at")
+        .select("id, direction, body, sent_at")
         .eq("thread_id", threadId)
         .order("sent_at", { ascending: false })
-        .limit(1);
+        .limit(20);
 
-      const last = (lastMsgRows ?? [])[0] as { direction: string; body: string | null; sent_at: string } | undefined;
+      const msgs = (recentMsgs ?? []) as Array<{
+        id: string;
+        direction: string;
+        body: string | null;
+        sent_at: string;
+      }>;
 
-      // Hanya alert bila pesan terakhir adalah inbound (tamu menunggu balasan)
-      // dan sudah > 10 detik. Kalau pesan terakhir outbound, bot sudah balas
-      // dan kita sedang menunggu tamu — itu bukan macet.
-      if (!last || last.direction !== "in") return;
+      if (msgs.length === 0) return;
 
-      const inboundAtMs = Date.parse(last.sent_at);
-      if (!Number.isFinite(inboundAtMs)) return;
+      // Pesan paling akhir (index 0 karena desc).
+      const lastMsg = msgs[0];
 
-      const stuckMs = now - inboundAtMs;
+      // Kalau balasan outbound sudah ada → bukan macet, stop.
+      if (lastMsg.direction !== "in") return;
+
+      // Cari outbound terakhir (maju dari belakang = asc dalam array desc).
+      const lastOutboundIdx = msgs.findIndex((m) => m.direction === "out");
+
+      // episodeStart = inbound PERTAMA setelah outbound terakhir.
+      // Kalau tidak ada outbound sama sekali, episode dimulai dari inbound paling awal.
+      let episodeStartMsg: (typeof msgs)[0];
+      if (lastOutboundIdx === -1) {
+        // Tidak ada outbound dalam 20 pesan — ambil inbound paling lama.
+        episodeStartMsg = msgs[msgs.length - 1];
+      } else {
+        // Semua pesan sebelum lastOutboundIdx (index 0..lastOutboundIdx-1) adalah
+        // inbound setelah outbound terakhir (karena urutan desc). Yang PALING AWAL
+        // dalam episode = index lastOutboundIdx - 1.
+        episodeStartMsg = msgs[lastOutboundIdx - 1];
+      }
+
+      const episodeStartMs = Date.parse(episodeStartMsg.sent_at);
+      if (!Number.isFinite(episodeStartMs)) return;
+
+      // Kemacetan dihitung dari pesan inbound PERTAMA episode, bukan terakhir.
+      const stuckMs = now - episodeStartMs;
       if (stuckMs < STUCK_THRESHOLD_MS) return;
 
       const guestName = typeof c.context?.guestName === "string" ? c.context.guestName : null;
@@ -131,8 +164,9 @@ async function handle(): Promise<Response> {
         state: c.state,
         requiredField: getRequiredField(c.state as BookingState),
         stuckSeconds: Math.round(stuckMs / 1000),
-        lastInboundBody: last.body,
-        lastInboundAt: last.sent_at,
+        lastInboundBody: lastMsg.body,
+        lastInboundAt: lastMsg.sent_at,
+        episodeStartAt: episodeStartMsg.sent_at,
         threadId,
         guestName,
       });
