@@ -28,6 +28,43 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
+/**
+ * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
+ * Tool `generate_booking_form` menyisipkan baris `pending` di
+ * `booking_form_send_logs` saat URL dibuat. Saat pesan berisi URL
+ * `/booking/form/<token>` benar-benar dikirim (atau gagal), kami
+ * memperbarui baris bersangkutan untuk audit di admin panel.
+ */
+async function updateBookingFormSendLog(args: {
+  body: string;
+  status: "sent" | "failed" | "superseded";
+  failureReason?: string | null;
+}): Promise<void> {
+  try {
+    const match = args.body.match(/\/booking\/form\/([A-Za-z0-9_-]+)/);
+    if (!match) return;
+    const token = match[1];
+    const patch: Record<string, unknown> = { status: args.status };
+    if (args.status === "sent") patch.sent_at = new Date().toISOString();
+    if (args.failureReason !== undefined) patch.failure_reason = args.failureReason;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = supabaseAdmin as any;
+    // Increment attempts kecuali superseded.
+    if (args.status !== "superseded") {
+      const { data: existing } = await admin
+        .from("booking_form_send_logs")
+        .select("attempts")
+        .eq("token", token)
+        .maybeSingle();
+      patch.attempts = ((existing?.attempts as number | undefined) ?? 0) + 1;
+    }
+    await admin.from("booking_form_send_logs").update(patch).eq("token", token);
+  } catch (e) {
+    console.warn("[booking-form-log] update failed (non-fatal):", e);
+  }
+}
+
+
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 6_000;
@@ -1298,6 +1335,7 @@ export async function executeAutoreplyForPhone(
           `[Autoreply] Final-reply race lost for ${phone.slice(-6)} ` +
             `(entry=${queueEntryId.slice(0, 8)}) — skip Fonnte`,
         );
+        void updateBookingFormSendLog({ body: finalReply, status: "superseded" });
         return "ok";
       }
     } catch (e) {
@@ -1349,6 +1387,11 @@ export async function executeAutoreplyForPhone(
         /* non-fatal */
       }
     }
+    void updateBookingFormSendLog({
+      body: finalReply,
+      status: "failed",
+      failureReason: String(sendErr ?? "unknown"),
+    });
     return "send_failed";
   }
 
@@ -1368,6 +1411,9 @@ export async function executeAutoreplyForPhone(
       console.warn("[Autoreply] Failed to update send_status (non-fatal):", e);
     }
   }
+
+  void updateBookingFormSendLog({ body: finalReply, status: "sent" });
+
 
   void updateThreadAutoReplyMeta(supabaseAdmin, {
     threadId: c.thread_id,

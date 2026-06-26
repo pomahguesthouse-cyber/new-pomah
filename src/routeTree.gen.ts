@@ -48,6 +48,7 @@ import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/compet
 import { Route as AdminChatbotTrainingRouteImport } from './routes/admin/chatbot-training'
 import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
+import { Route as AdminBookingFormLogsRouteImport } from './routes/admin/booking-form-logs'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
 import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
@@ -258,6 +259,11 @@ const AdminBookingsRoute = AdminBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminBookingFormLogsRoute = AdminBookingFormLogsRouteImport.update({
+  id: '/booking-form-logs',
+  path: '/booking-form-logs',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -343,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
@@ -397,6 +404,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
@@ -453,6 +461,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
   '/admin/bookings': typeof AdminBookingsRoute
   '/admin/calendar': typeof AdminCalendarRoute
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
@@ -510,6 +519,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin/ai-lab'
     | '/admin/analytics'
+    | '/admin/booking-form-logs'
     | '/admin/bookings'
     | '/admin/calendar'
     | '/admin/chatbot-training'
@@ -564,6 +574,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin/ai-lab'
     | '/admin/analytics'
+    | '/admin/booking-form-logs'
     | '/admin/bookings'
     | '/admin/calendar'
     | '/admin/chatbot-training'
@@ -619,6 +630,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/admin/ai-lab'
     | '/admin/analytics'
+    | '/admin/booking-form-logs'
     | '/admin/bookings'
     | '/admin/calendar'
     | '/admin/chatbot-training'
@@ -970,6 +982,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminBookingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/booking-form-logs': {
+      id: '/admin/booking-form-logs'
+      path: '/booking-form-logs'
+      fullPath: '/admin/booking-form-logs'
+      preLoaderRoute: typeof AdminBookingFormLogsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/analytics': {
       id: '/admin/analytics'
       path: '/analytics'
@@ -1074,6 +1093,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminAiLabRoute: typeof AdminAiLabRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminBookingFormLogsRoute: typeof AdminBookingFormLogsRoute
   AdminBookingsRoute: typeof AdminBookingsRoute
   AdminCalendarRoute: typeof AdminCalendarRoute
   AdminChatbotTrainingRoute: typeof AdminChatbotTrainingRoute
@@ -1099,6 +1119,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAiLabRoute: AdminAiLabRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminBookingFormLogsRoute: AdminBookingFormLogsRoute,
   AdminBookingsRoute: AdminBookingsRoute,
   AdminCalendarRoute: AdminCalendarRoute,
   AdminChatbotTrainingRoute: AdminChatbotTrainingRoute,
