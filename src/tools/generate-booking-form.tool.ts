@@ -108,19 +108,41 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
     });
   }
 
-  // Tamu pakai HP — sediakan teks balasan ringkas yang langsung berisi link
-  // dan instruksi singkat. LLM tinggal mengirim ini verbatim.
+  // Susun teks balasan dengan nada Pomah: hangat, ringkas, profesional,
+  // sentence case. Sertakan ringkasan kamar/tanggal bila tersedia agar tamu
+  // tahu form sudah pre-filled sesuai obrolan sebelumnya.
+  const propertyName =
+    (ctx.property as { name?: string } | undefined)?.name ?? "Pomah Guesthouse";
+
+  const contextLines: string[] = [];
+  if (resolvedRoomName) contextLines.push(`• Kamar: ${resolvedRoomName}`);
+  if (checkIn && checkOut) contextLines.push(`• Tanggal: ${checkIn} → ${checkOut}`);
+  else if (checkIn) contextLines.push(`• Check-in: ${checkIn}`);
+  const contextBlock = contextLines.length ? `\n${contextLines.join("\n")}\n` : "";
+
+  // Hitung sisa berlaku dalam menit untuk kalimat yang lebih natural.
+  const ttlMinutes = Math.max(
+    1,
+    Math.round((new Date(expiresAt).getTime() - Date.now()) / 60_000),
+  );
+
   const suggestedReply =
-    `Untuk mempercepat, silakan isi data booking di tautan berikut ya Kak 🙏\n\n${url}\n\n` +
-    `Tautan berlaku 30 menit. Setelah dikirim, saya akan langsung balas ringkasan booking + invoice di sini.`;
+    `Halo Kak 🙏 Supaya prosesnya lebih cepat, silakan lengkapi data pemesanan di formulir singkat ${propertyName} berikut:` +
+    `\n\n${url}\n` +
+    contextBlock +
+    `\nIsi nama, email (opsional), jumlah tamu, extra bed, dan catatan—form sudah saya siapkan sesuai obrolan kita. ` +
+    `Tautan berlaku ${ttlMinutes} menit.\n\n` +
+    `Begitu Kakak kirim, saya akan langsung balas ringkasan booking dan invoice di chat ini ya. Terima kasih! 🏡✨`;
 
   return JSON.stringify({
     ok: true,
     token,
     url,
     expires_at: expiresAt,
+    ttl_minutes: ttlMinutes,
     suggested_reply: suggestedReply,
     instruction_to_agent:
-      "Kirim teks `suggested_reply` ini sebagai balasan ke tamu. JANGAN ubah URL. Setelah ini, jangan menanyakan nama/email/extra bed lagi — tunggu submit form.",
+      "Kirim teks `suggested_reply` ini VERBATIM sebagai balasan ke tamu (jangan ubah URL, jangan tambah basa-basi lain). " +
+      "Setelah ini, JANGAN menanyakan nama/email/extra bed/catatan lagi di chat — tunggu webhook submit form.",
   });
 };
