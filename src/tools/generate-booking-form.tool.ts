@@ -12,6 +12,7 @@
  */
 
 import { createBookingFormToken } from "@/services/booking-form.service";
+import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
 import type { ToolContext, ToolHandler } from "./types";
 
 function str(v: unknown): string {
@@ -101,6 +102,23 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
     token = result.token;
     url = result.url;
     expiresAt = result.expiresAt;
+
+    const context: BookingContext = {
+      formToken: token,
+      guestPhone: ctx.phone,
+      checkIn: checkIn || undefined,
+      checkOut: checkOut || undefined,
+      adults: Number.isFinite(guestCount) && guestCount > 0 ? guestCount : undefined,
+      roomId: roomTypeId ?? undefined,
+      roomName: resolvedRoomName ?? (roomTypeName || undefined),
+    };
+    const roomCount = Number.isFinite(roomsCount) && roomsCount > 0 ? roomsCount : 1;
+    const matchedRoom = roomTypeId ? ctx.rooms.find((r) => r.id === roomTypeId) : null;
+    if (context.roomId && context.roomName) {
+      context.pricePerNight = Number(matchedRoom?.base_rate ?? 0);
+      context.rooms = [{ roomTypeId: context.roomId, roomTypeName: context.roomName, quantity: roomCount, pricePerNight: context.pricePerNight }];
+    }
+    await updateBookingState(ctx.supabaseAdmin, ctx.phone, "AWAITING_FORM_SUBMISSION", context);
   } catch (e) {
     return JSON.stringify({
       ok: false,
