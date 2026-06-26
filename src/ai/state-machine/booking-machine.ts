@@ -903,8 +903,7 @@ export async function processBookingState(
       };
     }
 
-    const allowedPhones = phoneCandidates(phone, row.phone);
-    if (!allowedPhones.includes(row.phone) && row.phone !== phone) {
+    if (normalizePhone(phone) !== normalizePhone(row.phone)) {
       return { handled: true, reply: "Maaf Kak, formulir ini tidak sesuai dengan nomor WhatsApp percakapan ini." };
     }
 
