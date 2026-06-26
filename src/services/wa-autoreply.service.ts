@@ -29,8 +29,8 @@ import { checkRoomAvailability } from "@/tools/availability.tool";
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
-const QUICK_ACK_AFTER_MS = 15_000;
-const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED === "true";
+const QUICK_ACK_AFTER_MS = 6_000;
+const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
 const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED === "true";
 const FAQ_BLOCK_RE =
   /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
@@ -42,19 +42,13 @@ type FastFaqResult = {
 
 /**
  * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent →
- * route → jalankan agent → tool calls → balasan teks). Harus lebih besar dari
- * LLM_CALL_TIMEOUT_MS (12s) dikali jumlah ronde tool-call yang wajar, jika
- * tidak orchestrasi multi-turn akan dipotong di tengah dan menghasilkan
- * balasan fallback. 40s menampung ~2-3 ronde. (Sebelumnya 22s — terlalu
- * pendek; satu panggilan LLM yang timeout saja sudah menghabiskan anggaran
- * sebelum ronde kedua sempat jalan.)
- *
- * Catatan Cloudflare Workers: pastikan ini masih di bawah batas wall-time
- * sub-request/worker pada paket yang dipakai. 40s aman untuk Workers berbayar
- * (CPU time terpisah dari wall time selama menunggu I/O LLM).
+ * route → jalankan agent → tool calls → balasan teks). Dibuat ketat agar
+ * request worker tidak hidup terlalu lama dan berubah menjadi zombie. Jika AI
+ * belum menghasilkan jawaban dalam batas ini, alur mengirim fallback yang jelas
+ * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
-const AI_TIMEOUT_MS = 40_000;
-const AI_MAX_ATTEMPTS = 2;
+const AI_TIMEOUT_MS = 28_000;
+const AI_MAX_ATTEMPTS = 1;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
