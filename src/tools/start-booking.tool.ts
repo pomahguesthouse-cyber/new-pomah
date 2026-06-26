@@ -78,7 +78,9 @@ export const startBookingDetails: ToolHandler = async (
   function calcNights(ci: string, co: string): number {
     const d1 = new Date(ci);
     const d2 = new Date(co);
-    return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
+    const diff = Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
+    // Dayuse (ci == co) → 0 malam; pricing dayuse butuh quote khusus.
+    return diff > 0 ? diff : 0;
   }
 
   const roomsArg = args.rooms;
