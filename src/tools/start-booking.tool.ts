@@ -8,7 +8,7 @@
  * deterministically — including the name and chat-number confirmations.
  */
 
-import { isDateString } from "@/lib/date";
+import { isDateString, todayWIB } from "@/lib/date";
 import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
 import type { ToolContext, ToolHandler } from "./types";
 
