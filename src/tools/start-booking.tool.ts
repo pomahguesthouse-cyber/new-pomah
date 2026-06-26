@@ -213,7 +213,7 @@ export const startBookingDetails: ToolHandler = async (
     message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak (bisa langsung sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789"):`;
   }
 
-  await updateBookingState(ctx.supabasePublic, ctx.phone, "COLLECTING_DATA", context);
+  await updateBookingState(ctx.supabaseAdmin, ctx.phone, "COLLECTING_DATA", context);
 
   // The orchestrator's state machine will own every subsequent message. Tell the
   // agent to relay `message` to the guest verbatim for this transition turn.

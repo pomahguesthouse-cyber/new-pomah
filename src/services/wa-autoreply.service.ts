@@ -666,6 +666,7 @@ export async function executeAutoreplyForPhone(
           property: p,
           today: todayWIB(),
           origin,
+          idempotencyKey: queueEntryId ? `wa_queue:${queueEntryId}` : undefined,
         },
         llmConfig: { apiKey, baseUrl, model },
         signal: controller.signal,
@@ -860,6 +861,19 @@ export async function executeAutoreplyForPhone(
   }
 
   const agentKey = orchResult?.agentKey ?? "front-office";
+  const outboundMetadata = {
+    agent: deriveAgentLabelFromKey(agentKey),
+    tools_used: orchResult?.toolsUsed ?? [],
+    agent_key: agentKey,
+    intent: orchResult?.intent,
+    routing_confidence: orchResult?.routingConfidence,
+    escalated: orchResult?.escalated,
+    is_fallback: isFallback,
+    fallback_reason: fallbackReason,
+    training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
+    training_example_ids: orchResult?.trainingExampleIds ?? [],
+    queue_entry_id: queueEntryId ?? null,
+  };
 
   // Persist outbound BEFORE calling Fonnte. Kalau worker mati setelah Fonnte
   // sukses, baris ini sudah ada dan dedup-guard di atas akan mencegah
@@ -868,17 +882,7 @@ export async function executeAutoreplyForPhone(
     threadId: c.thread_id,
     body: finalReply,
     metadata: {
-      agent: deriveAgentLabelFromKey(agentKey),
-      tools_used: orchResult?.toolsUsed ?? [],
-      agent_key: agentKey,
-      intent: orchResult?.intent,
-      routing_confidence: orchResult?.routingConfidence,
-      escalated: orchResult?.escalated,
-      is_fallback: isFallback,
-      fallback_reason: fallbackReason,
-      training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
-      training_example_ids: orchResult?.trainingExampleIds ?? [],
-      queue_entry_id: queueEntryId ?? null,
+      ...outboundMetadata,
       send_status: "pending",
     } as any,
   });
@@ -910,7 +914,13 @@ export async function executeAutoreplyForPhone(
       try {
         await (supabaseAdmin as any)
           .from("whatsapp_messages")
-          .update({ metadata: { send_status: "failed", error: String(sendErr) } as any })
+          .update({
+            metadata: {
+              ...outboundMetadata,
+              send_status: "failed",
+              error: String(sendErr),
+            } as any,
+          })
           .eq("id", outboundRowId);
       } catch {
         /* non-fatal */
@@ -925,17 +935,7 @@ export async function executeAutoreplyForPhone(
         .from("whatsapp_messages")
         .update({
           metadata: {
-            agent: deriveAgentLabelFromKey(agentKey),
-            tools_used: orchResult?.toolsUsed ?? [],
-            agent_key: agentKey,
-            intent: orchResult?.intent,
-            routing_confidence: orchResult?.routingConfidence,
-            escalated: orchResult?.escalated,
-            is_fallback: isFallback,
-            fallback_reason: fallbackReason,
-            training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
-            training_example_ids: orchResult?.trainingExampleIds ?? [],
-            queue_entry_id: queueEntryId ?? null,
+            ...outboundMetadata,
             send_status: "sent",
           } as any,
         })

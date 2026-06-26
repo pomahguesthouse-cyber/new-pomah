@@ -1307,10 +1307,12 @@ export async function processBookingState(
       }
 
       if (!result.ok) {
-        await updateBookingState(supabase, phone, "IDLE", {});
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
         return {
           handled: true,
-          reply: `Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. Silakan coba lagi atau hubungi staf kami.`,
+          reply:
+            `Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. ` +
+            `Data booking sebelumnya tetap saya simpan. Kakak bisa koreksi datanya, pilih kamar/tanggal lain, atau balas "batal".`,
         };
       }
 
