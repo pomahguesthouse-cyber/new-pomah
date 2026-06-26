@@ -1263,6 +1263,48 @@ export async function executeAutoreplyForPhone(
     } as any,
   });
 
+  // ── Atomic claim per queue_entry_id ────────────────────────────────────
+  // Dedup-guard di atas read-then-write: dua worker konkuren bisa sama-sama
+  // lolos pengecekan dan dua-duanya menulis baris 'pending' + memanggil
+  // Fonnte → tamu menerima pesan dobel. Setelah persist, pastikan baris
+  // kita adalah final-reply pertama untuk entry ini. Kalau ada baris lebih
+  // awal (non-ack, non-failed/superseded) milik worker lain, tandai punya
+  // kita superseded dan jangan kirim.
+  if (outboundRowId && queueEntryId) {
+    try {
+      const { data: peers } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id, sent_at, metadata")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "out")
+        .filter("metadata->>queue_entry_id", "eq", queueEntryId)
+        .order("sent_at", { ascending: true })
+        .limit(10);
+      const finalPeers = (peers ?? []).filter((m: any) => {
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        return meta.is_ack !== true && meta.send_status !== "failed" && meta.send_status !== "superseded";
+      });
+      const winnerId = finalPeers[0]?.id ?? null;
+      if (winnerId && winnerId !== outboundRowId) {
+        try {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({ metadata: { ...outboundMetadata, send_status: "superseded" } as any })
+            .eq("id", outboundRowId);
+        } catch {
+          // ignore
+        }
+        console.warn(
+          `[Autoreply] Final-reply race lost for ${phone.slice(-6)} ` +
+            `(entry=${queueEntryId.slice(0, 8)}) — skip Fonnte`,
+        );
+        return "ok";
+      }
+    } catch (e) {
+      console.warn("[Autoreply] Atomic claim check failed (continuing):", e);
+    }
+  }
+
   metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,
