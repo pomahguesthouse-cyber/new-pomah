@@ -762,7 +762,20 @@ export async function executeAutoreplyForPhone(
   const sessionStartIndex = findSessionStartIndex(messages);
   const previousSession = messages.slice(0, sessionStartIndex);
   const currentSessionMessages = messages.slice(sessionStartIndex);
-  const rollingMessages = currentSessionMessages.slice(-20);
+  // Filter pesan outbound "noise" supaya LLM tidak meniru mereka sebagai
+  // assistant turn: fallback "sistem sibuk" dan quick-ack "sebentar Kak"
+  // bukan jawaban substantif, dan kalau dibiarkan masuk history, model
+  // sering mengulanginya sebagai balasan berikutnya (regresi yang muncul
+  // di log: bot membalas "Mohon maaf, sistem kami sedang sibuk…").
+  const cleanedSession = currentSessionMessages.filter((m: { direction: string; body?: string }) => {
+    if (m.direction !== "out") return true;
+    const body = (m.body ?? "").trim();
+    if (!body) return false;
+    if (body === FALLBACK_MESSAGE) return false;
+    if (body === QUICK_ACK_MESSAGE) return false;
+    return true;
+  });
+  const rollingMessages = cleanedSession.slice(-20);
 
   const lastMessage =
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
