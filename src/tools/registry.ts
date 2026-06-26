@@ -514,6 +514,31 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "generate_booking_form",
+      description:
+        "Buat tautan FORM BOOKING sekali pakai untuk tamu WhatsApp lalu kirim ke tamu. " +
+        "Pakai SETELAH tamu memilih tipe kamar & tanggal dan menyatakan ingin booking, " +
+        "SEBAGAI ALTERNATIF dari `start_booking_details` — tujuannya memindahkan pengisian " +
+        "nama, email, jumlah extra bed, dan catatan ke halaman web supaya percakapan tidak bertele-tele. " +
+        "Tool akan mengembalikan `suggested_reply` berisi link + penjelasan singkat — kirim VERBATIM " +
+        "ke tamu sebagai balasan berikutnya. JANGAN menanyakan data pemesan lagi di chat setelah ini; " +
+        "tunggu webhook submit form. Jika tool mengembalikan `ok:false` (mis. fitur dimatikan), " +
+        "lanjutkan pakai `start_booking_details` seperti biasa.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type:   { type: "string", description: "Nama tipe kamar yang sudah disepakati (mis. 'Deluxe'). Boleh kosong bila tamu belum memilih." },
+          check_in:    { type: "string", description: "Tanggal check-in YYYY-MM-DD bila sudah disepakati." },
+          check_out:   { type: "string", description: "Tanggal check-out YYYY-MM-DD bila sudah disepakati." },
+          guest_count: { type: "number", description: "Total tamu (dewasa + anak) bila sudah disebut. Default kosong." },
+          rooms:       { type: "number", description: "Jumlah kamar yang dipesan dari tipe yang sama. Default kosong (1)." },
+        },
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
