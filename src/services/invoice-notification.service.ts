@@ -265,6 +265,16 @@ Terima kasih.`;
       }
     } else {
       console.warn(`[InvoiceNotification] WhatsApp send failed: ${sendErr}`);
+      // Release claim — kirim gagal, biarkan retry berikutnya mencoba lagi.
+      try {
+        await (supabase as any)
+          .from("invoices")
+          .update({ wa_sent_at: null })
+          .eq("booking_id", bookingId)
+          .eq("wa_sent_at", claimAt);
+      } catch {
+        /* non-fatal */
+      }
       return { ok: false, error: sendErr ?? "WhatsApp send failed", pdf_url: invoiceUrl, wa_sent: false };
     }
 
