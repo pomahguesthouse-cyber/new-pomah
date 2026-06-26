@@ -2650,6 +2650,7 @@ export type Database = {
           created_at: string
           id: string
           metadata: Json
+          property_id: string | null
           sender_name: string | null
           sender_type: string
           thread_id: string
@@ -2661,6 +2662,7 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json
+          property_id?: string | null
           sender_name?: string | null
           sender_type: string
           thread_id: string
@@ -2672,11 +2674,19 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json
+          property_id?: string | null
           sender_name?: string | null
           sender_type?: string
           thread_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "webchat_messages_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "webchat_messages_thread_id_fkey"
             columns: ["thread_id"]
@@ -2700,6 +2710,7 @@ export type Database = {
           handoff_until: string | null
           id: string
           last_message_at: string
+          property_id: string | null
           source: string
           status: string
           updated_at: string
@@ -2718,6 +2729,7 @@ export type Database = {
           handoff_until?: string | null
           id?: string
           last_message_at?: string
+          property_id?: string | null
           source?: string
           status?: string
           updated_at?: string
@@ -2736,6 +2748,7 @@ export type Database = {
           handoff_until?: string | null
           id?: string
           last_message_at?: string
+          property_id?: string | null
           source?: string
           status?: string
           updated_at?: string
@@ -2747,6 +2760,13 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_threads_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
             referencedColumns: ["id"]
           },
           {
