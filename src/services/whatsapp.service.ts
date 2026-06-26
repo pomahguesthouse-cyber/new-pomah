@@ -60,11 +60,16 @@ export async function sendWhatsAppMessage(
 export async function sendWhatsAppMessageWithOptions(
   input: SendWhatsAppMessageInput,
 ): Promise<SendResult> {
+  // Timeout 15 detik supaya worker tidak hang bila Fonnte lambat/macet.
+  const FONNTE_TIMEOUT_MS = 15_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FONNTE_TIMEOUT_MS);
   try {
     const res = await fetch(FONNTE_SEND_URL, {
       method: "POST",
       headers: { Authorization: input.token },
       body: buildFonnteSendForm(input),
+      signal: controller.signal,
     });
 
     const responseText = await res.text().catch(() => "");
@@ -92,8 +97,13 @@ export async function sendWhatsAppMessageWithOptions(
 
     return { ok: true, status: res.status, error: null, raw };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const isAbort = (e as { name?: string })?.name === "AbortError";
+    const msg = isAbort
+      ? `Fonnte timeout setelah ${FONNTE_TIMEOUT_MS}ms`
+      : e instanceof Error ? e.message : String(e);
     console.error("[WhatsApp] Fonnte fetch exception:", msg);
     return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
