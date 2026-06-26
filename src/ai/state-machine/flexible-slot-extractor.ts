@@ -151,6 +151,58 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function isoDate(year: number, monthIdx: number, day: number): string | null {
+  const d = new Date(Date.UTC(year, monthIdx, day));
+  if (
+    d.getUTCFullYear() !== year ||
+    d.getUTCMonth() !== monthIdx ||
+    d.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Resolve a bare day number ("tgl 7") to the nearest future date.
+ * If day already passed this month, use next month.
+ */
+function resolveBareDay(day: number, today?: string): string | null {
+  if (day < 1 || day > 31) return null;
+  const base = today ? new Date(`${today}T00:00:00Z`) : new Date();
+  let year = base.getUTCFullYear();
+  let monthIdx = base.getUTCMonth();
+
+  let candidate = isoDate(year, monthIdx, day);
+  if (!candidate) return null;
+
+  const todayIso = today ?? new Date().toISOString().slice(0, 10);
+  if (candidate < todayIso) {
+    monthIdx += 1;
+    if (monthIdx > 11) {
+      monthIdx = 0;
+      year += 1;
+    }
+    candidate = isoDate(year, monthIdx, day);
+  }
+
+  return candidate;
+}
+
+function resolveBareDayRange(startDay: number, endDay: number, today?: string): [string, string] | null {
+  const checkIn = resolveBareDay(startDay, today);
+  if (!checkIn) return null;
+
+  let checkOut = isoDate(Number(checkIn.slice(0, 4)), Number(checkIn.slice(5, 7)) - 1, endDay);
+  if (!checkOut || checkOut <= checkIn) {
+    const base = new Date(`${checkIn}T00:00:00Z`);
+    base.setUTCMonth(base.getUTCMonth() + 1);
+    checkOut = isoDate(base.getUTCFullYear(), base.getUTCMonth(), endDay);
+  }
+
+  return checkOut && checkOut > checkIn ? [checkIn, checkOut] : null;
+}
+
 // ─── Main extractor ───────────────────────────────────────────────────────────
 
 /**
@@ -240,6 +292,21 @@ export function extractAllSlots(
   // ── 5. Tanggal ────────────────────────────────────────────────────────────
   const dates: string[] = [];
 
+  // Pattern: "tgl 7-9", "tanggal 7 sampai 9", "7-9 kak 2 malam".
+  // Ini umum muncul sebagai reply singkat ke pertanyaan tanggal. Tanpa guard,
+  // "7-9" bisa keliru dibaca sebagai 7/9 (7 September), bukan rentang menginap.
+  const bareRangeRe =
+    /(?:\b(?:tgl|tanggal|date|check\s*in|ci|menginap|nginap)\b\D*)?(\d{1,2})\s*(?:-|–|—|s\/d|sd|sampai|sampe|hingga|to)\s*(\d{1,2})(?=\D|$)/i;
+  const bareRangeMatch = text.match(bareRangeRe);
+  if (bareRangeMatch) {
+    const startDay = Number(bareRangeMatch[1]);
+    const endDay = Number(bareRangeMatch[2]);
+    const range = resolveBareDayRange(startDay, endDay, today);
+    if (range) {
+      dates.push(range[0], range[1]);
+    }
+  }
+
   // Pattern: "25 Juni 2026" atau "25 Juni"
   const idDateRe =
     /(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|ags|sep|okt|nov|des)\w*(?:\s+(\d{4}|\d{2}))?/gi;
@@ -268,6 +335,9 @@ export function extractAllSlots(
     const matchStart = slashMatch.index;
     const matchEnd = slashMatch.index + slashMatch[0].length;
     if (phoneSpans.some((span) => matchStart >= span.start && matchEnd <= span.end)) {
+      continue;
+    }
+    if (!slashMatch[3] && slashMatch[0].includes("-") && bareRangeMatch?.[0]?.includes(slashMatch[0])) {
       continue;
     }
     const day = Number(slashMatch[1]);
