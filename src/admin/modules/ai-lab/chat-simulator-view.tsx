@@ -34,6 +34,8 @@ import {
   PlayCircle,
   StopCircle,
   ChevronRight,
+  ExternalLink,
+  FileText,
 } from "lucide-react";
 import {
   simulateChatTurn,
@@ -212,6 +214,84 @@ export function ChatSimulatorView() {
       | null
       | undefined;
     return { reply: res.reply as string | null, meta, attachment, ocrResult };
+  }
+
+  // ── Booking form integration ────────────────────────────────────────────
+  // Bot reply yang berisi URL `/booking/form/<token>` di-render dengan tombol
+  // "Buka formulir". Setelah dibuka, simulator polling endpoint publik untuk
+  // mendeteksi submission, lalu otomatis mengirim `[FORM_SUBMITTED:<token>]`
+  // sebagai pesan tamu — meniru perilaku worker WA di produksi.
+  const FORM_URL_REGEX = /\/booking\/form\/([A-Za-z0-9_-]{16,})/;
+  function extractFormToken(body: string): string | null {
+    const m = body.match(FORM_URL_REGEX);
+    return m ? m[1] : null;
+  }
+
+  // Token yang sedang dipantau, supaya tidak double-poll dan tidak dobel kirim.
+  const pollingTokensRef = useRef<Set<string>>(new Set());
+  const submittedTokensRef = useRef<Set<string>>(new Set());
+
+  async function pollFormSubmission(token: string) {
+    if (pollingTokensRef.current.has(token) || submittedTokensRef.current.has(token)) return;
+    pollingTokensRef.current.add(token);
+    const deadline = Date.now() + 5 * 60 * 1000; // 5 menit
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          const res = await fetch(`/api/public/booking-form/${token}`, { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.status === "submitted") {
+              if (submittedTokensRef.current.has(token)) return;
+              submittedTokensRef.current.add(token);
+              // Kirim pesan sintetis melalui pipeline simulator.
+              const syntheticMessage = `[FORM_SUBMITTED:${token}]`;
+              const history = transcriptRef.current;
+              const userBubble: TranscriptMsg = { direction: "in", body: "📝 Formulir booking terkirim" };
+              const withUser = [...history, userBubble];
+              setTranscript(withUser);
+              scrollToBottom();
+              setSending(true);
+              try {
+                const { reply, meta, attachment } = await sendOne(syntheticMessage, history);
+                setLastMeta(meta);
+                const systemMessages: TranscriptMsg[] = (meta.toolsUsed ?? []).map((tool) => ({
+                  direction: "system" as const,
+                  body: `🔧 Tool: ${tool}`,
+                }));
+                setTranscript([
+                  ...withUser,
+                  ...systemMessages,
+                  ...(reply
+                    ? [{ direction: "out" as const, body: reply, attachment }]
+                    : [{ direction: "out" as const, body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` }]),
+                ]);
+                scrollToBottom();
+                toast.success("Formulir terkirim — chatbot melanjutkan");
+              } finally {
+                setSending(false);
+              }
+              return;
+            }
+            if (data?.status === "expired") {
+              toast.warning("Token formulir kedaluwarsa");
+              return;
+            }
+          }
+        } catch {
+          // network blip — coba lagi
+        }
+      }
+    } finally {
+      pollingTokensRef.current.delete(token);
+    }
+  }
+
+  function openBookingForm(token: string) {
+    const url = `/booking/form/${token}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    void pollFormSubmission(token);
   }
 
   async function handleSend() {
@@ -1010,6 +1090,34 @@ export function ChatSimulatorView() {
                             />
                           )}
                           <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                          {m.direction === "out" && (() => {
+                            const formToken = extractFormToken(m.body);
+                            if (!formToken) return null;
+                            const isPolling = pollingTokensRef.current.has(formToken);
+                            const isSubmitted = submittedTokensRef.current.has(formToken);
+                            return (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openBookingForm(formToken)}
+                                  disabled={isSubmitted}
+                                  className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                                  title="Buka formulir di tab baru, lalu chatbot akan otomatis lanjut setelah dikirim"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Buka formulir
+                                  <ExternalLink className="h-3 w-3" />
+                                </button>
+                                {isSubmitted ? (
+                                  <span className="text-[10px] font-medium text-emerald-700">✓ Formulir terkirim</span>
+                                ) : isPolling ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-stone-500">
+                                    <Loader2 className="h-3 w-3 animate-spin" /> Menunggu submit…
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                           {m.direction === "out" && m.attachment && (
                             <a
                               href={m.attachment.url}
