@@ -611,7 +611,7 @@ export async function executeAutoreplyForPhone(
             await saveOutboundMessage(supabaseAdmin as any, {
               threadId: c.thread_id,
               body: ack,
-              metadata: { kind: "test_mode_toggle", mode: nextMode ? "guest" : "admin" },
+              metadata: { agent: nextMode ? "test_mode_guest" : "test_mode_admin" },
             });
           }
         }
