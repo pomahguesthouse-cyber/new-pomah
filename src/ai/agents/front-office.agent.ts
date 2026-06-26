@@ -26,6 +26,7 @@ const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "update_booking_slots",
   "offer_alternative_rooms",
   "start_booking_details",
+  "generate_booking_form",
   // Intentionally NOT exposed in guest mode. Final booking creation is handled
   // by the deterministic booking state machine after explicit confirmation.
 ] as const);
