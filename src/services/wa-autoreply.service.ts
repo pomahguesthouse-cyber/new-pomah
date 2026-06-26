@@ -86,7 +86,9 @@ type FastFaqResult = {
  * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
 const AI_TIMEOUT_MS = 28_000;
-const AI_MAX_ATTEMPTS = 1;
+// Naikkan ke 2 supaya worker yang request pertamanya keburu di-cancel
+// (HTTP 499 di gateway) masih punya satu retry sebelum entry ditandai gagal.
+const AI_MAX_ATTEMPTS = 2;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
