@@ -22,6 +22,7 @@ import {
   TrendingUp,
   LifeBuoy,
   Brain,
+  Link2,
   GripVertical,
 } from "lucide-react";
 import {
