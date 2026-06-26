@@ -33,6 +33,14 @@ export const startBookingDetails: ToolHandler = async (
   if (!checkIn) {
     return JSON.stringify({ ok: false, error: "Tanggal check-in belum ditentukan." });
   }
+  // Tolak tanggal lampau — kemungkinan tamu salah ketik tahun (mis. "25 Juni 2025").
+  const today = todayWIB();
+  if (checkIn < today) {
+    return JSON.stringify({
+      ok: false,
+      error: `Tanggal check-in (${checkIn}) sudah lewat. Mohon konfirmasi tanggal yang benar (hari ini ${today} WIB).`,
+    });
+  }
   // Default to a single night if only one date is provided.
   if (!checkOut) {
     // Tidak ada checkOut sama sekali → default 1 malam
