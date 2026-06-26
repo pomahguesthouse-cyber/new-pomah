@@ -62,11 +62,11 @@ async function handle(request: Request): Promise<Response> {
   }
 
   const origin = new URL(request.url).origin;
-  // Keep each cron invocation short. The scheduler already runs frequently,
-  // while one AI reply can take close to the worker lock budget; batching many
-  // entries in a single request increases the chance the platform terminates
-  // the request mid-job and leaves a zombie lock behind.
-  const { processed } = await drainQueue(origin, 3);
+  // Batch claims & processes in parallel inside drainQueue (Promise.allSettled).
+  // 5 entries per tick keeps the request well under the worker budget while
+  // significantly cutting per-message scheduling wait under load.
+  // request.signal stops new work if the platform disconnects mid-run.
+  const { processed } = await drainQueue(origin, 5, request.signal);
 
   // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
   // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
