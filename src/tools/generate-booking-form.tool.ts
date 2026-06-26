@@ -65,12 +65,14 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
   // di-enqueue saat tamu submit) dapat dikaitkan ke percakapan yang benar.
   let threadId: string | null = null;
   try {
-    const { data } = await (ctx.supabaseAdmin as { from: (t: string) => { select: (c: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: { id: string } | null }> } } } })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = ctx.supabaseAdmin as any;
+    const { data } = await admin
       .from("whatsapp_threads")
       .select("id")
       .eq("phone", ctx.phone)
       .maybeSingle();
-    threadId = data?.id ?? null;
+    threadId = (data?.id as string | undefined) ?? null;
   } catch {
     // Non-fatal — service akan fallback lookup-by-phone saat submit.
   }
