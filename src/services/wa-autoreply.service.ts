@@ -1638,15 +1638,35 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
-
-    if (!ok) {
-      console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
+    // ── Atomic claim: tandai entry SEBELUM kirim (idempotency key) ─────────
+    // Dua tick cron dapat melihat row 'failed' yang sama sebelum salah satu
+    // menyetel marker. Tanpa claim atomik, keduanya akan memanggil Fonnte
+    // dan tamu menerima dua pesan "sistem sibuk". Update bersyarat ini
+    // menjamin hanya satu pemanggil yang mendapat baris (`select` akan
+    // kosong untuk pemanggil yang kalah race).
+    let claimWon = false;
+    try {
+      const { data: claimed } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:claimed]") })
+        .eq("id", entry.id)
+        .or("last_error.is.null,last_error.not.ilike.%[fallback_sent%")
+        .select("id");
+      claimWon = Array.isArray(claimed) && claimed.length > 0;
+    } catch (e) {
+      console.warn("[Fallback] claim failed:", e);
+    }
+    if (!claimWon) {
+      console.info(`[Fallback] entry ${entry.id.slice(0, 8)} sudah diklaim worker lain — skip`);
       continue;
     }
 
+    // Persist outbound BEFORE Fonnte (pola persist-then-send). Jika worker
+    // mati setelah Fonnte tapi sebelum baris ini disimpan, claim di atas
+    // sudah mengunci entry sehingga retry tidak akan kirim ulang.
+    let outboundRowId: string | null = null;
     try {
-      await saveOutboundMessage(supabaseAdmin, {
+      outboundRowId = await saveOutboundMessage(supabaseAdmin, {
         threadId: entry.thread_id,
         body: FALLBACK_MESSAGE,
         metadata: {
@@ -1654,18 +1674,63 @@ export async function sendFailureFallbackToGuests(): Promise<{
           agent_key: "fallback",
           is_fallback: true,
           queue_entry_id: entry.id,
-          send_status: "sent",
+          send_status: "pending",
           reason: "queue_terminal_failure",
         } as any,
       });
     } catch (e) {
-      console.warn("[Fallback] save outbound failed:", e);
+      console.warn("[Fallback] save outbound (pending) failed:", e);
+    }
+
+    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
+
+    if (!ok) {
+      console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
+      // Tandai final supaya tidak retry tanpa henti — claim sudah set,
+      // tapi kita pertegas dengan marker terminal khusus.
+      try {
+        if (outboundRowId) {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({ metadata: { send_status: "failed", queue_entry_id: entry.id, is_fallback: true } as any })
+            .eq("id", outboundRowId);
+        }
+        await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:send_failed]") })
+          .eq("id", entry.id);
+      } catch (e) {
+        console.warn("[Fallback] mark send_failed failed:", e);
+      }
+      continue;
+    }
+
+    // Promote pending → sent.
+    if (outboundRowId) {
+      try {
+        await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .update({
+            metadata: {
+              agent: "system",
+              agent_key: "fallback",
+              is_fallback: true,
+              queue_entry_id: entry.id,
+              send_status: "sent",
+              reason: "queue_terminal_failure",
+            } as any,
+          })
+          .eq("id", outboundRowId);
+      } catch (e) {
+        console.warn("[Fallback] promote pending→sent failed:", e);
+      }
     }
 
     await (supabaseAdmin as any)
       .from("wa_conversation_queue")
       .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
+
 
     notified++;
     console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
