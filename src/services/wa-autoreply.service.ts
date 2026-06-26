@@ -1335,6 +1335,7 @@ export async function executeAutoreplyForPhone(
           `[Autoreply] Final-reply race lost for ${phone.slice(-6)} ` +
             `(entry=${queueEntryId.slice(0, 8)}) — skip Fonnte`,
         );
+        void updateBookingFormSendLog({ body: finalReply, status: "superseded" });
         return "ok";
       }
     } catch (e) {
