@@ -226,11 +226,17 @@ function formatDateId(iso: string): string {
   return `${day} ${months[month - 1]} ${year}`;
 }
 
-/** Hitung selisih malam antara dua tanggal YYYY-MM-DD. */
+/**
+ * Hitung selisih malam antara dua tanggal YYYY-MM-DD.
+ * Dayuse (checkIn == checkOut) mengembalikan 0 — pricing dayuse ditangani
+ * terpisah (tarif khusus / quote manual) dan tidak ditagih sebagai 1 malam.
+ */
 function countNights(checkIn: string, checkOut: string): number {
   const d1 = new Date(checkIn);
   const d2 = new Date(checkOut);
-  return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
+  const diff = Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
+  if (diff <= 0) return 0; // dayuse atau invalid → tidak ada malam menginap
+  return diff;
 }
 
 /**
