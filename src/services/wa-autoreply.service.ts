@@ -586,6 +586,30 @@ export async function executeAutoreplyForPhone(
       | undefined;
 
     if (stuckMsg?.body) {
+      // Atomic claim: ubah send_status pending → rescuing HANYA kalau masih
+      // pending. Kalau worker lain duluan, `claimed` kosong → kita tidak
+      // memanggil Fonnte (mencegah double resend).
+      const { data: claimed } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: {
+            ...stuckMsg.metadata,
+            send_status: "rescuing",
+            rescue_started_at: new Date().toISOString(),
+            queue_entry_id: queueEntryId ?? (stuckMsg.metadata as any)?.queue_entry_id ?? null,
+          },
+        })
+        .eq("id", stuckMsg.id)
+        .filter("metadata->>send_status", "eq", "pending")
+        .select("id");
+
+      if (!Array.isArray(claimed) || claimed.length === 0) {
+        console.info(
+          `[Autoreply] Zombie rescue: msg ${stuckMsg.id.slice(0, 8)} sudah diklaim worker lain — skip`,
+        );
+        return "ok";
+      }
+
       console.warn(
         `[Autoreply] 🧟 Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
       );
@@ -603,6 +627,14 @@ export async function executeAutoreplyForPhone(
         console.info(`[Autoreply] ✅ Zombie rescue berhasil untuk ${phone.slice(-6)}`);
         return "ok";
       }
+      // Resend gagal: kembalikan status ke 'failed' supaya tidak nge-block
+      // rescue berikutnya (rescue lain bisa coba lagi setelah window 5 menit).
+      await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: { ...stuckMsg.metadata, send_status: "failed", zombie_rescue_failed: true },
+        })
+        .eq("id", stuckMsg.id);
       console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
       // Kalau resend juga gagal (Fonnte down), lanjutkan ke AI normal
       // supaya tamu tetap dapat respons dari attempt ini.
