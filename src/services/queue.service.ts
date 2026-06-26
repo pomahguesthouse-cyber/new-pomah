@@ -44,8 +44,10 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   mediumMs:     6_000,
   longMs:       5_000,
   waitSignalMs: 10_000,  // tamu bilang "bentar/tunggu" → tunggu 10 detik
-  // Hard cap dari pesan pertama dalam burst.
-  maxWaitMs:    12_000,
+  // Hard cap dari pesan pertama dalam burst. Dinaikkan dari 12s → 25s
+  // supaya entry tidak ditandai `max_wait_exceeded` di tengah jalan saat
+  // burst tamu masih berdatangan + worker LLM butuh waktu (~10–20s).
+  maxWaitMs:    25_000,
 };
 
 /** Keywords/patterns that indicate user is still typing */
