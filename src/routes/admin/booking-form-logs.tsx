@@ -44,6 +44,8 @@ const statusBadge: Record<BookingFormSendStatus, { cls: string; label: string; I
 
 function BookingFormLogsPage() {
   const listFn = useServerFn(listBookingFormSendLogs);
+  const resendFn = useServerFn(resendBookingFormLink);
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<"all" | BookingFormSendStatus>("all");
   const [phone, setPhone] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
@@ -60,6 +62,21 @@ function BookingFormLogsPage() {
       }),
   });
   const logs = data?.logs ?? [];
+
+  const resendMutation = useMutation({
+    mutationFn: (logId: string) => resendFn({ data: { logId } }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success("Tautan baru terkirim via WhatsApp.");
+      } else {
+        toast.error(`Gagal kirim ulang: ${res.error ?? "unknown"}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["booking-form-send-logs"] });
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Gagal kirim ulang.");
+    },
+  });
 
   return (
     <div className="space-y-4 p-4 md:p-6">
