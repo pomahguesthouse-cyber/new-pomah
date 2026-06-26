@@ -556,12 +556,21 @@ async function cleanupPendingBookingAndInvoice(supabase: SupabaseClient, phone: 
     const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
     if (guestIds.length === 0) return;
 
+    // Hanya cancel booking yang:
+    // 1. Dibuat dalam 24 jam terakhir (bukan booking lama)
+    // 2. Belum ada pembayaran (paid_amount = 0 atau null)
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: bookings } = await (supabase as any)
       .from("bookings")
-      .select("id")
+      .select("id, paid_amount")
       .in("guest_id", guestIds)
-      .in("status", ["pending", "confirmed"]);
-    const bookingIds = ((bookings ?? []) as Array<{ id: string }>).map((b) => b.id);
+      .in("status", ["pending", "confirmed"])
+      .gte("created_at", cutoff);
+
+    const bookingIds = ((bookings ?? []) as Array<{ id: string; paid_amount?: number | null }>)
+      .filter((b) => !b.paid_amount || Number(b.paid_amount) === 0)
+      .map((b) => b.id);
+
     if (bookingIds.length === 0) return;
 
     await (supabase as any)
