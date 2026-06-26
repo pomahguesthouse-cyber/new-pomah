@@ -586,6 +586,30 @@ export async function executeAutoreplyForPhone(
       | undefined;
 
     if (stuckMsg?.body) {
+      // Atomic claim: ubah send_status pending → rescuing HANYA kalau masih
+      // pending. Kalau worker lain duluan, `claimed` kosong → kita tidak
+      // memanggil Fonnte (mencegah double resend).
+      const { data: claimed } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: {
+            ...stuckMsg.metadata,
+            send_status: "rescuing",
+            rescue_started_at: new Date().toISOString(),
+            queue_entry_id: queueEntryId ?? (stuckMsg.metadata as any)?.queue_entry_id ?? null,
+          },
+        })
+        .eq("id", stuckMsg.id)
+        .filter("metadata->>send_status", "eq", "pending")
+        .select("id");
+
+      if (!Array.isArray(claimed) || claimed.length === 0) {
+        console.info(
+          `[Autoreply] Zombie rescue: msg ${stuckMsg.id.slice(0, 8)} sudah diklaim worker lain — skip`,
+        );
+        return "ok";
+      }
+
       console.warn(
         `[Autoreply] 🧟 Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
       );
@@ -603,6 +627,14 @@ export async function executeAutoreplyForPhone(
         console.info(`[Autoreply] ✅ Zombie rescue berhasil untuk ${phone.slice(-6)}`);
         return "ok";
       }
+      // Resend gagal: kembalikan status ke 'failed' supaya tidak nge-block
+      // rescue berikutnya (rescue lain bisa coba lagi setelah window 5 menit).
+      await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: { ...stuckMsg.metadata, send_status: "failed", zombie_rescue_failed: true },
+        })
+        .eq("id", stuckMsg.id);
       console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
       // Kalau resend juga gagal (Fonnte down), lanjutkan ke AI normal
       // supaya tamu tetap dapat respons dari attempt ini.
@@ -802,6 +834,7 @@ export async function executeAutoreplyForPhone(
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
+          // (1) Cek existing ack untuk entry ini.
           const { data: existingAck } = await (supabaseAdmin as any)
             .from("whatsapp_messages")
             .select("id")
@@ -812,13 +845,10 @@ export async function executeAutoreplyForPhone(
             .limit(1);
           if ((existingAck ?? []).length > 0) return;
 
-          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
-          if (!ok) {
-            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
-            return;
-          }
-          metrics.ackSentAt = Date.now();
-          await saveOutboundMessage(supabaseAdmin, {
+          // (2) Persist-then-send + race guard: tulis baris ack 'pending'
+          // dulu, lalu pastikan baris kita yang paling awal. Kalau bukan,
+          // worker lain sudah menulis duluan → skip kirim Fonnte.
+          const ackRowId = await saveOutboundMessage(supabaseAdmin, {
             threadId: c.thread_id,
             body: QUICK_ACK_MESSAGE,
             metadata: {
@@ -826,10 +856,80 @@ export async function executeAutoreplyForPhone(
               agent_key: "quick-ack",
               is_ack: true,
               queue_entry_id: queueEntryId,
-              send_status: "sent",
-              latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+              send_status: "pending",
             } as any,
           });
+
+          const { data: allAcks } = await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .select("id, sent_at")
+            .eq("thread_id", c.thread_id)
+            .eq("direction", "out")
+            .filter("metadata->>queue_entry_id", "eq", queueEntryId)
+            .filter("metadata->>is_ack", "eq", "true")
+            .order("sent_at", { ascending: true })
+            .limit(5);
+          const winnerId = (allAcks ?? [])[0]?.id ?? null;
+          if (winnerId && winnerId !== ackRowId) {
+            // Kalah race: tandai baris kita superseded supaya tidak mengganggu dedup body.
+            try {
+              await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .update({
+                  metadata: {
+                    agent: "system",
+                    agent_key: "quick-ack",
+                    is_ack: true,
+                    queue_entry_id: queueEntryId,
+                    send_status: "superseded",
+                  } as any,
+                })
+                .eq("id", ackRowId);
+            } catch {
+              // ignore
+            }
+            return;
+          }
+
+          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
+          if (!ok) {
+            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
+            try {
+              await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .update({
+                  metadata: {
+                    agent: "system",
+                    agent_key: "quick-ack",
+                    is_ack: true,
+                    queue_entry_id: queueEntryId,
+                    send_status: "failed",
+                  } as any,
+                })
+                .eq("id", ackRowId);
+            } catch {
+              // ignore
+            }
+            return;
+          }
+          metrics.ackSentAt = Date.now();
+          try {
+            await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .update({
+                metadata: {
+                  agent: "system",
+                  agent_key: "quick-ack",
+                  is_ack: true,
+                  queue_entry_id: queueEntryId,
+                  send_status: "sent",
+                  latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+                } as any,
+              })
+              .eq("id", ackRowId);
+          } catch {
+            // ignore
+          }
           console.info(`[Autoreply] quick ack sent to ${phone.slice(-6)} (entry ${queueEntryId.slice(0, 8)})`);
         } catch (e) {
           console.warn("[Autoreply] quick ack error (non-fatal):", e);
@@ -1351,7 +1451,7 @@ function hasFallbackSentMarker(lastError: unknown): boolean {
   return typeof lastError === "string" && FALLBACK_SENT_MARKER_RE.test(lastError);
 }
 
-function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | "[fallback_sent:skipped]"): string {
+function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | "[fallback_sent:skipped]" | "[fallback_sent:claimed]" | "[fallback_sent:send_failed]"): string {
   const base = typeof lastError === "string" ? lastError.trim() : "";
   if (FALLBACK_SENT_MARKER_RE.test(base)) return base.slice(0, 500);
   return `${base} ${marker}`.trim().slice(0, 500);
@@ -1638,15 +1738,35 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
-
-    if (!ok) {
-      console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
+    // ── Atomic claim: tandai entry SEBELUM kirim (idempotency key) ─────────
+    // Dua tick cron dapat melihat row 'failed' yang sama sebelum salah satu
+    // menyetel marker. Tanpa claim atomik, keduanya akan memanggil Fonnte
+    // dan tamu menerima dua pesan "sistem sibuk". Update bersyarat ini
+    // menjamin hanya satu pemanggil yang mendapat baris (`select` akan
+    // kosong untuk pemanggil yang kalah race).
+    let claimWon = false;
+    try {
+      const { data: claimed } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:claimed]") })
+        .eq("id", entry.id)
+        .or("last_error.is.null,last_error.not.ilike.%[fallback_sent%")
+        .select("id");
+      claimWon = Array.isArray(claimed) && claimed.length > 0;
+    } catch (e) {
+      console.warn("[Fallback] claim failed:", e);
+    }
+    if (!claimWon) {
+      console.info(`[Fallback] entry ${entry.id.slice(0, 8)} sudah diklaim worker lain — skip`);
       continue;
     }
 
+    // Persist outbound BEFORE Fonnte (pola persist-then-send). Jika worker
+    // mati setelah Fonnte tapi sebelum baris ini disimpan, claim di atas
+    // sudah mengunci entry sehingga retry tidak akan kirim ulang.
+    let outboundRowId: string | null = null;
     try {
-      await saveOutboundMessage(supabaseAdmin, {
+      outboundRowId = await saveOutboundMessage(supabaseAdmin, {
         threadId: entry.thread_id,
         body: FALLBACK_MESSAGE,
         metadata: {
@@ -1654,18 +1774,63 @@ export async function sendFailureFallbackToGuests(): Promise<{
           agent_key: "fallback",
           is_fallback: true,
           queue_entry_id: entry.id,
-          send_status: "sent",
+          send_status: "pending",
           reason: "queue_terminal_failure",
         } as any,
       });
     } catch (e) {
-      console.warn("[Fallback] save outbound failed:", e);
+      console.warn("[Fallback] save outbound (pending) failed:", e);
+    }
+
+    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
+
+    if (!ok) {
+      console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
+      // Tandai final supaya tidak retry tanpa henti — claim sudah set,
+      // tapi kita pertegas dengan marker terminal khusus.
+      try {
+        if (outboundRowId) {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({ metadata: { send_status: "failed", queue_entry_id: entry.id, is_fallback: true } as any })
+            .eq("id", outboundRowId);
+        }
+        await (supabaseAdmin as any)
+          .from("wa_conversation_queue")
+          .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:send_failed]") })
+          .eq("id", entry.id);
+      } catch (e) {
+        console.warn("[Fallback] mark send_failed failed:", e);
+      }
+      continue;
+    }
+
+    // Promote pending → sent.
+    if (outboundRowId) {
+      try {
+        await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .update({
+            metadata: {
+              agent: "system",
+              agent_key: "fallback",
+              is_fallback: true,
+              queue_entry_id: entry.id,
+              send_status: "sent",
+              reason: "queue_terminal_failure",
+            } as any,
+          })
+          .eq("id", outboundRowId);
+      } catch (e) {
+        console.warn("[Fallback] promote pending→sent failed:", e);
+      }
     }
 
     await (supabaseAdmin as any)
       .from("wa_conversation_queue")
       .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
+
 
     notified++;
     console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
