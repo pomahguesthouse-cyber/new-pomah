@@ -1115,11 +1115,20 @@ export async function processBookingState(
       state === "AWAITING_EMAIL" &&
       !extracted.email &&
       !extracted.is_skip_email &&
-      !hasInterruptionSignal &&
-      !QUESTION_PATTERN.test(trimmedMessage);
+      !hasInterruptionSignal;
 
     if (autoSkipOptionalEmail) {
       context.guestEmail = undefined;
+      if (!context.guestPhone || context.guestPhone.length < 8) context.guestPhone = phone;
+      const hasDatesForSkip = !!context.checkIn && !!context.checkOut;
+      const hasRoomForSkip = !!context.roomName;
+      const hasNameForSkip = !!context.guestName && context.guestName.length >= 2;
+      if (hasDatesForSkip && hasRoomForSkip && hasNameForSkip) {
+        console.info(`[BookingState] AWAITING_EMAIL auto-skip → CONFIRMING_BOOKING for ${phone.slice(-6)}`);
+        await applyResolvedRatesToContext(ctx, context);
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        return await buildBookingSummaryAsync(ctx, context);
+      }
     }
 
     // Mid-booking interruption signals check

@@ -1385,7 +1385,7 @@ export async function drainQueue(origin: string, maxBatch = 10): Promise<{ proce
     // zombie. Fires every 30s for the entire executeAutoreplyForPhone call.
     const heartbeatTimer = setInterval(() => {
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
-    }, 30_000);
+    }, 20_000);
 
     try {
       outcome = await executeAutoreplyForPhone(
@@ -1673,8 +1673,13 @@ function countConsecutiveInbound(messages: Array<{ direction: string; body: stri
 }
 
 function getLastNInboundMessages(messages: Array<{ direction: string; body: string }>, n: number): string[] {
-  return messages
-    .filter((m) => m.direction === "in")
-    .slice(-n)
-    .map((m) => m.body);
+  const result: string[] = [];
+  for (let i = messages.length - 1; i >= 0 && result.length < n; i--) {
+    if (messages[i].direction === "in") {
+      result.unshift(messages[i].body);
+    } else {
+      break;
+    }
+  }
+  return result;
 }

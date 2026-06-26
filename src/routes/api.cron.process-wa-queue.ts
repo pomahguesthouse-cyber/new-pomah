@@ -66,7 +66,7 @@ async function handle(request: Request): Promise<Response> {
   // while one AI reply can take close to the worker lock budget; batching many
   // entries in a single request increases the chance the platform terminates
   // the request mid-job and leaves a zombie lock behind.
-  const { processed } = await drainQueue(origin, 1);
+  const { processed } = await drainQueue(origin, 3);
 
   // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
   // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
