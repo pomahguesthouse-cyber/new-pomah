@@ -27,6 +27,15 @@ import { findTrainingSignals } from "@/services/training-retrieval.service";
 import { runDeferred } from "@/lib/cf-context";
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
+const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
+const QUICK_ACK_AFTER_MS = 15_000;
+const FAQ_BLOCK_RE =
+  /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
+
+type FastFaqResult = {
+  reply: string;
+  intent: string;
+};
 
 /**
  * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent →
@@ -157,6 +166,68 @@ function shouldForceSummary(lastMessage: string): boolean {
   if (!lastMessage) return false;
   const text = lastMessage.toLowerCase();
   return FORCE_SUMMARY_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+function buildFastFaqReply(
+  message: string,
+  property: Record<string, unknown>,
+  rooms: Array<Record<string, unknown>>,
+): FastFaqResult | null {
+  const text = message.toLowerCase().trim();
+  if (!text || FAQ_BLOCK_RE.test(text)) return null;
+
+  const propertyName = String(property.name || property.title || "Pomah Guesthouse");
+  const address = String(property.address || property.location || "").trim();
+  const phone = String(property.phone || property.whatsapp || "").trim();
+  const mapUrl = String(property.google_maps_url || property.maps_url || "").trim();
+  const checkIn = String(property.check_in_time || property.checkin_time || "14.00").trim();
+  const checkOut = String(property.check_out_time || property.checkout_time || "12.00").trim();
+
+  if (/\b(alamat|lokasi|dimana|di mana|maps?|map|rute|arah|google maps)\b/i.test(text)) {
+    const lines = [`${propertyName} berlokasi di ${address || "area Pomah Guesthouse"}.`];
+    if (mapUrl) lines.push(`Google Maps: ${mapUrl}`);
+    if (phone) lines.push(`Kalau Kakak kesulitan mencari lokasi, bisa hubungi kami di ${phone}.`);
+    return { intent: "faq_location", reply: lines.join("\n") };
+  }
+
+  if (/\b(jam|waktu).*(check.?in|masuk)|check.?in.*(jam|waktu)|check.?out.*(jam|waktu|kapan)|checkout\b/i.test(text)) {
+    return {
+      intent: "faq_check_time",
+      reply: `Check-in mulai pukul ${checkIn}, dan check-out maksimal pukul ${checkOut}.`,
+    };
+  }
+
+  if (/\b(wifi|wi-fi|internet)\b/i.test(text)) {
+    return {
+      intent: "faq_wifi",
+      reply: "Iya Kak, tersedia WiFi untuk tamu.",
+    };
+  }
+
+  if (/\b(parkir|parking|mobil|motor)\b/i.test(text)) {
+    return {
+      intent: "faq_parking",
+      reply: "Iya Kak, tersedia area parkir untuk tamu. Untuk kendaraan besar atau rombongan, kabari kami dulu ya agar bisa dibantu arahkan.",
+    };
+  }
+
+  if (/\b(fasilitas|amenities|ada apa saja)\b/i.test(text)) {
+    const amenities = Array.from(
+      new Set(
+        rooms
+          .flatMap((r) => (Array.isArray(r.amenities) ? r.amenities : []))
+          .map((v) => String(v).trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 8);
+    const suffix = amenities.length ? ` Beberapa fasilitas: ${amenities.join(", ")}.` : "";
+    return {
+      intent: "faq_facility",
+      reply: `Fasilitas tergantung tipe kamar yang dipilih Kak.${suffix}`,
+    };
+  }
+
+  return null;
 }
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 const SUMMARY_MAX_CHARS = 800;
@@ -392,14 +463,25 @@ export async function executeAutoreplyForPhone(
   const c = ctx as any;
   const manager = await resolveManagerByPhone(phone);
   const isManager = !!manager;
+  const metrics = {
+    workerStartedAt: Date.now(),
+    contextLoadedAt: Date.now(),
+    aiStartedAt: 0,
+    aiFinishedAt: 0,
+    sendStartedAt: 0,
+    sendFinishedAt: 0,
+    ackSentAt: 0,
+  };
   if ((!isManager && !c.auto_reply_enabled) || !c.fonnte_token) {
     return "skipped_config";
   }
 
+  let bookingState: { state?: string | null; context?: unknown } | null = null;
   if (!isManager) {
     try {
       const { data: handoffState } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
-      const handoffContext = (handoffState as { context?: unknown } | null)?.context;
+      bookingState = (handoffState as { state?: string | null; context?: unknown } | null) ?? null;
+      const handoffContext = bookingState?.context;
       if (
         handoffContext &&
         typeof handoffContext === "object" &&
@@ -470,12 +552,60 @@ export async function executeAutoreplyForPhone(
     )
     .order("base_rate");
 
+  const chatSummary = c.chat_summary || "";
+  const rawSummaryJson = c.chat_summary_json;
+  const chatSummaryJson =
+    rawSummaryJson &&
+    typeof rawSummaryJson === "object" &&
+    !Array.isArray(rawSummaryJson) &&
+    Object.keys(rawSummaryJson).length > 0
+      ? (rawSummaryJson as ChatSummaryStructured)
+      : undefined;
+  const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
+  const messages = c.messages ?? [];
+
+  // manager is already resolved at the beginning of the function
+  if (manager) {
+    console.info(`[Autoreply] Managerial WA flow — ${manager.name} (${manager.role})`);
+  }
+
+  // Single source of truth for "where does the current session start?"
+  // — used both to trim history sent to the agent AND to decide whether
+  // a fresh summary of the PREVIOUS session is warranted.
+  const sessionStartIndex = findSessionStartIndex(messages);
+  const previousSession = messages.slice(0, sessionStartIndex);
+  const currentSessionMessages = messages.slice(sessionStartIndex);
+  const rollingMessages = currentSessionMessages.slice(-20);
+
+  const lastMessage =
+    [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
+
+  let reply: string | null = null;
+  let orchResult: any = null;
+
+  const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
+  if (!isManager && !bookingActive && lastMessage) {
+    const fastFaq = buildFastFaqReply(lastMessage, p, (rooms ?? []) as Array<Record<string, unknown>>);
+    if (fastFaq) {
+      reply = fastFaq.reply;
+      orchResult = {
+        agentKey: "front-office",
+        intent: fastFaq.intent,
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["faq-fast-path"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Fast-path FAQ (${fastFaq.intent}) for ${phone.slice(-6)}`);
+    }
+  }
+
   const aiCfgRaw = p.ai_lab_config as any;
   const sopEnabled = aiCfgRaw?.tools?.["sop-knowledge"]?.enabled ?? true;
   let sopText = "";
   let brosurFiles: { name: string; url: string }[] = [];
 
-  if (sopEnabled) {
+  if (sopEnabled && !reply) {
     const { data: sopDocs } = await (supabaseAdmin as any)
       .from("sop_documents")
       .select("name, content, source_url, file_path, doc_category, storage_bucket")
@@ -507,7 +637,7 @@ export async function executeAutoreplyForPhone(
   const lovableKey = process.env.LOVABLE_API_KEY?.trim();
   const useLovable = !explicitKey && !!lovableKey;
   const apiKey = explicitKey || lovableKey;
-  if (!apiKey) return "no_api_key";
+  if (!apiKey && !reply) return "no_api_key";
 
   const baseUrl = useLovable
     ? "https://ai.gateway.lovable.dev/v1"
@@ -518,37 +648,7 @@ export async function executeAutoreplyForPhone(
       ? cfgModel
       : "google/gemini-2.5-flash"
     : cfgModel || "gpt-4o-mini";
-
-  const chatSummary = c.chat_summary || "";
-  const rawSummaryJson = c.chat_summary_json;
-  const chatSummaryJson =
-    rawSummaryJson &&
-    typeof rawSummaryJson === "object" &&
-    !Array.isArray(rawSummaryJson) &&
-    Object.keys(rawSummaryJson).length > 0
-      ? (rawSummaryJson as ChatSummaryStructured)
-      : undefined;
-  const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
-  const messages = c.messages ?? [];
-
-  // manager is already resolved at the beginning of the function
-  if (manager) {
-    console.info(`[Autoreply] Managerial WA flow — ${manager.name} (${manager.role})`);
-  }
-
-  // Single source of truth for "where does the current session start?"
-  // — used both to trim history sent to the agent AND to decide whether
-  // a fresh summary of the PREVIOUS session is warranted.
-  const sessionStartIndex = findSessionStartIndex(messages);
-  const previousSession = messages.slice(0, sessionStartIndex);
-  const currentSessionMessages = messages.slice(sessionStartIndex);
-  const rollingMessages = currentSessionMessages.slice(-20);
-
-  const lastMessage =
-    [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
-
-  let reply: string | null = null;
-  let orchResult: any = null;
+  const llmConfig = apiKey ? { apiKey, baseUrl, model } : null;
 
   // ── Frustration / trust detection ──────────────────────────────────────
   // Tamu nulis "saya pusing", "ini benar?", "penipuan", "tidak AI kan?" dll.
@@ -598,12 +698,54 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  let quickAckTimer: ReturnType<typeof setTimeout> | undefined;
+  if (!reply && !isManager && queueEntryId && c.fonnte_token) {
+    quickAckTimer = setTimeout(() => {
+      void (async () => {
+        try {
+          const { data: existingAck } = await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .select("id")
+            .eq("thread_id", c.thread_id)
+            .eq("direction", "out")
+            .filter("metadata->>queue_entry_id", "eq", queueEntryId)
+            .filter("metadata->>is_ack", "eq", "true")
+            .limit(1);
+          if ((existingAck ?? []).length > 0) return;
+
+          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
+          if (!ok) {
+            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
+            return;
+          }
+          metrics.ackSentAt = Date.now();
+          await saveOutboundMessage(supabaseAdmin, {
+            threadId: c.thread_id,
+            body: QUICK_ACK_MESSAGE,
+            metadata: {
+              agent: "system",
+              agent_key: "quick-ack",
+              is_ack: true,
+              queue_entry_id: queueEntryId,
+              send_status: "sent",
+              latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+            } as any,
+          });
+          console.info(`[Autoreply] quick ack sent to ${phone.slice(-6)} (entry ${queueEntryId.slice(0, 8)})`);
+        } catch (e) {
+          console.warn("[Autoreply] quick ack error (non-fatal):", e);
+        }
+      })();
+    }, QUICK_ACK_AFTER_MS);
+  }
+
   for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
     const controller = new AbortController();
     const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    if (!metrics.aiStartedAt) metrics.aiStartedAt = Date.now();
     const tStart = Date.now();
     const trainingSignals = await findTrainingSignals(
       supabaseAdmin as any,
@@ -611,7 +753,7 @@ export async function executeAutoreplyForPhone(
         userMessage: lastMessage ?? "",
         stage: (chatSummaryJson?.last_topic ?? null) as string | null,
       },
-      { apiKey, baseUrl, model },
+      llmConfig!,
       { positiveLimit: 3, negativeLimit: 2 },
     );
     const trainingExamples = trainingSignals.positiveExamples;
@@ -676,9 +818,9 @@ export async function executeAutoreplyForPhone(
           today: todayWIB(),
           origin,
           idempotencyKey: queueEntryId ? `wa_queue:${queueEntryId}` : undefined,
-          llmConfig: { apiKey, baseUrl, model },
+          llmConfig: llmConfig!,
         },
-        llmConfig: { apiKey, baseUrl, model },
+        llmConfig: llmConfig!,
         signal: controller.signal,
       });
 
@@ -795,6 +937,8 @@ export async function executeAutoreplyForPhone(
       clearTimeout(aiTimeout);
     }
   }
+  if (quickAckTimer) clearTimeout(quickAckTimer);
+  if (metrics.aiStartedAt && !metrics.aiFinishedAt) metrics.aiFinishedAt = Date.now();
 
   const rawReply = reply ?? FALLBACK_MESSAGE;
   const isFallback = !reply;
@@ -834,12 +978,13 @@ export async function executeAutoreplyForPhone(
     if (queueEntryId) {
       const { data: existingForEntry } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
-        .select("id")
+        .select("id, metadata")
         .eq("thread_id", c.thread_id)
         .eq("direction", "out")
         .filter("metadata->>queue_entry_id", "eq", queueEntryId)
-        .limit(1);
-      if ((existingForEntry ?? []).length > 0) {
+        .limit(5);
+      const existingFinalForEntry = (existingForEntry ?? []).find((m: any) => (m.metadata as any)?.is_ack !== true);
+      if (existingFinalForEntry) {
         console.warn(
           `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
             `(entry=${queueEntryId.slice(0, 8)}, match=entry)`,
@@ -871,6 +1016,16 @@ export async function executeAutoreplyForPhone(
   }
 
   const agentKey = orchResult?.agentKey ?? "front-office";
+  const buildLatencyMetadata = () => ({
+    latency_ms: Date.now() - metrics.workerStartedAt,
+    ai_latency_ms:
+      metrics.aiStartedAt && metrics.aiFinishedAt ? metrics.aiFinishedAt - metrics.aiStartedAt : null,
+    send_latency_ms:
+      metrics.sendStartedAt && metrics.sendFinishedAt ? metrics.sendFinishedAt - metrics.sendStartedAt : null,
+    ack_sent: metrics.ackSentAt > 0,
+    ack_latency_ms: metrics.ackSentAt ? metrics.ackSentAt - metrics.workerStartedAt : null,
+    fast_path: orchResult?.fastPath === true,
+  });
   const outboundMetadata = {
     agent: deriveAgentLabelFromKey(agentKey),
     tools_used: orchResult?.toolsUsed ?? [],
@@ -883,6 +1038,7 @@ export async function executeAutoreplyForPhone(
     training_examples_used: orchResult?.trainingExamplesUsed ?? 0,
     training_example_ids: orchResult?.trainingExampleIds ?? [],
     queue_entry_id: queueEntryId ?? null,
+    ...buildLatencyMetadata(),
   };
 
   // Persist outbound BEFORE calling Fonnte. Kalau worker mati setelah Fonnte
@@ -897,6 +1053,7 @@ export async function executeAutoreplyForPhone(
     } as any,
   });
 
+  metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.fonnte_token,
     phone,
@@ -904,16 +1061,19 @@ export async function executeAutoreplyForPhone(
     attachUrl,
     attachName,
   );
+  metrics.sendFinishedAt = Date.now();
 
   // If the attachment broke the send (e.g. unreachable file URL), retry with
   // the direct link appended so the guest still gets the brochure.
   if (!sent && attachUrl) {
     console.warn(`[Autoreply] Send with attachment failed (${sendErr}) — retrying with link`);
+    metrics.sendStartedAt = Date.now();
     ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.fonnte_token,
       phone,
       `${finalReply}\n\n${attachUrl}`.trim(),
     ));
+    metrics.sendFinishedAt = Date.now();
   }
 
   if (!sent) {
@@ -929,6 +1089,7 @@ export async function executeAutoreplyForPhone(
               ...outboundMetadata,
               send_status: "failed",
               error: String(sendErr),
+              ...buildLatencyMetadata(),
             } as any,
           })
           .eq("id", outboundRowId);
@@ -947,6 +1108,7 @@ export async function executeAutoreplyForPhone(
           metadata: {
             ...outboundMetadata,
             send_status: "sent",
+            ...buildLatencyMetadata(),
           } as any,
         })
         .eq("id", outboundRowId);
@@ -1020,6 +1182,8 @@ export async function executeAutoreplyForPhone(
   const forced = shouldForceSummary(lastMessage);
   if (summarizableMessages.length < SUMMARY_MIN_MESSAGES) {
     // not enough — silent skip
+  } else if (!llmConfig) {
+    console.info(`[SessionSummarizer] summary skipped: no LLM config (thread ${c.thread_id.slice(0, 8)})`);
   } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
     console.info(`[SessionSummarizer] summary skipped: cooldown (thread ${c.thread_id.slice(0, 8)})`);
   } else {
@@ -1032,7 +1196,7 @@ export async function executeAutoreplyForPhone(
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
-        const summary = await generateSessionSummary(summarizableMessages, chatSummary, { apiKey, baseUrl, model });
+        const summary = await generateSessionSummary(summarizableMessages, chatSummary, llmConfig);
         if (summary) {
           // Saat booking aktif → jsonOnly (jangan timpa teks). Selain itu → full.
           await updateThreadSummary(supabaseAdmin, c.thread_id, summary, {
@@ -1052,7 +1216,13 @@ export async function executeAutoreplyForPhone(
     });
   }
 
-  console.log(`[Autoreply] ✓ Sent to ${phone.slice(-6)}`);
+  console.log(
+    `[Autoreply] ✓ Sent to ${phone.slice(-6)} ` +
+      `(latency=${Date.now() - metrics.workerStartedAt}ms, ` +
+      `ai=${buildLatencyMetadata().ai_latency_ms ?? "-"}ms, ` +
+      `send=${buildLatencyMetadata().send_latency_ms ?? "-"}ms, ` +
+      `fastPath=${orchResult?.fastPath === true}, ack=${metrics.ackSentAt > 0})`,
+  );
   return "ok";
 }
 
