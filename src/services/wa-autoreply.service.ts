@@ -802,6 +802,7 @@ export async function executeAutoreplyForPhone(
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
+          // (1) Cek existing ack untuk entry ini.
           const { data: existingAck } = await (supabaseAdmin as any)
             .from("whatsapp_messages")
             .select("id")
@@ -812,13 +813,10 @@ export async function executeAutoreplyForPhone(
             .limit(1);
           if ((existingAck ?? []).length > 0) return;
 
-          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
-          if (!ok) {
-            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
-            return;
-          }
-          metrics.ackSentAt = Date.now();
-          await saveOutboundMessage(supabaseAdmin, {
+          // (2) Persist-then-send + race guard: tulis baris ack 'pending'
+          // dulu, lalu pastikan baris kita yang paling awal. Kalau bukan,
+          // worker lain sudah menulis duluan → skip kirim Fonnte.
+          const ackRowId = await saveOutboundMessage(supabaseAdmin, {
             threadId: c.thread_id,
             body: QUICK_ACK_MESSAGE,
             metadata: {
@@ -826,10 +824,80 @@ export async function executeAutoreplyForPhone(
               agent_key: "quick-ack",
               is_ack: true,
               queue_entry_id: queueEntryId,
-              send_status: "sent",
-              latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+              send_status: "pending",
             } as any,
           });
+
+          const { data: allAcks } = await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .select("id, sent_at")
+            .eq("thread_id", c.thread_id)
+            .eq("direction", "out")
+            .filter("metadata->>queue_entry_id", "eq", queueEntryId)
+            .filter("metadata->>is_ack", "eq", "true")
+            .order("sent_at", { ascending: true })
+            .limit(5);
+          const winnerId = (allAcks ?? [])[0]?.id ?? null;
+          if (winnerId && winnerId !== ackRowId) {
+            // Kalah race: tandai baris kita superseded supaya tidak mengganggu dedup body.
+            try {
+              await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .update({
+                  metadata: {
+                    agent: "system",
+                    agent_key: "quick-ack",
+                    is_ack: true,
+                    queue_entry_id: queueEntryId,
+                    send_status: "superseded",
+                  } as any,
+                })
+                .eq("id", ackRowId);
+            } catch {
+              // ignore
+            }
+            return;
+          }
+
+          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
+          if (!ok) {
+            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
+            try {
+              await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .update({
+                  metadata: {
+                    agent: "system",
+                    agent_key: "quick-ack",
+                    is_ack: true,
+                    queue_entry_id: queueEntryId,
+                    send_status: "failed",
+                  } as any,
+                })
+                .eq("id", ackRowId);
+            } catch {
+              // ignore
+            }
+            return;
+          }
+          metrics.ackSentAt = Date.now();
+          try {
+            await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .update({
+                metadata: {
+                  agent: "system",
+                  agent_key: "quick-ack",
+                  is_ack: true,
+                  queue_entry_id: queueEntryId,
+                  send_status: "sent",
+                  latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+                } as any,
+              })
+              .eq("id", ackRowId);
+          } catch {
+            // ignore
+          }
           console.info(`[Autoreply] quick ack sent to ${phone.slice(-6)} (entry ${queueEntryId.slice(0, 8)})`);
         } catch (e) {
           console.warn("[Autoreply] quick ack error (non-fatal):", e);
