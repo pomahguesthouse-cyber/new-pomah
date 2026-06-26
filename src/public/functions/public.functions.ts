@@ -1559,16 +1559,22 @@ export type PublicExploreItem = {
 };
 
 export const getPublicExploreItems = createServerFn({ method: "GET" }).handler(async () => {
-  const { data, error } = await db(supabasePublic)
-    .from("explore_items")
-    .select("id, category, title, description, image_url, rating, badge, date_text, location_text, sort_order")
-    .eq("is_published", true)
-    .order("category", { ascending: true })
-    .order("sort_order", { ascending: true });
-  if (error) {
-    const message = String(error.message ?? error);
-    console.warn("[PublicExplore] failed to load items:", message.slice(0, 300));
+  try {
+    const { data, error } = await db(supabasePublic)
+      .from("explore_items")
+      .select("id, category, title, description, image_url, rating, badge, date_text, location_text, sort_order")
+      .eq("is_published", true)
+      .order("category", { ascending: true })
+      .order("sort_order", { ascending: true });
+    if (error) {
+      const message = String(error.message ?? error);
+      console.warn("[PublicExplore] failed to load items:", message.slice(0, 300));
+      return [] as PublicExploreItem[];
+    }
+    return (data ?? []) as PublicExploreItem[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn("[PublicExplore] request failed:", message.slice(0, 300));
     return [] as PublicExploreItem[];
   }
-  return (data ?? []) as PublicExploreItem[];
 });
