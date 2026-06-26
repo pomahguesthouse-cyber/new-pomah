@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { createBooking } from "@/tools/booking.tool";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary } from "./flexible-slot-extractor";
@@ -11,6 +12,7 @@ export type BookingState =
   | "AWAITING_DATES"
   | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
+  | "AWAITING_FORM_SUBMISSION"
   | "COLLECTING_DATA" // Flexible slot-filling (replaces old linear states)
   | "AWAITING_NAME"
   | "CONFIRMING_NAME"
@@ -57,6 +59,10 @@ export interface BookingContext {
   availableAlternatives?: AlternativeRoomOption[];
   /** Jumlah extra bed yang sudah disepakati (Deluxe: max 1/kamar). */
   extraBeds?: number;
+  /** Catatan khusus tamu dari chat/form. */
+  specialRequests?: string;
+  /** Token form booking temporer yang sedang ditunggu. */
+  formToken?: string;
   /** Tarif extra bed per malam (default Rp80.000). */
   extraBedRate?: number;
   /** Flag bahwa tamu sudah handoff ke admin manusia. */
@@ -101,6 +107,7 @@ export interface StateMachineResult {
 }
 
 const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi)\b/i;
+const FORM_SUBMITTED_PATTERN = /^\[FORM_SUBMITTED:([^\]]+)\]\s*$/i;
 const CANCEL_CONFIRM_PATTERN =
   /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
 const CANCEL_DECLINE_PATTERN = /^(tidak|nggak|ngga|gak|ga|jangan|bukan|lanjut booking|lanjutkan booking)[\s.!]*$/i;
@@ -564,6 +571,7 @@ function extractPhone(text: string): string | null {
 // interrupted by an unrelated question.
 const DATA_ENTRY_STATES: BookingState[] = [
   "COLLECTING_DATA",
+  "AWAITING_FORM_SUBMISSION",
   "AWAITING_NAME",
   "CONFIRMING_NAME",
   "AWAITING_EMAIL",
@@ -585,6 +593,8 @@ export function getRequiredField(state: BookingState): string | null {
   switch (state) {
     case "COLLECTING_DATA":
       return "data_booking";
+    case "AWAITING_FORM_SUBMISSION":
+      return "submit_form_booking";
     case "AWAITING_DATES":
       return "tanggal";
     case "AWAITING_ALTERNATIVE_ROOM_TYPE":
