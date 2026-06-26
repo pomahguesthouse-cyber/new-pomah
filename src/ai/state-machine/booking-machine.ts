@@ -1426,7 +1426,7 @@ export async function processBookingState(
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, context.adults ?? 1);
       if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
       if (eb.extraBeds > 0) {
-        context.extraBeds = eb.extraBeds;
+        context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
         if (confirmPolicy.extrabedRate > 0) context.extraBedRate = confirmPolicy.extrabedRate;
       }
       if (missing.length > 0) {
