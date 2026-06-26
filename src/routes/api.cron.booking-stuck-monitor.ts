@@ -92,6 +92,20 @@ async function handle(): Promise<Response> {
     handoffPhones.add(h.phone);
   }
 
+  // Skip alert juga untuk nomor yang queue worker-nya masih aktif memproses
+  // (pending/waiting/processing/retrying). Tanpa guard ini, monitor akan
+  // memicu "BOOKING FLOW MACET" padahal worker sedang menyusun balasan.
+  const { data: activeQueueRows } = await (supabaseAdmin as any)
+    .from("wa_conversation_queue")
+    .select("phone, status")
+    .in("phone", phones)
+    .in("status", ["pending", "waiting", "processing", "retrying"]);
+
+  const busyPhones = new Set<string>();
+  for (const q of (activeQueueRows ?? []) as Array<{ phone: string }>) {
+    busyPhones.add(q.phone);
+  }
+
   let alerted = 0;
   const now = Date.now();
 
