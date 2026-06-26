@@ -140,16 +140,28 @@ export async function submitBookingForm(params: {
   }
 
   // Enqueue pesan sintetis untuk chatbot worker. Body diawali marker khusus
-  // yang dideteksi oleh executeAutoreplyForPhone agar membangun ringkasan
-  // dari submitted_data tanpa memanggil AI.
+  // (`[FORM_SUBMITTED:<token>]`) yang dideteksi oleh executeAutoreplyForPhone
+  // agar membangun ringkasan dari submitted_data tanpa memanggil AI.
   try {
-    await params.supabaseAdmin.from("wa_conversation_queue").insert({
-      phone: row.phone,
-      thread_id: row.thread_id,
-      body: `[FORM_SUBMITTED:${row.token}]`,
-      status: "pending",
-      origin: "booking_form",
-    });
+    const body = `[FORM_SUBMITTED:${row.token}]`;
+    const { saveInboundMessage } = await import("@/repositories/message.repository");
+    const { messageId, error: saveErr } = await saveInboundMessage(
+      params.supabaseAdmin as any,
+      { phone: row.phone, name: params.submission.fullName, body },
+    );
+    if (saveErr || !messageId) {
+      console.warn("[BookingForm] saveInboundMessage gagal:", saveErr?.message);
+    } else {
+      const { queueUpsert } = await import("@/services/queue.service");
+      await queueUpsert(params.supabaseAdmin as any, {
+        phone: row.phone,
+        threadId: row.thread_id ?? "",
+        messageId,
+        body,
+        delayMs: 0,
+        maxWaitMs: 5_000,
+      });
+    }
   } catch (e) {
     // Tidak fatal — admin bisa retry manual. Tamu sudah lihat halaman done.
     console.warn("[BookingForm] enqueue synthetic message gagal:", e);
