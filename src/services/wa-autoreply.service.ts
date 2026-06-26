@@ -569,7 +569,6 @@ export async function executeAutoreplyForPhone(
 
   const c = ctx as any;
   const manager = await resolveManagerByPhone(phone);
-  const isManager = !!manager;
   const metrics = {
     workerStartedAt: Date.now(),
     contextLoadedAt: Date.now(),
@@ -579,6 +578,53 @@ export async function executeAutoreplyForPhone(
     sendFinishedAt: 0,
     ackSentAt: 0,
   };
+
+  // ── Super admin guest-mode toggle ─────────────────────────────────
+  // Super admin bisa mengetik `/guest` untuk mensimulasikan tamu
+  // (chatbot akan merespons seperti pesan tamu biasa) dan `/admin`
+  // untuk kembali ke mode manajerial. Status disimpan per nomor di
+  // tabel `manager_test_modes`.
+  let guestModeActive = false;
+  if (manager && manager.role === "super_admin") {
+    try {
+      const inMsgs = ((c.messages ?? []) as Array<{ direction: string; body: string }>)
+        .filter((m) => m.direction === "in");
+      const lastIn = inMsgs[inMsgs.length - 1]?.body?.trim().toLowerCase() ?? "";
+      const { data: modeRow } = await (supabaseAdmin as any)
+        .from("manager_test_modes")
+        .select("guest_mode")
+        .eq("phone", phone)
+        .maybeSingle();
+      guestModeActive = !!modeRow?.guest_mode;
+
+      if (lastIn === "/guest" || lastIn === "/admin") {
+        const nextMode = lastIn === "/guest";
+        await (supabaseAdmin as any)
+          .from("manager_test_modes")
+          .upsert({ phone, guest_mode: nextMode, updated_at: new Date().toISOString() });
+        const ack = nextMode
+          ? "🧪 Mode tamu aktif. Chatbot akan merespons Anda seperti tamu biasa. Ketik /admin untuk kembali."
+          : "🛠️ Mode admin aktif kembali. Chatbot tidak akan auto-reply ke nomor ini.";
+        if (c.fonnte_token) {
+          const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
+          if (ok) {
+            await saveOutboundMessage(supabaseAdmin as any, {
+              threadId: c.thread_id,
+              body: ack,
+              metadata: { kind: "test_mode_toggle", mode: nextMode ? "guest" : "admin" },
+            });
+          }
+        }
+        return "ok";
+      }
+    } catch (e) {
+      console.warn("[Autoreply] test-mode toggle error (non-fatal):", e);
+    }
+  }
+
+  // Saat super admin berada di mode tamu, perlakukan seperti tamu biasa
+  // supaya bisa menguji chatbot end-to-end.
+  const isManager = !!manager && !(manager.role === "super_admin" && guestModeActive);
   if ((!isManager && !c.auto_reply_enabled) || !c.fonnte_token) {
     return "skipped_config";
   }
