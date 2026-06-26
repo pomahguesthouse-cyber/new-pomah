@@ -90,6 +90,13 @@ type InvoiceRoomDetail = {
   nightly_rate?: number | string | null;
 };
 
+type InvoiceRoomGroup = {
+  key: string;
+  name: string;
+  qty: number;
+  nightly_rate: number;
+};
+
 function normalizeRoomDetails(inv: any): InvoiceRoomDetail[] {
   if (Array.isArray(inv?.room_details) && inv.room_details.length > 0) {
     return inv.room_details;
@@ -115,6 +122,30 @@ function buildRoomSummary(rooms: InvoiceRoomDetail[]): string {
   return Array.from(counts.entries())
     .map(([name, count]) => `${name} × ${count} kamar`)
     .join(", ");
+}
+
+function groupRoomDetails(rooms: InvoiceRoomDetail[]): InvoiceRoomGroup[] {
+  const groups = new Map<string, InvoiceRoomGroup>();
+
+  for (const room of rooms) {
+    const name = String(room.room_type || "Kamar").trim() || "Kamar";
+    const nightlyRate = Number(room.nightly_rate ?? 0);
+    const key = `${name}:${nightlyRate}`;
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.qty += 1;
+    } else {
+      groups.set(key, {
+        key,
+        name,
+        qty: 1,
+        nightly_rate: nightlyRate,
+      });
+    }
+  }
+
+  return Array.from(groups.values());
 }
 
 function ConfirmationPage() {
@@ -144,6 +175,7 @@ function ConfirmationPage() {
   const inv = data?.invoice ?? null;
   const roomDetails = React.useMemo(() => normalizeRoomDetails(inv), [inv]);
   const roomSummary = React.useMemo(() => buildRoomSummary(roomDetails), [roomDetails]);
+  const roomGroups = React.useMemo(() => groupRoomDetails(roomDetails), [roomDetails]);
 
   const mappedBooking = React.useMemo(() => {
     if (!inv) return null;
@@ -326,20 +358,17 @@ function ConfirmationPage() {
 
               {/* Price */}
                <div className="border-t border-stone-200 px-6 py-5 text-sm print:px-0">
-                {roomDetails.length > 1 ? (
+                {roomGroups.length > 0 ? (
                   <div className="space-y-2 text-stone-600 print:text-stone-700">
                     <p className="font-semibold text-stone-700 print:text-black">Rincian Kamar</p>
-                    {roomDetails.map((room, idx) => {
-                      const nightlyRate = Number(room.nightly_rate ?? 0);
-                      const subtotal = nightlyRate * Number(inv.nights ?? 1);
-                      const roomName = room.room_type || "Kamar";
-                      const roomNumber = room.room_number ? ` No. ${room.room_number}` : "";
+                    {roomGroups.map((room) => {
+                      const subtotal = room.nightly_rate * Number(inv.nights ?? 1) * room.qty;
                       return (
-                        <div key={room.id ?? `${roomName}-${idx}`} className="flex justify-between gap-4 border-t border-stone-100 pt-2 first:border-t-0 first:pt-0">
+                        <div key={room.key} className="flex justify-between gap-4 border-t border-stone-100 pt-2 first:border-t-0 first:pt-0">
                           <span>
-                            Kamar {idx + 1}: {roomName}{roomNumber}
+                            {room.name} × {room.qty} kamar
                             <span className="block text-xs text-stone-500">
-                              {formatIDR(nightlyRate)} × {inv.nights} malam
+                              {formatIDR(room.nightly_rate)} × {inv.nights} malam × {room.qty} kamar
                             </span>
                           </span>
                           <span>{formatIDR(subtotal)}</span>
