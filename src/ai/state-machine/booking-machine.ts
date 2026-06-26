@@ -970,6 +970,34 @@ export async function processBookingState(
   }
 
   if (state === "AWAITING_FORM_SUBMISSION") {
+    // Cek apakah token form sudah expired
+    let tokenExpired = false;
+    if (context.formToken) {
+      try {
+        const { getBookingFormByToken } = await import("@/services/booking-form.service");
+        const formRow = await getBookingFormByToken(supabase, context.formToken);
+        if (!formRow || formRow.status !== "pending" || new Date(formRow.expires_at).getTime() < Date.now()) {
+          tokenExpired = true;
+        }
+      } catch {
+        // Non-fatal: asumsikan tidak expired jika lookup gagal
+      }
+    }
+
+    if (tokenExpired) {
+      // Token expired — reset ke COLLECTING_DATA agar tamu bisa lanjut via chat
+      const { formToken: _ft, ...restContext } = context as any;
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", restContext);
+      return {
+        handled: true,
+        reply:
+          "Mohon maaf Kak, link formulir booking tadi sudah kedaluwarsa (berlaku 30 menit). " +
+          "Tidak apa-apa — saya bantu lanjutkan pengisian langsung di chat ini ya. " +
+          "Data yang sudah ada (kamar & tanggal) masih tersimpan. " +
+          "Mohon ketikkan nama lengkap Kakak untuk melanjutkan:",
+      };
+    }
+
     return {
       handled: true,
       reply:
