@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Link2, CheckCircle2, XCircle, Clock, Layers, ExternalLink } from "lucide-react";
+import { Link2, CheckCircle2, XCircle, Clock, Layers, ExternalLink, Send, Loader2 } from "lucide-react";
 
 import {
   listBookingFormSendLogs,
+  resendBookingFormLink,
   type BookingFormSendLog,
   type BookingFormSendStatus,
 } from "@/admin/functions/booking-form-logs.functions";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,6 +44,8 @@ const statusBadge: Record<BookingFormSendStatus, { cls: string; label: string; I
 
 function BookingFormLogsPage() {
   const listFn = useServerFn(listBookingFormSendLogs);
+  const resendFn = useServerFn(resendBookingFormLink);
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<"all" | BookingFormSendStatus>("all");
   const [phone, setPhone] = useState("");
   const [phoneFilter, setPhoneFilter] = useState("");
@@ -58,6 +62,21 @@ function BookingFormLogsPage() {
       }),
   });
   const logs = data?.logs ?? [];
+
+  const resendMutation = useMutation({
+    mutationFn: (logId: string) => resendFn({ data: { logId } }),
+    onSuccess: (res) => {
+      if (res.ok) {
+        toast.success("Tautan baru terkirim via WhatsApp.");
+      } else {
+        toast.error(`Gagal kirim ulang: ${res.error ?? "unknown"}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["booking-form-send-logs"] });
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Gagal kirim ulang.");
+    },
+  });
 
   return (
     <div className="space-y-4 p-4 md:p-6">
@@ -165,6 +184,26 @@ function BookingFormLogsPage() {
                 <p className="mt-2 rounded-md bg-rose-500/10 p-2 text-xs text-rose-700">
                   Alasan gagal: {log.failure_reason}
                 </p>
+              )}
+
+              {(log.status === "failed" || log.status === "superseded") && (
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      resendMutation.isPending && resendMutation.variables === log.id
+                    }
+                    onClick={() => resendMutation.mutate(log.id)}
+                  >
+                    {resendMutation.isPending && resendMutation.variables === log.id ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Send className="mr-1 h-3 w-3" />
+                    )}
+                    Resend WA
+                  </Button>
+                </div>
               )}
             </Card>
           );
