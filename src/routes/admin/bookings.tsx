@@ -2,7 +2,7 @@ import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt, FileDown, Printer, Loader2 } from "lucide-react";
+import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt, FileDown, Printer, Loader2, ArrowUpDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, openPrintView, openBlankPrintWindow, type ExportRow } from "@/admin/lib/booking-export";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
@@ -56,6 +56,8 @@ type BookingListRow = {
 };
 
 type ListResult = { bookings: BookingListRow[]; total: number; page: number; pageSize: number; degraded?: boolean };
+type SortKey = "created_at" | "status";
+type SortDir = "asc" | "desc";
 
 function formatDateID(iso?: string | null) {
   if (!iso) return "—";
@@ -91,13 +93,6 @@ async function getGuestIds(search: string) {
   const { data } = await supabase.from("guests").select("id").ilike("full_name", `%${search}%`).limit(500);
   return (data ?? []).map((g: any) => g.id as string);
 }
-function nextDateISO(date: string): string {
-  const [y, m, d] = date.split("-").map(Number);
-  if (!y || !m || !d) return date;
-  const utc = new Date(Date.UTC(y, m - 1, d));
-  utc.setUTCDate(utc.getUTCDate() + 1);
-  return utc.toISOString().slice(0, 10);
-}
 function applyFilters(
   q: any,
   status?: string,
@@ -105,13 +100,9 @@ function applyFilters(
   search?: string,
   guestIds: string[] = [],
   includeRef = true,
-  createdFrom?: string,
-  createdTo?: string,
 ) {
   if (status && status !== "all") q = q.eq("status", status);
   if (source && source !== "all") q = q.eq("source", source as never);
-  if (createdFrom) q = q.gte("created_at", `${createdFrom}T00:00:00+07:00`);
-  if (createdTo) q = q.lt("created_at", `${nextDateISO(createdTo)}T00:00:00+07:00`);
   if (search) {
     const ors: string[] = [];
     if (includeRef) ors.push(`reference_code.ilike.*${search}*`);
@@ -120,22 +111,27 @@ function applyFilters(
   }
   return q;
 }
-async function fetchBookings(args: { page: number; pageSize: number; status?: string; source?: string; search?: string; createdFrom?: string; createdTo?: string }): Promise<ListResult> {
+function applySort(q: any, sortBy: SortKey, sortDir: SortDir) {
+  q = q.order(sortBy, { ascending: sortDir === "asc" });
+  if (sortBy !== "created_at") q = q.order("created_at", { ascending: false });
+  return q;
+}
+async function fetchBookings(args: { page: number; pageSize: number; status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir }): Promise<ListResult> {
   const from = (args.page - 1) * args.pageSize;
   const to = from + args.pageSize - 1;
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
 
   let q = supabase.from("bookings").select(FULL_SELECT, { count: "exact" });
-  q = applyFilters(q, args.status, args.source, search, guestIds, true, args.createdFrom, args.createdTo);
-  const full = await q.order("created_at", { ascending: false }).range(from, to);
+  q = applyFilters(q, args.status, args.source, search, guestIds, true);
+  const full = await applySort(q, args.sortBy, args.sortDir).range(from, to);
   if (!full.error) return { bookings: (full.data ?? []) as any, total: full.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: false };
 
   if ((full.error as any).code !== "42703") throw full.error;
 
   let qb = supabase.from("bookings").select(BASE_SELECT, { count: "exact" });
-  qb = applyFilters(qb, args.status, args.source, search, guestIds, false, args.createdFrom, args.createdTo);
-  const base = await qb.order("created_at", { ascending: false }).range(from, to);
+  qb = applyFilters(qb, args.status, args.source, search, guestIds, false);
+  const base = await applySort(qb, args.sortBy, args.sortDir).range(from, to);
   if (base.error) throw base.error;
   return { bookings: (base.data ?? []) as any, total: base.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: true };
 }
@@ -177,12 +173,12 @@ function flattenExportRows(rows: any[]): ExportRow[] {
     } as ExportRow;
   });
 }
-async function fetchExportRows(args: { status?: string; source?: string; search?: string; createdFrom?: string; createdTo?: string }) {
+async function fetchExportRows(args: { status?: string; source?: string; search?: string; sortBy: SortKey; sortDir: SortDir }) {
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
   let q = supabase.from("bookings").select(FULL_SELECT);
-  q = applyFilters(q, args.status, args.source, search, guestIds, true, args.createdFrom, args.createdTo);
-  const res = await q.order("created_at", { ascending: false }).limit(5000);
+  q = applyFilters(q, args.status, args.source, search, guestIds, true);
+  const res = await applySort(q, args.sortBy, args.sortDir).limit(5000);
   if (res.error) throw res.error;
   const rows = flattenExportRows(res.data ?? []);
   return { rows, capped: rows.length >= 5000 };
@@ -194,8 +190,8 @@ function BookingsPage() {
   const [page, setPage] = React.useState(1);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [sourceFilter, setSourceFilter] = React.useState("all");
-  const [createdFrom, setCreatedFrom] = React.useState("");
-  const [createdTo, setCreatedTo] = React.useState("");
+  const [sortBy, setSortBy] = React.useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [newOpen, setNewOpen] = React.useState(false);
@@ -207,10 +203,10 @@ function BookingsPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || createdFrom !== "" || createdTo !== "" || search !== "";
+  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "";
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ["bookings", { page, statusFilter, sourceFilter, createdFrom, createdTo, search }],
-    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search, createdFrom, createdTo }),
+    queryKey: ["bookings", { page, statusFilter, sourceFilter, sortBy, sortDir, search }],
+    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search, sortBy, sortDir }),
     placeholderData: keepPreviousData,
   });
 
@@ -243,7 +239,7 @@ function BookingsPage() {
     }
     setExporting(kind);
     try {
-      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, createdFrom, createdTo });
+      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, sortBy, sortDir });
       const rows = res.rows;
       if (rows.length === 0) { toast.info("Tidak ada booking yang cocok dengan filter saat ini."); printWindow?.close(); return; }
       const stamp = new Date().toISOString().slice(0, 10);
@@ -269,7 +265,19 @@ function BookingsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeTo = Math.min(page * PAGE_SIZE, total);
-  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setCreatedFrom(""); setCreatedTo(""); setSearchInput(""); setSearch(""); setPage(1); };
+  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setSearchInput(""); setSearch(""); setPage(1); };
+  const setSort = (key: SortKey) => {
+    setPage(1);
+    setSortBy((current) => {
+      if (current === key) {
+        setSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
+        return current;
+      }
+      setSortDir("desc");
+      return key;
+    });
+  };
+  const sortLabel = (key: SortKey) => (sortBy === key ? (sortDir === "desc" ? "↓" : "↑") : "");
 
   return (
     <div className="space-y-6 p-4 md:p-8 lg:p-10">
@@ -288,8 +296,6 @@ function BookingsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Cari nama tamu atau kode referensi…" className="h-9 pl-9" />{searchInput && <button onClick={() => setSearchInput("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label="Bersihkan pencarian"><X className="h-3.5 w-3.5" /></button>}</div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}><SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
-        <Input type="date" value={createdFrom} onChange={(e) => { setCreatedFrom(e.target.value); setPage(1); }} aria-label="Tanggal pemesanan dari" title="Tanggal pemesanan dari" className="h-9 w-40" />
-        <Input type="date" value={createdTo} onChange={(e) => { setCreatedTo(e.target.value); setPage(1); }} aria-label="Tanggal pemesanan sampai" title="Tanggal pemesanan sampai" className="h-9 w-40" />
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}><SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger><SelectContent>{SOURCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
         {filtersActive && <Button variant="ghost" size="sm" className="h-9 gap-1.5" onClick={resetFilters}><X className="h-3.5 w-3.5" />Reset</Button>}
       </div>
@@ -297,7 +303,7 @@ function BookingsPage() {
       <div className="rounded-lg border border-border bg-card">
         <div className="overflow-x-auto md:overflow-visible">
           <table className="w-full text-sm">
-            <thead className="border-b border-border bg-muted/40"><tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground"><th className="px-4 py-3">Kode Booking</th><th className="px-4 py-3">Nama Tamu</th><th className="px-4 py-3">Kamar</th><th className="px-4 py-3 text-center">Jumlah Kamar</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Pembayaran</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Sumber</th><th className="px-4 py-3">Tgl Pemesanan</th><th className="px-4 py-3" /></tr></thead>
+            <thead className="border-b border-border bg-muted/40"><tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground"><th className="px-4 py-3">Kode Booking</th><th className="px-4 py-3">Nama Tamu</th><th className="px-4 py-3">Kamar</th><th className="px-4 py-3 text-center">Jumlah Kamar</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Pembayaran</th><th className="px-4 py-3"><button type="button" onClick={() => setSort("status")} className="inline-flex items-center gap-1 hover:text-foreground">Status <ArrowUpDown className="h-3 w-3" />{sortLabel("status")}</button></th><th className="px-4 py-3">Sumber</th><th className="px-4 py-3"><button type="button" onClick={() => setSort("created_at")} className="inline-flex items-center gap-1 hover:text-foreground">Tgl Pemesanan <ArrowUpDown className="h-3 w-3" />{sortLabel("created_at")}</button></th><th className="px-4 py-3" /></tr></thead>
             <tbody className="divide-y divide-border">
               {isLoading && <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
               {!isLoading && !error && bookings.length === 0 && <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">{filtersActive ? "Tidak ada booking yang cocok dengan filter ini." : "Belum ada booking."}</td></tr>}
