@@ -1043,7 +1043,7 @@ export async function notifyBotLoop(
 /**
  * Alert ketika queue worker mendeteksi zombie (lock_expires_at lewat).
  * Tidak per-entry — digabung jadi 1 pesan ringkas dengan sample, dedupe
- * per 10 menit agar tidak flooding.
+ * per episode/sampel agar tidak flooding bila cleanup yang sama berulang.
  */
 export async function notifyZombieTimeout(
   db: Db,
@@ -1085,8 +1085,15 @@ export async function notifyZombieTimeout(
       (sampleLines ? `Contoh:\n${sampleLines}\n\n` : "") +
       `Job akan dicoba ulang otomatis. Bila berulang, cek beban LLM / koneksi Fonnte.`;
 
-    const window = Math.floor(Date.now() / (10 * 60 * 1000));
-    const dedupeKey = `zombie_timeout:${window}`;
+    const sampleKey = opts.samples
+      .map((s) => s.entryId)
+      .filter(Boolean)
+      .sort()
+      .join(",");
+    const fallbackWindow = Math.floor(Date.now() / (6 * 60 * 60 * 1000));
+    const dedupeKey = sampleKey
+      ? `zombie_timeout:entries:${shortHash(sampleKey)}`
+      : `zombie_timeout:aggregate:${fallbackWindow}`;
 
     await Promise.all(
       targets.map((admin) =>

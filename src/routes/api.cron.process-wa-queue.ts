@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { drainQueue, sendFailureFallbackToGuests } from "@/services/wa-autoreply.service";
+import { runDeferred } from "@/lib/cf-context";
 
 /**
  * Cron-driven queue drain.
@@ -21,7 +22,7 @@ async function handle(request: Request): Promise<Response> {
 
   // Fire-and-forget super admin alert when zombies were reset.
   if (count > 0) {
-    void (async () => {
+    void runDeferred("Cron.notifyZombieTimeout", async () => {
       try {
         // Ambil sampel entry yang baru saja di-reset (status retrying + zombie error).
         const { data: samples } = await (supabaseAdmin as any)
@@ -46,11 +47,15 @@ async function handle(request: Request): Promise<Response> {
       } catch (e) {
         console.warn("[Cron] notifyZombieTimeout failed:", e);
       }
-    })();
+    });
   }
 
   const origin = new URL(request.url).origin;
-  const { processed } = await drainQueue(origin);
+  // Keep each cron invocation short. The scheduler already runs frequently,
+  // while one AI reply can take close to the worker lock budget; batching many
+  // entries in a single request increases the chance the platform terminates
+  // the request mid-job and leaves a zombie lock behind.
+  const { processed } = await drainQueue(origin, 1);
 
   // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
   // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
