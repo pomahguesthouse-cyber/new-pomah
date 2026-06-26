@@ -41,6 +41,7 @@ import { setDailyRoomRate }               from "./pricing/set-daily-room-rate.to
 import { getDailyRoomRates }              from "./pricing/get-daily-room-rates.tool";
 import { deleteDailyRoomRate }            from "./pricing/delete-daily-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
+import { generateBookingForm }            from "./generate-booking-form.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
