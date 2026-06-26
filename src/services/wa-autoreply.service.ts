@@ -1412,6 +1412,9 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  void updateBookingFormSendLog({ body: finalReply, status: "sent" });
+
+
   void updateThreadAutoReplyMeta(supabaseAdmin, {
     threadId: c.thread_id,
     toolsUsed: orchResult?.toolsUsed ?? [],
