@@ -108,6 +108,33 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
     });
   }
 
+  // Catat upaya pengiriman (status awal: pending). Status diperbarui menjadi
+  // `sent` / `failed` setelah pesan WhatsApp benar-benar terkirim oleh
+  // wa-autoreply.service.ts (lihat update by-token di sana).
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = ctx.supabaseAdmin as any;
+    await admin.from("booking_form_send_logs").insert({
+      token,
+      phone: ctx.phone,
+      thread_id: threadId,
+      property_id: propertyId,
+      room_type_name: resolvedRoomName ?? (roomTypeName || null),
+      check_in: checkIn || null,
+      check_out: checkOut || null,
+      url,
+      status: "pending",
+      metadata: {
+        guest_count: Number.isFinite(guestCount) && guestCount > 0 ? guestCount : null,
+        rooms: Number.isFinite(roomsCount) && roomsCount > 0 ? roomsCount : null,
+        expires_at: expiresAt,
+      },
+    });
+  } catch (e) {
+    // Non-fatal — log saja, tool tetap mengembalikan URL.
+    console.warn("[generate_booking_form] gagal mencatat send log:", e);
+  }
+
   // Susun teks balasan dengan nada Pomah: hangat, ringkas, profesional,
   // sentence case. Sertakan ringkasan kamar/tanggal bila tersedia agar tamu
   // tahu form sudah pre-filled sesuai obrolan sebelumnya.
