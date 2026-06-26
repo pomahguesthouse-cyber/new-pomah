@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/queue-worker")({
     handlers: {
       POST: async ({ request }) => {
         const origin = new URL(request.url).origin;
-        const { processed } = await drainQueue(origin);
+        const { processed } = await drainQueue(origin, 1);
         return new Response(JSON.stringify({ processed }), {
           status: 200,
           headers: { "Content-Type": "application/json" },

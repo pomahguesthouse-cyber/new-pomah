@@ -24,6 +24,7 @@ import {
 } from "@/ai/chat-summary.types";
 import { chatCompletionText } from "@/services/ai-client.service";
 import { findTrainingSignals } from "@/services/training-retrieval.service";
+import { runDeferred } from "@/lib/cf-context";
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 
@@ -574,7 +575,7 @@ export async function executeAutoreplyForPhone(
             context: bookingContext,
           });
           // Notify super admin secara fire-and-forget.
-          void (async () => {
+          void runDeferred("Autoreply.handoffNotify", async () => {
             try {
               const { notifyBotLoop } = await import("@/services/manager-notifier.service");
               await notifyBotLoop(supabaseAdmin as any, {
@@ -588,7 +589,7 @@ export async function executeAutoreplyForPhone(
             } catch (e) {
               console.warn("[Autoreply] handoff notify failed:", e);
             }
-          })();
+          });
         }
         console.info(`[Autoreply] Frustration short-circuit (${kind}) for ${phone.slice(-6)}`);
       }
@@ -749,7 +750,7 @@ export async function executeAutoreplyForPhone(
       // berlaku baik saat ada reply maupun saat orchestrator gagal.
       if (orchResult?.loopAlert) {
         const la = orchResult.loopAlert;
-        void (async () => {
+        void runDeferred("Autoreply.notifyBotLoop", async () => {
           try {
             const { notifyBotLoop } = await import("@/services/manager-notifier.service");
             await notifyBotLoop(supabaseAdmin as any, {
@@ -763,7 +764,7 @@ export async function executeAutoreplyForPhone(
           } catch (e) {
             console.warn("[Autoreply] notifyBotLoop failed:", e);
           }
-        })();
+        });
       }
     } catch (e) {
       console.error(`[Autoreply] AI attempt ${attempt}:`, e);
@@ -963,7 +964,7 @@ export async function executeAutoreplyForPhone(
   // Hitung berapa kali berturut-turut fallback dalam sesi ini.
   // Kami perkirakan dari metadata pesan outbound terakhir — bukan state
   // persisten agar tidak menambah latensi ke hot-path.
-  void (async () => {
+  void runDeferred("Autoreply.conversationMonitor", async () => {
     try {
       // Hitung consecutive fallbacks: lihat N pesan outbound terakhir
       const { data: recentOut } = await (supabaseAdmin as any)
@@ -1002,7 +1003,7 @@ export async function executeAutoreplyForPhone(
     } catch (e) {
       console.warn("[Autoreply] ConvMonitor check failed (non-fatal):", e);
     }
-  })();
+  });
 
   // Background summarizer: run AFTER the reply is sent so it never adds
   // latency to the user-visible turn. Perilaku (per keputusan produk):
@@ -1027,7 +1028,7 @@ export async function executeAutoreplyForPhone(
         `[SessionSummarizer] cooldown di-override karena pesan penting ` + `(thread ${c.thread_id.slice(0, 8)})`,
       );
     }
-    void (async () => {
+    void runDeferred("Autoreply.sessionSummarizer", async () => {
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
@@ -1048,7 +1049,7 @@ export async function executeAutoreplyForPhone(
       } catch (e) {
         console.warn("[SessionSummarizer] Background run failed:", e);
       }
-    })();
+    });
   }
 
   console.log(`[Autoreply] ✓ Sent to ${phone.slice(-6)}`);
