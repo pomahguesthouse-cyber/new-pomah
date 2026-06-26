@@ -105,7 +105,7 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
       name: roomTypeName,
       rate: Number(br.nightly_rate ?? 0),
       count: 0,
-      numbers: [],
+      numbers: [] as string[],
     };
     slot.count += 1;
     if (num) slot.numbers.push(String(num));

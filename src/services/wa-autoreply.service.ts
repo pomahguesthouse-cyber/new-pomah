@@ -439,7 +439,7 @@ export async function executeAutoreplyForPhone(
           })
           .eq("id", stuckMsg.id);
         console.info(`[Autoreply] ✅ Zombie rescue berhasil untuk ${phone.slice(-6)}`);
-        return "sent";
+        return "ok";
       }
       console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
       // Kalau resend juga gagal (Fonnte down), lanjutkan ke AI normal
@@ -1055,6 +1055,17 @@ function cooldownActive(updatedAt: string | null | undefined): boolean {
 // Outcomes that must NOT be retried — they are config/permanent, so retrying
 // just burns attempts and delays the 'failed' terminal state.
 const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set(["skipped_config", "no_api_key"]);
+const FALLBACK_SENT_MARKER_RE = /\[fallback_sent(?::[^\]]+)?\]/;
+
+function hasFallbackSentMarker(lastError: unknown): boolean {
+  return typeof lastError === "string" && FALLBACK_SENT_MARKER_RE.test(lastError);
+}
+
+function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | "[fallback_sent:skipped]"): string {
+  const base = typeof lastError === "string" ? lastError.trim() : "";
+  if (FALLBACK_SENT_MARKER_RE.test(base)) return base.slice(0, 500);
+  return `${base} ${marker}`.trim().slice(0, 500);
+}
 
 /**
  * Poll-based worker: drain all currently-ready queue entries.
@@ -1143,7 +1154,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
   let notified = 0;
   for (const entry of failedEntries as any[]) {
-    if (typeof entry.last_error === "string" && entry.last_error.includes("[fallback_sent]")) {
+    if (hasFallbackSentMarker(entry.last_error)) {
       continue;
     }
 
@@ -1180,7 +1191,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       if ((sameQid ?? []).length > 0 || (anyOut ?? []).length > 0 || (newerQueue ?? []).length > 0) {
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
-          .update({ last_error: `${entry.last_error ?? ""} [fallback_sent:skipped]`.slice(0, 500) })
+          .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:skipped]") })
           .eq("id", entry.id);
         continue;
       }
@@ -1205,7 +1216,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       // Tandai tetap supaya tidak dicek terus-menerus.
       await (supabaseAdmin as any)
         .from("wa_conversation_queue")
-        .update({ last_error: `${entry.last_error ?? ""} [fallback_sent:skipped]`.slice(0, 500) })
+        .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:skipped]") })
         .eq("id", entry.id);
       continue;
     }
@@ -1236,7 +1247,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
     await (supabaseAdmin as any)
       .from("wa_conversation_queue")
-      .update({ last_error: `${entry.last_error ?? ""} [fallback_sent]`.slice(0, 500) })
+      .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
 
     notified++;

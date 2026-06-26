@@ -13,6 +13,7 @@ import { drainQueue, sendFailureFallbackToGuests } from "@/services/wa-autoreply
  * the access posture of /api/queue-worker (hotfix 54a3274).
  */
 async function handle(request: Request): Promise<Response> {
+  const cleanupStartedAt = new Date(Date.now() - 5_000).toISOString();
   const { data: zombieCount } = await (supabaseAdmin as any).rpc(
     "wa_queue_cleanup_zombies",
   );
@@ -27,6 +28,7 @@ async function handle(request: Request): Promise<Response> {
           .from("wa_conversation_queue")
           .select("id, phone, last_error, updated_at")
           .ilike("last_error", "%zombie%")
+          .gte("updated_at", cleanupStartedAt)
           .order("updated_at", { ascending: false })
           .limit(5);
 

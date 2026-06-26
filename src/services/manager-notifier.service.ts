@@ -1065,9 +1065,17 @@ export async function notifyZombieTimeout(
       timeStyle: "short",
     });
 
+    const previewError = (value: string | null): string => {
+      const cleaned = (value ?? "zombie_timeout")
+        .replace(/\s*\[fallback_sent(?::[^\]]+)?\]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return (cleaned || "zombie_timeout").slice(0, 120);
+    };
+
     const sampleLines = opts.samples
       .slice(0, 5)
-      .map((s) => `• ${s.phone ?? "?"} — entry ${s.entryId.slice(0, 8)} (${s.lastError ?? "zombie_timeout"})`)
+      .map((s) => `• ${s.phone ?? "?"} — entry ${s.entryId.slice(0, 8)} (${previewError(s.lastError)})`)
       .join("\n");
 
     const message =
