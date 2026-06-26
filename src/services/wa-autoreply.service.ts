@@ -1351,7 +1351,7 @@ function hasFallbackSentMarker(lastError: unknown): boolean {
   return typeof lastError === "string" && FALLBACK_SENT_MARKER_RE.test(lastError);
 }
 
-function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | "[fallback_sent:skipped]"): string {
+function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | "[fallback_sent:skipped]" | "[fallback_sent:claimed]" | "[fallback_sent:send_failed]"): string {
   const base = typeof lastError === "string" ? lastError.trim() : "";
   if (FALLBACK_SENT_MARKER_RE.test(base)) return base.slice(0, 500);
   return `${base} ${marker}`.trim().slice(0, 500);
