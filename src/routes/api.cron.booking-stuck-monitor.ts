@@ -11,10 +11,10 @@ import { getRequiredField, type BookingState } from "@/ai/state-machine/booking-
  * Dijalankan setiap 1 menit oleh pg_cron job `booking-stuck-monitor`.
  * Logika:
  *   1. Cari semua wa_booking_states di state data-entry (CONFIRMING_PHONE,
- *      AWAITING_EMAIL, dst.) yang updated_at sudah lebih dari 10 detik lalu.
+ *      AWAITING_EMAIL, dst.) yang updated_at sudah lebih dari 90 detik lalu.
  *   2. Untuk masing-masing phone, ambil pesan WA terakhir di threadnya.
  *   3. Anggap "macet" jika pesan terakhir adalah inbound (direction='in')
- *      dan sudah > 10 detik tanpa balasan outbound — artinya tamu sudah
+ *      dan sudah > 90 detik tanpa balasan outbound — artinya tamu sudah
  *      mengirim sesuatu tapi bot belum membalas.
  *   4. Kirim alert ke super admin via WhatsApp/Telegram (dedupe per inbound
  *      message timestamp sehingga tidak spam).

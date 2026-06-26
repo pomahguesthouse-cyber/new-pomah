@@ -1081,7 +1081,7 @@ export async function notifyZombieTimeout(
 /**
  * Alert ke super admin ketika alur booking di state machine (CONFIRMING_PHONE,
  * AWAITING_EMAIL, dst.) macet — tamu sudah mengirim pesan tetapi tidak ada
- * balasan bot >10 detik.
+ * balasan bot >90 detik.
  *
  * Dedupe per kombinasi (phone, state, inbound message timestamp) sehingga
  * tiap kejadian macet hanya menghasilkan satu pesan, tetapi kejadian baru

@@ -105,6 +105,7 @@ const CANCEL_CONFIRM_PATTERN =
   /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
 const CANCEL_DECLINE_PATTERN = /^(tidak|nggak|ngga|gak|ga|jangan|bukan|lanjut booking|lanjutkan booking)[\s.!]*$/i;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_SKIP_PATTERN = /^(lewati|skip|no|tidak|tanpa|-)$/i;
 const PHONE_PATTERN = /^(?:\+62|62|0)[2-9][0-9]{7,11}$/;
 
 // Affirm = "use this one"; Decline/Other = "use a different one".
@@ -993,6 +994,7 @@ export async function processBookingState(
     const roomsList = ctx.rooms || [];
     const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
+    const trimmedMessage = message.trim();
 
     // Merge extracted values to context
     if (extracted.check_in) context.checkIn = extracted.check_in;
@@ -1045,14 +1047,26 @@ export async function processBookingState(
       context.email_clarification_asked = true;
     }
 
+    const autoSkipOptionalEmail =
+      !context.guestEmail &&
+      !!context.email_clarification_asked &&
+      (state === "AWAITING_EMAIL" || state === "COLLECTING_DATA") &&
+      !extracted.email &&
+      !extracted.is_skip_email;
+
+    if (autoSkipOptionalEmail) {
+      context.guestEmail = undefined;
+    }
+
     // Mid-booking interruption signals check
     if (
-      extracted.is_payment_question ||
-      extracted.is_bank_account_request ||
-      extracted.is_invoice_request ||
-      extracted.is_checkin_policy ||
-      extracted.is_room_detail_question ||
-      extracted.is_early_arrival
+      !autoSkipOptionalEmail &&
+      (extracted.is_payment_question ||
+        extracted.is_bank_account_request ||
+        extracted.is_invoice_request ||
+        extracted.is_checkin_policy ||
+        extracted.is_room_detail_question ||
+        extracted.is_early_arrival)
     ) {
       console.info(
         `[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`,
@@ -1076,12 +1090,12 @@ export async function processBookingState(
       // Prompt for optional email if not yet filled and not yet clarified
       if (!context.guestEmail && !context.email_clarification_asked) {
         // Special case: if user typed skip email or skipped in the message, we skip
-        const isSkipInput = /^(lewati|skip|no|tidak|tanpa|-)$/i.test(message.trim());
+        const isSkipInput = EMAIL_SKIP_PATTERN.test(trimmedMessage);
         if (isSkipInput) {
           context.email_clarification_asked = true;
         } else {
           context.email_clarification_asked = true;
-          await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+          await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
           return {
             handled: true,
             reply: `Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (opsional, balas "lewati" atau "-" jika tidak ingin mengisi):`,
