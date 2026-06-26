@@ -185,6 +185,7 @@ const INTEGRATION_FIELDS = [
   "payment_account_number",
   "payment_account_holder",
   "hotel_policy",
+  "booking_form_enabled",
 ] as const;
 
 /** Default hotel policy used until the property sets its own. */
@@ -222,6 +223,7 @@ export const getIntegrationSettings = createServerFn({ method: "GET" })
       payment_account_number: (row.payment_account_number as string | null) ?? null,
       payment_account_holder: (row.payment_account_holder as string | null) ?? null,
       hotel_policy: (row.hotel_policy as string | null) ?? null,
+      booking_form_enabled: (row.booking_form_enabled as boolean | null) ?? false,
     };
   });
 
@@ -246,6 +248,7 @@ export const updateIntegrationSettings = createServerFn({ method: "POST" })
         payment_account_number: z.string().max(100).nullable().optional(),
         payment_account_holder: z.string().max(120).nullable().optional(),
         hotel_policy: z.string().max(4000).nullable().optional(),
+        booking_form_enabled: z.boolean().optional(),
       })
       .parse(d),
   )

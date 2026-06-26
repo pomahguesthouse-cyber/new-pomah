@@ -539,6 +539,22 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_booking_form_submission",
+      description:
+        "Ambil submitted_data dari form booking sekali pakai berdasarkan token. " +
+        "Dipakai hanya untuk recovery/admin/debug; alur normal diproses otomatis oleh state machine saat marker [FORM_SUBMITTED:<token>] masuk queue.",
+      parameters: {
+        type: "object",
+        properties: {
+          token: { type: "string", description: "Token dari marker [FORM_SUBMITTED:<token>]." },
+        },
+        required: ["token"],
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -579,4 +595,5 @@ export const TOOL_LABELS: Record<string, string> = {
   list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
   audit_page_seo:               "Content - SEO Audit Halaman",
   generate_booking_form:        "Booking - Kirim Form Sekali Pakai",
+  get_booking_form_submission:  "Booking - Baca Submission Form",
 };
