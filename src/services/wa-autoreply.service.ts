@@ -1369,31 +1369,46 @@ function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | 
  *
  * Returns how many entries were processed in this invocation.
  */
-export async function drainQueue(origin: string, maxBatch = 10): Promise<{ processed: number }> {
+export async function drainQueue(
+  origin: string,
+  maxBatch = 10,
+  abortSignal?: AbortSignal,
+): Promise<{ processed: number }> {
   const workerId = `w-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
-  let processed = 0;
 
-  for (let i = 0; i < maxBatch; i++) {
-    const claim = await queueClaimNext(supabaseAdmin, workerId);
-    if (!claim) break; // nothing ready → done
+  // 1) Claim up to `maxBatch` entries in parallel. Each claim hits
+  // FOR UPDATE SKIP LOCKED so concurrent claims don't collide.
+  const claimResults = await Promise.allSettled(
+    Array.from({ length: maxBatch }, () => queueClaimNext(supabaseAdmin, workerId)),
+  );
+  const claims = claimResults
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((c): c is NonNullable<typeof c> => !!c);
 
+  if (claims.length === 0) return { processed: 0 };
+
+  // 2) Process claims concurrently. Each entry has its own heartbeat so a
+  // slow one doesn't starve the others. If `abortSignal` fires we skip
+  // starting new work — claims already in-flight finish or fail normally.
+  const handleOne = async (claim: (typeof claims)[number]) => {
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
 
-    // Periodic heartbeat so a long-running single attempt (tool chain + LLM
-    // retries) keeps extending lock_expires_at and the entry never becomes a
-    // zombie. Fires every 30s for the entire executeAutoreplyForPhone call.
     const heartbeatTimer = setInterval(() => {
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
     }, 20_000);
 
     try {
-      outcome = await executeAutoreplyForPhone(
-        claim.phone,
-        origin,
-        () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
-        claim.entryId,
-      );
+      if (abortSignal?.aborted) {
+        outcome = "fatal";
+      } else {
+        outcome = await executeAutoreplyForPhone(
+          claim.phone,
+          origin,
+          () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
+          claim.entryId,
+        );
+      }
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
@@ -1405,15 +1420,14 @@ export async function drainQueue(origin: string, maxBatch = 10): Promise<{ proce
       const completionResult = outcome === "ok" ? "sent" : outcome;
       await queueComplete(supabaseAdmin, claim.entryId, workerId, completionResult);
     } else {
-      // send_failed / context_error / fatal → retry with backoff (or fail).
       await queueFail(supabaseAdmin, claim.entryId, workerId, outcome);
     }
 
     console.log(`[Drain] ${logPhone} outcome=${outcome} (entry ${claim.entryId.slice(0, 8)})`);
-    processed++;
-  }
+  };
 
-  return { processed };
+  await Promise.allSettled(claims.map(handleOne));
+  return { processed: claims.length };
 }
 
 export async function recoverUnqueuedInboundMessages(options?: {
