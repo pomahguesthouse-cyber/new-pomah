@@ -1565,6 +1565,10 @@ export const getPublicExploreItems = createServerFn({ method: "GET" }).handler(a
     .eq("is_published", true)
     .order("category", { ascending: true })
     .order("sort_order", { ascending: true });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const message = String(error.message ?? error);
+    console.warn("[PublicExplore] failed to load items:", message.slice(0, 300));
+    return [] as PublicExploreItem[];
+  }
   return (data ?? []) as PublicExploreItem[];
 });
