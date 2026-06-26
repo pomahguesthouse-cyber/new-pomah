@@ -195,16 +195,35 @@ Untuk melihat dan mengunduh invoice resmi serta memantau status pembayaran, sila
 ${invoiceUrl}
 
 Terima kasih.`;
+
+    // ── Atomic claim ────────────────────────────────────────────────────
+    // Idempotency key = invoices.booking_id. Set wa_sent_at HANYA jika
+    // masih NULL. Kalau worker/retry lain sudah klaim (baris terupdate <1),
+    // skip Fonnte total supaya tamu tidak menerima invoice WhatsApp dobel
+    // dari payment-webhook retry, manual resend, atau cron yang tumpang
+    // tindih.
+    const claimAt = new Date().toISOString();
+    const { data: claimed, error: claimErr } = await (supabase as any)
+      .from("invoices")
+      .update({ wa_sent_at: claimAt })
+      .eq("booking_id", bookingId)
+      .is("wa_sent_at", null)
+      .select("id");
+    if (claimErr) {
+      console.warn(`[InvoiceNotification] Atomic claim failed: ${claimErr.message}`);
+    }
+    const claimWon = Array.isArray(claimed) && claimed.length > 0;
+    if (!claimWon) {
+      console.info(`[InvoiceNotification] Skip — invoice WA sudah dikirim untuk booking ${bookingId.slice(0, 8)}`);
+      return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
+    }
+
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
     const { ok: sent, error: sendErr } = await sendWhatsAppMessage(fonnte_token, cleanedPhone, messageBody);
 
     if (sent) {
       waSent = true;
-
-      await (supabase as any)
-        .from("invoices")
-        .update({ wa_sent_at: new Date().toISOString() })
-        .eq("booking_id", bookingId);
+      // wa_sent_at sudah di-set saat claim — tidak perlu update lagi.
 
       // Log to WhatsApp thread
       const { data: thread } = await supabase
