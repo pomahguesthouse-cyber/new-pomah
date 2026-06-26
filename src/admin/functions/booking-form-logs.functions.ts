@@ -26,7 +26,7 @@ export interface BookingFormSendLog {
   failure_reason: string | null;
   attempts: number;
   sent_at: string | null;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
