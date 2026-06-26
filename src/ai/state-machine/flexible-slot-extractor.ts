@@ -379,6 +379,16 @@ export function extractAllSlots(
     }
   }
 
+  // Tolak tanggal lampau (kemungkinan tamu salah ketik tahun / merujuk tahun lalu).
+  if (today) {
+    if (result.check_in && result.check_in < today) {
+      delete result.check_in;
+      delete result.check_out;
+    } else if (result.check_out && result.check_out < today) {
+      delete result.check_out;
+    }
+  }
+
   // ── 6. Tipe kamar ─────────────────────────────────────────────────────────
   if (rooms.length > 0) {
     const matched = findMentionedRoomType(text, rooms);
