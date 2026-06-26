@@ -162,7 +162,7 @@ export function IntentRulesView() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-6 py-8 space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-5 sm:px-6 sm:py-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -171,7 +171,7 @@ export function IntentRulesView() {
               Atur kata kunci pencocokan Regex untuk memetakan pesan tamu ke kategori intent yang sesuai.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -194,7 +194,7 @@ export function IntentRulesView() {
         </div>
 
         {/* Explain Box */}
-        <Card className="border-dashed border-teal-300 bg-teal-50/50 p-5 space-y-3">
+        <Card className="space-y-3 border-dashed border-teal-300 bg-teal-50/50 p-4 sm:p-5">
           <div className="flex items-center gap-2">
             <HelpCircle className="h-5 w-5 text-teal-700" />
             <h3 className="font-semibold text-teal-900 text-sm">Petunjuk Format Pola (Regular Expression)</h3>
@@ -234,7 +234,7 @@ export function IntentRulesView() {
         ) : (
           <div className="grid gap-4">
             {rules.map((rule: any) => (
-              <Card key={rule.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition duration-200">
+              <Card key={rule.id} className="flex flex-col justify-between gap-4 p-4 transition duration-200 hover:shadow-md sm:p-5 md:flex-row md:items-center">
                 <div className="space-y-2.5 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
@@ -284,7 +284,7 @@ export function IntentRulesView() {
 
         {/* Edit / Add Dialog */}
         <Dialog open={!!editingRule} onOpenChange={(open) => !open && handleCloseEdit()}>
-          <DialogContent className="sm:max-w-[550px] max-h-[85vh] flex flex-col">
+          <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col sm:max-w-[550px]">
             <DialogHeader>
               <DialogTitle>{editingRule?.id ? "Edit Aturan Intent" : "Tambah Aturan Intent Baru"}</DialogTitle>
               <DialogDescription>

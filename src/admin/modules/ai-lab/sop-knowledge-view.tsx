@@ -65,7 +65,7 @@ export function SopKnowledgeView() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
         <div className="mb-6">
           <h2 className="text-lg font-semibold tracking-tight">Knowledge &amp; SOP</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -75,7 +75,7 @@ export function SopKnowledgeView() {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex gap-1 rounded-lg border border-border bg-muted/40 p-1 w-fit">
+        <div className="mb-6 flex w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/40 p-1 sm:w-fit">
           <TabBtn active={tab === "knowledge"} icon={BookOpen}      label="Knowledge" onClick={() => setTab("knowledge")} />
           <TabBtn active={tab === "sop"}       icon={GraduationCap} label="SOP"       onClick={() => setTab("sop")} />
           <TabBtn active={tab === "brosur"}    icon={Images}        label="Brosur"    onClick={() => setTab("brosur")} />
@@ -114,7 +114,7 @@ function TabBtn({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition",
+        "flex shrink-0 items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition",
         active ? "bg-white shadow-sm text-teal-900" : "text-muted-foreground hover:text-foreground",
       )}
     >
@@ -173,7 +173,7 @@ function KnowledgePanel() {
 
   return (
     <>
-      <div className="mb-4 flex justify-end gap-2">
+      <div className="mb-4 flex flex-wrap justify-end gap-2">
         <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onPick} />
         <Button variant="outline" className="gap-1.5" onClick={() => setLinkOpen(true)}>
           <Link2 className="h-4 w-4" /> Tambah Link
@@ -359,14 +359,14 @@ function SopPanel() {
   return (
     <>
       {/* Seed button */}
-      <div className="mb-5 flex items-center justify-between rounded-xl border border-dashed border-teal-300 bg-teal-50 px-4 py-3">
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-dashed border-teal-300 bg-teal-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium text-teal-900">Isi SOP Default per Agent</p>
           <p className="text-xs text-teal-700">Tambahkan konten SOP bawaan untuk setiap agent yang belum memiliki SOP.</p>
         </div>
         <Button
           disabled={seeding}
-          className="gap-1.5 bg-teal-700 text-white hover:bg-teal-800 shrink-0"
+          className="shrink-0 gap-1.5 bg-teal-700 text-white hover:bg-teal-800"
           onClick={seed}
         >
           {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -473,7 +473,7 @@ function AgentSection({
       {expanded && (
         <div className="border-t border-border px-4 pb-4 pt-3">
           {/* Toolbar */}
-          <div className="mb-3 flex justify-end gap-2">
+          <div className="mb-3 flex flex-wrap justify-end gap-2">
             <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={onPick} />
             <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={() => setLinkOpen(true)}>
               <Link2 className="h-3.5 w-3.5" /> Tambah Link
@@ -578,7 +578,7 @@ function LinkDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[460px]">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:max-w-[460px]">
         <DialogHeader>
           <DialogTitle>Tambah Tautan {title}</DialogTitle>
           <DialogDescription>
@@ -647,7 +647,7 @@ function DocCard({
 
   return (
     <div className={cn("rounded-xl border border-border bg-white", compact ? "p-3" : "p-4")}>
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <span className={cn(
           "flex shrink-0 items-center justify-center rounded-lg",
           compact ? "h-8 w-8" : "h-9 w-9",
@@ -671,7 +671,7 @@ function DocCard({
             </a>
           )}
         </div>
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 flex-wrap gap-1">
           <Button
             size="sm"
             variant="ghost"

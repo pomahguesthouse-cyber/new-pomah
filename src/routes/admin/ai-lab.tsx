@@ -253,82 +253,82 @@ function AiLab() {
   const [view, setView] = useState<ViewKey>("dashboard");
 
   return (
-    <div className="flex h-full flex-col bg-stone-100">
+    <div className="flex h-full min-h-0 flex-col bg-stone-100">
       {/* Top bar */}
-      <header className="flex items-center justify-between gap-4 border-b border-border bg-card px-5 py-3">
-        <div className="flex items-center gap-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 sm:gap-4 sm:px-5 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Link
             to="/admin"
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-sm font-medium hover:bg-muted"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium hover:bg-muted sm:px-3 sm:text-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             Keluar
           </Link>
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          <div className="min-w-0">
+            <p className="truncate font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground sm:text-[10px]">
               Pomah Guesthouse
             </p>
-            <h1 className="text-lg font-semibold tracking-tight">AI LAB</h1>
+            <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">AI LAB</h1>
           </div>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-700 sm:px-3 sm:text-xs">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           AI Aktif
         </span>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         {/* Left nav */}
-        <nav className="flex w-48 shrink-0 flex-col gap-1 border-r border-border bg-card p-3">
+        <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border bg-card p-2 md:w-48 md:flex-col md:overflow-x-visible md:border-b-0 md:border-r md:p-3">
           {NAV.map((n) => (
             <button
               key={n.key}
               onClick={() => setView(n.key)}
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition",
+                "flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition md:w-full",
                 view === n.key
                   ? "bg-teal-50 font-medium text-teal-900"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <n.icon className="h-4 w-4 shrink-0" />
-              {n.label}
+              <span className="whitespace-nowrap">{n.label}</span>
             </button>
           ))}
         </nav>
 
         {/* View */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {view === "dashboard" ? (
             <DashboardView />
           ) : view === "whatsapp" ? (
             <WhatsAppPage />
           ) : view === "simulator" ? (
-            <div className="flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <ChatSimulatorView />
             </div>
           ) : view === "sop" ? (
             <SopKnowledgeView />
           ) : view === "smart-delay" ? (
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <SmartDelaySettings />
             </div>
           ) : view === "seo" ? (
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <SeoPage />
             </div>
           ) : view === "intent-rules" ? (
             <IntentRulesView />
           ) : view === "retry-observability" ? (
-            <div className="flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <RetryObservabilityView />
             </div>
           ) : view === "queue-monitoring" ? (
-            <div className="flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
               <QueueMonitoringView />
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <TrainingRagSettings />
             </div>
           )}
@@ -409,11 +409,11 @@ function DashboardView() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+      <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-5 sm:space-y-8 sm:px-6 sm:py-8">
         {/* KPIs */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {kpis.map((k) => (
-            <Card key={k.label} className="p-5">
+            <Card key={k.label} className="p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground">{k.label}</p>
                 <k.icon className="h-4 w-4 text-teal-600" />
@@ -431,7 +431,7 @@ function DashboardView() {
           </h2>
           <Card className="divide-y divide-border overflow-hidden p-0">
             {DECISION_HIERARCHY.map((item, i) => (
-              <div key={item.label} className="flex items-center gap-4 px-5 py-3.5">
+              <div key={item.label} className="flex items-start gap-3 px-4 py-3.5 sm:items-center sm:gap-4 sm:px-5">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white">
                   {i + 1}
                 </span>
@@ -450,18 +450,20 @@ function DashboardView() {
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Conversation Pipeline
           </h2>
-          <Card className="flex flex-wrap items-center gap-2 p-5">
-            {PIPELINE.map((step, i) => (
-              <div key={step.label} className="flex items-center gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                  <step.icon className="h-4 w-4 text-teal-600" />
-                  <span className="text-xs font-medium">{step.label}</span>
+          <Card className="overflow-x-auto p-4 sm:p-5">
+            <div className="flex min-w-max items-center gap-2">
+              {PIPELINE.map((step, i) => (
+                <div key={step.label} className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <step.icon className="h-4 w-4 text-teal-600" />
+                    <span className="whitespace-nowrap text-xs font-medium">{step.label}</span>
+                  </div>
+                  {i < PIPELINE.length - 1 && (
+                    <ArrowRight className="h-4 w-4 shrink-0 text-stone-300" />
+                  )}
                 </div>
-                {i < PIPELINE.length - 1 && (
-                  <ArrowRight className="h-4 w-4 shrink-0 text-stone-300" />
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </Card>
         </section>
 
@@ -481,13 +483,13 @@ function DashboardView() {
                 <Card
                   key={a.key}
                   onClick={() => setEdit({ type: "agent", key: a.key })}
-                  className="group flex cursor-pointer items-start gap-3 p-5 transition hover:border-teal-300 hover:shadow-md"
+                  className="group flex cursor-pointer items-start gap-3 p-4 transition hover:border-teal-300 hover:shadow-md sm:p-5"
                 >
                   {ac?.avatarUrl ? (
                     <img
                       src={ac.avatarUrl}
                       alt={ac.managerName || a.name}
-                      className="h-24 w-20 shrink-0 rounded-lg object-cover"
+                      className="h-20 w-16 shrink-0 rounded-lg object-cover sm:h-24 sm:w-20"
                       onError={(e) => {
                         console.warn("[AiLab] avatar failed to load:", ac.avatarUrl);
                         (e.currentTarget as HTMLImageElement).style.display = "none";
@@ -534,14 +536,14 @@ function DashboardView() {
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Knowledge &amp; Tools
           </h2>
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {TOOLS.map((t) => {
               const tc = cfg.tools[t.key];
               return (
                 <Card
                   key={t.key}
                   onClick={() => setEdit({ type: "tool", key: t.key })}
-                  className="group flex cursor-pointer flex-col items-center gap-2 p-5 text-center transition hover:border-sky-300 hover:shadow-md"
+                  className="group flex cursor-pointer flex-col items-center gap-2 p-4 text-center transition hover:border-sky-300 hover:shadow-md sm:p-5"
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
                     <t.icon className="h-5 w-5" />
@@ -589,8 +591,8 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-      <div>
+    <div className="flex flex-col items-start gap-3 rounded-lg border border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
         <p className="text-sm font-medium">{title}</p>
         {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
       </div>
@@ -620,10 +622,10 @@ function ConfigDialog({
 
   return (
     <Dialog open={!!edit} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[720px] md:max-w-[800px] w-[90vw] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-h-[92dvh] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-y-auto sm:max-w-[720px] md:max-w-[800px]">
         <DialogHeader>
           {agent && (
-            <div className="flex items-center gap-3 mb-1">
+            <div className="mb-1 flex items-start gap-3">
               {cfg.agents[agent.key]?.avatarUrl ? (
                 <img
                   src={cfg.agents[agent.key].avatarUrl}
@@ -904,7 +906,7 @@ function AgentAvatarUploader({
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-semibold">Foto Avatar</Label>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         {avatarUrl ? (
           <img
             src={avatarUrl}
@@ -928,7 +930,7 @@ function AgentAvatarUploader({
               if (f) handleFile(f);
             }}
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"

@@ -83,7 +83,7 @@ export function TrainingRagSettings() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-5 sm:p-6">
       <div>
         <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <Sparkles className="h-5 w-5 text-teal-600" />
@@ -95,7 +95,7 @@ export function TrainingRagSettings() {
         </p>
       </div>
 
-      <Card className="space-y-6 p-5">
+      <Card className="space-y-6 p-4 sm:p-5">
         {/* Enable toggle */}
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -184,7 +184,7 @@ export function TrainingRagSettings() {
         </div>
       </Card>
 
-      <Card className="space-y-3 p-5">
+      <Card className="space-y-3 p-4 sm:p-5">
         <div className="flex items-center gap-2">
           <Database className="h-4 w-4 text-teal-600" />
           <h3 className="text-sm font-medium">Indeks ulang contoh lama</h3>

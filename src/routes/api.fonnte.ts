@@ -195,7 +195,11 @@ export const Route = createFileRoute("/api/fonnte")({
         if (!event) return new Response("OK", { status: 200 });
 
         const { sender, message, name, fonnteId, isOutgoing, customerPhone, rawBody } = event;
-        const attachmentUrl = (event as any).attachmentUrl as string | undefined;
+        const attachmentUrl = event.attachmentUrl;
+        const attachmentName = event.attachmentName;
+        const attachmentMime = event.attachmentMime;
+        const messageType = event.messageType;
+        const displayMessage = message || (attachmentUrl ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
         const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
 
         console.log("[Webhook]", {
@@ -203,7 +207,7 @@ export const Route = createFileRoute("/api/fonnte")({
           customerPhone,
           isOutgoing,
           hasAttachment: !!attachmentUrl,
-          msg: message.slice(0, 60),
+          msg: displayMessage.slice(0, 60),
           rawBodyKeys: Object.keys(rawBody),
         });
 
@@ -231,21 +235,51 @@ export const Route = createFileRoute("/api/fonnte")({
             }
 
             if (threadId) {
-              const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
-              const { data: existingMsg } = await (supabaseAdmin as any)
-                .from("whatsapp_messages")
-                .select("id")
-                .eq("thread_id", threadId)
-                .eq("direction", "out")
-                .eq("body", message)
-                .gte("sent_at", twoMinsAgo)
-                .maybeSingle();
+              let existingMsg: { id: string } | null = null;
+              if (fonnteId) {
+                const byId = await (supabaseAdmin as any)
+                  .from("whatsapp_messages")
+                  .select("id")
+                  .eq("fonnte_id", fonnteId)
+                  .maybeSingle();
+                existingMsg = byId.data ?? null;
+              }
+
+              if (!existingMsg) {
+                const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
+                const byBody = await (supabaseAdmin as any)
+                  .from("whatsapp_messages")
+                  .select("id")
+                  .eq("thread_id", threadId)
+                  .eq("direction", "out")
+                  .eq("body", displayMessage)
+                  .gte("sent_at", twoMinsAgo)
+                  .maybeSingle();
+                existingMsg = byBody.data ?? null;
+              }
 
               if (!existingMsg) {
                 await (supabaseAdmin as any).rpc("save_outbound_whatsapp", {
                   p_thread_id: threadId,
-                  p_body: message,
-                  p_metadata: { is_native_human: true },
+                  p_body: displayMessage,
+                  p_metadata: {
+                    is_native_human: true,
+                    source: "whatsapp_native",
+                    attachment_url: attachmentUrl ?? null,
+                    media_url: attachmentUrl ?? null,
+                    file_name: attachmentName ?? null,
+                    mime_type: attachmentMime ?? null,
+                    media_type: messageType ?? null,
+                    attachment: attachmentUrl
+                      ? {
+                          url: attachmentUrl,
+                          file_name: attachmentName ?? null,
+                          mime_type: attachmentMime ?? null,
+                          type: messageType ?? null,
+                        }
+                      : null,
+                  },
+                  p_fonnte_id: fonnteId ?? null,
                 });
               }
             }
@@ -255,7 +289,7 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        const dedupKey = buildDedupKey(fonnteId, sender, message);
+        const dedupKey = buildDedupKey(fonnteId, sender, displayMessage);
         if (isDuplicate(dedupKey)) {
           console.log(`[Webhook] duplicate | ${logCtx}`);
           return new Response("OK", { status: 200 });
@@ -263,7 +297,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
         const { messageId, error: saveErr } = await saveInboundMessage(
           supabaseAdmin,
-          { phone: customerPhone, name, body: message },
+          { phone: customerPhone, name, body: displayMessage },
         );
         if (saveErr || !messageId) {
           console.error(`[Webhook] saveInbound failed: ${saveErr?.message ?? "no messageId"} | ${logCtx}`);
@@ -272,7 +306,23 @@ export const Route = createFileRoute("/api/fonnte")({
 
         void saveMessageMetadata(supabaseAdmin, {
           messageId,
-          metadata: { intent_label: classifyMessageIntent(message), attachment_url: attachmentUrl ?? null },
+          metadata: {
+            intent_label: classifyMessageIntent(displayMessage),
+            attachment_url: attachmentUrl ?? null,
+            media_url: attachmentUrl ?? null,
+            file_name: attachmentName ?? null,
+            mime_type: attachmentMime ?? null,
+            media_type: messageType ?? null,
+            fonnte_id: fonnteId ?? null,
+            attachment: attachmentUrl
+              ? {
+                  url: attachmentUrl,
+                  file_name: attachmentName ?? null,
+                  mime_type: attachmentMime ?? null,
+                  type: messageType ?? null,
+                }
+              : null,
+          },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e));
 
         const runBackground = await getWaitUntilRunner();
@@ -283,7 +333,7 @@ export const Route = createFileRoute("/api/fonnte")({
             await notifyIncomingMessage(supabaseAdmin as any, {
               phone: customerPhone,
               guestName: name || null,
-              body: message,
+              body: displayMessage,
               messageId,
               threadId: null,
               hasAttachment: !!attachmentUrl,
@@ -298,7 +348,7 @@ export const Route = createFileRoute("/api/fonnte")({
             await notifyNewSessionIfNeeded({
               phone: customerPhone,
               guestName: name || null,
-              firstMessage: message,
+              firstMessage: displayMessage,
               messageId,
             });
           } catch (e) {
@@ -376,7 +426,7 @@ export const Route = createFileRoute("/api/fonnte")({
             phone: customerPhone,
             threadId: c.thread_id,
             messageId,
-            body: message,
+            body: displayMessage,
             delayMs,
             maxWaitMs,
           });

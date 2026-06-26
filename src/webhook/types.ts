@@ -28,8 +28,28 @@ export interface FonntePayload {
   /** URL lampiran (image/file) yang dikirim tamu */
   url?:        string;
   filename?:   string;
+  filepath?:   string;
+  file?:       string;
+  mimetype?:   string;
+  mime_type?:  string;
+  media_type?: string;
   /** Tipe pesan (text|image|document|...) bila tersedia */
   type?:       string;
+  /** Receiver/target fields vary between Fonnte event types. */
+  target?:     string;
+  receiver?:   string;
+  penerima?:   string;
+  to?:         string;
+  recipient?:  string;
+  destination?: string;
+  tujuan?:     string;
+  /** Outgoing/native-device markers from gateway variants. */
+  fromMe?:     boolean | string | number;
+  from_me?:    boolean | string | number;
+  isFromMe?:   boolean | string | number;
+  from?:       string;
+  number?:     string;
+  phone?:      string;
 }
 
 /** Normalised, validated event after parsing the raw Fonnte body. */
@@ -52,6 +72,10 @@ export interface ParsedWebhookEvent {
   attachmentUrl?: string;
   /** Nama file lampiran (opsional) */
   attachmentName?: string;
+  /** MIME / media type attachment when provided by Fonnte. */
+  attachmentMime?: string;
+  /** Raw media/message type. */
+  messageType?: string;
   /** The raw body payload */
   rawBody: any;
 }

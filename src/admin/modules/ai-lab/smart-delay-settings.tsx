@@ -253,9 +253,9 @@ export function SmartDelaySettings() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 px-6 py-8">
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 sm:space-y-8 sm:px-6 sm:py-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <Timer className="h-5 w-5 text-teal-600" />
@@ -276,7 +276,7 @@ export function SmartDelaySettings() {
       </div>
 
       {/* Enable toggle */}
-      <Card className="flex items-center justify-between gap-4 p-5">
+      <Card className="flex items-start justify-between gap-4 p-4 sm:items-center sm:p-5">
         <div className="flex items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
             <Zap className="h-5 w-5" />
@@ -295,8 +295,8 @@ export function SmartDelaySettings() {
       </Card>
 
       {/* Delay sliders */}
-      <Card className={cn("space-y-6 p-5", !cfg.enabled && "pointer-events-none opacity-50")}>
-        <div className="flex items-center justify-between">
+      <Card className={cn("space-y-6 p-4 sm:p-5", !cfg.enabled && "pointer-events-none opacity-50")}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-semibold">Waktu Tunggu per Jenis Pesan</p>
           <Button
             variant="outline"
@@ -359,12 +359,12 @@ export function SmartDelaySettings() {
       </Card>
 
       {/* Live preview */}
-      <Card className="p-5">
+      <Card className="p-4 sm:p-5">
         <LivePreview cfg={cfg} />
       </Card>
 
       {/* How it works */}
-      <Card className="p-5">
+      <Card className="p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-3">
           <Info className="h-4 w-4 text-muted-foreground" />
           <p className="text-sm font-semibold">Cara Kerja</p>
@@ -382,7 +382,7 @@ export function SmartDelaySettings() {
 
       {/* Today's stats */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
             <p className="text-sm font-semibold">Statistik Hari Ini</p>

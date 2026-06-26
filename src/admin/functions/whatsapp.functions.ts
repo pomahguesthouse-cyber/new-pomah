@@ -103,18 +103,33 @@ export const sendMessage = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
 
+    let fonnteId: string | null = null;
     if (prop?.fonnte_token) {
       const sendResult = await sendWhatsAppMessage(prop.fonnte_token, thread.phone, data.body);
       if (!sendResult.ok) {
         console.error("[Admin WhatsApp] Fonnte send failed:", sendResult.error);
       }
+      const raw = sendResult.raw as any;
+      fonnteId =
+        raw?.id ??
+        raw?.message_id ??
+        raw?.data?.id ??
+        raw?.data?.message_id ??
+        raw?.detail?.id ??
+        null;
     }
 
     const { error } = await context.supabase.from("whatsapp_messages").insert({
       thread_id: data.threadId,
       direction: "out",
       body: data.body,
-    });
+      fonnte_id: fonnteId,
+      metadata: {
+        is_manual_admin: true,
+        source: "admin_inbox",
+        send_status: prop?.fonnte_token ? "sent" : "local_only",
+      },
+    } as any);
     if (error) throw error;
     await context.supabase
       .from("whatsapp_threads")

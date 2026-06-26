@@ -1311,9 +1311,9 @@ function getAttachment(m: any): AttachmentInfo | null {
     (url.split("?")[0].split("/").pop() ?? "file");
   const ext = (url.split("?")[0].split(".").pop() ?? "").toLowerCase();
 
-  const isImg = mime.startsWith("image/") || ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg"].includes(ext);
-  const isVid = mime.startsWith("video/") || ["mp4", "webm", "mov", "avi", "mkv"].includes(ext);
-  const isAud = mime.startsWith("audio/") || ["mp3", "ogg", "opus", "wav", "m4a", "aac"].includes(ext);
+  const isImg = mime.startsWith("image/") || mime === "image" || ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg"].includes(ext);
+  const isVid = mime.startsWith("video/") || mime === "video" || ["mp4", "webm", "mov", "avi", "mkv"].includes(ext);
+  const isAud = mime.startsWith("audio/") || mime === "audio" || ["mp3", "ogg", "opus", "wav", "m4a", "aac"].includes(ext);
   const kind: AttachmentInfo["kind"] = isImg ? "image" : isVid ? "video" : isAud ? "audio" : "file";
   return { url, kind, name, mime };
 }
