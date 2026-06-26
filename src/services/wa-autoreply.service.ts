@@ -29,6 +29,8 @@ import { runDeferred } from "@/lib/cf-context";
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 15_000;
+const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED === "true";
+const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED === "true";
 const FAQ_BLOCK_RE =
   /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
 
@@ -584,7 +586,7 @@ export async function executeAutoreplyForPhone(
   let orchResult: any = null;
 
   const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
-  if (!isManager && !bookingActive && lastMessage) {
+  if (FAST_FAQ_ENABLED && !isManager && !bookingActive && lastMessage) {
     const fastFaq = buildFastFaqReply(lastMessage, p, (rooms ?? []) as Array<Record<string, unknown>>);
     if (fastFaq) {
       reply = fastFaq.reply;
@@ -699,7 +701,7 @@ export async function executeAutoreplyForPhone(
   }
 
   let quickAckTimer: ReturnType<typeof setTimeout> | undefined;
-  if (!reply && !isManager && queueEntryId && c.fonnte_token) {
+  if (QUICK_ACK_ENABLED && !reply && !isManager && queueEntryId && c.fonnte_token) {
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
