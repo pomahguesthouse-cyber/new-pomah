@@ -34,6 +34,8 @@ import {
   PlayCircle,
   StopCircle,
   ChevronRight,
+  ExternalLink,
+  FileText,
 } from "lucide-react";
 import {
   simulateChatTurn,
