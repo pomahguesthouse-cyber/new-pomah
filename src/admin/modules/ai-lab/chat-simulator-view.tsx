@@ -1090,6 +1090,34 @@ export function ChatSimulatorView() {
                             />
                           )}
                           <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                          {m.direction === "out" && (() => {
+                            const formToken = extractFormToken(m.body);
+                            if (!formToken) return null;
+                            const isPolling = pollingTokensRef.current.has(formToken);
+                            const isSubmitted = submittedTokensRef.current.has(formToken);
+                            return (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openBookingForm(formToken)}
+                                  disabled={isSubmitted}
+                                  className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+                                  title="Buka formulir di tab baru, lalu chatbot akan otomatis lanjut setelah dikirim"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Buka formulir
+                                  <ExternalLink className="h-3 w-3" />
+                                </button>
+                                {isSubmitted ? (
+                                  <span className="text-[10px] font-medium text-emerald-700">✓ Formulir terkirim</span>
+                                ) : isPolling ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-stone-500">
+                                    <Loader2 className="h-3 w-3 animate-spin" /> Menunggu submit…
+                                  </span>
+                                ) : null}
+                              </div>
+                            );
+                          })()}
                           {m.direction === "out" && m.attachment && (
                             <a
                               href={m.attachment.url}
