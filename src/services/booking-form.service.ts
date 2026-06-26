@@ -152,15 +152,28 @@ export async function submitBookingForm(params: {
     if (saveErr || !messageId) {
       console.warn("[BookingForm] saveInboundMessage gagal:", saveErr?.message);
     } else {
-      const { queueUpsert } = await import("@/services/queue.service");
-      await queueUpsert(params.supabaseAdmin as any, {
-        phone: row.phone,
-        threadId: row.thread_id ?? "",
-        messageId,
-        body,
-        delayMs: 0,
-        maxWaitMs: 5_000,
-      });
+      // Pastikan thread_id terisi — fallback lookup via phone bila token tidak
+      // menyimpannya saat create.
+      let threadId = row.thread_id;
+      if (!threadId) {
+        const { data: t } = await (params.supabaseAdmin as any)
+          .from("whatsapp_threads")
+          .select("id")
+          .eq("phone", row.phone)
+          .maybeSingle();
+        threadId = (t?.id as string | undefined) ?? null;
+      }
+      if (threadId) {
+        const { queueUpsert } = await import("@/services/queue.service");
+        await queueUpsert(params.supabaseAdmin as any, {
+          phone: row.phone,
+          threadId,
+          messageId,
+          body,
+          delayMs: 0,
+          maxWaitMs: 5_000,
+        });
+      }
     }
   } catch (e) {
     // Tidak fatal — admin bisa retry manual. Tamu sudah lihat halaman done.
