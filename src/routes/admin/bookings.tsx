@@ -91,9 +91,27 @@ async function getGuestIds(search: string) {
   const { data } = await supabase.from("guests").select("id").ilike("full_name", `%${search}%`).limit(500);
   return (data ?? []).map((g: any) => g.id as string);
 }
-function applyFilters(q: any, status?: string, source?: string, search?: string, guestIds: string[] = [], includeRef = true) {
+function nextDateISO(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return date;
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  utc.setUTCDate(utc.getUTCDate() + 1);
+  return utc.toISOString().slice(0, 10);
+}
+function applyFilters(
+  q: any,
+  status?: string,
+  source?: string,
+  search?: string,
+  guestIds: string[] = [],
+  includeRef = true,
+  createdFrom?: string,
+  createdTo?: string,
+) {
   if (status && status !== "all") q = q.eq("status", status);
   if (source && source !== "all") q = q.eq("source", source as never);
+  if (createdFrom) q = q.gte("created_at", `${createdFrom}T00:00:00+07:00`);
+  if (createdTo) q = q.lt("created_at", `${nextDateISO(createdTo)}T00:00:00+07:00`);
   if (search) {
     const ors: string[] = [];
     if (includeRef) ors.push(`reference_code.ilike.*${search}*`);
@@ -102,22 +120,22 @@ function applyFilters(q: any, status?: string, source?: string, search?: string,
   }
   return q;
 }
-async function fetchBookings(args: { page: number; pageSize: number; status?: string; source?: string; search?: string }): Promise<ListResult> {
+async function fetchBookings(args: { page: number; pageSize: number; status?: string; source?: string; search?: string; createdFrom?: string; createdTo?: string }): Promise<ListResult> {
   const from = (args.page - 1) * args.pageSize;
   const to = from + args.pageSize - 1;
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
 
   let q = supabase.from("bookings").select(FULL_SELECT, { count: "exact" });
-  q = applyFilters(q, args.status, args.source, search, guestIds, true);
-  const full = await q.order("check_in", { ascending: false }).range(from, to);
+  q = applyFilters(q, args.status, args.source, search, guestIds, true, args.createdFrom, args.createdTo);
+  const full = await q.order("created_at", { ascending: false }).range(from, to);
   if (!full.error) return { bookings: (full.data ?? []) as any, total: full.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: false };
 
   if ((full.error as any).code !== "42703") throw full.error;
 
   let qb = supabase.from("bookings").select(BASE_SELECT, { count: "exact" });
-  qb = applyFilters(qb, args.status, args.source, search, guestIds, false);
-  const base = await qb.order("check_in", { ascending: false }).range(from, to);
+  qb = applyFilters(qb, args.status, args.source, search, guestIds, false, args.createdFrom, args.createdTo);
+  const base = await qb.order("created_at", { ascending: false }).range(from, to);
   if (base.error) throw base.error;
   return { bookings: (base.data ?? []) as any, total: base.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: true };
 }
@@ -159,12 +177,12 @@ function flattenExportRows(rows: any[]): ExportRow[] {
     } as ExportRow;
   });
 }
-async function fetchExportRows(args: { status?: string; source?: string; search?: string }) {
+async function fetchExportRows(args: { status?: string; source?: string; search?: string; createdFrom?: string; createdTo?: string }) {
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
   let q = supabase.from("bookings").select(FULL_SELECT);
-  q = applyFilters(q, args.status, args.source, search, guestIds, true);
-  const res = await q.order("check_in", { ascending: false }).limit(5000);
+  q = applyFilters(q, args.status, args.source, search, guestIds, true, args.createdFrom, args.createdTo);
+  const res = await q.order("created_at", { ascending: false }).limit(5000);
   if (res.error) throw res.error;
   const rows = flattenExportRows(res.data ?? []);
   return { rows, capped: rows.length >= 5000 };
@@ -176,6 +194,8 @@ function BookingsPage() {
   const [page, setPage] = React.useState(1);
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [sourceFilter, setSourceFilter] = React.useState("all");
+  const [createdFrom, setCreatedFrom] = React.useState("");
+  const [createdTo, setCreatedTo] = React.useState("");
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [newOpen, setNewOpen] = React.useState(false);
@@ -187,10 +207,10 @@ function BookingsPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "";
+  const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || createdFrom !== "" || createdTo !== "" || search !== "";
   const { data, isLoading, isFetching, error } = useQuery({
-    queryKey: ["bookings", { page, statusFilter, sourceFilter, search }],
-    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search }),
+    queryKey: ["bookings", { page, statusFilter, sourceFilter, createdFrom, createdTo, search }],
+    queryFn: () => fetchBookings({ page, pageSize: PAGE_SIZE, status: statusFilter, source: sourceFilter, search, createdFrom, createdTo }),
     placeholderData: keepPreviousData,
   });
 
@@ -223,7 +243,7 @@ function BookingsPage() {
     }
     setExporting(kind);
     try {
-      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search });
+      const res = await fetchExportRows({ status: statusFilter, source: sourceFilter, search, createdFrom, createdTo });
       const rows = res.rows;
       if (rows.length === 0) { toast.info("Tidak ada booking yang cocok dengan filter saat ini."); printWindow?.close(); return; }
       const stamp = new Date().toISOString().slice(0, 10);
@@ -249,7 +269,7 @@ function BookingsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeTo = Math.min(page * PAGE_SIZE, total);
-  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setSearchInput(""); setSearch(""); setPage(1); };
+  const resetFilters = () => { setStatusFilter("all"); setSourceFilter("all"); setCreatedFrom(""); setCreatedTo(""); setSearchInput(""); setSearch(""); setPage(1); };
 
   return (
     <div className="space-y-6 p-4 md:p-8 lg:p-10">
@@ -268,6 +288,8 @@ function BookingsPage() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Cari nama tamu atau kode referensi…" className="h-9 pl-9" />{searchInput && <button onClick={() => setSearchInput("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground" aria-label="Bersihkan pencarian"><X className="h-3.5 w-3.5" /></button>}</div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}><SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger><SelectContent>{STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
+        <Input type="date" value={createdFrom} onChange={(e) => { setCreatedFrom(e.target.value); setPage(1); }} aria-label="Tanggal pemesanan dari" title="Tanggal pemesanan dari" className="h-9 w-40" />
+        <Input type="date" value={createdTo} onChange={(e) => { setCreatedTo(e.target.value); setPage(1); }} aria-label="Tanggal pemesanan sampai" title="Tanggal pemesanan sampai" className="h-9 w-40" />
         <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}><SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger><SelectContent>{SOURCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select>
         {filtersActive && <Button variant="ghost" size="sm" className="h-9 gap-1.5" onClick={resetFilters}><X className="h-3.5 w-3.5" />Reset</Button>}
       </div>
