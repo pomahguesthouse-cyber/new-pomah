@@ -116,6 +116,8 @@ async function handle(): Promise<Response> {
 
       // Lewati notifikasi jika tiket handoff masih terbuka untuk nomor ini.
       if (handoffPhones.has(c.phone)) return;
+      // Lewati jika queue worker masih aktif → biarkan worker selesai dulu.
+      if (busyPhones.has(c.phone)) return;
 
       // Ambil 20 pesan terakhir untuk menentukan "episode kemacetan":
       // - Kalau pesan paling akhir adalah OUTBOUND → bot/human sudah balas
