@@ -50,6 +50,7 @@ import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
+import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
@@ -59,6 +60,7 @@ import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.pro
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
+import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -266,6 +268,11 @@ const AdminAiLabRoute = AdminAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AdminRoute,
 } as any)
+const BookingFormTokenRoute = BookingFormTokenRouteImport.update({
+  id: '/booking/form/$token',
+  path: '/booking/form/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   id: '/book/confirmation/$id',
   path: '/book/confirmation/$id',
@@ -313,6 +320,12 @@ const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => BookConfirmationIdRoute,
 } as any)
+const ApiPublicBookingFormTokenRoute =
+  ApiPublicBookingFormTokenRouteImport.update({
+    id: '/api/public/booking-form/$token',
+    path: '/api/public/booking-form/$token',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiBookingInvoiceIdSendRoute = ApiBookingInvoiceIdSendRouteImport.update({
   id: '/send',
   path: '/send',
@@ -369,7 +382,9 @@ export interface FileRoutesByFullPath {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
+  '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesByTo {
@@ -421,7 +436,9 @@ export interface FileRoutesByTo {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
+  '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesById {
@@ -475,7 +492,9 @@ export interface FileRoutesById {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
+  '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRouteTypes {
@@ -530,7 +549,9 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
+    | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -582,7 +603,9 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
+    | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
   id:
     | '__root__'
@@ -635,7 +658,9 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
+    | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
   fileRoutesById: FileRoutesById
 }
@@ -666,6 +691,8 @@ export interface RootRouteChildren {
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
+  BookingFormTokenRoute: typeof BookingFormTokenRoute
+  ApiPublicBookingFormTokenRoute: typeof ApiPublicBookingFormTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -957,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAiLabRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/booking/form/$token': {
+      id: '/booking/form/$token'
+      path: '/booking/form/$token'
+      fullPath: '/booking/form/$token'
+      preLoaderRoute: typeof BookingFormTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
       path: '/book/confirmation/$id'
@@ -1019,6 +1053,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/book/confirmation/$id/chat'
       preLoaderRoute: typeof BookConfirmationIdChatRouteImport
       parentRoute: typeof BookConfirmationIdRoute
+    }
+    '/api/public/booking-form/$token': {
+      id: '/api/public/booking-form/$token'
+      path: '/api/public/booking-form/$token'
+      fullPath: '/api/public/booking-form/$token'
+      preLoaderRoute: typeof ApiPublicBookingFormTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/booking-invoice/$id/send': {
       id: '/api/booking-invoice/$id/send'
@@ -1143,17 +1184,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
+  BookingFormTokenRoute: BookingFormTokenRoute,
+  ApiPublicBookingFormTokenRoute: ApiPublicBookingFormTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -214,6 +214,62 @@ export type Database = {
           },
         ]
       }
+      booking_form_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          phone: string
+          prefill_data: Json
+          property_id: string | null
+          reminder_sent_at: string | null
+          status: string
+          submitted_at: string | null
+          submitted_data: Json | null
+          thread_id: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone: string
+          prefill_data?: Json
+          property_id?: string | null
+          reminder_sent_at?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_data?: Json | null
+          thread_id?: string | null
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone?: string
+          prefill_data?: Json
+          property_id?: string | null
+          reminder_sent_at?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_data?: Json | null
+          thread_id?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_form_tokens_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       booking_rooms: {
         Row: {
           booking_id: string
@@ -1110,6 +1166,7 @@ export type Database = {
           ai_base_url: string | null
           ai_lab_config: Json
           ai_model: string | null
+          booking_form_enabled: boolean
           city: string | null
           competitor_hotels: Json
           country: string | null
@@ -1161,6 +1218,7 @@ export type Database = {
           ai_base_url?: string | null
           ai_lab_config?: Json
           ai_model?: string | null
+          booking_form_enabled?: boolean
           city?: string | null
           competitor_hotels?: Json
           country?: string | null
@@ -1212,6 +1270,7 @@ export type Database = {
           ai_base_url?: string | null
           ai_lab_config?: Json
           ai_model?: string | null
+          booking_form_enabled?: boolean
           city?: string | null
           competitor_hotels?: Json
           country?: string | null
