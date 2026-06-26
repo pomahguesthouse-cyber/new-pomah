@@ -34,10 +34,19 @@ export const startBookingDetails: ToolHandler = async (
     return JSON.stringify({ ok: false, error: "Tanggal check-in belum ditentukan." });
   }
   // Default to a single night if only one date is provided.
-  if (!checkOut || checkOut <= checkIn) {
+  if (!checkOut) {
+    // Tidak ada checkOut sama sekali → default 1 malam
     const d = new Date(checkIn);
     d.setUTCDate(d.getUTCDate() + 1);
     checkOut = d.toISOString().slice(0, 10);
+  } else if (checkOut < checkIn) {
+    // checkOut sebelum checkIn → tidak valid → default 1 malam
+    const d = new Date(checkIn);
+    d.setUTCDate(d.getUTCDate() + 1);
+    checkOut = d.toISOString().slice(0, 10);
+  } else if (checkOut === checkIn) {
+    // Same-day (dayuse) → izinkan, jangan ubah diam-diam
+    // State machine akan menampilkan "0 malam / dayuse" di ringkasan
   }
 
   const context: BookingContext = {
