@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
 import { createBooking } from "@/tools/booking.tool";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary } from "./flexible-slot-extractor";
@@ -11,6 +12,7 @@ export type BookingState =
   | "AWAITING_DATES"
   | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
+  | "AWAITING_FORM_SUBMISSION"
   | "COLLECTING_DATA" // Flexible slot-filling (replaces old linear states)
   | "AWAITING_NAME"
   | "CONFIRMING_NAME"
@@ -57,6 +59,10 @@ export interface BookingContext {
   availableAlternatives?: AlternativeRoomOption[];
   /** Jumlah extra bed yang sudah disepakati (Deluxe: max 1/kamar). */
   extraBeds?: number;
+  /** Catatan khusus tamu dari chat/form. */
+  specialRequests?: string;
+  /** Token form booking temporer yang sedang ditunggu. */
+  formToken?: string;
   /** Tarif extra bed per malam (default Rp80.000). */
   extraBedRate?: number;
   /** Flag bahwa tamu sudah handoff ke admin manusia. */
@@ -101,6 +107,7 @@ export interface StateMachineResult {
 }
 
 const CANCELLATION_PATTERNS = /\b(batal|batalkan|cancel|nggak jadi|ga jadi|gak jadi|tidak jadi)\b/i;
+const FORM_SUBMITTED_PATTERN = /^\[FORM_SUBMITTED:([^\]]+)\]\s*$/i;
 const CANCEL_CONFIRM_PATTERN =
   /^(ya|iya|yes|ok|oke|betul|benar)(?:\s+(batal|cancel|batalkan))?[\s.!]*$|^(batal|batalkan|cancel)[\s.!]*$/i;
 const CANCEL_DECLINE_PATTERN = /^(tidak|nggak|ngga|gak|ga|jangan|bukan|lanjut booking|lanjutkan booking)[\s.!]*$/i;
@@ -245,6 +252,7 @@ export interface RoomExtraBedPolicy {
 interface RoomCatalogEntry {
   id: string;
   name: string;
+  base_rate?: number | null;
   capacity?: number | null;
   extrabed_capacity?: number | null;
   extrabed_rate?: number | null;
@@ -492,6 +500,51 @@ async function applyResolvedRatesToContext(ctx: ToolContext, context: BookingCon
   }
 }
 
+function bookingFormSubmissionToContext(
+  submission: BookingFormSubmission,
+  phone: string,
+  roomsCatalog: RoomCatalogEntry[],
+  previous: BookingContext = {},
+): BookingContext {
+  const room = roomsCatalog.find((r) => r.id === submission.roomTypeId) ?? roomsCatalog[0];
+  const quantity = Math.max(1, Math.min(10, Number(submission.rooms) || 1));
+  const adults = Math.max(1, Math.min(20, Number(submission.guestCount) || 1));
+  const context: BookingContext = {
+    ...previous,
+    checkIn: submission.checkIn,
+    checkOut: submission.checkOut,
+    guestName: submission.fullName.trim(),
+    guestEmail: submission.email && EMAIL_PATTERN.test(submission.email) ? submission.email : undefined,
+    guestPhone: phone,
+    adults,
+    children: 0,
+    roomId: room?.id ?? submission.roomTypeId,
+    roomName: room?.name ?? previous.roomName,
+    pricePerNight: Number(room?.base_rate ?? previous.pricePerNight ?? 0),
+    specialRequests: submission.notes?.trim() || undefined,
+    email_clarification_asked: true,
+  };
+
+  if (context.roomId && context.roomName) {
+    context.rooms = [{
+      roomTypeId: context.roomId,
+      roomTypeName: context.roomName,
+      quantity,
+      pricePerNight: context.pricePerNight ?? 0,
+    }];
+  }
+
+  const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
+  const required = computeExtraBeds(policy, quantity, adults);
+  const requestedExtraBeds = Math.max(0, Math.min(20, Number(submission.extrabed) || 0));
+  context.extraBeds = Math.max(requestedExtraBeds, required.extraBeds);
+  if (policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
+  if (context.checkIn && context.checkOut && context.pricePerNight) {
+    context.totalPrice = countNights(context.checkIn, context.checkOut) * context.pricePerNight * quantity;
+  }
+  return context;
+}
+
 function clearCancelConfirmation(context: BookingContext): BookingContext {
   const { cancelPreviousState: _cancelPreviousState, ...rest } = context;
   return rest;
@@ -564,6 +617,7 @@ function extractPhone(text: string): string | null {
 // interrupted by an unrelated question.
 const DATA_ENTRY_STATES: BookingState[] = [
   "COLLECTING_DATA",
+  "AWAITING_FORM_SUBMISSION",
   "AWAITING_NAME",
   "CONFIRMING_NAME",
   "AWAITING_EMAIL",
@@ -585,6 +639,8 @@ export function getRequiredField(state: BookingState): string | null {
   switch (state) {
     case "COLLECTING_DATA":
       return "data_booking";
+    case "AWAITING_FORM_SUBMISSION":
+      return "submit_form_booking";
     case "AWAITING_DATES":
       return "tanggal";
     case "AWAITING_ALTERNATIVE_ROOM_TYPE":
@@ -835,6 +891,29 @@ export async function processBookingState(
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
 
+  const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
+  if (formSubmittedMatch) {
+    const token = formSubmittedMatch[1]?.trim();
+    const row = token ? await getSubmittedBookingForm(supabase, token) : null;
+    if (!row?.submitted_data) {
+      return {
+        handled: true,
+        reply:
+          "Maaf Kak, data formulir booking belum terbaca di sistem. Mohon tunggu sebentar lalu kirim pesan ke kami lagi ya 🙏.",
+      };
+    }
+
+    if (normalizePhone(phone) !== normalizePhone(row.phone)) {
+      return { handled: true, reply: "Maaf Kak, formulir ini tidak sesuai dengan nomor WhatsApp percakapan ini." };
+    }
+
+    context = bookingFormSubmissionToContext(row.submitted_data, phone, ctx.rooms, context);
+    context.formToken = token;
+    await applyResolvedRatesToContext(ctx, context);
+    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    return await buildBookingSummaryAsync(ctx, context);
+  }
+
   if (state === "AWAITING_CANCEL_CONFIRMATION") {
     const previousState = context.cancelPreviousState ?? "COLLECTING_DATA";
     const restoredContext = clearCancelConfirmation(context);
@@ -874,6 +953,15 @@ export async function processBookingState(
 
   if (state === "IDLE") {
     return { handled: false }; // Handled by LLM via normal AI workflow
+  }
+
+  if (state === "AWAITING_FORM_SUBMISSION") {
+    return {
+      handled: true,
+      reply:
+        "Saya masih menunggu formulir booking yang tadi saya kirim ya, Kak. " +
+        "Silakan lengkapi link tersebut dulu. Setelah dikirim, saya akan langsung balas ringkasan booking di chat ini.",
+    };
   }
 
   // Guard: jika state masih di tahap pengumpulan data tamu (AWAITING_*/CONFIRMING_*)
@@ -1337,7 +1425,7 @@ export async function processBookingState(
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, context.adults ?? 1);
       if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
       if (eb.extraBeds > 0) {
-        context.extraBeds = eb.extraBeds;
+        context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
         if (confirmPolicy.extrabedRate > 0) context.extraBedRate = confirmPolicy.extrabedRate;
       }
       if (missing.length > 0) {
@@ -1363,6 +1451,8 @@ export async function processBookingState(
           children: context.children ?? 0,
           payment_type: context.paymentType ?? "full",
           dp_amount: context.dpAmount ?? 0,
+          special_requests: context.specialRequests,
+          extra_beds: context.extraBeds ?? 0,
         },
         ctx,
       );

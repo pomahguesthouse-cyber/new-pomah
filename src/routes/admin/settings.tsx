@@ -808,6 +808,7 @@ function IntegrationTab() {
       payment_account_number?: string | null;
       payment_account_holder?: string | null;
       hotel_policy?: string | null;
+      booking_form_enabled?: boolean;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["integration-settings"] });
@@ -827,6 +828,24 @@ function IntegrationTab() {
           Data properti belum ada — integrasi belum bisa disimpan.
         </p>
       )}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <MessageCircle className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-medium">Gunakan form booking</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Aktifkan tautan form sementara untuk pengisian data pemesan via chatbot WhatsApp.
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={data?.booking_form_enabled ?? false}
+            disabled={disabled}
+            onCheckedChange={(checked) => id && mutation.mutate({ id, booking_form_enabled: checked })}
+          />
+        </div>
+      </Card>
       <TextSettingCard
         icon={<MapPin className="h-4 w-4" />}
         label="Google Place ID"

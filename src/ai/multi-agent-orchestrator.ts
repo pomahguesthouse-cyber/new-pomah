@@ -576,7 +576,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // 3. State Machine Interception
   const stateRecord = await getBookingState(input.toolCtx.supabaseAdmin, input.phone);
 
-  if (stateRecord.state !== "IDLE") {
+  if (stateRecord.state !== "IDLE" || /^\[FORM_SUBMITTED:[^\]]+\]\s*$/i.test(lastUserMsg)) {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
     const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord);
 

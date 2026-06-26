@@ -42,6 +42,7 @@ import { getDailyRoomRates }              from "./pricing/get-daily-room-rates.t
 import { deleteDailyRoomRate }            from "./pricing/delete-daily-room-rate.tool";
 import { getRoomSpecifications }          from "./room-specifications.tool";
 import { generateBookingForm }            from "./generate-booking-form.tool";
+import { getBookingFormSubmission }       from "./get-booking-form-submission.tool";
 import type { ToolContext, ToolHandler }  from "./types";
 
 // ─── Handler registry ─────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   delete_daily_room_rate:        deleteDailyRoomRate,
   get_room_specifications:       getRoomSpecifications,
   generate_booking_form:         generateBookingForm,
+  get_booking_form_submission:   getBookingFormSubmission,
 };
 
 // ─── Executor ─────────────────────────────────────────────────────────────────

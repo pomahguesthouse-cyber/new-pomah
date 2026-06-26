@@ -101,6 +101,19 @@ export async function getBookingFormByToken(
 }
 
 /**
+ * Ambil form yang sudah disubmit. Dipakai oleh state machine / tool agar
+ * `[FORM_SUBMITTED:<token>]` tidak pernah dilempar ke LLM sebagai teks biasa.
+ */
+export async function getSubmittedBookingForm(
+  supabase: { from: (table: string) => any },
+  token: string,
+): Promise<BookingFormRow | null> {
+  const row = await getBookingFormByToken(supabase, token);
+  if (!row || row.status !== "submitted" || !row.submitted_data) return null;
+  return row;
+}
+
+/**
  * Validasi token: pending dan belum expired.
  */
 export function isFormTokenUsable(row: BookingFormRow): boolean {
@@ -125,7 +138,7 @@ export async function submitBookingForm(params: {
   }
 
   const submittedAt = new Date().toISOString();
-  const { error: updErr } = await params.supabaseAdmin
+  const { data: claimed, error: updErr } = await params.supabaseAdmin
     .from("booking_form_tokens")
     .update({
       submitted_data: params.submission,
@@ -133,10 +146,16 @@ export async function submitBookingForm(params: {
       submitted_at: submittedAt,
     })
     .eq("id", row.id)
-    .eq("status", "pending"); // atomic claim
+    .eq("status", "pending") // atomic claim
+    .gt("expires_at", submittedAt)
+    .select("id")
+    .maybeSingle();
 
   if (updErr) {
     return { ok: false, error: `Gagal menyimpan: ${updErr.message}` };
+  }
+  if (!claimed) {
+    return { ok: false, error: "Form sudah dikirim atau sudah kedaluwarsa" };
   }
 
   // Enqueue pesan sintetis untuk chatbot worker. Body diawali marker khusus

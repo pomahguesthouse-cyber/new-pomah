@@ -251,6 +251,8 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   }
   const adults = Math.max(1, Math.min(8, Number(args.adults) || 1));
   const children = Math.max(0, Math.min(8, Number(args.children) || 0));
+  const requestedExtraBeds = Math.max(0, Math.min(20, Number(args.extra_beds) || 0));
+  const specialRequests = str(args.special_requests).slice(0, 1800);
 
   // Managerial direct entry: nama wajib, email/HP opsional (staff isi belakangan
   // via admin UI). Guest WA flow tetap strict — semua data wajib karena harus
@@ -528,7 +530,19 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     }
   }
 
-  const total = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
+  const roomTotal = assignments.reduce((acc, curr) => acc + curr.rate * nights, 0);
+  const extraBedRate = assignments
+    .map((a) => ctx.rooms.find((r) => r.id === a.roomTypeId)?.extrabed_rate)
+    .map((rate) => Number(rate ?? 0))
+    .find((rate) => rate > 0) ?? 0;
+  const extraBedTotal = requestedExtraBeds > 0 && extraBedRate > 0 ? requestedExtraBeds * extraBedRate * nights : 0;
+  const total = roomTotal + extraBedTotal;
+  const finalSpecialRequests = [
+    specialRequests,
+    requestedExtraBeds > 0
+      ? `Extra bed diminta: ${requestedExtraBeds}x${extraBedRate > 0 ? ` @ Rp${extraBedRate.toLocaleString("id-ID")}/malam` : ""}`
+      : "",
+  ].filter(Boolean).join("\n");
 
   const { data: guest, error: gErr } = await (ctx.supabaseAdmin as any)
     .from("guests")
@@ -575,6 +589,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         payment_status: initialPaymentStatus,
         source: srcValue,
         status: "pending",
+        special_requests: finalSpecialRequests || null,
         idempotency_key: idemKey ?? null,
       })
       .select("id, reference_code")
@@ -675,6 +690,13 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         `Kamar ${conflictNames.join(", ")} baru saja diambil booking lain saat ` +
         `kita mau finalisasi. Coba ulangi — tool akan memilih kamar yang masih kosong.`,
     });
+  }
+
+  if (extraBedTotal > 0 || finalSpecialRequests) {
+    await (ctx.supabaseAdmin as any)
+      .from("bookings")
+      .update({ total_amount: total, special_requests: finalSpecialRequests || null })
+      .eq("id", booking.id);
   }
 
   // ── Upsert the invoice record (no WhatsApp send) ────────────────────────────
