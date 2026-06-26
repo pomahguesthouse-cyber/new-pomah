@@ -212,6 +212,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool. " +
       "PENTING: di mode tamu, Front Office TIDAK memiliki tool `create_booking`. Booking final hanya boleh dibuat oleh state machine setelah tamu eksplisit konfirmasi ringkasan.",
 
+    "FORM BOOKING SEKALI PAKAI (opsional, lebih ringan): Bila percakapan terlihat panjang/" +
+      "tamu tampak sibuk atau tamu meminta cara mengisi data lebih cepat, kamu boleh memilih " +
+      "`generate_booking_form` SEBAGAI PENGGANTI `start_booking_details`. Tool ini menghasilkan " +
+      "link form web sekali pakai (data pemesan, extra bed, catatan). Setelah tool dipanggil, " +
+      "kirim teks `suggested_reply` dari hasil tool VERBATIM ke tamu dan JANGAN menanyakan " +
+      "nama/email/extra bed lagi di chat — tunggu submit form. Bila tool mengembalikan " +
+      "`ok:false`, fallback ke `start_booking_details` seperti biasa.",
+
     "SLOT-FILL PARTIAL: jika tamu hanya menyebut SEBAGIAN info booking di satu pesan " +
       "(mis. cuma 'Deluxe', cuma '2 orang', atau cuma tanggal) DAN data lain masih kurang " +
       "untuk `start_booking_details`, WAJIB panggil `update_booking_slots` dengan info yang " +
