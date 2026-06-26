@@ -578,4 +578,5 @@ export const TOOL_LABELS: Record<string, string> = {
   check_keyword_ranking:        "Content - SEO Cek Posisi Google",
   list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
   audit_page_seo:               "Content - SEO Audit Halaman",
+  generate_booking_form:        "Booking - Kirim Form Sekali Pakai",
 };
