@@ -1032,6 +1032,24 @@ export type Database = {
         }
         Relationships: []
       }
+      manager_test_modes: {
+        Row: {
+          guest_mode: boolean
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          guest_mode?: boolean
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          guest_mode?: boolean
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       media_folders: {
         Row: {
           created_at: string
