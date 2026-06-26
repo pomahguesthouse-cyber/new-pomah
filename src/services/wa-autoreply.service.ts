@@ -1387,6 +1387,11 @@ export async function executeAutoreplyForPhone(
         /* non-fatal */
       }
     }
+    void updateBookingFormSendLog({
+      body: finalReply,
+      status: "failed",
+      failureReason: String(sendErr ?? "unknown"),
+    });
     return "send_failed";
   }
 
