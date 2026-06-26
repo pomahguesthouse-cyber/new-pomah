@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { drainQueue, sendFailureFallbackToGuests } from "@/services/wa-autoreply.service";
+import {
+  drainQueue,
+  recoverUnqueuedInboundMessages,
+  sendFailureFallbackToGuests,
+} from "@/services/wa-autoreply.service";
 import { runDeferred } from "@/lib/cf-context";
 
 /**
@@ -50,6 +54,13 @@ async function handle(request: Request): Promise<Response> {
     });
   }
 
+  let recovered = 0;
+  try {
+    ({ recovered } = await recoverUnqueuedInboundMessages({ lookbackMinutes: 30, limit: 20 }));
+  } catch (e) {
+    console.warn("[Cron] recoverUnqueuedInboundMessages failed:", e);
+  }
+
   const origin = new URL(request.url).origin;
   // Keep each cron invocation short. The scheduler already runs frequently,
   // while one AI reply can take close to the worker lock budget; batching many
@@ -67,7 +78,7 @@ async function handle(request: Request): Promise<Response> {
   }
 
   return new Response(
-    JSON.stringify({ processed, zombies_reset: count, fallback_notified: notified }, null, 2),
+    JSON.stringify({ processed, zombies_reset: count, recovered, fallback_notified: notified }, null, 2),
     {
       status: 200,
       headers: { "Content-Type": "application/json" },

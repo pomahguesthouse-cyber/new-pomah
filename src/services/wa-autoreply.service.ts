@@ -7,7 +7,7 @@ import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/m
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
-import { queueClaimNext, queueComplete, queueFail, queueHeartbeat } from "@/services/queue.service";
+import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
 import {
   SESSION_GAP_MS,
   findSessionStartIndex,
@@ -1407,6 +1407,119 @@ export async function drainQueue(origin: string, maxBatch = 10): Promise<{ proce
   }
 
   return { processed };
+}
+
+export async function recoverUnqueuedInboundMessages(options?: {
+  lookbackMinutes?: number;
+  limit?: number;
+}): Promise<{ recovered: number }> {
+  const lookbackMinutes = options?.lookbackMinutes ?? 30;
+  const limit = options?.limit ?? 10;
+  const sinceIso = new Date(Date.now() - lookbackMinutes * 60_000).toISOString();
+
+  const { data: inboundRows, error: inboundErr } = await (supabaseAdmin as any)
+    .from("whatsapp_messages")
+    .select("id, thread_id, body, sent_at")
+    .eq("direction", "in")
+    .gte("sent_at", sinceIso)
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+
+  if (inboundErr) {
+    console.warn("[QueueRecovery] inbound lookup failed:", inboundErr.message);
+    return { recovered: 0 };
+  }
+
+  const rows = ((inboundRows ?? []) as Array<{
+    id: string;
+    thread_id: string;
+    body: string | null;
+    sent_at: string;
+  }>).filter((r) => r.id && r.thread_id && r.sent_at);
+
+  if (rows.length === 0) return { recovered: 0 };
+
+  const threadIds = Array.from(new Set(rows.map((r) => r.thread_id)));
+  const { data: threadRows, error: threadErr } = await (supabaseAdmin as any)
+    .from("whatsapp_threads")
+    .select("id, phone")
+    .in("id", threadIds);
+
+  if (threadErr) {
+    console.warn("[QueueRecovery] thread lookup failed:", threadErr.message);
+    return { recovered: 0 };
+  }
+
+  const phoneByThread = new Map(
+    ((threadRows ?? []) as Array<{ id: string; phone: string | null }>).map((t) => [t.id, t.phone]),
+  );
+
+  let recovered = 0;
+  for (const row of rows.reverse()) {
+    const phone = phoneByThread.get(row.thread_id);
+    if (!phone) continue;
+
+    try {
+      const { data: queued } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .select("id")
+        .eq("last_message_id", row.id)
+        .limit(1);
+      if ((queued ?? []).length > 0) continue;
+
+      const { data: activeQueue } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .select("id")
+        .eq("thread_id", row.thread_id)
+        .in("status", ["pending", "waiting", "processing", "retrying"])
+        .gte("created_at", row.sent_at)
+        .limit(1);
+      if ((activeQueue ?? []).length > 0) continue;
+
+      const { data: outboundAfter } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", row.thread_id)
+        .eq("direction", "out")
+        .gte("sent_at", row.sent_at)
+        .limit(1);
+      if ((outboundAfter ?? []).length > 0) continue;
+
+      const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
+        p_phone: phone,
+      });
+      if (ctxErr || !ctx) {
+        console.warn(
+          `[QueueRecovery] context lookup failed for ${phone.slice(-6)}: ${ctxErr?.message ?? "empty context"}`,
+        );
+        continue;
+      }
+
+      const c = ctx as { auto_reply_enabled?: boolean; fonnte_token?: string | null };
+      if (!c.auto_reply_enabled || !c.fonnte_token) continue;
+
+      const entry = await queueUpsert(supabaseAdmin, {
+        phone,
+        threadId: row.thread_id,
+        messageId: row.id,
+        body: row.body ?? "",
+        delayMs: 0,
+        maxWaitMs: 1_000,
+      });
+
+      if (entry?.entryId) {
+        recovered++;
+        console.warn(
+          `[QueueRecovery] recovered inbound ${row.id.slice(0, 8)} ` +
+            `for ${phone.slice(-6)} into queue ${entry.entryId.slice(0, 8)}`,
+        );
+      }
+    } catch (e) {
+      console.warn(`[QueueRecovery] failed for message ${row.id.slice(0, 8)}:`, e);
+    }
+  }
+
+  return { recovered };
 }
 
 /**
