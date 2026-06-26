@@ -26,12 +26,13 @@ import { chatCompletionText } from "@/services/ai-client.service";
 import { findTrainingSignals } from "@/services/training-retrieval.service";
 import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
+import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
-const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED === "true";
+const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
 const FAQ_BLOCK_RE =
   /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
 
@@ -610,14 +611,16 @@ export async function executeAutoreplyForPhone(
     console.warn("[Autoreply] Zombie rescue check error (non-fatal):", e);
   }
 
-  const { data: prop } = await (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle();
+  const [{ data: prop }, { data: rooms }] = await Promise.all([
+    (supabaseAdmin as any).from("properties").select("*").limit(1).maybeSingle(),
+    (supabasePublic as any)
+      .from("room_types")
+      .select(
+        "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate",
+      )
+      .order("base_rate"),
+  ]);
   const p = (prop ?? {}) as any;
-  const { data: rooms } = await (supabasePublic as any)
-    .from("room_types")
-    .select(
-      "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate",
-    )
-    .order("base_rate");
 
   const chatSummary = c.chat_summary || "";
   const rawSummaryJson = c.chat_summary_json;
@@ -691,39 +694,6 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  const aiCfgRaw = p.ai_lab_config as any;
-  const sopEnabled = aiCfgRaw?.tools?.["sop-knowledge"]?.enabled ?? true;
-  let sopText = "";
-  let brosurFiles: { name: string; url: string }[] = [];
-
-  if (sopEnabled && !reply) {
-    const { data: sopDocs } = await (supabaseAdmin as any)
-      .from("sop_documents")
-      .select("name, content, source_url, file_path, doc_category, storage_bucket")
-      .order("created_at", { ascending: true })
-      .limit(40);
-    const parts: string[] = [];
-    const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
-    for (const d of sopDocs ?? []) {
-      if (isBrosurDoc(d)) {
-        if (d.file_path) {
-          const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
-          brosurFiles.push({
-            name: d.name,
-            url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`,
-          });
-        }
-        continue;
-      }
-      const content = d.content?.trim();
-      const url = d.source_url?.trim();
-      if (!content && !url) continue;
-      const head = url ? `### ${d.name} (Tautan: ${url})` : `### ${d.name}`;
-      parts.push(content ? `${head}\n${content}` : head);
-    }
-    sopText = parts.join("\n\n").slice(0, 8000);
-  }
-
   const explicitKey = p.ai_api_key?.trim();
   const lovableKey = process.env.LOVABLE_API_KEY?.trim();
   const useLovable = !explicitKey && !!lovableKey;
@@ -740,6 +710,44 @@ export async function executeAutoreplyForPhone(
       : "google/gemini-2.5-flash"
     : cfgModel || "gpt-4o-mini";
   const llmConfig = apiKey ? { apiKey, baseUrl, model } : null;
+
+  const aiCfgRaw = p.ai_lab_config as any;
+  const sopEnabled = aiCfgRaw?.tools?.["sop-knowledge"]?.enabled ?? true;
+  let sopText = "";
+  let brosurFiles: { name: string; url: string }[] = [];
+
+  if (sopEnabled && !reply && llmConfig) {
+    try {
+      const sopQuery = [lastMessage, chatSummaryJson?.last_topic, chatSummaryJson?.room_type]
+        .filter(Boolean)
+        .join(" ");
+      const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
+      const [relevantSop, { data: brosurDocs }] = await Promise.all([
+        sopQuery.trim()
+          ? retrieveRelevantSopContext(supabaseAdmin as any, sopQuery, llmConfig, 5, 0.65)
+          : Promise.resolve(""),
+        (supabaseAdmin as any)
+          .from("sop_documents")
+          .select("name, file_path, doc_category, storage_bucket")
+          .order("created_at", { ascending: true })
+          .limit(40),
+      ]);
+
+      sopText = relevantSop.slice(0, 5000);
+      brosurFiles = ((brosurDocs ?? []) as any[])
+        .filter(isBrosurDoc)
+        .filter((d) => d.file_path)
+        .map((d) => {
+          const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
+          return {
+            name: d.name,
+            url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`,
+          };
+        });
+    } catch (e) {
+      console.warn("[Autoreply] relevant SOP retrieval failed (continuing without SOP):", e);
+    }
+  }
 
   // ── Frustration / trust detection ──────────────────────────────────────
   // Tamu nulis "saya pusing", "ini benar?", "penipuan", "tidak AI kan?" dll.
@@ -830,25 +838,20 @@ export async function executeAutoreplyForPhone(
     }, QUICK_ACK_AFTER_MS);
   }
 
-  for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
-    if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
-    // Extend the worker lock before each (potentially slow) AI attempt.
-    if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
-    const controller = new AbortController();
-    const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
-    if (!metrics.aiStartedAt) metrics.aiStartedAt = Date.now();
-    const tStart = Date.now();
+  let trainingExamples: any[] = [];
+  let negativeExamples: any[] = [];
+  if (!reply && llmConfig) {
     const trainingSignals = await findTrainingSignals(
       supabaseAdmin as any,
       {
         userMessage: lastMessage ?? "",
         stage: (chatSummaryJson?.last_topic ?? null) as string | null,
       },
-      llmConfig!,
+      llmConfig,
       { positiveLimit: 3, negativeLimit: 2 },
     );
-    const trainingExamples = trainingSignals.positiveExamples;
-    const negativeExamples = trainingSignals.negativeExamples;
+    trainingExamples = trainingSignals.positiveExamples;
+    negativeExamples = trainingSignals.negativeExamples;
 
     if (trainingExamples.length > 0) {
       const top = trainingExamples[0];
@@ -863,6 +866,16 @@ export async function executeAutoreplyForPhone(
           `(top sim ${negativeExamples[0].similarity.toFixed(2)})`,
       );
     }
+  }
+
+  for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
+    if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
+    // Extend the worker lock before each (potentially slow) AI attempt.
+    if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
+    const controller = new AbortController();
+    const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    if (!metrics.aiStartedAt) metrics.aiStartedAt = Date.now();
+    const tStart = Date.now();
     try {
       const consecutiveInbound = countConsecutiveInbound(rollingMessages);
       const recoveryMode = consecutiveInbound >= 3;

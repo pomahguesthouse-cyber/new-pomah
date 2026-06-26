@@ -36,7 +36,47 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 
-const DEFAULT_MAX_TURNS = 5;
+const DEFAULT_MAX_TURNS = 3;
+
+function formatToolDraftReply(toolName: string, output: string): string | null {
+  try {
+    const data = JSON.parse(output) as Record<string, any>;
+    if (typeof data.reply_to_guest === "string" && data.reply_to_guest.trim()) {
+      return data.reply_to_guest.trim();
+    }
+
+    if (toolName === "check_room_availability" && Array.isArray(data.kamar)) {
+      const period = typeof data.periode === "string" ? data.periode : data.tanggal;
+      const rows = data.kamar
+        .slice(0, 8)
+        .map((r: any) => {
+          const available = Number(r.kamar_tersedia ?? 0);
+          const icon = available > 0 ? "✅" : "❌";
+          const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0).toLocaleString("id-ID");
+          const stock = Number.isFinite(available) ? `${available} kamar tersedia` : "stok belum diatur";
+          return `${icon} ${r.nama}: ${stock}, Rp${price}/malam`;
+        })
+        .join("\n");
+      if (rows) {
+        return `Ketersediaan kamar untuk ${period ?? "tanggal tersebut"}:\n${rows}\n\nMau pilih kamar yang mana, Kak?`;
+      }
+    }
+
+    if (toolName === "create_booking") {
+      if (data.ok === false) {
+        return `Maaf Kak, booking belum bisa saya buat: ${data.error ?? "data belum lengkap"}`;
+      }
+      if (data.reference_code) {
+        const total = Number(data.total ?? data.total_amount ?? 0);
+        const totalText = total ? ` Totalnya Rp${total.toLocaleString("id-ID")}.` : "";
+        return `Booking Kakak berhasil dibuat dengan kode *${data.reference_code}*.${totalText}`;
+      }
+    }
+  } catch {
+    /* non-JSON tool output */
+  }
+  return null;
+}
 
 function normalizeAgentInstruction(value: unknown): string | undefined {
   return typeof value === "string" ? normalizeAssistantName(value, "") : undefined;
@@ -182,6 +222,8 @@ async function runAgent(
 }> {
   const toolsUsed = new Set<string>();
   const allRetries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
+  let emptyCompletionRetried = false;
+  let lastToolDraftReply: string | null = null;
   // Track per-tool need_dates repeats — surfaces loop pattern to caller.
   const needDatesCount = new Map<string, { count: number; lastArgs: string; lastOutput: string }>();
   // Resolve tools dynamically per run so context-aware tool sets (e.g.
@@ -288,12 +330,22 @@ async function runAgent(
     if (toolCalls.length === 0) {
       const reply = assistantMsg?.content?.trim() ?? null;
       if (!reply) {
+        if (!emptyCompletionRetried) {
+          emptyCompletionRetried = true;
+          console.warn(`[MultiAgent][${agent.key}] empty completion — retrying with explicit final-answer nudge`);
+          messages.push({
+            role: "user",
+            content:
+              "Balasan sebelumnya kosong. Jawab pesan tamu terakhir sekarang dalam Bahasa Indonesia yang singkat, ramah, dan langsung membantu. Jangan kosong.",
+          });
+          continue;
+        }
         const detail = json.error?.message ?? "Empty LLM response";
         console.error(`[MultiAgent][${agent.key}] No reply:`, detail);
         return {
-          reply: null,
+          reply: lastToolDraftReply,
           toolsUsed: Array.from(toolsUsed),
-          error: detail,
+          error: lastToolDraftReply ? `${detail}; returned tool draft` : detail,
           ...(allRetries.length ? { retries: allRetries } : {}),
         };
       }
@@ -343,6 +395,9 @@ async function runAgent(
 
       if (toolLabel) toolsUsed.add(toolLabel);
 
+      const draft = formatToolDraftReply(toolName, output);
+      if (draft) lastToolDraftReply = draft;
+
       // Loop heuristic: jika tool yang sama mengembalikan need_dates: true
       // ≥2× dalam 1 run → surface ke caller (super admin akan dapat alert).
       if (toolName && output.includes('"need_dates"')) {
@@ -380,9 +435,9 @@ async function runAgent(
 
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
   return {
-    reply: null,
+    reply: lastToolDraftReply,
     toolsUsed: Array.from(toolsUsed),
-    error: "Max turns exceeded",
+    error: lastToolDraftReply ? "Max turns exceeded; returned tool draft" : "Max turns exceeded",
     ...(allRetries.length ? { retries: allRetries } : {}),
     ...(loopAlert ? { loopAlert } : {}),
   };
