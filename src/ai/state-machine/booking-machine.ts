@@ -890,6 +890,30 @@ export async function processBookingState(
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
 
+  const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
+  if (formSubmittedMatch) {
+    const token = formSubmittedMatch[1]?.trim();
+    const row = token ? await getSubmittedBookingForm(supabase as any, token) : null;
+    if (!row?.submitted_data) {
+      return {
+        handled: true,
+        reply:
+          "Maaf Kak, data formulir booking belum terbaca di sistem. Mohon tunggu sebentar lalu kirim pesan ke kami lagi ya 🙏.",
+      };
+    }
+
+    const allowedPhones = phoneCandidates(phone, row.phone);
+    if (!allowedPhones.includes(row.phone) && row.phone !== phone) {
+      return { handled: true, reply: "Maaf Kak, formulir ini tidak sesuai dengan nomor WhatsApp percakapan ini." };
+    }
+
+    context = bookingFormSubmissionToContext(row.submitted_data, phone, ctx.rooms, context);
+    context.formToken = token;
+    await applyResolvedRatesToContext(ctx, context);
+    await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+    return await buildBookingSummaryAsync(ctx, context);
+  }
+
   if (state === "AWAITING_CANCEL_CONFIRMATION") {
     const previousState = context.cancelPreviousState ?? "COLLECTING_DATA";
     const restoredContext = clearCancelConfirmation(context);
@@ -929,6 +953,15 @@ export async function processBookingState(
 
   if (state === "IDLE") {
     return { handled: false }; // Handled by LLM via normal AI workflow
+  }
+
+  if (state === "AWAITING_FORM_SUBMISSION") {
+    return {
+      handled: true,
+      reply:
+        "Saya masih menunggu formulir booking yang tadi saya kirim ya, Kak. " +
+        "Silakan lengkapi link tersebut dulu. Setelah dikirim, saya akan langsung balas ringkasan booking di chat ini.",
+    };
   }
 
   // Guard: jika state masih di tahap pengumpulan data tamu (AWAITING_*/CONFIRMING_*)
