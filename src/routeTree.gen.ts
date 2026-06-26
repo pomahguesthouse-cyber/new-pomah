@@ -50,6 +50,7 @@ import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
 import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
+import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
@@ -267,6 +268,11 @@ const AdminAiLabRoute = AdminAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AdminRoute,
 } as any)
+const BookingFormTokenRoute = BookingFormTokenRouteImport.update({
+  id: '/booking/form/$token',
+  path: '/booking/form/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
   id: '/book/confirmation/$id',
   path: '/book/confirmation/$id',
@@ -376,6 +382,7 @@ export interface FileRoutesByFullPath {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
@@ -429,6 +436,7 @@ export interface FileRoutesByTo {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
@@ -484,6 +492,7 @@ export interface FileRoutesById {
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
+  '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
@@ -540,6 +549,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
@@ -593,6 +603,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
@@ -647,6 +658,7 @@ export interface FileRouteTypes {
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
+    | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
     | '/book/confirmation/$id/chat'
@@ -679,6 +691,7 @@ export interface RootRouteChildren {
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
+  BookingFormTokenRoute: typeof BookingFormTokenRoute
   ApiPublicBookingFormTokenRoute: typeof ApiPublicBookingFormTokenRoute
 }
 
@@ -971,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAiLabRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/booking/form/$token': {
+      id: '/booking/form/$token'
+      path: '/booking/form/$token'
+      fullPath: '/booking/form/$token'
+      preLoaderRoute: typeof BookingFormTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/confirmation/$id': {
       id: '/book/confirmation/$id'
       path: '/book/confirmation/$id'
@@ -1164,6 +1184,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
+  BookingFormTokenRoute: BookingFormTokenRoute,
   ApiPublicBookingFormTokenRoute: ApiPublicBookingFormTokenRoute,
 }
 export const routeTree = rootRouteImport
