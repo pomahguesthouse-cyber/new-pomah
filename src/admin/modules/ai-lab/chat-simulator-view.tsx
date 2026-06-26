@@ -216,7 +216,84 @@ export function ChatSimulatorView() {
     return { reply: res.reply as string | null, meta, attachment, ocrResult };
   }
 
-  async function handleSend() {
+  // ── Booking form integration ────────────────────────────────────────────
+  // Bot reply yang berisi URL `/booking/form/<token>` di-render dengan tombol
+  // "Buka formulir". Setelah dibuka, simulator polling endpoint publik untuk
+  // mendeteksi submission, lalu otomatis mengirim `[FORM_SUBMITTED:<token>]`
+  // sebagai pesan tamu — meniru perilaku worker WA di produksi.
+  const FORM_URL_REGEX = /\/booking\/form\/([A-Za-z0-9_-]{16,})/;
+  function extractFormToken(body: string): string | null {
+    const m = body.match(FORM_URL_REGEX);
+    return m ? m[1] : null;
+  }
+
+  // Token yang sedang dipantau, supaya tidak double-poll dan tidak dobel kirim.
+  const pollingTokensRef = useRef<Set<string>>(new Set());
+  const submittedTokensRef = useRef<Set<string>>(new Set());
+
+  async function pollFormSubmission(token: string) {
+    if (pollingTokensRef.current.has(token) || submittedTokensRef.current.has(token)) return;
+    pollingTokensRef.current.add(token);
+    const deadline = Date.now() + 5 * 60 * 1000; // 5 menit
+    try {
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          const res = await fetch(`/api/public/booking-form/${token}`, { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.status === "submitted") {
+              if (submittedTokensRef.current.has(token)) return;
+              submittedTokensRef.current.add(token);
+              // Kirim pesan sintetis melalui pipeline simulator.
+              const syntheticMessage = `[FORM_SUBMITTED:${token}]`;
+              const history = transcriptRef.current;
+              const userBubble: TranscriptMsg = { direction: "in", body: "📝 Formulir booking terkirim" };
+              const withUser = [...history, userBubble];
+              setTranscript(withUser);
+              scrollToBottom();
+              setSending(true);
+              try {
+                const { reply, meta, attachment } = await sendOne(syntheticMessage, history);
+                setLastMeta(meta);
+                const systemMessages: TranscriptMsg[] = (meta.toolsUsed ?? []).map((tool) => ({
+                  direction: "system" as const,
+                  body: `🔧 Tool: ${tool}`,
+                }));
+                setTranscript([
+                  ...withUser,
+                  ...systemMessages,
+                  ...(reply
+                    ? [{ direction: "out" as const, body: reply, attachment }]
+                    : [{ direction: "out" as const, body: `⚠️ (tidak ada balasan — ${meta.error ?? meta.status})` }]),
+                ]);
+                scrollToBottom();
+                toast.success("Formulir terkirim — chatbot melanjutkan");
+              } finally {
+                setSending(false);
+              }
+              return;
+            }
+            if (data?.status === "expired") {
+              toast.warning("Token formulir kedaluwarsa");
+              return;
+            }
+          }
+        } catch {
+          // network blip — coba lagi
+        }
+      }
+    } finally {
+      pollingTokensRef.current.delete(token);
+    }
+  }
+
+  function openBookingForm(token: string) {
+    const url = `/booking/form/${token}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    void pollFormSubmission(token);
+  }
+
     const message = input.trim() || (attachedImage ? "Saya kirim bukti transfer Kak" : "");
     if (!message || sending) return;
     const imgPayload = attachedImage;
