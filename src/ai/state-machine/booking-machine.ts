@@ -252,6 +252,7 @@ export interface RoomExtraBedPolicy {
 interface RoomCatalogEntry {
   id: string;
   name: string;
+  base_rate?: number | null;
   capacity?: number | null;
   extrabed_capacity?: number | null;
   extrabed_rate?: number | null;
@@ -519,7 +520,7 @@ function bookingFormSubmissionToContext(
     children: 0,
     roomId: room?.id ?? submission.roomTypeId,
     roomName: room?.name ?? previous.roomName,
-    pricePerNight: Number((room as any)?.base_rate ?? previous.pricePerNight ?? 0),
+    pricePerNight: Number(room?.base_rate ?? previous.pricePerNight ?? 0),
     specialRequests: submission.notes?.trim() || undefined,
     email_clarification_asked: true,
   };
@@ -893,7 +894,7 @@ export async function processBookingState(
   const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
   if (formSubmittedMatch) {
     const token = formSubmittedMatch[1]?.trim();
-    const row = token ? await getSubmittedBookingForm(supabase as any, token) : null;
+    const row = token ? await getSubmittedBookingForm(supabase, token) : null;
     if (!row?.submitted_data) {
       return {
         handled: true,
@@ -1451,6 +1452,8 @@ export async function processBookingState(
           children: context.children ?? 0,
           payment_type: context.paymentType ?? "full",
           dp_amount: context.dpAmount ?? 0,
+          special_requests: context.specialRequests,
+          extra_beds: context.extraBeds ?? 0,
         },
         ctx,
       );
