@@ -499,6 +499,51 @@ async function applyResolvedRatesToContext(ctx: ToolContext, context: BookingCon
   }
 }
 
+function bookingFormSubmissionToContext(
+  submission: BookingFormSubmission,
+  phone: string,
+  roomsCatalog: RoomCatalogEntry[],
+  previous: BookingContext = {},
+): BookingContext {
+  const room = roomsCatalog.find((r) => r.id === submission.roomTypeId) ?? roomsCatalog[0];
+  const quantity = Math.max(1, Math.min(10, Number(submission.rooms) || 1));
+  const adults = Math.max(1, Math.min(20, Number(submission.guestCount) || 1));
+  const context: BookingContext = {
+    ...previous,
+    checkIn: submission.checkIn,
+    checkOut: submission.checkOut,
+    guestName: submission.fullName.trim(),
+    guestEmail: submission.email && EMAIL_PATTERN.test(submission.email) ? submission.email : undefined,
+    guestPhone: phone,
+    adults,
+    children: 0,
+    roomId: room?.id ?? submission.roomTypeId,
+    roomName: room?.name ?? previous.roomName,
+    pricePerNight: Number((room as any)?.base_rate ?? previous.pricePerNight ?? 0),
+    specialRequests: submission.notes?.trim() || undefined,
+    email_clarification_asked: true,
+  };
+
+  if (context.roomId && context.roomName) {
+    context.rooms = [{
+      roomTypeId: context.roomId,
+      roomTypeName: context.roomName,
+      quantity,
+      pricePerNight: context.pricePerNight ?? 0,
+    }];
+  }
+
+  const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
+  const required = computeExtraBeds(policy, quantity, adults);
+  const requestedExtraBeds = Math.max(0, Math.min(20, Number(submission.extrabed) || 0));
+  context.extraBeds = Math.max(requestedExtraBeds, required.extraBeds);
+  if (policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
+  if (context.checkIn && context.checkOut && context.pricePerNight) {
+    context.totalPrice = countNights(context.checkIn, context.checkOut) * context.pricePerNight * quantity;
+  }
+  return context;
+}
+
 function clearCancelConfirmation(context: BookingContext): BookingContext {
   const { cancelPreviousState: _cancelPreviousState, ...rest } = context;
   return rest;
