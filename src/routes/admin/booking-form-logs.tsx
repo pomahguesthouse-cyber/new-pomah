@@ -185,6 +185,26 @@ function BookingFormLogsPage() {
                   Alasan gagal: {log.failure_reason}
                 </p>
               )}
+
+              {(log.status === "failed" || log.status === "superseded") && (
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      resendMutation.isPending && resendMutation.variables === log.id
+                    }
+                    onClick={() => resendMutation.mutate(log.id)}
+                  >
+                    {resendMutation.isPending && resendMutation.variables === log.id ? (
+                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    ) : (
+                      <Send className="mr-1 h-3 w-3" />
+                    )}
+                    Resend WA
+                  </Button>
+                </div>
+              )}
             </Card>
           );
         })}
