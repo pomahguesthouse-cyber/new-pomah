@@ -64,6 +64,10 @@ function coerceDate(v: unknown, today: string): string | null {
   if (!s) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
+  if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(s)) return today;
+  if (/\b(besok|tomorrow)\b/i.test(s)) return nextDay(today);
+  if (/\blusa\b/i.test(s)) return nextDay(nextDay(today));
+
   // YYYY/MM/DD
   let m = s.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
   if (m) {

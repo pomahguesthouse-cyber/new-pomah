@@ -352,9 +352,9 @@ export function extractAllSlots(
     }
   }
 
-  // Relative: "besok", "lusa", "hari ini"
+  // Relative: "malam ini", "besok", "lusa", "hari ini"
   if (today) {
-    if (/\b(hari ini|today)\b/i.test(textLower)) dates.push(today);
+    if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(textLower)) dates.push(today);
     if (/\b(besok|tomorrow)\b/i.test(textLower)) dates.push(addDays(today, 1));
     if (/\blusa\b/i.test(textLower)) dates.push(addDays(today, 2));
   }
@@ -366,6 +366,9 @@ export function extractAllSlots(
     result.check_out = uniqueDates[1];
   } else if (uniqueDates.length === 1) {
     result.check_in = uniqueDates[0];
+    if (/\b(malam ini|nanti malam)\b/i.test(textLower)) {
+      result.check_out = addDays(uniqueDates[0]!, 1);
+    }
     // Cek pola "X malam" untuk menghitung check_out
     const nightsMatch = text.match(/(\d+)\s*malam/i);
     if (nightsMatch) {

@@ -6,7 +6,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
-import { todayWIB } from "@/lib/date";
+import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat } from "@/services/queue.service";
 import {
   SESSION_GAP_MS,
@@ -25,6 +25,7 @@ import {
 import { chatCompletionText } from "@/services/ai-client.service";
 import { findTrainingSignals } from "@/services/training-retrieval.service";
 import { runDeferred } from "@/lib/cf-context";
+import { checkRoomAvailability } from "@/tools/availability.tool";
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
@@ -230,6 +231,76 @@ function buildFastFaqReply(
   }
 
   return null;
+}
+
+function isTonightReply(message: string): boolean {
+  return /\b(malam ini|nanti malam|hari ini|today)\b/i.test(message);
+}
+
+function hasRecentPriceContext(messages: Array<{ direction: string; body: string }>): boolean {
+  const recent = messages
+    .slice(-6)
+    .map((m) => m.body)
+    .join("\n")
+    .toLowerCase();
+  return /\b(harga|rate|tarif|kamar|guest house|guesthouse|tanggal spesifik|check-in|check.?in|ketersediaan)\b/i.test(recent);
+}
+
+async function buildTonightPriceReply(params: {
+  rooms: any[];
+  property: any;
+  origin: string;
+}): Promise<FastFaqResult | null> {
+  const checkIn = todayWIB();
+  const checkOut = nextDay(checkIn);
+  const raw = await checkRoomAvailability(
+    { check_in: checkIn, check_out: checkOut },
+    {
+      supabasePublic: supabasePublic as any,
+      supabaseAdmin: supabaseAdmin as any,
+      rooms: params.rooms,
+      property: params.property,
+      today: checkIn,
+      origin: params.origin,
+    } as any,
+  );
+
+  const data = JSON.parse(raw) as {
+    kamar?: Array<{
+      nama?: string;
+      harga_per_malam?: number;
+      kamar_tersedia?: number | null;
+      tidak_tersedia?: boolean;
+      alasan?: string;
+    }>;
+  };
+
+  const available = (data.kamar ?? [])
+    .filter((r) => !r.tidak_tersedia && (r.kamar_tersedia ?? 0) > 0)
+    .sort((a, b) => Number(a.harga_per_malam ?? 0) - Number(b.harga_per_malam ?? 0));
+
+  if (available.length === 0) {
+    return {
+      intent: "deterministic_tonight_availability",
+      reply:
+        `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), ` +
+        `sementara kamar yang tersedia belum ada di sistem. Saya bantu teruskan ke admin ya Kak.`,
+    };
+  }
+
+  const lines = available.slice(0, 6).map((r) => {
+    const price = Number(r.harga_per_malam ?? 0).toLocaleString("id-ID");
+    const stock = r.kamar_tersedia == null ? "" : ` (${r.kamar_tersedia} kamar tersedia)`;
+    return `- ${r.nama}: Rp${price}/malam${stock}`;
+  });
+
+  return {
+    intent: "deterministic_tonight_price",
+    reply:
+      `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), pilihan yang tersedia:\n` +
+      `${lines.join("\n")}\n\n` +
+      `Mau saya bantu pilihkan kamar yang paling sesuai, Kak?`,
+  };
 }
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 const SUMMARY_MAX_CHARS = 800;
@@ -599,6 +670,30 @@ export async function executeAutoreplyForPhone(
         fastPath: true,
       };
       console.info(`[Autoreply] Fast-path FAQ (${fastFaq.intent}) for ${phone.slice(-6)}`);
+    }
+  }
+
+  if (!reply && !isManager && !bookingActive && isTonightReply(lastMessage) && hasRecentPriceContext(rollingMessages)) {
+    try {
+      const tonightReply = await buildTonightPriceReply({
+        rooms: rooms ?? [],
+        property: p,
+        origin,
+      });
+      if (tonightReply) {
+        reply = tonightReply.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: tonightReply.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["deterministic-tonight-availability"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Deterministic tonight price reply for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] deterministic tonight price failed (falling back to AI):", e);
     }
   }
 
