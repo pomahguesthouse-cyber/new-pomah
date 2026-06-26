@@ -454,6 +454,12 @@ function sourceLabel(source: string | null | undefined): string {
   switch (source) {
     case "direct":
       return "Direct booking";
+    case "whatsapp":
+      return "WhatsApp";
+    case "website":
+      return "Website";
+    case "walk_in":
+      return "Walk-in";
     case "ota":
       return "OTA import";
     case "manual":
@@ -461,6 +467,22 @@ function sourceLabel(source: string | null | undefined): string {
     default:
       return source || "Direct booking";
   }
+}
+
+function summarizeBookingRooms(bookingRooms: any[] | null | undefined): string {
+  const counts = new Map<string, number>();
+
+  for (const br of bookingRooms ?? []) {
+    const roomType = Array.isArray(br?.room_types) ? br.room_types[0] : br?.room_types;
+    const name = String(roomType?.name ?? "Kamar").trim() || "Kamar";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+
+  if (counts.size === 0) return "Kamar belum ditentukan";
+
+  return Array.from(counts.entries())
+    .map(([name, count]) => `${name} × ${count} kamar`)
+    .join(", ");
 }
 
 /* ------------------------------------------------------------------ */
@@ -484,7 +506,7 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
 
     const b = booking as any;
     const guestName = b.guests?.full_name ?? "Tamu";
-    const roomName = b.booking_rooms?.[0]?.room_types?.name ?? "Kamar belum ditentukan";
+    const roomName = summarizeBookingRooms(b.booking_rooms);
     const message =
       "🏨 NEW BOOKING ALERT\n\n" +
       `Guest: ${guestName}\n` +
@@ -498,9 +520,10 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
       "Please review in Manager Dashboard.";
 
     const { fonnteToken } = await getPropertyTokens(db);
-    const managers = await getActiveManagers(db);
+    const allManagers = await getActiveManagers(db);
+    const managers = allManagers.filter((m) => !!m.phone || !!m.telegram_chat_id);
     if (managers.length === 0) {
-      console.info("[ManagerNotifier] Belum ada manager aktif");
+      console.info("[ManagerNotifier] Belum ada nomor WA / Telegram pengelola aktif untuk notifikasi booking baru");
       return;
     }
 
