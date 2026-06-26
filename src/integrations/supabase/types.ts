@@ -214,6 +214,81 @@ export type Database = {
           },
         ]
       }
+      booking_form_send_logs: {
+        Row: {
+          attempts: number
+          booking_id: string | null
+          check_in: string | null
+          check_out: string | null
+          created_at: string
+          failure_reason: string | null
+          id: string
+          metadata: Json
+          phone: string
+          property_id: string | null
+          room_type_name: string | null
+          sent_at: string | null
+          status: string
+          thread_id: string | null
+          token: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          attempts?: number
+          booking_id?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          metadata?: Json
+          phone: string
+          property_id?: string | null
+          room_type_name?: string | null
+          sent_at?: string | null
+          status?: string
+          thread_id?: string | null
+          token: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          attempts?: number
+          booking_id?: string | null
+          check_in?: string | null
+          check_out?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          id?: string
+          metadata?: Json
+          phone?: string
+          property_id?: string | null
+          room_type_name?: string | null
+          sent_at?: string | null
+          status?: string
+          thread_id?: string | null
+          token?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_form_send_logs_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "booking_form_send_logs_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       booking_form_tokens: {
         Row: {
           created_at: string
