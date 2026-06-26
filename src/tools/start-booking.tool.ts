@@ -8,7 +8,7 @@
  * deterministically — including the name and chat-number confirmations.
  */
 
-import { isDateString } from "@/lib/date";
+import { isDateString, todayWIB } from "@/lib/date";
 import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
 import type { ToolContext, ToolHandler } from "./types";
 
@@ -32,6 +32,14 @@ export const startBookingDetails: ToolHandler = async (
 
   if (!checkIn) {
     return JSON.stringify({ ok: false, error: "Tanggal check-in belum ditentukan." });
+  }
+  // Tolak tanggal lampau — kemungkinan tamu salah ketik tahun (mis. "25 Juni 2025").
+  const today = todayWIB();
+  if (checkIn < today) {
+    return JSON.stringify({
+      ok: false,
+      error: `Tanggal check-in (${checkIn}) sudah lewat. Mohon konfirmasi tanggal yang benar (hari ini ${today} WIB).`,
+    });
   }
   // Default to a single night if only one date is provided.
   if (!checkOut) {
@@ -70,7 +78,9 @@ export const startBookingDetails: ToolHandler = async (
   function calcNights(ci: string, co: string): number {
     const d1 = new Date(ci);
     const d2 = new Date(co);
-    return Math.max(1, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
+    const diff = Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
+    // Dayuse (ci == co) → 0 malam; pricing dayuse butuh quote khusus.
+    return diff > 0 ? diff : 0;
   }
 
   const roomsArg = args.rooms;

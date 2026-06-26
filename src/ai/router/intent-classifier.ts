@@ -414,6 +414,9 @@ export async function classifyIntent(
   // Trigger LLM Fallback if ambiguous or general and llmConfig is present
   const isAmbiguous = ruleResult.category === "general" || ruleResult.confidence < 0.70;
   if (isAmbiguous && llmConfig?.apiKey) {
+    const INTENT_LLM_TIMEOUT_MS = 5_000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), INTENT_LLM_TIMEOUT_MS);
     try {
       const res = await fetch(`${llmConfig.baseUrl}/chat/completions`, {
         method: "POST",
@@ -421,6 +424,7 @@ export async function classifyIntent(
           "Content-Type": "application/json",
           Authorization: `Bearer ${llmConfig.apiKey}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           model: llmConfig.model,
           temperature: 0,
@@ -493,7 +497,13 @@ export async function classifyIntent(
         console.warn("[classifyIntent] LLM Fallback HTTP status error:", res.status);
       }
     } catch (e: any) {
-      console.warn("[classifyIntent] LLM Fallback failure, using rule-based result:", e.message);
+      if (e?.name === "AbortError") {
+        console.warn(`[classifyIntent] LLM Fallback timeout after ${INTENT_LLM_TIMEOUT_MS}ms — using rule-based result`);
+      } else {
+        console.warn("[classifyIntent] LLM Fallback failure, using rule-based result:", e?.message);
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
