@@ -295,13 +295,17 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        const { messageId, error: saveErr } = await saveInboundMessage(
+        const { messageId, duplicate, error: saveErr } = await saveInboundMessage(
           supabaseAdmin,
-          { phone: customerPhone, name, body: displayMessage },
+          { phone: customerPhone, name, body: displayMessage, fonnteId },
         );
         if (saveErr || !messageId) {
           console.error(`[Webhook] saveInbound failed: ${saveErr?.message ?? "no messageId"} | ${logCtx}`);
           return new Response("Error", { status: 500 });
+        }
+        if (duplicate) {
+          console.log(`[Webhook] duplicate persisted inbound | ${logCtx}`);
+          return new Response("OK", { status: 200 });
         }
 
         void saveMessageMetadata(supabaseAdmin, {
@@ -663,6 +667,7 @@ export const Route = createFileRoute("/api/fonnte")({
                 property: p as any,
                 today: todayWIB(),
                 origin: url.origin,
+                llmConfig: { apiKey, baseUrl, model },
               },
               llmConfig: { apiKey, baseUrl, model },
             });

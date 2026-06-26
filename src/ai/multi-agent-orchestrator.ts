@@ -421,6 +421,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // and to tools / the booking state machine.
   input.agentCtx.chatPhone = input.phone;
   input.toolCtx.phone = input.phone;
+  input.toolCtx.llmConfig = input.toolCtx.llmConfig ?? input.llmConfig;
   // Propagate the manager flag into tool context so privileged tools
   // (e.g. update_room_rate) can gate themselves to internal users only.
   if (input.isManager) input.toolCtx.isManager = true;

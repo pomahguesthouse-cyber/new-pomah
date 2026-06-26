@@ -16,6 +16,8 @@ type AnyClient = SupabaseClient<any>;
 export interface SaveInboundResult {
   /** UUID of the newly created whatsapp_messages row */
   messageId: string | null;
+  /** True when a durable Fonnte ID already existed, so callers should not enqueue. */
+  duplicate?: boolean;
   error:     Error   | null;
 }
 
@@ -29,17 +31,55 @@ export interface SaveInboundResult {
  */
 export async function saveInboundMessage(
   client: AnyClient,
-  params: { phone: string; name: string; body: string },
+  params: { phone: string; name: string; body: string; fonnteId?: string | null },
 ): Promise<SaveInboundResult> {
-  const { data, error } = await (client as any).rpc("receive_whatsapp_message", {
+  const rpcParams = {
     p_phone: params.phone,
     p_name:  params.name,
     p_body:  params.body,
-  });
+  };
+  const withFonnteId =
+    params.fonnteId && params.fonnteId.trim()
+      ? { ...rpcParams, p_fonnte_id: params.fonnteId.trim() }
+      : null;
+
+  if (withFonnteId) {
+    const existing = await (client as any)
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("fonnte_id", withFonnteId.p_fonnte_id)
+      .limit(1)
+      .maybeSingle();
+
+    if (!existing.error && existing.data?.id) {
+      return { messageId: existing.data.id as string, duplicate: true, error: null };
+    }
+  }
+
+  const { data, error } = withFonnteId
+    ? await (client as any).rpc("receive_whatsapp_message", withFonnteId)
+    : await (client as any).rpc("receive_whatsapp_message", rpcParams);
+
+  if (error && withFonnteId && ((error as any).code === "PGRST202" || String((error as any).message).includes("function"))) {
+    console.warn("[MessageRepo] 4-arg receive RPC unavailable, falling back to 3-arg:", (error as any).message);
+    const fallback = await (client as any).rpc("receive_whatsapp_message", rpcParams);
+    if (!fallback.error) {
+      return { messageId: fallback.data as string | null, error: null };
+    }
+    void reportRpcFailure(client, "receive_whatsapp_message", fallback.error, {
+      phone: params.phone,
+      fonnteId: params.fonnteId ?? null,
+    });
+    return {
+      messageId: null,
+      error:     new Error(`receive_whatsapp_message: ${(fallback.error as any).message}`),
+    };
+  }
 
   if (error) {
     void reportRpcFailure(client, "receive_whatsapp_message", error, {
       phone: params.phone,
+      fonnteId: params.fonnteId ?? null,
     });
     return {
       messageId: null,

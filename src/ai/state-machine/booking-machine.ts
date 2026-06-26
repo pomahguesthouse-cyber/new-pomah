@@ -176,6 +176,29 @@ function formatPhoneDisplay(raw: string): string {
   return digits;
 }
 
+function normalizePhone(raw: string | null | undefined): string {
+  let p = String(raw ?? "").replace(/\D/g, "");
+  if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("8")) p = "62" + p;
+  return p;
+}
+
+function phoneCandidates(...values: Array<string | null | undefined>): string[] {
+  const candidates = new Set<string>();
+  for (const value of values) {
+    const raw = String(value ?? "").trim();
+    if (!raw) continue;
+    const normalized = normalizePhone(raw);
+    if (raw) candidates.add(raw);
+    if (normalized) {
+      candidates.add(normalized);
+      if (normalized.startsWith("62")) candidates.add("0" + normalized.slice(2));
+    }
+  }
+  return Array.from(candidates);
+}
+
 /** Format YYYY-MM-DD ke "10 Juni 2026" dalam bahasa Indonesia. */
 function formatDateId(iso: string): string {
   const months = [
@@ -449,6 +472,18 @@ async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContex
     console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
   }
   return buildBookingSummary(context, ctx.rooms);
+}
+
+async function applyResolvedRatesToContext(ctx: ToolContext, context: BookingContext): Promise<void> {
+  try {
+    const resolved = await resolveBookingSummaryRates(ctx, context);
+    if (!resolved || resolved.stopSellDates.length > 0) return;
+    context.rooms = resolved.rooms;
+    context.pricePerNight = resolved.displayRatePerNight;
+    context.totalPrice = resolved.roomSubtotal;
+  } catch (e) {
+    console.warn("[BookingState] applyResolvedRatesToContext failed (non-fatal):", e);
+  }
 }
 
 function clearCancelConfirmation(context: BookingContext): BookingContext {
@@ -844,7 +879,12 @@ export async function processBookingState(
   // Reset state ke PAYMENT_PENDING dan serahkan ke Finance Agent.
   if (isDataEntryState(state)) {
     try {
-      const { data: guests } = await (supabase as any).from("guests").select("id").eq("phone", phone).limit(10);
+      const guestPhones = phoneCandidates(phone, context.guestPhone);
+      const { data: guests } = await (supabase as any)
+        .from("guests")
+        .select("id")
+        .in("phone", guestPhones.length > 0 ? guestPhones : [phone])
+        .limit(20);
       const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
       if (guestIds.length > 0) {
         const cutoff = new Date(Date.now() - 90 * 60 * 1000).toISOString();
@@ -878,7 +918,15 @@ export async function processBookingState(
   // relevant reply (the state auto-resets after 15 min if truly abandoned).
   if (isDataEntryState(state) && !isExpectedAnswer(state, message)) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
-    const interruptByIntent = INTERRUPT_INTENTS.has((await classifyIntent(message, supabase)).category);
+    const interruptByIntent = INTERRUPT_INTENTS.has(
+      (
+        await classifyIntent(message, supabase, ctx.llmConfig, {
+          bookingActive: true,
+          lastTopic: currentStateRecord.last_topic ?? null,
+          roomTypeNames: ctx.rooms.map((r) => r.name),
+        })
+      ).category,
+    );
     if (interruptByQuestion || interruptByIntent) {
       console.info(`[BookingState] Interruption during ${state} — preserving state, deferring to LLM`);
       return { handled: false };
@@ -1047,27 +1095,29 @@ export async function processBookingState(
       context.email_clarification_asked = true;
     }
 
+    const hasInterruptionSignal =
+      extracted.is_payment_question ||
+      extracted.is_bank_account_request ||
+      extracted.is_invoice_request ||
+      extracted.is_checkin_policy ||
+      extracted.is_room_detail_question ||
+      extracted.is_early_arrival;
+
     const autoSkipOptionalEmail =
       !context.guestEmail &&
       !!context.email_clarification_asked &&
-      (state === "AWAITING_EMAIL" || state === "COLLECTING_DATA") &&
+      state === "AWAITING_EMAIL" &&
       !extracted.email &&
-      !extracted.is_skip_email;
+      !extracted.is_skip_email &&
+      !hasInterruptionSignal &&
+      !QUESTION_PATTERN.test(trimmedMessage);
 
     if (autoSkipOptionalEmail) {
       context.guestEmail = undefined;
     }
 
     // Mid-booking interruption signals check
-    if (
-      !autoSkipOptionalEmail &&
-      (extracted.is_payment_question ||
-        extracted.is_bank_account_request ||
-        extracted.is_invoice_request ||
-        extracted.is_checkin_policy ||
-        extracted.is_room_detail_question ||
-        extracted.is_early_arrival)
-    ) {
+    if (hasInterruptionSignal) {
       console.info(
         `[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`,
       );
@@ -1115,6 +1165,7 @@ export async function processBookingState(
         context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
       }
 
+      await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return await buildBookingSummaryAsync(ctx, context);
     }
@@ -1180,6 +1231,7 @@ export async function processBookingState(
           pricePerNight: requestedRoom.pricePerNight,
         },
       ];
+      await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
       return await buildBookingSummaryAsync(ctx, context);
     }
@@ -1217,6 +1269,7 @@ export async function processBookingState(
           const nights = countNights(context.checkIn, context.checkOut);
           context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
         }
+        await applyResolvedRatesToContext(ctx, context);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
         return await buildBookingSummaryAsync(ctx, context);
       }

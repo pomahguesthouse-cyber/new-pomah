@@ -41,6 +41,7 @@ const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan se
  * (CPU time terpisah dari wall time selama menunggu I/O LLM).
  */
 const AI_TIMEOUT_MS = 40_000;
+const AI_MAX_ATTEMPTS = 2;
 
 interface SopCache {
   docs: any[];
@@ -401,6 +402,23 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
+  if (!isManager) {
+    try {
+      const { data: handoffState } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
+      const handoffContext = (handoffState as { context?: unknown } | null)?.context;
+      if (
+        handoffContext &&
+        typeof handoffContext === "object" &&
+        (handoffContext as { handoff?: unknown }).handoff === true
+      ) {
+        console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
+        return "skipped_config";
+      }
+    } catch (e) {
+      console.warn("[Autoreply] handoff guard failed (continuing):", e);
+    }
+  }
+
   // ── Zombie rescue: kirim ulang pesan outbound yang tersangkut 'pending' ──
   // Skenario: worker sebelumnya mati setelah menyimpan pesan ke DB
   // (send_status='pending') tapi sebelum memanggil Fonnte API. Pesan itu
@@ -589,7 +607,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  for (let attempt = 1; attempt <= 3 && !reply; attempt++) {
+  for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
@@ -667,6 +685,7 @@ export async function executeAutoreplyForPhone(
           today: todayWIB(),
           origin,
           idempotencyKey: queueEntryId ? `wa_queue:${queueEntryId}` : undefined,
+          llmConfig: { apiKey, baseUrl, model },
         },
         llmConfig: { apiKey, baseUrl, model },
         signal: controller.signal,

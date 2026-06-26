@@ -26,6 +26,12 @@ export interface ToolContext {
   today:          string;
   /** App base URL (e.g. https://pomahguesthouse.com) */
   origin?:        string;
+  /** AI gateway credentials for deterministic helpers that need LLM fallback. */
+  llmConfig?: {
+    apiKey:  string;
+    baseUrl: string;
+    model:   string;
+  };
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   phone?:         string;
   /**
