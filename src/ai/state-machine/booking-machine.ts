@@ -949,7 +949,12 @@ export async function processBookingState(
   }
 
   // Cancellation is destructive, so ask for explicit confirmation first.
-  if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
+  if (
+    CANCELLATION_PATTERNS.test(message) &&
+    state !== "IDLE" &&
+    state !== "PAYMENT_PENDING" &&
+    state !== "COMPLETED"
+  ) {
     context.cancelPreviousState = state;
     await updateBookingState(supabase, phone, "AWAITING_CANCEL_CONFIRMATION", context);
     return {
