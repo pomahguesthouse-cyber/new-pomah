@@ -1795,7 +1795,28 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gt("created_at", entry.created_at)
         .limit(1);
 
-      if ((sameQid ?? []).length > 0 || (anyOut ?? []).length > 0 || (newerQueue ?? []).length > 0) {
+      // (d) queue lock guard: ada worker yang sedang aktif memproses thread
+      // ini (status processing/retrying dengan heartbeat masih segar). Kalau
+      // ada, JANGAN kirim fallback — worker tersebut sedang menyelesaikan
+      // balasan dan fallback akan jadi double-message ke tamu.
+      const lockFreshSinceIso = new Date(Date.now() - 30_000).toISOString();
+      const { data: activeWorker } = await (supabaseAdmin as any)
+        .from("wa_conversation_queue")
+        .select("id, status, locked_at")
+        .eq("thread_id", entry.thread_id)
+        .in("status", ["processing", "retrying"])
+        .gte("locked_at", lockFreshSinceIso)
+        .limit(1);
+
+      if (
+        (sameQid ?? []).length > 0 ||
+        (anyOut ?? []).length > 0 ||
+        (newerQueue ?? []).length > 0 ||
+        (activeWorker ?? []).length > 0
+      ) {
+        console.info(
+          `[Fallback] skip ${entry.id.slice(0, 8)} — fallback_skipped_worker_active=${(activeWorker ?? []).length > 0}`,
+        );
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
           .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent:skipped]") })
