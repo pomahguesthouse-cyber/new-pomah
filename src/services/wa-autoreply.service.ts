@@ -1080,7 +1080,10 @@ export async function executeAutoreplyForPhone(
         .eq("direction", "out")
         .filter("metadata->>queue_entry_id", "eq", queueEntryId)
         .limit(5);
-      const existingFinalForEntry = (existingForEntry ?? []).find((m: any) => (m.metadata as any)?.is_ack !== true);
+      const existingFinalForEntry = (existingForEntry ?? []).find((m: any) => {
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        return meta.is_ack !== true && meta.send_status !== "failed";
+      });
       if (existingFinalForEntry) {
         console.warn(
           `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
@@ -1094,13 +1097,16 @@ export async function executeAutoreplyForPhone(
     const sinceIso = new Date(Date.now() - 300_000).toISOString();
     const { data: recentOut } = await (supabaseAdmin as any)
       .from("whatsapp_messages")
-      .select("id, body, sent_at")
+      .select("id, body, sent_at, metadata")
       .eq("thread_id", c.thread_id)
       .eq("direction", "out")
       .gte("sent_at", sinceIso)
       .order("sent_at", { ascending: false })
       .limit(5);
-    const dup = (recentOut ?? []).find((m: any) => (m.body ?? "").trim() === finalReply.trim());
+    const dup = (recentOut ?? []).find((m: any) => {
+      const meta = (m.metadata ?? {}) as Record<string, unknown>;
+      return meta.is_ack !== true && meta.send_status !== "failed" && (m.body ?? "").trim() === finalReply.trim();
+    });
     if (dup) {
       console.warn(
         `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
