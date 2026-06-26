@@ -556,12 +556,21 @@ async function cleanupPendingBookingAndInvoice(supabase: SupabaseClient, phone: 
     const guestIds = ((guests ?? []) as Array<{ id: string }>).map((g) => g.id);
     if (guestIds.length === 0) return;
 
+    // Hanya cancel booking yang:
+    // 1. Dibuat dalam 24 jam terakhir (bukan booking lama)
+    // 2. Belum ada pembayaran (paid_amount = 0 atau null)
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: bookings } = await (supabase as any)
       .from("bookings")
-      .select("id")
+      .select("id, paid_amount")
       .in("guest_id", guestIds)
-      .in("status", ["pending", "confirmed"]);
-    const bookingIds = ((bookings ?? []) as Array<{ id: string }>).map((b) => b.id);
+      .in("status", ["pending", "confirmed"])
+      .gte("created_at", cutoff);
+
+    const bookingIds = ((bookings ?? []) as Array<{ id: string; paid_amount?: number | null }>)
+      .filter((b) => !b.paid_amount || Number(b.paid_amount) === 0)
+      .map((b) => b.id);
+
     if (bookingIds.length === 0) return;
 
     await (supabase as any)
@@ -940,7 +949,12 @@ export async function processBookingState(
   }
 
   // Cancellation is destructive, so ask for explicit confirmation first.
-  if (CANCELLATION_PATTERNS.test(message) && state !== "IDLE") {
+  if (
+    CANCELLATION_PATTERNS.test(message) &&
+    state !== "IDLE" &&
+    state !== "PAYMENT_PENDING" &&
+    state !== "COMPLETED"
+  ) {
     context.cancelPreviousState = state;
     await updateBookingState(supabase, phone, "AWAITING_CANCEL_CONFIRMATION", context);
     return {
@@ -956,6 +970,34 @@ export async function processBookingState(
   }
 
   if (state === "AWAITING_FORM_SUBMISSION") {
+    // Cek apakah token form sudah expired
+    let tokenExpired = false;
+    if (context.formToken) {
+      try {
+        const { getBookingFormByToken } = await import("@/services/booking-form.service");
+        const formRow = await getBookingFormByToken(supabase, context.formToken);
+        if (!formRow || formRow.status !== "pending" || new Date(formRow.expires_at).getTime() < Date.now()) {
+          tokenExpired = true;
+        }
+      } catch {
+        // Non-fatal: asumsikan tidak expired jika lookup gagal
+      }
+    }
+
+    if (tokenExpired) {
+      // Token expired — reset ke COLLECTING_DATA agar tamu bisa lanjut via chat
+      const { formToken: _ft, ...restContext } = context as any;
+      await updateBookingState(supabase, phone, "COLLECTING_DATA", restContext);
+      return {
+        handled: true,
+        reply:
+          "Mohon maaf Kak, link formulir booking tadi sudah kedaluwarsa (berlaku 30 menit). " +
+          "Tidak apa-apa — saya bantu lanjutkan pengisian langsung di chat ini ya. " +
+          "Data yang sudah ada (kamar & tanggal) masih tersimpan. " +
+          "Mohon ketikkan nama lengkap Kakak untuk melanjutkan:",
+      };
+    }
+
     return {
       handled: true,
       reply:
@@ -1297,6 +1339,14 @@ export async function processBookingState(
   }
 
   if (state === "CONFIRMING_BOOKING") {
+    // Guard: booking sudah dibuat sebelumnya (race condition / double-tap)
+    // Langsung serahkan ke Finance Agent tanpa buat booking baru.
+    if (context.bookingCode) {
+      console.info(`[BookingState] CONFIRMING_BOOKING → PAYMENT_PENDING: bookingCode sudah ada (${context.bookingCode}), skip createBooking.`);
+      await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+      return { handled: false };
+    }
+
     // Koreksi tipe kamar harus diproses sebelum kata konfirmasi. Pesan seperti
     // "eh sorry Family Suite 100 ya" mengandung kata "ya", tetapi maksudnya
     // mengganti kamar — bukan menyetujui ringkasan kamar sebelumnya.
