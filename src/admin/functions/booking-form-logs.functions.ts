@@ -11,6 +11,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 const STATUS_VALUES = ["pending", "sent", "failed", "superseded"] as const;
 export type BookingFormSendStatus = (typeof STATUS_VALUES)[number];
 
+type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+
 export interface BookingFormSendLog {
   id: string;
   token: string;
