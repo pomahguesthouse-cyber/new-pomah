@@ -671,7 +671,7 @@ export function WhatsAppPage() {
                     takeoverMut.mutate(currentlyAi);
                   }}
                   className={cn(
-                    "gap-2 font-medium transition-all rounded-[8px] border-[1.5px] bg-background px-4 py-1.5 h-9",
+                    "h-8 gap-1 rounded-[8px] border-[1.5px] bg-background px-2 text-xs font-medium transition-all sm:h-9 sm:gap-2 sm:px-4 sm:py-1.5 sm:text-sm",
                     "border-[#0e7490] text-[#0e7490] hover:bg-[#0e7490]/5 hover:text-[#0e7490]",
                     "dark:border-cyan-500 dark:text-cyan-400 dark:hover:bg-cyan-950/20"
                   )}
@@ -684,13 +684,15 @@ export function WhatsAppPage() {
                 >
                   {(thread.thread as any).ai_auto === false ? (
                     <>
-                      <ArrowUpRight className="h-4 w-4 stroke-[2.2]" />
-                      Kembalikan ke AI
+                      <ArrowUpRight className="h-3.5 w-3.5 stroke-[2.2] sm:h-4 sm:w-4" />
+                      <span className="sm:hidden">Ke AI</span>
+                      <span className="hidden sm:inline">Kembalikan ke AI</span>
                     </>
                   ) : (
                     <>
-                      <UserCheck className="h-4 w-4 stroke-[2.2]" />
-                      Ambil Alih
+                      <UserCheck className="h-3.5 w-3.5 stroke-[2.2] sm:h-4 sm:w-4" />
+                      <span className="sm:hidden">Alih</span>
+                      <span className="hidden sm:inline">Ambil Alih</span>
                     </>
                   )}
                 </Button>
