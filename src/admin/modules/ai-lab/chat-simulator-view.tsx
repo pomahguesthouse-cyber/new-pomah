@@ -294,6 +294,7 @@ export function ChatSimulatorView() {
     void pollFormSubmission(token);
   }
 
+  async function handleSend() {
     const message = input.trim() || (attachedImage ? "Saya kirim bukti transfer Kak" : "");
     if (!message || sending) return;
     const imgPayload = attachedImage;
