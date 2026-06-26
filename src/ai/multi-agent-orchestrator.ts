@@ -34,6 +34,7 @@ import {
   type TrainingExample,
 } from "./training-rag.service";
 import { normalizeAssistantName } from "./agents/persona";
+import { runDeferred } from "@/lib/cf-context";
 
 const DEFAULT_MAX_TURNS = 5;
 
@@ -728,7 +729,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     classified.confidence > 0.7 &&
     lastUserMsg.trim().length > 0
   ) {
-    void (async () => {
+    void runDeferred("MultiAgent.complaint-escalation", async () => {
       try {
         const db: any = input.toolCtx.supabaseAdmin;
         const { data: existing } = await db
@@ -766,7 +767,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       } catch (e) {
         console.warn("[MultiAgent] Eskalasi komplain gagal:", e);
       }
-    })();
+    });
   }
 
   // 4b. Retrieve training examples (RAG di ai_conversation_logs).
@@ -896,16 +897,15 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   }
   // Fire-and-forget — failure here must not break the reply path.
   if (resolved.topic || resolved.entity || Object.keys(finalSlots).length) {
-    void input.toolCtx.supabaseAdmin
-      .rpc("update_conversation_topic", {
+    void runDeferred("MultiAgent.update-conversation-topic", async () => {
+      const { error } = await input.toolCtx.supabaseAdmin.rpc("update_conversation_topic", {
         p_phone: input.phone,
         p_last_topic: resolved.topic ?? null,
         p_last_entity: resolved.entity ?? null,
         p_slots: finalSlots,
-      })
-      .then(({ error }: { error: unknown }) => {
-        if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
       });
+      if (error) console.warn("[MultiAgent] update_conversation_topic failed:", error);
+    });
   }
 
   // 6. If primary agent failed, fall back to Front Office

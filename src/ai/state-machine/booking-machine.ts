@@ -328,7 +328,6 @@ function buildBookingSummary(
   // --- Resolve extra-bed policy & jumlah extra bed dari DB ---
   const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
   const resolvedExtraBedRate = policy.extrabedRate;
-  if (resolvedExtraBedRate > 0) context.extraBedRate = resolvedExtraBedRate;
 
   const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
   const eb = computeExtraBeds(policy, totalRooms, adults);
@@ -342,6 +341,12 @@ function buildBookingSummary(
   const grandTotal = roomSubtotal + extraBedTotal;
 
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
+  const paymentLine =
+    context.paymentType === "dp"
+      ? `- Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"}\n`
+      : context.paymentType === "full"
+        ? `- Pembayaran: Lunas\n`
+        : "";
 
   const extraBedLine =
     extraBeds > 0
@@ -369,6 +374,7 @@ function buildBookingSummary(
     `- Jumlah tamu: ${adultLine}\n` +
     `- Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
     extraBedLine +
+    paymentLine +
     `- Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
     overCapLine +
     `\n\nApakah data di atas sudah benar dan Kakak ingin melanjutkan ke Booking & Pembayaran? ` +

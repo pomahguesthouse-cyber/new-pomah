@@ -43,13 +43,6 @@ const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan se
 const AI_TIMEOUT_MS = 40_000;
 const AI_MAX_ATTEMPTS = 2;
 
-interface SopCache {
-  docs: any[];
-  fetchedAt: number;
-}
-let globalSopCache: SopCache | null = null;
-const SOP_CACHE_TTL_MS = 10 * 60 * 1000;
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Normalize an Indonesian phone to digits-only with 62 prefix. */
@@ -482,17 +475,14 @@ export async function executeAutoreplyForPhone(
   let brosurFiles: { name: string; url: string }[] = [];
 
   if (sopEnabled) {
-    if (!globalSopCache || Date.now() - globalSopCache.fetchedAt > SOP_CACHE_TTL_MS) {
-      const { data: fetchedDocs } = await (supabaseAdmin as any)
-        .from("sop_documents")
-        .select("name, content, source_url, file_path, doc_category, storage_bucket")
-        .order("created_at", { ascending: true })
-        .limit(40);
-      globalSopCache = { docs: fetchedDocs ?? [], fetchedAt: Date.now() };
-    }
+    const { data: sopDocs } = await (supabaseAdmin as any)
+      .from("sop_documents")
+      .select("name, content, source_url, file_path, doc_category, storage_bucket")
+      .order("created_at", { ascending: true })
+      .limit(40);
     const parts: string[] = [];
     const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
-    for (const d of globalSopCache.docs) {
+    for (const d of sopDocs ?? []) {
       if (isBrosurDoc(d)) {
         if (d.file_path) {
           const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";

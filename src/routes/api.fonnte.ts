@@ -308,7 +308,9 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        void saveMessageMetadata(supabaseAdmin, {
+        const runBackground = await getWaitUntilRunner();
+
+        runBackground(saveMessageMetadata(supabaseAdmin, {
           messageId,
           metadata: {
             intent_label: classifyMessageIntent(displayMessage),
@@ -327,9 +329,7 @@ export const Route = createFileRoute("/api/fonnte")({
                 }
               : null,
           },
-        }).catch((e) => console.warn("[Webhook] intent badge error:", e));
-
-        const runBackground = await getWaitUntilRunner();
+        }).catch((e) => console.warn("[Webhook] intent badge error:", e)));
 
         runBackground((async () => {
           try {

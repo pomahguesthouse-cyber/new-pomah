@@ -31,6 +31,19 @@ function normalizePhoneCandidate(value: unknown): string | undefined {
   return cleaned || undefined;
 }
 
+function samePhone(a: string | undefined, b: string | undefined): boolean {
+  const normalize = (value: string | undefined) => {
+    let p = String(value ?? "").replace(/\D/g, "");
+    if (p.startsWith("620")) p = "62" + p.slice(3);
+    else if (p.startsWith("0")) p = "62" + p.slice(1);
+    else if (p.startsWith("8")) p = "62" + p;
+    return p;
+  };
+  const left = normalize(a);
+  const right = normalize(b);
+  return !!left && !!right && left === right;
+}
+
 export async function parseFonnteBody(
   request: Request,
 ): Promise<ParsedWebhookEvent | null> {
@@ -82,11 +95,11 @@ export async function parseFonnteBody(
     boolish(body.from_me) ||
     boolish(body.isFromMe) ||
     /^(out|outgoing|sent|send)$/i.test(firstString((body as any).direction, (body as any).event) ?? "");
-  const isOutgoing = explicitOutgoing || (!!device && sender === device) || (!!target && target !== sender);
+  const isOutgoing = explicitOutgoing || (!!device && samePhone(sender, device));
 
   const customerPhone =
     isOutgoing
-      ? (target && target !== device ? target : sender !== device ? sender : target ?? sender)
+      ? (target && !samePhone(target, device) ? target : !samePhone(sender, device) ? sender : target ?? sender)
       : sender;
 
   return {
