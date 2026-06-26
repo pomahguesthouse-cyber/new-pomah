@@ -1339,6 +1339,14 @@ export async function processBookingState(
   }
 
   if (state === "CONFIRMING_BOOKING") {
+    // Guard: booking sudah dibuat sebelumnya (race condition / double-tap)
+    // Langsung serahkan ke Finance Agent tanpa buat booking baru.
+    if (context.bookingCode) {
+      console.info(`[BookingState] CONFIRMING_BOOKING → PAYMENT_PENDING: bookingCode sudah ada (${context.bookingCode}), skip createBooking.`);
+      await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+      return { handled: false };
+    }
+
     // Koreksi tipe kamar harus diproses sebelum kata konfirmasi. Pesan seperti
     // "eh sorry Family Suite 100 ya" mengandung kata "ya", tetapi maksudnya
     // mengganti kamar — bukan menyetujui ringkasan kamar sebelumnya.
