@@ -28,6 +28,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
+<<<<<<< Updated upstream
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
  * Tool `generate_booking_form` menyisipkan baris `pending` di
@@ -66,6 +67,10 @@ async function updateBookingFormSendLog(args: {
 
 
 const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
+=======
+const FALLBACK_MESSAGE =
+  "Mohon maaf Kak, pengecekan otomatis kami belum selesai. Pesan Kakak sudah kami teruskan ke tim dan akan segera dibalas. 🙏";
+>>>>>>> Stashed changes
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
@@ -265,6 +270,159 @@ function buildFastFaqReply(
   }
 
   return null;
+}
+
+const ID_MONTHS: Record<string, number> = {
+  jan: 1, januari: 1,
+  feb: 2, februari: 2, pebruari: 2,
+  mar: 3, maret: 3,
+  apr: 4, april: 4,
+  mei: 5,
+  jun: 6, juni: 6,
+  jul: 7, juli: 7,
+  agu: 8, agt: 8, agustus: 8,
+  sep: 9, sept: 9, september: 9,
+  okt: 10, oktober: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12,
+};
+
+function makeIsoDate(day: number, month: number, year: number): string | null {
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return null;
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() + 1 !== month || d.getUTCDate() !== day) return null;
+  return iso;
+}
+
+function resolveYear(month: number, explicitYear: string | undefined, today: string): number {
+  if (explicitYear) {
+    return Number(explicitYear.length === 2 ? `20${explicitYear}` : explicitYear);
+  }
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  return month < currentMonth ? currentYear + 1 : currentYear;
+}
+
+function parseAvailabilityDateRange(message: string, today: string): { checkIn: string; checkOut: string } | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  const todayMatch = /\b(malam ini|nanti malam|hari ini|today)\b/i.test(text);
+  if (todayMatch) return { checkIn: today, checkOut: nextDay(today) };
+  if (/\b(besok|tomorrow)\b/i.test(text)) {
+    const checkIn = nextDay(today);
+    return { checkIn, checkOut: nextDay(checkIn) };
+  }
+  if (/\blusa\b/i.test(text)) {
+    const checkIn = nextDay(nextDay(today));
+    return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  let m = text.match(/\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
+  if (m) {
+    const [, d1Raw, d2Raw, monthName, yearRaw] = m;
+    const month = ID_MONTHS[monthName];
+    if (!month) return null;
+    const year = resolveYear(month, yearRaw, today);
+    const checkIn = makeIsoDate(Number(d1Raw), month, year);
+    const checkOut = makeIsoDate(Number(d2Raw), month, year);
+    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+  }
+
+  m = text.match(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
+  if (m) {
+    const [, dayRaw, monthName, yearRaw] = m;
+    const month = ID_MONTHS[monthName];
+    if (!month) return null;
+    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  m = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?\b/i);
+  if (m) {
+    const [, dayRaw, monthRaw, yearRaw] = m;
+    const month = Number(monthRaw);
+    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+  }
+
+  return null;
+}
+
+function shouldUseDeterministicAvailability(message: string): boolean {
+  const text = message.toLowerCase();
+  const asksAvailability =
+    /\b(ready|tersedia|available|avail|kosong|ada kamar|ada yg|ada yang|ada untuk|kamar.*ada|cek.*kamar|booking|pesan kamar|menginap)\b/i.test(text);
+  const hasDateSignal =
+    /\b(hari ini|malam ini|besok|lusa|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/i.test(text) ||
+    /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text) ||
+    /\b\d{1,2}[\/.]\d{1,2}\b/i.test(text);
+  return asksAvailability && hasDateSignal;
+}
+
+function formatAvailabilityReply(raw: string): FastFaqResult | null {
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(data.kamar)) return null;
+  const period = typeof data.periode === "string" ? data.periode : data.tanggal ?? "tanggal tersebut";
+  const rooms = data.kamar as Array<Record<string, unknown>>;
+  const available = rooms.filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true);
+
+  if (available.length === 0) {
+    return {
+      intent: "deterministic_availability_full",
+      reply:
+        `Mohon maaf Kak, untuk periode ${period} kamar kami sudah penuh.\n\n` +
+        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cekkan lagi.",
+    };
+  }
+
+  const lines = available.slice(0, 5).map((r) => {
+    const count = Number(r.kamar_tersedia ?? 0);
+    const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0);
+    const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+    return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}`;
+  });
+
+  return {
+    intent: "deterministic_availability",
+    reply:
+      `Untuk periode ${period}, masih tersedia:\n${lines.join("\n")}\n\n` +
+      "Kakak rencana untuk berapa orang?",
+  };
+}
+
+async function buildDeterministicAvailabilityReply(params: {
+  message: string;
+  rooms: any[];
+  property: any;
+  origin: string;
+}): Promise<FastFaqResult | null> {
+  if (!shouldUseDeterministicAvailability(params.message)) return null;
+  const today = todayWIB();
+  const range = parseAvailabilityDateRange(params.message, today);
+  if (!range) return null;
+
+  const raw = await checkRoomAvailability(
+    { check_in: range.checkIn, check_out: range.checkOut },
+    {
+      supabasePublic: supabasePublic as any,
+      supabaseAdmin: supabaseAdmin as any,
+      rooms: params.rooms,
+      property: params.property,
+      today,
+      origin: params.origin,
+    } as any,
+  );
+
+  return formatAvailabilityReply(raw);
 }
 
 function isTonightReply(message: string): boolean {
@@ -821,6 +979,31 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] deterministic tonight price failed (falling back to AI):", e);
+    }
+  }
+
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    try {
+      const availabilityReply = await buildDeterministicAvailabilityReply({
+        message: lastMessage,
+        rooms: rooms ?? [],
+        property: p,
+        origin,
+      });
+      if (availabilityReply) {
+        reply = availabilityReply.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: availabilityReply.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["deterministic-availability"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Deterministic availability reply for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] deterministic availability failed (falling back to AI):", e);
     }
   }
 
