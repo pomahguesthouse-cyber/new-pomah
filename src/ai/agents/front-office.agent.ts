@@ -133,12 +133,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "dalam keadaan apa pun, meskipun tamu menyapa demikian. Gunakan sapaan netral seperti " +
       "'Halo Kak' atau langsung 'Baik Kak'. Larangan ini berlaku di SEMUA turn.",
 
-    "SAPAAN AWAL: Saat tamu BARU menyapa TANPA menyebut kebutuhan, balas hangat dengan " +
+    "SAPAAN AWAL: Saat tamu BARU menyapa TANPA menyebut kebutuhan (contoh: 'halo', 'selamat pagi'), balas hangat dengan " +
       "'Halo Kak' (atau variasi netral tanpa kata 'selamat ...') dan langsung tawarkan bantuan — " +
       "JANGAN membuat satu giliran khusus hanya untuk menanyakan nama. " +
-      "Jika tamu SUDAH menyebut kebutuhan, JANGAN tanya nama lebih dulu — layani kebutuhannya, " +
-      "sisipkan permintaan nama secara natural. Bila tamu tidak menyebut nama, ABAIKAN — " +
-      "nama akan dikumpulkan otomatis saat proses booking.",
+      "JANGAN PERNAH memanggil tool check_room_availability jika tamu HANYA menyapa. Tunggu sampai tamu secara eksplisit menanyakan kamar, harga, atau ingin booking. " +
+      "Bila tamu tidak menyebut nama, ABAIKAN — nama akan dikumpulkan otomatis saat proses booking.",
 
     "ANTI-PENGULANGAN SAPAAN: Kalimat sapaan pembuka HANYA boleh muncul di TURN PERTAMA. " +
       "Pada turn berikutnya WAJIB jawab pertanyaan tamu langsung tanpa sapaan apa pun. " +

@@ -16,6 +16,26 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function resolveRoomType(input: string, rooms: Array<{ id: string; name: string; }>) {
+  if (!input) return null;
+  const s = input.toLowerCase().trim().replace(/^(kamar|room|no\.?)\s+/i, "").replace(/\s+/g, " ");
+  
+  // 1. Strict exact/priority mapping
+  if (s.includes("grand deluxe")) return rooms.find(r => r.name.toLowerCase() === "grand deluxe");
+  if (s === "deluxe" || s.includes("kamar deluxe")) return rooms.find(r => r.name.toLowerCase() === "deluxe");
+  if (s.includes("single")) return rooms.find(r => r.name.toLowerCase() === "single");
+  if (s.includes("family suite") || s.includes("suite 100")) return rooms.find(r => r.name.toLowerCase() === "family suite 100");
+  if (s.includes("family room") || s.includes("room 222")) return rooms.find(r => r.name.toLowerCase() === "family room 222");
+
+  // 2. Fallback
+  return rooms.find(r => r.name.toLowerCase() === s) ?? 
+         rooms.find(r => {
+           const n = r.name.toLowerCase();
+           if (s === "deluxe" && n.includes("grand")) return false; // Prevent deluxe -> grand deluxe
+           return n.includes(s) || s.includes(n);
+         });
+}
+
 export const startBookingDetails: ToolHandler = async (
   args: Record<string, unknown>,
   ctx: ToolContext,
@@ -94,17 +114,7 @@ export const startBookingDetails: ToolHandler = async (
       if (!rName) continue;
 
       const cleanName = rName.replace(/^(kamar|room|no\.?)\s+/i, "").trim();
-      let rt =
-        ctx.rooms.find((r) => r.name.toLowerCase() === rName) ??
-        ctx.rooms.find((r) => {
-          const n = r.name.toLowerCase();
-          return n.includes(rName) || rName.includes(n);
-        }) ??
-        ctx.rooms.find((r) => r.name.toLowerCase() === cleanName) ??
-        ctx.rooms.find((r) => {
-          const n = r.name.toLowerCase();
-          return n.includes(cleanName) || cleanName.includes(n);
-        });
+      let rt = resolveRoomType(rName, ctx.rooms);
 
       if (!rt) {
         // Fallback: Check if cleanName is a physical room number in the DB
@@ -163,17 +173,7 @@ export const startBookingDetails: ToolHandler = async (
     }
 
     const cleanTypeName = roomTypeName.replace(/^(kamar|room|no\.?)\s+/i, "").trim();
-    let rt =
-      ctx.rooms.find((r) => r.name.toLowerCase() === roomTypeName) ??
-      ctx.rooms.find((r) => {
-        const n = r.name.toLowerCase();
-        return n.includes(roomTypeName) || roomTypeName.includes(n);
-      }) ??
-      ctx.rooms.find((r) => r.name.toLowerCase() === cleanTypeName) ??
-      ctx.rooms.find((r) => {
-        const n = r.name.toLowerCase();
-        return n.includes(cleanTypeName) || cleanTypeName.includes(n);
-      });
+    let rt = resolveRoomType(roomTypeName, ctx.rooms);
 
     if (!rt) {
       // Fallback: Check if cleanTypeName is a physical room number in the DB

@@ -1331,6 +1331,13 @@ export async function processBookingState(
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
     const trimmedMessage = message.trim();
 
+    // Fallback: If we specifically need a name and the user provides a short unlabelled string that looks like a name.
+    if (!context.guestName && !extracted.guest_name) {
+      if (!extracted.check_in && !extracted.room_type && looksLikePersonName(trimmedMessage)) {
+        extracted.guest_name = cleanNameCandidate(trimmedMessage);
+      }
+    }
+
     // Guard override test 4
     const diffs: string[] = [];
     if (extracted.guest_name && context.guestName && extracted.guest_name.toLowerCase() !== context.guestName.toLowerCase()) {

@@ -784,7 +784,7 @@ export async function executeAutoreplyForPhone(
     // Check database for saved mode
     const { data: modeRow } = await (supabaseAdmin as any)
       .from("user_modes")
-      .select("mode")
+      .select("mode, updated_at")
       .eq("phone", phone)
       .maybeSingle();
 
@@ -794,22 +794,34 @@ export async function executeAutoreplyForPhone(
 
     if (lastIn === "/guest" || lastIn === "/admin") {
       const nextMode = lastIn === "/guest" ? "guest" : "admin";
-      await (supabaseAdmin as any)
-        .from("user_modes")
-        .upsert({ phone, mode: nextMode, updated_at: new Date().toISOString() });
       
-      const ack = nextMode === "guest"
-        ? "✅ Mode Guest aktif. Chatbot akan merespons sebagai Rani."
-        : "✅ Mode Admin aktif. Chatbot akan merespons sebagai Asisten Admin.";
+      const lastCmdTime = modeRow?.updated_at ? new Date(modeRow.updated_at).getTime() : 0;
+      const isDuplicate = modeRow?.mode === nextMode && (Date.now() - lastCmdTime < 30000);
       
-      if (c.fonnte_token) {
-        const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
-        if (ok) {
-          await saveOutboundMessage(supabaseAdmin as any, {
-            threadId: c.thread_id,
-            body: ack,
-            metadata: { agent: "system_mode_toggle" },
-          });
+      if (!isDuplicate) {
+        const adminDb = supabaseAdmin as any;
+        await adminDb
+          .from("user_modes")
+          .upsert({ phone, mode: nextMode, updated_at: new Date().toISOString() });
+          
+        // RESET STATE
+        await adminDb.from("booking_states").delete().eq("phone", phone);
+        await adminDb.from("chat_summaries").delete().eq("phone", phone);
+        await adminDb.from("conversation_monitor").delete().eq("phone", phone);
+        
+        const ack = nextMode === "guest"
+          ? "✅ Mode Guest aktif. Chatbot akan merespons sebagai Rani."
+          : "✅ Mode Admin aktif. Chatbot akan merespons sebagai Asisten Admin.";
+        
+        if (c.fonnte_token) {
+          const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
+          if (ok) {
+            await saveOutboundMessage(adminDb, {
+              threadId: c.thread_id,
+              body: ack,
+              metadata: { agent: "system_mode_toggle" },
+            });
+          }
         }
       }
       return "ok";
@@ -1367,6 +1379,9 @@ export async function executeAutoreplyForPhone(
 
       if (orchResult?.reply) {
         reply = orchResult.reply;
+        
+        console.info(`[Inbound Processing] Phone: ${phone.slice(-6)} | Mode: ${mode} | PrevState: ${bookingState?.state || "IDLE"} | Msg: "${lastMessage}" | Agent: ${orchResult.agentKey} | Intent: ${orchResult.intent} | Tools: ${(orchResult.toolsUsed ?? []).join(",")}`);
+
         // Resolve all retry attempts for this message execution
         const updateQuery = (supabaseAdmin as any).from("ai_retry_audit").update({ resolved: true });
         if (queueEntryId) {
