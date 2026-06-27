@@ -702,7 +702,26 @@ export async function executeAutoreplyForPhone(
   origin: string,
   onBeforeAttempt?: () => Promise<void>,
   queueEntryId?: string,
+  onReplyCommitted?: () => Promise<void>,
 ): Promise<AutoreplyOutcome> {
+  const deferredAfterReply: Array<{ label: string; task: () => Promise<unknown> }> = [];
+  const deferAfterReply = (label: string, task: () => Promise<unknown>) => {
+    deferredAfterReply.push({ label, task });
+  };
+  const flushDeferredAfterReply = () => {
+    for (const deferred of deferredAfterReply) {
+      void runDeferred(deferred.label, deferred.task);
+    }
+  };
+  const markReplyCommitted = async () => {
+    if (!onReplyCommitted) return;
+    try {
+      await onReplyCommitted();
+    } catch (e) {
+      console.warn("[Autoreply] Early queue completion failed (will retry after return):", e);
+    }
+  };
+
   const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc("get_autoreply_context", { p_phone: phone });
 
   if (ctxErr || !ctx) {
@@ -1082,7 +1101,7 @@ export async function executeAutoreplyForPhone(
             context: bookingContext,
           });
           // Notify super admin secara fire-and-forget.
-          void runDeferred("Autoreply.handoffNotify", async () => {
+          deferAfterReply("Autoreply.handoffNotify", async () => {
             try {
               const { notifyBotLoop } = await import("@/services/manager-notifier.service");
               await notifyBotLoop(supabaseAdmin as any, {
@@ -1372,7 +1391,7 @@ export async function executeAutoreplyForPhone(
       // berlaku baik saat ada reply maupun saat orchestrator gagal.
       if (orchResult?.loopAlert) {
         const la = orchResult.loopAlert;
-        void runDeferred("Autoreply.notifyBotLoop", async () => {
+        deferAfterReply("Autoreply.notifyBotLoop", async () => {
           try {
             const { notifyBotLoop } = await import("@/services/manager-notifier.service");
             await notifyBotLoop(supabaseAdmin as any, {
@@ -1653,6 +1672,7 @@ export async function executeAutoreplyForPhone(
 
   void updateBookingFormSendLog({ body: finalReply, status: "sent" });
 
+  await markReplyCommitted();
 
   void updateThreadAutoReplyMeta(supabaseAdmin, {
     threadId: c.thread_id,
@@ -1663,7 +1683,7 @@ export async function executeAutoreplyForPhone(
   // Hitung berapa kali berturut-turut fallback dalam sesi ini.
   // Kami perkirakan dari metadata pesan outbound terakhir — bukan state
   // persisten agar tidak menambah latensi ke hot-path.
-  void runDeferred("Autoreply.conversationMonitor", async () => {
+  deferAfterReply("Autoreply.conversationMonitor", async () => {
     try {
       // Hitung consecutive fallbacks: lihat N pesan outbound terakhir
       const { data: recentOut } = await (supabaseAdmin as any)
@@ -1729,7 +1749,7 @@ export async function executeAutoreplyForPhone(
         `[SessionSummarizer] cooldown di-override karena pesan penting ` + `(thread ${c.thread_id.slice(0, 8)})`,
       );
     }
-    void runDeferred("Autoreply.sessionSummarizer", async () => {
+    deferAfterReply("Autoreply.sessionSummarizer", async () => {
       try {
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
@@ -1752,6 +1772,8 @@ export async function executeAutoreplyForPhone(
       }
     });
   }
+
+  flushDeferredAfterReply();
 
   console.log(
     `[Autoreply] ✓ Sent to ${phone.slice(-6)} ` +
@@ -1820,6 +1842,12 @@ export async function drainQueue(
   const handleOne = async (claim: (typeof claims)[number]) => {
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
+    let queueCompleted = false;
+    const completeQueue = async (completionResult: string) => {
+      if (queueCompleted) return;
+      await queueComplete(supabaseAdmin, claim.entryId, workerId, completionResult);
+      queueCompleted = true;
+    };
 
     const heartbeatTimer = setInterval(() => {
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
@@ -1834,6 +1862,7 @@ export async function drainQueue(
           origin,
           () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
           claim.entryId,
+          () => completeQueue("sent"),
         );
       }
     } catch (e) {
@@ -1845,7 +1874,7 @@ export async function drainQueue(
 
     if (outcome === "ok" || NON_RETRYABLE_OUTCOMES.has(outcome)) {
       const completionResult = outcome === "ok" ? "sent" : outcome;
-      await queueComplete(supabaseAdmin, claim.entryId, workerId, completionResult);
+      await completeQueue(completionResult);
     } else {
       await queueFail(supabaseAdmin, claim.entryId, workerId, outcome);
     }
