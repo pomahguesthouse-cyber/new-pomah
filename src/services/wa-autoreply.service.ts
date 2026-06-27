@@ -1774,8 +1774,11 @@ export async function recoverUnqueuedInboundMessages(options?: {
         messageId: row.id,
         body: row.body ?? "",
         delayMs: 0,
-        maxWaitMs: 1_000,
+        // Beri jendela 30 detik agar worker sempat menjawab; 1s sebelumnya
+        // langsung memicu max_wait_exceeded dan fallback "sistem sibuk".
+        maxWaitMs: 30_000,
       });
+
 
       if (entry?.entryId) {
         recovered++;
@@ -1807,16 +1810,25 @@ export async function sendFailureFallbackToGuests(): Promise<{
   notified: number;
 }> {
   const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  // Grace period: jangan kirim fallback langsung setelah entry di-mark
+  // failed. Worker bisa saja masih hidup memproses outbound (Fonnte +
+  // persistence) walau heartbeat telat. Tunggu 90 detik sejak completed_at
+  // — jika benar-benar mati, fallback akan tetap terkirim. Jika worker
+  // sebenarnya berhasil, pengecekan outbound di bawah akan menangkapnya
+  // dan kita skip.
+  const graceCutoffIso = new Date(Date.now() - 90_000).toISOString();
   const { data: failedEntries } = await (supabaseAdmin as any)
     .from("wa_conversation_queue")
-    .select("id, phone, thread_id, created_at, completed_at, last_error")
+    .select("id, phone, thread_id, created_at, completed_at, last_error, last_message_id")
     .eq("status", "failed")
     .gte("completed_at", sinceIso)
+    .lte("completed_at", graceCutoffIso)
     .limit(20);
 
   if (!failedEntries || failedEntries.length === 0) {
     return { notified: 0 };
   }
+
 
   let notified = 0;
   for (const entry of failedEntries as any[]) {
@@ -1867,14 +1879,27 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gte("locked_at", lockFreshSinceIso)
         .limit(1);
 
+      // (e) inbound baru dari guest setelah entry ini → guest sudah lanjut
+      // mengirim pesan baru. Kirim fallback hanya akan membingungkan: pesan
+      // "sistem sibuk" muncul setelah guest sudah pindah topik. Biarkan
+      // burst baru yang menjawab.
+      const { data: newerInbound } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", entry.thread_id)
+        .eq("direction", "in")
+        .gt("sent_at", entry.created_at)
+        .limit(1);
+
       if (
         (sameQid ?? []).length > 0 ||
         (anyOut ?? []).length > 0 ||
         (newerQueue ?? []).length > 0 ||
-        (activeWorker ?? []).length > 0
+        (activeWorker ?? []).length > 0 ||
+        (newerInbound ?? []).length > 0
       ) {
         console.info(
-          `[Fallback] skip ${entry.id.slice(0, 8)} — fallback_skipped_worker_active=${(activeWorker ?? []).length > 0}`,
+          `[Fallback] skip ${entry.id.slice(0, 8)} — worker_active=${(activeWorker ?? []).length > 0} newer_inbound=${(newerInbound ?? []).length > 0}`,
         );
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
@@ -1882,6 +1907,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
           .eq("id", entry.id);
         continue;
       }
+
     } catch (e) {
       console.warn("[Fallback] outbound lookup failed:", e);
     }
