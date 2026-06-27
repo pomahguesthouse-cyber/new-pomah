@@ -1774,8 +1774,11 @@ export async function recoverUnqueuedInboundMessages(options?: {
         messageId: row.id,
         body: row.body ?? "",
         delayMs: 0,
-        maxWaitMs: 1_000,
+        // Beri jendela 30 detik agar worker sempat menjawab; 1s sebelumnya
+        // langsung memicu max_wait_exceeded dan fallback "sistem sibuk".
+        maxWaitMs: 30_000,
       });
+
 
       if (entry?.entryId) {
         recovered++;
