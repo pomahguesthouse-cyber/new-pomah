@@ -1807,16 +1807,25 @@ export async function sendFailureFallbackToGuests(): Promise<{
   notified: number;
 }> {
   const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  // Grace period: jangan kirim fallback langsung setelah entry di-mark
+  // failed. Worker bisa saja masih hidup memproses outbound (Fonnte +
+  // persistence) walau heartbeat telat. Tunggu 90 detik sejak completed_at
+  // — jika benar-benar mati, fallback akan tetap terkirim. Jika worker
+  // sebenarnya berhasil, pengecekan outbound di bawah akan menangkapnya
+  // dan kita skip.
+  const graceCutoffIso = new Date(Date.now() - 90_000).toISOString();
   const { data: failedEntries } = await (supabaseAdmin as any)
     .from("wa_conversation_queue")
-    .select("id, phone, thread_id, created_at, completed_at, last_error")
+    .select("id, phone, thread_id, created_at, completed_at, last_error, last_message_id")
     .eq("status", "failed")
     .gte("completed_at", sinceIso)
+    .lte("completed_at", graceCutoffIso)
     .limit(20);
 
   if (!failedEntries || failedEntries.length === 0) {
     return { notified: 0 };
   }
+
 
   let notified = 0;
   for (const entry of failedEntries as any[]) {
