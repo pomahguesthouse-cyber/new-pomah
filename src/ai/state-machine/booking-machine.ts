@@ -10,6 +10,10 @@ import { extractAllSlots, getMissingSlots, formatPartialBookingSummary } from ".
 export type BookingState =
   | "IDLE"
   | "AWAITING_DATES"
+  | "WAITING_DATE_CHANGE"
+  | "WAITING_DATE_CHANGE_CONFIRMATION"
+  | "DATE_CHANGE_RECEIVED"
+  | "CHECK_AVAILABILITY_AFTER_DATE_CHANGE"
   | "AWAITING_ALTERNATIVE_ROOM_TYPE"
   | "ROOM_SELECTED"
   | "AWAITING_FORM_SUBMISSION"
@@ -208,22 +212,98 @@ function phoneCandidates(...values: Array<string | null | undefined>): string[] 
 
 /** Format YYYY-MM-DD ke "10 Juni 2026" dalam bahasa Indonesia. */
 function formatDateId(iso: string): string {
-  const months = [
-    "Januari",
-    "Februari",
-    "Maret",
-    "April",
-    "Mei",
-    "Juni",
-    "Juli",
-    "Agustus",
-    "September",
-    "Oktober",
-    "November",
-    "Desember",
-  ];
-  const [year, month, day] = iso.split("-").map(Number);
-  return `${day} ${months[month - 1]} ${year}`;
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const months = [
+      "Januari",
+      "Februari",
+      "Maret",
+      "April",
+      "Mei",
+      "Juni",
+      "Juli",
+      "Agustus",
+      "September",
+      "Oktober",
+      "November",
+      "Desember",
+    ];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch {
+    return iso;
+  }
+}
+
+export function parseDateUpdate(input: string, todayWIB: string): { checkIn: string; checkOut: string; nights: number } | null {
+  const text = input.toLowerCase();
+  let checkInDate = new Date(todayWIB);
+  let nights = 1;
+  let foundCheckIn = false;
+
+  if (text.includes("hari ini")) {
+    checkInDate = new Date(todayWIB);
+    foundCheckIn = true;
+  } else if (text.includes("besok")) {
+    checkInDate = new Date(todayWIB);
+    checkInDate.setDate(checkInDate.getDate() + 1);
+    foundCheckIn = true;
+  } else if (text.includes("lusa")) {
+    checkInDate = new Date(todayWIB);
+    checkInDate.setDate(checkInDate.getDate() + 2);
+    foundCheckIn = true;
+  } else {
+    const dateMatch = text.match(/(\d{1,2})\s+(jan|feb|mar|apr|mei|jun|jul|agu|sep|okt|nov|des)[a-z]*\b/);
+    if (dateMatch) {
+      const day = parseInt(dateMatch[1], 10);
+      const monthStr = dateMatch[2];
+      const months = ["jan", "feb", "mar", "apr", "mei", "jun", "jul", "agu", "sep", "okt", "nov", "des"];
+      const monthIndex = months.indexOf(monthStr);
+      if (monthIndex !== -1) {
+        const now = new Date(todayWIB);
+        let year = now.getFullYear();
+        const parsedDate = new Date(year, monthIndex, day);
+        if (now.getTime() - parsedDate.getTime() > 180 * 24 * 60 * 60 * 1000) {
+          year++;
+        }
+        checkInDate = new Date(year, monthIndex, day);
+        foundCheckIn = true;
+      }
+    } else {
+      const dateOnlyMatch = text.match(/tanggal\s+(\d{1,2})\b/);
+      if (dateOnlyMatch) {
+        const day = parseInt(dateOnlyMatch[1], 10);
+        const now = new Date(todayWIB);
+        checkInDate = new Date(now.getFullYear(), now.getMonth(), day);
+        if (day < now.getDate()) {
+          checkInDate.setMonth(checkInDate.getMonth() + 1);
+        }
+        foundCheckIn = true;
+      }
+    }
+  }
+
+  const nightsMatch = text.match(/(\d+)\s+malam/);
+  if (nightsMatch) {
+    nights = parseInt(nightsMatch[1], 10);
+  }
+
+  if (!foundCheckIn && !nightsMatch) {
+    return null;
+  }
+
+  // Adjust timezone offset to avoid JS date shifting back a day
+  const tzOffset = checkInDate.getTimezoneOffset() * 60000;
+  const localCheckIn = new Date(checkInDate.getTime() - tzOffset);
+  const checkOutDate = new Date(localCheckIn.getTime());
+  checkOutDate.setDate(checkOutDate.getDate() + nights);
+
+  return {
+    checkIn: localCheckIn.toISOString().slice(0, 10),
+    checkOut: checkOutDate.toISOString().slice(0, 10),
+    nights
+  };
 }
 
 /**
@@ -975,6 +1055,71 @@ export async function processBookingState(
     return { handled: false }; // Handled by LLM via normal AI workflow
   }
 
+  if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
+    const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
+    const dateUpdate = parseDateUpdate(message, todayStr);
+
+    if (dateUpdate) {
+      context.checkIn = dateUpdate.checkIn;
+      context.checkOut = dateUpdate.checkOut;
+      
+      const { checkRoomAvailability } = await import("@/tools/availability.tool");
+      const result = await checkRoomAvailability(JSON.stringify({
+        check_in: dateUpdate.checkIn,
+        check_out: dateUpdate.checkOut,
+        room_type: context.roomType || undefined
+      }), ctx);
+
+      let isAvailable = false;
+      try {
+        const availData = JSON.parse(result.output);
+        if (availData.kamar && availData.kamar.length > 0) {
+          const room = context.roomType 
+             ? availData.kamar.find((r: any) => r.nama.toLowerCase() === context.roomType!.toLowerCase())
+             : availData.kamar[0];
+          if (room && room.kamar_tersedia > 0) {
+            isAvailable = true;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      if (isAvailable) {
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return {
+          handled: true,
+          reply: `Baik Kak, saya ubah tanggalnya ke ${formatDateId(dateUpdate.checkIn)} – ${formatDateId(dateUpdate.checkOut)} untuk ${dateUpdate.nights} malam. ` + 
+                 `Saya cek ketersediaan kamar ${context.roomType || ''} dulu ya.\n\n` +
+                 `${context.roomType || 'Kamar'} tersedia untuk tanggal tersebut. Data booking sementara:\n` +
+                 `- Nama: ${context.guestName || "Belum ada"}\n` +
+                 `- No HP: ${context.guestPhone || "Belum ada"}\n` +
+                 `- Kamar: ${context.roomType || "Belum ada"}\n` +
+                 `- Check-in: ${formatDateId(dateUpdate.checkIn)}\n` +
+                 `- Check-out: ${formatDateId(dateUpdate.checkOut)}\n` +
+                 `Apakah sudah sesuai?`
+        };
+      } else {
+        await updateBookingState(supabase, phone, "WAITING_DATE_CHANGE", context);
+        return {
+          handled: true,
+          reply: `Mohon maaf Kak, ${context.roomType || 'kamar'} tidak tersedia untuk ${formatDateId(dateUpdate.checkIn)} – ${formatDateId(dateUpdate.checkOut)}. Yang tersedia mungkin tipe lain, atau Kakak ingin ganti tanggal?`
+        };
+      }
+    } else {
+      const confirmMatch = message.match(/\b(ya|iya|benar|saya rubah|ubah|ganti)\b/i);
+      if (confirmMatch) {
+        if (context.checkIn && new Date(context.checkIn) >= new Date(todayStr)) {
+          await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+          return { handled: true, reply: "Baik Kak, tanggal sudah dikonfirmasi. Ketersediaan masih aman." };
+        } else {
+          return { handled: true, reply: "Baik Kak, tanggal barunya untuk kapan dan berapa malam?" };
+        }
+      }
+      return { handled: false };
+    }
+  }
+
   if (state === "AWAITING_FORM_SUBMISSION") {
     // Cek apakah token form sudah expired
     let tokenExpired = false;
@@ -1186,8 +1331,52 @@ export async function processBookingState(
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
     const trimmedMessage = message.trim();
 
+    // Guard override test 4
+    const diffs: string[] = [];
+    if (extracted.guest_name && context.guestName && extracted.guest_name.toLowerCase() !== context.guestName.toLowerCase()) {
+      diffs.push(`atas nama ${extracted.guest_name}`);
+    }
+    if (extracted.check_in && context.checkIn && extracted.check_in !== context.checkIn) {
+      const out = extracted.check_out ? `–${formatDateId(extracted.check_out)}` : "";
+      diffs.push(`tanggal ${formatDateId(extracted.check_in)}${out}`);
+    }
+    
+    if (diffs.length > 0 && !context.pendingOverride) {
+      context.pendingOverride = extracted;
+      await updateBookingState(supabase, phone, state, context);
+      return {
+        handled: true,
+        reply: `Kak, apakah data booking ingin diganti menjadi ${diffs.join(" ")}? Balas "Ya" jika setuju.`
+      };
+    }
+    
+    if (context.pendingOverride) {
+      if (/\\b(ya|iya|setuju|benar|ganti)\\b/i.test(trimmedMessage)) {
+        Object.assign(extracted, context.pendingOverride);
+        context.pendingOverride = undefined;
+      } else {
+        context.pendingOverride = undefined;
+        // Ignore overrides if not confirmed
+        extracted.guest_name = undefined;
+        extracted.check_in = undefined;
+        extracted.check_out = undefined;
+        return { handled: true, reply: "Baik Kak, kita tetap gunakan data yang sebelumnya ya. Silakan lanjutkan." };
+      }
+    }
+
     // Merge extracted values to context
-    if (extracted.check_in) context.checkIn = extracted.check_in;
+    if (extracted.check_in) {
+      if (new Date(extracted.check_in) < new Date(todayStr)) {
+        context.checkIn = undefined;
+        context.checkOut = undefined;
+        await updateBookingState(supabase, phone, state, context);
+        return {
+          handled: true,
+          reply: "Maaf Kak, tanggal check-in tidak boleh di masa lalu. Untuk tanggal barunya kapan ya?"
+        };
+      }
+      context.checkIn = extracted.check_in;
+    }
     if (extracted.check_out) context.checkOut = extracted.check_out;
 
     if (extracted.room_type) {

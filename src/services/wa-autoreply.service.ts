@@ -27,6 +27,7 @@ import { findTrainingSignals } from "@/services/training-retrieval.service";
 import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
+import { getBookingState } from "@/ai/state-machine/booking-machine";
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -67,6 +68,22 @@ async function updateBookingFormSendLog(args: {
 
 const FALLBACK_MESSAGE = "Maaf Kak, sistem sedang lambat. Data terakhir sudah saya simpan. Kakak bisa ketik 'lanjut' untuk meneruskan.";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
+
+function buildStateAwareFallback(state?: string): string {
+  if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
+    return "Baik Kak, untuk melanjutkan booking, tanggal barunya kapan dan berapa malam?";
+  }
+  if (state === "AWAITING_NAME" || state === "CONFIRMING_NAME") {
+    return "Baik Kak, mohon ketikkan nama lengkap untuk booking ini.";
+  }
+  if (state === "AWAITING_PHONE" || state === "CONFIRMING_PHONE") {
+    return "Baik Kak, mohon ketikkan nomor WhatsApp yang bisa dihubungi.";
+  }
+  if (state === "CONFIRMING_BOOKING") {
+    return "Apakah data booking sudah sesuai? Kakak bisa balas Ya, Lanjut, atau Batal.";
+  }
+  return FALLBACK_MESSAGE;
+}
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
 const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
@@ -1444,7 +1461,17 @@ export async function executeAutoreplyForPhone(
   if (quickAckTimer) clearTimeout(quickAckTimer);
   if (metrics.aiStartedAt && !metrics.aiFinishedAt) metrics.aiFinishedAt = Date.now();
 
-  const rawReply = reply ?? FALLBACK_MESSAGE;
+  let finalFallback = FALLBACK_MESSAGE;
+  if (!reply) {
+    try {
+      const stateRecord = await getBookingState(supabaseAdmin as any, phone);
+      finalFallback = buildStateAwareFallback(stateRecord.state);
+    } catch (err) {
+      console.warn("[Autoreply] Failed to fetch state for fallback:", err);
+    }
+  }
+
+  const rawReply = reply ?? finalFallback;
   const isFallback = !reply;
   // Saat fallback dikirim, catat ALASAN-nya supaya dashboard/Activity Log bisa
   // membedakan timeout vs. max-turns vs. gateway-error vs. balasan kosong —
