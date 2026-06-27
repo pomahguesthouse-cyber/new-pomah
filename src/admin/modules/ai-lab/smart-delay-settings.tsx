@@ -349,12 +349,12 @@ export function SmartDelaySettings() {
         />
 
         <DelaySlider
-          label="Batas Maksimum Delay"
-          description="Tidak ada jeda yang melebihi batas ini, apa pun kategori pesannya."
+          label="Batas Maksimum Tunggu"
+          description="Hard cap dari pesan pertama dalam satu burst; harus lebih besar dari lock queue 30 detik."
           icon={ShieldCheck}
           value={cfg.maxDelayMs}
           onChange={(v) => update({ maxDelayMs: v })}
-          max={30000}
+          max={60000}
         />
       </Card>
 

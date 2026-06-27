@@ -44,10 +44,10 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   mediumMs:     6_000,
   longMs:       5_000,
   waitSignalMs: 10_000,  // tamu bilang "bentar/tunggu" → tunggu 10 detik
-  // Hard cap dari pesan pertama dalam burst. Dinaikkan dari 12s → 25s
-  // supaya entry tidak ditandai `max_wait_exceeded` di tengah jalan saat
-  // burst tamu masih berdatangan + worker LLM butuh waktu (~10–20s).
-  maxWaitMs:    25_000,
+  // Hard cap dari pesan pertama dalam burst. Harus lebih besar dari lock TTL
+  // DB (30s) supaya entry berikutnya masih sempat di-claim setelah zombie
+  // sebelumnya dibersihkan oleh cron.
+  maxWaitMs:    45_000,
 };
 
 /** Keywords/patterns that indicate user is still typing */
@@ -77,7 +77,8 @@ export function resolveQueueTiming(
     maxDelayMs: number;
   }> | null | undefined,
 ): { delayMs: number; maxWaitMs: number } {
-  const maxWaitMs = raw?.maxDelayMs ?? DEFAULT_SMART_DELAY.maxWaitMs;
+  const configuredMaxWaitMs = raw?.maxDelayMs ?? DEFAULT_SMART_DELAY.maxWaitMs;
+  const maxWaitMs = Math.max(configuredMaxWaitMs, DEFAULT_SMART_DELAY.maxWaitMs);
   if (raw?.enabled === false) {
     return { delayMs: 0, maxWaitMs };
   }

@@ -27,7 +27,7 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   // Hard cap from the first message of a burst. The delay now lives in the DB
   // (process_after), not in the request, so this can comfortably exceed the old
   // edge-timeout-driven 8s — giving multi-message bursts room to group fully.
-  maxDelayMs: 12000,
+  maxDelayMs: 45000,
 };
 
 const SmartDelayConfigSchema = z.object({
@@ -36,7 +36,7 @@ const SmartDelayConfigSchema = z.object({
   mediumMs:     z.number().int().min(0).max(30000),
   longMs:       z.number().int().min(0).max(30000),
   waitSignalMs: z.number().int().min(0).max(30000),
-  maxDelayMs:   z.number().int().min(0).max(30000),
+  maxDelayMs:   z.number().int().min(0).max(60000),
 });
 
 // ─── Server functions ─────────────────────────────────────────────────────────
@@ -51,13 +51,14 @@ export const getSmartDelayConfig = createServerFn({ method: "GET" })
       .maybeSingle();
     if (error) throw error;
     const raw = data?.smart_delay_config as Partial<SmartDelayConfig> | null;
+    const rawMaxDelayMs = raw?.maxDelayMs ?? DEFAULT_SMART_DELAY.maxDelayMs;
     const config: SmartDelayConfig = {
       enabled:      raw?.enabled      ?? DEFAULT_SMART_DELAY.enabled,
       shortMs:      raw?.shortMs      ?? DEFAULT_SMART_DELAY.shortMs,
       mediumMs:     raw?.mediumMs     ?? DEFAULT_SMART_DELAY.mediumMs,
       longMs:       raw?.longMs       ?? DEFAULT_SMART_DELAY.longMs,
       waitSignalMs: raw?.waitSignalMs ?? DEFAULT_SMART_DELAY.waitSignalMs,
-      maxDelayMs:   raw?.maxDelayMs   ?? DEFAULT_SMART_DELAY.maxDelayMs,
+      maxDelayMs:   Math.max(rawMaxDelayMs, DEFAULT_SMART_DELAY.maxDelayMs),
     };
     return { id: data?.id ?? null, config };
   });

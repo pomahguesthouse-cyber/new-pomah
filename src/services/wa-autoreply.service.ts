@@ -1823,7 +1823,7 @@ export async function drainQueue(
 
     const heartbeatTimer = setInterval(() => {
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
-    }, 20_000);
+    }, 10_000);
 
     try {
       if (abortSignal?.aborted) {
