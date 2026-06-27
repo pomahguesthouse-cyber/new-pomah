@@ -24,6 +24,8 @@ import { updateBookingStatus }            from "./manager/update-booking-status.
 import { deleteBooking }                  from "./manager/delete-booking.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
 import { replyToGuest }                   from "./manager/reply-to-guest.tool";
+import { blockRoom }                      from "./manager/block-room.tool";
+import { sendToManager }                  from "./manager/send-to-manager.tool";
 import { discoverSemarangContent }        from "./content/discover-semarang-content.tool";
 import { upsertExploreItem }              from "./content/upsert-explore-item.tool";
 import { listExploreItems }               from "./content/list-explore-items.tool";
@@ -65,6 +67,8 @@ const HANDLERS: Record<string, ToolHandler> = {
   delete_booking:                deleteBooking,
   change_booking_room:           changeBookingRoom,
   reply_to_guest:                replyToGuest,
+  block_room:                    blockRoom,
+  send_to_manager:               sendToManager,
   discover_semarang_content:     discoverSemarangContent,
   upsert_explore_item:           upsertExploreItem,
   list_explore_items:            listExploreItems,

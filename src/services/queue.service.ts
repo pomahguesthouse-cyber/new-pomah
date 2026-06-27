@@ -40,9 +40,9 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
   // Default 8 detik untuk pesan pendek — pesan singkat seperti "kak", "mau
   // booking" sangat mungkin diikuti pesan lain, sehingga perlu delay lebih
   // lama agar ter-batch. Admin tetap bisa menurunkan via AI Lab.
-  shortMs:      8_000,
-  mediumMs:     6_000,
-  longMs:       5_000,
+  shortMs:      5_000,
+  mediumMs:     4_000,
+  longMs:       2_000,
   waitSignalMs: 10_000,  // tamu bilang "bentar/tunggu" → tunggu 10 detik
   // Hard cap dari pesan pertama dalam burst. Harus lebih besar dari lock TTL
   // DB (30s) supaya entry berikutnya masih sempat di-claim setelah zombie

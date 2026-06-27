@@ -14,7 +14,7 @@ import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.se
 // ── Webhook layer ──────────────────────────────────────────────────────────────
 import { verifyFonnteToken } from "@/webhook/verifier";
 import { parseFonnteBody } from "@/webhook/parser";
-import { isDuplicate, buildDedupKey } from "@/webhook/deduplicator";
+import { isDuplicate, isDuplicateBody, buildDedupKey } from "@/webhook/deduplicator";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 
 // ── Data access ────────────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         const dedupKey = buildDedupKey(fonnteId, sender, displayMessage);
-        if (isDuplicate(dedupKey)) {
+        if (isDuplicate(dedupKey) || isDuplicateBody(sender, displayMessage)) {
           console.log(`[Webhook] duplicate | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }

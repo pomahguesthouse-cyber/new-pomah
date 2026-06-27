@@ -27,6 +27,22 @@ export function isDuplicate(key: string): boolean {
   return false;
 }
 
+const _seenBody = new Map<string, number>();
+
+/** Returns true if the exact same body was received from this sender within 30s. */
+export function isDuplicateBody(sender: string, message: string): boolean {
+  const key = `${sender}::${message.trim().toLowerCase()}`;
+  const now = Date.now();
+
+  for (const [k, ts] of _seenBody) {
+    if (now - ts > 30_000) _seenBody.delete(k);
+  }
+
+  if (_seenBody.has(key)) return true;
+  _seenBody.set(key, now);
+  return false;
+}
+
 /**
  * Build a stable dedup key.
  * Prefer the Fonnte message ID; fall back to

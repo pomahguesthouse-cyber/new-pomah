@@ -25,6 +25,51 @@ interface IntentRule {
 }
 
 const RULES: IntentRule[] = [
+  // ── Admin Rules (only match if in admin mode, very high weight)
+  {
+    category: "list_bookings",
+    weight:   20,
+    patterns: [
+      /^\/(booking|list|daftar|cek)\b/i,
+      /\b(tampilkan|lihat) (semua )?(booking|pesanan|reservasi)\b/i,
+      /\b(daftar booking|list booking|cek booking|cek jadwal)\b/i,
+    ],
+  },
+  {
+    category: "booking_detail",
+    weight:   20,
+    patterns: [
+      /^\/(detail)\b/i,
+      /\b(lihat|cek) detail\b/i,
+      /\b(detail booking|detail pesanan)\b/i,
+    ],
+  },
+  {
+    category: "payment_update",
+    weight:   20,
+    patterns: [
+      /^\/(bayar|lunas|payment|update)\b/i,
+      /\b(update bayar|sudah lunas|sudah dp|konfirmasi bayar|tandai (lunas|bayar))\b/i,
+    ],
+  },
+  {
+    category: "room_block",
+    weight:   20,
+    patterns: [
+      /^\/(blok|block)\b/i,
+      /\b(blok(ir)? kamar|kamar rusak|tutup kamar|kamar (sedang )?maintenance)\b/i,
+    ],
+  },
+  {
+    category: "send_to_manager",
+    weight:   20,
+    patterns: [
+      /^\/(forward|laporkan|kirim)\b/i,
+      /\b(teruskan ke (owner|manajer|manager|pengelola))\b/i,
+      /\b(laporkan ke (owner|manajer|manager))\b/i,
+    ],
+  },
+
   // ── Complaints (highest weight — always escalate)
   {
     category: "complaint",
@@ -235,6 +280,8 @@ export interface IntentContext {
   bookingActive?: boolean;
   /** Last resolved topic from the context resolver (e.g. "pricing", "availability"). */
   lastTopic?: string | null;
+  /** Current user mode */
+  mode?: "guest" | "admin" | "managerial";
 }
 
 const SHORT_AFFIRMATIVE =
@@ -318,7 +365,17 @@ export async function classifyIntent(
     }
   }
 
-  let activeRules = RULES;
+  // Filter admin rules if user is not in admin/managerial mode
+  let activeRules = RULES.filter(r => {
+    const isAdminRule = [
+      "list_bookings", "booking_detail", "payment_update", "room_block", "send_to_manager"
+    ].includes(r.category);
+    
+    if (isAdminRule) {
+      return context?.mode === "admin" || context?.mode === "managerial";
+    }
+    return true;
+  });
 
   if (supabase) {
     const now = Date.now();
@@ -481,6 +538,11 @@ export async function classifyIntent(
               "room_detail_question",
               "checkin_policy_question",
               "early_arrival_guest_question",
+              "list_bookings",
+              "booking_detail",
+              "payment_update",
+              "room_block",
+              "send_to_manager",
               "general",
             ];
             if (VALID_CATEGORIES.includes(category as IntentCategory)) {

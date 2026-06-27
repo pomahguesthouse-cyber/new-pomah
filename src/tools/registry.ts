@@ -555,6 +555,38 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "block_room",
+      description: "Blokir tipe kamar tertentu untuk rentang tanggal tertentu (maintenance, dsb).",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: { type: "string" },
+          start_date: { type: "string", description: "YYYY-MM-DD" },
+          end_date: { type: "string", description: "YYYY-MM-DD" },
+          reason: { type: "string", description: "Alasan pemblokiran (mis. 'AC Rusak')" },
+        },
+        required: ["room_type", "start_date", "end_date", "reason"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_to_manager",
+      description: "Teruskan pesan, informasi, atau laporan langsung ke owner/manajer properti.",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string", description: "Isi pesan yang akan disampaikan" },
+          urgency: { type: "string", enum: ["low", "normal", "high"], description: "Tingkat urgensi" },
+        },
+        required: ["message"],
+      },
+    },
+  },
 ];
 
 /** Human-readable label shown in the admin inbox for each tool call. */
@@ -596,4 +628,6 @@ export const TOOL_LABELS: Record<string, string> = {
   audit_page_seo:               "Content - SEO Audit Halaman",
   generate_booking_form:        "Booking - Kirim Form Sekali Pakai",
   get_booking_form_submission:  "Booking - Baca Submission Form",
+  block_room:                   "Manager - Blokir Kamar",
+  send_to_manager:              "Manager - Eskalasi ke Manajer",
 };

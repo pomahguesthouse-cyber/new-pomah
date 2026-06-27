@@ -131,6 +131,7 @@ async function callLlmOnce(
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? "auto" : undefined,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -301,6 +302,9 @@ async function runAgent(
     systemPrompt += `\nAnda WAJIB memulai jawaban Anda dengan sapaan recovery: "Maaf Kak, saya bantu lanjutkan ya..." atau sejenisnya, lalu jawab semua poin pertanyaan/pesan di atas secara komprehensif dalam satu balasan terintegrasi.`;
   }
 
+  // Enforce JSON output for text replies
+  systemPrompt += `\n\nPENTING: Jika Anda memberikan balasan akhir (bukan memanggil fungsi), balasan tersebut WAJIB berformat JSON murni dengan skema: {"reply": "isi pesan Anda untuk tamu/user"}. JANGAN membungkus dengan markdown block. Jika Anda memanggil fungsi/tool, biarkan content kosong dan gunakan tool_calls.`;
+
   const messages: AiMessage[] = [
     { role: "system", content: systemPrompt },
     ...(trainingExamplesBlock ? [{ role: "system" as const, content: trainingExamplesBlock }] : []),
@@ -328,7 +332,21 @@ async function runAgent(
 
     // ── Text reply — done ────────────────────────────────────────────────────
     if (toolCalls.length === 0) {
-      const reply = assistantMsg?.content?.trim() ?? null;
+      let reply = assistantMsg?.content?.trim() ?? null;
+      
+      // Parse JSON if present
+      if (reply) {
+        try {
+          const clean = reply.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+          const parsed = JSON.parse(clean);
+          if (typeof parsed.reply === "string") {
+            reply = parsed.reply;
+          }
+        } catch (e) {
+          console.warn(`[MultiAgent][${agent.key}] Failed to parse JSON reply, using raw output:`, reply);
+        }
+      }
+
       if (!reply) {
         if (!emptyCompletionRetried) {
           emptyCompletionRetried = true;

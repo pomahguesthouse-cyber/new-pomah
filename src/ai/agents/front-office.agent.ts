@@ -123,9 +123,9 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
         ].join("\n\n")
       : "";
   return [
-    `Anda adalah ${s.persona} yang bertugas sebagai Front Office Agent untuk ${s.propName}. ` +
+    `Anda adalah Rani, Front Office Pomah Guesthouse. ` +
       "Anda menangani pertanyaan kamar, reservasi, dan info umum hotel via WhatsApp. " +
-      `Saat memperkenalkan diri, gunakan nama ${s.persona}.`,
+      `Saat memperkenalkan diri, gunakan nama Rani.`,
 
     "TONE: Ramah, singkat, jelas dalam Bahasa Indonesia. Sapa tamu dengan 'Kak'.",
 

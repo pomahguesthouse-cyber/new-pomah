@@ -65,7 +65,7 @@ async function updateBookingFormSendLog(args: {
 }
 
 
-const FALLBACK_MESSAGE = "Mohon ditunggu sebentar ya 🙏";
+const FALLBACK_MESSAGE = "Maaf Kak, sistem sedang lambat. Data terakhir sudah saya simpan. Kakak bisa ketik 'lanjut' untuk meneruskan.";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
@@ -751,52 +751,57 @@ export async function executeAutoreplyForPhone(
     ackSentAt: 0,
   };
 
-  // ── Super admin guest-mode toggle ─────────────────────────────────
-  // Super admin bisa mengetik `/guest` untuk mensimulasikan tamu
-  // (chatbot akan merespons seperti pesan tamu biasa) dan `/admin`
-  // untuk kembali ke mode manajerial. Status disimpan per nomor di
-  // tabel `manager_test_modes`.
-  let guestModeActive = false;
-  if (manager && manager.role === "super_admin") {
-    try {
-      const inMsgs = ((c.messages ?? []) as Array<{ direction: string; body: string }>)
-        .filter((m) => m.direction === "in");
-      const lastIn = inMsgs[inMsgs.length - 1]?.body?.trim().toLowerCase() ?? "";
-      const { data: modeRow } = await (supabaseAdmin as any)
-        .from("manager_test_modes")
-        .select("guest_mode")
-        .eq("phone", phone)
-        .maybeSingle();
-      guestModeActive = !!modeRow?.guest_mode;
-
-      if (lastIn === "/guest" || lastIn === "/admin") {
-        const nextMode = lastIn === "/guest";
-        await (supabaseAdmin as any)
-          .from("manager_test_modes")
-          .upsert({ phone, guest_mode: nextMode, updated_at: new Date().toISOString() });
-        const ack = nextMode
-          ? "🧪 Mode tamu aktif. Chatbot akan merespons Anda seperti tamu biasa. Ketik /admin untuk kembali."
-          : "🛠️ Mode admin aktif kembali. Chatbot tidak akan auto-reply ke nomor ini.";
-        if (c.fonnte_token) {
-          const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
-          if (ok) {
-            await saveOutboundMessage(supabaseAdmin as any, {
-              threadId: c.thread_id,
-              body: ack,
-              metadata: { agent: nextMode ? "test_mode_guest" : "test_mode_admin" },
-            });
-          }
-        }
-        return "ok";
-      }
-    } catch (e) {
-      console.warn("[Autoreply] test-mode toggle error (non-fatal):", e);
-    }
+  // ── Mode toggle ─────────────────────────────────
+  let mode = "guest"; // Default
+  const adminPhones = (process.env.ADMIN_PHONE_NUMBERS || "").split(",").map(p => normalizePhone(p));
+  
+  if (manager || adminPhones.includes(normalizePhone(phone))) {
+    mode = "admin";
   }
 
-  // Saat super admin berada di mode tamu, perlakukan seperti tamu biasa
-  // supaya bisa menguji chatbot end-to-end.
-  const isManager = !!manager && !(manager.role === "super_admin" && guestModeActive);
+  try {
+    const inMsgs = ((c.messages ?? []) as Array<{ direction: string; body: string }>)
+      .filter((m) => m.direction === "in");
+    const lastIn = inMsgs[inMsgs.length - 1]?.body?.trim().toLowerCase() ?? "";
+    
+    // Check database for saved mode
+    const { data: modeRow } = await (supabaseAdmin as any)
+      .from("user_modes")
+      .select("mode")
+      .eq("phone", phone)
+      .maybeSingle();
+
+    if (modeRow?.mode) {
+      mode = modeRow.mode;
+    }
+
+    if (lastIn === "/guest" || lastIn === "/admin") {
+      const nextMode = lastIn === "/guest" ? "guest" : "admin";
+      await (supabaseAdmin as any)
+        .from("user_modes")
+        .upsert({ phone, mode: nextMode, updated_at: new Date().toISOString() });
+      
+      const ack = nextMode === "guest"
+        ? "✅ Mode Guest aktif. Chatbot akan merespons sebagai Rani."
+        : "✅ Mode Admin aktif. Chatbot akan merespons sebagai Asisten Admin.";
+      
+      if (c.fonnte_token) {
+        const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
+        if (ok) {
+          await saveOutboundMessage(supabaseAdmin as any, {
+            threadId: c.thread_id,
+            body: ack,
+            metadata: { agent: "system_mode_toggle" },
+          });
+        }
+      }
+      return "ok";
+    }
+  } catch (e) {
+    console.warn("[Autoreply] user-modes toggle error (non-fatal):", e);
+  }
+
+  const isManager = mode === "admin";
   if ((!isManager && !c.auto_reply_enabled) || !c.fonnte_token) {
     return "skipped_config";
   }

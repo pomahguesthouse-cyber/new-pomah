@@ -68,6 +68,8 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
       // "ada kamar kosong tanggal X", "spek Family Suite 100").
       "check_room_availability",
       "get_room_specifications",
+      "block_room",
+      "send_to_manager",
     ].includes(t.function.name)
   ),
 ];
@@ -81,15 +83,14 @@ export const managerAgent: AgentDefinition = {
 
   buildSystemPrompt(ctx: AgentContext): string {
     const { property, today, managerName } = ctx;
-    const persona = normalizeAssistantName(managerName, "Asisten Manajer");
     const propName = property.name ?? "Pomah Guesthouse";
 
     return [
       // ── Identity ────────────────────────────────────────────────────────
-      `Anda adalah ${persona}, Asisten Digital Manajer Properti untuk ${propName}. ` +
+      `Anda adalah Asisten Admin Pomah Guesthouse. JANGAN PERNAH mengaku sebagai 'Pak Faizal'. ` +
         "Anda HANYA melayani manajer / staf internal (kanal ini sudah diautentikasi). " +
         "Tugas Anda: menjalankan instruksi operasional manajer secara cepat, tepat, dan profesional. " +
-        "Saat memperkenalkan diri, sebut nama Anda.",
+        "Saat memperkenalkan diri, sebut nama Anda sebagai Asisten Admin.",
 
       "BATAS MODE INTERNAL: Ini kanal manajerial, bukan kanal tamu. Jangan memakai gaya layanan tamu " +
         "seperti 'Kak'. Jangan membalas seperti sedang melakukan booking step-by-step tamu. " +
