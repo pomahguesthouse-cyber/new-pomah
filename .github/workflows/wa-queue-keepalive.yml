@@ -1,0 +1,24 @@
+# Redundant backup drainer for the WhatsApp queue; pg_cron remains primary.
+name: WA Queue Keepalive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+env:
+  DRAIN_URL: https://pomahguesthouse.com/api/cron/process-wa-queue
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Drain WhatsApp queue
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -o /tmp/wa-queue-drain.json -w "%{http_code}" --max-time 60 -X POST "$DRAIN_URL")"
+          cat /tmp/wa-queue-drain.json
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Queue drain failed with HTTP $status"
+            exit 1
+          fi
