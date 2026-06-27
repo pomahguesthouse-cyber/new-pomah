@@ -48,6 +48,8 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 function getAuthorized(request: Request, url: URL): boolean {
   const tokenParam = url.searchParams.get("token");
   const authHeader = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
@@ -61,6 +63,26 @@ async function getWaitUntilRunner(): Promise<(task: Promise<void>) => void> {
   return (task: Promise<void>) => {
     if (waitUntil) waitUntil(task);
   };
+}
+
+function scheduleQueueNudge(
+  runBackground: (task: Promise<void>) => void,
+  origin: string,
+  waitMs: number,
+  logCtx: string,
+) {
+  const nudgeDelayMs = Math.max(500, Math.min(waitMs + 500, 15_000));
+  runBackground((async () => {
+    await sleep(nudgeDelayMs);
+    try {
+      const res = await fetch(`${origin}/api/queue-worker`, { method: "POST" });
+      if (!res.ok) {
+        console.warn(`[Webhook] queue nudge failed status=${res.status} | ${logCtx}`);
+      }
+    } catch (e) {
+      console.warn(`[Webhook] queue nudge failed: ${e} | ${logCtx}`);
+    }
+  })());
 }
 
 function isBrosurLike(doc: any): boolean {
@@ -438,6 +460,15 @@ export const Route = createFileRoute("/api/fonnte")({
           console.log(
             `[Webhook] Enqueued (entry=${entry?.entryId?.slice(0, 8) ?? "none"} delay=${delayMs}ms) | ${logCtx}`,
           );
+
+          if (entry?.entryId) {
+            scheduleQueueNudge(
+              runBackground,
+              new URL(request.url).origin,
+              entry.sleepMs ?? delayMs,
+              logCtx,
+            );
+          }
         } catch (e) {
           console.error(`[Webhook] enqueue error: ${e} | ${logCtx}`);
         }
