@@ -1876,14 +1876,27 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gte("locked_at", lockFreshSinceIso)
         .limit(1);
 
+      // (e) inbound baru dari guest setelah entry ini → guest sudah lanjut
+      // mengirim pesan baru. Kirim fallback hanya akan membingungkan: pesan
+      // "sistem sibuk" muncul setelah guest sudah pindah topik. Biarkan
+      // burst baru yang menjawab.
+      const { data: newerInbound } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("thread_id", entry.thread_id)
+        .eq("direction", "in")
+        .gt("sent_at", entry.created_at)
+        .limit(1);
+
       if (
         (sameQid ?? []).length > 0 ||
         (anyOut ?? []).length > 0 ||
         (newerQueue ?? []).length > 0 ||
-        (activeWorker ?? []).length > 0
+        (activeWorker ?? []).length > 0 ||
+        (newerInbound ?? []).length > 0
       ) {
         console.info(
-          `[Fallback] skip ${entry.id.slice(0, 8)} — fallback_skipped_worker_active=${(activeWorker ?? []).length > 0}`,
+          `[Fallback] skip ${entry.id.slice(0, 8)} — worker_active=${(activeWorker ?? []).length > 0} newer_inbound=${(newerInbound ?? []).length > 0}`,
         );
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
@@ -1891,6 +1904,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
           .eq("id", entry.id);
         continue;
       }
+
     } catch (e) {
       console.warn("[Fallback] outbound lookup failed:", e);
     }
