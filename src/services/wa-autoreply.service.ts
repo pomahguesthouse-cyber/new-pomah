@@ -28,7 +28,6 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 
-<<<<<<< Updated upstream
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
  * Tool `generate_booking_form` menyisipkan baris `pending` di
@@ -66,11 +65,8 @@ async function updateBookingFormSendLog(args: {
 }
 
 
-const FALLBACK_MESSAGE = "Mohon maaf, sistem kami sedang sibuk. Tim kami akan segera membalas pesan Anda. 🙏";
-=======
 const FALLBACK_MESSAGE =
   "Mohon maaf Kak, pengecekan otomatis kami belum selesai. Pesan Kakak sudah kami teruskan ke tim dan akan segera dibalas. 🙏";
->>>>>>> Stashed changes
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";

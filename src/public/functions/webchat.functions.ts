@@ -34,6 +34,154 @@ function fmtDateID(d: string | null | undefined): string {
   } catch { return String(d); }
 }
 
+function nextIsoDay(d: string): string {
+  return new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function todayWibIso(): string {
+  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+const ID_MONTHS: Record<string, number> = {
+  jan: 1, januari: 1,
+  feb: 2, februari: 2, pebruari: 2,
+  mar: 3, maret: 3,
+  apr: 4, april: 4,
+  mei: 5,
+  jun: 6, juni: 6,
+  jul: 7, juli: 7,
+  agu: 8, agt: 8, agustus: 8,
+  sep: 9, sept: 9, september: 9,
+  okt: 10, oktober: 10,
+  nov: 11, november: 11,
+  des: 12, desember: 12,
+};
+
+function makeIsoDate(day: number, month: number, year: number): string | null {
+  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return null;
+  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) return null;
+  return iso;
+}
+
+function resolveYear(month: number, explicitYear: string | undefined, today: string): number {
+  if (explicitYear) return Number(explicitYear.length === 2 ? `20${explicitYear}` : explicitYear);
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7));
+  return month < currentMonth ? currentYear + 1 : currentYear;
+}
+
+function parseAvailabilityDateRange(message: string, today: string): { checkIn: string; checkOut: string } | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+
+  if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(text)) {
+    return { checkIn: today, checkOut: nextIsoDay(today) };
+  }
+  if (/\b(besok|tomorrow)\b/i.test(text)) {
+    const checkIn = nextIsoDay(today);
+    return { checkIn, checkOut: nextIsoDay(checkIn) };
+  }
+  if (/\blusa\b/i.test(text)) {
+    const checkIn = nextIsoDay(nextIsoDay(today));
+    return { checkIn, checkOut: nextIsoDay(checkIn) };
+  }
+
+  let m = text.match(/\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
+  if (m) {
+    const [, d1Raw, d2Raw, monthName, yearRaw] = m;
+    const month = ID_MONTHS[monthName];
+    if (!month) return null;
+    const year = resolveYear(month, yearRaw, today);
+    const checkIn = makeIsoDate(Number(d1Raw), month, year);
+    const checkOut = makeIsoDate(Number(d2Raw), month, year);
+    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+  }
+
+  m = text.match(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
+  if (m) {
+    const [, dayRaw, monthName, yearRaw] = m;
+    const month = ID_MONTHS[monthName];
+    if (!month) return null;
+    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+    if (checkIn) return { checkIn, checkOut: nextIsoDay(checkIn) };
+  }
+
+  m = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?\b/i);
+  if (m) {
+    const [, dayRaw, monthRaw, yearRaw] = m;
+    const month = Number(monthRaw);
+    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+    if (checkIn) return { checkIn, checkOut: nextIsoDay(checkIn) };
+  }
+
+  return null;
+}
+
+function shouldUseDeterministicAvailability(message: string): boolean {
+  const text = message.toLowerCase();
+  const asksAvailability =
+    /\b(ready|tersedia|available|avail|kosong|ada kamar|ada yg|ada yang|ada untuk|kamar.*ada|cek.*kamar|booking|pesan kamar|menginap)\b/i.test(text);
+  const hasDateSignal =
+    /\b(hari ini|malam ini|besok|lusa|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/i.test(text) ||
+    /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text) ||
+    /\b\d{1,2}[\/.]\d{1,2}\b/i.test(text);
+  return asksAvailability && hasDateSignal;
+}
+
+function formatAvailabilityReply(raw: {
+  periode: string;
+  kamar: Array<{ nama: string; harga_per_malam: number; kamar_tersedia: number | null }>;
+}): string {
+  const available = raw.kamar.filter((r) => Number(r.kamar_tersedia ?? 0) > 0);
+  if (available.length === 0) {
+    return (
+      `Mohon maaf Kak, untuk periode ${raw.periode} kamar kami sudah penuh.\n\n` +
+      "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cekkan lagi."
+    );
+  }
+
+  const lines = available.slice(0, 5).map((r) => {
+    const priceText = r.harga_per_malam > 0 ? `, ${fmtRupiah(r.harga_per_malam)}/malam` : "";
+    return `- ${r.nama}: ${r.kamar_tersedia} kamar tersedia${priceText}`;
+  });
+  return `Untuk periode ${raw.periode}, masih tersedia:\n${lines.join("\n")}\n\nKakak rencana untuk berapa orang?`;
+}
+
+async function buildDeterministicAvailabilityReply(
+  supabase: any,
+  message: string,
+  rooms: Array<Record<string, any>>,
+): Promise<string | null> {
+  if (!shouldUseDeterministicAvailability(message)) return null;
+  const today = todayWibIso();
+  const range = parseAvailabilityDateRange(message, today);
+  if (!range) return null;
+
+  const { data: rows } = await supabase.rpc("room_type_availability_detail", {
+    p_check_in: range.checkIn,
+    p_check_out: range.checkOut,
+  });
+  const byId = new Map(((rows ?? []) as any[]).map((r) => [r.room_type_id, r]));
+  const kamar = rooms.map((r) => {
+    const d = byId.get(r.id);
+    return {
+      nama: String(r.name ?? "Kamar"),
+      harga_per_malam: Number(r.base_rate ?? 0),
+      kamar_tersedia: d ? Number(d.available ?? 0) : null,
+    };
+  });
+
+  return formatAvailabilityReply({
+    periode: `${fmtDateID(range.checkIn)} – ${fmtDateID(range.checkOut)}`,
+    kamar,
+  });
+}
+
 const SAFE_BOOKING_COLS =
   "id, reference_code, status, payment_status, check_in, check_out, nights, total_amount, source, guest_id";
 
@@ -479,8 +627,20 @@ async function runWebchatAi(threadId: string): Promise<string | null> {
   // Build context.
   const { data: rooms } = await (supabaseAdmin as any)
     .from("room_types")
-    .select("name, base_rate, capacity, bed_type, description")
+    .select("id, name, base_rate, capacity, bed_type, description")
     .order("base_rate");
+  const roomRows = (rooms ?? []) as Array<Record<string, any>>;
+
+  const lastGuestMessage = [...messages].reverse().find((m) => m.sender_type === "guest")?.body ?? "";
+  const deterministicAvailability = await buildDeterministicAvailabilityReply(
+    supabaseAdmin as any,
+    lastGuestMessage,
+    roomRows,
+  );
+  if (deterministicAvailability) {
+    return deterministicAvailability;
+  }
+
   const roomLines = (rooms ?? []).map((r: any) =>
     `- ${r.name}: ${fmtRupiah(r.base_rate)}/malam, kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}`,
   ).join("\n");
