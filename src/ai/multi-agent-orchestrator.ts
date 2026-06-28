@@ -131,7 +131,7 @@ async function callLlmOnce(
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? "auto" : undefined,
-        response_format: { type: "json_object" },
+        response_format: tools.length > 0 ? undefined : { type: "json_object" },
       }),
     });
 
