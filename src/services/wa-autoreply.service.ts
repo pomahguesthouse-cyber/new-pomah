@@ -768,85 +768,12 @@ export async function executeAutoreplyForPhone(
     ackSentAt: 0,
   };
 
-  // ── Mode toggle ─────────────────────────────────
+  // ── Mode selection ──────────────────────────────
   let mode = "guest"; // Default
   const adminPhones = (process.env.ADMIN_PHONE_NUMBERS || "").split(",").map(p => normalizePhone(p));
   
   if (manager || adminPhones.includes(normalizePhone(phone))) {
     mode = "admin";
-  }
-
-  try {
-    const inMsgs = ((c.messages ?? []) as Array<{ direction: string; body: string }>)
-      .filter((m) => m.direction === "in");
-    const lastIn = inMsgs[inMsgs.length - 1]?.body?.trim().toLowerCase() ?? "";
-    
-    // Check database for saved mode
-    const { data: modeRow } = await (supabaseAdmin as any)
-      .from("user_modes")
-      .select("mode, updated_at")
-      .eq("phone", phone)
-      .maybeSingle();
-
-    if (modeRow?.mode) {
-      mode = modeRow.mode;
-    }
-
-    if (lastIn === "/guest" || lastIn === "/admin") {
-      const nextMode = lastIn === "/guest" ? "guest" : "admin";
-      
-      const lastCmdTime = modeRow?.updated_at ? new Date(modeRow.updated_at).getTime() : 0;
-      const isDuplicate = modeRow?.mode === nextMode && (Date.now() - lastCmdTime < 30000);
-      
-      if (!isDuplicate) {
-        const adminDb = supabaseAdmin as any;
-        await adminDb
-          .from("user_modes")
-          .upsert({ phone, mode: nextMode, updated_at: new Date().toISOString() });
-          
-        // RESET STATE
-        const resetStep = async (label: string, task: () => PromiseLike<unknown>) => {
-          try {
-            await task();
-          } catch (e) {
-            console.warn(`[Autoreply] mode reset ${label} failed (non-fatal):`, e);
-          }
-        };
-
-        await resetStep("booking-state", () =>
-          adminDb.from("wa_booking_states").delete().eq("phone", phone),
-        );
-
-        if (c.thread_id) {
-          await resetStep("message-history", () =>
-            adminDb.from("whatsapp_messages").delete().eq("thread_id", c.thread_id),
-          );
-          await resetStep("thread-summary", () => clearThreadSummary(adminDb, c.thread_id));
-        }
-
-        await resetStep("conversation-alerts", () =>
-          adminDb.from("conversation_alerts").delete().eq("phone", phone),
-        );
-        
-        const ack = nextMode === "guest"
-          ? "✅ Mode Guest aktif. Chatbot akan merespons sebagai Rani."
-          : "✅ Mode Admin aktif. Chatbot akan merespons sebagai Asisten Admin.";
-        
-        if (c.fonnte_token) {
-          const { ok } = await sendWhatsAppMessage(c.fonnte_token, phone, ack);
-          if (ok) {
-            await saveOutboundMessage(adminDb, {
-              threadId: c.thread_id,
-              body: ack,
-              metadata: { agent: "system_mode_toggle" },
-            });
-          }
-        }
-      }
-      return "ok";
-    }
-  } catch (e) {
-    console.warn("[Autoreply] user-modes toggle error (non-fatal):", e);
   }
 
   const isManager = mode === "admin";
