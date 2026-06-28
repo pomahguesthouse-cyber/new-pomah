@@ -37,6 +37,12 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   room_detail_question:         "front-office",
   checkin_policy_question:      "front-office",
   early_arrival_guest_question: "front-office",
+  // ── Admin intents ────────────────────────────────────────────────────────
+  list_bookings:                "manager",
+  booking_detail:               "manager",
+  payment_update:               "finance",
+  room_block:                   "manager",
+  send_to_manager:              "manager",
   general:            "front-office",
 };
 
