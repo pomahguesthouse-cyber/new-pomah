@@ -1260,7 +1260,7 @@ export async function executeAutoreplyForPhone(
 
       orchResult = await runMultiAgentOrchestration({
         phone,
-        isManager: !!manager,
+        isManager,
         messages: rollingMessages,
         agentCtx: {
           property: p,
@@ -1271,8 +1271,8 @@ export async function executeAutoreplyForPhone(
           lastMessage,
           chatSummary,
           chatSummaryJson,
-          managerName: manager?.name,
-          mode: manager ? "managerial" : undefined,
+          managerName: manager?.name ?? (isManager ? "Admin" : undefined),
+          mode: isManager ? "managerial" : undefined,
           recoveryMode,
           unansweredMessages,
           trainingExamples: trainingExamples.map((ex) => ({
