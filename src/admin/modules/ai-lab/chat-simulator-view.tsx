@@ -1008,15 +1008,16 @@ export function ChatSimulatorView() {
                               isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40",
                             ),
                         !isEditing && m.direction === "out" && "pr-8",
+                        isEditing && "w-[min(720px,calc(100vw-8rem))] max-w-[92%] px-5 py-4",
                       )}
                     >
                       {isEditing ? (
-                        <div className="space-y-2 min-w-[200px] sm:min-w-[300px]">
-                          <div className="flex gap-1.5 p-1 rounded bg-stone-100 border border-stone-200 w-fit">
+                        <div className="w-full space-y-3 min-w-[320px] sm:min-w-[560px]">
+                          <div className="flex gap-2 p-1.5 rounded bg-stone-100 border border-stone-200 w-fit">
                             <button
                               type="button"
                               onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "bold")}
-                              className="h-6 w-6 inline-flex items-center justify-center text-xs font-bold hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              className="h-9 w-9 inline-flex items-center justify-center text-sm font-bold hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
                               title="Tebal (Bold) - *"
                             >
                               B
@@ -1024,7 +1025,7 @@ export function ChatSimulatorView() {
                             <button
                               type="button"
                               onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "italic")}
-                              className="h-6 w-6 inline-flex items-center justify-center text-xs italic hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              className="h-9 w-9 inline-flex items-center justify-center text-sm italic hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
                               title="Miring (Italic) - _"
                             >
                               I
@@ -1032,7 +1033,7 @@ export function ChatSimulatorView() {
                             <button
                               type="button"
                               onClick={() => insertFormatToTextarea(editingText, setEditingText, activeEditorRef.current, "strike")}
-                              className="h-6 w-6 inline-flex items-center justify-center text-xs line-through hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
+                              className="h-9 w-9 inline-flex items-center justify-center text-sm line-through hover:bg-stone-200 rounded border border-stone-300 bg-white cursor-pointer"
                               title="Coret (Strikethrough) - ~"
                             >
                               S
@@ -1042,15 +1043,15 @@ export function ChatSimulatorView() {
                             ref={activeEditorRef}
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
-                            className="text-xs p-2 min-h-[85px] bg-white text-stone-800 border border-stone-300 focus-visible:ring-teal-500"
+                            className="min-h-[180px] resize-y bg-white p-4 text-base leading-7 text-stone-800 border border-stone-300 focus-visible:ring-teal-500"
                             placeholder="Tulis respon chatbot yang seharusnya..."
                             autoFocus
                           />
-                          <div className="flex justify-end gap-1.5">
+                          <div className="flex justify-end gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 px-2.5 text-xs rounded-md"
+                              className="h-9 px-4 text-sm rounded-md"
                               onClick={() => setEditingIdx(null)}
                             >
                               <X className="mr-1 h-3.5 w-3.5" />
@@ -1058,7 +1059,7 @@ export function ChatSimulatorView() {
                             </Button>
                             <Button
                               size="sm"
-                              className="h-7 px-2.5 text-xs bg-teal-700 hover:bg-teal-800 text-white rounded-md"
+                              className="h-9 px-4 text-sm bg-teal-700 hover:bg-teal-800 text-white rounded-md"
                               onClick={() => {
                                 const trimmed = editingText.trim();
                                 if (!trimmed) {
