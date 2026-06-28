@@ -5,7 +5,7 @@ import {
   recoverUnqueuedInboundMessages,
   sendFailureFallbackToGuests,
 } from "@/services/wa-autoreply.service";
-import { runDeferred } from "@/lib/cf-context";
+import { getWaitUntil, runDeferred } from "@/lib/cf-context";
 
 /**
  * Cron-driven queue drain.
@@ -54,9 +54,8 @@ async function handle(request: Request): Promise<Response> {
     });
   }
 
-  let recovered = 0;
   try {
-    ({ recovered } = await recoverUnqueuedInboundMessages({ lookbackMinutes: 30, limit: 20 }));
+    await recoverUnqueuedInboundMessages({ lookbackMinutes: 30, limit: 20 });
   } catch (e) {
     console.warn("[Cron] recoverUnqueuedInboundMessages failed:", e);
   }
@@ -68,26 +67,32 @@ async function handle(request: Request): Promise<Response> {
   // dimatikan paksa di tengah jalan dan entry ditandai zombie_timeout.
   // 2/tick × 2s cron = 60/menit, masih jauh di atas throughput nyata,
   // namun masing-masing klaim mendapat headroom CPU yang lebih besar.
-  // request.signal stops new work if the platform disconnects mid-run.
-  const { processed } = await drainQueue(origin, 2, request.signal);
+  const drainWork = (async () => {
+    try {
+      await drainQueue(origin, 2);
 
+      // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
+      // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
+      await sendFailureFallbackToGuests();
+    } catch (e) {
+      console.warn("[Cron] background drain failed:", e);
+    }
+  })();
 
-  // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
-  // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
-  let notified = 0;
-  try {
-    ({ notified } = await sendFailureFallbackToGuests());
-  } catch (e) {
-    console.warn("[Cron] sendFailureFallbackToGuests failed:", e);
+  const waitUntil = getWaitUntil();
+  if (waitUntil) {
+    waitUntil(drainWork);
+    return new Response(JSON.stringify({ accepted: true }), {
+      status: 202,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  return new Response(
-    JSON.stringify({ processed, zombies_reset: count, recovered, fallback_notified: notified }, null, 2),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  await drainWork;
+  return new Response(JSON.stringify({ accepted: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export const Route = createFileRoute("/api/cron/process-wa-queue")({
