@@ -94,6 +94,10 @@ const FAQ_BLOCK_RE =
 type FastFaqResult = {
   reply: string;
   intent: string;
+  /** Tanggal yang di-parse (untuk jalur ketersediaan) — dipersist ke
+   *  conversation-state agar turn berikutnya (mis. tanya harga) tidak
+   *  menanyakan tanggal lagi. */
+  dates?: { checkIn: string; checkOut: string };
 };
 
 /**
@@ -453,7 +457,14 @@ async function buildDeterministicAvailabilityReply(params: {
     } as any,
   );
 
-  return formatAvailabilityReply(raw, messageOpensWithGreeting(params.message));
+  const result = formatAvailabilityReply(raw, messageOpensWithGreeting(params.message));
+  // Lampirkan tanggal yang di-parse agar caller bisa mempersist-nya ke
+  // conversation-state. Tanpa ini, tanggal hilang karena jalur deterministik
+  // melewati orchestrator (satu-satunya tempat slot biasanya disimpan).
+  if (result) {
+    result.dates = { checkIn: range.checkIn, checkOut: range.checkOut };
+  }
+  return result;
 }
 
 function isTonightReply(message: string): boolean {
@@ -1012,6 +1023,23 @@ export async function executeAutoreplyForPhone(
           fastPath: true,
         };
         console.info(`[Autoreply] Deterministic availability reply for ${phone.slice(-6)}`);
+
+        // Persist tanggal yang ditanyakan ke conversation-state. Jalur ini
+        // melewati orchestrator, jadi tanpa ini slot tanggal tak pernah
+        // tersimpan dan turn berikutnya (mis. "per malam berapa?") akan
+        // menanyakan tanggal lagi. Fire-and-forget — tak boleh menggagalkan reply.
+        if (availabilityReply.dates) {
+          const { checkIn, checkOut } = availabilityReply.dates;
+          void runDeferred("Autoreply.persist-availability-dates", async () => {
+            const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+              p_phone: phone,
+              p_last_topic: "availability",
+              p_last_entity: null,
+              p_slots: { checkIn, checkOut },
+            });
+            if (error) console.warn("[Autoreply] persist availability dates failed:", error.message);
+          });
+        }
       }
     } catch (e) {
       console.warn("[Autoreply] deterministic availability failed (falling back to AI):", e);
