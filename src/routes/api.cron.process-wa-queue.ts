@@ -67,7 +67,7 @@ async function handle(request: Request): Promise<Response> {
   // dimatikan paksa di tengah jalan dan entry ditandai zombie_timeout.
   // 2/tick × 2s cron = 60/menit, masih jauh di atas throughput nyata,
   // namun masing-masing klaim mendapat headroom CPU yang lebih besar.
-  const drainWork = (async () => {
+  const runDrainWork = async () => {
     try {
       await drainQueue(origin, 2);
 
@@ -77,18 +77,18 @@ async function handle(request: Request): Promise<Response> {
     } catch (e) {
       console.warn("[Cron] background drain failed:", e);
     }
-  })();
+  };
 
   const waitUntil = getWaitUntil();
   if (waitUntil) {
-    waitUntil(drainWork);
+    waitUntil(runDrainWork());
     return new Response(JSON.stringify({ accepted: true }), {
       status: 202,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  await drainWork;
+  await runDrainWork();
   return new Response(JSON.stringify({ accepted: true }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
