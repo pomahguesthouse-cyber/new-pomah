@@ -67,6 +67,7 @@ async function updateBookingFormSendLog(args: {
 
 
 const FALLBACK_MESSAGE = "Maaf Kak, sistem sedang lambat. Data terakhir sudah saya simpan. Kakak bisa ketik 'lanjut' untuk meneruskan.";
+const MANAGER_FALLBACK_MESSAGE = "Maaf Admin, sistem AI sedang lambat dan belum berhasil memproses perintah ini. Silakan coba lagi sebentar lagi.";
 const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 
 function buildStateAwareFallback(state?: string): string {
@@ -116,6 +117,16 @@ function normalizePhone(raw: string): string {
   else if (p.startsWith("0")) p = "62" + p.slice(1);
   else if (p.startsWith("8")) p = "62" + p;
   return p;
+}
+
+function isConfiguredAdminPhone(phone: string): boolean {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return false;
+  return (process.env.ADMIN_PHONE_NUMBERS || "")
+    .split(",")
+    .map((p) => normalizePhone(p))
+    .filter(Boolean)
+    .includes(normalized);
 }
 
 /**
@@ -770,9 +781,7 @@ export async function executeAutoreplyForPhone(
 
   // ── Mode selection ──────────────────────────────
   let mode = "guest"; // Default
-  const adminPhones = (process.env.ADMIN_PHONE_NUMBERS || "").split(",").map(p => normalizePhone(p));
-  
-  if (manager || adminPhones.includes(normalizePhone(phone))) {
+  if (manager || isConfiguredAdminPhone(phone)) {
     mode = "admin";
   }
 
@@ -923,7 +932,7 @@ export async function executeAutoreplyForPhone(
     if (m.direction !== "out") return true;
     const body = (m.body ?? "").trim();
     if (!body) return false;
-    if (body === FALLBACK_MESSAGE) return false;
+    if (body === FALLBACK_MESSAGE || body === MANAGER_FALLBACK_MESSAGE) return false;
     if (body === QUICK_ACK_MESSAGE) return false;
     return true;
   });
@@ -1422,8 +1431,8 @@ export async function executeAutoreplyForPhone(
   if (quickAckTimer) clearTimeout(quickAckTimer);
   if (metrics.aiStartedAt && !metrics.aiFinishedAt) metrics.aiFinishedAt = Date.now();
 
-  let finalFallback = FALLBACK_MESSAGE;
-  if (!reply) {
+  let finalFallback = isManager ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
+  if (!reply && !isManager) {
     try {
       const stateRecord = await getBookingState(supabaseAdmin as any, phone);
       finalFallback = buildStateAwareFallback(stateRecord.state);
@@ -2036,6 +2045,9 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
+    const isManagerEntry = !!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone);
+    const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
+
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
     // atau ada queue lain yang sudah membalas thread ini.
     try {
@@ -2125,7 +2137,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] context fetch failed:", e);
     }
 
-    if (!fonnteToken || !autoReplyEnabled) {
+    if (!fonnteToken || (!autoReplyEnabled && !isManagerEntry)) {
       // Tandai tetap supaya tidak dicek terus-menerus.
       await (supabaseAdmin as any)
         .from("wa_conversation_queue")
@@ -2164,7 +2176,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
     try {
       outboundRowId = await saveOutboundMessage(supabaseAdmin, {
         threadId: entry.thread_id,
-        body: FALLBACK_MESSAGE,
+        body: fallbackBody,
         metadata: {
           agent: "system",
           agent_key: "fallback",
@@ -2178,7 +2190,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] save outbound (pending) failed:", e);
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, FALLBACK_MESSAGE);
+    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, fallbackBody);
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
