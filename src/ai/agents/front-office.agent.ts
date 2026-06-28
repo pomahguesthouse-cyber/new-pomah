@@ -160,16 +160,23 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     s.roomSummary,
 
-    "KETERSEDIAAN KAMAR: WAJIB panggil `check_room_availability` saat tamu tanya kamar " +
-      "kosong / ingin booking — jangan menebak. " +
-      "KONTEKS TANGGAL: baca ulang riwayat percakapan. Bila tanggal sudah disepakati " +
-      "sebelumnya, PAKAI tanggal itu — JANGAN reset ke hari ini. Tanggal hanya berubah " +
-      "bila tamu eksplisit menyebut tanggal baru. " +
-      "Bila tamu BELUM pernah menyebut tanggal, JANGAN asumsi 'hari ini' — tanyakan dulu " +
-      "(contoh: 'Boleh tahu untuk tanggal berapa Kak rencana menginap, dan sampai tanggal " +
-      "berapa? 📅'). Setelah tamu menjawab, baru panggil tool. " +
-      "ATURAN UTAMA: begitu tamu menyebut tanggal APAPUN, LANGSUNG panggil " +
-      "`check_room_availability` SEBELUM balas teks. JANGAN tanya jumlah orang dulu. " +
+    "KETERSEDIAAN KAMAR — ATURAN TANGGAL (BACA DULU SEBELUM TOOL CALL): " +
+      "(1) JANGAN PERNAH mengisi argumen `check_in` dengan tanggal hari ini (" + today + ") " +
+      "sebagai default. " +
+      "(2) Tamu wajib menyebut tanggal SECARA EKSPLISIT (mis. 'besok', 'lusa', '15 Juli', " +
+      "'akhir minggu ini') sebelum tool dipanggil. Frasa umum seperti 'mau tanya kamar', " +
+      "'cek kamar', 'ada kamar?', 'mau booking' BUKAN tanggal — itu sinyal supaya kamu TANYAKAN " +
+      "tanggal dulu, bukan asumsi hari ini. " +
+      "(3) Bila tamu BELUM menyebut tanggal sama sekali, JAWAB DULU dengan teks (tanpa tool call): " +
+      "'Boleh tahu untuk tanggal berapa Kak rencana menginap, dan sampai tanggal berapa? 📅'. " +
+      "(4) Bila tanggal sudah disepakati sebelumnya di riwayat, PAKAI tanggal itu — JANGAN reset " +
+      "ke hari ini. Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru.",
+
+    "KETERSEDIAAN KAMAR — KAPAN PANGGIL TOOL: " +
+      "Setelah aturan tanggal di atas terpenuhi, WAJIB panggil `check_room_availability` " +
+      "saat tamu tanya kamar kosong / ingin booking — jangan menebak. " +
+      "Begitu tamu menyebut tanggal APAPUN, LANGSUNG panggil `check_room_availability` " +
+      "SEBELUM balas teks. JANGAN tanya jumlah orang dulu. " +
       "KONVERSI tanggal relatif dari hari ini (" +
       today +
       "): 'hari ini' → " +
