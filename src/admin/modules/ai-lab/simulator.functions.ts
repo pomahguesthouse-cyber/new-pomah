@@ -13,12 +13,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { ChatSummaryStructured } from "@/ai/chat-summary.types";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { runMultiAgentOrchestration } from "@/ai/multi-agent-orchestrator";
 import { getBookingState, updateBookingState } from "@/ai/state-machine/booking-machine";
 import { embedTrainingExample } from "@/ai/training-rag.service";
 import { todayWIB } from "@/lib/date";
+import {
+  saveInboundMessage,
+  saveMessageMetadata,
+  saveOutboundMessage,
+  updateThreadAutoReplyMeta,
+} from "@/repositories/message.repository";
+import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import {
   findSessionStartIndex,
   pickAttachment,
@@ -123,28 +131,45 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       return { ok: false as const, error: "AI API key belum dikonfigurasi." };
     }
 
-    // Mirror the production WA path: fetch the persisted chat summary so the
-    // simulator runs with the same session-carryover context the real bot
-    // would see for this phone number. Missing thread → empty summary.
-    let chatSummary = "";
-    try {
-      const { data: thread } = await (supabaseAdmin as any)
-        .from("whatsapp_threads")
-        .select("chat_summary")
-        .eq("phone", data.phone)
-        .maybeSingle();
-      chatSummary = thread?.chat_summary ?? "";
-    } catch (e) {
-      console.warn("[simulator] chat_summary fetch failed (non-fatal):", e);
+    const { messageId, error: saveErr } = await saveInboundMessage(supabaseAdmin as any, {
+      phone: data.phone,
+      name: "Simulator Guest",
+      body: data.message,
+      fonnteId: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    });
+    if (saveErr || !messageId) {
+      return { ok: false as const, error: saveErr?.message ?? "Gagal menyimpan pesan simulator." };
     }
 
-    // Session windowing: production trims history at a >15-min gap. The
-    // simulator transcript has no sent_at, so this is a no-op here (returns
-    // 0), but using the same helper keeps the code paths identical and lets
-    // future "import from real thread" scenarios share the trim.
-    const transcript = [...data.transcript, { direction: "in", body: data.message }];
-    const sessionStart = findSessionStartIndex(transcript as Array<{ sent_at?: string }>);
-    const messages = transcript.slice(sessionStart).slice(-20);
+    await saveMessageMetadata(supabaseAdmin as any, {
+      messageId,
+      metadata: {
+        intent_label: classifyMessageIntent(data.message),
+        source: "simulator",
+        simulator: true,
+      },
+    }).catch((e) => console.warn("[simulator] metadata save failed:", e));
+
+    const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
+      p_phone: data.phone,
+    });
+    if (ctxErr || !ctx) {
+      return {
+        ok: false as const,
+        error: ctxErr?.message ?? "Context WhatsApp simulator kosong.",
+      };
+    }
+
+    const c = ctx as {
+      thread_id: string;
+      chat_summary?: string | null;
+      chat_summary_json?: Record<string, unknown> | null;
+      messages?: Array<{ direction: "in" | "out"; body: string; sent_at?: string }>;
+    };
+
+    const allMessages = c.messages ?? [];
+    const sessionStart = findSessionStartIndex(allMessages);
+    const messages = allMessages.slice(sessionStart).slice(-20);
     const lastMessage = data.message;
 
     // Payment-proof OCR: if the admin attached an image, run Vision OCR +
@@ -177,7 +202,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
         brosurFiles: env.brosurFiles,
         today,
         lastMessage,
-        chatSummary,
+        chatSummary: c.chat_summary || "",
+        chatSummaryJson: (c.chat_summary_json as ChatSummaryStructured | null | undefined) || undefined,
       },
       toolCtx: {
         supabasePublic: supabasePublic as any,
@@ -212,6 +238,28 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       if (picked.url) attachment = { url: picked.url, name: picked.name };
     }
 
+    if (displayReply) {
+      await saveOutboundMessage(supabaseAdmin as any, {
+        threadId: c.thread_id,
+        body: displayReply,
+        metadata: {
+          agent: orch.agentKey ?? "simulator",
+          tools_used: orch.toolsUsed ?? [],
+          agent_key: orch.agentKey,
+          intent: orch.intent,
+          routing_confidence: orch.routingConfidence,
+          escalated: orch.escalated,
+          source: "simulator",
+          simulator: true,
+          send_status: "simulated",
+        } as any,
+      });
+      await updateThreadAutoReplyMeta(supabaseAdmin as any, {
+        threadId: c.thread_id,
+        toolsUsed: orch.toolsUsed ?? [],
+      }).catch((e) => console.warn("[simulator] thread meta update failed:", e));
+    }
+
     return {
       ok: true as const,
       reply: displayReply,
@@ -227,7 +275,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       bookingState: stateAfter.state,
       bookingContext: stateAfter.context,
       elapsedMs,
-      chatSummaryUsed: !!chatSummary,
+      chatSummaryUsed: !!c.chat_summary,
       trainingExamplesUsed: orch.trainingExamplesUsed ?? 0,
       trainingExampleIds: orch.trainingExampleIds ?? [],
     };
@@ -266,6 +314,22 @@ export const resetSimulation = createServerFn({ method: "POST" })
       p_last_entity: null,
       p_slots:       {},
     });
+    const { data: thread } = await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id")
+      .eq("phone", data.phone)
+      .maybeSingle();
+    if (thread?.id) {
+      await (supabaseAdmin as any).from("whatsapp_messages").delete().eq("thread_id", thread.id);
+      await (supabaseAdmin as any)
+        .from("whatsapp_threads")
+        .update({
+          chat_summary: null,
+          chat_summary_json: {},
+          chat_summary_updated_at: null,
+        })
+        .eq("id", thread.id);
+    }
     return { ok: true };
   });
 
