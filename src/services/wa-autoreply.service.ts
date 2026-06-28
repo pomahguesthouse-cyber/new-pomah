@@ -1851,9 +1851,14 @@ export async function drainQueue(
       queueCompleted = true;
     };
 
+    // Kirim heartbeat pertama SEGERA setelah klaim supaya lock langsung
+    // di-refresh (jangan menunggu tick pertama). Lalu tick tiap 7 detik —
+    // lebih rapat dari TTL 40s (≈5 tick slack) supaya worker yang masih hidup
+    // tapi sibuk (LLM + tools) tidak salah ditandai zombie oleh cron cleanup.
+    void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
     const heartbeatTimer = setInterval(() => {
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
-    }, 10_000);
+    }, 7_000);
 
     try {
       if (abortSignal?.aborted) {
