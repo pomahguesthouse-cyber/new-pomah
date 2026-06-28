@@ -805,9 +805,28 @@ export async function executeAutoreplyForPhone(
           .upsert({ phone, mode: nextMode, updated_at: new Date().toISOString() });
           
         // RESET STATE
-        await adminDb.from("booking_states").delete().eq("phone", phone);
-        await adminDb.from("chat_summaries").delete().eq("phone", phone);
-        await adminDb.from("conversation_monitor").delete().eq("phone", phone);
+        const resetStep = async (label: string, task: () => PromiseLike<unknown>) => {
+          try {
+            await task();
+          } catch (e) {
+            console.warn(`[Autoreply] mode reset ${label} failed (non-fatal):`, e);
+          }
+        };
+
+        await resetStep("booking-state", () =>
+          adminDb.from("wa_booking_states").delete().eq("phone", phone),
+        );
+
+        if (c.thread_id) {
+          await resetStep("message-history", () =>
+            adminDb.from("whatsapp_messages").delete().eq("thread_id", c.thread_id),
+          );
+          await resetStep("thread-summary", () => clearThreadSummary(adminDb, c.thread_id));
+        }
+
+        await resetStep("conversation-alerts", () =>
+          adminDb.from("conversation_alerts").delete().eq("phone", phone),
+        );
         
         const ack = nextMode === "guest"
           ? "✅ Mode Guest aktif. Chatbot akan merespons sebagai Rani."
