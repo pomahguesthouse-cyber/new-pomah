@@ -15,6 +15,7 @@ import {
 } from "@/admin/modules/seo/article-generator.functions";
 import { computeNextRunUTC, type Frequency } from "@/admin/modules/seo/schedules.functions";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { getWaitUntil, runDeferred } from "@/lib/cf-context";
 
 type DueRow = {
   id: string;
