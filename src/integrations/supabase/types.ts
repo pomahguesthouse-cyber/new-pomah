@@ -1464,6 +1464,47 @@ export type Database = {
           },
         ]
       }
+      room_blocks: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          end_date: string
+          id: string
+          reason: string | null
+          room_id: string | null
+          start_date: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          end_date: string
+          id?: string
+          reason?: string | null
+          room_id?: string | null
+          start_date: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          reason?: string | null
+          room_id?: string | null
+          start_date?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_blocks_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       room_daily_rates: {
         Row: {
           created_at: string
@@ -2391,6 +2432,24 @@ export type Database = {
           message_thread_id?: string | null
           messages?: Json
           updated_at?: string
+        }
+        Relationships: []
+      }
+      user_modes: {
+        Row: {
+          mode: string
+          phone: string
+          updated_at: string | null
+        }
+        Insert: {
+          mode: string
+          phone: string
+          updated_at?: string | null
+        }
+        Update: {
+          mode?: string
+          phone?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
