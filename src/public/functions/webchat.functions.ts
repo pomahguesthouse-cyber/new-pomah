@@ -133,15 +133,26 @@ function shouldUseDeterministicAvailability(message: string): boolean {
   return asksAvailability && hasDateSignal;
 }
 
-function formatAvailabilityReply(raw: {
-  periode: string;
-  kamar: Array<{ nama: string; harga_per_malam: number; kamar_tersedia: number | null }>;
-}): string {
+/** True bila pesan tamu DIBUKA dengan sapaan — agar bot membalas sapaan
+ *  hanya saat tepat (turn pembuka), tidak mengulang di tengah percakapan. */
+function messageOpensWithGreeting(message: string): boolean {
+  return /^\s*(halo|hai|hi|hei|hey|hello|assalam|selamat\s+(pagi|siang|sore|malam)|pagi|siang|sore|malam)\b/i.test(
+    message,
+  );
+}
+
+function formatAvailabilityReply(
+  raw: {
+    periode: string;
+    kamar: Array<{ nama: string; harga_per_malam: number; kamar_tersedia: number | null }>;
+  },
+  greet = false,
+): string {
   const available = raw.kamar.filter((r) => Number(r.kamar_tersedia ?? 0) > 0);
   if (available.length === 0) {
     return (
-      `Mohon maaf Kak, untuk periode ${raw.periode} kamar kami sudah penuh.\n\n` +
-      "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cekkan lagi."
+      `${greet ? "Halo Kak, mohon" : "Mohon"} maaf Kak, untuk tanggal ${raw.periode} kamar kami sudah penuh.\n\n` +
+      "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi."
     );
   }
 
@@ -149,7 +160,7 @@ function formatAvailabilityReply(raw: {
     const priceText = r.harga_per_malam > 0 ? `, ${fmtRupiah(r.harga_per_malam)}/malam` : "";
     return `- ${r.nama}: ${r.kamar_tersedia} kamar tersedia${priceText}`;
   });
-  return `Untuk periode ${raw.periode}, masih tersedia:\n${lines.join("\n")}\n\nKakak rencana untuk berapa orang?`;
+  return `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${raw.periode}, masih tersedia:\n${lines.join("\n")}\n\nKakak rencana untuk berapa orang?`;
 }
 
 async function buildDeterministicAvailabilityReply(
@@ -176,10 +187,13 @@ async function buildDeterministicAvailabilityReply(
     };
   });
 
-  return formatAvailabilityReply({
-    periode: `${fmtDateID(range.checkIn)} – ${fmtDateID(range.checkOut)}`,
-    kamar,
-  });
+  return formatAvailabilityReply(
+    {
+      periode: `${fmtDateID(range.checkIn)} – ${fmtDateID(range.checkOut)}`,
+      kamar,
+    },
+    messageOpensWithGreeting(message),
+  );
 }
 
 const SAFE_BOOKING_COLS =

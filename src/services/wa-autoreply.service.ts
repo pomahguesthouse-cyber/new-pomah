@@ -385,7 +385,7 @@ function shouldUseDeterministicAvailability(message: string): boolean {
   return asksAvailability && hasDateSignal;
 }
 
-function formatAvailabilityReply(raw: string): FastFaqResult | null {
+function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
   let data: any;
   try {
     data = JSON.parse(raw);
@@ -402,8 +402,8 @@ function formatAvailabilityReply(raw: string): FastFaqResult | null {
     return {
       intent: "deterministic_availability_full",
       reply:
-        `Mohon maaf Kak, untuk periode ${period} kamar kami sudah penuh.\n\n` +
-        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cekkan lagi.",
+        `${greet ? "Halo Kak, mohon" : "Mohon"} maaf Kak, untuk tanggal ${period} kamar kami sudah penuh.\n\n` +
+        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
     };
   }
 
@@ -417,9 +417,17 @@ function formatAvailabilityReply(raw: string): FastFaqResult | null {
   return {
     intent: "deterministic_availability",
     reply:
-      `Untuk periode ${period}, masih tersedia:\n${lines.join("\n")}\n\n` +
+      `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${period}, masih tersedia:\n${lines.join("\n")}\n\n` +
       "Kakak rencana untuk berapa orang?",
   };
+}
+
+/** True bila pesan tamu DIBUKA dengan sapaan — agar bot membalas sapaan
+ *  hanya saat tepat (turn pembuka), tidak mengulang di tengah percakapan. */
+function messageOpensWithGreeting(message: string): boolean {
+  return /^\s*(halo|hai|hi|hei|hey|hello|assalam|selamat\s+(pagi|siang|sore|malam)|pagi|siang|sore|malam)\b/i.test(
+    message,
+  );
 }
 
 async function buildDeterministicAvailabilityReply(params: {
@@ -445,7 +453,7 @@ async function buildDeterministicAvailabilityReply(params: {
     } as any,
   );
 
-  return formatAvailabilityReply(raw);
+  return formatAvailabilityReply(raw, messageOpensWithGreeting(params.message));
 }
 
 function isTonightReply(message: string): boolean {
