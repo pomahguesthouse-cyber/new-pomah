@@ -168,6 +168,11 @@ function cleanNameCandidate(candidate: string): string {
     .trim();
 }
 
+// Kata kerja / kata tanya / kata fungsi yang TIDAK mungkin jadi nama orang.
+// Kalau salah satu muncul sebagai token, kandidat ditolak sebagai nama.
+const NON_NAME_TOKEN =
+  /^(mau|ingin|pengen|pingin|tanya|nanya|tanyakan|cek|cek?in|lihat|liat|minta|tolong|info|infonya|booking|pesan|reservasi|kamar|room|tipe|type|harga|tarif|biaya|fasilitas|wifi|parkir|sarapan|breakfast|lokasi|alamat|tersedia|ketersediaan|kosong|ada|apakah|apa|berapa|bagaimana|gimana|kapan|dimana|kenapa|mengapa|halo|hai|hello|hi|pagi|siang|sore|malam|ya|iya|tidak|gak|ga|ngga|enggak|ok|oke|sip|bisa|boleh|mohon|maaf|terima|kasih|thanks)$/i;
+
 export function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
   if (t.length < 2 || t.length > 80) return false;
@@ -177,6 +182,10 @@ export function looksLikePersonName(candidate: string): boolean {
   if (tokens.length > 8) return false; // names rarely > 8 tokens
   // Must contain at least one alphabetic word of length ≥ 2.
   if (!tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w))) return false;
+  // Reject phrases that contain question/verb/function words — these are
+  // questions or commands ("mau tanya kamar", "ada kamar", "cek harga"),
+  // not a guest's name. A real name won't contain these tokens.
+  if (tokens.some((w) => NON_NAME_TOKEN.test(w))) return false;
   return true;
 }
 

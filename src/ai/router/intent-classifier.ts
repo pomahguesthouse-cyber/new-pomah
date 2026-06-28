@@ -470,6 +470,29 @@ export async function classifyIntent(
 
   // Trigger LLM Fallback if ambiguous or general and llmConfig is present
   const isAmbiguous = ruleResult.category === "general" || ruleResult.confidence < 0.70;
+
+  // Gibberish guard: don't let the LLM "autocorrect" a single nonsense token
+  // (e.g. "sisng", "kmar", "asdf") into a confident booking/availability intent.
+  // If the rules matched nothing AND the message is one short alphabetic token
+  // that isn't a known short keyword, treat it as unintelligible → "general"
+  // so the bot asks the guest to rephrase instead of firing tools.
+  const trimmedForGuard = text.trim();
+  const isSingleToken = /^[a-zA-Z]+$/.test(trimmedForGuard);
+  const KNOWN_SHORT_WORDS = /^(ya|ok|oke|sip|halo|hai|hi|cek|kos|wifi|dp|booking|kamar)$/i;
+  const isLikelyGibberish =
+    scores.size === 0 &&
+    isSingleToken &&
+    trimmedForGuard.length <= 6 &&
+    !KNOWN_SHORT_WORDS.test(trimmedForGuard);
+
+  if (isLikelyGibberish) {
+    return {
+      category: "general",
+      confidence: 0.4,
+      matchedTerms: ["gibberish-guard"],
+    };
+  }
+
   if (isAmbiguous && llmConfig?.apiKey) {
     const INTENT_LLM_TIMEOUT_MS = 5_000;
     const controller = new AbortController();
