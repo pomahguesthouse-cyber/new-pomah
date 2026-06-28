@@ -12,7 +12,10 @@ import {
   Save,
   RefreshCw,
   Sliders,
-  Type
+  Type,
+  DownloadCloud,
+  FlaskConical,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,26 +29,57 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   getIntentRules,
   saveIntentRule,
+  seedDefaultIntentRules,
+  testIntentClassification,
 } from "./intent-rules.functions";
+import {
+  INTENT_CATEGORIES,
+  getIntentCategoryLabel,
+} from "@/ai/router/intent-categories";
 
-// Category options for dropdown
-const CATEGORIES = [
-  { key: "greeting", label: "Greeting (Sapaan)" },
-  { key: "booking_inquiry", label: "Booking Inquiry (Tanya Pesan)" },
-  { key: "availability_check", label: "Availability Check (Cek Ketersediaan)" },
-  { key: "pricing_inquiry", label: "Pricing Inquiry (Tanya Harga)" },
-  { key: "payment", label: "Payment (Pembayaran)" },
-  { key: "customer-care", label: "Customer Care (Layanan Kamar)" },
-  { key: "maintenance", label: "Maintenance (Kerusakan)" },
-  { key: "complaint", label: "Complaint (Komplain)" },
-];
+const WEIGHT_MIN = 1;
+const WEIGHT_MAX = 20;
+
+/**
+ * Validasi sebuah pola: terima bentuk polos (`\bharga\b`) atau ber-flag
+ * (`/\bharga\b/i`). Mengembalikan pesan error bila regex tidak bisa di-compile.
+ */
+function validatePattern(raw: string): { ok: boolean; error?: string } {
+  const p = raw.trim();
+  if (!p) return { ok: false, error: "Pola kosong." };
+  try {
+    if (p.startsWith("/") && p.lastIndexOf("/") > 0) {
+      const last = p.lastIndexOf("/");
+      // eslint-disable-next-line no-new
+      new RegExp(p.slice(1, last), p.slice(last + 1) || "i");
+    } else {
+      // eslint-disable-next-line no-new
+      new RegExp(p, "i");
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Regex tidak valid." };
+  }
+}
 
 export function IntentRulesView() {
   const qc = useQueryClient();
   const getRulesFn = useServerFn(getIntentRules);
   const saveRuleFn = useServerFn(saveIntentRule);
+  const seedFn = useServerFn(seedDefaultIntentRules);
+  const testFn = useServerFn(testIntentClassification);
 
   // Fetch intent rules
   const { data, isLoading, refetch } = useQuery({
@@ -64,7 +98,20 @@ export function IntentRulesView() {
   } | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [newPattern, setNewPattern] = useState("");
+  const [patternError, setPatternError] = useState<string | null>(null);
+
+  // Delete confirmation
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+
+  // Tester
+  const [testText, setTestText] = useState("");
+  const [testMode, setTestMode] = useState<"guest" | "admin" | "managerial">("guest");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<
+    { category: string; confidence: number; matchedTerms: string[] } | null
+  >(null);
 
   const handleOpenEdit = (rule?: any) => {
     if (rule) {
@@ -82,21 +129,35 @@ export function IntentRulesView() {
       });
     }
     setNewPattern("");
+    setPatternError(null);
   };
 
   const handleCloseEdit = () => {
     setEditingRule(null);
+    setPatternError(null);
   };
 
   const handleAddPattern = () => {
-    if (!newPattern.trim()) return;
-    if (editingRule) {
-      setEditingRule({
-        ...editingRule,
-        patterns: [...editingRule.patterns, newPattern.trim()],
-      });
-      setNewPattern("");
+    if (!editingRule) return;
+    const candidate = newPattern.trim();
+    if (!candidate) return;
+
+    const check = validatePattern(candidate);
+    if (!check.ok) {
+      setPatternError(check.error ?? "Regex tidak valid.");
+      return;
     }
+    if (editingRule.patterns.includes(candidate)) {
+      setPatternError("Pola ini sudah ada.");
+      return;
+    }
+
+    setEditingRule({
+      ...editingRule,
+      patterns: [...editingRule.patterns, candidate],
+    });
+    setNewPattern("");
+    setPatternError(null);
   };
 
   const handleRemovePattern = (index: number) => {
@@ -125,7 +186,7 @@ export function IntentRulesView() {
           category: editingRule.category,
           patterns: editingRule.patterns,
           weight: editingRule.weight,
-        }
+        },
       });
       toast.success(editingRule.id ? "Aturan berhasil diperbarui" : "Aturan berhasil dibuat");
       qc.invalidateQueries({ queryKey: ["ai-intent-rules"] });
@@ -137,27 +198,56 @@ export function IntentRulesView() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus aturan intent untuk kategori "${name}"?`)) return;
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
       await saveRuleFn({
         data: {
-          id,
+          id: deleteTarget.id,
           category: "",
           patterns: [],
           weight: 0,
           delete: true,
-        }
+        },
       });
       toast.success("Aturan berhasil dihapus");
       qc.invalidateQueries({ queryKey: ["ai-intent-rules"] });
     } catch (e: any) {
       toast.error(e.message);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
-  const getCategoryLabel = (key: string) => {
-    return CATEGORIES.find((c) => c.key === key)?.label ?? key;
+  const handleSeedDefaults = async () => {
+    setSeeding(true);
+    try {
+      const res = await seedFn();
+      if (res.inserted > 0) {
+        toast.success(`${res.inserted} aturan default diimpor (${res.skipped} dilewati karena sudah ada).`);
+      } else {
+        toast.info("Semua kategori default sudah ada — tidak ada yang ditambahkan.");
+      }
+      qc.invalidateQueries({ queryKey: ["ai-intent-rules"] });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleTest = async () => {
+    const text = testText.trim();
+    if (!text) return;
+    setTesting(true);
+    try {
+      const res = await testFn({ data: { text, mode: testMode } });
+      setTestResult(res);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
@@ -172,6 +262,20 @@ export function IntentRulesView() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9"
+              disabled={seeding}
+              onClick={handleSeedDefaults}
+            >
+              {seeding ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <DownloadCloud className="h-3.5 w-3.5" />
+              )}
+              Impor Default
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -192,6 +296,78 @@ export function IntentRulesView() {
             </Button>
           </div>
         </div>
+
+        {/* Merge-behaviour notice */}
+        <Card className="flex gap-3 border-amber-300 bg-amber-50/60 p-4">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+          <div className="text-xs text-amber-900 leading-relaxed space-y-1">
+            <p className="font-semibold">Cara kerja aturan ini</p>
+            <p>
+              Aturan di sini <strong>digabung per-kategori</strong> dengan aturan bawaan sistem. Kategori yang Anda
+              edit di sini akan menimpa bawaannya; kategori yang tidak Anda sentuh tetap memakai aturan bawaan. Jadi
+              menambah satu aturan tidak lagi mematikan kategori lain. Gunakan <strong>Impor Default</strong> bila ingin
+              melihat & menyunting seluruh aturan bawaan.
+            </p>
+          </div>
+        </Card>
+
+        {/* Tester */}
+        <Card className="space-y-3 border-teal-200 bg-white p-4 sm:p-5">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-5 w-5 text-teal-700" />
+            <h3 className="font-semibold text-sm">Uji Klasifikasi</h3>
+            <span className="text-[11px] text-muted-foreground">(berbasis aturan, tanpa fallback AI)</span>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder='Ketik contoh pesan tamu, mis. "ada kamar kosong besok?"'
+              value={testText}
+              onChange={(e) => setTestText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleTest();
+                }
+              }}
+              className="h-9 text-sm"
+            />
+            <select
+              className="h-9 rounded-md border border-stone-300 bg-white px-2 text-sm focus:border-teal-500 focus:outline-none"
+              value={testMode}
+              onChange={(e) => setTestMode(e.target.value as "guest" | "admin" | "managerial")}
+              aria-label="Mode penguji"
+            >
+              <option value="guest">Mode Tamu</option>
+              <option value="admin">Mode Admin</option>
+              <option value="managerial">Mode Manajer</option>
+            </select>
+            <Button
+              size="sm"
+              className="h-9 shrink-0 bg-teal-700 hover:bg-teal-800 text-white"
+              disabled={testing || !testText.trim()}
+              onClick={handleTest}
+            >
+              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Uji"}
+            </Button>
+          </div>
+          {testResult && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">Hasil:</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2.5 py-0.5 font-semibold text-teal-800 border border-teal-200">
+                <Network className="h-3 w-3" />
+                {getIntentCategoryLabel(testResult.category)}
+              </span>
+              <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-stone-600 border border-stone-200">
+                confidence {(testResult.confidence * 100).toFixed(0)}%
+              </span>
+              {testResult.matchedTerms.length > 0 && (
+                <span className="text-muted-foreground">
+                  cocok: <span className="font-mono text-stone-700">{testResult.matchedTerms.join(", ")}</span>
+                </span>
+              )}
+            </div>
+          )}
+        </Card>
 
         {/* Explain Box */}
         <Card className="space-y-3 border-dashed border-teal-300 bg-teal-50/50 p-4 sm:p-5">
@@ -229,7 +405,9 @@ export function IntentRulesView() {
           <Card className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground border-dashed">
             <Network className="h-10 w-10 text-muted-foreground/60 mb-2" />
             <p className="font-medium text-sm">Belum ada aturan intent terdefinisi.</p>
-            <p className="text-xs text-muted-foreground mt-1">Sistem saat ini menggunakan fallback aturan statis.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Sistem saat ini menggunakan aturan bawaan. Klik "Impor Default" untuk menyuntingnya.
+            </p>
           </Card>
         ) : (
           <div className="grid gap-4">
@@ -239,12 +417,17 @@ export function IntentRulesView() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-2.5 py-0.5 text-xs font-semibold text-teal-800 border border-teal-200">
                       <Network className="h-3 w-3" />
-                      {getCategoryLabel(rule.category)}
+                      {getIntentCategoryLabel(rule.category)}
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-600 border border-stone-200">
                       <Sliders className="h-2.5 w-2.5" />
                       Bobot: {rule.weight}
                     </span>
+                    {rule.created_at && (
+                      <span className="text-[10px] text-muted-foreground">
+                        dibuat {new Date(rule.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -272,7 +455,7 @@ export function IntentRulesView() {
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2.5 text-xs gap-1 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                    onClick={() => handleDelete(rule.id, getCategoryLabel(rule.category))}
+                    onClick={() => setDeleteTarget({ id: rule.id, label: getIntentCategoryLabel(rule.category) })}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Hapus
                   </Button>
@@ -281,6 +464,28 @@ export function IntentRulesView() {
             ))}
           </div>
         )}
+
+        {/* Delete confirmation */}
+        <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Hapus aturan intent?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Aturan untuk kategori "{deleteTarget?.label}" akan dihapus. Bila ini satu-satunya aturan kategori
+                tersebut, sistem otomatis kembali memakai aturan bawaan untuk kategori itu.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Batal</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                onClick={handleConfirmDelete}
+              >
+                Hapus
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Edit / Add Dialog */}
         <Dialog open={!!editingRule} onOpenChange={(open) => !open && handleCloseEdit()}>
@@ -302,7 +507,7 @@ export function IntentRulesView() {
                     value={editingRule.category}
                     onChange={(e) => setEditingRule({ ...editingRule, category: e.target.value })}
                   >
-                    {CATEGORIES.map((cat) => (
+                    {INTENT_CATEGORIES.map((cat) => (
                       <option key={cat.key} value={cat.key}>
                         {cat.label}
                       </option>
@@ -320,14 +525,18 @@ export function IntentRulesView() {
                   </div>
                   <input
                     type="range"
-                    min="1"
-                    max="20"
+                    min={WEIGHT_MIN}
+                    max={WEIGHT_MAX}
                     className="w-full accent-teal-700 h-1.5 bg-stone-200 rounded-lg cursor-pointer"
                     value={editingRule.weight}
                     onChange={(e) => setEditingRule({ ...editingRule, weight: parseInt(e.target.value) || 5 })}
                   />
                   <p className="text-[10px] text-muted-foreground">
                     Semakin tinggi bobot, semakin diprioritaskan jika ada kata kunci yang tumpang tindih dengan intent lain.
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Referensi tangga bobot bawaan: <strong>perintah admin 20</strong> · komplain 10 · kerusakan/layanan 8 ·
+                    finance 7 · harga/ketersediaan 6 · niat umum 5 · sapaan 3.
                   </p>
                 </div>
 
@@ -361,14 +570,17 @@ export function IntentRulesView() {
                     <Input
                       placeholder="Contoh: \b(kecewa|buruk)\b"
                       value={newPattern}
-                      onChange={(e) => setNewPattern(e.target.value)}
+                      onChange={(e) => {
+                        setNewPattern(e.target.value);
+                        if (patternError) setPatternError(null);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           handleAddPattern();
                         }
                       }}
-                      className="h-9 font-mono text-xs"
+                      className={`h-9 font-mono text-xs ${patternError ? "border-rose-400 focus-visible:ring-rose-400" : ""}`}
                     />
                     <Button
                       type="button"
@@ -380,11 +592,16 @@ export function IntentRulesView() {
                       Tambah Pola
                     </Button>
                   </div>
+                  {patternError && (
+                    <p className="text-[10px] text-rose-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> {patternError}
+                    </p>
+                  )}
                   <div className="flex gap-1.5 justify-end">
                     <button
                       type="button"
                       className="text-[10px] text-teal-800 hover:underline flex items-center gap-0.5 font-medium"
-                      onClick={() => setNewPattern(prev => prev ? prev : "\\b(kata1|kata2)\\b")}
+                      onClick={() => setNewPattern((prev) => (prev ? prev : "\\b(kata1|kata2)\\b"))}
                     >
                       <Type className="h-3 w-3" /> Template Pencocokan Kata
                     </button>

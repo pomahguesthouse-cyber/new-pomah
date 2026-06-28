@@ -2,7 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { clearIntentRulesCache } from "@/ai/router/intent-classifier";
+import {
+  clearIntentRulesCache,
+  classifyIntent,
+  getDefaultIntentRulesSeed,
+} from "@/ai/router/intent-classifier";
 
 // Validate inputs
 const SaveRuleInput = z.object({
@@ -74,4 +78,61 @@ export const saveIntentRule = createServerFn({ method: "POST" })
     clearIntentRulesCache();
 
     return { ok: true };
+  });
+
+/**
+ * Impor aturan default (RULES statis) ke tabel `ai_intent_rules`.
+ *
+ * Hanya menyisipkan kategori yang BELUM punya baris di DB — jadi aman
+ * dijalankan berkali-kali dan tidak menimpa hasil suntingan admin. Tujuannya
+ * agar admin bisa melihat & menyunting aturan bawaan, bukan mengeditnya buta.
+ */
+export const seedDefaultIntentRules = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const seed = getDefaultIntentRulesSeed();
+
+    const { data: existing, error: readErr } = await supabaseAdmin
+      .from("ai_intent_rules")
+      .select("category");
+
+    if (readErr) {
+      throw new Error(`Failed to read existing rules: ${readErr.message}`);
+    }
+
+    const existingCats = new Set((existing ?? []).map((r: { category: string }) => r.category));
+    const toInsert = seed.filter((s) => !existingCats.has(s.category));
+
+    if (toInsert.length > 0) {
+      const { error } = await supabaseAdmin.from("ai_intent_rules").insert(toInsert);
+      if (error) {
+        throw new Error(`Failed to seed default rules: ${error.message}`);
+      }
+    }
+
+    clearIntentRulesCache();
+
+    return { inserted: toInsert.length, skipped: seed.length - toInsert.length };
+  });
+
+const TestIntentInput = z.object({
+  text: z.string().min(1).max(500),
+  mode: z.enum(["guest", "admin", "managerial"]).default("guest"),
+});
+
+/**
+ * Alat uji: jalankan classifier pada contoh pesan tamu lalu kembalikan
+ * kategori pemenang + confidence + kata yang cocok. Memakai aturan DB yang
+ * sedang aktif (lewat supabaseAdmin) sehingga admin bisa memverifikasi
+ * efek suntingannya. `llmConfig` sengaja tidak diberikan agar hasil murni
+ * berbasis aturan (deterministik) tanpa memicu fallback LLM.
+ */
+export const testIntentClassification = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => TestIntentInput.parse(d))
+  .handler(async ({ data }) => {
+    const result = await classifyIntent(data.text, supabaseAdmin, undefined, {
+      mode: data.mode,
+    });
+    return result;
   });

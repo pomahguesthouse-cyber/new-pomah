@@ -14,6 +14,7 @@
 import type { IntentCategory }   from "@/ai/agents/types";
 import type { ClassifiedIntent }  from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ADMIN_INTENT_CATEGORIES } from "./intent-categories";
 
 // ─── Rule definitions ─────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ interface IntentRule {
   weight:   number;
 }
 
-const RULES: IntentRule[] = [
+export const RULES: IntentRule[] = [
   // ── Admin Rules (only match if in admin mode, very high weight)
   {
     category: "list_bookings",
@@ -262,6 +263,66 @@ interface CachedRules {
   expiresAt: number;
 }
 
+// ─── Rule merging ─────────────────────────────────────────────────────────────
+
+/**
+ * Gabungkan aturan override dari DB dengan RULES statis.
+ *
+ * Semantik: override PER-KATEGORI. Kategori yang muncul di `dbRules` akan
+ * menimpa definisi statisnya; kategori yang tidak ada di DB tetap memakai
+ * RULES statis. Bila beberapa baris DB memakai kategori sama, pola-polanya
+ * digabung dan bobot baris terakhir dipakai.
+ *
+ * Ini memperbaiki bug lama di mana aturan DB MENGGANTIKAN seluruh RULES,
+ * sehingga 13 kategori (booking_start, invoice_request, perintah admin, dll.)
+ * mati begitu tabel `ai_intent_rules` terisi.
+ */
+function mergeRulesWithDefaults(dbRules: IntentRule[] | null): IntentRule[] {
+  const byCategory = new Map<IntentCategory, IntentRule>();
+  for (const r of RULES) {
+    byCategory.set(r.category, { category: r.category, weight: r.weight, patterns: [...r.patterns] });
+  }
+
+  if (dbRules && dbRules.length > 0) {
+    const dbByCategory = new Map<IntentCategory, IntentRule>();
+    for (const r of dbRules) {
+      const prev = dbByCategory.get(r.category);
+      if (prev) {
+        prev.patterns.push(...r.patterns);
+        prev.weight = r.weight;
+      } else {
+        dbByCategory.set(r.category, { category: r.category, weight: r.weight, patterns: [...r.patterns] });
+      }
+    }
+    for (const [cat, rule] of dbByCategory) byCategory.set(cat, rule);
+  }
+
+  return Array.from(byCategory.values());
+}
+
+/** Saring aturan kategori admin — hanya aktif saat mode admin/managerial. */
+function filterRulesByMode(rules: IntentRule[], mode?: string): IntentRule[] {
+  return rules.filter((r) =>
+    ADMIN_INTENT_CATEGORIES.includes(r.category)
+      ? mode === "admin" || mode === "managerial"
+      : true,
+  );
+}
+
+/**
+ * Serialisasi RULES statis ke bentuk yang bisa disimpan ke tabel
+ * `ai_intent_rules` (pola sebagai string `/sumber/flag`). Dipakai fitur
+ * "Impor aturan default" di UI admin agar admin bisa melihat & menyunting
+ * aturan bawaan, bukan mengeditnya secara buta.
+ */
+export function getDefaultIntentRulesSeed(): { category: string; patterns: string[]; weight: number }[] {
+  return RULES.map((r) => ({
+    category: r.category,
+    patterns: r.patterns.map((p) => `/${p.source}/${p.flags}`),
+    weight: r.weight,
+  }));
+}
+
 let cachedDbRules: CachedRules | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -365,22 +426,16 @@ export async function classifyIntent(
     }
   }
 
-  // Filter admin rules if user is not in admin/managerial mode
-  let activeRules = RULES.filter(r => {
-    const isAdminRule = [
-      "list_bookings", "booking_detail", "payment_update", "room_block", "send_to_manager"
-    ].includes(r.category);
-    
-    if (isAdminRule) {
-      return context?.mode === "admin" || context?.mode === "managerial";
-    }
-    return true;
-  });
-
+  // Ambil override aturan dari DB (bila ada). Hasil di-cache 5 menit.
+  // PENTING: aturan DB TIDAK lagi menggantikan seluruh RULES statis. Mereka
+  // di-MERGE per-kategori (lihat mergeRulesWithDefaults): kategori yang punya
+  // baris DB ditimpa, kategori lain tetap memakai RULES statis. Tanpa ini,
+  // menambahkan satu aturan via UI admin akan mematikan semua kategori lain.
+  let dbRules: IntentRule[] | null = null;
   if (supabase) {
     const now = Date.now();
     if (cachedDbRules && cachedDbRules.expiresAt > now) {
-      activeRules = cachedDbRules.rules;
+      dbRules = cachedDbRules.rules;
     } else {
       try {
         const { data, error } = await supabase
@@ -389,10 +444,10 @@ export async function classifyIntent(
           .order("weight", { ascending: false });
 
         if (error) {
-          console.warn("[classifyIntent] Failed to fetch rules from database, using static fallback:", error.message);
-        } else if (data && data.length > 0) {
+          console.warn("[classifyIntent] Failed to fetch rules from database, using static defaults:", error.message);
+        } else {
           const parsedRules: IntentRule[] = [];
-          for (const row of data as DBIntentRule[]) {
+          for (const row of (data ?? []) as DBIntentRule[]) {
             const patterns: RegExp[] = [];
             for (const pStr of row.patterns) {
               try {
@@ -417,19 +472,24 @@ export async function classifyIntent(
               weight: row.weight,
             });
           }
+          // Cache walau kosong, agar tidak query berulang tiap pesan.
           cachedDbRules = {
             rules: parsedRules,
             expiresAt: now + CACHE_TTL,
           };
-          activeRules = parsedRules;
-        } else {
-          console.log("[classifyIntent] No rules found in database, using static fallback.");
+          dbRules = parsedRules;
         }
       } catch (e: any) {
         console.warn("[classifyIntent] Error fetching rules:", e.message);
       }
     }
   }
+
+  // Merge DB override ke RULES statis, lalu saring aturan admin sesuai mode.
+  const activeRules = filterRulesByMode(
+    mergeRulesWithDefaults(dbRules),
+    context?.mode,
+  );
 
   const scores = new Map<IntentCategory, number>();
   const matched = new Map<IntentCategory, string[]>();
