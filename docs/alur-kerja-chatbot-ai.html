@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alur Kerja Chatbot AI — POMAH</title>
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --surface2:#f4f2ec;
+    --text:#1f1e1b; --text2:#5f5e5a; --muted:#888780; --border:#e3e0d6;
+    --teal-fill:#E1F5EE; --teal-strong:#5DCAA5; --teal-text:#0F6E56; --teal-dark:#04342C;
+    --amber-fill:#FAEEDA; --amber-strong:#FAC775; --amber-text:#854F0B; --amber-dark:#412402;
+    --gray-fill:#F1EFE8; --gray-strong:#D3D1C7; --gray-text:#444441;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#1f1e1b; --surface:#2a2925; --surface2:#33322d;
+      --text:#f4f2ec; --text2:#b4b2a9; --muted:#888780; --border:#444441;
+      --teal-fill:#085041; --teal-strong:#1D9E75; --teal-text:#9FE1CB; --teal-dark:#E1F5EE;
+      --amber-fill:#633806; --amber-strong:#BA7517; --amber-text:#FAC775; --amber-dark:#FAEEDA;
+      --gray-fill:#33322d; --gray-strong:#5F5E5A; --gray-text:#D3D1C7;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6;padding:32px 16px}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:24px;font-weight:600;margin:0 0 4px}
+  .lead{color:var(--text2);font-size:14px;margin:0 0 20px}
+  .leg{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 18px;font-size:12.5px}
+  .lg{display:flex;align-items:center;gap:6px;color:var(--text2)}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .chrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px}
+  .ch{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--surface)}
+  .ch .t{font-size:14px;font-weight:600}
+  .ch .s{font-size:11px;color:var(--text2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .arr{text-align:center;color:var(--muted);font-size:20px;margin:4px 0}
+  .step{display:flex;gap:12px;border:1px solid var(--border);border-radius:12px;
+    padding:11px 13px;margin-bottom:7px;align-items:flex-start;background:var(--surface)}
+  .num{flex:0 0 28px;height:28px;border-radius:7px;display:flex;align-items:center;
+    justify-content:center;font-size:14px;font-weight:600}
+  .body{flex:1;min-width:0}
+  .head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+  .title{font-size:14.5px;font-weight:600}
+  .tag{font-size:10.5px;padding:2px 8px;border-radius:20px;white-space:nowrap;font-weight:500}
+  .sub{font-size:12.5px;color:var(--text2);margin-top:3px}
+  .file{font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--muted);margin-top:4px;word-break:break-word}
+  .loop{font-size:12.5px;color:var(--text2);text-align:center;border:1px dashed var(--border);
+    border-radius:10px;padding:10px;margin-top:8px}
+  .t-tune{background:var(--teal-fill);color:var(--teal-text)}
+  .t-cfg{background:var(--amber-fill);color:var(--amber-text)}
+  .t-infra{background:var(--gray-fill);color:var(--gray-text)}
+  .n-tune{background:var(--teal-strong);color:var(--teal-dark)}
+  .n-cfg{background:var(--amber-strong);color:var(--amber-dark)}
+  .n-infra{background:var(--gray-strong);color:var(--gray-text)}
+  footer{margin-top:24px;font-size:12px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Alur kerja chatbot AI — POMAH</h1>
+  <p class="lead">Pipeline 12 langkah dari pesan masuk sampai balasan, ditandai berdasarkan seberapa mudah tiap bagian dimodifikasi.</p>
+
+  <div class="leg">
+    <span class="lg"><span class="dot" style="background:#5DCAA5"></span>Mudah diubah (leverage tinggi)</span>
+    <span class="lg"><span class="dot" style="background:#FAC775"></span>Konfigurasi model</span>
+    <span class="lg"><span class="dot" style="background:#D3D1C7"></span>Infrastruktur (jarang disentuh)</span>
+  </div>
+
+  <div class="chrow">
+    <div class="ch"><div class="t">WhatsApp (tamu)</div><div class="s">whatsapp.functions</div></div>
+    <div class="ch"><div class="t">Telegram (staf)</div><div class="s">api.telegram.$agentKey</div></div>
+    <div class="ch"><div class="t">Webchat (web)</div><div class="s">webchat-window.tsx</div></div>
+  </div>
+  <div class="arr">&#8595;</div>
+
+  <div class="step"><div class="num n-infra">1</div><div class="body"><div class="head"><span class="title">Webhook &amp; identifikasi pengirim</span><span class="tag t-infra">infra</span></div><div class="sub">Verifikasi, kenali nomor/chat-id, ambil riwayat + ringkasan sesi.</div><div class="file">telegram-router.ts · multi-agent-orchestrator.ts</div></div></div>
+
+  <div class="step"><div class="num n-tune">2</div><div class="body"><div class="head"><span class="title">Resolusi konteks &amp; query rewrite</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Ubah "itu / yang tadi" jadi pertanyaan utuh sebelum diproses.</div><div class="file">router/context-resolver.ts · query-rewriter.ts</div></div></div>
+
+  <div class="step"><div class="num n-tune">3</div><div class="body"><div class="head"><span class="title">Klasifikasi intent</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Aturan regex berbobot &#8594; kategori + skor keyakinan.</div><div class="file">router/intent-classifier.ts (RULES)</div></div></div>
+
+  <div class="step"><div class="num n-tune">4</div><div class="body"><div class="head"><span class="title">Cek eskalasi komplain</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Keluhan / keyakinan rendah &#8594; dilempar ke Manager.</div><div class="file">router/agent-router.ts (ESCALATION_THRESHOLD)</div></div></div>
+
+  <div class="step"><div class="num n-tune">5</div><div class="body"><div class="head"><span class="title">Pengambilan contoh latihan (RAG)</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Cari contoh jawaban mirip (vektor) dari data curated + log bagus.</div><div class="file">training-retrieval.service.ts · AI Lab</div></div></div>
+
+  <div class="step"><div class="num n-tune">6</div><div class="body"><div class="head"><span class="title">Routing ke agen spesialis</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Pilih front-office / pricing / finance / customer-care / manager.</div><div class="file">router/agent-router.ts (ROUTING_MAP)</div></div></div>
+
+  <div class="step"><div class="num n-tune">7</div><div class="body"><div class="head"><span class="title">Susun system prompt (paling berpengaruh)</span><span class="tag t-tune">leverage tinggi</span></div><div class="sub">Gabung persona, data kamar/harga, SOP, brosur, contoh RAG.</div><div class="file">context-builder.ts · agents/*.agent.ts · AI Lab config</div></div></div>
+
+  <div class="step"><div class="num n-cfg">8</div><div class="body"><div class="head"><span class="title">Panggil LLM</span><span class="tag t-cfg">config model</span></div><div class="sub">Gemini via Lovable gateway — atur model, temperature, timeout.</div><div class="file">ai-client.service.ts (DEFAULT_LOVABLE_MODEL)</div></div></div>
+
+  <div class="step"><div class="num n-tune">9</div><div class="body"><div class="head"><span class="title">Eksekusi tool (loop maks 8x)</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Cek ketersediaan, buat booking, info bayar, housekeeping, dll.</div><div class="file">tools/executor.ts · tools/registry.ts · tools/*</div></div></div>
+
+  <div class="step"><div class="num n-infra">10</div><div class="body"><div class="head"><span class="title">Delegasi Manager (opsional)</span><span class="tag t-infra">infra</span></div><div class="sub">Manager bisa memanggil agen lain via ask_agent lalu rangkum.</div><div class="file">agents/manager.agent.ts</div></div></div>
+
+  <div class="step"><div class="num n-infra">11</div><div class="body"><div class="head"><span class="title">Kirim balasan ke channel</span><span class="tag t-infra">infra</span></div><div class="sub">Balas ke WhatsApp / Telegram / Webchat asal.</div><div class="file">telegram.service.ts · whatsapp.functions.ts</div></div></div>
+
+  <div class="step"><div class="num n-tune">12</div><div class="body"><div class="head"><span class="title">Catat log percakapan</span><span class="tag t-tune">bisa diubah</span></div><div class="sub">Disimpan untuk diberi rating admin &#8594; jadi bahan latihan.</div><div class="file">ai_conversation_logs (Supabase)</div></div></div>
+
+  <div class="loop">&#8635; Umpan balik: log ber-rating "good" (langkah 12) &#8594; kembali jadi contoh RAG (langkah 5). Inilah cara bot makin pintar.</div>
+
+  <footer>Dihasilkan untuk proyek new-pomah · alur multi-agent orchestrator</footer>
+</div>
+</body>
+</html>
