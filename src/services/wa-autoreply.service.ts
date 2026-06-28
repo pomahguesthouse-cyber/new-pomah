@@ -100,6 +100,12 @@ type FastFaqResult = {
   dates?: { checkIn: string; checkOut: string };
 };
 
+type ParsedGuestCount = {
+  adults: number;
+  children: number;
+  total: number;
+};
+
 /**
  * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent →
  * route → jalankan agent → tool calls → balasan teks). Dibuat ketat agar
@@ -426,6 +432,105 @@ function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | nu
   };
 }
 
+function parseGuestCountFollowup(message: string): ParsedGuestCount | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || !/\b(orang|dewasa|adult|anak|child|children|kids?|pax|tamu)\b/i.test(text)) return null;
+
+  const adultMatch = text.match(/(?:dewasa|adult|pax|tamu)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:dewasa|adult|pax|tamu)\b/i);
+  const childMatch = text.match(/(?:anak|child(?:ren)?|kids?)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|child(?:ren)?|kids?)\b/i);
+  const genericMatch = text.match(/\b(\d{1,2})\s*(?:orang|pax|tamu)\b/i);
+
+  let adults = adultMatch ? Number(adultMatch[1] ?? adultMatch[2]) : 0;
+  const children = childMatch ? Number(childMatch[1] ?? childMatch[2]) : 0;
+
+  if (!adults && !children && genericMatch) {
+    adults = Number(genericMatch[1]);
+  }
+
+  if (!Number.isFinite(adults) || !Number.isFinite(children)) return null;
+  if (adults < 0 || adults > 20 || children < 0 || children > 20) return null;
+  const total = adults + children;
+  if (total < 1 || total > 20) return null;
+
+  return { adults, children, total };
+}
+
+function lastBotAskedGuestCount(messages: Array<{ direction: string; body?: string }>): boolean {
+  const lastOutbound = [...messages]
+    .reverse()
+    .find((m) => m.direction === "out" && (m.body ?? "").trim());
+  const body = (lastOutbound?.body ?? "").toLowerCase();
+  return /\brencana untuk berapa orang\b|\bberapa orang\b/.test(body) && /\btersedia\b/.test(body);
+}
+
+function formatAvailabilityForGuestCount(raw: string, guests: ParsedGuestCount): FastFaqResult | null {
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(data.kamar)) return null;
+  const period = typeof data.periode === "string" ? data.periode : data.tanggal ?? "tanggal tersebut";
+  const rooms = data.kamar as Array<Record<string, unknown>>;
+  const available = rooms.filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true);
+  const suitable = available.filter((r) => r.cocok_untuk_jumlah_tamu === true);
+  const guestLabel = guests.children > 0
+    ? `${guests.adults} dewasa dan ${guests.children} anak`
+    : `${guests.total} tamu`;
+
+  if (suitable.length > 0) {
+    const lines = suitable.slice(0, 5).map((r) => {
+      const count = Number(r.kamar_tersedia ?? 0);
+      const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0);
+      const maxGuests = Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 0);
+      const extraBeds = Number(r.extra_bed_dibutuhkan ?? 0);
+      const extraBedRate = Number(r.tarif_extra_bed_per_malam ?? 0);
+      const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+      const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
+      const extraBedText = extraBeds > 0
+        ? extraBedRate > 0
+          ? `, butuh ${extraBeds} extra bed @ Rp${extraBedRate.toLocaleString("id-ID")}/malam`
+          : `, butuh ${extraBeds} extra bed`
+        : "";
+      return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}${extraBedText}`;
+    });
+
+    return {
+      intent: "deterministic_availability_guest_count",
+      reply:
+        `Untuk ${period} dengan ${guestLabel}, pilihan yang tersedia dan cukup kapasitas:\n` +
+        `${lines.join("\n")}\n\n` +
+        "Kakak mau pilih tipe kamar yang mana?",
+    };
+  }
+
+  if (available.length === 0) {
+    return {
+      intent: "deterministic_availability_full",
+      reply:
+        `Mohon maaf Kak, untuk ${period} kamar kami sudah penuh.\n\n` +
+        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
+    };
+  }
+
+  const lines = available.slice(0, 5).map((r) => {
+    const count = Number(r.kamar_tersedia ?? 0);
+    const maxGuests = Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 0);
+    const capacityText = maxGuests > 0 ? `maks ${maxGuests} tamu/kamar` : "kapasitas belum terdata";
+    return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia, ${capacityText}`;
+  });
+
+  return {
+    intent: "deterministic_availability_over_capacity",
+    reply:
+      `Maaf Kak, untuk ${period} belum ada tipe kamar tersedia yang cukup untuk ${guestLabel}.\n\n` +
+      `Yang masih tersedia:\n${lines.join("\n")}\n\n` +
+      "Kakak mau coba tanggal lain, atau saya bantu cek opsi kamar lain kalau ada?",
+  };
+}
+
 /** True bila pesan tamu DIBUKA dengan sapaan — agar bot membalas sapaan
  *  hanya saat tepat (turn pembuka), tidak mengulang di tengah percakapan. */
 function messageOpensWithGreeting(message: string): boolean {
@@ -463,6 +568,47 @@ async function buildDeterministicAvailabilityReply(params: {
   // melewati orchestrator (satu-satunya tempat slot biasanya disimpan).
   if (result) {
     result.dates = { checkIn: range.checkIn, checkOut: range.checkOut };
+  }
+  return result;
+}
+
+async function buildGuestCountAfterAvailabilityReply(params: {
+  message: string;
+  rooms: any[];
+  property: any;
+  origin: string;
+  dates?: { checkIn?: unknown; checkOut?: unknown } | null;
+  messages: Array<{ direction: string; body?: string }>;
+}): Promise<FastFaqResult | null> {
+  if (!lastBotAskedGuestCount(params.messages)) return null;
+  const guests = parseGuestCountFollowup(params.message);
+  if (!guests) return null;
+
+  const checkIn = typeof params.dates?.checkIn === "string" ? params.dates.checkIn : null;
+  const checkOut = typeof params.dates?.checkOut === "string" ? params.dates.checkOut : null;
+  if (!checkIn || !checkOut) return null;
+
+  const today = todayWIB();
+  const raw = await checkRoomAvailability(
+    {
+      check_in: checkIn,
+      check_out: checkOut,
+      adults: guests.adults,
+      children: guests.children,
+    },
+    {
+      supabasePublic: supabasePublic as any,
+      supabaseAdmin: supabaseAdmin as any,
+      rooms: params.rooms,
+      property: params.property,
+      today,
+      origin: params.origin,
+    } as any,
+  );
+
+  const result = formatAvailabilityForGuestCount(raw, guests);
+  if (result) {
+    result.dates = { checkIn, checkOut };
   }
   return result;
 }
@@ -1001,6 +1147,38 @@ export async function executeAutoreplyForPhone(
       }
     } catch (e) {
       console.warn("[Autoreply] deterministic tonight price failed (falling back to AI):", e);
+    }
+  }
+
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    try {
+      const activeSlots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
+      const availabilitySlots = {
+        checkIn: activeSlots.checkIn ?? chatSummaryJson?.check_in,
+        checkOut: activeSlots.checkOut ?? chatSummaryJson?.check_out,
+      };
+      const guestCountReply = await buildGuestCountAfterAvailabilityReply({
+        message: lastMessage,
+        rooms: rooms ?? [],
+        property: p,
+        origin,
+        dates: availabilitySlots,
+        messages: rollingMessages,
+      });
+      if (guestCountReply) {
+        reply = guestCountReply.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: guestCountReply.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["deterministic-availability"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Deterministic availability guest-count reply for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] deterministic guest-count availability failed (falling back to AI):", e);
     }
   }
 
