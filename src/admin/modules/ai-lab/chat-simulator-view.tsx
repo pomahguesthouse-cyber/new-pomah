@@ -751,9 +751,9 @@ export function ChatSimulatorView() {
   }, [editTrainingId]);
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_480px]">
+    <div className="grid h-full min-h-0 grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(420px,520px)]">
       {/* ── Left: chat ─────────────────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-col gap-3">
+      <div className="flex min-h-0 min-w-0 flex-col gap-3">
       {editTrainingId !== null ? (
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex items-center justify-between gap-3 border-b border-border bg-card px-4 py-3">
@@ -902,7 +902,7 @@ export function ChatSimulatorView() {
       ) : (
         <>
 
-        <Card className="flex items-center gap-3 p-3">
+        <Card className="flex flex-wrap items-center gap-3 p-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-teal-700">
             <Bot className="h-5 w-5" />
           </div>
@@ -912,7 +912,7 @@ export function ChatSimulatorView() {
               Pipeline asli — menulis data nyata. Pakai nomor uji.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Label htmlFor="sim-phone" className="text-xs text-muted-foreground">
               Nomor uji
             </Label>
@@ -1326,7 +1326,7 @@ export function ChatSimulatorView() {
 
 
       {/* ── Right: meta + saved training ──────────────────────────────────── */}
-      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-hidden">
         {/* Last turn meta */}
         <Card className="p-4">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1361,16 +1361,16 @@ export function ChatSimulatorView() {
         </Card>
 
         {/* Saved training list */}
-        <Card className="flex min-h-0 flex-col p-4">
-          <div className="mb-2 flex items-center justify-between gap-2">
+        <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5" /> Training tersimpan
             </p>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 px-2 text-[11px]"
+                className="h-8 px-2.5 text-[11px]"
                 onClick={() => handleExport("json")}
                 title="Ekspor JSON"
               >
@@ -1379,7 +1379,7 @@ export function ChatSimulatorView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 px-2 text-[11px]"
+                className="h-8 px-2.5 text-[11px]"
                 onClick={() => handleExport("csv")}
                 title="Ekspor CSV"
               >
@@ -1402,14 +1402,14 @@ export function ChatSimulatorView() {
               Belum ada training tersimpan dari simulator.
             </p>
           ) : (
-            <ScrollArea className="max-h-[420px]">
-              <ul className="space-y-2 pr-2">
+            <ScrollArea className="min-h-0 flex-1 pr-1">
+              <ul className="space-y-3 pr-3">
                 {savedTraining.map((log) => {
                   const turns: TranscriptMsg[] = Array.isArray(log.transcript)
                     ? log.transcript
                     : [];
                   const turnCount = turns.length;
-                  const preview = (log.user_message ?? "").slice(0, 120);
+                  const preview = log.user_message ?? "";
                   const dateStr = log.created_at
                     ? new Date(log.created_at).toLocaleDateString("id-ID", {
                         day: "2-digit",
@@ -1429,7 +1429,7 @@ export function ChatSimulatorView() {
                       )}
                     >
                       <div className="space-y-1">
-                        <p className="truncate text-sm font-semibold text-stone-800">
+                        <p className="break-words text-sm font-semibold leading-snug text-stone-800">
                           {log.title || "(Tanpa judul)"}
                         </p>
                         <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -1441,16 +1441,18 @@ export function ChatSimulatorView() {
                             </>
                           )}
                         </div>
-                        <p className="flex items-start gap-1 text-stone-600">
+                        <p className="flex min-w-0 items-start gap-1 text-stone-600">
                           <User className="mt-0.5 h-3 w-3 shrink-0" />
-                          <span className="line-clamp-2 whitespace-pre-wrap">{preview}</span>
+                          <span className="min-w-0 whitespace-pre-wrap break-words leading-relaxed">
+                            {preview}
+                          </span>
                         </p>
                       </div>
-                      <div className="mt-2 flex items-center justify-end gap-1.5 border-t border-border/60 pt-2">
+                      <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border/60 pt-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-[11px]"
+                          className="h-8 px-2.5 text-[11px]"
                           onClick={() => openEditTraining(log)}
                         >
                           <Pencil className="mr-1 h-3 w-3" /> Edit
@@ -1458,7 +1460,7 @@ export function ChatSimulatorView() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
+                          className="h-8 px-2.5 text-[11px] text-red-600 hover:bg-red-50 hover:text-red-700"
                           onClick={() => handleDeleteTraining(log.id)}
                         >
                           <Trash2 className="mr-1 h-3 w-3" /> Hapus
