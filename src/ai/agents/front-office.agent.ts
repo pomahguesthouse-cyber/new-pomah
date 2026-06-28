@@ -189,11 +189,20 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "Untuk kamar yang penuh, cukup sebutkan secara singkat. " +
       "Tutup dengan pertanyaan yang membantu proses booking, misalnya jumlah tamu atau pilihan kamar.",
 
+    "JUMLAH TAMU & KAPASITAS: Bila tamu menyebut jumlah orang setelah tanggal sudah diketahui " +
+      "(contoh: '4 dewasa, 2 anak'), WAJIB panggil ulang `check_room_availability` dengan " +
+      "check_in, check_out, adults, dan children. Setelah hasil keluar, hanya tawarkan kamar dengan " +
+      "`kamar_tersedia>0`, `tidak_tersedia=false`, dan `cocok_untuk_jumlah_tamu=true`. " +
+      "Jika tidak ada kamar dengan `cocok_untuk_jumlah_tamu=true`, sampaikan bahwa belum ada " +
+      "kamar yang bisa mengakomodasi jumlah tamu tersebut untuk tanggal itu. Jangan menawarkan Single " +
+      "atau tipe lain yang kapasitas maksimalnya lebih kecil dari total tamu.",
+
     "KAMAR DIMINTA PENUH: jika tipe kamar yang TAMU SEBUT SECARA SPESIFIK (mis. 'Deluxe') " +
       "ditandai `tidak_tersedia=true` atau `kamar_tersedia<=0`, TAPI ada tipe lain dengan " +
-      "`kamar_tersedia>0`, WAJIB panggil `offer_alternative_rooms` dengan requested_room_type, " +
+      "`kamar_tersedia>0` dan, bila jumlah tamu sudah diketahui, `cocok_untuk_jumlah_tamu=true`, " +
+      "WAJIB panggil `offer_alternative_rooms` dengan requested_room_type, " +
       "check_in, check_out, adults, children, dan array `alternatives` (ambil dari tipe lain yang " +
-      "tersedia). Setelah tool jalan, kirim isi `message` VERBATIM. JANGAN menulis sendiri " +
+      "tersedia dan cukup kapasitasnya). Setelah tool jalan, kirim isi `message` VERBATIM. JANGAN menulis sendiri " +
       "kalimat 'apakah Kakak ingin memilih tipe kamar lain' — biarkan state machine yang " +
       "memandu pemilihan kamar pengganti.",
 
@@ -201,7 +210,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "`get_room_specifications` dulu dan gunakan `extrabed_capacity` serta `extrabed_rate` " +
       "dari hasil tool / data `room_types`. JANGAN hardcode tarif extra bed di prompt. " +
       "Bila extra bed tersedia, tawarkan dan hitung total akurat: " +
-      "(tarif kamar × jumlah kamar + extrabed_rate × jumlah extra bed) × malam.",
+      "(tarif kamar × jumlah kamar + extrabed_rate × jumlah extra bed) × malam. " +
+      "Jika tamu bertanya extra bed untuk jumlah tamu yang sudah melebihi kapasitas maksimal kamar " +
+      "(kapasitas default + kapasitas extra bed), jangan hanya menjawab aturan extra bed kamar itu; " +
+      "simpulkan juga bahwa kamar tersebut tidak cukup untuk jumlah tamu tersebut dan tawarkan hanya " +
+      "tipe lain yang kapasitasnya cukup. Jika tidak ada, sampaikan tidak tersedia untuk jumlah tamu itu.",
 
     "BOOKING VIA CHAT: " +
       "(1) cek availability dulu, " +

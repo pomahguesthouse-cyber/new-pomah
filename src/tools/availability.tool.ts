@@ -162,6 +162,10 @@ export const checkRoomAvailability: ToolHandler = async (
     return n;
   })();
 
+  const adults = Math.max(0, Math.min(20, Math.floor(Number(args.adults) || 0)));
+  const children = Math.max(0, Math.min(20, Math.floor(Number(args.children) || 0)));
+  const guestCount = adults + children;
+
   const kamar = ctx.rooms.map((r) => {
     const d       = byId.get(r.id);
     const resolved = resolveRoomNightlyRates(
@@ -174,6 +178,16 @@ export const checkRoomAvailability: ToolHandler = async (
     const blockedByStopSell = resolved.has_stop_sell;
     const baseAvailable     = d ? d.available : null;
     const availableEffective = blockedByStopSell ? 0 : baseAvailable;
+    const kapasitasDefault = Math.max(1, Number(r.capacity ?? 1) || 1);
+    const kapasitasExtraBed = Math.max(0, Number(r.extrabed_capacity ?? 0) || 0);
+    const kapasitasMaksimal = kapasitasDefault + kapasitasExtraBed;
+    const extraBedDibutuhkan = guestCount > kapasitasDefault
+      ? Math.max(0, guestCount - kapasitasDefault)
+      : 0;
+    const melewatiKapasitas = guestCount > 0 && guestCount > kapasitasMaksimal;
+    const cocokUntukJumlahTamu = guestCount > 0
+      ? !melewatiKapasitas && (availableEffective ?? 0) > 0
+      : undefined;
 
     // Breakdown only when rates differ per night — keeps payloads compact
     // for the common "all base rate" case.
@@ -200,6 +214,13 @@ export const checkRoomAvailability: ToolHandler = async (
       nightly_breakdown: nightlyBreakdown,
       kamar_tersedia:  availableEffective,
       total_kamar:     d ? d.total : null,
+      kapasitas_tamu:  kapasitasDefault,
+      kapasitas_extra_bed: kapasitasExtraBed,
+      tarif_extra_bed_per_malam: Number(r.extrabed_rate ?? 0) || 0,
+      kapasitas_maksimal_dengan_extra_bed: kapasitasMaksimal,
+      cocok_untuk_jumlah_tamu: cocokUntukJumlahTamu,
+      extra_bed_dibutuhkan: guestCount > 0 ? extraBedDibutuhkan : undefined,
+      melewati_kapasitas: guestCount > 0 ? melewatiKapasitas : undefined,
       tidak_tersedia:  blockedByStopSell || (baseAvailable !== null && baseAvailable <= 0),
       stop_sell_dates: blockedByStopSell ? resolved.stop_sell_dates : undefined,
       alasan: blockedByStopSell
@@ -213,6 +234,7 @@ export const checkRoomAvailability: ToolHandler = async (
     check_in:  checkIn,
     check_out: checkOut,
     nights,
+    jumlah_tamu: guestCount > 0 ? { dewasa: adults, anak: children, total: guestCount } : undefined,
     tanggal:   fmtDateID(checkIn),
     periode:   `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`,
     kamar,

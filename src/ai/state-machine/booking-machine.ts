@@ -319,6 +319,10 @@ function countNights(checkIn: string, checkOut: string): number {
   return diff;
 }
 
+function getTotalGuests(context: Pick<BookingContext, "adults" | "children">): number {
+  return Math.max(1, Number(context.adults ?? 1) || 1) + Math.max(0, Number(context.children ?? 0) || 0);
+}
+
 /**
  * Struktur policy extra bed per tipe kamar. Selalu berasal dari DB
  * (`room_types`), tidak boleh hardcode per nama kamar.
@@ -412,9 +416,13 @@ function buildBookingSummary(
   const checkInDisplay = context.checkIn ? `${formatDateId(context.checkIn)}, 14.00` : "—";
   const checkOutDisplay = context.checkOut ? `${formatDateId(context.checkOut)}, 12.00` : "—";
 
-  // --- Adults ---
+  // --- Guests ---
   const adults = context.adults ?? 1;
-  const adultLine = `${adults} orang dewasa`;
+  const children = context.children ?? 0;
+  const totalGuests = getTotalGuests(context);
+  const guestLine = children > 0
+    ? `${adults} orang dewasa, ${children} anak`
+    : `${adults} orang dewasa`;
 
   // --- Format currency IDR ---
   const fmtRp = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
@@ -424,7 +432,7 @@ function buildBookingSummary(
   const resolvedExtraBedRate = policy.extrabedRate;
 
   const totalRooms = summaryRooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
-  const eb = computeExtraBeds(policy, totalRooms, adults);
+  const eb = computeExtraBeds(policy, totalRooms, totalGuests);
   const extraBeds = context.extraBeds ?? eb.extraBeds;
   const hasRate = resolvedExtraBedRate > 0;
   const extraBedTotal = nights && extraBeds > 0 && hasRate ? nights * extraBeds * resolvedExtraBedRate : 0;
@@ -465,7 +473,7 @@ function buildBookingSummary(
     `- Check-in: ${checkInDisplay}\n` +
     `- Check-out: ${checkOutDisplay}\n` +
     `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
-    `- Jumlah tamu: ${adultLine}\n` +
+    `- Jumlah tamu: ${guestLine}\n` +
     `- Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
     extraBedLine +
     paymentLine +
@@ -621,7 +629,7 @@ function bookingFormSubmissionToContext(
   }
 
   const policy = resolveRoomExtraBedPolicy(context, roomsCatalog);
-  const required = computeExtraBeds(policy, quantity, adults);
+  const required = computeExtraBeds(policy, quantity, getTotalGuests(context));
   const requestedExtraBeds = Math.max(0, Math.min(20, Number(submission.extrabed) || 0));
   context.extraBeds = Math.max(requestedExtraBeds, required.extraBeds);
   if (policy.extrabedRate > 0) context.extraBedRate = policy.extrabedRate;
@@ -915,6 +923,24 @@ export function parseSlotCorrection(
     const n = Number(guestsMatch[1] ?? guestsMatch[0].match(/\d{1,2}/)?.[0]);
     if (n && n >= 1 && n <= 16) {
       patch.adults = n;
+      changed = true;
+    }
+  }
+
+  const adultsMatch = text.match(/(?:dewasa|adult)\s*(?:nya|:)?\s*(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:dewasa|adult)/i);
+  if (adultsMatch) {
+    const n = Number(adultsMatch[1] ?? adultsMatch[2]);
+    if (n && n >= 1 && n <= 16) {
+      patch.adults = n;
+      changed = true;
+    }
+  }
+
+  const childrenMatch = text.match(/(?:anak|child(?:ren)?|kids?)\s*(?:nya|:)?\s*(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|child(?:ren)?|kids?)/i);
+  if (childrenMatch) {
+    const n = Number(childrenMatch[1] ?? childrenMatch[2]);
+    if (n >= 0 && n <= 16) {
+      patch.children = n;
       changed = true;
     }
   }
@@ -1504,7 +1530,7 @@ export async function processBookingState(
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const recomputePolicy = resolveRoomExtraBedPolicy(context, roomsList);
       if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
-      const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, context.adults ?? 1);
+      const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
       context.extraBeds = eb.extraBeds;
 
       if (context.checkIn && context.checkOut && context.pricePerNight) {
@@ -1601,6 +1627,7 @@ export async function processBookingState(
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
         if (patch.adults) context.adults = patch.adults;
+        if (patch.children !== undefined) context.children = patch.children;
         if (patch.roomName) {
           context.roomName = patch.roomName;
           if (patch.roomId) {
@@ -1616,7 +1643,7 @@ export async function processBookingState(
         const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
         const recomputePolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
         if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
-        const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, context.adults ?? 1);
+        const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
         context.extraBeds = eb.extraBeds;
 
         // Recompute total
@@ -1674,7 +1701,7 @@ export async function processBookingState(
       if (context.guestEmail && !EMAIL_PATTERN.test(context.guestEmail)) missing.push("email");
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
-      const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, context.adults ?? 1);
+      const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, getTotalGuests(context));
       if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
       if (eb.extraBeds > 0) {
         context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);

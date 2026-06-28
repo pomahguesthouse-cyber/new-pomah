@@ -27,6 +27,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
             description:
               "Tanggal check-out format YYYY-MM-DD. Kosongkan untuk sehari setelah check-in.",
           },
+          adults: {
+            type: "number",
+            description:
+              "Jumlah tamu dewasa bila sudah disebut. Dipakai untuk menilai kecocokan kapasitas kamar.",
+          },
+          children: {
+            type: "number",
+            description:
+              "Jumlah anak bila sudah disebut. Dipakai bersama adults untuk menilai kapasitas total tamu.",
+          },
         },
       },
     },
