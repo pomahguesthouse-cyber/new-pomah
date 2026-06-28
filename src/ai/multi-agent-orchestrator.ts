@@ -36,7 +36,7 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 
-const DEFAULT_MAX_TURNS = 3;
+const DEFAULT_MAX_TURNS = 6;
 
 function formatToolDraftReply(toolName: string, output: string): string | null {
   try {
@@ -453,9 +453,13 @@ async function runAgent(
 
   console.error(`[MultiAgent][${agent.key}] max turns reached without a text reply`);
   return {
-    reply: lastToolDraftReply,
+    reply: lastToolDraftReply ?? null,
     toolsUsed: Array.from(toolsUsed),
-    error: lastToolDraftReply ? "Max turns exceeded; returned tool draft" : "Max turns exceeded",
+    // If a tool produced a draft reply (e.g. formatted availability), treat as
+    // success so the guest/admin gets useful data instead of a generic fallback.
+    ...(lastToolDraftReply
+      ? {}
+      : { error: "Max turns exceeded" }),
     ...(allRetries.length ? { retries: allRetries } : {}),
     ...(loopAlert ? { loopAlert } : {}),
   };
@@ -555,7 +559,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
         input.agentCtx,
         input.toolCtx,
         input.llmConfig,
-        Math.max(2, maxTurns - 2),
+        Math.max(3, maxTurns - 1),
         undefined,
         input.signal,
       );
