@@ -15,6 +15,7 @@ import {
 } from "@/admin/modules/seo/article-generator.functions";
 import { computeNextRunUTC, type Frequency } from "@/admin/modules/seo/schedules.functions";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { getWaitUntil, runDeferred } from "@/lib/cf-context";
 
 type DueRow = {
   id: string;
@@ -170,7 +171,10 @@ async function runDueSchedule(
   }
 }
 
-async function handle(_request: Request): Promise<Response> {
+async function runArticleSchedules(): Promise<{
+  expired: number;
+  results: Array<{ id: string; ok: boolean; titles?: string[]; error?: string }>;
+}> {
   const client = supabaseAdmin as unknown as SupabaseClient;
 
   // 1. Expire old events first
@@ -187,10 +191,7 @@ async function handle(_request: Request): Promise<Response> {
     .limit(5); // safety cap per run
 
   if (error) {
-    return new Response(
-      JSON.stringify({ ok: false, error: error.message, expired }, null, 2),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Error(error.message);
   }
 
   const results: Array<{ id: string; ok: boolean; titles?: string[]; error?: string }> = [];
@@ -209,10 +210,41 @@ async function handle(_request: Request): Promise<Response> {
     );
   }
 
-  return new Response(
-    JSON.stringify({ ok: true, expired_events: expired, runs: results }, null, 2),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  );
+  return { expired, results };
+}
+
+async function handle(_request: Request): Promise<Response> {
+  // Pg_cron's net.http_post drops the connection at its default timeout (~5s),
+  // sementara generateObject ke Gemini perlu 7–9s. Sebelumnya itu menyebabkan
+  // Worker request dibatalkan dan subrequest AI Gateway berakhir 499 setiap
+  // 5 menit (token tetap ditagih). Sekarang handler kembalikan 202 cepat dan
+  // jalankan kerjanya di waitUntil sehingga selesai walau pg_cron sudah putus.
+  const work = (async () => {
+    try {
+      const out = await runArticleSchedules();
+      console.log(
+        `[article-cron] done: expired=${out.expired} runs=${out.results.length}`,
+      );
+    } catch (e) {
+      console.warn("[article-cron] background run failed:", e);
+    }
+  })();
+
+  const waitUntil = getWaitUntil();
+  if (waitUntil) {
+    waitUntil(work);
+    return new Response(JSON.stringify({ accepted: true }), {
+      status: 202,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Local dev / non-CF runtime: await so process tidak exit dulu.
+  const out = await work.then(() => null).catch(() => null);
+  return new Response(JSON.stringify({ accepted: true, sync: out === null }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export const Route = createFileRoute("/api/cron/run-article-schedules")({
@@ -223,3 +255,7 @@ export const Route = createFileRoute("/api/cron/run-article-schedules")({
     },
   },
 });
+
+// `runDeferred` di-import untuk konsistensi pola cron lain, walau handler ini
+// memilih pakai waitUntil langsung agar bisa mengembalikan 202 deterministik.
+void runDeferred;
