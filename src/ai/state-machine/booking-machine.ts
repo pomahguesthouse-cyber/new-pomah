@@ -81,6 +81,8 @@ export interface BookingContext {
   paymentType?: "full" | "dp";
   /** Jumlah DP yang disepakati (nominal, bukan persen). Diisi saat paymentType='dp'. */
   dpAmount?: number;
+  /** Pending override yang menunggu konfirmasi "Ya/Tidak" dari tamu. */
+  pendingOverride?: Record<string, unknown>;
 }
 
 export interface StateRecord {
