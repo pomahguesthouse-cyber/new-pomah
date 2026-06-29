@@ -10,13 +10,14 @@
 
 import { isDateString, todayWIB } from "@/lib/date";
 import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
+import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext, ToolHandler } from "./types";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-function resolveRoomType(input: string, rooms: Array<{ id: string; name: string; }>) {
+function resolveRoomType(input: string, rooms: RoomTypeRow[]): RoomTypeRow | undefined {
   if (!input) return null;
   const s = input.toLowerCase().trim().replace(/^(kamar|room|no\.?)\s+/i, "").replace(/\s+/g, " ");
   
