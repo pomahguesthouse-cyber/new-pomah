@@ -395,6 +395,82 @@ function shouldUseDeterministicAvailability(message: string): boolean {
   return asksAvailability && hasDateSignal;
 }
 
+function looksLikeAvailabilityQuestion(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/\b(ready|tersedia|available|availability|avail|kosong|ada kamar|ada room|cek kamar|booking|pesan kamar|menginap)\b/i.test(text)) {
+    return true;
+  }
+  return /\b(kamar|room|guesthouse|guest house|penginapan)\b/i.test(text) &&
+    /\b(available|availability|avail|tersedia|kosong|ready)\b/i.test(text);
+}
+
+function isAvailabilityNeedDatesQuestion(message: string, today: string): boolean {
+  return looksLikeAvailabilityQuestion(message) && !parseAvailabilityDateRange(message, today);
+}
+
+function isAvailabilitySourceContext(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  return /^\[lampiran\b/i.test(text) ||
+    /\b(tiktok|tik tok|instagram|ig|facebook|fb|google|maps?|iklan|promo|dapat|dapet|lihat|nemu)\b/i.test(text);
+}
+
+function buildAvailabilityNeedDatesReply(
+  askMessage: string,
+  recentInboundMessages: string[] = [],
+): FastFaqResult {
+  const mentionsSource = [askMessage, ...recentInboundMessages].some((m) =>
+    /\b(tiktok|tik tok|instagram|ig|facebook|fb|google|maps?)\b/i.test(m),
+  );
+  const prefix = messageOpensWithGreeting(askMessage)
+    ? "Halo Kak, "
+    : mentionsSource
+      ? "Terima kasih infonya Kak. "
+      : "";
+  return {
+    intent: "deterministic_availability_need_dates",
+    reply:
+      `${prefix}Untuk cek ketersediaan kamar, boleh tahu rencana menginap tanggal berapa sampai tanggal berapa?`,
+  };
+}
+
+function buildRecentAvailabilityNeedDatesReply(
+  messages: Array<{ direction: string; body?: string }>,
+): FastFaqResult | null {
+  const today = todayWIB();
+  const recent = messages.slice(-8);
+  let askBody = "";
+  let askIndex = -1;
+
+  for (let i = recent.length - 1; i >= 0; i--) {
+    const row = recent[i];
+    if (row.direction === "out") break;
+    if (row.direction !== "in") continue;
+
+    const body = (row.body ?? "").trim();
+    if (isAvailabilityNeedDatesQuestion(body, today)) {
+      askBody = body;
+      askIndex = i;
+      break;
+    }
+  }
+
+  if (!askBody || askIndex < 0) return null;
+
+  const inboundAfterAsk = recent
+    .slice(askIndex)
+    .filter((m) => m.direction === "in")
+    .map((m) => (m.body ?? "").trim())
+    .filter(Boolean);
+  const latestInbound = inboundAfterAsk[inboundAfterAsk.length - 1] ?? askBody;
+  if (latestInbound !== askBody && !isAvailabilitySourceContext(latestInbound)) {
+    return null;
+  }
+
+  return buildAvailabilityNeedDatesReply(askBody, inboundAfterAsk);
+}
+
 function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
   let data: any;
   try {
@@ -1123,6 +1199,22 @@ export async function executeAutoreplyForPhone(
         fastPath: true,
       };
       console.info(`[Autoreply] Fast-path FAQ (${fastFaq.intent}) for ${phone.slice(-6)}`);
+    }
+  }
+
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
+    if (needDatesReply) {
+      reply = needDatesReply.reply;
+      orchResult = {
+        agentKey: "front-office",
+        intent: needDatesReply.intent,
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed: ["deterministic-availability"],
+        fastPath: true,
+      };
+      console.info(`[Autoreply] Deterministic availability need-dates reply for ${phone.slice(-6)}`);
     }
   }
 
