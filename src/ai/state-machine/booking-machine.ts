@@ -1101,18 +1101,21 @@ export async function processBookingState(
       context.checkOut = dateUpdate.checkOut;
       
       const { checkRoomAvailability } = await import("@/tools/availability.tool");
-      const result = await checkRoomAvailability(JSON.stringify({
-        check_in: dateUpdate.checkIn,
-        check_out: dateUpdate.checkOut,
-        room_type: context.roomType || undefined
-      }), ctx);
+      const result = await checkRoomAvailability(
+        {
+          check_in: dateUpdate.checkIn,
+          check_out: dateUpdate.checkOut,
+          room_type: context.roomName || undefined,
+        },
+        ctx,
+      );
 
       let isAvailable = false;
       try {
-        const availData = JSON.parse(result.output);
+        const availData = JSON.parse(result);
         if (availData.kamar && availData.kamar.length > 0) {
-          const room = context.roomType 
-             ? availData.kamar.find((r: any) => r.nama.toLowerCase() === context.roomType!.toLowerCase())
+          const room = context.roomName
+             ? availData.kamar.find((r: any) => r.nama.toLowerCase() === context.roomName!.toLowerCase())
              : availData.kamar[0];
           if (room && room.kamar_tersedia > 0) {
             isAvailable = true;
@@ -1127,11 +1130,11 @@ export async function processBookingState(
         return {
           handled: true,
           reply: `Baik Kak, saya ubah tanggalnya ke ${formatDateId(dateUpdate.checkIn)} – ${formatDateId(dateUpdate.checkOut)} untuk ${dateUpdate.nights} malam. ` + 
-                 `Saya cek ketersediaan kamar ${context.roomType || ''} dulu ya.\n\n` +
-                 `${context.roomType || 'Kamar'} tersedia untuk tanggal tersebut. Data booking sementara:\n` +
+                 `Saya cek ketersediaan kamar ${context.roomName || ''} dulu ya.\n\n` +
+                 `${context.roomName || 'Kamar'} tersedia untuk tanggal tersebut. Data booking sementara:\n` +
                  `- Nama: ${context.guestName || "Belum ada"}\n` +
                  `- No HP: ${context.guestPhone || "Belum ada"}\n` +
-                 `- Kamar: ${context.roomType || "Belum ada"}\n` +
+                 `- Kamar: ${context.roomName || "Belum ada"}\n` +
                  `- Check-in: ${formatDateId(dateUpdate.checkIn)}\n` +
                  `- Check-out: ${formatDateId(dateUpdate.checkOut)}\n` +
                  `Apakah sudah sesuai?`
@@ -1140,7 +1143,7 @@ export async function processBookingState(
         await updateBookingState(supabase, phone, "WAITING_DATE_CHANGE", context);
         return {
           handled: true,
-          reply: `Mohon maaf Kak, ${context.roomType || 'kamar'} tidak tersedia untuk ${formatDateId(dateUpdate.checkIn)} – ${formatDateId(dateUpdate.checkOut)}. Yang tersedia mungkin tipe lain, atau Kakak ingin ganti tanggal?`
+          reply: `Mohon maaf Kak, ${context.roomName || 'kamar'} tidak tersedia untuk ${formatDateId(dateUpdate.checkIn)} – ${formatDateId(dateUpdate.checkOut)}. Yang tersedia mungkin tipe lain, atau Kakak ingin ganti tanggal?`
         };
       }
     } else {
