@@ -573,7 +573,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          room_type: { type: "string" },
+          room_type: { type: "string", description: "Nama tipe kamar yang diblokir (mis. 'Deluxe')" },
           start_date: { type: "string", description: "YYYY-MM-DD" },
           end_date: { type: "string", description: "YYYY-MM-DD" },
           reason: { type: "string", description: "Alasan pemblokiran (mis. 'AC Rusak')" },
