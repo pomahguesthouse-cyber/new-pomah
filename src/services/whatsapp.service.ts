@@ -60,8 +60,10 @@ export async function sendWhatsAppMessage(
 export async function sendWhatsAppMessageWithOptions(
   input: SendWhatsAppMessageInput,
 ): Promise<SendResult> {
-  // Timeout 15 detik supaya worker tidak hang bila Fonnte lambat/macet.
-  const FONNTE_TIMEOUT_MS = 15_000;
+  // Timeout 8 detik. Fonnte normalnya balas <2s; 15s sebelumnya menyisakan
+  // headroom kecil terhadap cap waitUntil Cloudflare (~30s) saat orchestrator
+  // berat, sehingga worker sering mati pada langkah persist outbound + queueComplete.
+  const FONNTE_TIMEOUT_MS = 8_000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FONNTE_TIMEOUT_MS);
   try {
