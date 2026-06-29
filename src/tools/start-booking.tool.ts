@@ -18,7 +18,7 @@ function str(v: unknown): string {
 }
 
 function resolveRoomType(input: string, rooms: RoomTypeRow[]): RoomTypeRow | undefined {
-  if (!input) return null;
+  if (!input) return undefined;
   const s = input.toLowerCase().trim().replace(/^(kamar|room|no\.?)\s+/i, "").replace(/\s+/g, " ");
   
   // 1. Strict exact/priority mapping
