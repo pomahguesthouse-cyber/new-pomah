@@ -61,15 +61,13 @@ async function handle(request: Request): Promise<Response> {
   }
 
   const origin = new URL(request.url).origin;
-  // Batch claims & processes in parallel inside drainQueue (Promise.allSettled).
-  // Sebelumnya 5/tick — namun orchestrator multi-agent + tool call sering
-  // memakan CPU budget Cloudflare Worker per request, menyebabkan handler
-  // dimatikan paksa di tengah jalan dan entry ditandai zombie_timeout.
-  // 2/tick × 2s cron = 60/menit, masih jauh di atas throughput nyata,
-  // namun masing-masing klaim mendapat headroom CPU yang lebih besar.
+  // Process 1 entry per request. Multi-agent orchestration is CPU-heavy in
+  // Cloudflare Workers; running 2 in one invocation caused worker eviction and
+  // zombie_timeout retries. pg_cron still ticks every 2s, while DB claims keep
+  // concurrency safe across separate invocations.
   const runDrainWork = async () => {
     try {
-      await drainQueue(origin, 2);
+      await drainQueue(origin, 1);
 
       // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
       // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.

@@ -13,8 +13,9 @@ export const Route = createFileRoute("/api/queue-worker")({
     handlers: {
       POST: async ({ request }) => {
         const origin = new URL(request.url).origin;
-        // Parallel batch — drainQueue claims & runs concurrently.
-        const { processed } = await drainQueue(origin, 3, request.signal);
+        // Keep each Worker invocation to one queue entry to avoid CPU-budget
+        // eviction during heavy LLM/tool orchestration.
+        const { processed } = await drainQueue(origin, 1, request.signal);
         return new Response(JSON.stringify({ processed }), {
           status: 200,
           headers: { "Content-Type": "application/json" },

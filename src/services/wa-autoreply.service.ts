@@ -113,10 +113,11 @@ type ParsedGuestCount = {
  * belum menghasilkan jawaban dalam batas ini, alur mengirim fallback yang jelas
  * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
-const AI_TIMEOUT_MS = 28_000;
-// Naikkan ke 2 supaya worker yang request pertamanya keburu di-cancel
-// (HTTP 499 di gateway) masih punya satu retry sebelum entry ditandai gagal.
-const AI_MAX_ATTEMPTS = 2;
+const AI_TIMEOUT_MS = 18_000;
+// Retry penuh menggandakan rakit prompt/retrieval/tool orchestration di runtime
+// Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan
+// mengulang orchestration berat dalam satu request worker.
+const AI_MAX_ATTEMPTS = 1;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -241,6 +242,21 @@ function shouldForceSummary(lastMessage: string): boolean {
   if (!lastMessage) return false;
   const text = lastMessage.toLowerCase();
   return FORCE_SUMMARY_KEYWORDS.some((kw) => text.includes(kw));
+}
+
+function shouldLoadHeavyRetrieval(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/^(halo|hai|hi|hello|pagi|siang|sore|malam|assalamualaikum|terima kasih|makasih|thanks|ok|oke|sip|baik)\b[.!?\s]*$/i.test(text)) {
+    return false;
+  }
+  if (/^(saya )?(dapat|dapet|lihat|nemu).*\b(tiktok|tik tok|instagram|ig|facebook|fb|google|maps?)\b/i.test(text)) {
+    return false;
+  }
+  if (text.length <= 18 && /^(ya|iya|ok|oke|sip|baik|bisa|boleh|lanjut|ready)\b/i.test(text)) {
+    return false;
+  }
+  return true;
 }
 
 function buildFastFaqReply(
@@ -972,6 +988,7 @@ export async function executeAutoreplyForPhone(
   onBeforeAttempt?: () => Promise<void>,
   queueEntryId?: string,
   onReplyCommitted?: () => Promise<void>,
+  queueAttempt = 1,
 ): Promise<AutoreplyOutcome> {
   const deferredAfterReply: Array<{ label: string; task: () => Promise<unknown> }> = [];
   const deferAfterReply = (label: string, task: () => Promise<unknown>) => {
@@ -1177,7 +1194,7 @@ export async function executeAutoreplyForPhone(
     if (body === QUICK_ACK_MESSAGE) return false;
     return true;
   });
-  const rollingMessages = cleanedSession.slice(-20);
+  const rollingMessages = cleanedSession.slice(-10);
 
   const lastMessage =
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
@@ -1338,7 +1355,10 @@ export async function executeAutoreplyForPhone(
   let sopText = "";
   let brosurFiles: { name: string; url: string }[] = [];
 
-  if (sopEnabled && !reply && llmConfig) {
+  const isQueueRetry = queueAttempt > 1;
+  const loadHeavyRetrieval = !isQueueRetry && shouldLoadHeavyRetrieval(lastMessage);
+
+  if (sopEnabled && !reply && llmConfig && loadHeavyRetrieval) {
     try {
       const sopQuery = [lastMessage, chatSummaryJson?.last_topic, chatSummaryJson?.room_type]
         .filter(Boolean)
@@ -1346,7 +1366,7 @@ export async function executeAutoreplyForPhone(
       const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
       const [relevantSop, { data: brosurDocs }] = await Promise.all([
         sopQuery.trim()
-          ? retrieveRelevantSopContext(supabaseAdmin as any, sopQuery, llmConfig, 5, 0.65)
+          ? retrieveRelevantSopContext(supabaseAdmin as any, sopQuery, llmConfig, 3, 0.65)
           : Promise.resolve(""),
         (supabaseAdmin as any)
           .from("sop_documents")
@@ -1355,7 +1375,7 @@ export async function executeAutoreplyForPhone(
           .limit(40),
       ]);
 
-      sopText = relevantSop.slice(0, 5000);
+      sopText = relevantSop.slice(0, 2500);
       brosurFiles = ((brosurDocs ?? []) as any[])
         .filter(isBrosurDoc)
         .filter((d) => d.file_path)
@@ -1530,7 +1550,7 @@ export async function executeAutoreplyForPhone(
 
   let trainingExamples: any[] = [];
   let negativeExamples: any[] = [];
-  if (!reply && llmConfig) {
+  if (!reply && llmConfig && loadHeavyRetrieval) {
     const trainingSignals = await findTrainingSignals(
       supabaseAdmin as any,
       {
@@ -1538,7 +1558,7 @@ export async function executeAutoreplyForPhone(
         stage: (chatSummaryJson?.last_topic ?? null) as string | null,
       },
       llmConfig,
-      { positiveLimit: 3, negativeLimit: 2 },
+      { positiveLimit: 2, negativeLimit: 0 },
     );
     trainingExamples = trainingSignals.positiveExamples;
     negativeExamples = trainingSignals.negativeExamples;
@@ -2128,7 +2148,7 @@ function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | 
  */
 export async function drainQueue(
   origin: string,
-  maxBatch = 10,
+  maxBatch = 1,
   abortSignal?: AbortSignal,
 ): Promise<{ processed: number }> {
   const workerId = `w-${globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
@@ -2176,6 +2196,7 @@ export async function drainQueue(
           () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
           claim.entryId,
           () => completeQueue("sent"),
+          claim.attempt,
         );
       }
     } catch (e) {

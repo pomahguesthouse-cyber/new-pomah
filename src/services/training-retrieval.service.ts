@@ -187,6 +187,7 @@ export async function findNegativeExamples(
   const trimmed = (userMessage ?? "").trim();
   if (!trimmed || !llmConfig?.apiKey) return [];
   const limit = options.limit ?? 2;
+  if (limit <= 0) return [];
   const minSim = options.minSimilarity ?? DEFAULT_MIN_SIM;
 
   const queryEmbedding = await generateEmbedding(llmConfig, trimmed).catch(() => null);
