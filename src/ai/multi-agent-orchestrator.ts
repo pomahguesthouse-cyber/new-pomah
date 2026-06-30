@@ -86,6 +86,36 @@ function normalizeAgentManagerName(value: unknown): string | undefined {
   return typeof value === "string" ? normalizeAssistantName(value, "") : undefined;
 }
 
+function selectRecoveryClassifierQuery(lastUserMsg: string, unansweredMessages?: string[]): string {
+  const candidates = (unansweredMessages ?? [])
+    .map((m) => m.trim())
+    .filter(Boolean);
+  if (candidates.length === 0) return lastUserMsg;
+
+  const scoreMessage = (message: string): number => {
+    const text = message.toLowerCase();
+    let score = Math.min(message.length, 160) / 40;
+    if (/\b(available|availability|avail|tersedia|ketersediaan|kosong|ada kamar|guesthouse|guest house|kamar|room)\b/i.test(text)) {
+      score += 6;
+    }
+    if (/\b(harga|rate|tarif|berapa|booking|reservasi|pesan|check.?in|check.?out|tanggal|malam|orang|tamu)\b/i.test(text)) {
+      score += 3;
+    }
+    if (/\?/.test(message)) score += 2;
+    if (/^\s*(halo|hai|hi|hello)\s*$/i.test(message)) score -= 4;
+    if (/\b(tiktok|tik tok|instagram|ig|facebook|fb|google|maps?|dapat|dapet|lihat|nemu)\b/i.test(text)) {
+      score -= 2;
+    }
+    return score;
+  };
+
+  const best = candidates.reduce((winner, current) =>
+    scoreMessage(current) > scoreMessage(winner) ? current : winner,
+  );
+  const joined = candidates.join("\n");
+  return best === lastUserMsg.trim() ? joined : best;
+}
+
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
 /**
@@ -299,7 +329,11 @@ async function runAgent(
         `\nPesan-pesan tamu yang belum terjawab:\n` +
         agentCtx.unansweredMessages.map((m, i) => `${i + 1}. "${m}"`).join("\n");
     }
-    systemPrompt += `\nAnda WAJIB memulai jawaban Anda dengan sapaan recovery: "Maaf Kak, saya bantu lanjutkan ya..." atau sejenisnya, lalu jawab semua poin pertanyaan/pesan di atas secara komprehensif dalam satu balasan terintegrasi.`;
+    systemPrompt +=
+      `\nJawab pertanyaan inti tamu secara langsung, ringkas, dan terpadu dalam satu balasan.` +
+      ` Jika ada pesan yang hanya konteks sumber (mis. TikTok/Instagram/lampiran), boleh akui sangat singkat lalu kembali ke kebutuhan utama.` +
+      ` Jangan memakai preamble recovery seperti "Maaf Kak, saya bantu lanjutkan ya", jangan memperkenalkan diri ulang, dan jangan menambahkan "Ada yang bisa Rani bantu?" ketika kebutuhan tamu sudah jelas.` +
+      ` Untuk pertanyaan ketersediaan tanpa tanggal eksplisit, jangan panggil tool availability; cukup tanyakan tanggal check-in dan check-out secara singkat.`;
   }
 
   // Enforce JSON output for text replies
@@ -787,7 +821,18 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // 5. Classify intent — use the rewritten query when one was produced.
   //    Pass conversation context so short follow-ups ("ya", "oke") inherit the
   //    prior intent instead of degrading to "general".
-  const queryForClassifier = rewrite.rewritten_applied ? rewrite.rewritten : lastUserMsg;
+  const recoveryClassifierQuery = input.agentCtx.recoveryMode
+    ? selectRecoveryClassifierQuery(lastUserMsg, input.agentCtx.unansweredMessages)
+    : lastUserMsg;
+  const queryForClassifier =
+    rewrite.rewritten_applied && recoveryClassifierQuery === lastUserMsg
+      ? rewrite.rewritten
+      : recoveryClassifierQuery;
+  if (input.agentCtx.recoveryMode && queryForClassifier !== lastUserMsg) {
+    console.info(
+      `[MultiAgent] Recovery classifier query selected: "${queryForClassifier.slice(0, 160)}"`,
+    );
+  }
   const classified = await classifyIntent(queryForClassifier, input.toolCtx.supabaseAdmin, input.llmConfig, {
     bookingActive: stateRecord.state !== "IDLE",
     lastTopic: resolved.topic ?? stateRecord.last_topic ?? null,
