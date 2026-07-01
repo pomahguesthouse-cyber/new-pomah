@@ -52,7 +52,7 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
 
 /** Keywords/patterns that indicate user is still typing */
 const WAIT_SIGNAL_RE =
-  /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek|nanti|sejenak|just a sec)\b|\.\.\./i;
+  /\b(bentar|sebentar|tunggu(?: dulu| ya| sebentar)?|wait|cek dulu(?: ya)?|sejenak|just a sec)\b|\.\.\.$/i;
 
 export function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
   if (!cfg.enabled) return 0;

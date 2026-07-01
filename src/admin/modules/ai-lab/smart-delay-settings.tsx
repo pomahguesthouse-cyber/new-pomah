@@ -45,7 +45,7 @@ function fmtMs(ms: number): string {
 }
 
 /** Preview: what delay would fire for a given sample message? */
-const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu|wait|lagi|masih|cek dulu|cek)\b|\.\.\./i;
+const WAIT_SIGNALS = /\b(bentar|sebentar|tunggu(?: dulu| ya| sebentar)?|wait|cek dulu(?: ya)?|sejenak|just a sec)\b|\.\.\.$/i;
 function previewDelay(body: string, cfg: SmartDelayConfig): number {
   if (!cfg.enabled) return 0;
   if (WAIT_SIGNALS.test(body)) return Math.min(cfg.waitSignalMs, cfg.maxDelayMs);
