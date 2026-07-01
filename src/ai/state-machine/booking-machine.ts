@@ -566,42 +566,69 @@ export async function resolveBookingSummaryRates(
  * malam, balas pesan minta pilih tanggal/tipe lain alih-alih ringkasan final.
  * Fallback ke versi sync bila resolve gagal (mis. data context tidak lengkap).
  */
-async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContext): Promise<StateMachineResult> {
-  try {
-    const resolved = await resolveBookingSummaryRates(ctx, context);
-    if (resolved && resolved.stopSellDates.length > 0) {
-      const tanggalList = resolved.stopSellDates.map((d) => formatDateId(d)).join(", ");
-      const roomLabel = context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
-      return {
-        handled: true,
-        reply:
-          `Mohon maaf Kak, ${roomLabel} tidak dijual untuk tanggal ${tanggalList}. ` +
-          `Silakan pilih tanggal lain atau tipe kamar lain ya 🙏.`,
-      };
-    }
-    if (resolved) {
-      return buildBookingSummary(context, ctx.rooms, {
-        rooms: resolved.rooms,
-        roomSubtotal: resolved.roomSubtotal,
-        displayRatePerNight: resolved.displayRatePerNight,
-        hasDynamicBreakdown: resolved.hasDynamicBreakdown,
-      });
-    }
-  } catch (e) {
-    console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
+type ResolvedBookingRates = Awaited<ReturnType<typeof resolveBookingSummaryRates>>;
+
+/**
+ * Bangun StateMachineResult ringkasan booking dari hasil resolve yang SUDAH
+ * ada (tidak query ulang). Dipakai bareng applyResolvedRatesToContext supaya
+ * satu pemanggilan resolveBookingSummaryRates (yang query room_daily_rates)
+ * bisa dipakai ulang untuk apply-ke-context DAN build ringkasan, alih-alih
+ * dua kali round-trip DB untuk data yang sama.
+ */
+function buildBookingSummaryFromResolved(
+  ctx: ToolContext,
+  context: BookingContext,
+  resolved: ResolvedBookingRates,
+): StateMachineResult {
+  if (resolved && resolved.stopSellDates.length > 0) {
+    const tanggalList = resolved.stopSellDates.map((d) => formatDateId(d)).join(", ");
+    const roomLabel = context.rooms?.[0]?.roomTypeName ?? context.roomName ?? "tipe kamar ini";
+    return {
+      handled: true,
+      reply:
+        `Mohon maaf Kak, ${roomLabel} tidak dijual untuk tanggal ${tanggalList}. ` +
+        `Silakan pilih tanggal lain atau tipe kamar lain ya 🙏.`,
+    };
+  }
+  if (resolved) {
+    return buildBookingSummary(context, ctx.rooms, {
+      rooms: resolved.rooms,
+      roomSubtotal: resolved.roomSubtotal,
+      displayRatePerNight: resolved.displayRatePerNight,
+      hasDynamicBreakdown: resolved.hasDynamicBreakdown,
+    });
   }
   return buildBookingSummary(context, ctx.rooms);
 }
 
-async function applyResolvedRatesToContext(ctx: ToolContext, context: BookingContext): Promise<void> {
+async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContext): Promise<StateMachineResult> {
+  let resolved: ResolvedBookingRates = null;
+  try {
+    resolved = await resolveBookingSummaryRates(ctx, context);
+  } catch (e) {
+    console.warn("[BookingState] resolveBookingSummaryRates failed, fallback sync:", e);
+  }
+  return buildBookingSummaryFromResolved(ctx, context, resolved);
+}
+
+/**
+ * Resolve rates SEKALI, apply ke context, dan kembalikan hasil resolve agar
+ * caller bisa langsung pakai buildBookingSummaryFromResolved tanpa query ulang.
+ */
+async function applyResolvedRatesToContext(
+  ctx: ToolContext,
+  context: BookingContext,
+): Promise<ResolvedBookingRates> {
   try {
     const resolved = await resolveBookingSummaryRates(ctx, context);
-    if (!resolved || resolved.stopSellDates.length > 0) return;
+    if (!resolved || resolved.stopSellDates.length > 0) return resolved;
     context.rooms = resolved.rooms;
     context.pricePerNight = resolved.displayRatePerNight;
     context.totalPrice = resolved.roomSubtotal;
+    return resolved;
   } catch (e) {
     console.warn("[BookingState] applyResolvedRatesToContext failed (non-fatal):", e);
+    return null;
   }
 }
 
@@ -1041,9 +1068,9 @@ export async function processBookingState(
 
     context = bookingFormSubmissionToContext(row.submitted_data, phone, ctx.rooms, context);
     context.formToken = token;
-    await applyResolvedRatesToContext(ctx, context);
+    const resolvedRates = await applyResolvedRatesToContext(ctx, context);
     await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-    return await buildBookingSummaryAsync(ctx, context);
+    return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
   }
 
   if (state === "AWAITING_CANCEL_CONFIRMATION") {
@@ -1497,9 +1524,9 @@ export async function processBookingState(
       const hasNameForSkip = !!context.guestName && context.guestName.length >= 2;
       if (hasDatesForSkip && hasRoomForSkip && hasNameForSkip) {
         console.info(`[BookingState] AWAITING_EMAIL auto-skip → CONFIRMING_BOOKING for ${phone.slice(-6)}`);
-        await applyResolvedRatesToContext(ctx, context);
+        const resolvedRates = await applyResolvedRatesToContext(ctx, context);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-        return await buildBookingSummaryAsync(ctx, context);
+        return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
       }
     }
 
@@ -1552,9 +1579,9 @@ export async function processBookingState(
         context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
       }
 
-      await applyResolvedRatesToContext(ctx, context);
+      const resolvedRates = await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return await buildBookingSummaryAsync(ctx, context);
+      return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
     }
 
     // Still missing details: update state to COLLECTING_DATA
@@ -1626,9 +1653,9 @@ export async function processBookingState(
           pricePerNight: requestedRoom.pricePerNight,
         },
       ];
-      await applyResolvedRatesToContext(ctx, context);
+      const resolvedRates = await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return await buildBookingSummaryAsync(ctx, context);
+      return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
     }
 
     // Koreksi slot fleksibel: tamu kirim "jumlah tamu 5 kak", "tanggal 22 Juni",
@@ -1665,9 +1692,9 @@ export async function processBookingState(
           const nights = countNights(context.checkIn, context.checkOut);
           context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
         }
-        await applyResolvedRatesToContext(ctx, context);
+        const resolvedRates = await applyResolvedRatesToContext(ctx, context);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-        return await buildBookingSummaryAsync(ctx, context);
+        return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
       }
     }
 
