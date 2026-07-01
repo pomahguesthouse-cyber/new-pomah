@@ -2230,7 +2230,28 @@ export async function drainQueue(
     try {
       if (abortSignal?.aborted) {
         outcome = "fatal";
-      } else {
+      } else if (claim.attempt >= 1) {
+        // Guard retry basi: kalau entry ini dicoba ulang (mis. setelah
+        // zombie_timeout) TAPI sudah ada queue entry lebih baru untuk phone
+        // yang sama yang sudah 'sent', balasan kita akan terasa telat/tidak
+        // nyambung karena tamu sudah lanjut menanyakan hal lain. Skip.
+        try {
+          const { data: newer } = await (supabaseAdmin as any)
+            .from("wa_conversation_queue")
+            .select("id")
+            .eq("phone", claim.phone)
+            .eq("status", "sent")
+            .gt("first_message_at", claim.firstMessageAt ?? new Date(0).toISOString())
+            .limit(1);
+          if (newer && newer.length > 0) {
+            console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
+            outcome = "skipped_config";
+          }
+        } catch (guardErr) {
+          console.warn(`[Drain] ${logPhone} stale-retry guard failed:`, guardErr);
+        }
+      }
+      if (outcome === "fatal") {
         outcome = await executeAutoreplyForPhone(
           claim.phone,
           origin,
@@ -2240,6 +2261,7 @@ export async function drainQueue(
           claim.attempt,
         );
       }
+
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
