@@ -2236,21 +2236,30 @@ export async function drainQueue(
         // yang sama yang sudah 'sent', balasan kita akan terasa telat/tidak
         // nyambung karena tamu sudah lanjut menanyakan hal lain. Skip.
         try {
-          const { data: newer } = await (supabaseAdmin as any)
+          const { data: selfRow } = await (supabaseAdmin as any)
             .from("wa_conversation_queue")
-            .select("id")
-            .eq("phone", claim.phone)
-            .eq("status", "sent")
-            .gt("first_message_at", claim.firstMessageAt ?? new Date(0).toISOString())
-            .limit(1);
-          if (newer && newer.length > 0) {
-            console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
-            outcome = "skipped_config";
+            .select("created_at")
+            .eq("id", claim.entryId)
+            .maybeSingle();
+          const selfCreatedAt = (selfRow as { created_at?: string } | null)?.created_at ?? null;
+          if (selfCreatedAt) {
+            const { data: newer } = await (supabaseAdmin as any)
+              .from("wa_conversation_queue")
+              .select("id")
+              .eq("phone", claim.phone)
+              .eq("status", "sent")
+              .gt("created_at", selfCreatedAt)
+              .limit(1);
+            if (newer && newer.length > 0) {
+              console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
+              outcome = "skipped_config";
+            }
           }
         } catch (guardErr) {
           console.warn(`[Drain] ${logPhone} stale-retry guard failed:`, guardErr);
         }
       }
+
       if (outcome === "fatal") {
         outcome = await executeAutoreplyForPhone(
           claim.phone,
