@@ -1018,11 +1018,11 @@ export function ChatSimulatorView() {
                               isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40",
                             ),
                         !isEditing && m.direction === "out" && "pr-8",
-                        isEditing && "w-[min(720px,calc(100vw-8rem))] max-w-[92%] px-5 py-4",
+                        isEditing && "w-full max-w-full px-3 py-3 sm:w-[min(720px,calc(100vw-8rem))] sm:max-w-[92%] sm:px-5 sm:py-4",
                       )}
                     >
                       {isEditing ? (
-                        <div className="w-full space-y-3 min-w-[320px] sm:min-w-[560px]">
+                        <div className="w-full space-y-3 sm:min-w-[560px]">
                           <div className="flex gap-2 p-1.5 rounded bg-stone-100 border border-stone-200 w-fit">
                             <button
                               type="button"
