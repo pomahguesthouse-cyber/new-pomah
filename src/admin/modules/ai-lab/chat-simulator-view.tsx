@@ -902,72 +902,82 @@ export function ChatSimulatorView() {
       ) : (
         <>
 
-        <Card className="flex flex-wrap items-center gap-3 p-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-teal-100 text-teal-700">
-            <Bot className="h-5 w-5" />
+        <Card className="flex flex-col gap-3 p-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700">
+              <Bot className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold leading-tight">Simulator Chatbot</p>
+              <p className="truncate text-xs text-muted-foreground">
+                Pipeline asli — pakai nomor uji.
+              </p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-tight">Simulator Chatbot</p>
-            <p className="text-xs text-muted-foreground">
-              Pipeline asli — menulis data nyata. Pakai nomor uji.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Label htmlFor="sim-phone" className="text-xs text-muted-foreground">
-              Nomor uji
-            </Label>
-            <Input
-              id="sim-phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-8 w-40 font-mono text-xs"
-              placeholder="628xxxxxxxxxx"
-            />
-            {transcript.length >= 2 && (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="sim-phone" className="shrink-0 text-xs text-muted-foreground">
+                Nomor uji
+              </Label>
+              <Input
+                id="sim-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="h-8 min-w-0 flex-1 font-mono text-xs sm:w-40 sm:flex-none"
+                placeholder="628xxxxxxxxxx"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {transcript.length >= 2 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-sm transition-colors"
+                  onClick={openSaveDialog}
+                  disabled={sending}
+                >
+                  <GraduationCap className="mr-1.5 h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Simpan Training</span>
+                  <span className="sm:hidden">Simpan</span>
+                </Button>
+              )}
               <Button
-                variant="default"
+                variant="outline"
                 size="sm"
-                className="bg-teal-700 hover:bg-teal-800 text-white font-medium shadow-sm transition-colors"
-                onClick={openSaveDialog}
+                onClick={() => setImportOpen(true)}
                 disabled={sending}
               >
-                <GraduationCap className="mr-1.5 h-3.5 w-3.5" />
-                Simpan Training
+                <MessagesSquare className="mr-1 h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Impor Chat WA</span>
+                <span className="sm:hidden">Impor</span>
               </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setImportOpen(true)}
-              disabled={sending}
-            >
-              <MessagesSquare className="mr-1 h-3.5 w-3.5" />
-              Impor Chat WA
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={startDemo}
-              disabled={sending || demoStep !== -1}
-              title="Jalankan skenario booking lengkap step-by-step"
-            >
-              <PlayCircle className="mr-1 h-3.5 w-3.5" />
-              Demo Booking
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportJson}
-              disabled={sending || transcript.length === 0}
-              title="Unduh percakapan ini sebagai file JSON"
-            >
-              <Download className="mr-1 h-3.5 w-3.5" />
-              Ekspor JSON
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleReset} disabled={sending}>
-              <RotateCcw className="mr-1 h-3.5 w-3.5" />
-              Reset
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startDemo}
+                disabled={sending || demoStep !== -1}
+                title="Jalankan skenario booking lengkap step-by-step"
+              >
+                <PlayCircle className="mr-1 h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Demo Booking</span>
+                <span className="sm:hidden">Demo</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportJson}
+                disabled={sending || transcript.length === 0}
+                title="Unduh percakapan ini sebagai file JSON"
+              >
+                <Download className="mr-1 h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Ekspor JSON</span>
+                <span className="sm:hidden">Ekspor</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleReset} disabled={sending}>
+                <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                Reset
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -1008,11 +1018,11 @@ export function ChatSimulatorView() {
                               isEdited && "border-l-4 border-l-teal-500 bg-teal-50/40",
                             ),
                         !isEditing && m.direction === "out" && "pr-8",
-                        isEditing && "w-[min(720px,calc(100vw-8rem))] max-w-[92%] px-5 py-4",
+                        isEditing && "w-full max-w-full px-3 py-3 sm:w-[min(720px,calc(100vw-8rem))] sm:max-w-[92%] sm:px-5 sm:py-4",
                       )}
                     >
                       {isEditing ? (
-                        <div className="w-full space-y-3 min-w-[320px] sm:min-w-[560px]">
+                        <div className="w-full space-y-3 sm:min-w-[560px]">
                           <div className="flex gap-2 p-1.5 rounded bg-stone-100 border border-stone-200 w-fit">
                             <button
                               type="button"

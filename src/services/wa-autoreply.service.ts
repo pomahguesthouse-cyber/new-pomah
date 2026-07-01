@@ -1060,8 +1060,49 @@ export async function executeAutoreplyForPhone(
         (handoffContext as { handoff?: unknown }).handoff === true
       ) {
         console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
+        // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
+        // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
+        // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
+        try {
+          const fifteenMinAgo = new Date(Date.now() - 15 * 60_000).toISOString();
+          const { data: recentAck } = await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .select("id")
+            .eq("thread_id", c.thread_id)
+            .eq("direction", "out")
+            .filter("metadata->>handoff_ack", "eq", "true")
+            .gte("sent_at", fifteenMinAgo)
+            .limit(1);
+          if (!recentAck || recentAck.length === 0) {
+            const ackBody =
+              "Terima kasih Kak 🙏 Pesan Kakak sudah kami terima. " +
+              "Admin manusia kami akan segera membalas ya, mohon ditunggu sebentar.";
+            const ackRowId = await saveOutboundMessage(supabaseAdmin, {
+              threadId: c.thread_id,
+              body: ackBody,
+              metadata: {
+                agent: "system",
+                agent_key: "handoff-ack",
+                handoff_ack: true,
+                send_status: "pending",
+              } as any,
+            });
+            try {
+              await sendWhatsAppMessage(c.fonnte_token, phone, ackBody);
+              await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
+                .eq("id", ackRowId);
+            } catch (sendErr) {
+              console.warn("[Autoreply] handoff ack send failed:", sendErr);
+            }
+          }
+        } catch (ackErr) {
+          console.warn("[Autoreply] handoff ack guard failed:", ackErr);
+        }
         return "skipped_config";
       }
+
     } catch (e) {
       console.warn("[Autoreply] handoff guard failed (continuing):", e);
     }
@@ -2189,7 +2230,37 @@ export async function drainQueue(
     try {
       if (abortSignal?.aborted) {
         outcome = "fatal";
-      } else {
+      } else if (claim.attempt >= 1) {
+        // Guard retry basi: kalau entry ini dicoba ulang (mis. setelah
+        // zombie_timeout) TAPI sudah ada queue entry lebih baru untuk phone
+        // yang sama yang sudah 'sent', balasan kita akan terasa telat/tidak
+        // nyambung karena tamu sudah lanjut menanyakan hal lain. Skip.
+        try {
+          const { data: selfRow } = await (supabaseAdmin as any)
+            .from("wa_conversation_queue")
+            .select("created_at")
+            .eq("id", claim.entryId)
+            .maybeSingle();
+          const selfCreatedAt = (selfRow as { created_at?: string } | null)?.created_at ?? null;
+          if (selfCreatedAt) {
+            const { data: newer } = await (supabaseAdmin as any)
+              .from("wa_conversation_queue")
+              .select("id")
+              .eq("phone", claim.phone)
+              .eq("status", "sent")
+              .gt("created_at", selfCreatedAt)
+              .limit(1);
+            if (newer && newer.length > 0) {
+              console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
+              outcome = "skipped_config";
+            }
+          }
+        } catch (guardErr) {
+          console.warn(`[Drain] ${logPhone} stale-retry guard failed:`, guardErr);
+        }
+      }
+
+      if (outcome === "fatal") {
         outcome = await executeAutoreplyForPhone(
           claim.phone,
           origin,
@@ -2199,6 +2270,7 @@ export async function drainQueue(
           claim.attempt,
         );
       }
+
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
