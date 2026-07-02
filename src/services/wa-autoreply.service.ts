@@ -642,6 +642,13 @@ function messageOpensWithGreeting(message: string): boolean {
 function looksLikeBookingInquiry(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text || text.length > 240) return false;
+  // Negative filter: pertanyaan tentang spesifikasi/fasilitas kamar harus
+  // dijawab oleh agent (get_room_specifications), bukan re-run availability.
+  // Tanpa filter ini, "Single ukuran kamar sm kasur brp" akan memicu ulang
+  // daftar ketersediaan yang baru saja dikirim (double-send).
+  if (/\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon)\b/i.test(text)) {
+    return false;
+  }
   if (/\b(ready|tersedia|available|avail|kosong|ada kamar|cek kamar|cek ketersediaan|booking|pesan kamar|menginap|masih ada|masih available|harga|rate|tarif|per malam|permalam)\b/i.test(text)) {
     return true;
   }
