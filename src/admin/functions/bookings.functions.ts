@@ -265,6 +265,46 @@ const BOOKING_STATUS = z.enum(["pending", "confirmed", "checked_in", "checked_ou
 const BOOKING_SOURCE = z.enum(["direct", "whatsapp", "walk_in", "website"]);
 const PAYMENT_STATUS = z.enum(["unpaid", "partial", "paid"]);
 
+/**
+ * Kebijakan usia tamu Pomah: anak SD/SMP/SMA/mahasiswa dihitung sebagai
+ * dewasa untuk kapasitas & extra bed. Hanya balita ≤5 thn yang TIDAK
+ * dihitung. Field `children_under_5` bersifat opsional & backward-compatible
+ * (default 0), sehingga request lama tetap valid tetapi tidak bisa
+ * memanipulasi kapasitas dengan mengaku semua "children" berumur ≤5.
+ */
+type RoomCapMeta = { capacity: number; extrabedCap: number; name: string };
+
+function assertGuestCapacity(
+  adults: number,
+  children: number,
+  childrenUnder5: number,
+  rooms: Array<{ room_id: string; extra_bed_count?: number | null }>,
+  roomTypeById: Map<string, string>,
+  typeMetaById: Map<string, RoomCapMeta>,
+): void {
+  const under5 = Math.min(Math.max(0, childrenUnder5), children);
+  const countedGuests = adults + Math.max(0, children - under5);
+
+  let baseCapacity = 0;
+  let extraBedTotal = 0;
+  for (const r of rooms) {
+    const tid = roomTypeById.get(r.room_id);
+    if (!tid) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
+    const meta = typeMetaById.get(tid);
+    if (!meta) throw new Error(`Metadata tipe kamar tidak ditemukan untuk ${r.room_id}`);
+    baseCapacity += meta.capacity;
+    extraBedTotal += Number(r.extra_bed_count ?? 0);
+  }
+  const totalCapacity = baseCapacity + extraBedTotal;
+  if (countedGuests > totalCapacity) {
+    throw new Error(
+      `Jumlah tamu (${countedGuests} orang; balita ≤5 thn tidak dihitung) ` +
+        `melebihi kapasitas kamar (${totalCapacity} = ${baseCapacity} dasar + ${extraBedTotal} extra bed). ` +
+        `Tambah kamar/extra bed atau kurangi jumlah tamu.`,
+    );
+  }
+}
+
 const createMultiRoomBookingSchema = z.object({
   guest: z.object({
     id: z.string().uuid().optional().nullable(),
@@ -277,6 +317,7 @@ const createMultiRoomBookingSchema = z.object({
   check_out: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  children_under_5: z.number().int().min(0).max(20).optional().default(0),
   status: BOOKING_STATUS,
   source: BOOKING_SOURCE,
   payment_status: PAYMENT_STATUS,
@@ -295,6 +336,7 @@ const createMultiRoomBookingSchema = z.object({
     .min(1, "Pilih minimal 1 kamar")
     .max(20),
 });
+
 
 export const createMultiRoomBooking = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
