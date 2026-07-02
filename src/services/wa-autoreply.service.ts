@@ -113,7 +113,12 @@ type ParsedGuestCount = {
  * belum menghasilkan jawaban dalam batas ini, alur mengirim fallback yang jelas
  * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
-const AI_TIMEOUT_MS = 18_000;
+const AI_TIMEOUT_MS = 14_000;
+// Deadline dinding-jam untuk satu iterasi handleOne (klaim → orkestrasi →
+// persist → Fonnte → queueComplete). Harus < batas wall-time worker Cloudflare
+// (≈30s). Jika terlampaui, kita paksa queueFail supaya entry tidak menjadi
+// zombie dan fallback bisa dikirim di siklus cron berikutnya.
+const HANDLE_ONE_DEADLINE_MS = 24_000;
 // Retry penuh menggandakan rakit prompt/retrieval/tool orchestration di runtime
 // Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan
 // mengulang orchestration berat dalam satu request worker.
