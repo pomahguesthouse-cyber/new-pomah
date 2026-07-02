@@ -101,7 +101,14 @@ export async function generateAndSendInvoiceNotification({
     const roomCounts = new Map<string, number>();
     let totalExtraBed = 0;
     let extraBedSubtotal = 0;
-    const nightsForCalc = Math.max(1, Number((booking as any).nights ?? 1));
+    const ciMs = Date.parse(`${String((booking as any).check_in)}T00:00:00Z`);
+    const coMs = Date.parse(`${String((booking as any).check_out)}T00:00:00Z`);
+    const nightsForCalc = Math.max(
+      1,
+      Number.isFinite(ciMs) && Number.isFinite(coMs)
+        ? Math.round((coMs - ciMs) / 86_400_000)
+        : 1,
+    );
     for (const br of ((bookingRooms as any[]) ?? [])) {
       const name = br?.room_types?.name ?? "Kamar";
       roomCounts.set(name, (roomCounts.get(name) ?? 0) + 1);
