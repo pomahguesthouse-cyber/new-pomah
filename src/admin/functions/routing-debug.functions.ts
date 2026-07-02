@@ -63,7 +63,16 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: outbound, error } = await supabaseAdmin
+    type OutboundRow = {
+      id: string;
+      thread_id: string | null;
+      body: string | null;
+      sent_at: string | null;
+      metadata: Record<string, unknown> | null;
+    };
+    type ThreadRow = { id: string; phone: string | null; display_name: string | null };
+
+    const { data: outboundRaw, error } = await supabaseAdmin
       .from("whatsapp_messages")
       .select("id, thread_id, body, sent_at, metadata")
       .eq("direction", "outbound")
@@ -73,17 +82,19 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
       .limit(data.limit);
 
     if (error) throw new Error(`Gagal memuat riwayat: ${error.message}`);
+    const outbound = (outboundRaw ?? []) as unknown as OutboundRow[];
 
-    const threadIds = Array.from(new Set((outbound ?? []).map((m) => m.thread_id).filter(Boolean)));
+    const threadIds = Array.from(new Set(outbound.map((m) => m.thread_id).filter(Boolean) as string[]));
 
     // Ambil info thread (phone/display_name) untuk konteks.
-    const { data: threads } = threadIds.length
+    const threadsResult = threadIds.length
       ? await supabaseAdmin
           .from("whatsapp_threads")
           .select("id, phone, display_name")
-          .in("id", threadIds as string[])
-      : { data: [] as Array<{ id: string; phone: string | null; display_name: string | null }> };
-    const threadById = new Map((threads ?? []).map((t) => [t.id, t]));
+          .in("id", threadIds)
+      : { data: [] as ThreadRow[] };
+    const threads = (threadsResult.data ?? []) as unknown as ThreadRow[];
+    const threadById = new Map<string, ThreadRow>(threads.map((t) => [t.id, t]));
 
     // Untuk setiap outbound, cari pesan inbound terakhir sebelum sent_at.
     const items = await Promise.all(
