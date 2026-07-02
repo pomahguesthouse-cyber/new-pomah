@@ -1603,6 +1603,33 @@ export async function executeAutoreplyForPhone(
   }
 
 
+  // Fast-path deterministik untuk FAQ properti ringan (greeting, thanks,
+  // alamat, kontak, jam check-in/out). Dijalankan setelah booking-inquiry
+  // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    try {
+      const propertyFaq = buildDeterministicPropertyFaqReply({
+        message: lastMessage,
+        property: p as any,
+        greetingUsed: messageOpensWithGreeting(lastMessage),
+      });
+      if (propertyFaq) {
+        reply = propertyFaq.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: propertyFaq.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["property-faq-template"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Property FAQ fast-path (${propertyFaq.intent}) for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] property FAQ fast-path failed:", e);
+    }
+  }
+
 
   const explicitKey = p.ai_api_key?.trim();
   const lovableKey = process.env.LOVABLE_API_KEY?.trim();
