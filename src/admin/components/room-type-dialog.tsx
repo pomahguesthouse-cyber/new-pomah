@@ -217,6 +217,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         slug: slug.trim() || slugify(name),
         description: description.trim() || null,
         bed_type: bedType.trim() || null,
+        bed_size: bedSize.trim() || null,
         floor_info: floorInfo.trim() || null,
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
         capacity: Number(capacity) || 1,
