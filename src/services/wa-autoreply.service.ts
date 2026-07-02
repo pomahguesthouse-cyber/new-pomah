@@ -636,6 +636,19 @@ function messageOpensWithGreeting(message: string): boolean {
   );
 }
 
+/** Heuristik ringan: pesan tamu bernada booking_inquiry (tanya
+ *  ketersediaan/harga/kamar) walau tanpa kata kunci tanggal. Dipakai untuk
+ *  fast-path kontekstual yang meminjam tanggal dari state sebelumnya. */
+function looksLikeBookingInquiry(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || text.length > 240) return false;
+  if (/\b(ready|tersedia|available|avail|kosong|ada kamar|cek kamar|cek ketersediaan|booking|pesan kamar|menginap|masih ada|masih available|harga|rate|tarif|per malam|permalam)\b/i.test(text)) {
+    return true;
+  }
+  // Follow-up singkat seperti "gimana kak?", "jadi kosong?", "cek dong"
+  return /\b(kamar|room|guesthouse|guest house|penginapan)\b/i.test(text);
+}
+
 async function buildDeterministicAvailabilityReply(params: {
   message: string;
   rooms: any[];
