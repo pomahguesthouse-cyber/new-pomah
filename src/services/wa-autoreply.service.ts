@@ -2916,10 +2916,41 @@ export async function sendFailureFallbackToGuests(): Promise<{
       .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
 
+    // Eskalasi ke admin: buat handoff ticket supaya percakapan mati tidak
+    // hilang dari radar. `createHandoffTicket` idempotent per (phone, open),
+    // jadi aman dipanggil setiap tick fallback.
+    if (!isManagerEntry) {
+      try {
+        const { createHandoffTicket } = await import("@/services/frustration-detector");
+        const { data: lastInbound } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("body")
+          .eq("thread_id", entry.thread_id)
+          .eq("direction", "in")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        await createHandoffTicket(supabaseAdmin as any, {
+          phone: entry.phone,
+          threadId: entry.thread_id,
+          kind: "frustrated",
+          triggerMessage: String(lastInbound?.body ?? "(pesan tidak tersedia)"),
+          context: {
+            reason: "queue_terminal_failure",
+            queue_entry_id: entry.id,
+            last_error: entry.last_error ?? null,
+            created_at: entry.created_at,
+          },
+        });
+      } catch (e) {
+        console.warn("[Fallback] createHandoffTicket failed:", e);
+      }
+    }
 
     notified++;
     console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
   }
+
 
   return { notified };
 }
