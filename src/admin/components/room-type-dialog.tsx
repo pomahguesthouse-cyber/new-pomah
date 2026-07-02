@@ -195,6 +195,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug("");
       setSlugTouched(false);
       setBedType("");
+      setBedSize("");
       setFloorInfo("");
       setCapacity(2);
       setExtrabedCapacity(0);
