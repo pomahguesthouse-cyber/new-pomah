@@ -758,9 +758,110 @@ async function buildContextualBookingInquiryReply(params: {
 }
 
 
+/**
+ * Fast-path deterministik untuk intent ringan yang jawabannya sudah ada di
+ * profil properti (greeting, thanks, bye, alamat/lokasi, kontak, policy
+ * check-in/checkout). Sebelum ini, semua intent tersebut ikut lewat
+ * orchestrator LLM (p95 ~10 s). Sekarang: match regex ringan → template
+ * balasan langsung dari kolom `properties`. Return `null` bila tidak cocok.
+ */
+function buildDeterministicPropertyFaqReply(params: {
+  message: string;
+  property: {
+    name?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    whatsapp_number?: string | null;
+    email?: string | null;
+    check_in_time?: string | null;
+    check_out_time?: string | null;
+    hotel_policy?: string | null;
+    instagram_url?: string | null;
+    google_place_id?: string | null;
+  } | null;
+  greetingUsed: boolean;
+}): FastFaqResult | null {
+  const raw = params.message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!raw || raw.length > 200) return null;
+  const p = params.property ?? {};
+  const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
+
+  // Trailing filler yang lazim: "kak", "kakak", "min", "admin", "pak", "bu",
+  // "ka", "ya", "dong", "banget" — bisa muncul berulang dengan spasi.
+  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|ya|dong|banget|deh|nih))*";
+
+  // — Greeting murni (tanpa pertanyaan lain) —
+  if (
+    new RegExp(
+      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
+  ) {
+    const name = p.name ?? "Pomah Guesthouse";
+    return {
+      reply: `Halo Kak, terima kasih sudah menghubungi ${name} 🙏\nAda yang bisa kami bantu — mau cek ketersediaan kamar, harga, atau info fasilitas?`,
+      intent: "greeting",
+    };
+  }
+
+  // — Terima kasih / penutup —
+  if (
+    new RegExp(
+      `^(makasih|terima\\s*kasih|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
+  ) {
+    return {
+      reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
+      intent: "thanks",
+    };
+
+  }
+
+  // — Alamat / lokasi —
+  if (
+    /\b(alamat|lokasi|dimana|di mana|dmn|maps|map|lokasinya|arah|arahan|posisi)\b/i.test(raw) &&
+    p.address
+  ) {
+    const mapsLink = p.google_place_id
+      ? `https://www.google.com/maps/place/?q=place_id:${p.google_place_id}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}`;
+    return {
+      reply: `${opener}Alamat kami:\n📍 ${p.address}\n\nMaps: ${mapsLink}`,
+      intent: "location_question",
+    };
+  }
+
+  // — Kontak (nomor WA / telepon / email / IG) —
+  if (/\b(kontak|nomor|no\.?\s*wa|whatsapp|telepon|telp|hp|email|ig|instagram)\b/i.test(raw)) {
+    const bits: string[] = [];
+    if (p.whatsapp_number ?? p.phone) bits.push(`📱 WA/Telp: ${p.whatsapp_number ?? p.phone}`);
+    if (p.email) bits.push(`✉️ Email: ${p.email}`);
+    if (p.instagram_url) bits.push(`📸 Instagram: ${p.instagram_url}`);
+    if (bits.length === 0) return null;
+    return {
+      reply: `${opener}Berikut kontak kami:\n${bits.join("\n")}`,
+      intent: "contact_request",
+    };
+  }
+
+  // — Jam check-in / check-out —
+  if (/\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw)) {
+    const ci = p.check_in_time?.slice(0, 5) ?? "14:00";
+    const co = p.check_out_time?.slice(0, 5) ?? "12:00";
+    return {
+      reply: `${opener}Waktu check-in mulai pukul *${ci}* dan check-out paling lambat *${co}*.\nEarly check-in / late check-out mengikuti ketersediaan kamar ya Kak 🙏`,
+      intent: "policy_question",
+    };
+  }
+
+  return null;
+}
+
 
 async function buildGuestCountAfterAvailabilityReply(params: {
   message: string;
+
   rooms: any[];
   property: any;
   origin: string;
@@ -1514,6 +1615,33 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+
+  // Fast-path deterministik untuk FAQ properti ringan (greeting, thanks,
+  // alamat, kontak, jam check-in/out). Dijalankan setelah booking-inquiry
+  // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    try {
+      const propertyFaq = buildDeterministicPropertyFaqReply({
+        message: lastMessage,
+        property: p as any,
+        greetingUsed: messageOpensWithGreeting(lastMessage),
+      });
+      if (propertyFaq) {
+        reply = propertyFaq.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: propertyFaq.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["property-faq-template"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Property FAQ fast-path (${propertyFaq.intent}) for ${phone.slice(-6)}`);
+      }
+    } catch (e) {
+      console.warn("[Autoreply] property FAQ fast-path failed:", e);
+    }
+  }
 
 
   const explicitKey = p.ai_api_key?.trim();
@@ -2801,10 +2929,41 @@ export async function sendFailureFallbackToGuests(): Promise<{
       .update({ last_error: withFallbackSentMarker(entry.last_error, "[fallback_sent]") })
       .eq("id", entry.id);
 
+    // Eskalasi ke admin: buat handoff ticket supaya percakapan mati tidak
+    // hilang dari radar. `createHandoffTicket` idempotent per (phone, open),
+    // jadi aman dipanggil setiap tick fallback.
+    if (!isManagerEntry) {
+      try {
+        const { createHandoffTicket } = await import("@/services/frustration-detector");
+        const { data: lastInbound } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("body")
+          .eq("thread_id", entry.thread_id)
+          .eq("direction", "in")
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        await createHandoffTicket(supabaseAdmin as any, {
+          phone: entry.phone,
+          threadId: entry.thread_id,
+          kind: "frustrated",
+          triggerMessage: String(lastInbound?.body ?? "(pesan tidak tersedia)"),
+          context: {
+            reason: "queue_terminal_failure",
+            queue_entry_id: entry.id,
+            last_error: entry.last_error ?? null,
+            created_at: entry.created_at,
+          },
+        });
+      } catch (e) {
+        console.warn("[Fallback] createHandoffTicket failed:", e);
+      }
+    }
 
     notified++;
     console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
   }
+
 
   return { notified };
 }

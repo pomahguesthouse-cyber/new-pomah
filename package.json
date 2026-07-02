@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test:admin-bookings": "bun run scripts/test-admin-booking-types.ts",
-    "test:awaiting-alt-room": "bun run scripts/test-awaiting-alternative-room-type.ts"
+    "test:awaiting-alt-room": "bun run scripts/test-awaiting-alternative-room-type.ts",
+    "test:chatbot-fastpath": "bun run scripts/test-chatbot-fastpath.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
