@@ -171,7 +171,7 @@ export const managerAgent: AgentDefinition = {
         "  - get_bookings (booking terbaru, daftar/jadwal/laporan booking)\n" +
         "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
         "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
-        "  - update_booking_status, delete_booking, change_booking_room (mutasi booking)\n" +
+        "  - update_booking_status, delete_booking, change_booking_room, set_extra_bed (mutasi booking)\n" +
         "  - reply_to_guest (relay ke tamu)\n" +
         "Untuk perintah yang cocok dengan tool langsung di atas, panggil tool langsung. " +
         "Untuk instruksi lainnya, gunakan peta delegasi wajib.",
