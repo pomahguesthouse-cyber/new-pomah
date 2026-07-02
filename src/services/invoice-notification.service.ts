@@ -188,7 +188,7 @@ Terima kasih telah memesan kamar di ${propertyName}. Reservasi Anda telah berhas
 
 Berikut ringkasan pemesanan Anda:
 • Kode Booking: ${booking.reference_code ?? booking.id.slice(0, 8)}
-• Tipe Kamar: ${roomTypeName}
+• Tipe Kamar: ${roomTypeName}${extraBedLine}
 • Check-in: ${fmtDateID(booking.check_in)}
 • Check-out: ${fmtDateID(booking.check_out)}
 • Total: ${totalFormatted}
