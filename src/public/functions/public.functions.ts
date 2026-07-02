@@ -740,7 +740,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       try {
         const { data: brRows } = await sb
           .from("booking_rooms")
-          .select("id, room_id, room_type_id, nightly_rate, room_types(name), rooms(number)")
+          .select("id, room_id, room_type_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(name), rooms(number)")
           .eq("booking_id", bookingId)
           .order("created_at", { ascending: true });
         rows = (brRows ?? []) as Record<string, unknown>[];
