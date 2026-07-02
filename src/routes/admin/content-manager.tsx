@@ -49,6 +49,8 @@ function ContentManagerPage() {
     queryFn: () => listFn(),
   });
 
+  const purgedCount = (data as any)?.purgedCount ?? 0;
+
   const [category, setCategory] = useState<typeof CATEGORIES[number]["value"]>("event");
   const [extra, setExtra] = useState("");
   const [running, setRunning] = useState(false);
