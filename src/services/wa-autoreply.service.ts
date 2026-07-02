@@ -2421,8 +2421,30 @@ export async function executeAutoreplyForPhone(
   const summarizableMessages =
     currentSessionMessages.length >= SUMMARY_MIN_MESSAGES ? currentSessionMessages : previousSession;
   const forced = shouldForceSummary(lastMessage);
+  const summaryTextMissing = !chatSummary.trim();
+
+  // Fallback deterministik: kalau kolom `chat_summary` masih kosong (thread
+  // baru, LLM belum tersedia, atau LLM path akan di-skip), tanam seed dari
+  // regex sederhana lewat waitUntil. Regex murni <5 ms — dan karena
+  // dijalankan di dalam runDeferred (waitUntil di CF), TIDAK menambah
+  // latency ke balasan tamu. Ini memastikan panel admin selalu punya
+  // ringkasan minimal walau LLM regen gagal/di-skip.
+  if (summaryTextMissing) {
+    deferAfterReply("Autoreply.summarySeedFallback", async () => {
+      try {
+        const { seedMissingThreadSummary } = await import("@/services/whatsapp-summary.service");
+        const res = await seedMissingThreadSummary(supabaseAdmin, c.thread_id);
+        if (res.updated) {
+          console.info(`[SessionSummarizer] seed fallback applied (thread ${c.thread_id.slice(0, 8)})`);
+        }
+      } catch (e) {
+        console.warn("[SessionSummarizer] seed fallback failed:", e);
+      }
+    });
+  }
+
   if (summarizableMessages.length < SUMMARY_MIN_MESSAGES) {
-    // not enough — silent skip
+    // not enough — silent skip (seed fallback di atas sudah menutupi)
   } else if (!llmConfig) {
     console.info(`[SessionSummarizer] summary skipped: no LLM config (thread ${c.thread_id.slice(0, 8)})`);
   } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
@@ -2456,6 +2478,7 @@ export async function executeAutoreplyForPhone(
       }
     });
   }
+
 
   flushDeferredAfterReply();
 
