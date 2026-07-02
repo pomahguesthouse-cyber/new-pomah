@@ -332,6 +332,15 @@ export const Route = createFileRoute("/api/fonnte")({
 
         const runBackground = await getWaitUntilRunner();
 
+        // Deteksi "bukti transfer via teks" (mis. "sudah transfer kak",
+        // "sy udh bayar") supaya routing-debug bisa mengukur berapa banyak
+        // percakapan yang butuh pipeline finance tanpa attachment gambar.
+        const paymentProofText =
+          !attachmentUrl &&
+          /\b(sudah|udh|udah|dh|sdh)\s*(transfer|tf|bayar|byr|kirim)\b|\b(bukti|bukti transfer|proof)\b|\bslip\s*(transfer|tf)\b/i.test(
+            displayMessage,
+          );
+
         runBackground(saveMessageMetadata(supabaseAdmin, {
           messageId,
           metadata: {
@@ -350,6 +359,9 @@ export const Route = createFileRoute("/api/fonnte")({
                   type: messageType ?? null,
                 }
               : null,
+            ...(paymentProofText
+              ? { intent_hint: "payment_proof_text", needs_finance_followup: true }
+              : {}),
           },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e)));
 
@@ -382,7 +394,33 @@ export const Route = createFileRoute("/api/fonnte")({
           }
         })());
 
-        if (attachmentUrl) {
+        // Gate OCR ke gambar SAJA. Sebelumnya semua attachment (PDF/video/
+        // audio) ikut men-trigger Vision OCR — buang kredit & bikin log
+        // pipeline finance kotor. Kalau MIME kosong, cek ekstensi URL.
+        const isImageAttachment = (() => {
+          if (!attachmentUrl) return false;
+          const mime = (attachmentMime ?? "").toLowerCase();
+          if (mime.startsWith("image/")) return true;
+          if (mime && !mime.startsWith("image/")) return false;
+          return /\.(jpe?g|png|webp|heic|heif|gif)(\?|$)/i.test(attachmentUrl);
+        })();
+
+        if (isImageAttachment && attachmentUrl) {
+          // Tag intent metadata SEBELUM OCR jalan supaya routing-debug bisa
+          // melihat pipeline payment_proof aktif meski OCR async selesai
+          // belakangan (atau gagal).
+          runBackground(saveMessageMetadata(supabaseAdmin, {
+            messageId,
+            metadata: {
+              intent: "payment_proof",
+              agent_key: "finance",
+              tools_used: ["payment-proof-ocr"],
+              routing_confidence: 1,
+              fast_path: true,
+              pipeline: "payment_proof_ocr",
+            },
+          }).catch((e) => console.warn("[Webhook] payment_proof intent tag error:", e)));
+
           runBackground((async () => {
             try {
               const { analyzePaymentProof } = await import("@/services/payment-proof.service");
@@ -406,7 +444,12 @@ export const Route = createFileRoute("/api/fonnte")({
               console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
             }
           })());
+        } else if (attachmentUrl) {
+          console.info(
+            `[Webhook] Skip OCR non-image attachment (mime=${attachmentMime ?? "?"}, type=${messageType ?? "?"})`,
+          );
         }
+
 
         const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
           "get_autoreply_context",

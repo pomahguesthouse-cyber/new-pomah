@@ -253,7 +253,20 @@ Terima kasih.`;
           thread_id: threadId,
           direction: "out",
           body: messageBody,
-          metadata: { agent: "System", is_automated: true, invoice_url: invoiceUrl },
+          // Tag metadata pipeline-standar supaya invoice muncul di
+          // /admin/routing-debug (sebelumnya invoice tidak terlacak karena
+          // hanya menulis `agent: "System"` yang tidak dibaca aggregator).
+          metadata: {
+            agent: "System",
+            is_automated: true,
+            invoice_url: invoiceUrl,
+            intent: "invoice_send",
+            agent_key: "finance",
+            tools_used: ["invoice-notification"],
+            routing_confidence: 1,
+            fast_path: true,
+            pipeline: "invoice_notification",
+          },
         });
         await supabase
           .from("whatsapp_threads")
