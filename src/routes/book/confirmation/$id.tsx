@@ -88,6 +88,8 @@ type InvoiceRoomDetail = {
   room_type_id?: string | null;
   room_type?: string | null;
   nightly_rate?: number | string | null;
+  extra_bed_count?: number | string | null;
+  extra_bed_rate?: number | string | null;
 };
 
 type InvoiceRoomGroup = {
