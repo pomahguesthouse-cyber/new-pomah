@@ -65,7 +65,7 @@ export function buildSystemPrompt(params: SystemPromptParams): string {
   const roomLines = rooms.map(
     (r) =>
       `• ${r.name} — Rp ${Number(r.base_rate ?? 0).toLocaleString("id-ID")}/malam, ` +
-      `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}` +
+      `kapasitas ${r.capacity ?? "-"} tamu${r.bed_type ? `, ${r.bed_type}` : ""}${r.bed_size ? ` (${r.bed_size})` : ""}` +
       `${r.floor_info ? `, Lokasi: ${r.floor_info}` : ""}` +
       `${r.amenities && r.amenities.length ? `, Fasilitas: ${r.amenities.join(", ")}` : ""}` +
       `${r.description ? `, Deskripsi: ${r.description}` : ""}`,
