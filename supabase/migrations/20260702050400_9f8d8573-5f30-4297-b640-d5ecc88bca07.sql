@@ -1,0 +1,1 @@
+ALTER TABLE public.room_types ADD COLUMN IF NOT EXISTS bed_size text;

@@ -58,6 +58,7 @@ export type ManagedRoomType = {
   slug?: string | null;
   description?: string | null;
   bed_type?: string | null;
+  bed_size?: string | null;
   floor_info?: string | null;
   size_sqm?: number | null;
   capacity?: number | null;
@@ -97,6 +98,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
   const [bedType, setBedType] = React.useState("");
+  const [bedSize, setBedSize] = React.useState("");
   const [floorInfo, setFloorInfo] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
   const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
@@ -170,6 +172,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug(roomType.slug ?? "");
       setSlugTouched(true);
       setBedType(roomType.bed_type ?? "");
+      setBedSize(roomType.bed_size ?? "");
       setFloorInfo(roomType.floor_info ?? "");
       setCapacity(roomType.capacity ?? 2);
       setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
@@ -192,6 +195,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug("");
       setSlugTouched(false);
       setBedType("");
+      setBedSize("");
       setFloorInfo("");
       setCapacity(2);
       setExtrabedCapacity(0);
@@ -213,6 +217,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
         slug: slug.trim() || slugify(name),
         description: description.trim() || null,
         bed_type: bedType.trim() || null,
+        bed_size: bedSize.trim() || null,
         floor_info: floorInfo.trim() || null,
         size_sqm: sizeSqm === "" ? null : Number(sizeSqm),
         capacity: Number(capacity) || 1,
@@ -473,6 +478,18 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Ukuran tempat tidur</Label>
+                <Input
+                  value={bedSize}
+                  placeholder="mis. 180x200 cm (King) atau 120x200 cm"
+                  maxLength={60}
+                  onChange={(e) => setBedSize(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Dipakai chatbot untuk menjawab pertanyaan ukuran/dimensi tempat tidur.
+                </p>
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">Fasilitas</Label>
