@@ -108,11 +108,6 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
           .order("sent_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-          .eq("direction", "inbound")
-          .lt("sent_at", msg.sent_at ?? new Date().toISOString())
-          .order("sent_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
 
         const meta = (msg.metadata ?? {}) as Record<string, unknown>;
         const thread = threadById.get(msg.thread_id ?? "");
