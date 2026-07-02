@@ -150,7 +150,11 @@ function RoutingDebugPage() {
                 );
 
               return (
-                <TableRow key={row.intent}>
+                <TableRow
+                  key={row.intent}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => setSelectedIntent(row.intent)}
+                >
                   <TableCell>
                     <div className="font-mono text-xs">{row.intent}</div>
                     <div className="text-[11px] text-muted-foreground">{row.label}</div>
