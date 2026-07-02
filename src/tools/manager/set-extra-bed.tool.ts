@@ -245,6 +245,20 @@ export const setExtraBed: ToolHandler = async (
     console.error(`[set_extra_bed] notifyBookingUpdated gagal ${booking.id}:`, e);
   }
 
+  // Kirim ringkasan extra bed terbaru ke tamu via WhatsApp.
+  try {
+    const { sendExtraBedUpdateSummary } = await import(
+      "@/services/invoice-notification.service"
+    );
+    await sendExtraBedUpdateSummary({
+      supabase,
+      bookingId: booking.id,
+      changedBy: "Manager",
+    });
+  } catch (e) {
+    console.error(`[set_extra_bed] sendExtraBedUpdateSummary gagal ${booking.id}:`, e);
+  }
+
   const delta = nextCount - current;
   const verb = delta > 0 ? `menambahkan ${delta}` : `mengurangi ${Math.abs(delta)}`;
   return JSON.stringify({
