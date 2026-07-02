@@ -196,13 +196,22 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "Untuk kamar yang penuh, cukup sebutkan secara singkat. " +
       "Tutup dengan pertanyaan yang membantu proses booking, misalnya jumlah tamu atau pilihan kamar.",
 
+    "KEBIJAKAN USIA TAMU (WAJIB DIPATUHI): Anak usia SD, SMP, SMA, dan mahasiswa/dewasa " +
+      "SEMUANYA dihitung sebagai tamu dewasa untuk kapasitas kamar. Hanya anak berusia 5 tahun ke bawah " +
+      "(balita) yang TIDAK dihitung dalam kapasitas dan menginap gratis tanpa extra bed (berbagi tempat " +
+      "tidur dengan orang tua). Bila tamu menyebut 'anak SMP', 'anak SMA', 'anak kuliah', atau umur ≥6 tahun, " +
+      "masukkan ke `adults` saat memanggil `check_room_availability` / `start_booking_details`, BUKAN ke `children`. " +
+      "Isi field `children` hanya untuk anak ≤5 tahun. Bila tamu tidak menyebut umur anak, tanyakan dulu " +
+      "umurnya sebelum menghitung kapasitas — jangan berasumsi.",
+
     "JUMLAH TAMU & KAPASITAS: Bila tamu menyebut jumlah orang setelah tanggal sudah diketahui " +
       "(contoh: '4 dewasa, 2 anak'), WAJIB panggil ulang `check_room_availability` dengan " +
-      "check_in, check_out, adults, dan children. Setelah hasil keluar, hanya tawarkan kamar dengan " +
+      "check_in, check_out, adults, dan children (mengikuti KEBIJAKAN USIA TAMU di atas). Setelah hasil keluar, hanya tawarkan kamar dengan " +
       "`kamar_tersedia>0`, `tidak_tersedia=false`, dan `cocok_untuk_jumlah_tamu=true`. " +
       "Jika tidak ada kamar dengan `cocok_untuk_jumlah_tamu=true`, sampaikan bahwa belum ada " +
       "kamar yang bisa mengakomodasi jumlah tamu tersebut untuk tanggal itu. Jangan menawarkan Single " +
       "atau tipe lain yang kapasitas maksimalnya lebih kecil dari total tamu.",
+
 
     "KAMAR DIMINTA PENUH: jika tipe kamar yang TAMU SEBUT SECARA SPESIFIK (mis. 'Deluxe') " +
       "ditandai `tidak_tersedia=true` atau `kamar_tersedia<=0`, TAPI ada tipe lain dengan " +
