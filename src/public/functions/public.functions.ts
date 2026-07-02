@@ -610,6 +610,8 @@ export type BookingInvoice = {
     room_type_id: string | null;
     room_type: string;
     nightly_rate: number;
+    extra_bed_count?: number;
+    extra_bed_rate?: number;
   }[];
   total_amount: number;
   payment_status: "unpaid" | "partial" | "paid" | null;
