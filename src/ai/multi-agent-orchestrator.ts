@@ -235,7 +235,7 @@ async function callLlm(
  */
 async function runAgent(
   agent: AgentDefinition,
-  conversationMsgs: Array<{ direction: string; body: string }>,
+  conversationMsgs: Array<{ direction: string; body: string; isHuman?: boolean }>,
   agentCtx: AgentContext,
   toolCtx: ToolContext,
   llmConfig: AiClientConfig,
