@@ -397,6 +397,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     mutationFn: () => {
       if (!booking || !booking.guests) throw new Error("Booking tidak valid");
       if (effectiveRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
+      const firstEbErr = Object.values(extraBedErrors)[0];
+      if (firstEbErr) throw new Error(firstEbErr);
       return fnUpdate({
         data: {
           id: booking.id,
