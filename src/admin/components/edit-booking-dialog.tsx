@@ -285,6 +285,29 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return counts;
   }, [allotmentMode, autoCounts, roomsByType, selectedRooms, allRooms]);
 
+  /**
+   * Per-type validation: extra bed for a type must never exceed
+   *   extrabed_capacity_per_room × room_count_of_that_type.
+   * Returns { [typeId]: "pesan error" } for the types that overflow.
+   */
+  const extraBedErrors = React.useMemo<Record<string, string>>(() => {
+    const errs: Record<string, string> = {};
+    for (const group of roomsByType) {
+      const requested = extraBedByType[group.typeId] ?? 0;
+      const rooms = roomCountByType[group.typeId] ?? 0;
+      const maxAllowed = group.extraBedCapacityPerRoom * rooms;
+      if (requested > 0 && group.extraBedCapacityPerRoom === 0) {
+        errs[group.typeId] = `${group.typeName} tidak mendukung extra bed.`;
+      } else if (requested > maxAllowed) {
+        errs[group.typeId] =
+          `Extra bed ${group.typeName} melebihi kapasitas: diminta ${requested}, ` +
+          `maksimum ${maxAllowed} (${group.extraBedCapacityPerRoom}/kamar × ${rooms} kamar).`;
+      }
+    }
+    return errs;
+  }, [roomsByType, extraBedByType, roomCountByType]);
+  const hasExtraBedError = Object.keys(extraBedErrors).length > 0;
+
   // Rooms actually sent on save. Extra beds for a type are packed onto the
   // FIRST booking_row of that type so total_amount stays correct even when
   // the group has multiple physical rooms.
