@@ -1431,7 +1431,45 @@ export async function executeAutoreplyForPhone(
     if (body === QUICK_ACK_MESSAGE) return false;
     return true;
   });
-  const rollingMessages = cleanedSession.slice(-10);
+  const rollingMessages: Array<{ direction: string; body: string; sent_at?: string; isHuman?: boolean }> =
+    cleanedSession.slice(-10);
+
+  // Tandai outbound yang ditulis manual oleh admin (Fonnte native/WhatsApp Web)
+  // agar LLM tahu ada intervensi manusia dan tidak menimpa/menganulir jawaban
+  // admin. Kita ambil metadata->>is_native_human & source untuk pesan out di
+  // window rolling ini, lalu cocokkan dengan body + sent_at.
+  try {
+    const outSentAts = rollingMessages
+      .filter((m) => m.direction === "out" && m.sent_at)
+      .map((m) => m.sent_at as string);
+    if (outSentAts.length && c.thread_id) {
+      const minSent = outSentAts.reduce((a, b) => (a < b ? a : b));
+      const { data: outMeta } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("body, sent_at, metadata")
+        .eq("thread_id", c.thread_id)
+        .eq("direction", "out")
+        .gte("sent_at", minSent);
+      const humanKeys = new Set<string>();
+      for (const row of (outMeta ?? []) as Array<{ body: string; sent_at: string; metadata: any }>) {
+        const md = row.metadata ?? {};
+        const isHuman =
+          md.is_native_human === true ||
+          md.source === "whatsapp_native" ||
+          (!md.agent && !md.agent_key && md.is_automated !== true);
+        if (isHuman) humanKeys.add(`${row.sent_at}::${(row.body ?? "").slice(0, 80)}`);
+      }
+      for (const m of rollingMessages) {
+        if (m.direction !== "out" || !m.sent_at) continue;
+        if (humanKeys.has(`${m.sent_at}::${(m.body ?? "").slice(0, 80)}`)) {
+          m.isHuman = true;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[Autoreply] failed to tag human-admin turns (non-fatal):", e);
+  }
+
 
   const lastMessage =
     [...rollingMessages].reverse().find((m: { direction: string }) => m.direction === "in")?.body ?? "";
