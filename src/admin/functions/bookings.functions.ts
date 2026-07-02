@@ -353,7 +353,13 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     const roomTypeById = new Map<string, string>();
     for (const r of roomRows ?? []) roomTypeById.set(r.id, r.room_type_id);
 
-    let grandTotal = data.rooms.reduce((sum, r) => sum + Number(r.nightly_rate) * nights, 0);
+    let grandTotal = data.rooms.reduce(
+      (sum, r) =>
+        sum +
+        Number(r.nightly_rate) * nights +
+        Number(r.extra_bed_rate) * Number(r.extra_bed_count) * nights,
+      0,
+    );
     let finalPaidAmount = data.paid_amount;
 
     if (data.payment_status === "paid") {
