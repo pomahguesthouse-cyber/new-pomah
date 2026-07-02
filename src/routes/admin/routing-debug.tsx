@@ -1,14 +1,25 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Route as Route3, Activity, ArrowRight } from "lucide-react";
+import { Route as Route3, Activity, ArrowRight, X } from "lucide-react";
 
 import { ROUTING_MAP, AGENT_NAMES } from "@/ai/router/agent-router";
 import { INTENT_CATEGORIES } from "@/ai/router/intent-categories";
-import { getAgentRoutingStats } from "@/admin/functions/routing-debug.functions";
+import {
+  getAgentRoutingStats,
+  getIntentCallHistory,
+} from "@/admin/functions/routing-debug.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Table,
   TableBody,
