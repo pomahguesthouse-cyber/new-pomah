@@ -529,6 +529,7 @@ const updateBookingFullSchema = z.object({
   check_out: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  children_under_5: z.number().int().min(0).max(20).optional().default(0),
   status: BOOKING_STATUS,
   source: BOOKING_SOURCE,
   payment_status: PAYMENT_STATUS,
