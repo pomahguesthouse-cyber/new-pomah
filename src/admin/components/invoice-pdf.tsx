@@ -226,6 +226,8 @@ export type InvoiceBookingData = {
         id: string;
         room_id: string | null;
         nightly_rate: number;
+        extra_bed_count?: number | null;
+        extra_bed_rate?: number | null;
         room_types?: { name?: string | null } | null;
         rooms?: { number?: string | null } | null;
       }[]
