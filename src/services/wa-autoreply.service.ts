@@ -786,9 +786,16 @@ function buildDeterministicPropertyFaqReply(params: {
   const p = params.property ?? {};
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
+  // Trailing filler yang lazim: "kak", "kakak", "min", "admin", "pak", "bu",
+  // "ka", "ya", "dong", "banget" — bisa muncul berulang dengan spasi.
+  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|ya|dong|banget|deh|nih))*";
+
   // — Greeting murni (tanpa pertanyaan lain) —
   if (
-    /^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))[\s!.\-,]*$/i.test(raw)
+    new RegExp(
+      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
   ) {
     const name = p.name ?? "Pomah Guesthouse";
     return {
@@ -798,11 +805,17 @@ function buildDeterministicPropertyFaqReply(params: {
   }
 
   // — Terima kasih / penutup —
-  if (/^(makasih|terima\s*kasih|thanks|thank\s*you|thx|tq|ty|oke\s*(makasih|thanks)?|sip|siap)[\s!.\-,]*$/i.test(raw)) {
+  if (
+    new RegExp(
+      `^(makasih|terima\\s*kasih|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
+  ) {
     return {
       reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
       intent: "thanks",
     };
+
   }
 
   // — Alamat / lokasi —
