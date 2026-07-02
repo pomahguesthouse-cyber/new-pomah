@@ -332,11 +332,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
               "Jumlah extra bed sesuai mode. Default 1 untuk add/remove, wajib diisi untuk set. " +
               "Diabaikan untuk mode='clear'.",
           },
-          count: {
-            type: "number",
-            description:
-              "Jumlah extra bed sesuai mode. Default 1 untuk add/remove, wajib diisi untuk set.",
-          },
           confirmed: {
             type: "boolean",
             description:
