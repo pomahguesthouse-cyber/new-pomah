@@ -98,6 +98,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [slug, setSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
   const [bedType, setBedType] = React.useState("");
+  const [bedSize, setBedSize] = React.useState("");
   const [floorInfo, setFloorInfo] = React.useState("");
   const [capacity, setCapacity] = React.useState(2);
   const [extrabedCapacity, setExtrabedCapacity] = React.useState(0);
