@@ -475,7 +475,13 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
     }
-    let total_amount = data.rooms.reduce((s, r) => s + Number(r.nightly_rate) * nights, 0);
+    let total_amount = data.rooms.reduce(
+      (s, r) =>
+        s +
+        Number(r.nightly_rate) * nights +
+        Number(r.extra_bed_rate ?? 0) * Number(r.extra_bed_count ?? 0) * nights,
+      0,
+    );
     let final_paid_amount = data.paid_amount;
 
     if (data.payment_status === "paid") {
