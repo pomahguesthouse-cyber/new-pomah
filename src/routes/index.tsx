@@ -1341,7 +1341,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
-      setCardsPerView(w < 640 ? 1 : w < 1024 ? 2 : 3);
+      setCardsPerView(w < 640 ? 2 : w < 1024 ? 3 : 4);
     };
     update();
     window.addEventListener("resize", update);
