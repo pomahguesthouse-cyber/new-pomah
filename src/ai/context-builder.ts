@@ -16,6 +16,7 @@ export interface RoomTypeRow {
   base_rate:   number | null;
   capacity:    number | null;
   bed_type:    string | null;
+  bed_size?:   string | null;
   floor_info?: string | null;
   description: string | null;
   amenities?:  string[] | null;
