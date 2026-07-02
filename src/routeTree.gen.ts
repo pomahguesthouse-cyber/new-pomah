@@ -57,6 +57,7 @@ import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$tok
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
+import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
@@ -306,6 +307,11 @@ const ApiPublicHealthCheckRoute = ApiPublicHealthCheckRouteImport.update({
   path: '/api/public/health-check',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
+  id: '/api/cron/wa-summary-refresh',
+  path: '/api/cron/wa-summary-refresh',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   id: '/api/cron/sync-explore',
   path: '/api/cron/sync-explore',
@@ -400,6 +406,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -457,6 +464,7 @@ export interface FileRoutesByTo {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -516,6 +524,7 @@ export interface FileRoutesById {
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -576,6 +585,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -633,6 +643,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -691,6 +702,7 @@ export interface FileRouteTypes {
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -725,6 +737,7 @@ export interface RootRouteChildren {
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
+  ApiCronWaSummaryRefreshRoute: typeof ApiCronWaSummaryRefreshRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
   BookingFormTokenRoute: typeof BookingFormTokenRoute
@@ -1069,6 +1082,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHealthCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/wa-summary-refresh': {
+      id: '/api/cron/wa-summary-refresh'
+      path: '/api/cron/wa-summary-refresh'
+      fullPath: '/api/cron/wa-summary-refresh'
+      preLoaderRoute: typeof ApiCronWaSummaryRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/sync-explore': {
       id: '/api/cron/sync-explore'
       path: '/api/cron/sync-explore'
@@ -1245,6 +1265,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
+  ApiCronWaSummaryRefreshRoute: ApiCronWaSummaryRefreshRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
   BookingFormTokenRoute: BookingFormTokenRoute,
