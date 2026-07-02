@@ -732,6 +732,11 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                             </div>
                           </div>
                         )}
+                      {extraBedErrors[group.typeId] && (
+                        <p className="border-t border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[11px] font-medium text-destructive">
+                          {extraBedErrors[group.typeId]}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
