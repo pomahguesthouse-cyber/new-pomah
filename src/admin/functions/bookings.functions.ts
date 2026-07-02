@@ -236,7 +236,7 @@ export const listRooms = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("rooms")
-      .select("id, number, status, notes, room_types(id, name, base_rate, capacity)")
+      .select("id, number, status, notes, room_types(id, name, base_rate, capacity, extrabed_capacity, extrabed_rate)")
       .order("number");
     if (error) throw error;
     return { rooms: data ?? [] };
