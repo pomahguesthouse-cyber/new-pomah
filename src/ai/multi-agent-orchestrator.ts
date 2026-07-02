@@ -235,7 +235,7 @@ async function callLlm(
  */
 async function runAgent(
   agent: AgentDefinition,
-  conversationMsgs: Array<{ direction: string; body: string }>,
+  conversationMsgs: Array<{ direction: string; body: string; isHuman?: boolean }>,
   agentCtx: AgentContext,
   toolCtx: ToolContext,
   llmConfig: AiClientConfig,
@@ -339,14 +339,19 @@ async function runAgent(
   // Enforce JSON output for text replies
   systemPrompt += `\n\nPENTING: Jika Anda memberikan balasan akhir (bukan memanggil fungsi), balasan tersebut WAJIB berformat JSON murni dengan skema: {"reply": "isi pesan Anda untuk tamu/user"}. JANGAN membungkus dengan markdown block. Jika Anda memanggil fungsi/tool, biarkan content kosong dan gunakan tool_calls.`;
 
+  const humanTurnsPresent = history.some((m) => m.direction === "out" && m.isHuman);
+  const humanHandoffNote = humanTurnsPresent
+    ? "\n\nCATATAN KONTEKS: Beberapa balasan sebelumnya (ditandai prefix `[Admin manusia]:`) ditulis oleh staf Pomah secara manual, bukan oleh Anda. Anggap balasan itu sebagai keputusan resmi tim — JANGAN mengoreksi, mengulang, atau membantahnya. Lanjutkan percakapan mengikuti arah yang sudah diberikan admin dan hanya isi kekosongan info yang belum dijawab."
+    : "";
   const messages: AiMessage[] = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: systemPrompt + humanHandoffNote },
     ...(trainingExamplesBlock ? [{ role: "system" as const, content: trainingExamplesBlock }] : []),
     ...history.map((m) => ({
       role: (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
-      content: m.body,
+      content: m.direction === "out" && m.isHuman ? `[Admin manusia]: ${m.body}` : m.body,
     })),
   ];
+
 
   for (let turn = 0; turn < maxTurns; turn++) {
     const { response: json, retries } = await callLlm(llmConfig, messages, agent, agentTools, signal);
@@ -507,7 +512,8 @@ export interface MultiAgentInput {
   /** Is the user an authenticated property manager? */
   isManager?: boolean;
   /** Full conversation history (ascending) */
-  messages: Array<{ direction: string; body: string }>;
+  messages: Array<{ direction: string; body: string; isHuman?: boolean }>;
+
   /** Pre-fetched context for agents */
   agentCtx: AgentContext;
   /** Supabase clients + room data for tool execution */
