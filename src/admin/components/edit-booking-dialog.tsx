@@ -77,7 +77,14 @@ type RoomRow = {
   id: string;
   number: string;
   status: "clean" | "dirty" | "maintenance" | "out_of_order";
-  room_types?: { id: string; name: string; base_rate: number; capacity: number } | null;
+  room_types?: {
+    id: string;
+    name: string;
+    base_rate: number;
+    capacity: number;
+    extrabed_capacity?: number | null;
+    extrabed_rate?: number | null;
+  } | null;
 };
 
 /** A room line of a booking, as returned by listBookings' booking_rooms join. */
@@ -85,6 +92,8 @@ type BookingRoom = {
   id: string;
   room_id: string | null;
   nightly_rate: number;
+  extra_bed_count?: number | null;
+  extra_bed_rate?: number | null;
   room_types?: { id: string; name: string } | null;
   rooms?: { id: string; number: string } | null;
 };
@@ -113,7 +122,12 @@ export type EditableBooking = {
   booking_rooms?: BookingRoom[] | null;
 };
 
-type SelectedRoom = { room_id: string; nightly_rate: number };
+type SelectedRoom = {
+  room_id: string;
+  nightly_rate: number;
+  extra_bed_count: number;
+  extra_bed_rate: number;
+};
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -167,6 +181,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [selectedRooms, setSelectedRooms] = React.useState<SelectedRoom[]>([]);
   const [allotmentMode, setAllotmentMode] = React.useState<"auto" | "manual">("manual");
   const [autoCounts, setAutoCounts] = React.useState<Record<string, number>>({});
+  const [extraBedByType, setExtraBedByType] = React.useState<Record<string, number>>({});
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
@@ -192,16 +207,26 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setSelectedRooms(
       (booking.booking_rooms ?? [])
         .filter((br): br is BookingRoom & { room_id: string } => !!br.room_id)
-        .map((br) => ({ room_id: br.room_id, nightly_rate: Number(br.nightly_rate) })),
+        .map((br) => ({
+          room_id: br.room_id,
+          nightly_rate: Number(br.nightly_rate),
+          extra_bed_count: Number(br.extra_bed_count ?? 0),
+          extra_bed_rate: Number(br.extra_bed_rate ?? 0),
+        })),
     );
-    // Pre-fill the auto-allotment counts from the current room set, and
-    // open in manual mode so the existing rooms stay visible.
+    // Pre-fill the auto-allotment counts + extra-bed counts (summed per type)
+    // from the current room set. Open in manual mode.
     const counts: Record<string, number> = {};
+    const ebByType: Record<string, number> = {};
     for (const br of booking.booking_rooms ?? []) {
       const tid = br.room_types?.id;
-      if (tid) counts[tid] = (counts[tid] ?? 0) + 1;
+      if (tid) {
+        counts[tid] = (counts[tid] ?? 0) + 1;
+        ebByType[tid] = (ebByType[tid] ?? 0) + Number(br.extra_bed_count ?? 0);
+      }
     }
     setAutoCounts(counts);
+    setExtraBedByType(ebByType);
     setAllotmentMode("manual");
   }, [open, booking?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -215,7 +240,14 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const roomsByType = React.useMemo(() => {
     const m = new Map<
       string,
-      { typeId: string; typeName: string; baseRate: number; rooms: RoomRow[] }
+      {
+        typeId: string;
+        typeName: string;
+        baseRate: number;
+        extraBedRate: number;
+        extraBedCapacityPerRoom: number;
+        rooms: RoomRow[];
+      }
     >();
     for (const r of allRooms) {
       const tid = r.room_types?.id ?? "_none";
@@ -224,6 +256,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           typeId: tid,
           typeName: r.room_types?.name ?? "Tanpa Tipe",
           baseRate: Number(r.room_types?.base_rate ?? 0),
+          extraBedRate: Number(r.room_types?.extrabed_rate ?? 0),
+          extraBedCapacityPerRoom: Number(r.room_types?.extrabed_capacity ?? 0),
           rooms: [],
         });
       }
@@ -232,23 +266,83 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return [...m.values()];
   }, [allRooms]);
 
-  // Rooms actually sent on save: the manual picks, or — in auto mode —
-  // the first N available rooms of each chosen type.
-  const effectiveRooms = React.useMemo<SelectedRoom[]>(() => {
-    if (allotmentMode === "manual") return selectedRooms;
-    const out: SelectedRoom[] = [];
-    for (const group of roomsByType) {
-      const want = autoCounts[group.typeId] ?? 0;
-      const available = group.rooms.filter((r) => !isUnavailable(r));
-      for (let i = 0; i < Math.min(want, available.length); i++) {
-        out.push({ room_id: available[i].id, nightly_rate: group.baseRate });
+  /** Total rooms per type currently in the effective set (before extra beds). */
+  const roomCountByType = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (allotmentMode === "auto") {
+      for (const group of roomsByType) {
+        const want = autoCounts[group.typeId] ?? 0;
+        const available = group.rooms.filter((r) => !isUnavailable(r)).length;
+        counts[group.typeId] = Math.min(want, available);
+      }
+    } else {
+      for (const sr of selectedRooms) {
+        const room = allRooms.find((r) => r.id === sr.room_id);
+        const tid = room?.room_types?.id ?? "_none";
+        counts[tid] = (counts[tid] ?? 0) + 1;
       }
     }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allotmentMode, selectedRooms, roomsByType, autoCounts]);
+    return counts;
+  }, [allotmentMode, autoCounts, roomsByType, selectedRooms, allRooms]);
 
-  const baseTotal = effectiveRooms.reduce((s, r) => s + r.nightly_rate * Math.max(nights, 1), 0);
+  // Rooms actually sent on save. Extra beds for a type are packed onto the
+  // FIRST booking_row of that type so total_amount stays correct even when
+  // the group has multiple physical rooms.
+  const effectiveRooms = React.useMemo<SelectedRoom[]>(() => {
+    const base: {
+      room_id: string;
+      nightly_rate: number;
+      typeId: string;
+      extraBedRate: number;
+    }[] = [];
+    if (allotmentMode === "manual") {
+      for (const sr of selectedRooms) {
+        const room = allRooms.find((r) => r.id === sr.room_id);
+        const tid = room?.room_types?.id ?? "_none";
+        const group = roomsByType.find((g) => g.typeId === tid);
+        base.push({
+          room_id: sr.room_id,
+          nightly_rate: sr.nightly_rate,
+          typeId: tid,
+          extraBedRate: group?.extraBedRate ?? sr.extra_bed_rate ?? 0,
+        });
+      }
+    } else {
+      for (const group of roomsByType) {
+        const want = autoCounts[group.typeId] ?? 0;
+        const available = group.rooms.filter((r) => !isUnavailable(r));
+        for (let i = 0; i < Math.min(want, available.length); i++) {
+          base.push({
+            room_id: available[i].id,
+            nightly_rate: group.baseRate,
+            typeId: group.typeId,
+            extraBedRate: group.extraBedRate,
+          });
+        }
+      }
+    }
+    // Distribute extra beds — all onto the first row of each type.
+    const seenType = new Set<string>();
+    return base.map((row) => {
+      const first = !seenType.has(row.typeId);
+      seenType.add(row.typeId);
+      return {
+        room_id: row.room_id,
+        nightly_rate: row.nightly_rate,
+        extra_bed_count: first ? Math.max(0, extraBedByType[row.typeId] ?? 0) : 0,
+        extra_bed_rate: row.extraBedRate,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allotmentMode, selectedRooms, roomsByType, autoCounts, extraBedByType, allRooms]);
+
+  const baseTotal = effectiveRooms.reduce(
+    (s, r) =>
+      s +
+      r.nightly_rate * Math.max(nights, 1) +
+      r.extra_bed_rate * r.extra_bed_count * Math.max(nights, 1),
+    0,
+  );
   const total = paymentStatus === "paid" ? paidAmount : baseTotal;
   const outstanding = Math.max(0, total - paidAmount);
 
@@ -256,12 +350,24 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setSelectedRooms((cur) => {
       const exists = cur.find((r) => r.room_id === room.id);
       if (exists) return cur.filter((r) => r.room_id !== room.id);
-      return [...cur, { room_id: room.id, nightly_rate: Number(room.room_types?.base_rate ?? 0) }];
+      return [
+        ...cur,
+        {
+          room_id: room.id,
+          nightly_rate: Number(room.room_types?.base_rate ?? 0),
+          extra_bed_count: 0,
+          extra_bed_rate: Number(room.room_types?.extrabed_rate ?? 0),
+        },
+      ];
     });
   }
 
   function setAutoCount(typeId: string, n: number) {
     setAutoCounts((cur) => ({ ...cur, [typeId]: Math.max(0, n) }));
+  }
+
+  function setExtraBed(typeId: string, n: number) {
+    setExtraBedByType((cur) => ({ ...cur, [typeId]: Math.max(0, n) }));
   }
 
   const updateMut = useMutation({
@@ -549,6 +655,60 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                           })}
                         </div>
                       )}
+
+                      {/* Extra bed picker per room type */}
+                      {group.extraBedCapacityPerRoom > 0 &&
+                        (roomCountByType[group.typeId] ?? 0) > 0 && (
+                          <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
+                            <div>
+                              <p className="text-[11px] font-medium">Extra Bed</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {formatIDR(group.extraBedRate)}/malam · maks{" "}
+                                {group.extraBedCapacityPerRoom *
+                                  (roomCountByType[group.typeId] ?? 0)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={(extraBedByType[group.typeId] ?? 0) <= 0}
+                                onClick={() =>
+                                  setExtraBed(
+                                    group.typeId,
+                                    (extraBedByType[group.typeId] ?? 0) - 1,
+                                  )
+                                }
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                              <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
+                                {extraBedByType[group.typeId] ?? 0}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={
+                                  (extraBedByType[group.typeId] ?? 0) >=
+                                  group.extraBedCapacityPerRoom *
+                                    (roomCountByType[group.typeId] ?? 0)
+                                }
+                                onClick={() =>
+                                  setExtraBed(
+                                    group.typeId,
+                                    (extraBedByType[group.typeId] ?? 0) + 1,
+                                  )
+                                }
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                     </div>
                   );
                 })}

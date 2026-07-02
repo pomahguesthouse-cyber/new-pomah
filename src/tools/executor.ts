@@ -23,6 +23,7 @@ import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
 import { deleteBooking }                  from "./manager/delete-booking.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
+import { setExtraBed }                    from "./manager/set-extra-bed.tool";
 import { replyToGuest }                   from "./manager/reply-to-guest.tool";
 import { blockRoom }                      from "./manager/block-room.tool";
 import { sendToManager }                  from "./manager/send-to-manager.tool";
@@ -66,6 +67,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   update_booking_status:         updateBookingStatus,
   delete_booking:                deleteBooking,
   change_booking_room:           changeBookingRoom,
+  set_extra_bed:                 setExtraBed,
   reply_to_guest:                replyToGuest,
   block_room:                    blockRoom,
   send_to_manager:               sendToManager,

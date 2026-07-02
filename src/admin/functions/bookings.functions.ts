@@ -451,6 +451,8 @@ const updateBookingFullSchema = z.object({
       z.object({
         room_id: z.string().uuid(),
         nightly_rate: z.number().min(0).max(100_000_000),
+        extra_bed_count: z.number().int().min(0).max(10).default(0),
+        extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
       }),
     )
     .min(1, "Pilih minimal 1 kamar")
@@ -473,7 +475,13 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
     }
-    let total_amount = data.rooms.reduce((s, r) => s + Number(r.nightly_rate) * nights, 0);
+    let total_amount = data.rooms.reduce(
+      (s, r) =>
+        s +
+        Number(r.nightly_rate) * nights +
+        Number(r.extra_bed_rate ?? 0) * Number(r.extra_bed_count ?? 0) * nights,
+      0,
+    );
     let final_paid_amount = data.paid_amount;
 
     if (data.payment_status === "paid") {
@@ -540,6 +548,8 @@ export const updateBookingFull = createServerFn({ method: "POST" })
         room_id: r.room_id,
         room_type_id,
         nightly_rate: r.nightly_rate,
+        extra_bed_count: r.extra_bed_count ?? 0,
+        extra_bed_rate: r.extra_bed_rate ?? 0,
       };
     });
     const { error: insErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
