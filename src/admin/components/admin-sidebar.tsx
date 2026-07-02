@@ -24,7 +24,9 @@ import {
   Brain,
   Link2,
   Route as RouteIcon,
+  Activity,
   GripVertical,
+
 } from "lucide-react";
 import {
   DndContext,
