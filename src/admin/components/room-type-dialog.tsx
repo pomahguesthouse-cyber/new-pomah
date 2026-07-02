@@ -58,6 +58,7 @@ export type ManagedRoomType = {
   slug?: string | null;
   description?: string | null;
   bed_type?: string | null;
+  bed_size?: string | null;
   floor_info?: string | null;
   size_sqm?: number | null;
   capacity?: number | null;
