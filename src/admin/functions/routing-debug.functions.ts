@@ -48,3 +48,78 @@ export const getAgentRoutingStats = createServerFn({ method: "GET" })
       rows,
     };
   });
+
+/**
+ * Riwayat pemanggilan terakhir untuk satu intent tertentu. Untuk setiap pesan
+ * bot yang cocok, kita ambil juga pesan inbound terakhir di thread yang sama
+ * sebagai perkiraan "request payload" — pesan bot itu sendiri adalah "response".
+ */
+export const getIntentCallHistory = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { intent: string; limit?: number }) => ({
+    intent: String(input.intent),
+    limit: Math.min(Math.max(Number(input.limit ?? 20), 1), 50),
+  }))
+  .handler(async ({ data }) => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: outbound, error } = await supabaseAdmin
+      .from("whatsapp_messages")
+      .select("id, thread_id, body, sent_at, metadata")
+      .eq("direction", "outbound")
+      .eq("metadata->>intent", data.intent)
+      .gte("sent_at", since)
+      .order("sent_at", { ascending: false })
+      .limit(data.limit);
+
+    if (error) throw new Error(`Gagal memuat riwayat: ${error.message}`);
+
+    const threadIds = Array.from(new Set((outbound ?? []).map((m) => m.thread_id).filter(Boolean)));
+
+    // Ambil info thread (phone/display_name) untuk konteks.
+    const { data: threads } = threadIds.length
+      ? await supabaseAdmin
+          .from("whatsapp_threads")
+          .select("id, phone, display_name")
+          .in("id", threadIds as string[])
+      : { data: [] as Array<{ id: string; phone: string | null; display_name: string | null }> };
+    const threadById = new Map((threads ?? []).map((t) => [t.id, t]));
+
+    // Untuk setiap outbound, cari pesan inbound terakhir sebelum sent_at.
+    const items = await Promise.all(
+      (outbound ?? []).map(async (msg) => {
+        const { data: inbound } = await supabaseAdmin
+          .from("whatsapp_messages")
+          .select("body, sent_at")
+          .eq("thread_id", msg.thread_id)
+          .eq("direction", "inbound")
+          .lt("sent_at", msg.sent_at ?? new Date().toISOString())
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const meta = (msg.metadata ?? {}) as Record<string, unknown>;
+        const thread = threadById.get(msg.thread_id ?? "");
+        return {
+          id: msg.id,
+          sentAt: msg.sent_at,
+          phone: thread?.phone ?? null,
+          displayName: thread?.display_name ?? null,
+          agentKey: String(meta.agent_key ?? ""),
+          agent: String(meta.agent ?? ""),
+          toolsUsed: Array.isArray(meta.tools_used) ? (meta.tools_used as string[]) : [],
+          latencyMs: typeof meta.latency_ms === "number" ? (meta.latency_ms as number) : null,
+          aiLatencyMs: typeof meta.ai_latency_ms === "number" ? (meta.ai_latency_ms as number) : null,
+          routingConfidence:
+            typeof meta.routing_confidence === "number" ? (meta.routing_confidence as number) : null,
+          fastPath: Boolean(meta.fast_path),
+          isFallback: Boolean(meta.is_fallback),
+          request: inbound?.body ?? null,
+          requestAt: inbound?.sent_at ?? null,
+          response: msg.body ?? "",
+        };
+      }),
+    );
+
+    return { intent: data.intent, items };
+  });
