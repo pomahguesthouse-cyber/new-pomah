@@ -28,12 +28,24 @@ function buildDeterministicPropertyFaqReply(params: {
   const p = params.property ?? {};
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
-  if (/^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))[\s!.\-,]*$/i.test(raw)) {
+  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|ya|dong|banget|deh|nih))*";
+  if (
+    new RegExp(
+      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
+  ) {
     return { reply: `Halo Kak, terima kasih sudah menghubungi ${p.name ?? "Pomah Guesthouse"}`, intent: "greeting" };
   }
-  if (/^(makasih|terima\s*kasih|thanks|thank\s*you|thx|tq|ty|oke\s*(makasih|thanks)?|sip|siap)[\s!.\-,]*$/i.test(raw)) {
+  if (
+    new RegExp(
+      `^(makasih|terima\\s*kasih|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(raw)
+  ) {
     return { reply: `Sama-sama Kak`, intent: "thanks" };
   }
+
   if (/\b(alamat|lokasi|dimana|di mana|dmn|maps|map|lokasinya|arah|arahan|posisi)\b/i.test(raw) && p.address) {
     return { reply: `${opener}Alamat kami: ${p.address}`, intent: "location_question" };
   }
