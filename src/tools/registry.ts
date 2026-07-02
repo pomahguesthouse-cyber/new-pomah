@@ -294,6 +294,54 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "set_extra_bed",
+      description:
+        "Manajer-only. Tambah/kurangi/set jumlah extra bed pada SATU kamar di booking tertentu. " +
+        "Total booking otomatis dihitung ulang (nightly_rate × nights + extra_bed_rate × count × nights). " +
+        "Contoh: 'di booking PMH-002 tambahkan extrabed di kamar Family Suite 100' → " +
+        "reference_code='PMH-002', room_number='100', mode='add', count=1. " +
+        "Bila manajer menyebut nama tipe tanpa nomor kamar dan booking hanya punya 1 kamar dari tipe itu, " +
+        "kirim room_type saja. Bila ambigu, tool akan minta klarifikasi.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode booking (mis. PMH-002)." },
+          room_number: {
+            type: "string",
+            description:
+              "Nomor kamar spesifik (mis. '100'). Diprioritaskan di atas room_type bila keduanya diisi.",
+          },
+          room_type: {
+            type: "string",
+            description:
+              "Nama tipe kamar (mis. 'Family Suite'). Pakai bila nomor kamar tidak disebut manajer.",
+          },
+          mode: {
+            type: "string",
+            enum: ["add", "set", "remove"],
+            description:
+              "'add' (default) menambah count ke jumlah saat ini. 'set' menimpa jadi count. " +
+              "'remove' mengurangi count.",
+          },
+          count: {
+            type: "number",
+            description:
+              "Jumlah extra bed sesuai mode. Default 1 untuk add/remove, wajib diisi untuk set.",
+          },
+          confirmed: {
+            type: "boolean",
+            description:
+              "Wajib true pada panggilan kedua setelah konfirmasi manajer. Panggilan pertama " +
+              "akan mengembalikan needs_confirmation.",
+          },
+        },
+        required: ["reference_code"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "reply_to_guest",
       description:
         "Kirim pesan WhatsApp ke tamu yang sudah punya thread. Dipakai oleh Manager Agent " +
