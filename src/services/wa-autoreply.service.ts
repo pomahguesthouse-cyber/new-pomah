@@ -758,8 +758,95 @@ async function buildContextualBookingInquiryReply(params: {
 }
 
 
+/**
+ * Fast-path deterministik untuk intent ringan yang jawabannya sudah ada di
+ * profil properti (greeting, thanks, bye, alamat/lokasi, kontak, policy
+ * check-in/checkout). Sebelum ini, semua intent tersebut ikut lewat
+ * orchestrator LLM (p95 ~10 s). Sekarang: match regex ringan → template
+ * balasan langsung dari kolom `properties`. Return `null` bila tidak cocok.
+ */
+function buildDeterministicPropertyFaqReply(params: {
+  message: string;
+  property: {
+    name?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    whatsapp_number?: string | null;
+    email?: string | null;
+    check_in_time?: string | null;
+    check_out_time?: string | null;
+    hotel_policy?: string | null;
+    instagram_url?: string | null;
+    google_place_id?: string | null;
+  } | null;
+  greetingUsed: boolean;
+}): FastFaqResult | null {
+  const raw = params.message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!raw || raw.length > 200) return null;
+  const p = params.property ?? {};
+  const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
-async function buildGuestCountAfterAvailabilityReply(params: {
+  // — Greeting murni (tanpa pertanyaan lain) —
+  if (
+    /^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))[\s!.\-,]*$/i.test(raw)
+  ) {
+    const name = p.name ?? "Pomah Guesthouse";
+    return {
+      reply: `Halo Kak, terima kasih sudah menghubungi ${name} 🙏\nAda yang bisa kami bantu — mau cek ketersediaan kamar, harga, atau info fasilitas?`,
+      intent: "greeting",
+    };
+  }
+
+  // — Terima kasih / penutup —
+  if (/^(makasih|terima\s*kasih|thanks|thank\s*you|thx|tq|ty|oke\s*(makasih|thanks)?|sip|siap)[\s!.\-,]*$/i.test(raw)) {
+    return {
+      reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
+      intent: "thanks",
+    };
+  }
+
+  // — Alamat / lokasi —
+  if (
+    /\b(alamat|lokasi|dimana|di mana|dmn|maps|map|lokasinya|arah|arahan|posisi)\b/i.test(raw) &&
+    p.address
+  ) {
+    const mapsLink = p.google_place_id
+      ? `https://www.google.com/maps/place/?q=place_id:${p.google_place_id}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}`;
+    return {
+      reply: `${opener}Alamat kami:\n📍 ${p.address}\n\nMaps: ${mapsLink}`,
+      intent: "location_question",
+    };
+  }
+
+  // — Kontak (nomor WA / telepon / email / IG) —
+  if (/\b(kontak|nomor|no\.?\s*wa|whatsapp|telepon|telp|hp|email|ig|instagram)\b/i.test(raw)) {
+    const bits: string[] = [];
+    if (p.whatsapp_number ?? p.phone) bits.push(`📱 WA/Telp: ${p.whatsapp_number ?? p.phone}`);
+    if (p.email) bits.push(`✉️ Email: ${p.email}`);
+    if (p.instagram_url) bits.push(`📸 Instagram: ${p.instagram_url}`);
+    if (bits.length === 0) return null;
+    return {
+      reply: `${opener}Berikut kontak kami:\n${bits.join("\n")}`,
+      intent: "contact_request",
+    };
+  }
+
+  // — Jam check-in / check-out —
+  if (/\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw)) {
+    const ci = p.check_in_time?.slice(0, 5) ?? "14:00";
+    const co = p.check_out_time?.slice(0, 5) ?? "12:00";
+    return {
+      reply: `${opener}Waktu check-in mulai pukul *${ci}* dan check-out paling lambat *${co}*.\nEarly check-in / late check-out mengikuti ketersediaan kamar ya Kak 🙏`,
+      intent: "policy_question",
+    };
+  }
+
+  return null;
+}
+
+
+
   message: string;
   rooms: any[];
   property: any;
