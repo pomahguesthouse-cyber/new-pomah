@@ -260,15 +260,29 @@ export function InvoiceDocument({
 
   const isPaid = sisa <= 0 && paid > 0;
   
-  // Aggregate rooms by room type to match screenshot "Family Suite -> 2"
-  const roomGroups = new Map<string, { name: string; qty: number; price: number }>();
+  // Aggregate rooms by room type to match screenshot "Family Suite -> 2".
+  // Extra beds are aggregated per type so a separate line item appears in the invoice.
+  const roomGroups = new Map<
+    string,
+    { name: string; qty: number; price: number; extraBed: number; extraBedRate: number }
+  >();
   for (const br of rooms) {
     const name = br.room_types?.name || "Kamar";
+    const ebCount = Number(br.extra_bed_count ?? 0);
+    const ebRate = Number(br.extra_bed_rate ?? 0);
     if (roomGroups.has(name)) {
       const g = roomGroups.get(name)!;
       g.qty += 1;
+      g.extraBed += ebCount;
+      if (ebRate > 0) g.extraBedRate = ebRate;
     } else {
-      roomGroups.set(name, { name, qty: 1, price: Number(br.nightly_rate) });
+      roomGroups.set(name, {
+        name,
+        qty: 1,
+        price: Number(br.nightly_rate),
+        extraBed: ebCount,
+        extraBedRate: ebRate,
+      });
     }
   }
   const groupedRooms = Array.from(roomGroups.values());
