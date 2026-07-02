@@ -507,7 +507,8 @@ export interface MultiAgentInput {
   /** Is the user an authenticated property manager? */
   isManager?: boolean;
   /** Full conversation history (ascending) */
-  messages: Array<{ direction: string; body: string }>;
+  messages: Array<{ direction: string; body: string; isHuman?: boolean }>;
+
   /** Pre-fetched context for agents */
   agentCtx: AgentContext;
   /** Supabase clients + room data for tool execution */
