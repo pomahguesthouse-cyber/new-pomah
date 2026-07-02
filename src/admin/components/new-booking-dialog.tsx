@@ -619,11 +619,56 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                             })}
                           </div>
                         )}
+
+                        {/* Extra bed selector — muncul jika tipe kamar mendukung extra bed dan sudah ada kamar dipilih */}
+                        {group.extraBedCapacityPerRoom > 0 && roomsPicked > 0 && (
+                          <div className="flex items-center justify-between border-t border-border bg-amber-50/40 px-3 py-2 dark:bg-amber-950/10">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-medium">
+                                Extra bed
+                                <span className="ml-1 text-muted-foreground">
+                                  (maks {maxExtraBed})
+                                </span>
+                              </p>
+                              {group.extraBedRate > 0 && (
+                                <p className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+                                  +{formatIDR(group.extraBedRate)}/malam/bed
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={extraBed <= 0}
+                                onClick={() => setExtraBed(group.typeId, extraBed - 1)}
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                              <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
+                                {extraBed}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={extraBed >= maxExtraBed}
+                                onClick={() => setExtraBed(group.typeId, extraBed + 1)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </Section>
+
 
               {/* Status & Sumber */}
               <Section icon={<ClipboardList className="h-4 w-4" />} title="Status Booking">
