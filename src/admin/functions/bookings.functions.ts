@@ -451,6 +451,8 @@ const updateBookingFullSchema = z.object({
       z.object({
         room_id: z.string().uuid(),
         nightly_rate: z.number().min(0).max(100_000_000),
+        extra_bed_count: z.number().int().min(0).max(10).default(0),
+        extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
       }),
     )
     .min(1, "Pilih minimal 1 kamar")
