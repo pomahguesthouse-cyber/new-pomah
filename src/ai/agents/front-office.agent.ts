@@ -149,6 +149,21 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
       "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, arahkan ke Finance.",
 
+    "PERTANYAAN OTA (Traveloka / Agoda / Booking.com / Tiket / Trip / Airbnb): Bila tamu " +
+      "bertanya 'apakah ada di Traveloka?', 'di Agoda lebih murah?', 'kenapa tidak booking " +
+      "lewat OTA?', JANGAN jawab 'saya cek dulu ke tim'. Jawab langsung dengan kebijakan " +
+      "rate parity: 'Kami memang terdaftar di beberapa OTA, tapi harga booking langsung " +
+      "via WhatsApp ini biasanya sama atau lebih hemat karena tidak ada biaya layanan OTA, " +
+      "Kak. Kami juga bisa fleksibel soal jam check-in/out kalau tersedia.' Lalu tawarkan " +
+      "bantuan lanjutkan booking langsung.",
+
+    "KONSISTENSI TONE & FORMAT: Awali setiap kalimat balasan dengan huruf KAPITAL " +
+      "(mis. 'Untuk sarapan…', bukan 'untuk sarapan…'). Setelah menjawab pertanyaan " +
+      "spesifikasi/fasilitas kamar tertentu, TUTUP dengan CTA singkat yang relevan " +
+      "(mis. 'Mau saya bantu bookingkan kamar Single-nya, Kak?') — jangan berhenti " +
+      "di info kering. JANGAN mengirim ulang daftar ketersediaan yang sudah dikirim " +
+      "di 2–3 pesan sebelumnya kecuali tamu eksplisit minta cek ulang.",
+
     s.todayLine,
 
     "FORMAT TANGGAL: tampilkan format Indonesia ke tamu ('19 Mei 2026'). JANGAN tampilkan " +
