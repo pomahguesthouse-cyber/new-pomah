@@ -507,11 +507,60 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     const roomIds = data.rooms.map((r) => r.room_id);
     const { data: roomRows, error: rErr } = await context.supabase
       .from("rooms")
-      .select("id, room_type_id")
+      .select("id, room_type_id, room_types(extrabed_capacity, name)")
       .in("id", roomIds);
     if (rErr) throw rErr;
     const roomTypeById = new Map<string, string>();
-    for (const r of roomRows ?? []) roomTypeById.set(r.id, r.room_type_id);
+    const typeMetaById = new Map<string, { capPerRoom: number; name: string }>();
+    for (const r of (roomRows ?? []) as any[]) {
+      roomTypeById.set(r.id, r.room_type_id);
+      const rt = Array.isArray(r.room_types) ? r.room_types[0] : r.room_types;
+      if (rt && r.room_type_id && !typeMetaById.has(r.room_type_id)) {
+        typeMetaById.set(r.room_type_id, {
+          capPerRoom: Number(rt.extrabed_capacity ?? 0),
+          name: String(rt.name ?? "Kamar"),
+        });
+      }
+    }
+
+    // ── Extra bed capacity guard ─────────────────────────────────────────
+    const perTypeReq = new Map<string, { requested: number; rooms: number }>();
+    for (const r of data.rooms) {
+      const tid = roomTypeById.get(r.room_id);
+      if (!tid) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
+      const cur = perTypeReq.get(tid) ?? { requested: 0, rooms: 0 };
+      cur.requested += Number(r.extra_bed_count ?? 0);
+      cur.rooms += 1;
+      perTypeReq.set(tid, cur);
+    }
+    for (const [tid, agg] of perTypeReq) {
+      const meta = typeMetaById.get(tid);
+      if (!meta) continue;
+      const maxAllowed = meta.capPerRoom * agg.rooms;
+      if (agg.requested > 0 && meta.capPerRoom === 0) {
+        throw new Error(`Tipe ${meta.name} tidak mendukung extra bed.`);
+      }
+      if (agg.requested > maxAllowed) {
+        throw new Error(
+          `Extra bed ${meta.name} melebihi kapasitas: diminta ${agg.requested}, ` +
+            `maksimum ${maxAllowed} (${meta.capPerRoom}/kamar × ${agg.rooms} kamar).`,
+        );
+      }
+    }
+
+    // Snapshot extra bed totals BEFORE mutation to detect changes for WA notify.
+    const { data: beforeBrs } = await context.supabase
+      .from("booking_rooms")
+      .select("extra_bed_count")
+      .eq("booking_id", data.id);
+    const beforeExtraBedTotal = ((beforeBrs as any[]) ?? []).reduce(
+      (s: number, r: any) => s + Number(r?.extra_bed_count ?? 0),
+      0,
+    );
+    const afterExtraBedTotal = data.rooms.reduce(
+      (s, r) => s + Number(r.extra_bed_count ?? 0),
+      0,
+    );
 
     const patch = {
       check_in: data.check_in,
