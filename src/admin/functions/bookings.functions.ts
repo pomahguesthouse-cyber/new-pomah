@@ -764,7 +764,7 @@ export const listRoomTypes = createServerFn({ method: "GET" })
     const { data, error } = await db(context.supabase)
       .from("room_types")
       .select(
-        "id, name, slug, description, bed_type, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images",
+        "id, name, slug, description, bed_type, bed_size, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images",
       )
       .order("name");
     if (error) throw error;
