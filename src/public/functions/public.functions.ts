@@ -610,6 +610,8 @@ export type BookingInvoice = {
     room_type_id: string | null;
     room_type: string;
     nightly_rate: number;
+    extra_bed_count?: number;
+    extra_bed_rate?: number;
   }[];
   total_amount: number;
   payment_status: "unpaid" | "partial" | "paid" | null;
@@ -738,7 +740,7 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
       try {
         const { data: brRows } = await sb
           .from("booking_rooms")
-          .select("id, room_id, room_type_id, nightly_rate, room_types(name), rooms(number)")
+          .select("id, room_id, room_type_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(name), rooms(number)")
           .eq("booking_id", bookingId)
           .order("created_at", { ascending: true });
         rows = (brRows ?? []) as Record<string, unknown>[];
@@ -812,6 +814,8 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         room_type_id: row.room_type_id ? String(row.room_type_id) : null,
         room_type: ((row.room_types as Record<string, unknown> | null)?.name as string | undefined) ?? "Kamar",
         nightly_rate: Number(row.nightly_rate ?? 0),
+        extra_bed_count: Number(row.extra_bed_count ?? 0),
+        extra_bed_rate: Number(row.extra_bed_rate ?? 0),
       }));
 
       const invoice: BookingInvoice = {

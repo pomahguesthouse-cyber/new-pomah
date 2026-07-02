@@ -37,8 +37,8 @@ const SOURCE_OPTIONS = [
 ];
 const PAGE_SIZE = 20;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
-const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, room_types(id, name), rooms(id, number))";
-const BASE_SELECT = "id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), booking_rooms(id, room_id, nightly_rate, room_types(id, name), rooms(id, number))";
+const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
+const BASE_SELECT = "id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 
 type BookingListRow = {
   id: string;

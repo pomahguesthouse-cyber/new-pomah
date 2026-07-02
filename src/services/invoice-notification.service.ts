@@ -92,20 +92,23 @@ export async function generateAndSendInvoiceNotification({
     // ── 2. Resolve the room type name (for the message summary) ─────────
     const { data: bookingRooms, error: brErr } = await supabase
       .from("booking_rooms")
-      .select(`room_types(name)`)
+      .select(`extra_bed_count, extra_bed_rate, room_types(name)`)
       .eq("booking_id", bookingId);
 
     if (brErr) {
       console.warn("[InvoiceNotification] Error fetching booking rooms:", brErr);
     }
     const roomCounts = new Map<string, number>();
+    let totalExtraBed = 0;
     for (const br of ((bookingRooms as any[]) ?? [])) {
       const name = br?.room_types?.name ?? "Kamar";
       roomCounts.set(name, (roomCounts.get(name) ?? 0) + 1);
+      totalExtraBed += Number(br?.extra_bed_count ?? 0);
     }
     const roomTypeName = roomCounts.size
       ? Array.from(roomCounts.entries()).map(([name, count]) => `${name} × ${count} kamar`).join(", ")
       : "Kamar";
+    const extraBedLine = totalExtraBed > 0 ? `\n• Extra Bed: ${totalExtraBed}` : "";
 
     // ── 3. Build the public invoice (confirmation page) link ────────────
     const rawDomain = property?.public_domain ?? origin ?? null;
@@ -185,7 +188,7 @@ Terima kasih telah memesan kamar di ${propertyName}. Reservasi Anda telah berhas
 
 Berikut ringkasan pemesanan Anda:
 • Kode Booking: ${booking.reference_code ?? booking.id.slice(0, 8)}
-• Tipe Kamar: ${roomTypeName}
+• Tipe Kamar: ${roomTypeName}${extraBedLine}
 • Check-in: ${fmtDateID(booking.check_in)}
 • Check-out: ${fmtDateID(booking.check_out)}
 • Total: ${totalFormatted}

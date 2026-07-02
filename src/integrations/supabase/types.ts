@@ -352,6 +352,8 @@ export type Database = {
           check_in: string | null
           check_out: string | null
           created_at: string
+          extra_bed_count: number
+          extra_bed_rate: number
           id: string
           nightly_rate: number
           room_id: string | null
@@ -363,6 +365,8 @@ export type Database = {
           check_in?: string | null
           check_out?: string | null
           created_at?: string
+          extra_bed_count?: number
+          extra_bed_rate?: number
           id?: string
           nightly_rate?: number
           room_id?: string | null
@@ -374,6 +378,8 @@ export type Database = {
           check_in?: string | null
           check_out?: string | null
           created_at?: string
+          extra_bed_count?: number
+          extra_bed_rate?: number
           id?: string
           nightly_rate?: number
           room_id?: string | null

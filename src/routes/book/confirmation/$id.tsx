@@ -88,6 +88,8 @@ type InvoiceRoomDetail = {
   room_type_id?: string | null;
   room_type?: string | null;
   nightly_rate?: number | string | null;
+  extra_bed_count?: number | string | null;
+  extra_bed_rate?: number | string | null;
 };
 
 type InvoiceRoomGroup = {
@@ -197,6 +199,8 @@ function ConfirmationPage() {
         id: room.id ?? `room-${idx + 1}`,
         room_id: room.room_id ?? null,
         nightly_rate: Number(room.nightly_rate ?? 0),
+        extra_bed_count: Number(room.extra_bed_count ?? 0),
+        extra_bed_rate: Number(room.extra_bed_rate ?? 0),
         room_types: {
           name: room.room_type ?? "Kamar",
         },

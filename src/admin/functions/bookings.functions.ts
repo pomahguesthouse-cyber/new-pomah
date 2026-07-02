@@ -29,7 +29,7 @@ const exportBookingsSchema = z.object({
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 /** Rooms of a booking, via the booking_rooms child table. */
 const BOOKING_ROOMS_SELECT =
-  "booking_rooms(id, room_id, nightly_rate, room_types(id, name), rooms(id, number))";
+  "booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 const FULL_BOOKING_SELECT = `id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), ${BOOKING_ROOMS_SELECT}`;
 const BASE_BOOKING_SELECT = `id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), ${BOOKING_ROOMS_SELECT}`;
 
@@ -236,7 +236,7 @@ export const listRooms = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("rooms")
-      .select("id, number, status, notes, room_types(id, name, base_rate, capacity)")
+      .select("id, number, status, notes, room_types(id, name, base_rate, capacity, extrabed_capacity, extrabed_rate)")
       .order("number");
     if (error) throw error;
     return { rooms: data ?? [] };
@@ -288,6 +288,8 @@ const createMultiRoomBookingSchema = z.object({
       z.object({
         room_id: z.string().uuid(),
         nightly_rate: z.number().min(0).max(100_000_000),
+        extra_bed_count: z.number().int().min(0).max(10).default(0),
+        extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
       }),
     )
     .min(1, "Pilih minimal 1 kamar")
@@ -351,7 +353,13 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     const roomTypeById = new Map<string, string>();
     for (const r of roomRows ?? []) roomTypeById.set(r.id, r.room_type_id);
 
-    let grandTotal = data.rooms.reduce((sum, r) => sum + Number(r.nightly_rate) * nights, 0);
+    let grandTotal = data.rooms.reduce(
+      (sum, r) =>
+        sum +
+        Number(r.nightly_rate) * nights +
+        Number(r.extra_bed_rate) * Number(r.extra_bed_count) * nights,
+      0,
+    );
     let finalPaidAmount = data.paid_amount;
 
     if (data.payment_status === "paid") {
@@ -393,6 +401,8 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
         room_id: r.room_id,
         room_type_id,
         nightly_rate: r.nightly_rate,
+        extra_bed_count: r.extra_bed_count ?? 0,
+        extra_bed_rate: r.extra_bed_rate ?? 0,
       };
     });
     const { error: brErr } = await context.supabase.from("booking_rooms").insert(roomInserts);

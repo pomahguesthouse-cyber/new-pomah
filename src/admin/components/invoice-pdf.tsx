@@ -226,6 +226,8 @@ export type InvoiceBookingData = {
         id: string;
         room_id: string | null;
         nightly_rate: number;
+        extra_bed_count?: number | null;
+        extra_bed_rate?: number | null;
         room_types?: { name?: string | null } | null;
         rooms?: { number?: string | null } | null;
       }[]
@@ -258,15 +260,29 @@ export function InvoiceDocument({
 
   const isPaid = sisa <= 0 && paid > 0;
   
-  // Aggregate rooms by room type to match screenshot "Family Suite -> 2"
-  const roomGroups = new Map<string, { name: string; qty: number; price: number }>();
+  // Aggregate rooms by room type to match screenshot "Family Suite -> 2".
+  // Extra beds are aggregated per type so a separate line item appears in the invoice.
+  const roomGroups = new Map<
+    string,
+    { name: string; qty: number; price: number; extraBed: number; extraBedRate: number }
+  >();
   for (const br of rooms) {
     const name = br.room_types?.name || "Kamar";
+    const ebCount = Number(br.extra_bed_count ?? 0);
+    const ebRate = Number(br.extra_bed_rate ?? 0);
     if (roomGroups.has(name)) {
       const g = roomGroups.get(name)!;
       g.qty += 1;
+      g.extraBed += ebCount;
+      if (ebRate > 0) g.extraBedRate = ebRate;
     } else {
-      roomGroups.set(name, { name, qty: 1, price: Number(br.nightly_rate) });
+      roomGroups.set(name, {
+        name,
+        qty: 1,
+        price: Number(br.nightly_rate),
+        extraBed: ebCount,
+        extraBedRate: ebRate,
+      });
     }
   }
   const groupedRooms = Array.from(roomGroups.values());
@@ -388,18 +404,35 @@ export function InvoiceDocument({
             <Text style={[styles.tableCell, styles.colPrice]}>HARGA (Rp)</Text>
             <Text style={[styles.tableCell, styles.colSub]}>SUBTOTAL (Rp)</Text>
           </View>
-          {/* Table Body */}
-          {groupedRooms.map((r, idx) => (
-            <View key={idx} style={styles.tableRow}>
-              <Text style={[styles.tableCell, styles.colNo]}>{idx + 1}</Text>
-              <Text style={[styles.tableCell, styles.colDesc]}>{r.name}</Text>
-              <Text style={[styles.tableCell, styles.colQty]}>{r.qty}</Text>
-              <Text style={[styles.tableCell, styles.colPrice]}>{formatIDR(r.price)}</Text>
-              <Text style={[styles.tableCell, styles.colSub]}>
-                {formatIDR(r.price * r.qty * nights)}
-              </Text>
-            </View>
-          ))}
+          {/* Table Body — kamar + baris extra bed per tipe */}
+          {(() => {
+            const rows: { desc: string; qty: number; price: number; subtotal: number }[] = [];
+            for (const r of groupedRooms) {
+              rows.push({
+                desc: r.name,
+                qty: r.qty,
+                price: r.price,
+                subtotal: r.price * r.qty * nights,
+              });
+              if (r.extraBed > 0 && r.extraBedRate > 0) {
+                rows.push({
+                  desc: `Extra bed (${r.name})`,
+                  qty: r.extraBed,
+                  price: r.extraBedRate,
+                  subtotal: r.extraBedRate * r.extraBed * nights,
+                });
+              }
+            }
+            return rows.map((row, idx) => (
+              <View key={idx} style={styles.tableRow}>
+                <Text style={[styles.tableCell, styles.colNo]}>{idx + 1}</Text>
+                <Text style={[styles.tableCell, styles.colDesc]}>{row.desc}</Text>
+                <Text style={[styles.tableCell, styles.colQty]}>{row.qty}</Text>
+                <Text style={[styles.tableCell, styles.colPrice]}>{formatIDR(row.price)}</Text>
+                <Text style={[styles.tableCell, styles.colSub]}>{formatIDR(row.subtotal)}</Text>
+              </View>
+            ));
+          })()}
           {rooms.length === 0 && (
             <View style={styles.tableRow}>
               <Text style={[styles.tableCell, { width: "100%", textAlign: "center", borderRightWidth: 0 }]}>
