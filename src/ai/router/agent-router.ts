@@ -17,7 +17,7 @@ const ESCALATION_THRESHOLD = 0.35;
 
 // ─── Routing table ────────────────────────────────────────────────────────────
 
-const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
+export const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   greeting:           "front-office",
   booking_inquiry:    "front-office",
   availability_check: "front-office",
@@ -46,7 +46,7 @@ const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   general:            "front-office",
 };
 
-const AGENT_NAMES: Record<AgentKey, string> = {
+export const AGENT_NAMES: Record<AgentKey, string> = {
   "front-office": "Front Office Agent",
   pricing:        "Pricing Agent",
   "customer-care": "Customer Care Agent",
