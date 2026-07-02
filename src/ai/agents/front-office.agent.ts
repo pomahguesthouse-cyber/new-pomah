@@ -198,7 +198,9 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       today +
       "; " +
       "'besok' → +1; 'lusa' → +2; 'minggu depan' → +7; 'akhir minggu ini' → Sab/Min terdekat. " +
-      "Bila hanya satu tanggal disebut, anggap 1 malam. " +
+      "Bila hanya satu tanggal disebut (mis. 'hari ini', 'besok') tanpa jumlah malam, " +
+      "asumsikan 1 malam TAPI sisipkan konfirmasi halus di balasan: '(saya asumsikan 1 malam ya, " +
+      "Kak — kabari kalau lebih)'. Jangan tampilkan pertanyaan panjang, cukup 1 kalimat. " +
       "Bila tool return `need_dates: true`, JANGAN ulangi pemanggilan dan JANGAN bilang " +
       "'sistem gangguan'. Kirim isi field `reply_to_guest` VERBATIM ke tamu.",
 
