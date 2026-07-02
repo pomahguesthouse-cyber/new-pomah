@@ -1341,7 +1341,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
   useEffect(() => {
     const update = () => {
       const w = window.innerWidth;
-      setCardsPerView(w < 640 ? 1 : w < 1024 ? 2 : 3);
+      setCardsPerView(w < 640 ? 2 : w < 1024 ? 3 : 4);
     };
     update();
     window.addEventListener("resize", update);
@@ -1439,12 +1439,12 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
           {extended.map((n, idx) => (
             <div
               key={`${n.title}-${n.date}-${idx}`}
-              className="shrink-0 px-3"
+              className="shrink-0 px-2"
               style={{ width: `${100 / cardsPerView}%` }}
             >
-              <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
+              <article className="flex h-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:shadow-lg">
                 {n.image && (
-                  <div className="aspect-[16/9] w-full overflow-hidden bg-stone-100">
+                  <div className="aspect-[4/3] w-full overflow-hidden bg-stone-100">
                     <img
                       src={getDisplayImageUrl(n.image)}
                       alt={n.title}
@@ -1454,18 +1454,18 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                     />
                   </div>
                 )}
-                <div className="flex flex-1 flex-col p-6">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-stone-400">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {n.date}
+                <div className="flex flex-1 flex-col p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-stone-400 truncate">
+                      <CalendarDays className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{n.date}</span>
                     </span>
-                    <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                    <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 shrink-0">
                       {n.category}
                     </span>
                   </div>
-                  <h3 className="mt-4 font-serif text-lg font-semibold text-stone-900">{n.title}</h3>
-                  <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-stone-500">{n.excerpt}</p>
+                  <h3 className="mt-2 font-serif text-sm font-semibold text-stone-900 line-clamp-2">{n.title}</h3>
+                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-stone-500">{n.excerpt}</p>
                 </div>
               </article>
             </div>
