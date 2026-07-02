@@ -49,6 +49,8 @@ function ContentManagerPage() {
     queryFn: () => listFn(),
   });
 
+  const purgedCount = (data as any)?.purgedCount ?? 0;
+
   const [category, setCategory] = useState<typeof CATEGORIES[number]["value"]>("event");
   const [extra, setExtra] = useState("");
   const [running, setRunning] = useState(false);
@@ -156,18 +158,25 @@ function ContentManagerPage() {
         )}
       </Card>
 
-      <Card className="p-4 space-y-2">
-        <div className="text-sm font-semibold">Entri City Guide</div>
+      <Card className="p-3 md:p-4 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold">Entri City Guide</div>
+          {purgedCount > 0 && (
+            <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5">
+              {purgedCount} event lewat tanggal otomatis dihapus
+            </span>
+          )}
+        </div>
         {isLoading ? (
           <div className="text-sm text-muted-foreground">Memuat…</div>
         ) : (data?.items?.length ?? 0) === 0 ? (
           <div className="text-sm text-muted-foreground">Belum ada entri.</div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3">
             {data!.items.map((it: any) => (
               <div
                 key={it.id}
-                className={`flex items-start gap-3 border rounded-md p-3 ${
+                className={`flex flex-col border rounded-md overflow-hidden ${
                   it.is_published ? "bg-emerald-50/50 border-emerald-200" : "bg-stone-50 border-stone-200"
                 }`}
               >
@@ -175,62 +184,67 @@ function ContentManagerPage() {
                   <img
                     src={it.image_url}
                     alt={it.title}
-                    className="w-20 h-20 object-cover rounded-md border flex-shrink-0"
+                    className="w-full aspect-[4/3] object-cover"
                     loading="lazy"
                   />
                 ) : (
-                  <div className="w-20 h-20 rounded-md border bg-stone-100 flex items-center justify-center flex-shrink-0">
+                  <div className="w-full aspect-[4/3] bg-stone-100 flex items-center justify-center">
                     <ImageIcon className="h-6 w-6 text-stone-300" />
                   </div>
                 )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className="text-[10px] capitalize">{it.category}</Badge>
+                <div className="p-2 flex-1 flex flex-col min-w-0">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Badge variant="outline" className="text-[9px] capitalize px-1 py-0">{it.category}</Badge>
                     {it.is_published ? (
-                      <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">PUBLISHED</Badge>
+                      <Badge className="bg-emerald-100 text-emerald-700 text-[9px] px-1 py-0">PUB</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">DRAFT</Badge>
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 text-amber-700 border-amber-300">DRAFT</Badge>
                     )}
-                    {it.badge && <Badge variant="outline" className="text-[10px]">{it.badge}</Badge>}
                   </div>
-                  <div className="font-medium text-sm mt-1">{it.title}</div>
-                  {it.description && (
-                    <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{it.description}</div>
-                  )}
-                  <div className="flex gap-3 mt-1 text-[11px] text-stone-600">
-                    {it.date_text && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{it.date_text}</span>}
-                    {it.location_text && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{it.location_text}</span>}
+                  <div className="font-medium text-xs md:text-sm mt-1 line-clamp-2">{it.title}</div>
+                  <div className="mt-1 space-y-0.5 text-[10px] text-stone-600">
+                    {it.date_text && (
+                      <div className="flex items-center gap-1 truncate">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{it.date_text}</span>
+                      </div>
+                    )}
+                    {it.location_text && (
+                      <div className="flex items-center gap-1 truncate">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{it.location_text}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {!it.image_url && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {!it.image_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-1.5 text-[10px] text-indigo-600 border-indigo-200"
+                        onClick={() => handleGenerateImage(it.id)}
+                        disabled={generatingIds.has(it.id)}
+                      >
+                        {generatingIds.has(it.id) ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ImageIcon className="h-3 w-3" />
+                        )}
+                      </Button>
+                    )}
                     <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-indigo-600 border-indigo-200"
-                      onClick={() => handleGenerateImage(it.id)}
-                      disabled={generatingIds.has(it.id)}
+                      size="sm" variant="outline" className="h-6 px-1.5 text-[10px]"
+                      onClick={() => handlePublishToggle(it.id, it.is_published)}
                     >
-                      {generatingIds.has(it.id) ? (
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      ) : (
-                        <ImageIcon className="h-3 w-3 mr-1" />
-                      )}
-                      Generate gambar
+                      {it.is_published ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </Button>
-                  )}
-                  <Button
-                    size="sm" variant="outline" className="h-7"
-                    onClick={() => handlePublishToggle(it.id, it.is_published)}
-                  >
-                    {it.is_published ? <><EyeOff className="h-3 w-3 mr-1" />Unpublish</> : <><Eye className="h-3 w-3 mr-1" />Publish</>}
-                  </Button>
-                  <Button
-                    size="sm" variant="outline" className="h-7 text-red-600"
-                    onClick={() => handleDelete(it.id)}
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />Hapus
-                  </Button>
+                    <Button
+                      size="sm" variant="outline" className="h-6 px-1.5 text-[10px] text-red-600"
+                      onClick={() => handleDelete(it.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}

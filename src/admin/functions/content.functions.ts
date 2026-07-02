@@ -78,16 +78,71 @@ export const runContentDiscovery = createServerFn({ method: "POST" })
     };
   });
 
+const ID_MONTHS: Record<string, number> = {
+  januari: 1, februari: 2, maret: 3, april: 4, mei: 5, juni: 6,
+  juli: 7, agustus: 8, september: 9, oktober: 10, november: 11, desember: 12,
+};
+
+/**
+ * Ambil tanggal akhir (paling akhir) dari string date_text bahasa Indonesia.
+ * Return null jika tidak bisa diparse (biarkan entri tetap ada agar aman).
+ */
+function parseIndoEndDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+  const monthNames = Object.keys(ID_MONTHS).join("|");
+  const yearMatch = s.match(/(20\d{2})/g);
+  if (!yearMatch) return null;
+  const year = parseInt(yearMatch[yearMatch.length - 1], 10);
+
+  const dayMonthRe = new RegExp(`(\\d{1,2})\\s+(${monthNames})`, "g");
+  let last: { day: number; month: number } | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = dayMonthRe.exec(s)) !== null) {
+    last = { day: parseInt(m[1], 10), month: ID_MONTHS[m[2]] };
+  }
+  if (last) return new Date(Date.UTC(year, last.month - 1, last.day));
+
+  const monthOnlyRe = new RegExp(`(${monthNames})`, "g");
+  let lastMonth: number | null = null;
+  while ((m = monthOnlyRe.exec(s)) !== null) lastMonth = ID_MONTHS[m[1]];
+  if (lastMonth) return new Date(Date.UTC(year, lastMonth, 0));
+
+  return null;
+}
+
+async function purgePastExploreEvents(): Promise<number> {
+  const { data, error } = await (supabaseAdmin as any)
+    .from("explore_items")
+    .select("id, date_text")
+    .eq("category", "event");
+  if (error || !data) return 0;
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const expiredIds = (data as Array<{ id: string; date_text: string | null }>)
+    .map((row) => ({ id: row.id, end: parseIndoEndDate(row.date_text) }))
+    .filter((r) => r.end !== null && (r.end as Date) < today)
+    .map((r) => r.id);
+  if (expiredIds.length === 0) return 0;
+  const { error: delErr } = await (supabaseAdmin as any)
+    .from("explore_items")
+    .delete()
+    .in("id", expiredIds);
+  if (delErr) return 0;
+  return expiredIds.length;
+}
+
 export const listExploreItemsForAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
+    const purgedCount = await purgePastExploreEvents();
     const { data, error } = await (supabaseAdmin as any)
       .from("explore_items")
       .select("id, title, category, description, date_text, location_text, image_url, badge, is_published, sort_order, updated_at")
       .order("updated_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
-    return { items: data ?? [] };
+    return { items: data ?? [], purgedCount };
   });
 
 export const toggleExplorePublish = createServerFn({ method: "POST" })
