@@ -67,6 +67,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   update_booking_status:         updateBookingStatus,
   delete_booking:                deleteBooking,
   change_booking_room:           changeBookingRoom,
+  set_extra_bed:                 setExtraBed,
   reply_to_guest:                replyToGuest,
   block_room:                    blockRoom,
   send_to_manager:               sendToManager,
