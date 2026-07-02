@@ -1469,6 +1469,53 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // Fast-path kontekstual booking_inquiry: pesan tanya kamar/harga tanpa
+  // menyebut tanggal, tetapi tanggal sudah tersimpan di slot/summary.
+  // Jalur ini WAJIB dijalankan sebelum LLM supaya beban tinggi tidak
+  // memaksa orkestrator agent (p95 ~15 s) untuk pekerjaan yang bisa
+  // dihitung deterministik dari `checkRoomAvailability`.
+  if (!reply && !isManager && !bookingActive && lastMessage) {
+    try {
+      const contextualReply = await buildContextualBookingInquiryReply({
+        message: lastMessage,
+        rooms: rooms ?? [],
+        property: p,
+        origin,
+        bookingSlots: ((bookingState as any)?.slots ?? null) as Record<string, unknown> | null,
+        chatSummary: chatSummaryJson as any,
+      });
+      if (contextualReply) {
+        reply = contextualReply.reply;
+        orchResult = {
+          agentKey: "front-office",
+          intent: contextualReply.intent,
+          routingConfidence: 1,
+          escalated: false,
+          toolsUsed: ["deterministic-availability", "context-slots"],
+          fastPath: true,
+        };
+        console.info(`[Autoreply] Contextual booking_inquiry fast-path for ${phone.slice(-6)}`);
+
+        if (contextualReply.dates) {
+          const { checkIn, checkOut } = contextualReply.dates;
+          void runDeferred("Autoreply.persist-contextual-availability-dates", async () => {
+            const { error } = await (supabaseAdmin as any).rpc("update_conversation_topic", {
+              p_phone: phone,
+              p_last_topic: "availability",
+              p_last_entity: null,
+              p_slots: { checkIn, checkOut },
+            });
+            if (error) console.warn("[Autoreply] persist contextual dates failed:", error.message);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[Autoreply] contextual booking_inquiry fast-path failed (falling back to AI):", e);
+    }
+  }
+
+
+
   const explicitKey = p.ai_api_key?.trim();
   const lovableKey = process.env.LOVABLE_API_KEY?.trim();
   const useLovable = !explicitKey && !!lovableKey;
