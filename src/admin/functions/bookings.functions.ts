@@ -548,6 +548,8 @@ export const updateBookingFull = createServerFn({ method: "POST" })
         room_id: r.room_id,
         room_type_id,
         nightly_rate: r.nightly_rate,
+        extra_bed_count: r.extra_bed_count ?? 0,
+        extra_bed_rate: r.extra_bed_rate ?? 0,
       };
     });
     const { error: insErr } = await context.supabase.from("booking_rooms").insert(roomInserts);
