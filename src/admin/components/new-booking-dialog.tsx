@@ -77,11 +77,19 @@ const PAYMENT_STATUSES = [
 ] as const;
 
 type RoomStatus = "clean" | "dirty" | "maintenance" | "out_of_order";
+type RoomType = {
+  id: string;
+  name: string;
+  base_rate: number;
+  capacity: number;
+  extrabed_capacity?: number | null;
+  extrabed_rate?: number | null;
+};
 type RoomRow = {
   id: string;
   number: string;
   status: RoomStatus;
-  room_types?: { id: string; name: string; base_rate: number; capacity: number } | null;
+  room_types?: RoomType | null;
 };
 
 const formatIDR = (n: number) =>
