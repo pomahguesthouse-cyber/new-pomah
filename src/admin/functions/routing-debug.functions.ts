@@ -98,11 +98,16 @@ export const getIntentCallHistory = createServerFn({ method: "GET" })
 
     // Untuk setiap outbound, cari pesan inbound terakhir sebelum sent_at.
     const items = await Promise.all(
-      (outbound ?? []).map(async (msg) => {
+      outbound.map(async (msg) => {
         const { data: inbound } = await supabaseAdmin
           .from("whatsapp_messages")
           .select("body, sent_at")
-          .eq("thread_id", msg.thread_id)
+          .eq("thread_id", msg.thread_id ?? "")
+          .eq("direction", "inbound")
+          .lt("sent_at", msg.sent_at ?? new Date().toISOString())
+          .order("sent_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
           .eq("direction", "inbound")
           .lt("sent_at", msg.sent_at ?? new Date().toISOString())
           .order("sent_at", { ascending: false })
