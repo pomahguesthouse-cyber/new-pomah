@@ -540,6 +540,9 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                   {roomsByType.map((group) => {
                     const availableCount = group.rooms.filter((r) => !isUnavailable(r)).length;
                     const count = autoCounts[group.typeId] ?? 0;
+                    const roomsPicked = roomCountByType[group.typeId] ?? 0;
+                    const maxExtraBed = group.extraBedCapacityPerRoom * roomsPicked;
+                    const extraBed = Math.min(extraBedByType[group.typeId] ?? 0, maxExtraBed);
                     return (
                       <div key={group.typeId} className="rounded-lg border border-border">
                         <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
