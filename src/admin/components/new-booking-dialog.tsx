@@ -120,7 +120,7 @@ function nightsBetween(ci: string, co: string) {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
-type SelectedRoom = { room_id: string; nightly_rate: number };
+type SelectedRoom = { room_id: string; nightly_rate: number; extra_bed_count: number; extra_bed_rate: number };
 
 type Props = {
   open: boolean;
