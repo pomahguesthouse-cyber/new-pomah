@@ -77,7 +77,14 @@ type RoomRow = {
   id: string;
   number: string;
   status: "clean" | "dirty" | "maintenance" | "out_of_order";
-  room_types?: { id: string; name: string; base_rate: number; capacity: number } | null;
+  room_types?: {
+    id: string;
+    name: string;
+    base_rate: number;
+    capacity: number;
+    extrabed_capacity?: number | null;
+    extrabed_rate?: number | null;
+  } | null;
 };
 
 /** A room line of a booking, as returned by listBookings' booking_rooms join. */
@@ -85,6 +92,8 @@ type BookingRoom = {
   id: string;
   room_id: string | null;
   nightly_rate: number;
+  extra_bed_count?: number | null;
+  extra_bed_rate?: number | null;
   room_types?: { id: string; name: string } | null;
   rooms?: { id: string; number: string } | null;
 };
@@ -113,7 +122,12 @@ export type EditableBooking = {
   booking_rooms?: BookingRoom[] | null;
 };
 
-type SelectedRoom = { room_id: string; nightly_rate: number };
+type SelectedRoom = {
+  room_id: string;
+  nightly_rate: number;
+  extra_bed_count: number;
+  extra_bed_rate: number;
+};
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
