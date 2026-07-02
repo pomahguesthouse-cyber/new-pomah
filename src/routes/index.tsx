@@ -301,65 +301,39 @@ export function PomahHomeView({
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
-  // News & Event slider — disamakan dengan halaman /explore.
-  // Sumber utama: `property.explore_config.news` + `.events` (manual),
-  // digabung dengan AI-generated events dari `active_public_events`.
-  // Slider di explore_items (City Guide) tidak lagi dipakai di homepage
-  // agar konten Jelajah Kutho Semarang selalu identik dengan halaman Explore.
+  // Slider "Jelajah Kutho Semarang" — hanya menampilkan destinasi wisata & kuliner
+  // dari sumber yang sama dengan halaman /explore (`property.explore_config`).
+  // Events & news sengaja tidak ditampilkan di homepage sesuai permintaan.
   void getPublicExploreItems;
+  void listActivePublicEvents;
 
   const exploreCfg = mergeExploreConfig(
     (property as { explore_config?: unknown } | null | undefined)?.explore_config,
   );
 
-  const { data: autoEventsData } = useQuery({
-    queryKey: ["public-active-events"],
-    queryFn: () => listActivePublicEvents(),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const autoEvents = (autoEventsData?.events ?? []).map((e: any) => {
-    const startIso = e.event_start_date ?? e.event_end_date ?? "";
-    const isoStr = startIso
-      ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        })
-      : "";
-    const dateStr = e.event_date_label || isoStr || "Tanggal menyusul";
-    return {
-      date: dateStr,
-      category: "Event",
-      title: e.title,
-      excerpt: e.description ?? "",
-      image: e.image_url ?? "",
-      ts: startIso ? new Date(startIso).getTime() : Date.now(),
-    };
-  });
-
-  const manualEvents = (exploreCfg.events ?? []).map((ev: any) => ({
-    date: ev.date || ev.location || "",
-    category: ev.label || "Event",
-    title: ev.title,
-    excerpt: ev.desc ?? "",
-    image: ev.image || "",
-    ts: ev.date ? parseIdDate(ev.date) : Date.now(),
+  const destinationItems = (exploreCfg.destinations ?? []).map((d: any) => ({
+    date: d.nearby_distance || d.address || "",
+    category: "Wisata",
+    title: d.name,
+    excerpt: d.desc ?? "",
+    image: d.image || "",
+    ts: 0,
   }));
 
-  const manualNews = (exploreCfg.news ?? []).map((nw: any) => ({
-    date: nw.date || "",
-    category: nw.label || "Berita",
-    title: nw.title,
-    excerpt: nw.desc ?? "",
-    image: nw.image || "",
-    ts: nw.date ? parseIdDate(nw.date) : Date.now(),
+  const culinaryItems = (exploreCfg.culinary ?? []).map((c: any) => ({
+    date: c.address || "",
+    category: c.category ? `Kuliner • ${c.category}` : "Kuliner",
+    title: c.name,
+    excerpt: c.desc ?? "",
+    image: c.image || "",
+    ts: 0,
   }));
 
-  const newsEvents = [...manualEvents, ...autoEvents, ...manualNews]
+  const newsEvents = [...destinationItems, ...culinaryItems]
     .filter((n) => n.title)
-    .sort((a, b) => b.ts - a.ts)
     .slice(0, 12);
+
+
 
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
