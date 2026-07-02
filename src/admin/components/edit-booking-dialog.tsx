@@ -207,16 +207,26 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setSelectedRooms(
       (booking.booking_rooms ?? [])
         .filter((br): br is BookingRoom & { room_id: string } => !!br.room_id)
-        .map((br) => ({ room_id: br.room_id, nightly_rate: Number(br.nightly_rate) })),
+        .map((br) => ({
+          room_id: br.room_id,
+          nightly_rate: Number(br.nightly_rate),
+          extra_bed_count: Number(br.extra_bed_count ?? 0),
+          extra_bed_rate: Number(br.extra_bed_rate ?? 0),
+        })),
     );
-    // Pre-fill the auto-allotment counts from the current room set, and
-    // open in manual mode so the existing rooms stay visible.
+    // Pre-fill the auto-allotment counts + extra-bed counts (summed per type)
+    // from the current room set. Open in manual mode.
     const counts: Record<string, number> = {};
+    const ebByType: Record<string, number> = {};
     for (const br of booking.booking_rooms ?? []) {
       const tid = br.room_types?.id;
-      if (tid) counts[tid] = (counts[tid] ?? 0) + 1;
+      if (tid) {
+        counts[tid] = (counts[tid] ?? 0) + 1;
+        ebByType[tid] = (ebByType[tid] ?? 0) + Number(br.extra_bed_count ?? 0);
+      }
     }
     setAutoCounts(counts);
+    setExtraBedByType(ebByType);
     setAllotmentMode("manual");
   }, [open, booking?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
