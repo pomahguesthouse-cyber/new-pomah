@@ -682,6 +682,83 @@ async function buildDeterministicAvailabilityReply(params: {
   return result;
 }
 
+/**
+ * Fast-path kontekstual untuk intent `booking_inquiry`: pertanyaan
+ * ketersediaan/harga yang TIDAK menyebut tanggal secara eksplisit, tetapi
+ * tanggal check-in/check-out sudah tersimpan di booking-state atau chat
+ * summary dari turn sebelumnya. Tanpa jalur ini, orkestrator agent penuh
+ * (LLM + tools) yang p95-nya ~15 s ikut menghitung ketersediaan — beban
+ * yang tak perlu dan berisiko zombie di Cloudflare Worker saat traffic
+ * tinggi. Semua data dihitung dari `checkRoomAvailability` (deterministik).
+ */
+async function buildContextualBookingInquiryReply(params: {
+  message: string;
+  rooms: any[];
+  property: any;
+  origin: string;
+  bookingSlots?: Record<string, unknown> | null;
+  chatSummary?: { check_in?: unknown; check_out?: unknown; guest_count?: unknown } | null;
+}): Promise<FastFaqResult | null> {
+  if (!looksLikeBookingInquiry(params.message)) return null;
+
+  const today = todayWIB();
+  // Prioritas: tanggal yang di-parse dari pesan → slot booking aktif →
+  // ringkasan chat. Kalau pesan baru menyebut tanggal, jalur deterministik
+  // "biasa" (buildDeterministicAvailabilityReply) sudah lebih dulu menang;
+  // di sini kita hanya menutup celah saat pesan tanpa tanggal.
+  const explicitRange = parseAvailabilityDateRange(params.message, today);
+  const slotCheckIn = typeof params.bookingSlots?.checkIn === "string" ? params.bookingSlots?.checkIn as string : null;
+  const slotCheckOut = typeof params.bookingSlots?.checkOut === "string" ? params.bookingSlots?.checkOut as string : null;
+  const summaryCheckIn = typeof params.chatSummary?.check_in === "string" ? params.chatSummary?.check_in as string : null;
+  const summaryCheckOut = typeof params.chatSummary?.check_out === "string" ? params.chatSummary?.check_out as string : null;
+
+  const checkIn = explicitRange?.checkIn ?? slotCheckIn ?? summaryCheckIn;
+  const checkOut = explicitRange?.checkOut ?? slotCheckOut ?? summaryCheckOut;
+  if (!checkIn || !checkOut) return null;
+
+  // Tolak tanggal lampau — biarkan agent menjelaskan supaya tidak terkesan
+  // menutupi kesalahan slot lama yang belum dibersihkan.
+  if (checkIn < today) return null;
+
+  const guests = parseGuestCountFollowup(params.message);
+  const summaryGuests = Number(params.chatSummary?.guest_count ?? 0);
+  const adults = guests?.adults ?? (summaryGuests > 0 ? summaryGuests : undefined);
+  const children = guests?.children ?? 0;
+
+  let raw: string;
+  try {
+    raw = await checkRoomAvailability(
+      { check_in: checkIn, check_out: checkOut, adults, children },
+      {
+        supabasePublic: supabasePublic as any,
+        supabaseAdmin: supabaseAdmin as any,
+        rooms: params.rooms,
+        property: params.property,
+        today,
+        origin: params.origin,
+      } as any,
+    );
+  } catch (e) {
+    console.warn("[Autoreply] contextual booking_inquiry checkAvailability failed:", e);
+    return null;
+  }
+
+  // Kalau kita punya jumlah tamu, format lebih kaya (dengan kapasitas + extra
+  // bed). Kalau tidak, format ringkas seperti availability biasa.
+  const greet = messageOpensWithGreeting(params.message);
+  const result = adults
+    ? formatAvailabilityForGuestCount(raw, { adults, children, total: adults + children })
+    : formatAvailabilityReply(raw, greet);
+
+  if (result) {
+    result.dates = { checkIn, checkOut };
+    result.intent = `${result.intent}_contextual`;
+  }
+  return result;
+}
+
+
+
 async function buildGuestCountAfterAvailabilityReply(params: {
   message: string;
   rooms: any[];
