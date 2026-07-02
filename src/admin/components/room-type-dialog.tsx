@@ -172,6 +172,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setSlug(roomType.slug ?? "");
       setSlugTouched(true);
       setBedType(roomType.bed_type ?? "");
+      setBedSize(roomType.bed_size ?? "");
       setFloorInfo(roomType.floor_info ?? "");
       setCapacity(roomType.capacity ?? 2);
       setExtrabedCapacity(roomType.extrabed_capacity ?? 0);
