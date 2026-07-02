@@ -35,10 +35,19 @@ export const Route = createFileRoute("/admin/routing-debug")({
 
 function RoutingDebugPage() {
   const statsFn = useServerFn(getAgentRoutingStats);
+  const historyFn = useServerFn(getIntentCallHistory);
   const { data, isLoading } = useQuery({
     queryKey: ["routing-debug-stats"],
     queryFn: () => statsFn(),
   });
+
+  const [selectedIntent, setSelectedIntent] = useState<string | null>(null);
+  const historyQuery = useQuery({
+    queryKey: ["routing-debug-history", selectedIntent],
+    queryFn: () => historyFn({ data: { intent: selectedIntent!, limit: 20 } }),
+    enabled: Boolean(selectedIntent),
+  });
+
 
   // Gabungkan mapping statis dengan statistik pemanggilan aktual.
   const combined = useMemo(() => {
