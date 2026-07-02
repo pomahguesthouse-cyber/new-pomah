@@ -43,6 +43,7 @@ export const getRoomSpecifications: ToolHandler = async (
       harga_dasar_per_malam: Number(r.base_rate ?? 0),
       kapasitas_tamu: r.capacity ?? null,
       tipe_tempat_tidur: r.bed_type ?? null,
+      ukuran_tempat_tidur: r.bed_size ?? null,
       lokasi_lantai: r.floor_info ?? null,
       deskripsi: r.description ?? null,
       fasilitas: r.amenities ?? [],
