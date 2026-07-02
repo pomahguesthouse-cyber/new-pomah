@@ -316,3 +316,165 @@ Terima kasih.`;
     return { ok: false, error: errMsg, pdf_url: null, wa_sent: false };
   }
 }
+
+/**
+ * Send a lightweight WhatsApp summary to the guest whenever extra bed
+ * configuration changes on an existing booking (via Edit Booking Dialog or
+ * the `set_extra_bed` manager tool). Unlike the full invoice notifier, this
+ * does NOT touch the `invoices.wa_sent_at` claim, so it can fire multiple
+ * times across the booking lifecycle.
+ */
+export async function sendExtraBedUpdateSummary({
+  supabase,
+  bookingId,
+  changedBy,
+}: {
+  supabase: SupabaseClient;
+  bookingId: string;
+  changedBy?: string;
+}): Promise<{ ok: boolean; wa_sent: boolean; error: string | null }> {
+  try {
+    const { data: booking, error: bErr } = await supabase
+      .from("bookings")
+      .select(
+        `
+        id, reference_code, check_in, check_out, total_amount,
+        payment_status, paid_amount,
+        guests ( id, full_name, phone ),
+        properties ( name, fonnte_token, public_domain )
+        `,
+      )
+      .eq("id", bookingId)
+      .single();
+    if (bErr || !booking) {
+      return { ok: false, wa_sent: false, error: bErr?.message ?? "Booking not found" };
+    }
+    const guest = (booking as any).guests;
+    const property = (booking as any).properties;
+    if (!guest?.phone) {
+      return { ok: false, wa_sent: false, error: "Guest tanpa nomor HP" };
+    }
+    const fonnte_token = property?.fonnte_token;
+    if (!fonnte_token) {
+      return { ok: true, wa_sent: false, error: null };
+    }
+
+    const { data: brs } = await supabase
+      .from("booking_rooms")
+      .select("nightly_rate, extra_bed_count, extra_bed_rate, room_types(name)")
+      .eq("booking_id", bookingId);
+
+    const ciMs = Date.parse(`${String((booking as any).check_in)}T00:00:00Z`);
+    const coMs = Date.parse(`${String((booking as any).check_out)}T00:00:00Z`);
+    const nights = Math.max(
+      1,
+      Number.isFinite(ciMs) && Number.isFinite(coMs)
+        ? Math.round((coMs - ciMs) / 86_400_000)
+        : 1,
+    );
+
+    let totalExtraBed = 0;
+    let extraBedSubtotal = 0;
+    const perTypeLines: string[] = [];
+    for (const br of ((brs as any[]) ?? [])) {
+      const ebCount = Number(br?.extra_bed_count ?? 0);
+      const ebRate = Number(br?.extra_bed_rate ?? 0);
+      if (ebCount > 0) {
+        totalExtraBed += ebCount;
+        const sub = ebCount * ebRate * nights;
+        extraBedSubtotal += sub;
+        const tname = br?.room_types?.name ?? "Kamar";
+        perTypeLines.push(
+          `  - ${tname}: ${ebCount} × Rp ${ebRate.toLocaleString("id-ID")} × ${nights} malam = Rp ${sub.toLocaleString("id-ID")}`,
+        );
+      }
+    }
+
+    const total = Number((booking as any).total_amount ?? 0);
+    const paid = Number((booking as any).paid_amount ?? 0);
+    const outstanding = Math.max(0, total - paid);
+    const ref = (booking as any).reference_code ?? bookingId.slice(0, 8);
+
+    const summary =
+      totalExtraBed > 0
+        ? `Extra Bed: ${totalExtraBed} unit — subtotal Rp ${extraBedSubtotal.toLocaleString("id-ID")}\n` +
+          perTypeLines.join("\n")
+        : "Extra Bed: sudah dihapus (0 unit).";
+
+    const messageBody = `Halo ${guest.full_name},
+
+Ringkasan booking ${ref} telah diperbarui${changedBy ? ` oleh ${changedBy}` : ""}:
+
+${summary}
+
+• Total Baru: Rp ${total.toLocaleString("id-ID")}
+• Sudah Dibayar: Rp ${paid.toLocaleString("id-ID")}
+• Sisa: Rp ${outstanding.toLocaleString("id-ID")}
+
+Terima kasih.`;
+
+    let cleanedPhone = String(guest.phone).replace(/\D/g, "");
+    if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
+
+    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
+      fonnte_token,
+      cleanedPhone,
+      messageBody,
+    );
+
+    if (sent) {
+      try {
+        const { data: thread } = await supabase
+          .from("whatsapp_threads")
+          .select("id")
+          .eq("phone", cleanedPhone)
+          .maybeSingle();
+        let threadId = thread?.id;
+        if (!threadId) {
+          const { data: newThread } = await supabase
+            .from("whatsapp_threads")
+            .insert({
+              phone: cleanedPhone,
+              display_name: guest.full_name,
+              guest_id: guest.id,
+              status: "open",
+              unread_count: 0,
+            })
+            .select("id")
+            .single();
+          threadId = newThread?.id;
+        }
+        if (threadId) {
+          await supabase.from("whatsapp_messages").insert({
+            thread_id: threadId,
+            direction: "out",
+            body: messageBody,
+            metadata: {
+              agent: "System",
+              is_automated: true,
+              intent: "extra_bed_update",
+              agent_key: "finance",
+              tools_used: ["extra-bed-update-summary"],
+              pipeline: "extra_bed_update",
+            },
+          });
+          await supabase
+            .from("whatsapp_threads")
+            .update({
+              last_message_preview: messageBody.slice(0, 100),
+              last_message_at: new Date().toISOString(),
+            })
+            .eq("id", threadId);
+        }
+      } catch (logErr) {
+        console.warn("[ExtraBedUpdate] thread log failed:", logErr);
+      }
+      return { ok: true, wa_sent: true, error: null };
+    }
+    return { ok: false, wa_sent: false, error: sendErr ?? "WhatsApp send failed" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[ExtraBedUpdate] Unexpected error:", err);
+    return { ok: false, wa_sent: false, error: msg };
+  }
+}

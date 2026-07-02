@@ -172,6 +172,8 @@ export const managerAgent: AgentDefinition = {
         "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
         "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
         "  - update_booking_status, delete_booking, change_booking_room, set_extra_bed (mutasi booking)\n" +
+        "    · set_extra_bed: 'tambahkan/kurangi/set/hapus extrabed' → gunakan mode add/remove/set/clear. " +
+        "'hapus extrabed' atau 'kosongkan extrabed' → mode='clear' (extra bed jadi 0 pada tipe/kamar itu).\n" +
         "  - reply_to_guest (relay ke tamu)\n" +
         "Untuk perintah yang cocok dengan tool langsung di atas, panggil tool langsung. " +
         "Untuk instruksi lainnya, gunakan peta delegasi wajib.",

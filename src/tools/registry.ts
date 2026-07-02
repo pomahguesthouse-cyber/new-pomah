@@ -296,10 +296,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     function: {
       name: "set_extra_bed",
       description:
-        "Manajer-only. Tambah/kurangi/set jumlah extra bed pada SATU kamar di booking tertentu. " +
+        "Manajer-only. Tambah/kurangi/set/hapus jumlah extra bed pada SATU kamar di booking tertentu. " +
         "Total booking otomatis dihitung ulang (nightly_rate × nights + extra_bed_rate × count × nights). " +
-        "Contoh: 'di booking PMH-002 tambahkan extrabed di kamar Family Suite 100' → " +
-        "reference_code='PMH-002', room_number='100', mode='add', count=1. " +
+        "Contoh perintah manajer → parameter: \n" +
+        "  • 'tambahkan extrabed di kamar 100 booking PMH-002' → mode='add', count=1\n" +
+        "  • 'set extra bed 2 di kamar Deluxe PMH-003' → mode='set', count=2\n" +
+        "  • 'kurangi 1 extrabed di PMH-002 kamar 100' → mode='remove', count=1\n" +
+        "  • 'hapus extra bed di PMH-002 kamar Family Suite' → mode='clear' (setara set count=0)\n" +
         "Bila manajer menyebut nama tipe tanpa nomor kamar dan booking hanya punya 1 kamar dari tipe itu, " +
         "kirim room_type saja. Bila ambigu, tool akan minta klarifikasi.",
       parameters: {
@@ -318,15 +321,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           },
           mode: {
             type: "string",
-            enum: ["add", "set", "remove"],
+            enum: ["add", "set", "remove", "clear"],
             description:
               "'add' (default) menambah count ke jumlah saat ini. 'set' menimpa jadi count. " +
-              "'remove' mengurangi count.",
+              "'remove' mengurangi count. 'clear' mengosongkan jadi 0 (untuk 'hapus extrabed').",
           },
           count: {
             type: "number",
             description:
-              "Jumlah extra bed sesuai mode. Default 1 untuk add/remove, wajib diisi untuk set.",
+              "Jumlah extra bed sesuai mode. Default 1 untuk add/remove, wajib diisi untuk set. " +
+              "Diabaikan untuk mode='clear'.",
           },
           confirmed: {
             type: "boolean",

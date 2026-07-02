@@ -30,13 +30,33 @@ export const setExtraBed: ToolHandler = async (
     typeof args.room_number === "string" ? args.room_number.trim() : null;
   const roomTypeName =
     typeof args.room_type === "string" ? args.room_type.trim() : null;
-  const rawMode = typeof args.mode === "string" ? args.mode.toLowerCase() : "add";
-  const mode: "set" | "add" | "remove" =
-    rawMode === "set" || rawMode === "remove" ? rawMode : "add";
-  const count = Math.max(
-    0,
-    Math.floor(typeof args.count === "number" ? args.count : mode === "remove" ? 0 : 1),
-  );
+  const rawMode = typeof args.mode === "string" ? args.mode.toLowerCase().trim() : "add";
+  // Accept Indonesian & English aliases from the LLM:
+  //   add / tambah / plus         → add
+  //   set                          → set
+  //   remove / kurangi / minus     → remove
+  //   clear / reset / zero / hapus / hapus semua → set count=0
+  let mode: "set" | "add" | "remove";
+  let count: number;
+  if (["clear", "reset", "zero", "hapus", "hapus semua", "kosongkan"].includes(rawMode)) {
+    mode = "set";
+    count = 0;
+  } else if (["remove", "kurangi", "minus", "kurang"].includes(rawMode)) {
+    mode = "remove";
+    count = Math.max(
+      0,
+      Math.floor(typeof args.count === "number" ? args.count : 1),
+    );
+  } else if (rawMode === "set") {
+    mode = "set";
+    count = Math.max(0, Math.floor(typeof args.count === "number" ? args.count : 0));
+  } else {
+    mode = "add";
+    count = Math.max(
+      1,
+      Math.floor(typeof args.count === "number" ? args.count : 1),
+    );
+  }
   const confirmed = args.confirmed === true;
 
   if (!referenceCode) {
@@ -223,6 +243,20 @@ export const setExtraBed: ToolHandler = async (
     await notifyBookingUpdated(supabase, booking.id, beforeSnap, afterSnap, "Manager (chat)");
   } catch (e) {
     console.error(`[set_extra_bed] notifyBookingUpdated gagal ${booking.id}:`, e);
+  }
+
+  // Kirim ringkasan extra bed terbaru ke tamu via WhatsApp.
+  try {
+    const { sendExtraBedUpdateSummary } = await import(
+      "@/services/invoice-notification.service"
+    );
+    await sendExtraBedUpdateSummary({
+      supabase,
+      bookingId: booking.id,
+      changedBy: "Manager",
+    });
+  } catch (e) {
+    console.error(`[set_extra_bed] sendExtraBedUpdateSummary gagal ${booking.id}:`, e);
   }
 
   const delta = nextCount - current;

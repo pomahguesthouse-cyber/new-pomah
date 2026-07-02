@@ -285,6 +285,29 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return counts;
   }, [allotmentMode, autoCounts, roomsByType, selectedRooms, allRooms]);
 
+  /**
+   * Per-type validation: extra bed for a type must never exceed
+   *   extrabed_capacity_per_room × room_count_of_that_type.
+   * Returns { [typeId]: "pesan error" } for the types that overflow.
+   */
+  const extraBedErrors = React.useMemo<Record<string, string>>(() => {
+    const errs: Record<string, string> = {};
+    for (const group of roomsByType) {
+      const requested = extraBedByType[group.typeId] ?? 0;
+      const rooms = roomCountByType[group.typeId] ?? 0;
+      const maxAllowed = group.extraBedCapacityPerRoom * rooms;
+      if (requested > 0 && group.extraBedCapacityPerRoom === 0) {
+        errs[group.typeId] = `${group.typeName} tidak mendukung extra bed.`;
+      } else if (requested > maxAllowed) {
+        errs[group.typeId] =
+          `Extra bed ${group.typeName} melebihi kapasitas: diminta ${requested}, ` +
+          `maksimum ${maxAllowed} (${group.extraBedCapacityPerRoom}/kamar × ${rooms} kamar).`;
+      }
+    }
+    return errs;
+  }, [roomsByType, extraBedByType, roomCountByType]);
+  const hasExtraBedError = Object.keys(extraBedErrors).length > 0;
+
   // Rooms actually sent on save. Extra beds for a type are packed onto the
   // FIRST booking_row of that type so total_amount stays correct even when
   // the group has multiple physical rooms.
@@ -374,6 +397,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     mutationFn: () => {
       if (!booking || !booking.guests) throw new Error("Booking tidak valid");
       if (effectiveRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
+      const firstEbErr = Object.values(extraBedErrors)[0];
+      if (firstEbErr) throw new Error(firstEbErr);
       return fnUpdate({
         data: {
           id: booking.id,
@@ -414,7 +439,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     !updateMut.isPending &&
     guest.full_name.trim().length > 0 &&
     nights >= 1 &&
-    effectiveRooms.length > 0;
+    effectiveRooms.length > 0 &&
+    !hasExtraBedError;
 
   const paymentChip = PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.chip;
 
@@ -709,6 +735,11 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                             </div>
                           </div>
                         )}
+                      {extraBedErrors[group.typeId] && (
+                        <p className="border-t border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[11px] font-medium text-destructive">
+                          {extraBedErrors[group.typeId]}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
