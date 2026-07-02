@@ -480,6 +480,18 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 </select>
               </div>
               <div className="grid gap-1.5">
+                <Label className="text-xs">Ukuran tempat tidur</Label>
+                <Input
+                  value={bedSize}
+                  placeholder="mis. 180x200 cm (King) atau 120x200 cm"
+                  maxLength={60}
+                  onChange={(e) => setBedSize(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Dipakai chatbot untuk menjawab pertanyaan ukuran/dimensi tempat tidur.
+                </p>
+              </div>
+              <div className="grid gap-1.5">
                 <Label className="text-xs">Fasilitas</Label>
                 <Input
                   value={amenities}
