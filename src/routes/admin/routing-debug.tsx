@@ -1,14 +1,25 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Route as Route3, Activity, ArrowRight } from "lucide-react";
+import { Route as Route3, Activity, ArrowRight, X } from "lucide-react";
 
 import { ROUTING_MAP, AGENT_NAMES } from "@/ai/router/agent-router";
 import { INTENT_CATEGORIES } from "@/ai/router/intent-categories";
-import { getAgentRoutingStats } from "@/admin/functions/routing-debug.functions";
+import {
+  getAgentRoutingStats,
+  getIntentCallHistory,
+} from "@/admin/functions/routing-debug.functions";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import {
   Table,
   TableBody,
@@ -24,10 +35,19 @@ export const Route = createFileRoute("/admin/routing-debug")({
 
 function RoutingDebugPage() {
   const statsFn = useServerFn(getAgentRoutingStats);
+  const historyFn = useServerFn(getIntentCallHistory);
   const { data, isLoading } = useQuery({
     queryKey: ["routing-debug-stats"],
     queryFn: () => statsFn(),
   });
+
+  const [selectedIntent, setSelectedIntent] = useState<string | null>(null);
+  const historyQuery = useQuery({
+    queryKey: ["routing-debug-history", selectedIntent],
+    queryFn: () => historyFn({ data: { intent: selectedIntent!, limit: 20 } }),
+    enabled: Boolean(selectedIntent),
+  });
+
 
   // Gabungkan mapping statis dengan statistik pemanggilan aktual.
   const combined = useMemo(() => {
@@ -130,7 +150,11 @@ function RoutingDebugPage() {
                 );
 
               return (
-                <TableRow key={row.intent}>
+                <TableRow
+                  key={row.intent}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => setSelectedIntent(row.intent)}
+                >
                   <TableCell>
                     <div className="font-mono text-xs">{row.intent}</div>
                     <div className="text-[11px] text-muted-foreground">{row.label}</div>
@@ -190,7 +214,11 @@ function RoutingDebugPage() {
             </TableHeader>
             <TableBody>
               {orphanRows.map((row) => (
-                <TableRow key={row.intent}>
+                <TableRow
+                  key={row.intent}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => setSelectedIntent(row.intent)}
+                >
                   <TableCell className="font-mono text-xs">{row.intent}</TableCell>
                   <TableCell className="text-right font-mono">{row.total}</TableCell>
                   <TableCell>
@@ -210,6 +238,80 @@ function RoutingDebugPage() {
           </Table>
         </Card>
       )}
+
+      <Sheet open={Boolean(selectedIntent)} onOpenChange={(open) => !open && setSelectedIntent(null)}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-2xl">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <span className="font-mono text-sm">{selectedIntent}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto h-7 w-7"
+                onClick={() => setSelectedIntent(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </SheetTitle>
+            <SheetDescription>
+              20 pemanggilan terakhir (30 hari). Request = pesan tamu terakhir sebelum bot menjawab;
+              Response = balasan bot yang terkirim.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 space-y-3">
+            {historyQuery.isLoading && (
+              <div className="text-sm text-muted-foreground">Memuat riwayat…</div>
+            )}
+            {historyQuery.data?.items.length === 0 && (
+              <div className="text-sm text-muted-foreground">
+                Tidak ada pemanggilan pada 30 hari terakhir.
+              </div>
+            )}
+            {historyQuery.data?.items.map((item) => (
+              <Card key={item.id} className="p-3 text-xs">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{item.agent || item.agentKey || "—"}</Badge>
+                  {item.fastPath && <Badge variant="secondary">fast-path</Badge>}
+                  {item.isFallback && <Badge variant="destructive">fallback</Badge>}
+                  {item.toolsUsed.map((t) => (
+                    <Badge key={t} variant="secondary" className="text-[10px]">
+                      🔧 {t}
+                    </Badge>
+                  ))}
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {item.sentAt ? new Date(item.sentAt).toLocaleString("id-ID") : "—"}
+                  </span>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                  <span>📞 {item.phone ?? "—"}</span>
+                  {item.latencyMs !== null && <span>⏱ {item.latencyMs}ms</span>}
+                  {item.aiLatencyMs !== null && <span>🤖 {item.aiLatencyMs}ms</span>}
+                  {item.routingConfidence !== null && (
+                    <span>conf {(item.routingConfidence * 100).toFixed(0)}%</span>
+                  )}
+                </div>
+                <div className="mb-2">
+                  <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    Request (tamu)
+                  </div>
+                  <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-sans">
+                    {item.request ?? "(tidak ada pesan sebelumnya)"}
+                  </pre>
+                </div>
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">
+                    Response (bot)
+                  </div>
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-sans">
+                    {item.response}
+                  </pre>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
