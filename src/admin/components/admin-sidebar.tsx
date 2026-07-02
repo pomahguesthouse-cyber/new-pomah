@@ -23,6 +23,7 @@ import {
   LifeBuoy,
   Brain,
   Link2,
+  Route as RouteIcon,
   GripVertical,
 } from "lucide-react";
 import {
@@ -97,6 +98,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
       { to: "/admin/training", label: "Chatbot Training", icon: Brain },
+      { to: "/admin/routing-debug", label: "Routing Debug", icon: RouteIcon },
     ],
   },
   {
