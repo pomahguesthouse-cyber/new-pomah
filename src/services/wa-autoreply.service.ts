@@ -846,8 +846,9 @@ function buildDeterministicPropertyFaqReply(params: {
 }
 
 
-
+async function buildGuestCountAfterAvailabilityReply(params: {
   message: string;
+
   rooms: any[];
   property: any;
   origin: string;
