@@ -181,6 +181,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [selectedRooms, setSelectedRooms] = React.useState<SelectedRoom[]>([]);
   const [allotmentMode, setAllotmentMode] = React.useState<"auto" | "manual">("manual");
   const [autoCounts, setAutoCounts] = React.useState<Record<string, number>>({});
+  const [extraBedByType, setExtraBedByType] = React.useState<Record<string, number>>({});
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
