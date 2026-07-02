@@ -856,6 +856,7 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     slug: d.slug,
     description: d.description ?? null,
     bed_type: d.bed_type ?? null,
+    bed_size: d.bed_size ?? null,
     floor_info: d.floor_info ?? null,
     size_sqm: d.size_sqm ?? null,
     capacity: d.capacity,
