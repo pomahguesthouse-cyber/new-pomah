@@ -301,44 +301,66 @@ export function PomahHomeView({
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
   );
 
-  // News & Event slider — sourced ENTIRELY from explore_items (where the
-  // Content Manager Agent writes its discoveries). Only is_published=true
-  // rows appear here; drafts stay invisible until admin approves them.
-  // Manual exploreCfg.events / exploreCfg.news arrays + the AI scheduler's
-  // active_public_events view are no longer used as homepage sources —
-  // single source of truth.
-  void mergeExploreConfig; // keep import side-effect free for other usages
-  void listActivePublicEvents;
+  // News & Event slider — disamakan dengan halaman /explore.
+  // Sumber utama: `property.explore_config.news` + `.events` (manual),
+  // digabung dengan AI-generated events dari `active_public_events`.
+  // Slider di explore_items (City Guide) tidak lagi dipakai di homepage
+  // agar konten Jelajah Kutho Semarang selalu identik dengan halaman Explore.
+  void getPublicExploreItems;
 
-  const { data: cityGuideItems } = useQuery({
-    queryKey: ["public-explore-items"],
-    queryFn: () => getPublicExploreItems(),
+  const exploreCfg = mergeExploreConfig(
+    (property as { explore_config?: unknown } | null | undefined)?.explore_config,
+  );
+
+  const { data: autoEventsData } = useQuery({
+    queryKey: ["public-active-events"],
+    queryFn: () => listActivePublicEvents(),
     staleTime: 5 * 60 * 1000,
   });
 
-  const newsEvents = (cityGuideItems ?? [])
-    .map((it: any) => {
-      const ts = it.date_text ? parseIdDate(it.date_text) : Date.now();
-      const categoryLabel = it.badge
-        ? it.badge
-        : it.category === "event"
-        ? "Event"
-        : it.category === "destinasi"
-        ? "Destinasi"
-        : it.category === "kuliner"
-        ? "Kuliner"
-        : "Tips";
-      return {
-        date: it.date_text || it.location_text || "",
-        category: categoryLabel,
-        title: it.title,
-        excerpt: it.description ?? "",
-        image: it.image_url || "",
-        ts,
-      };
-    })
-    .sort((a: any, b: any) => b.ts - a.ts)
+  const autoEvents = (autoEventsData?.events ?? []).map((e: any) => {
+    const startIso = e.event_start_date ?? e.event_end_date ?? "";
+    const isoStr = startIso
+      ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "";
+    const dateStr = e.event_date_label || isoStr || "Tanggal menyusul";
+    return {
+      date: dateStr,
+      category: "Event",
+      title: e.title,
+      excerpt: e.description ?? "",
+      image: e.image_url ?? "",
+      ts: startIso ? new Date(startIso).getTime() : Date.now(),
+    };
+  });
+
+  const manualEvents = (exploreCfg.events ?? []).map((ev: any) => ({
+    date: ev.date || ev.location || "",
+    category: ev.label || "Event",
+    title: ev.title,
+    excerpt: ev.desc ?? "",
+    image: ev.image || "",
+    ts: ev.date ? parseIdDate(ev.date) : Date.now(),
+  }));
+
+  const manualNews = (exploreCfg.news ?? []).map((nw: any) => ({
+    date: nw.date || "",
+    category: nw.label || "Berita",
+    title: nw.title,
+    excerpt: nw.desc ?? "",
+    image: nw.image || "",
+    ts: nw.date ? parseIdDate(nw.date) : Date.now(),
+  }));
+
+  const newsEvents = [...manualEvents, ...autoEvents, ...manualNews]
+    .filter((n) => n.title)
+    .sort((a, b) => b.ts - a.ts)
     .slice(0, 12);
+
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
   useEffect(() => {
