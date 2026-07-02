@@ -404,18 +404,35 @@ export function InvoiceDocument({
             <Text style={[styles.tableCell, styles.colPrice]}>HARGA (Rp)</Text>
             <Text style={[styles.tableCell, styles.colSub]}>SUBTOTAL (Rp)</Text>
           </View>
-          {/* Table Body */}
-          {groupedRooms.map((r, idx) => (
-            <View key={idx} style={styles.tableRow}>
-              <Text style={[styles.tableCell, styles.colNo]}>{idx + 1}</Text>
-              <Text style={[styles.tableCell, styles.colDesc]}>{r.name}</Text>
-              <Text style={[styles.tableCell, styles.colQty]}>{r.qty}</Text>
-              <Text style={[styles.tableCell, styles.colPrice]}>{formatIDR(r.price)}</Text>
-              <Text style={[styles.tableCell, styles.colSub]}>
-                {formatIDR(r.price * r.qty * nights)}
-              </Text>
-            </View>
-          ))}
+          {/* Table Body — kamar + baris extra bed per tipe */}
+          {(() => {
+            const rows: { desc: string; qty: number; price: number; subtotal: number }[] = [];
+            for (const r of groupedRooms) {
+              rows.push({
+                desc: r.name,
+                qty: r.qty,
+                price: r.price,
+                subtotal: r.price * r.qty * nights,
+              });
+              if (r.extraBed > 0 && r.extraBedRate > 0) {
+                rows.push({
+                  desc: `Extra bed (${r.name})`,
+                  qty: r.extraBed,
+                  price: r.extraBedRate,
+                  subtotal: r.extraBedRate * r.extraBed * nights,
+                });
+              }
+            }
+            return rows.map((row, idx) => (
+              <View key={idx} style={styles.tableRow}>
+                <Text style={[styles.tableCell, styles.colNo]}>{idx + 1}</Text>
+                <Text style={[styles.tableCell, styles.colDesc]}>{row.desc}</Text>
+                <Text style={[styles.tableCell, styles.colQty]}>{row.qty}</Text>
+                <Text style={[styles.tableCell, styles.colPrice]}>{formatIDR(row.price)}</Text>
+                <Text style={[styles.tableCell, styles.colSub]}>{formatIDR(row.subtotal)}</Text>
+              </View>
+            ));
+          })()}
           {rooms.length === 0 && (
             <View style={styles.tableRow}>
               <Text style={[styles.tableCell, { width: "100%", textAlign: "center", borderRightWidth: 0 }]}>
