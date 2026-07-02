@@ -104,5 +104,3 @@ export const Route = createFileRoute("/api/cron/wa-summary-refresh")({
   },
 });
 
-// Silence unused import lint in some builds
-export const _unusedRunDeferred = runDeferred;
