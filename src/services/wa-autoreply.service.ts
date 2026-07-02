@@ -2232,41 +2232,51 @@ export async function drainQueue(
       void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
     }, 7_000);
 
-    try {
-      if (abortSignal?.aborted) {
-        outcome = "fatal";
-      } else if (claim.attempt >= 1) {
-        // Guard retry basi: kalau entry ini dicoba ulang (mis. setelah
-        // zombie_timeout) TAPI sudah ada queue entry lebih baru untuk phone
-        // yang sama yang sudah 'sent', balasan kita akan terasa telat/tidak
-        // nyambung karena tamu sudah lanjut menanyakan hal lain. Skip.
-        try {
-          const { data: selfRow } = await (supabaseAdmin as any)
-            .from("wa_conversation_queue")
-            .select("created_at")
-            .eq("id", claim.entryId)
-            .maybeSingle();
-          const selfCreatedAt = (selfRow as { created_at?: string } | null)?.created_at ?? null;
-          if (selfCreatedAt) {
-            const { data: newer } = await (supabaseAdmin as any)
-              .from("wa_conversation_queue")
-              .select("id")
-              .eq("phone", claim.phone)
-              .eq("status", "sent")
-              .gt("created_at", selfCreatedAt)
-              .limit(1);
-            if (newer && newer.length > 0) {
-              console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
-              outcome = "skipped_config";
-            }
-          }
-        } catch (guardErr) {
-          console.warn(`[Drain] ${logPhone} stale-retry guard failed:`, guardErr);
-        }
-      }
+    // Deadline dinding-jam per klaim: kalau pipeline (orkestrasi + persist +
+    // Fonnte) melewati batas, kita paksa outcome fatal supaya cabang di bawah
+    // memanggil queueFail SEBELUM Cloudflare mematikan worker. Tanpa ini,
+    // worker mati diam-diam dan entry menjadi zombie (lock expired tanpa
+    // completion) yang harus di-cleanup oleh cron dan tidak dapat fallback
+    // segera.
+    const deadlinePromise = new Promise<AutoreplyOutcome>((resolve) => {
+      setTimeout(() => resolve("fatal"), HANDLE_ONE_DEADLINE_MS);
+    });
 
-      if (outcome === "fatal") {
-        outcome = await executeAutoreplyForPhone(
+    try {
+      const workPromise = (async (): Promise<AutoreplyOutcome> => {
+        if (abortSignal?.aborted) return "fatal";
+
+        if (claim.attempt >= 1) {
+          // Guard retry basi: kalau entry ini dicoba ulang (mis. setelah
+          // zombie_timeout) TAPI sudah ada queue entry lebih baru untuk phone
+          // yang sama yang sudah 'sent', balasan kita akan terasa telat/tidak
+          // nyambung karena tamu sudah lanjut menanyakan hal lain. Skip.
+          try {
+            const { data: selfRow } = await (supabaseAdmin as any)
+              .from("wa_conversation_queue")
+              .select("created_at")
+              .eq("id", claim.entryId)
+              .maybeSingle();
+            const selfCreatedAt = (selfRow as { created_at?: string } | null)?.created_at ?? null;
+            if (selfCreatedAt) {
+              const { data: newer } = await (supabaseAdmin as any)
+                .from("wa_conversation_queue")
+                .select("id")
+                .eq("phone", claim.phone)
+                .eq("status", "sent")
+                .gt("created_at", selfCreatedAt)
+                .limit(1);
+              if (newer && newer.length > 0) {
+                console.info(`[Drain] ${logPhone} skip stale retry (entry=${claim.entryId.slice(0, 8)}, attempt=${claim.attempt})`);
+                return "skipped_config";
+              }
+            }
+          } catch (guardErr) {
+            console.warn(`[Drain] ${logPhone} stale-retry guard failed:`, guardErr);
+          }
+        }
+
+        return executeAutoreplyForPhone(
           claim.phone,
           origin,
           () => queueHeartbeat(supabaseAdmin, claim.entryId, workerId).then(() => {}),
@@ -2274,8 +2284,14 @@ export async function drainQueue(
           () => completeQueue("sent"),
           claim.attempt,
         );
-      }
+      })();
 
+      outcome = await Promise.race([workPromise, deadlinePromise]);
+      if (outcome === "fatal" && !queueCompleted) {
+        // Deadline mungkin memicu; catat supaya jelas di log kalau ini bukan
+        // fatal biasa melainkan timeout dinding-jam yang mencegah zombie.
+        console.warn(`[Drain] ${logPhone} wall-clock deadline hit — forcing queueFail`);
+      }
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
       outcome = "fatal";
