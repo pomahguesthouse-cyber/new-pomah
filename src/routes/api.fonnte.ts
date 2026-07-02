@@ -332,6 +332,15 @@ export const Route = createFileRoute("/api/fonnte")({
 
         const runBackground = await getWaitUntilRunner();
 
+        // Deteksi "bukti transfer via teks" (mis. "sudah transfer kak",
+        // "sy udh bayar") supaya routing-debug bisa mengukur berapa banyak
+        // percakapan yang butuh pipeline finance tanpa attachment gambar.
+        const paymentProofText =
+          !attachmentUrl &&
+          /\b(sudah|udh|udah|dh|sdh)\s*(transfer|tf|bayar|byr|kirim)\b|\b(bukti|bukti transfer|proof)\b|\bslip\s*(transfer|tf)\b/i.test(
+            displayMessage,
+          );
+
         runBackground(saveMessageMetadata(supabaseAdmin, {
           messageId,
           metadata: {
@@ -350,6 +359,9 @@ export const Route = createFileRoute("/api/fonnte")({
                   type: messageType ?? null,
                 }
               : null,
+            ...(paymentProofText
+              ? { intent_hint: "payment_proof_text", needs_finance_followup: true }
+              : {}),
           },
         }).catch((e) => console.warn("[Webhook] intent badge error:", e)));
 
