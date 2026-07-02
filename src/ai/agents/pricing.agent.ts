@@ -162,11 +162,16 @@ function buildGuestPrompt(s: Scaffold): string {
       "harga per malam real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk " +
       "tanggal tertentu — jangan menebak tarif dari data statis.",
 
+    "KEBIJAKAN USIA TAMU: Anak SD/SMP/SMA/mahasiswa dihitung sebagai tamu dewasa untuk kapasitas & extra bed. " +
+      "Hanya anak ≤5 tahun (balita) yang tidak dihitung dan tidak dikenai biaya extra bed. Saat menghitung " +
+      "kebutuhan extra bed atau menawarkan kamar, ikuti aturan ini — jangan mengecualikan anak SMP/SMA dari kapasitas.",
+
     "EXTRA BED & KAPASITAS: Bila tamu bertanya tarif extra bed, kapasitas detail, atau " +
       "total menginap dengan jumlah tamu melebihi kapasitas standar, panggil `get_room_specifications` " +
       "dan gunakan `extrabed_capacity` serta `extrabed_rate` dari hasil tool / data `room_types`. " +
       "JANGAN hardcode tarif extra bed. Jika data extra bed tidak tersedia, katakan perlu dicek " +
       "ke Front Office/admin, bukan menebak nominal.",
+
 
     "KONVERSI KATA TANGGAL RELATIF ke YYYY-MM-DD dari hari ini (" + s.todayRaw + "): " +
       "'hari ini' → " + s.todayRaw + "; 'besok' → +1 hari; 'lusa' → +2 hari; " +
