@@ -121,7 +121,7 @@ async function purgePastExploreEvents(): Promise<number> {
   today.setUTCHours(0, 0, 0, 0);
   const expiredIds = (data as Array<{ id: string; date_text: string | null }>)
     .map((row) => ({ id: row.id, end: parseIndoEndDate(row.date_text) }))
-    .filter((r) => r.end !== null && (r.end as Date) < today)
+    .filter((r): r is { id: string; end: Date } => r.end !== null && r.end < today)
     .map((r) => r.id);
   if (expiredIds.length === 0) return 0;
   const { error: delErr } = await (supabaseAdmin as any)
