@@ -837,6 +837,7 @@ const roomTypeFieldsSchema = z.object({
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Slug hanya boleh huruf kecil, angka, dan tanda hubung"),
   description: z.string().max(2000).nullable().optional(),
   bed_type: z.string().max(60).nullable().optional(),
+  bed_size: z.string().max(60).nullable().optional(),
   floor_info: z.string().max(120).nullable().optional(),
   size_sqm: z.number().int().min(0).max(10000).nullable().optional(),
   capacity: z.number().int().min(1).max(20),
