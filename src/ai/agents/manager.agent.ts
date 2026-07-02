@@ -62,6 +62,7 @@ export const MANAGER_TOOLS: ToolDefinition[] = [
       "update_booking_status",
       "delete_booking",
       "change_booking_room",
+      "set_extra_bed",
       "reply_to_guest",
       // Quick-answer tools — avoid round-tripping through ask_agent for the
       // most common managerial questions ("berapa harga kamar hari ini",
