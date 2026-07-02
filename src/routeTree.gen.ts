@@ -35,6 +35,7 @@ import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSeoRouteImport } from './routes/admin/seo'
+import { Route as AdminRoutingDebugRouteImport } from './routes/admin/routing-debug'
 import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
 import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing-calendar'
 import { Route as AdminPagesRouteImport } from './routes/admin/pages'
@@ -192,6 +193,11 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
 const AdminSeoRoute = AdminSeoRouteImport.update({
   id: '/seo',
   path: '/seo',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoutingDebugRoute = AdminRoutingDebugRouteImport.update({
+  id: '/routing-debug',
+  path: '/routing-debug',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoomsRoute = AdminRoomsRouteImport.update({
@@ -363,6 +369,7 @@ export interface FileRoutesByFullPath {
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
@@ -418,6 +425,7 @@ export interface FileRoutesByTo {
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
@@ -475,6 +483,7 @@ export interface FileRoutesById {
   '/admin/pages': typeof AdminPagesRoute
   '/admin/pricing-calendar': typeof AdminPricingCalendarRoute
   '/admin/rooms': typeof AdminRoomsRoute
+  '/admin/routing-debug': typeof AdminRoutingDebugRoute
   '/admin/seo': typeof AdminSeoRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
@@ -533,6 +542,7 @@ export interface FileRouteTypes {
     | '/admin/pages'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
+    | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/telegram'
@@ -588,6 +598,7 @@ export interface FileRouteTypes {
     | '/admin/pages'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
+    | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/telegram'
@@ -644,6 +655,7 @@ export interface FileRouteTypes {
     | '/admin/pages'
     | '/admin/pricing-calendar'
     | '/admin/rooms'
+    | '/admin/routing-debug'
     | '/admin/seo'
     | '/admin/settings'
     | '/admin/telegram'
@@ -891,6 +903,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSeoRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/routing-debug': {
+      id: '/admin/routing-debug'
+      path: '/routing-debug'
+      fullPath: '/admin/routing-debug'
+      preLoaderRoute: typeof AdminRoutingDebugRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/rooms': {
       id: '/admin/rooms'
       path: '/rooms'
@@ -1107,6 +1126,7 @@ interface AdminRouteChildren {
   AdminPagesRoute: typeof AdminPagesRoute
   AdminPricingCalendarRoute: typeof AdminPricingCalendarRoute
   AdminRoomsRoute: typeof AdminRoomsRoute
+  AdminRoutingDebugRoute: typeof AdminRoutingDebugRoute
   AdminSeoRoute: typeof AdminSeoRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTelegramRoute: typeof AdminTelegramRoute
@@ -1133,6 +1153,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPagesRoute: AdminPagesRoute,
   AdminPricingCalendarRoute: AdminPricingCalendarRoute,
   AdminRoomsRoute: AdminRoomsRoute,
+  AdminRoutingDebugRoute: AdminRoutingDebugRoute,
   AdminSeoRoute: AdminSeoRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTelegramRoute: AdminTelegramRoute,
