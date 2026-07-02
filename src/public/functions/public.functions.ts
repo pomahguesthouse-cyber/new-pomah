@@ -814,6 +814,8 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         room_type_id: row.room_type_id ? String(row.room_type_id) : null,
         room_type: ((row.room_types as Record<string, unknown> | null)?.name as string | undefined) ?? "Kamar",
         nightly_rate: Number(row.nightly_rate ?? 0),
+        extra_bed_count: Number(row.extra_bed_count ?? 0),
+        extra_bed_rate: Number(row.extra_bed_rate ?? 0),
       }));
 
       const invoice: BookingInvoice = {
