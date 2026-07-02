@@ -597,17 +597,18 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     const roomIds = data.rooms.map((r) => r.room_id);
     const { data: roomRows, error: rErr } = await context.supabase
       .from("rooms")
-      .select("id, room_type_id, room_types(extrabed_capacity, name)")
+      .select("id, room_type_id, room_types(capacity, extrabed_capacity, name)")
       .in("id", roomIds);
     if (rErr) throw rErr;
     const roomTypeById = new Map<string, string>();
-    const typeMetaById = new Map<string, { capPerRoom: number; name: string }>();
+    const typeMetaById = new Map<string, RoomCapMeta>();
     for (const r of (roomRows ?? []) as any[]) {
       roomTypeById.set(r.id, r.room_type_id);
       const rt = Array.isArray(r.room_types) ? r.room_types[0] : r.room_types;
       if (rt && r.room_type_id && !typeMetaById.has(r.room_type_id)) {
         typeMetaById.set(r.room_type_id, {
-          capPerRoom: Number(rt.extrabed_capacity ?? 0),
+          capacity: Number(rt.capacity ?? 0),
+          extrabedCap: Number(rt.extrabed_capacity ?? 0),
           name: String(rt.name ?? "Kamar"),
         });
       }
@@ -626,17 +627,28 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     for (const [tid, agg] of perTypeReq) {
       const meta = typeMetaById.get(tid);
       if (!meta) continue;
-      const maxAllowed = meta.capPerRoom * agg.rooms;
-      if (agg.requested > 0 && meta.capPerRoom === 0) {
+      const maxAllowed = meta.extrabedCap * agg.rooms;
+      if (agg.requested > 0 && meta.extrabedCap === 0) {
         throw new Error(`Tipe ${meta.name} tidak mendukung extra bed.`);
       }
       if (agg.requested > maxAllowed) {
         throw new Error(
           `Extra bed ${meta.name} melebihi kapasitas: diminta ${agg.requested}, ` +
-            `maksimum ${maxAllowed} (${meta.capPerRoom}/kamar × ${agg.rooms} kamar).`,
+            `maksimum ${maxAllowed} (${meta.extrabedCap}/kamar × ${agg.rooms} kamar).`,
         );
       }
     }
+
+    // ── Guest capacity guard (usia policy: balita ≤5 thn tidak dihitung) ─
+    assertGuestCapacity(
+      data.adults,
+      data.children,
+      data.children_under_5 ?? 0,
+      data.rooms,
+      roomTypeById,
+      typeMetaById,
+    );
+
 
     // Snapshot extra bed totals BEFORE mutation to detect changes for WA notify.
     const { data: beforeBrs } = await context.supabase
