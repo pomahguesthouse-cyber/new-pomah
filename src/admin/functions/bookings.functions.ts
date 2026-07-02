@@ -622,6 +622,20 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       await notifyBookingUpdated(context.supabase, data.id, beforeSnap, afterSnap, "Admin");
     });
 
+    // Kirim ringkasan WhatsApp ke tamu bila konfigurasi extra bed berubah.
+    if (beforeExtraBedTotal !== afterExtraBedTotal) {
+      runDeferred("updateBookingFull.extraBedSummary", async () => {
+        const { sendExtraBedUpdateSummary } = await import(
+          "@/services/invoice-notification.service"
+        );
+        await sendExtraBedUpdateSummary({
+          supabase: context.supabase,
+          bookingId: data.id,
+          changedBy: "Admin",
+        });
+      });
+    }
+
     return { ok: true, total_amount, nights };
   });
 
