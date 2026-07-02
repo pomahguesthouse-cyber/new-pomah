@@ -655,6 +655,60 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                           })}
                         </div>
                       )}
+
+                      {/* Extra bed picker per room type */}
+                      {group.extraBedCapacityPerRoom > 0 &&
+                        (roomCountByType[group.typeId] ?? 0) > 0 && (
+                          <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
+                            <div>
+                              <p className="text-[11px] font-medium">Extra Bed</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {formatIDR(group.extraBedRate)}/malam · maks{" "}
+                                {group.extraBedCapacityPerRoom *
+                                  (roomCountByType[group.typeId] ?? 0)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={(extraBedByType[group.typeId] ?? 0) <= 0}
+                                onClick={() =>
+                                  setExtraBed(
+                                    group.typeId,
+                                    (extraBedByType[group.typeId] ?? 0) - 1,
+                                  )
+                                }
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                              <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
+                                {extraBedByType[group.typeId] ?? 0}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={
+                                  (extraBedByType[group.typeId] ?? 0) >=
+                                  group.extraBedCapacityPerRoom *
+                                    (roomCountByType[group.typeId] ?? 0)
+                                }
+                                onClick={() =>
+                                  setExtraBed(
+                                    group.typeId,
+                                    (extraBedByType[group.typeId] ?? 0) + 1,
+                                  )
+                                }
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                     </div>
                   );
                 })}
