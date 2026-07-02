@@ -807,24 +807,33 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
                     <ul className="space-y-1.5">
                       {effectiveRooms.map((sr) => {
                         const room = allRooms.find((r) => r.id === sr.room_id);
+                        const nightsMin = Math.max(nights, 1);
+                        const roomSub = sr.nightly_rate * nightsMin;
+                        const ebSub = sr.extra_bed_rate * sr.extra_bed_count * nightsMin;
                         return (
-                          <li
-                            key={sr.room_id}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span className="font-mono">
-                              {room?.number}{" "}
-                              <span className="text-muted-foreground">
-                                · {room?.room_types?.name}
+                          <li key={sr.room_id} className="space-y-0.5 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono">
+                                {room?.number}{" "}
+                                <span className="text-muted-foreground">
+                                  · {room?.room_types?.name}
+                                </span>
                               </span>
-                            </span>
-                            <span className="font-mono tabular-nums">
-                              {formatIDR(sr.nightly_rate * Math.max(nights, 1))}
-                            </span>
+                              <span className="font-mono tabular-nums">
+                                {formatIDR(roomSub)}
+                              </span>
+                            </div>
+                            {sr.extra_bed_count > 0 && (
+                              <div className="flex items-center justify-between pl-3 text-[10px] text-muted-foreground">
+                                <span>+ {sr.extra_bed_count} extra bed × {nightsMin} malam</span>
+                                <span className="font-mono tabular-nums">{formatIDR(ebSub)}</span>
+                              </div>
+                            )}
                           </li>
                         );
                       })}
                     </ul>
+
                   )}
                 </div>
               </div>
