@@ -29,7 +29,7 @@ const exportBookingsSchema = z.object({
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 /** Rooms of a booking, via the booking_rooms child table. */
 const BOOKING_ROOMS_SELECT =
-  "booking_rooms(id, room_id, nightly_rate, room_types(id, name), rooms(id, number))";
+  "booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 const FULL_BOOKING_SELECT = `id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), ${BOOKING_ROOMS_SELECT}`;
 const BASE_BOOKING_SELECT = `id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), ${BOOKING_ROOMS_SELECT}`;
 
