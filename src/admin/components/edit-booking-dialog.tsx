@@ -437,7 +437,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     !updateMut.isPending &&
     guest.full_name.trim().length > 0 &&
     nights >= 1 &&
-    effectiveRooms.length > 0;
+    effectiveRooms.length > 0 &&
+    !hasExtraBedError;
 
   const paymentChip = PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.chip;
 
