@@ -99,6 +99,8 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
       { to: "/admin/training", label: "Chatbot Training", icon: Brain },
       { to: "/admin/routing-debug", label: "Routing Debug", icon: RouteIcon },
+      { to: "/admin/health", label: "Health Chatbot", icon: Activity },
+
     ],
   },
   {
