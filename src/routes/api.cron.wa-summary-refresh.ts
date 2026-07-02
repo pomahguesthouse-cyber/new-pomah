@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { getWaitUntil, runDeferred } from "@/lib/cf-context";
+import { getWaitUntil } from "@/lib/cf-context";
 import { resolvePropertyAiConfig } from "@/services/ai-client.service";
 
 /**
