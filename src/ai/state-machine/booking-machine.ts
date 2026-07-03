@@ -6,6 +6,7 @@ import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
+import { buildPaymentPolicyAnswer } from "./booking-inline-answers";
 
 export type BookingState =
   | "IDLE"
@@ -1510,13 +1511,18 @@ export async function processBookingState(
       context.email_clarification_asked = true;
     }
 
-    const hasInterruptionSignal =
-      extracted.is_payment_question ||
-      extracted.is_bank_account_request ||
+    // Pertanyaan pembayaran/DP dijawab INLINE secara deterministik — kebijakan
+    // DP itu statis, tidak boleh ditunda sampai data booking lengkap (bug
+    // produksi 3 Juli 2026: bot menjawab "akan kami informasikan setelah nama
+    // lengkap ada"). Sinyal lain tetap diserahkan ke LLM.
+    const paymentInterrupt =
+      !!extracted.is_payment_question || !!extracted.is_bank_account_request;
+    const deferToLlmSignal =
       extracted.is_invoice_request ||
       extracted.is_checkin_policy ||
       extracted.is_room_detail_question ||
       extracted.is_early_arrival;
+    const hasInterruptionSignal = paymentInterrupt || deferToLlmSignal;
 
     const autoSkipOptionalEmail =
       !context.guestEmail &&
@@ -1541,12 +1547,29 @@ export async function processBookingState(
     }
 
     // Mid-booking interruption signals check
-    if (hasInterruptionSignal) {
+    if (deferToLlmSignal) {
       console.info(
         `[BookingState] Interrupt detected via signals ("${message.slice(0, 50)}") — preserving state, deferring to LLM`,
       );
       await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
       return { handled: false };
+    }
+
+    // Jawaban pembayaran/DP disisipkan di DEPAN balasan lanjutan alur booking,
+    // sehingga satu pesan sekaligus: jawab pertanyaan + minta data yang kurang.
+    let inlineAnswerPrefix = "";
+    if (paymentInterrupt) {
+      const prop = ctx.property as Record<string, unknown> | undefined;
+      inlineAnswerPrefix =
+        buildPaymentPolicyAnswer({
+          totalPrice: context.totalPrice,
+          includeBank: !!extracted.is_bank_account_request,
+          bankName: typeof prop?.payment_bank_name === "string" ? prop.payment_bank_name : undefined,
+          accountNumber:
+            typeof prop?.payment_account_number === "string" ? prop.payment_account_number : undefined,
+          accountHolder:
+            typeof prop?.payment_account_holder === "string" ? prop.payment_account_holder : undefined,
+        }) + "\n\n";
     }
 
     // Check mandatory fields: Dates, Room type, guest name
@@ -1572,7 +1595,7 @@ export async function processBookingState(
           await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
           return {
             handled: true,
-            reply: `Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (opsional, balas "lewati" atau "-" jika tidak ingin mengisi):`,
+            reply: `${inlineAnswerPrefix}Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (opsional, balas "lewati" atau "-" jika tidak ingin mengisi):`,
           };
         }
       }
@@ -1591,7 +1614,11 @@ export async function processBookingState(
 
       const resolvedRates = await applyResolvedRatesToContext(ctx, context);
       await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      return buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+      const summaryResult = buildBookingSummaryFromResolved(ctx, context, resolvedRates);
+      if (inlineAnswerPrefix && summaryResult.reply) {
+        summaryResult.reply = inlineAnswerPrefix + summaryResult.reply;
+      }
+      return summaryResult;
     }
 
     // Still missing details: update state to COLLECTING_DATA
@@ -1604,7 +1631,7 @@ export async function processBookingState(
     // guestPhone otomatis dari nomor WA — tidak perlu diminta ke tamu
 
     const summary = formatPartialBookingSummary(context);
-    let reply = `Data booking sementara:\n${summary}\n\n`;
+    let reply = `${inlineAnswerPrefix}Data booking sementara:\n${summary}\n\n`;
     reply += `Mohon lengkapi data berikut untuk melanjutkan reservasi:\n`;
     missing.forEach((item, idx) => {
       reply += `${idx + 1}. ${item}\n`;

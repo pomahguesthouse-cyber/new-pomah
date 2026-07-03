@@ -28,6 +28,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
+import { buildFacilityReply, findMentionedRooms, type FacilityRoom } from "@/ai/state-machine/booking-inline-answers";
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -307,20 +308,25 @@ function buildFastFaqReply(
     };
   }
 
-  if (/\b(fasilitas|amenities|ada apa saja)\b/i.test(text)) {
-    const amenities = Array.from(
-      new Set(
-        rooms
-          .flatMap((r) => (Array.isArray(r.amenities) ? r.amenities : []))
-          .map((v) => String(v).trim())
-          .filter(Boolean),
-      ),
-    ).slice(0, 8);
-    const suffix = amenities.length ? ` Beberapa fasilitas: ${amenities.join(", ")}.` : "";
-    return {
-      intent: "faq_facility",
-      reply: `Fasilitas tergantung tipe kamar yang dipilih Kak.${suffix}`,
-    };
+  // Fasilitas: jawab PER TIPE KAMAR bila tamu menyebut nama kamar — termasuk
+  // pertanyaan perbandingan ("perbedaan deluxe sama grand deluxe di fasilitas
+  // apa?"). Dulu selalu dijawab daftar gabungan generik dengan duplikat
+  // ("WI-FI, ... WIfi") dan tidak menjawab perbedaannya.
+  const facilityKeyword = /\b(fasilitas|amenities|ada apa saja)\b/i.test(text);
+  const diffKeyword = /\b(perbedaan|bedanya|beda)\b/i.test(text);
+  const priceOnlyQuestion = /\b(harga|tarif|price|rate)\b/i.test(text) && !facilityKeyword;
+  if (facilityKeyword || (diffKeyword && !priceOnlyQuestion)) {
+    const mentionedRooms = findMentionedRooms(text, rooms as FacilityRoom[]);
+    if (facilityKeyword || mentionedRooms.length >= 2) {
+      const reply = buildFacilityReply(text, rooms as FacilityRoom[]);
+      if (reply) return { intent: "faq_facility", reply };
+      if (facilityKeyword) {
+        return {
+          intent: "faq_facility",
+          reply: "Fasilitas tergantung tipe kamar yang dipilih Kak. Sebutkan tipe kamarnya ya, nanti saya rincikan.",
+        };
+      }
+    }
   }
 
   return null;
