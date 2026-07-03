@@ -28,21 +28,25 @@ function buildDeterministicPropertyFaqReply(params: {
   const p = params.property ?? {};
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
-  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|ya|dong|banget|deh|nih))*";
-  if (
-    new RegExp(
-      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
-      "i",
-    ).test(raw)
-  ) {
+  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
+  // Interjeksi awal dibuang sebelum matching — sinkron dengan
+  // buildDeterministicPropertyFaqReply di wa-autoreply.service.ts.
+  const core = raw.replace(
+    /^(?:(?:y+a+h*|wah|waduh|oalah|aduh|hmm+|oh+|nah|deh|dong|ya\s?udah?|yaudah|yasudah|baik(?:lah)?|ok|oke?y?|okay|kak|kakak|ka|min|admin|pak|bu)[\s,!.…~-]+)+/i,
+    "",
+  );
+  const GREET_RE = new RegExp(
+    `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
+    "i",
+  );
+  if (GREET_RE.test(core) || GREET_RE.test(raw)) {
     return { reply: `Halo Kak, terima kasih sudah menghubungi ${p.name ?? "Pomah Guesthouse"}`, intent: "greeting" };
   }
-  if (
-    new RegExp(
-      `^(makasih|terima\\s*kasih|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[\\s!.\\-,]*$`,
-      "i",
-    ).test(raw)
-  ) {
+  const THANKS_RE = new RegExp(
+    `^(makasih|terima\\s*kasih|t(e)?rima?\\s*kasih|trims?|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[^a-z0-9]*$`,
+    "i",
+  );
+  if (THANKS_RE.test(core) || THANKS_RE.test(raw)) {
     return { reply: `Sama-sama Kak`, intent: "thanks" };
   }
 
@@ -75,6 +79,14 @@ const CASES: Array<{ label: string; input: string; expectIntent: string | null }
   { label: "greeting selamat pagi", input: "selamat pagi", expectIntent: "greeting" },
   { label: "thanks", input: "makasih ya kak", expectIntent: "thanks" },
   { label: "thanks siap", input: "siap", expectIntent: "thanks" },
+  // Kasus produksi 3 Juli 2026: interjeksi awal + filler — dulu jatuh ke AI
+  // dan memicu quick-ack "saya cekkan dulu ya" yang tidak nyambung.
+  { label: "thanks dgn interjeksi", input: "Yahh, oke kak makasih ya", expectIntent: "thanks" },
+  { label: "thanks banyak + emoji", input: "makasih banyak yaa 🙏", expectIntent: "thanks" },
+  { label: "thanks oke deh", input: "oke deh makasih min", expectIntent: "thanks" },
+  { label: "greeting dgn interjeksi", input: "oh iya, halo kak", expectIntent: null },
+  // Negatif: interjeksi + isi substantif TIDAK boleh dianggap thanks
+  { label: "oke lanjut booking (bukan thanks)", input: "oke, jadi booking deluxe ya", expectIntent: null },
   { label: "alamat", input: "alamatnya dimana?", expectIntent: "location_question" },
   { label: "lokasi maps", input: "share maps dong", expectIntent: "location_question" },
   { label: "kontak wa", input: "nomor wa berapa?", expectIntent: "contact_request" },

@@ -800,11 +800,24 @@ function buildDeterministicPropertyFaqReply(params: {
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
   // Trailing filler yang lazim: "kak", "kakak", "min", "admin", "pak", "bu",
-  // "ka", "ya", "dong", "banget" — bisa muncul berulang dengan spasi.
-  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|ya|dong|banget|deh|nih))*";
+  // "ka", "ya/yaa", "dong", "banget", "banyak" — bisa berulang dengan spasi.
+  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
+
+  // Interjeksi/pengisi di AWAL kalimat yang bukan isi pesan — "Yahh, oke kak
+  // makasih ya" harus tetap terdeteksi sebagai thanks. Tanpa ini pesan penutup
+  // jatuh ke jalur AI penuh dan memicu quick-ack "saya cekkan dulu ya" yang
+  // tidak nyambung (insiden produksi 3 Juli 2026).
+  const core = raw.replace(
+    /^(?:(?:y+a+h*|wah|waduh|oalah|aduh|hmm+|oh+|nah|deh|dong|ya\s?udah?|yaudah|yasudah|baik(?:lah)?|ok|oke?y?|okay|kak|kakak|ka|min|admin|pak|bu)[\s,!.…~-]+)+/i,
+    "",
+  );
 
   // — Greeting murni (tanpa pertanyaan lain) —
   if (
+    new RegExp(
+      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
+      "i",
+    ).test(core) ||
     new RegExp(
       `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
       "i",
@@ -818,12 +831,13 @@ function buildDeterministicPropertyFaqReply(params: {
   }
 
   // — Terima kasih / penutup —
-  if (
-    new RegExp(
-      `^(makasih|terima\\s*kasih|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[\\s!.\\-,]*$`,
-      "i",
-    ).test(raw)
-  ) {
+  // Dites terhadap `core` (interjeksi awal sudah dibuang) DAN `raw`, dengan
+  // ekor longgar (emoji 🙏 dsb. diperbolehkan lewat [^a-z0-9]*).
+  const THANKS_RE = new RegExp(
+    `^(makasih|terima\\s*kasih|t(e)?rima?\\s*kasih|trims?|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[^a-z0-9]*$`,
+    "i",
+  );
+  if (THANKS_RE.test(core) || THANKS_RE.test(raw)) {
     return {
       reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
       intent: "thanks",
@@ -1801,8 +1815,18 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // Quick-ack "saya cekkan dulu ya" tidak pantas untuk pesan penutup/basa-basi
+  // ("Yahh, oke kak makasih ya") — tidak ada yang perlu dicek. Fast-path thanks
+  // biasanya sudah menangkap ini; guard ini melindungi varian yang lolos.
+  const CLOSING_CHITCHAT_RE =
+    /\b(makasih|terima\s*kasih|trims?|trimakasih|thanks?|thank\s*you|thx|tq|sama\s*-?\s*sama|mantap|oke?\s*deh|ya\s*udah?|yaudah|sampai\s*(jumpa|ketemu)|see\s*you|bye)\b/i;
+  const isClosingChitchat =
+    (lastMessage ?? "").trim().length <= 60 &&
+    !(lastMessage ?? "").includes("?") &&
+    CLOSING_CHITCHAT_RE.test(lastMessage ?? "");
+
   let quickAckTimer: ReturnType<typeof setTimeout> | undefined;
-  if (QUICK_ACK_ENABLED && !reply && !isManager && queueEntryId && c.fonnte_token) {
+  if (QUICK_ACK_ENABLED && !reply && !isManager && queueEntryId && c.fonnte_token && !isClosingChitchat) {
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
