@@ -294,6 +294,11 @@ export const updateAiLabConfig = createServerFn({ method: "POST" })
       .update({ ai_lab_config: mergeAiLabConfig(data.config) } as never)
       .eq("id", data.id);
     if (error) throw error;
+    // Invalidasi cache config Training RAG di orchestrator agar perubahan
+    // (enable/disable, matchCount, minSimilarity) langsung berlaku, bukan
+    // menunggu TTL 5 menit.
+    const { clearTrainingRagConfigCache } = await import("@/ai/multi-agent-orchestrator");
+    clearTrainingRagConfigCache();
     return { ok: true };
   });
 

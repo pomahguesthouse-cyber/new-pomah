@@ -506,21 +506,37 @@ export async function classifyIntent(
     }
   }
 
-  // Pick highest score
-  let best:      IntentCategory = "general";
-  let bestScore  = 0;
-  let totalScore = 0;
+  // Pick highest score + runner-up
+  let best:        IntentCategory = "general";
+  let bestScore    = 0;
+  let secondScore  = 0;
 
   for (const [cat, score] of scores) {
-    totalScore += score;
     if (score > bestScore) {
-      bestScore = score;
-      best      = cat;
+      secondScore = bestScore;
+      bestScore   = score;
+      best        = cat;
+    } else if (score > secondScore) {
+      secondScore = score;
     }
   }
 
-  // Normalise confidence: ratio of best score to total (capped at 0.95)
-  const confidence = Math.min(0.95, bestScore / Math.max(totalScore, 1));
+  // Confidence = dominasi kategori terbaik atas RUNNER-UP, bukan atas total
+  // semua kategori. Formula lama (bestScore/totalScore) menghukum pesan yang
+  // menyentuh dua topik — "berapa harga kamar, masih ada?" match pricing(6) +
+  // availability(6) → 6/12 = 0.5 → selalu memicu LLM fallback 5s, padahal
+  // aturan sudah sangat yakin dan kedua rute sama-sama benar.
+  let confidence = Math.min(0.95, bestScore / Math.max(bestScore + secondScore, 1));
+
+  // Bukti absolut kuat: kategori terbaik match dengan bobot penuh (≥6) dan
+  // tetap unggul/imbang atas runner-up → jangan anggap ambigu hanya karena
+  // pesan menyentuh topik kedua. Angkat ke 0.75 supaya tidak memicu LLM
+  // fallback dan eskalasi komplain (threshold 0.7) tetap bekerja saat pesan
+  // komplain juga menyebut kata pembayaran/refund.
+  if (bestScore >= 6 && bestScore >= secondScore) {
+    confidence = Math.max(confidence, 0.75);
+  }
+  confidence = Math.min(0.95, confidence);
 
   const ruleResult = {
     category:     scores.size === 0 ? ("general" as IntentCategory) : best,

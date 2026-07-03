@@ -2,9 +2,10 @@
  * Agent router.
  *
  * Maps a ClassifiedIntent to a specific AgentKey, applying escalation logic:
- *   - "complaint" always routes to manager
- *   - confidence < ESCALATION_THRESHOLD routes to manager
- *   - overlapping intents (booking + pricing) favour the more specific agent
+ *   - "complaint" routes to front-office (flagged escalated; human staff
+ *     dinotifikasi terpisah via guest_complaints)
+ *   - confidence < ESCALATION_THRESHOLD falls back to front-office
+ *   - overlapping intents (booking + pricing) favour the more specific agent.
  */
 
 import type { IntentCategory, AgentKey } from "@/ai/agents/types";

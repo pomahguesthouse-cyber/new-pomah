@@ -36,7 +36,34 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 
-const DEFAULT_MAX_TURNS = 6;
+// Dulu 6 — tidak realistis: anggaran luar (AI_TIMEOUT_MS di
+// wa-autoreply.service.ts) hanya 14s, jadi maksimal ~2 ronde LLM yang benar-
+// benar muat. 3 memberi ruang untuk 1 ronde tool-call + 1 balasan teks + 1
+// cadangan, tanpa membiarkan loop tool memakan seluruh anggaran.
+const DEFAULT_MAX_TURNS = 3;
+
+// ─── Cache config Training RAG ────────────────────────────────────────────────
+// readTrainingRagConfig men-query tabel `properties` — sebelumnya dilakukan
+// SETIAP pesan masuk, menambah 1 round-trip DB serial di jalur panas sebelum
+// agent jalan. Config ini nyaris tidak pernah berubah → cache 5 menit
+// (per-isolate, sama seperti cache ai_intent_rules di intent-classifier).
+type TrainingRagCfg = { enabled: boolean; matchCount: number; minSimilarity: number };
+let cachedRagCfg: { cfg: TrainingRagCfg; expiresAt: number } | null = null;
+const RAG_CFG_TTL_MS = 5 * 60 * 1000;
+
+async function getTrainingRagConfigCached(supabaseAdmin: unknown): Promise<TrainingRagCfg> {
+  const now = Date.now();
+  if (cachedRagCfg && cachedRagCfg.expiresAt > now) return cachedRagCfg.cfg;
+  const { readTrainingRagConfig } = await import("@/admin/modules/ai-lab/ai-lab.functions");
+  const cfg = (await readTrainingRagConfig(supabaseAdmin as any)) as TrainingRagCfg;
+  cachedRagCfg = { cfg, expiresAt: now + RAG_CFG_TTL_MS };
+  return cfg;
+}
+
+/** Kosongkan cache config RAG — dipanggil editor admin setelah menyimpan. */
+export function clearTrainingRagConfigCache(): void {
+  cachedRagCfg = null;
+}
 
 function formatToolDraftReply(toolName: string, output: string): string | null {
   try {
@@ -121,15 +148,18 @@ function selectRecoveryClassifierQuery(lastUserMsg: string, unansweredMessages?:
 /**
  * Hard timeout per panggilan LLM agar tidak pernah menggantung worker.
  *
- * PENTING: nilai ini harus cukup kecil agar beberapa ronde tool-call
- * (klasifikasi intent → panggil tool → balas) muat di dalam AI_TIMEOUT_MS
- * (controller luar di wa-autoreply.service.ts). Dengan 12s per panggilan +
- * 1 retry internal, satu ronde maksimal ~24.5s; dua ronde "happy path"
- * (tanpa retry) ~24s — keduanya muat di anggaran luar 40s. Sebelumnya 18s,
- * yang membuat retry internal mustahil selesai dan multi-turn hampir selalu
+ * PENTING: nilai ini harus memenuhi invariant terhadap anggaran luar
+ * AI_TIMEOUT_MS = 14s (wa-autoreply.service.ts):
+ *
+ *   LLM_CALL_TIMEOUT_MS × (LLM_MAX_RETRIES + 1) + backoff < AI_TIMEOUT_MS
+ *
+ * Dengan 6.5s per panggilan + 1 retry + 0.5s backoff → worst case satu ronde
+ * ~13.5s, masih muat di 14s. Happy path dua ronde (tool-call + balasan teks,
+ * tanpa retry) ~13s — juga muat. Nilai lama 12s membuat retry internal
+ * mustahil selesai (12+0.5+12 = 24.5s > 14s) dan multi-turn hampir selalu
  * dipotong oleh controller luar → balasan fallback "sistem sedang sibuk".
  */
-const LLM_CALL_TIMEOUT_MS = 12_000;
+const LLM_CALL_TIMEOUT_MS = 6_500;
 /** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
 const LLM_MAX_RETRIES = 1;
 
@@ -157,7 +187,10 @@ async function callLlmOnce(
       body: JSON.stringify({
         model: config.model,
         temperature: 0.6,
-        max_tokens: 2000,
+        // Balasan WhatsApp pendek; 800 token (~3000 karakter) cukup bahkan
+        // untuk daftar booking manager. Nilai lama 2000 memperpanjang tail
+        // latency saat model "kebablasan" menulis panjang.
+        max_tokens: 800,
         messages,
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: tools.length > 0 ? "auto" : undefined,
@@ -375,14 +408,28 @@ async function runAgent(
       
       // Parse JSON if present
       if (reply) {
+        const raw = reply;
         try {
-          const clean = reply.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
+          const clean = raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "").trim();
           const parsed = JSON.parse(clean);
           if (typeof parsed.reply === "string") {
             reply = parsed.reply;
           }
         } catch (e) {
-          console.warn(`[MultiAgent][${agent.key}] Failed to parse JSON reply, using raw output:`, reply);
+          // JSON.parse gagal (mis. JSON terpotong oleh max_tokens atau ada
+          // teks di sekitar objek). Jangan kirim raw JSON ke tamu — coba
+          // ekstrak nilai "reply" dengan regex dulu.
+          const m = raw.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+          if (m) {
+            reply = m[1]
+              .replace(/\\n/g, "\n")
+              .replace(/\\"/g, '"')
+              .replace(/\\\\/g, "\\")
+              .trim();
+            console.warn(`[MultiAgent][${agent.key}] JSON reply malformed — extracted via regex`);
+          } else {
+            console.warn(`[MultiAgent][${agent.key}] Failed to parse JSON reply, using raw output:`, reply);
+          }
         }
       }
 
@@ -909,8 +956,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   const alreadyProvided = (input.agentCtx.trainingExamples?.length ?? 0) > 0;
   if (!alreadyProvided && !input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
     try {
-      const { readTrainingRagConfig } = await import("@/admin/modules/ai-lab/ai-lab.functions");
-      const ragCfg = await readTrainingRagConfig(input.toolCtx.supabaseAdmin);
+      const ragCfg = await getTrainingRagConfigCached(input.toolCtx.supabaseAdmin);
       if (ragCfg.enabled) {
         trainingExamples = await retrieveTrainingExamples(input.toolCtx.supabaseAdmin, lastUserMsg, input.llmConfig, {
           matchCount: ragCfg.matchCount,
