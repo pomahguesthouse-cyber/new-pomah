@@ -100,5 +100,42 @@ console.log("Test 4: nama eksplisit di pesan menang atas summary");
   truthy("guestName = Budi Santoso (bukan dari summary)", finalContext.guestName === "Budi Santoso");
 }
 
+console.log("Test 5: koreksi data + konfirmasi \"Ya\" (regresi bug regex \\\\b)");
+{
+  // Turn 1: tamu minta ganti nama → bot menyimpan pendingOverride & minta konfirmasi.
+  const supabase = makeFakeSupabase({
+    state: "COLLECTING_DATA",
+    context: { ...BASE_CONTEXT, guestName: "Budi Santoso" },
+  });
+  const ask = await processBookingState(
+    makeCtx(supabase),
+    "6281234567890",
+    "atas nama Lutfi Jihan",
+    { state: "COLLECTING_DATA", context: { ...BASE_CONTEXT, guestName: "Budi Santoso" } },
+    {},
+  );
+  truthy("turn 1: bot minta konfirmasi ganti", /diganti|Balas "Ya"/i.test(ask.reply ?? ""));
+  truthy("turn 1: pendingOverride tersimpan", !!supabase.getState().context.pendingOverride);
+
+  // Turn 2: tamu balas "Ya" → override HARUS diterapkan.
+  // Sebelum fix, regex /\\b(ya|...)\\b/ tidak pernah cocok sehingga koreksi dibuang.
+  const confirm = await processBookingState(
+    makeCtx(supabase),
+    "6281234567890",
+    "Ya",
+    { state: supabase.getState().state, context: { ...supabase.getState().context } },
+    {},
+  );
+  truthy("turn 2: handled", confirm.handled);
+  truthy(
+    "turn 2: nama terganti ke Lutfi Jihan",
+    supabase.getState().context.guestName === "Lutfi Jihan",
+  );
+  truthy(
+    "turn 2: TIDAK ada balasan 'tetap gunakan data sebelumnya'",
+    !/tetap gunakan data/i.test(confirm.reply ?? ""),
+  );
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

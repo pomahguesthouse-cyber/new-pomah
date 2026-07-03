@@ -121,12 +121,18 @@ type ParsedGuestCount = {
  * belum menghasilkan jawaban dalam batas ini, alur mengirim fallback yang jelas
  * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
-const AI_TIMEOUT_MS = 14_000;
+// 18s (naik dari 14s, 3 Jul 2026): worst case realistis = classifier LLM
+// fallback ~5s + 2 ronde LLM @6.5s + tool/DB — 14s memotong percakapan
+// booking berat dan memicu fallback "sistem sibuk". 18s masih di bawah
+// HANDLE_ONE_DEADLINE_MS dan timeout klien penggerak (pg_net 30s,
+// cron-job.org 30s).
+const AI_TIMEOUT_MS = 18_000;
 // Deadline dinding-jam untuk satu iterasi handleOne (klaim → orkestrasi →
 // persist → Fonnte → queueComplete). Harus < batas wall-time worker Cloudflare
-// (≈30s). Jika terlampaui, kita paksa queueFail supaya entry tidak menjadi
-// zombie dan fallback bisa dikirim di siklus cron berikutnya.
-const HANDLE_ONE_DEADLINE_MS = 24_000;
+// (≈30s) dan < timeout klien penggerak (pg_net/cron-job.org 30s). Jika
+// terlampaui, kita paksa queueFail supaya entry tidak menjadi zombie dan
+// fallback bisa dikirim di siklus cron berikutnya.
+const HANDLE_ONE_DEADLINE_MS = 26_000;
 // Retry penuh menggandakan rakit prompt/retrieval/tool orchestration di runtime
 // Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan
 // mengulang orchestration berat dalam satu request worker.
@@ -1726,10 +1732,16 @@ export async function executeAutoreplyForPhone(
   // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
   if (!reply && !isManager && !bookingActive && lastMessage) {
     try {
+      // greetingUsed juga true bila bot SUDAH membalas di sesi berjalan —
+      // tanpa ini "Halo Kak 👋" muncul lagi di tengah percakapan (terlihat
+      // di produksi 3 Juli 2026).
+      const botAlreadyRepliedThisSession = currentSessionMessages.some(
+        (m: { direction: string }) => m.direction === "out",
+      );
       const propertyFaq = buildDeterministicPropertyFaqReply({
         message: lastMessage,
         property: p as any,
-        greetingUsed: messageOpensWithGreeting(lastMessage),
+        greetingUsed: messageOpensWithGreeting(lastMessage) || botAlreadyRepliedThisSession,
       });
       if (propertyFaq) {
         reply = propertyFaq.reply;
@@ -2086,7 +2098,12 @@ export async function executeAutoreplyForPhone(
 
       if (orchResult?.reply) {
         reply = orchResult.reply;
-        
+
+        // Heartbeat berbasis kemajuan: orkestrasi AI (bagian terlama pipeline)
+        // baru saja selesai — segarkan lock SEKARANG, jangan bergantung pada
+        // setInterval yang tick-nya bisa di-skip Cloudflare saat CPU sibuk.
+        if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
+
         console.info(`[Inbound Processing] Phone: ${phone.slice(-6)} | Mode: ${mode} | PrevState: ${bookingState?.state || "IDLE"} | Msg: "${lastMessage}" | Agent: ${orchResult.agentKey} | Intent: ${orchResult.intent} | Tools: ${(orchResult.toolsUsed ?? []).join(",")}`);
 
         // Resolve all retry attempts for this message execution
@@ -2354,6 +2371,10 @@ export async function executeAutoreplyForPhone(
       console.warn("[Autoreply] Atomic claim check failed (continuing):", e);
     }
   }
+
+  // Heartbeat berbasis kemajuan: sebelum langkah I/O terakhir (Fonnte),
+  // pastikan lock masih milik worker ini walau setInterval sempat di-skip.
+  if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
 
   metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(

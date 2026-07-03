@@ -149,15 +149,17 @@ function selectRecoveryClassifierQuery(lastUserMsg: string, unansweredMessages?:
  * Hard timeout per panggilan LLM agar tidak pernah menggantung worker.
  *
  * PENTING: nilai ini harus memenuhi invariant terhadap anggaran luar
- * AI_TIMEOUT_MS = 14s (wa-autoreply.service.ts):
+ * AI_TIMEOUT_MS = 18s (wa-autoreply.service.ts, dinaikkan dari 14s pada
+ * 3 Jul 2026 agar classifier LLM fallback ~5s ikut muat):
  *
  *   LLM_CALL_TIMEOUT_MS × (LLM_MAX_RETRIES + 1) + backoff < AI_TIMEOUT_MS
  *
  * Dengan 6.5s per panggilan + 1 retry + 0.5s backoff → worst case satu ronde
- * ~13.5s, masih muat di 14s. Happy path dua ronde (tool-call + balasan teks,
- * tanpa retry) ~13s — juga muat. Nilai lama 12s membuat retry internal
- * mustahil selesai (12+0.5+12 = 24.5s > 14s) dan multi-turn hampir selalu
- * dipotong oleh controller luar → balasan fallback "sistem sedang sibuk".
+ * ~13.5s + classifier fallback 5s ≈ 18.5s — pas di batas 18s. Happy path dua
+ * ronde (tool-call + balasan teks, tanpa retry) ~13s — muat longgar. Nilai
+ * lama 12s membuat retry internal mustahil selesai (12+0.5+12 = 24.5s >
+ * budget) dan multi-turn hampir selalu dipotong oleh controller luar →
+ * balasan fallback "sistem sedang sibuk".
  */
 const LLM_CALL_TIMEOUT_MS = 6_500;
 /** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */

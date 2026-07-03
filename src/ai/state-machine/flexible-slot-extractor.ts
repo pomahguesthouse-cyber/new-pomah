@@ -17,6 +17,7 @@ import {
   findMentionedRoomType,
   normalizeRoomName,
 } from "./booking-machine";
+import { todayWIB } from "@/lib/date";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -154,7 +155,7 @@ function parseIndonesianDate(
     year = Number(yearStr);
     if (year < 100) year += 2000;
   } else {
-    year = today ? Number(today.slice(0, 4)) : new Date().getFullYear();
+    year = Number((today ?? todayWIB()).slice(0, 4));
   }
 
   if (day < 1 || day > 31) return null;
@@ -188,14 +189,16 @@ function isoDate(year: number, monthIdx: number, day: number): string | null {
  */
 function resolveBareDay(day: number, today?: string): string | null {
   if (day < 1 || day > 31) return null;
-  const base = today ? new Date(`${today}T00:00:00Z`) : new Date();
+  // Selalu berbasis tanggal WIB — `new Date()` polos memakai UTC dan salah
+  // hari antara 00.00–07.00 WIB.
+  const base = new Date(`${today ?? todayWIB()}T00:00:00Z`);
   let year = base.getUTCFullYear();
   let monthIdx = base.getUTCMonth();
 
   let candidate = isoDate(year, monthIdx, day);
   if (!candidate) return null;
 
-  const todayIso = today ?? new Date().toISOString().slice(0, 10);
+  const todayIso = today ?? todayWIB();
   if (candidate < todayIso) {
     monthIdx += 1;
     if (monthIdx > 11) {
@@ -364,7 +367,7 @@ export function extractAllSlots(
     let year = slashMatch[3] ? Number(slashMatch[3]) : undefined;
     if (year !== undefined && year < 100) year += 2000;
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      const y = year ?? (today ? Number(today.slice(0, 4)) : new Date().getFullYear());
+      const y = year ?? Number((today ?? todayWIB()).slice(0, 4));
       dates.push(
         `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
       );

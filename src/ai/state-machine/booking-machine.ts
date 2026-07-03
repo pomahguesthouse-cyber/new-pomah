@@ -7,6 +7,7 @@ import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
 import { buildPaymentPolicyAnswer } from "./booking-inline-answers";
+import { todayWIB } from "@/lib/date";
 
 export type BookingState =
   | "IDLE"
@@ -1135,7 +1136,7 @@ export async function processBookingState(
   }
 
   if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
-    const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
+    const todayStr = ctx.today || todayWIB(); // WIB, bukan UTC — hindari off-by-one 00.00–07.00
     const dateUpdate = parseDateUpdate(message, todayStr);
 
     if (dateUpdate) {
@@ -1285,7 +1286,13 @@ export async function processBookingState(
   // answering the current prompt. Hand the turn to the LLM / specialist agents
   // to answer, but KEEP the booking state so the flow resumes on the next
   // relevant reply (the state auto-resets after 15 min if truly abandoned).
-  if (isDataEntryState(state) && !isExpectedAnswer(state, message)) {
+  // Konfirmasi pendingOverride ("Ya"/"tidak" setelah bot bertanya "data ingin
+  // diganti?") adalah jawaban yang DIHARAPKAN — jangan biarkan guard interupsi
+  // membajaknya ke LLM sebelum blok pendingOverride sempat memprosesnya.
+  const awaitingOverrideConfirm =
+    !!(currentStateRecord.context as BookingContext | undefined)?.pendingOverride &&
+    /\b(ya|iya|setuju|benar|ganti|tidak|jangan|batal|gak|ngga|engga)\b/i.test(message);
+  if (isDataEntryState(state) && !awaitingOverrideConfirm && !isExpectedAnswer(state, message)) {
     const interruptByQuestion = QUESTION_PATTERN.test(message);
     const interruptByIntent = INTERRUPT_INTENTS.has(
       (
@@ -1409,7 +1416,7 @@ export async function processBookingState(
     state === "AWAITING_PHONE"
   ) {
     const roomsList = ctx.rooms || [];
-    const todayStr = ctx.today || new Date().toISOString().slice(0, 10);
+    const todayStr = ctx.today || todayWIB(); // WIB, bukan UTC — hindari off-by-one 00.00–07.00
     const extracted = extractAllSlots(message, roomsList, phone, todayStr);
     const trimmedMessage = message.trim();
 
@@ -1446,7 +1453,10 @@ export async function processBookingState(
     }
     
     if (context.pendingOverride) {
-      if (/\\b(ya|iya|setuju|benar|ganti)\\b/i.test(trimmedMessage)) {
+      // BUGFIX 3 Jul 2026: sebelumnya /\\b...\\b/ (backslash literal, bukan
+      // word boundary) sehingga konfirmasi "Ya" TIDAK PERNAH cocok dan
+      // koreksi data tamu selalu dibuang.
+      if (/\b(ya|iya|setuju|benar|ganti)\b/i.test(trimmedMessage)) {
         Object.assign(extracted, context.pendingOverride);
         context.pendingOverride = undefined;
       } else {
