@@ -54,7 +54,7 @@ export const DEFAULT_SMART_DELAY: SmartDelayConfig = {
 const WAIT_SIGNAL_RE =
   /\b(bentar|sebentar|tunggu(?: dulu| ya| sebentar)?|wait|cek dulu(?: ya)?|sejenak|just a sec)\b|\.\.\.$/i;
 
-export function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
+function calcDelayMs(body: string, cfg: SmartDelayConfig): number {
   if (!cfg.enabled) return 0;
   const text = body.trim();
   let base: number;

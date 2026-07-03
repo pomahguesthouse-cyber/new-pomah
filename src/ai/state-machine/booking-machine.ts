@@ -253,7 +253,7 @@ function formatDateId(iso: string): string {
   }
 }
 
-export function parseDateUpdate(input: string, todayWIB: string): { checkIn: string; checkOut: string; nights: number } | null {
+function parseDateUpdate(input: string, todayWIB: string): { checkIn: string; checkOut: string; nights: number } | null {
   const text = input.toLowerCase();
   let checkInDate = new Date(todayWIB);
   let nights = 1;
@@ -369,7 +369,7 @@ interface RoomCatalogEntry {
  * Pilih policy extra bed berdasarkan konteks booking + katalog kamar dari DB.
  * Prioritas pencarian: roomId → roomName → context.rooms[0].
  */
-export function resolveRoomExtraBedPolicy(
+function resolveRoomExtraBedPolicy(
   context: BookingContext,
   roomsCatalog?: RoomCatalogEntry[],
 ): RoomExtraBedPolicy {
@@ -508,7 +508,7 @@ function buildBookingSummary(
  * tarif tampilan, dan flag dynamic breakdown sehingga ringkasan selaras
  * dengan harga final yang dipakai create_booking.
  */
-export async function resolveBookingSummaryRates(
+async function resolveBookingSummaryRates(
   ctx: ToolContext,
   context: BookingContext,
 ): Promise<{
@@ -819,7 +819,7 @@ export function formatAlternativesList(alts: AlternativeRoomOption[]): string {
 }
 
 /** Cocokkan jawaban tamu dengan salah satu alternatif (nama / nomor urut). */
-export function matchAlternative(message: string, alts: AlternativeRoomOption[]): AlternativeRoomOption | null {
+function matchAlternative(message: string, alts: AlternativeRoomOption[]): AlternativeRoomOption | null {
   const t = message.trim().toLowerCase();
   if (!t) return null;
   // Pilihan nomor: "1", "2", "pilih 2", "no 3"
@@ -948,7 +948,7 @@ const INTERRUPT_INTENTS = new Set([
  * Mendukung pola umum berbahasa Indonesia. Mengembalikan patch parsial untuk
  * digabungkan ke BookingContext + bool apakah ada perubahan.
  */
-export function parseSlotCorrection(
+function parseSlotCorrection(
   input: string,
   rooms?: Array<{ id: string; name: string; base_rate?: number | null }>,
 ): {
@@ -1023,7 +1023,7 @@ export function parseSlotCorrection(
  * - totalExtraBedCapacity = policy.extrabedCapacity * roomCount
  * - overCapacity = guests > (totalDefaultCapacity + totalExtraBedCapacity)
  */
-export function computeExtraBeds(
+function computeExtraBeds(
   policy: RoomExtraBedPolicy,
   roomCount: number,
   guests: number,

@@ -33,13 +33,13 @@ const SEO_TOOL_NAMES = [
   "audit_page_seo",
 ] as const;
 
-export const SEO_TOOLS: ToolDefinition[] = TOOL_DEFINITIONS.filter((t) =>
+const SEO_TOOLS: ToolDefinition[] = TOOL_DEFINITIONS.filter((t) =>
   (SEO_TOOL_NAMES as readonly string[]).includes(t.function.name),
 );
 
 // ─── City Guide (explore_items) ──────────────────────────────────────────────
 
-export const CITY_GUIDE_TOOLS: ToolDefinition[] = [
+const CITY_GUIDE_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
@@ -148,7 +148,7 @@ export const CITY_GUIDE_TOOLS: ToolDefinition[] = [
 
 // ─── Reviews (custom_google_* on properties) ─────────────────────────────────
 
-export const REVIEW_TOOLS: ToolDefinition[] = [
+const REVIEW_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
@@ -236,7 +236,7 @@ export const REVIEW_TOOLS: ToolDefinition[] = [
 
 // ─── Media (AI image generation for City Guide cards) ────────────────────────
 
-export const MEDIA_TOOLS: ToolDefinition[] = [
+const MEDIA_TOOLS: ToolDefinition[] = [
   // Handler enforces ctx.isManager === true; generation is paid and writes image_url.
   {
     type: "function",

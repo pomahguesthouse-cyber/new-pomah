@@ -1038,7 +1038,7 @@ const SUMMARY_MIN_MESSAGES = 3;
  * Panggil LLM untuk menghasilkan ringkasan terstruktur JSON.
  * Kalau LLM gagal/JSON invalid → return null (caller fallback ke text lama).
  */
-export async function generateSessionSummary(
+async function generateSessionSummary(
   history: Array<{ direction: string; body: string; sent_at?: string }>,
   existingSummary: string | null | undefined,
   config: { apiKey: string; baseUrl: string; model: string },

@@ -57,7 +57,7 @@ export async function sendWhatsAppMessage(
   return sendWhatsAppMessageWithOptions({ token, phone, message, fileUrl, filename });
 }
 
-export async function sendWhatsAppMessageWithOptions(
+async function sendWhatsAppMessageWithOptions(
   input: SendWhatsAppMessageInput,
 ): Promise<SendResult> {
   // Timeout 8 detik. Fonnte normalnya balas <2s; 15s sebelumnya menyisakan

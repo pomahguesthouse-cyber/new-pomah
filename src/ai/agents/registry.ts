@@ -16,7 +16,7 @@ import type { AgentDefinition, AgentKey } from "./types";
 
 // ─── Registry map ─────────────────────────────────────────────────────────────
 
-export const AGENT_REGISTRY: Record<AgentKey, AgentDefinition> = {
+const AGENT_REGISTRY: Record<AgentKey, AgentDefinition> = {
   "front-office": frontOfficeAgent,
   pricing:        pricingAgent,
   "customer-care": customerCareAgent,

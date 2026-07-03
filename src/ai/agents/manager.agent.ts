@@ -21,7 +21,7 @@ import { normalizeAssistantName } from "./persona";
 /** Delegation tool — intercepted by the multi-agent orchestrator */
 export const ASK_AGENT_TOOL_NAME = "ask_agent" as const;
 
-export const MANAGER_TOOLS: ToolDefinition[] = [
+const MANAGER_TOOLS: ToolDefinition[] = [
   {
     type: "function",
     function: {
