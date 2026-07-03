@@ -92,6 +92,13 @@ const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
 const FAQ_BLOCK_RE =
   /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
 
+// Sinyal komplain/kerusakan: pesan seperti "wifi lemot", "mobil saya baret di
+// parkiran", "AC rusak minta kontak admin" TIDAK boleh dijawab template FAQ
+// ("Iya Kak, tersedia WiFi") — serahkan ke AI/frustration detector. Dipakai
+// sebagai guard masuk di kedua builder FAQ deterministik.
+const COMPLAINT_SIGNAL_RE =
+  /\b(rusak|mati|lemot|lambat|putus|bocor|kotor|bau|berisik|bising|tidak bisa|ga bisa|gak bisa|nggak bisa|gabisa|error|eror|bermasalah|komplain|keluhan|kecewa|baret|lecet|hilang|kemalingan|denda)\b/i;
+
 type FastFaqResult = {
   reply: string;
   intent: string;
@@ -272,6 +279,7 @@ function buildFastFaqReply(
 ): FastFaqResult | null {
   const text = message.toLowerCase().trim();
   if (!text || FAQ_BLOCK_RE.test(text)) return null;
+  if (COMPLAINT_SIGNAL_RE.test(text)) return null;
 
   const propertyName = String(property.name || property.title || "Pomah Guesthouse");
   const address = String(property.address || property.location || "").trim();
@@ -657,7 +665,7 @@ function looksLikeBookingInquiry(message: string): boolean {
   // dijawab oleh agent (get_room_specifications), bukan re-run availability.
   // Tanpa filter ini, "Single ukuran kamar sm kasur brp" akan memicu ulang
   // daftar ketersediaan yang baru saja dikirim (double-send).
-  if (/\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon)\b/i.test(text)) {
+  if (/\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(text)) {
     return false;
   }
   if (/\b(ready|tersedia|available|avail|kosong|ada kamar|cek kamar|cek ketersediaan|booking|pesan kamar|menginap|masih ada|masih available|harga|rate|tarif|per malam|permalam)\b/i.test(text)) {
@@ -801,6 +809,8 @@ function buildDeterministicPropertyFaqReply(params: {
 }): FastFaqResult | null {
   const raw = params.message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!raw || raw.length > 200) return null;
+  // Sinyal komplain → jangan jawab template; AI/frustration detector yang tangani.
+  if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
   const p = params.property ?? {};
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
@@ -1564,7 +1574,10 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && isTonightReply(lastMessage) && hasRecentPriceContext(rollingMessages)) {
+  // Guard "malam ini": tamu yang bertanya JAM ("bisa check-in hari ini jam 8
+  // malam?") sedang bertanya kebijakan waktu, bukan harga malam ini.
+  const asksTimeNotPrice = /\b(jam|pukul|check\s*[- ]?in|checkin|check\s*[- ]?out|checkout)\b/i.test(lastMessage ?? "");
+  if (!reply && !isManager && !bookingActive && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
     try {
       const tonightReply = await buildTonightPriceReply({
         rooms: rooms ?? [],

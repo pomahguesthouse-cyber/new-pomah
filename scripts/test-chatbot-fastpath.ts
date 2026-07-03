@@ -25,6 +25,10 @@ function buildDeterministicPropertyFaqReply(params: {
 }): FaqOut {
   const raw = params.message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!raw || raw.length > 200) return null;
+  // Sinkron dengan COMPLAINT_SIGNAL_RE di wa-autoreply.service.ts.
+  const COMPLAINT_SIGNAL_RE =
+    /\b(rusak|mati|lemot|lambat|putus|bocor|kotor|bau|berisik|bising|tidak bisa|ga bisa|gak bisa|nggak bisa|gabisa|error|eror|bermasalah|komplain|keluhan|kecewa|baret|lecet|hilang|kemalingan|denda)\b/i;
+  if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
   const p = params.property ?? {};
   const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
 
@@ -108,6 +112,11 @@ const CASES: Array<{ label: string; input: string; expectIntent: string | null }
   // Negatif: harus TIDAK match agar tidak "menelan" pesan booking
   { label: "booking (bukan FAQ)", input: "mau booking kamar untuk besok", expectIntent: null },
   { label: "pertanyaan bebas", input: "boleh bawa hewan peliharaan?", expectIntent: null },
+  // Sinyal komplain: template FAQ dilarang menjawab keluhan
+  { label: "komplain wifi (bukan FAQ)", input: "wifi nya lemot banget min", expectIntent: null },
+  { label: "komplain + minta kontak (bukan FAQ)", input: "AC rusak, minta kontak admin dong", expectIntent: null },
+  { label: "komplain parkir (bukan FAQ)", input: "mobil saya baret di area parkir", expectIntent: null },
+  { label: "denda telat checkout (bukan FAQ)", input: "kalau telat checkout kena denda?", expectIntent: null },
 ];
 
 let pass = 0;
