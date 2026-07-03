@@ -687,7 +687,9 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
 
   if (stateRecord.state !== "IDLE" || /^\[FORM_SUBMITTED:[^\]]+\]\s*$/i.test(lastUserMsg)) {
     console.info(`[MultiAgent] Intercepted by Booking State Machine | State: ${stateRecord.state}`);
-    const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord);
+    const stateResult = await processBookingState(input.toolCtx, input.phone, lastUserMsg, stateRecord, {
+      knownGuestName: input.agentCtx.chatSummaryJson?.guest_name ?? null,
+    });
 
     if (stateResult.handled && stateResult.reply) {
       let combinedReply = stateResult.reply;

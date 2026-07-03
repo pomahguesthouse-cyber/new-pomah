@@ -1051,6 +1051,16 @@ export async function processBookingState(
   phone: string,
   message: string,
   currentStateRecord: StateRecord,
+  opts?: {
+    /**
+     * Nama tamu yang sudah diketahui dari sesi sebelumnya
+     * (whatsapp_threads.chat_summary_json.guest_name). Dipakai sebagai
+     * prefill slot nama saat tamu belum menyebut nama di alur booking ini —
+     * tamu tetap melihat & mengonfirmasi nama di ringkasan CONFIRMING_BOOKING
+     * sebelum booking dibuat, jadi aman dari salah orang.
+     */
+    knownGuestName?: string | null;
+  },
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
   let { state, context } = currentStateRecord;
@@ -1496,6 +1506,20 @@ export async function processBookingState(
     }
 
     if (extracted.guest_name) context.guestName = extracted.guest_name;
+
+    // Prefill nama dari context summary sesi sebelumnya: tamu yang sudah
+    // pernah menyebut nama tidak perlu ditanya lagi. Divalidasi dengan
+    // looksLikePersonName agar nilai janggal dari LLM summarizer tidak lolos.
+    if (!context.guestName && !extracted.guest_name && opts?.knownGuestName) {
+      const prefillCandidate = cleanNameCandidate(opts.knownGuestName);
+      if (prefillCandidate && looksLikePersonName(prefillCandidate)) {
+        context.guestName = prefillCandidate;
+        console.info(
+          `[BookingState] guestName prefilled from chat summary for ${phone.slice(-6)} ("${prefillCandidate}")`,
+        );
+      }
+    }
+
     if (extracted.email) context.guestEmail = extracted.email;
     if (extracted.phone) context.guestPhone = extracted.phone;
     if (extracted.adults) context.adults = extracted.adults;
