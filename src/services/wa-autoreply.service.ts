@@ -287,7 +287,12 @@ function buildFastFaqReply(
     return { intent: "faq_location", reply: lines.join("\n") };
   }
 
-  if (/\b(jam|waktu).*(check.?in|masuk)|check.?in.*(jam|waktu)|check.?out.*(jam|waktu|kapan)|checkout\b/i.test(text)) {
+  // Guard: pesan yang memuat tanggal/durasi menginap ("tgl 8 udh checkout")
+  // adalah jawaban tanggal, bukan pertanyaan jam check-in/out.
+  if (
+    /\b(jam|waktu).*(check.?in|masuk)|check.?in.*(jam|waktu)|check.?out.*(jam|waktu|kapan)|checkout\b/i.test(text) &&
+    !/\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|besok|lusa|minggu\s+depan|menginap(?:nya)?)\b/i.test(text)
+  ) {
     return {
       intent: "faq_check_time",
       reply: `Check-in mulai pukul ${checkIn}, dan check-out maksimal pukul ${checkOut}.`,
@@ -873,7 +878,17 @@ function buildDeterministicPropertyFaqReply(params: {
   }
 
   // — Jam check-in / check-out —
-  if (/\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw)) {
+  // Guard sinyal tanggal: "menginapnya di tgl 7 siang/sore trs tgl 8
+  // pagi/siang udh checkout" adalah JAWABAN TANGGAL, bukan pertanyaan
+  // kebijakan — kata "checkout" di dalamnya sempat memicu balasan jam
+  // check-in yang tidak nyambung (insiden 3 Juli 2026). Bila pesan memuat
+  // tanggal/durasi menginap, serahkan ke jalur availability/AI.
+  const DATE_SIGNAL_RE =
+    /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?)\b/i;
+  if (
+    /\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw) &&
+    !DATE_SIGNAL_RE.test(raw)
+  ) {
     const ci = p.check_in_time?.slice(0, 5) ?? "14:00";
     const co = p.check_out_time?.slice(0, 5) ?? "12:00";
     return {
@@ -1521,7 +1536,19 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && lastMessage) {
+  // Jangan tanya tanggal ULANG bila tanggal sudah tersimpan dari turn
+  // sebelumnya (booking-state slots / chat summary). Insiden 3 Juli 2026:
+  // tamu tanya "7-8 Agustus" → dijawab penuh → tamu bilang "kalo ada yg
+  // kosong kabari ya" → bot balik bertanya "rencana menginap tanggal
+  // berapa?" padahal tanggalnya baru saja dibahas. Dengan guard ini pesan
+  // jatuh ke buildContextualBookingInquiryReply yang memakai tanggal
+  // tersimpan.
+  const storedAvailabilitySlots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
+  const hasStoredAvailabilityDates = !!(
+    (storedAvailabilitySlots.checkIn ?? chatSummaryJson?.check_in) &&
+    (storedAvailabilitySlots.checkOut ?? chatSummaryJson?.check_out)
+  );
+  if (!reply && !isManager && !bookingActive && lastMessage && !hasStoredAvailabilityDates) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
       reply = needDatesReply.reply;

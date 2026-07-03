@@ -57,7 +57,12 @@ function buildDeterministicPropertyFaqReply(params: {
     if (!(p.whatsapp_number || p.phone || p.email || p.instagram_url)) return null;
     return { reply: `${opener}Kontak: ${p.whatsapp_number ?? p.phone ?? p.email}`, intent: "contact_request" };
   }
-  if (/\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw)) {
+  const DATE_SIGNAL_RE =
+    /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?)\b/i;
+  if (
+    /\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw) &&
+    !DATE_SIGNAL_RE.test(raw)
+  ) {
     return { reply: `${opener}Check-in ${p.check_in_time?.slice(0, 5) ?? "14:00"}`, intent: "policy_question" };
   }
   return null;
@@ -93,6 +98,13 @@ const CASES: Array<{ label: string; input: string; expectIntent: string | null }
   { label: "kontak instagram", input: "IG kalian apa?", expectIntent: "contact_request" },
   { label: "jam check-in", input: "jam checkin jam berapa?", expectIntent: "policy_question" },
   { label: "jam check-out", input: "checkout jam brp", expectIntent: "policy_question" },
+  // Kasus produksi 3 Juli 2026: jawaban tanggal yang memuat kata "checkout"
+  // tidak boleh dijawab kebijakan jam check-in.
+  {
+    label: "jawaban tanggal + kata checkout (bukan policy)",
+    input: "Ini kak, menginapnya di tgl 7 siang/sore trs tgl 8 pagi/siang udh checkout",
+    expectIntent: null,
+  },
   // Negatif: harus TIDAK match agar tidak "menelan" pesan booking
   { label: "booking (bukan FAQ)", input: "mau booking kamar untuk besok", expectIntent: null },
   { label: "pertanyaan bebas", input: "boleh bawa hewan peliharaan?", expectIntent: null },

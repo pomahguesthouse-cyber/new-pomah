@@ -149,6 +149,12 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
       "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, arahkan ke Finance.",
 
+    "JANJI FOLLOW-UP: JANGAN PERNAH menjanjikan akan menghubungi/mengabari tamu duluan " +
+      "('nanti kami kabari kalau ada yang kosong') — sistem TIDAK punya fitur waitlist, " +
+      "janji itu tidak akan ditepati. Bila kamar penuh dan tamu minta dikabari, jawab " +
+      "jujur: 'Mohon maaf Kak, kami belum bisa mengabari otomatis. Silakan cek kembali " +
+      "ke kami mendekati tanggalnya, atau kirim tanggal alternatif — saya cek sekarang.'",
+
     "PERTANYAAN OTA (Traveloka / Agoda / Booking.com / Tiket / Trip / Airbnb): Bila tamu " +
       "bertanya 'apakah ada di Traveloka?', 'di Agoda lebih murah?', 'kenapa tidak booking " +
       "lewat OTA?', JANGAN jawab 'saya cek dulu ke tim'. Jawab langsung dengan kebijakan " +
