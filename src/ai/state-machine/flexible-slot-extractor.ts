@@ -44,12 +44,28 @@ export interface ExtractedSlots {
 
 // ─── Patterns ─────────────────────────────────────────────────────────────────
 
-/** Pola nama setelah label — "atas nama:", "a/n:", "nama:", "name:" */
+/**
+ * Pola nama setelah label.
+ * - Label eksplisit ("atas nama", "a/n", "nama saya", "namaku"): titik dua
+ *   OPSIONAL — tamu nyata menulis "atas nama Lutfi Jihan Priyanti" tanpa ":".
+ * - Label ambigu ("nama", "name"): titik dua tetap WAJIB agar kalimat seperti
+ *   "nama hotelnya apa" tidak salah tangkap.
+ */
 const NAME_LABEL_PATTERN =
-  /(?:atas\s+nama|a\s*\/\s*n|nama|name)\s*:\s*(.+)/i;
+  /(?:(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku)\s*(?::\s*|\s+)|(?:nama|name)\s*:\s*)(.+)/i;
 
 /** Honorifik yang harus dibuang dari nama */
 const HONORIFIC_RE = /\b(kak|kakak|mba|mbak|mas|pak|bu|bro|sis|bang|kk)\b/gi;
+
+/**
+ * Kata pengisi di EKOR kalimat yang bukan bagian nama — "ya minn", "dong",
+ * "gan", dsb. Dipotong berulang hanya dari akhir string (bukan tengah) agar
+ * nama seperti "Yanti" tidak rusak. Catatan: "min+" berisiko sangat kecil pada
+ * nama asing berakhiran "Min", tapi dalam konteks WA jauh lebih sering berarti
+ * "admin". Dipakai juga oleh booking-machine (cleanNameCandidate).
+ */
+export const TRAILING_FILLER_RE =
+  /(?:\s+(?:y+a+|min+|admin|dong|donk|deh|gan|om|bos+|ka|nya|aja|saja|dulu|oke?|okey|sip|thanks|makasih))+$/i;
 
 /** Email regex */
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/;
@@ -95,9 +111,12 @@ const EARLY_ARRIVAL_RE =
 function cleanName(raw: string): string {
   return raw
     .split(/\r?\n/)[0]!
+    .replace(/^saya\s+/i, "")
     .replace(HONORIFIC_RE, " ")
     .replace(/[,.\-–—!]+$/g, " ")
     .replace(/\s+/g, " ")
+    .trim()
+    .replace(TRAILING_FILLER_RE, "")
     .trim();
 }
 

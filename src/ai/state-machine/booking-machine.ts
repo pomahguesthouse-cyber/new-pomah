@@ -5,7 +5,7 @@ import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/prici
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext } from "@/tools/types";
-import { extractAllSlots, getMissingSlots, formatPartialBookingSummary } from "./flexible-slot-extractor";
+import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
 
 export type BookingState =
   | "IDLE"
@@ -164,9 +164,13 @@ const ROOM_PREFERENCE_OR_QUESTION =
 function cleanNameCandidate(candidate: string): string {
   const firstLine = candidate.split(/\r?\n/)[0] ?? candidate;
   return firstLine
+    .replace(/^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama|name)\s*:?\s*/i, "")
+    .replace(/^saya\s+/i, "")
     .replace(HONORIFIC_TOKEN, " ")
     .replace(/[,.\-–—!]+$/g, " ")
     .replace(/\s+/g, " ")
+    .trim()
+    .replace(TRAILING_FILLER_RE, "")
     .trim();
 }
 
@@ -1399,9 +1403,15 @@ export async function processBookingState(
     const trimmedMessage = message.trim();
 
     // Fallback: If we specifically need a name and the user provides a short unlabelled string that looks like a name.
+    // Validasi dilakukan pada kandidat yang SUDAH dibersihkan (label, honorifik,
+    // filler ekor seperti "ya minn" dibuang) — pesan mentah "Lutfi Priyanti ya"
+    // dulu ditolak hanya karena token "ya" ada di NON_NAME_TOKEN.
     if (!context.guestName && !extracted.guest_name) {
-      if (!extracted.check_in && !extracted.room_type && looksLikePersonName(trimmedMessage)) {
-        extracted.guest_name = cleanNameCandidate(trimmedMessage);
+      if (!extracted.check_in && !extracted.room_type) {
+        const nameCandidate = cleanNameCandidate(trimmedMessage);
+        if (nameCandidate && looksLikePersonName(nameCandidate)) {
+          extracted.guest_name = nameCandidate;
+        }
       }
     }
 
