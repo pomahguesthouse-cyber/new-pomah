@@ -2,7 +2,7 @@
 
 **Proyek:** new-pomah (Pomah Guesthouse)
 **Tanggal analisa awal:** 26 Juni 2026
-**Terakhir diperbarui:** 27 Juni 2026
+**Terakhir diperbarui:** 3 Juli 2026
 **Lingkup:** Jalur balasan WhatsApp end-to-end — webhook → antrian → worker → orchestration AI → pengiriman Fonnte.
 **Status:** Sebagian besar temuan SUDAH DIPERBAIKI di kode. Dokumen ini diperbarui agar tidak menyesatkan.
 
@@ -13,6 +13,42 @@
 > ditutup dengan scheduler cadangan (GitHub Actions). Tiap temuan di bawah
 > kini diawali blok status. Selain itu ditemukan **satu masalah baru di luar
 > kode** — auto-reply manual di panel Fonnte (lihat Temuan #7).
+
+> **⚠️ Catatan revisi 3 Juli 2026 — analisa ulang**
+>
+> **Status temuan lama:** #3, #4, #6 tetap tertutup. #1 termitigasi —
+> `wa-queue-keepalive.yml` (GitHub Actions, tiap 5 menit) sudah aktif, tapi
+> URL pg_cron masih hardcoded (Rekomendasi #4 belum). #2 tetap sebagian.
+> **#5 mundur secara sengaja:** batch dikembalikan ke 1 karena batch=2
+> memicu worker eviction + zombie_timeout di Cloudflare.
+>
+> **Temuan baru #8 — `waitUntil` tidak aktif di produksi (probe 3 Juli).**
+> POST ke `/api/cron/process-wa-queue` produksi membalas **HTTP 200**
+> (0,84–4,4s), bukan **202** — artinya `getWaitUntil()` undefined dan drain
+> berjalan **sinkron di dalam request**. Konsekuensi: saat ada pesan yang
+> diproses (14–20s), request pg_cron diputus oleh timeout default pg_net
+> (~5s, tidak di-override di migrasi) sebelum drain selesai → invocation
+> berisiko dibatalkan di tengah panggilan AI → pola zombie yang tersisa.
+> Verifikasi: cek kenapa `runWithCfContext` di `src/server.ts` tidak
+> menyuplai `ctx.waitUntil` di deployment (build lama? jalur fetch berbeda?).
+> Solusi struktural: pindahkan drain ke **Cloudflare Cron Triggers**
+> (`triggers.crons` di `wrangler.jsonc`) supaya tidak bergantung HTTP
+> eksternal sama sekali.
+>
+> **Risiko baru dari commit "Fix Chatbot" (3 Juli):** anggaran diperketat ke
+> `AI_TIMEOUT_MS=14s × 1 attempt`, `LLM_CALL_TIMEOUT_MS=6.5s`, max 3 turn.
+> Invariant di komentar kode hanya menghitung waktu LLM — **belum menghitung
+> RAG retrieval, eksekusi tool (query DB), dan LLM fallback intent classifier
+> (5s)**. Percakapan booking berat (tool-call + balasan) realistis ~15–16s >
+> 14s → tamu dapat fallback "sistem sibuk". Pantau `wa_queue_latency_stats`
+> (view sudah ada sejak migrasi 02 Juni) setelah deploy; bila `failed` naik,
+> longgarkan ke 18–20s (tetap aman karena attempt kini 1).
+>
+> **Perbaikan UX booking (3 Juli, belum di-commit saat catatan ini ditulis):**
+> ekstraksi nama tanpa titik dua + filler ("atas nama Lutfi Jihan Priyanti ya
+> minn"), jawaban DP inline saat slot-filling, dan perbandingan fasilitas per
+> tipe kamar. Lihat `scripts/test-name-extraction.ts` dan
+> `scripts/test-booking-inline-answers.ts`.
 
 ---
 
