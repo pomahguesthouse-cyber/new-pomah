@@ -103,13 +103,6 @@ export interface QueueEntry {
   isNewBurst:  boolean;
 }
 
-export interface ClaimResult {
-  claimed:          boolean;
-  messageCount:     number;
-  lastMessageBody:  string;
-  attempt:          number;
-}
-
 export interface ClaimNextResult {
   entryId:          string;
   phone:            string;
@@ -172,40 +165,7 @@ export async function queueUpsert(
   };
 }
 
-/**
- * Atomically claim a queue entry for processing.
- *
- * Must be called AFTER the sleep window.
- * Uses DB-level locking — only ONE worker can succeed for any given entry.
- * Returns claimed=false if the entry was superseded or already claimed.
- */
-export async function queueClaim(
-  supabase:  AnySupabase,
-  entryId:   string,
-  workerId:  string,
-): Promise<ClaimResult> {
-  const { data, error } = await supabase.rpc("wa_queue_claim", {
-    p_entry_id:  entryId,
-    p_worker_id: workerId,
-  });
-
-  if (error) {
-    console.error("[Queue] claim error:", error.message, "| entry:", entryId);
-    return { claimed: false, messageCount: 0, lastMessageBody: "", attempt: 0 };
-  }
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row || !row.claimed) {
-    return { claimed: false, messageCount: 0, lastMessageBody: "", attempt: 0 };
-  }
-
-  return {
-    claimed:         true,
-    messageCount:    row.message_count    ?? 1,
-    lastMessageBody: row.last_message_body ?? "",
-    attempt:         row.attempt          ?? 1,
-  };
-}
+// (queueClaim dihapus 3 Jul 2026 — dead code; klaim memakai queueClaimNext.)
 
 /**
  * Atomically claim the next ready entry across ALL conversations.
@@ -336,21 +296,4 @@ export async function queueCleanupZombies(supabase: AnySupabase): Promise<number
   return count;
 }
 
-/**
- * Check if there's a retrying entry ready for pickup for this phone.
- * Called when a new message arrives — allows immediate retry rather than
- * waiting for the next webhook call.
- */
-export async function queueGetRetrying(
-  supabase: AnySupabase,
-  phone:    string,
-): Promise<{ entryId: string; attempt: number } | null> {
-  const { data, error } = await supabase.rpc("wa_queue_get_retrying", {
-    p_phone: phone,
-  });
-
-  if (error || !data) return null;
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row?.entry_id) return null;
-  return { entryId: row.entry_id, attempt: row.attempt };
-}
+// (queueGetRetrying dihapus 3 Jul 2026 — dead code; retry ditangani drainQueue.)

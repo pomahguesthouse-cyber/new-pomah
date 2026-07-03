@@ -76,6 +76,4 @@ export function getIntentCategoryLabel(key: string): string {
   return META_BY_KEY.get(key)?.label ?? key;
 }
 
-export function isAdminIntentCategory(key: string): boolean {
-  return META_BY_KEY.get(key)?.adminOnly === true;
-}
+// (isAdminIntentCategory dihapus 3 Jul 2026 — dead code, tidak pernah diimpor.)

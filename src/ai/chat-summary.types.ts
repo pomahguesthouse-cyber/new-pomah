@@ -82,22 +82,5 @@ export const PAYMENT_STATUS_VALUES: readonly PaymentSummaryStatus[] = [
   "pay_at_hotel",
 ];
 
-export const CHAT_SUMMARY_SOURCE_VALUES: readonly ChatSummarySource[] = [
-  "llm",
-  "manual",
-  "auto_seed",
-  "human_takeover_auto",
-  "backfill_auto",
-];
-
-export function isChatSummaryStructured(v: unknown): v is ChatSummaryStructured {
-  return (
-    !!v &&
-    typeof v === "object" &&
-    typeof (v as { short_summary?: unknown }).short_summary === "string"
-  );
-}
-
-export function hasStructuredSummary(v: unknown): boolean {
-  return isChatSummaryStructured(v) && v.short_summary.trim().length > 0;
-}
+// (CHAT_SUMMARY_SOURCE_VALUES, isChatSummaryStructured, hasStructuredSummary
+//  dihapus 3 Jul 2026 — dead code, tidak pernah diimpor.)

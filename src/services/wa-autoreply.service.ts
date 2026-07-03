@@ -9,7 +9,6 @@ import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
 import {
-  SESSION_GAP_MS,
   findSessionStartIndex,
   isBrosurDoc,
   pickAttachment,
@@ -1032,9 +1031,8 @@ async function buildTonightPriceReply(params: {
 const SUMMARY_MAX_CHARS = 800;
 /** Below this many messages, summarizing is pointless — skip. */
 const SUMMARY_MIN_MESSAGES = 3;
-// (SESSION_GAP_MS / findSessionStartIndex now live in reply-postprocess.ts
+// (SESSION_GAP_MS / findSessionStartIndex live in reply-postprocess.ts
 //  so the AI Lab simulator can share the same windowing logic.)
-void SESSION_GAP_MS;
 
 /**
  * Panggil LLM untuk menghasilkan ringkasan terstruktur JSON.
@@ -1220,20 +1218,6 @@ export async function regenerateThreadSummary(
   await updateThreadSummary(client, threadId, summary);
   console.info(`[SessionSummarizer] manual regen for thread ${threadId.slice(0, 8)}`);
   return { ok: true, summary };
-}
-
-/**
- * Helper publik: hapus context summary (semua field) — dipakai admin UI.
- */
-export async function clearThreadSummary(client: any, threadId: string): Promise<void> {
-  await client
-    .from("whatsapp_threads")
-    .update({
-      chat_summary: null,
-      chat_summary_json: {},
-      chat_summary_updated_at: null,
-    })
-    .eq("id", threadId);
 }
 
 export async function executeAutoreplyForPhone(
