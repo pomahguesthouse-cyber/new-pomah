@@ -27,7 +27,7 @@ import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
-import { buildFacilityReply, findMentionedRooms, type FacilityRoom } from "@/ai/state-machine/booking-inline-answers";
+import { buildPropertyFaqReply } from "@/services/property-faq";
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -88,15 +88,7 @@ function buildStateAwareFallback(state?: string): string {
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
 const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
-const FAQ_BLOCK_RE =
-  /\b(booking|pesan|reservasi|available|availability|tersedia|kamar|room|harga|rate|tarif|tanggal|check.?in|check.?out|malam|orang|tamu|bayar|transfer|dp|invoice)\b/i;
-
-// Sinyal komplain/kerusakan: pesan seperti "wifi lemot", "mobil saya baret di
-// parkiran", "AC rusak minta kontak admin" TIDAK boleh dijawab template FAQ
-// ("Iya Kak, tersedia WiFi") — serahkan ke AI/frustration detector. Dipakai
-// sebagai guard masuk di kedua builder FAQ deterministik.
-const COMPLAINT_SIGNAL_RE =
-  /\b(rusak|mati|lemot|lambat|putus|bocor|kotor|bau|berisik|bising|tidak bisa|ga bisa|gak bisa|nggak bisa|gabisa|error|eror|bermasalah|komplain|keluhan|kecewa|baret|lecet|hilang|kemalingan|denda)\b/i;
+// (FAQ_BLOCK_RE & COMPLAINT_SIGNAL_RE pindah ke property-faq.ts — O3.)
 
 type FastFaqResult = {
   reply: string;
@@ -126,6 +118,19 @@ type ParsedGuestCount = {
 // HANDLE_ONE_DEADLINE_MS dan timeout klien penggerak (pg_net 30s,
 // cron-job.org 30s).
 const AI_TIMEOUT_MS = 18_000;
+// O4 — anggaran adaptif: pesan ringan (chit-chat/FAQ tanpa kata kunci booking/
+// harga/tanggal) hampir selalu selesai 1 ronde LLM. Budget ringan tetap 14s
+// (bukan lebih kecil) karena worst case 1 ronde + retry internal = 6.5+0.5+6.5
+// = 13.5s — memotong di bawah itu berarti mengorbankan retry. Pesan berat
+// (booking/pricing/availability, atau panjang) memakai budget penuh 18s.
+const AI_TIMEOUT_LIGHT_MS = 14_000;
+const HEAVY_INTENT_RE =
+  /\b(booking|pesan|reservasi|kamar|room|harga|rate|tarif|tersedia|available|avail|kosong|tanggal|check.?in|check.?out|checkout|menginap|malam|dp|bayar|transfer|invoice|refund|extra ?bed|ganti|ubah|batal)\b/i;
+function pickAiBudgetMs(message: string): number {
+  const text = (message ?? "").trim();
+  if (text.length > 120) return AI_TIMEOUT_MS;
+  return HEAVY_INTENT_RE.test(text) ? AI_TIMEOUT_MS : AI_TIMEOUT_LIGHT_MS;
+}
 // Deadline dinding-jam untuk satu iterasi handleOne (klaim → orkestrasi →
 // persist → Fonnte → queueComplete). Harus < batas wall-time worker Cloudflare
 // (≈30s) dan < timeout klien penggerak (pg_net/cron-job.org 30s). Jika
@@ -277,78 +282,8 @@ function shouldLoadHeavyRetrieval(message: string): boolean {
   return true;
 }
 
-function buildFastFaqReply(
-  message: string,
-  property: Record<string, unknown>,
-  rooms: Array<Record<string, unknown>>,
-): FastFaqResult | null {
-  const text = message.toLowerCase().trim();
-  if (!text || FAQ_BLOCK_RE.test(text)) return null;
-  if (COMPLAINT_SIGNAL_RE.test(text)) return null;
-
-  const propertyName = String(property.name || property.title || "Pomah Guesthouse");
-  const address = String(property.address || property.location || "").trim();
-  const phone = String(property.phone || property.whatsapp || "").trim();
-  const mapUrl = String(property.google_maps_url || property.maps_url || "").trim();
-  const checkIn = String(property.check_in_time || property.checkin_time || "14.00").trim();
-  const checkOut = String(property.check_out_time || property.checkout_time || "12.00").trim();
-
-  if (/\b(alamat|lokasi|dimana|di mana|maps?|map|rute|arah|google maps)\b/i.test(text)) {
-    const lines = [`${propertyName} berlokasi di ${address || "area Pomah Guesthouse"}.`];
-    if (mapUrl) lines.push(`Google Maps: ${mapUrl}`);
-    if (phone) lines.push(`Kalau Kakak kesulitan mencari lokasi, bisa hubungi kami di ${phone}.`);
-    return { intent: "faq_location", reply: lines.join("\n") };
-  }
-
-  // Guard: pesan yang memuat tanggal/durasi menginap ("tgl 8 udh checkout")
-  // adalah jawaban tanggal, bukan pertanyaan jam check-in/out.
-  if (
-    /\b(jam|waktu).*(check.?in|masuk)|check.?in.*(jam|waktu)|check.?out.*(jam|waktu|kapan)|checkout\b/i.test(text) &&
-    !/\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|besok|lusa|minggu\s+depan|menginap(?:nya)?)\b/i.test(text)
-  ) {
-    return {
-      intent: "faq_check_time",
-      reply: `Check-in mulai pukul ${checkIn}, dan check-out maksimal pukul ${checkOut}.`,
-    };
-  }
-
-  if (/\b(wifi|wi-fi|internet)\b/i.test(text)) {
-    return {
-      intent: "faq_wifi",
-      reply: "Iya Kak, tersedia WiFi untuk tamu.",
-    };
-  }
-
-  if (/\b(parkir|parking|mobil|motor)\b/i.test(text)) {
-    return {
-      intent: "faq_parking",
-      reply: "Iya Kak, tersedia area parkir untuk tamu. Untuk kendaraan besar atau rombongan, kabari kami dulu ya agar bisa dibantu arahkan.",
-    };
-  }
-
-  // Fasilitas: jawab PER TIPE KAMAR bila tamu menyebut nama kamar — termasuk
-  // pertanyaan perbandingan ("perbedaan deluxe sama grand deluxe di fasilitas
-  // apa?"). Dulu selalu dijawab daftar gabungan generik dengan duplikat
-  // ("WI-FI, ... WIfi") dan tidak menjawab perbedaannya.
-  const facilityKeyword = /\b(fasilitas|amenities|ada apa saja)\b/i.test(text);
-  const diffKeyword = /\b(perbedaan|bedanya|beda)\b/i.test(text);
-  const priceOnlyQuestion = /\b(harga|tarif|price|rate)\b/i.test(text) && !facilityKeyword;
-  if (facilityKeyword || (diffKeyword && !priceOnlyQuestion)) {
-    const mentionedRooms = findMentionedRooms(text, rooms as FacilityRoom[]);
-    if (facilityKeyword || mentionedRooms.length >= 2) {
-      const reply = buildFacilityReply(text, rooms as FacilityRoom[]);
-      if (reply) return { intent: "faq_facility", reply };
-      if (facilityKeyword) {
-        return {
-          intent: "faq_facility",
-          reply: "Fasilitas tergantung tipe kamar yang dipilih Kak. Sebutkan tipe kamarnya ya, nanti saya rincikan.",
-        };
-      }
-    }
-  }
-
-  return null;
-}
+// (buildFastFaqReply dikonsolidasi ke buildPropertyFaqReply di
+//  src/services/property-faq.ts — O3, 3 Jul 2026.)
 
 const ID_MONTHS: Record<string, number> = {
   jan: 1, januari: 1,
@@ -796,124 +731,8 @@ async function buildContextualBookingInquiryReply(params: {
  * orchestrator LLM (p95 ~10 s). Sekarang: match regex ringan → template
  * balasan langsung dari kolom `properties`. Return `null` bila tidak cocok.
  */
-function buildDeterministicPropertyFaqReply(params: {
-  message: string;
-  property: {
-    name?: string | null;
-    address?: string | null;
-    phone?: string | null;
-    whatsapp_number?: string | null;
-    email?: string | null;
-    check_in_time?: string | null;
-    check_out_time?: string | null;
-    hotel_policy?: string | null;
-    instagram_url?: string | null;
-    google_place_id?: string | null;
-  } | null;
-  greetingUsed: boolean;
-}): FastFaqResult | null {
-  const raw = params.message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!raw || raw.length > 200) return null;
-  // Sinyal komplain → jangan jawab template; AI/frustration detector yang tangani.
-  if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
-  const p = params.property ?? {};
-  const opener = params.greetingUsed ? "" : "Halo Kak 👋 ";
-
-  // Trailing filler yang lazim: "kak", "kakak", "min", "admin", "pak", "bu",
-  // "ka", "ya/yaa", "dong", "banget", "banyak" — bisa berulang dengan spasi.
-  const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
-
-  // Interjeksi/pengisi di AWAL kalimat yang bukan isi pesan — "Yahh, oke kak
-  // makasih ya" harus tetap terdeteksi sebagai thanks. Tanpa ini pesan penutup
-  // jatuh ke jalur AI penuh dan memicu quick-ack "saya cekkan dulu ya" yang
-  // tidak nyambung (insiden produksi 3 Juli 2026).
-  const core = raw.replace(
-    /^(?:(?:y+a+h*|wah|waduh|oalah|aduh|hmm+|oh+|nah|deh|dong|ya\s?udah?|yaudah|yasudah|baik(?:lah)?|ok|oke?y?|okay|kak|kakak|ka|min|admin|pak|bu)[\s,!.…~-]+)+/i,
-    "",
-  );
-
-  // — Greeting murni (tanpa pertanyaan lain) —
-  if (
-    new RegExp(
-      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
-      "i",
-    ).test(core) ||
-    new RegExp(
-      `^(halo|hai|hi|hello|assalamu?alaikum|salam|permisi|selamat (pagi|siang|sore|malam))${FILLER}[\\s!.\\-,]*$`,
-      "i",
-    ).test(raw)
-  ) {
-    const name = p.name ?? "Pomah Guesthouse";
-    return {
-      reply: `Halo Kak, terima kasih sudah menghubungi ${name} 🙏\nAda yang bisa kami bantu — mau cek ketersediaan kamar, harga, atau info fasilitas?`,
-      intent: "greeting",
-    };
-  }
-
-  // — Terima kasih / penutup —
-  // Dites terhadap `core` (interjeksi awal sudah dibuang) DAN `raw`, dengan
-  // ekor longgar (emoji 🙏 dsb. diperbolehkan lewat [^a-z0-9]*).
-  const THANKS_RE = new RegExp(
-    `^(makasih|terima\\s*kasih|t(e)?rima?\\s*kasih|trims?|thanks|thank\\s*you|thx|tq|ty|oke\\s*(makasih|thanks)?|sip|siap)${FILLER}[^a-z0-9]*$`,
-    "i",
-  );
-  if (THANKS_RE.test(core) || THANKS_RE.test(raw)) {
-    return {
-      reply: `Sama-sama Kak 🙏 Kalau ada yang perlu ditanyakan lagi, silakan chat kami ya.`,
-      intent: "thanks",
-    };
-
-  }
-
-  // — Alamat / lokasi —
-  if (
-    /\b(alamat|lokasi|dimana|di mana|dmn|maps|map|lokasinya|arah|arahan|posisi)\b/i.test(raw) &&
-    p.address
-  ) {
-    const mapsLink = p.google_place_id
-      ? `https://www.google.com/maps/place/?q=place_id:${p.google_place_id}`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}`;
-    return {
-      reply: `${opener}Alamat kami:\n📍 ${p.address}\n\nMaps: ${mapsLink}`,
-      intent: "location_question",
-    };
-  }
-
-  // — Kontak (nomor WA / telepon / email / IG) —
-  if (/\b(kontak|nomor|no\.?\s*wa|whatsapp|telepon|telp|hp|email|ig|instagram)\b/i.test(raw)) {
-    const bits: string[] = [];
-    if (p.whatsapp_number ?? p.phone) bits.push(`📱 WA/Telp: ${p.whatsapp_number ?? p.phone}`);
-    if (p.email) bits.push(`✉️ Email: ${p.email}`);
-    if (p.instagram_url) bits.push(`📸 Instagram: ${p.instagram_url}`);
-    if (bits.length === 0) return null;
-    return {
-      reply: `${opener}Berikut kontak kami:\n${bits.join("\n")}`,
-      intent: "contact_request",
-    };
-  }
-
-  // — Jam check-in / check-out —
-  // Guard sinyal tanggal: "menginapnya di tgl 7 siang/sore trs tgl 8
-  // pagi/siang udh checkout" adalah JAWABAN TANGGAL, bukan pertanyaan
-  // kebijakan — kata "checkout" di dalamnya sempat memicu balasan jam
-  // check-in yang tidak nyambung (insiden 3 Juli 2026). Bila pesan memuat
-  // tanggal/durasi menginap, serahkan ke jalur availability/AI.
-  const DATE_SIGNAL_RE =
-    /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?)\b/i;
-  if (
-    /\b(check\s*[- ]?in|checkin|jam\s*masuk|waktu\s*masuk|check\s*[- ]?out|checkout|jam\s*keluar|waktu\s*keluar)\b/i.test(raw) &&
-    !DATE_SIGNAL_RE.test(raw)
-  ) {
-    const ci = p.check_in_time?.slice(0, 5) ?? "14:00";
-    const co = p.check_out_time?.slice(0, 5) ?? "12:00";
-    return {
-      reply: `${opener}Waktu check-in mulai pukul *${ci}* dan check-out paling lambat *${co}*.\nEarly check-in / late check-out mengikuti ketersediaan kamar ya Kak 🙏`,
-      intent: "policy_question",
-    };
-  }
-
-  return null;
-}
+// (buildDeterministicPropertyFaqReply dikonsolidasi ke buildPropertyFaqReply
+//  di src/services/property-faq.ts — O3, 3 Jul 2026.)
 
 
 async function buildGuestCountAfterAvailabilityReply(params: {
@@ -1520,8 +1339,19 @@ export async function executeAutoreplyForPhone(
   let orchResult: any = null;
 
   const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
+  // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
+  // membalas di sesi berjalan atau tamu membuka dengan salam.
+  const faqGreetingUsed =
+    messageOpensWithGreeting(lastMessage) ||
+    currentSessionMessages.some((m: { direction: string }) => m.direction === "out");
   if (FAST_FAQ_ENABLED && !isManager && !bookingActive && lastMessage) {
-    const fastFaq = buildFastFaqReply(lastMessage, p, (rooms ?? []) as Array<Record<string, unknown>>);
+    const fastFaq = buildPropertyFaqReply({
+      message: lastMessage,
+      property: p as Record<string, unknown>,
+      rooms: (rooms ?? []) as any[],
+      greetingUsed: faqGreetingUsed,
+      mode: "early",
+    });
     if (fastFaq) {
       reply = fastFaq.reply;
       orchResult = {
@@ -1716,16 +1546,12 @@ export async function executeAutoreplyForPhone(
   // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
   if (!reply && !isManager && !bookingActive && lastMessage) {
     try {
-      // greetingUsed juga true bila bot SUDAH membalas di sesi berjalan —
-      // tanpa ini "Halo Kak 👋" muncul lagi di tengah percakapan (terlihat
-      // di produksi 3 Juli 2026).
-      const botAlreadyRepliedThisSession = currentSessionMessages.some(
-        (m: { direction: string }) => m.direction === "out",
-      );
-      const propertyFaq = buildDeterministicPropertyFaqReply({
+      const propertyFaq = buildPropertyFaqReply({
         message: lastMessage,
-        property: p as any,
-        greetingUsed: messageOpensWithGreeting(lastMessage) || botAlreadyRepliedThisSession,
+        property: p as Record<string, unknown>,
+        rooms: (rooms ?? []) as any[],
+        greetingUsed: faqGreetingUsed,
+        mode: "late",
       });
       if (propertyFaq) {
         reply = propertyFaq.reply;
@@ -1769,6 +1595,25 @@ export async function executeAutoreplyForPhone(
 
   const isQueueRetry = queueAttempt > 1;
   const loadHeavyRetrieval = !isQueueRetry && shouldLoadHeavyRetrieval(lastMessage);
+
+  // O1: retrieval training signals dimulai DI SINI, paralel dengan SOP
+  // retrieval di bawah — keduanya independen (embedding + RPC masing-masing).
+  // Dulu serial: SOP selesai dulu baru training mulai, menambah ~0,3-0,8s.
+  const trainingSignalsPromise =
+    !reply && llmConfig && loadHeavyRetrieval
+      ? findTrainingSignals(
+          supabaseAdmin as any,
+          {
+            userMessage: lastMessage ?? "",
+            stage: (chatSummaryJson?.last_topic ?? null) as string | null,
+          },
+          llmConfig,
+          { positiveLimit: 2, negativeLimit: 0 },
+        ).catch((e) => {
+          console.warn("[Autoreply] training retrieval failed (non-fatal):", e);
+          return { positiveExamples: [] as any[], negativeExamples: [] as any[] };
+        })
+      : null;
 
   if (sopEnabled && !reply && llmConfig && loadHeavyRetrieval) {
     try {
@@ -1972,16 +1817,8 @@ export async function executeAutoreplyForPhone(
 
   let trainingExamples: any[] = [];
   let negativeExamples: any[] = [];
-  if (!reply && llmConfig && loadHeavyRetrieval) {
-    const trainingSignals = await findTrainingSignals(
-      supabaseAdmin as any,
-      {
-        userMessage: lastMessage ?? "",
-        stage: (chatSummaryJson?.last_topic ?? null) as string | null,
-      },
-      llmConfig,
-      { positiveLimit: 2, negativeLimit: 0 },
-    );
+  if (!reply && trainingSignalsPromise) {
+    const trainingSignals = await trainingSignalsPromise;
     trainingExamples = trainingSignals.positiveExamples;
     negativeExamples = trainingSignals.negativeExamples;
 
@@ -2005,7 +1842,8 @@ export async function executeAutoreplyForPhone(
     // Extend the worker lock before each (potentially slow) AI attempt.
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
     const controller = new AbortController();
-    const aiTimeout = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+    const aiBudgetMs = pickAiBudgetMs(lastMessage ?? "");
+    const aiTimeout = setTimeout(() => controller.abort(), aiBudgetMs);
     if (!metrics.aiStartedAt) metrics.aiStartedAt = Date.now();
     const tStart = Date.now();
     try {

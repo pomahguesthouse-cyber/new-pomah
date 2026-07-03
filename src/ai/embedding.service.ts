@@ -3,11 +3,31 @@
  */
 import type { AiClientConfig } from "./types";
 
+// ─── LRU cache per-isolate ───────────────────────────────────────────────────
+// Pertanyaan tamu sangat repetitif ("ada kamar kosong?", "alamatnya dimana?")
+// — tanpa cache, tiap pesan membayar 1 round-trip API embedding (~200-600ms).
+// Map JS menjaga insertion order → entri tertua = key pertama (LRU sederhana).
+const EMBED_CACHE_MAX = 50;
+const embedCache = new Map<string, number[]>();
+
+function cacheKey(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export async function generateEmbedding(
   config: AiClientConfig,
   text: string
 ): Promise<number[] | null> {
   if (!text || text.trim().length === 0) return null;
+
+  const key = cacheKey(text);
+  const cached = embedCache.get(key);
+  if (cached) {
+    // Refresh posisi LRU: hapus lalu set ulang agar jadi entri termuda.
+    embedCache.delete(key);
+    embedCache.set(key, cached);
+    return cached;
+  }
 
   try {
     // For Lovable gateway or OpenAI, we call /embeddings
@@ -34,7 +54,15 @@ export async function generateEmbedding(
     }
 
     const json = await res.json();
-    return json.data?.[0]?.embedding ?? null;
+    const embedding = (json.data?.[0]?.embedding ?? null) as number[] | null;
+    if (embedding) {
+      embedCache.set(key, embedding);
+      if (embedCache.size > EMBED_CACHE_MAX) {
+        const oldest = embedCache.keys().next().value;
+        if (oldest !== undefined) embedCache.delete(oldest);
+      }
+    }
+    return embedding;
   } catch (e) {
     console.error("[EmbeddingService] fetch error:", e);
     return null;

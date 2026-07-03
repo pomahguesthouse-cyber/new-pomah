@@ -900,6 +900,31 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       `[MultiAgent] Recovery classifier query selected: "${queryForClassifier.slice(0, 160)}"`,
     );
   }
+  // 4b DIMULAI DI SINI, PARALEL dengan classifyIntent (O1): retrieval training
+  // examples (embedding + RPC) tidak bergantung pada hasil klasifikasi, jadi
+  // tidak perlu menunggu — dulu serial dan menambah 0,3–1s per turn AI
+  // (lebih parah lagi saat classifier jatuh ke LLM fallback ~5s).
+  const trainingExamplesPromise: Promise<TrainingExample[]> = (async () => {
+    const alreadyProvided = (input.agentCtx.trainingExamples?.length ?? 0) > 0;
+    if (alreadyProvided || input.agentCtx.bookingInProgress || lastUserMsg.trim().length === 0) {
+      return [];
+    }
+    try {
+      const ragCfg = await getTrainingRagConfigCached(input.toolCtx.supabaseAdmin);
+      if (!ragCfg.enabled) {
+        console.info("[MultiAgent] Training RAG disabled by config");
+        return [];
+      }
+      return await retrieveTrainingExamples(input.toolCtx.supabaseAdmin, lastUserMsg, input.llmConfig, {
+        matchCount: ragCfg.matchCount,
+        minSimilarity: ragCfg.minSimilarity,
+      });
+    } catch (e) {
+      console.warn("[MultiAgent] Training RAG failed (non-fatal):", e);
+      return [];
+    }
+  })();
+
   const classified = await classifyIntent(queryForClassifier, input.toolCtx.supabaseAdmin, input.llmConfig, {
     bookingActive: stateRecord.state !== "IDLE",
     lastTopic: resolved.topic ?? stateRecord.last_topic ?? null,
@@ -959,37 +984,15 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     });
   }
 
-  // 4b. Retrieve training examples (RAG di ai_conversation_logs).
-  //     Skip saat tamu sedang di tengah pengisian data booking — di sana
-  //     jawaban harus mengikuti state machine, bukan few-shot.
-  //     Skip juga bila pemanggil (wa-autoreply) sudah melakukan unified
-  //     retrieval & menaruh hasilnya di `agentCtx.trainingExamples` —
-  //     hindari fetch ganda.
-  let trainingExamples: TrainingExample[] = [];
+  // 4b (lanjutan). Ambil hasil retrieval yang sudah berjalan paralel di atas.
+  const trainingExamples: TrainingExample[] = await trainingExamplesPromise;
   let trainingBlock: string | undefined;
-  const alreadyProvided = (input.agentCtx.trainingExamples?.length ?? 0) > 0;
-  if (!alreadyProvided && !input.agentCtx.bookingInProgress && lastUserMsg.trim().length > 0) {
-    try {
-      const ragCfg = await getTrainingRagConfigCached(input.toolCtx.supabaseAdmin);
-      if (ragCfg.enabled) {
-        trainingExamples = await retrieveTrainingExamples(input.toolCtx.supabaseAdmin, lastUserMsg, input.llmConfig, {
-          matchCount: ragCfg.matchCount,
-          minSimilarity: ragCfg.minSimilarity,
-        });
-        if (trainingExamples.length > 0) {
-          trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
-          console.info(
-            `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
-              `(top sim ${trainingExamples[0].similarity.toFixed(2)}, ` +
-              `k=${ragCfg.matchCount}, min=${ragCfg.minSimilarity})`,
-          );
-        }
-      } else {
-        console.info("[MultiAgent] Training RAG disabled by config");
-      }
-    } catch (e) {
-      console.warn("[MultiAgent] Training RAG failed (non-fatal):", e);
-    }
+  if (trainingExamples.length > 0) {
+    trainingBlock = formatTrainingExamplesForPrompt(trainingExamples);
+    console.info(
+      `[MultiAgent] Training RAG: ${trainingExamples.length} contoh ` +
+        `(top sim ${trainingExamples[0].similarity.toFixed(2)})`,
+    );
   }
 
   // 5. Route to agent
