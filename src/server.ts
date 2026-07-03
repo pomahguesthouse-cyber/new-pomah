@@ -106,5 +106,28 @@ export default {
       return brandedErrorResponse();
     }
   },
+
+  // ── Cloudflare Cron Trigger (lihat triggers.crons di wrangler.jsonc) ──────
+  // Penggerak antrian WA yang tinggal serumah dengan Worker: tiap menit
+  // men-dispatch POST internal ke route drain yang sama dengan pg_cron,
+  // sehingga recovery + zombie-alarm + drain berjalan lewat SATU jalur kode.
+  // Berbeda dari pg_net (fire-and-forget, putus ~5s), di sini `waitUntil`
+  // tersedia sehingga pemrosesan AI tidak terpotong saat respons dikirim.
+  async scheduled(_controller: unknown, env: unknown, ctx: unknown) {
+    try {
+      const handler = await getServerEntry();
+      const waitUntil = (ctx as ExecutionContextLike | undefined)?.waitUntil?.bind(ctx);
+      const envOrigin = (env as Record<string, unknown> | undefined)?.["PUBLIC_ORIGIN"];
+      const origin =
+        typeof envOrigin === "string" && envOrigin ? envOrigin : "https://pomahguesthouse.com";
+      const request = new Request(`${origin}/api/cron/process-wa-queue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      await runWithCfContext({ waitUntil }, () => handler.fetch(request, env, ctx));
+    } catch (error) {
+      console.error("[scheduled] WA queue drain failed:", error);
+    }
+  },
 };
 

@@ -4,4 +4,12 @@
   "compatibility_date": "2025-09-24",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
+  // Cron Trigger: penggerak antrian WhatsApp yang tinggal serumah dengan
+  // Worker. Cadangan independen dari pg_cron/pg_net Supabase dan dari
+  // scheduler HTTP eksternal (GitHub Actions keepalive terbukti mati karena
+  // billing lock, 3 Juli 2026). Menjalankan export `scheduled` di server.ts.
+  // 1 menit = granularitas minimum Cloudflare; pg_cron 2 detik tetap primer.
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
 }
