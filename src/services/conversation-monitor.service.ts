@@ -254,6 +254,7 @@ const TRIGGER_LABEL: Record<string, string> = {
   fallback_loop: "🤖 AI Gagal Berulang",
   keyword: "⚠️ Kata Sensitif Terdeteksi",
   manual: "📌 Alert Manual",
+  needs_human: "🙋 Summary AI: Tamu Butuh Human",
 };
 
 function buildTelegramMessage(opts: {
@@ -343,7 +344,8 @@ interface AlertOptions {
     | "unresponsive"
     | "fallback_loop"
     | "keyword"
-    | "manual";
+    | "manual"
+    | "needs_human";
   triggerDetail: string;
   lastMessage: string;
   aiStatus: "auto" | "human";
@@ -469,6 +471,10 @@ export interface MonitorCheckInput {
   isFallback?: boolean;
   /** Jumlah fallback berturut-turut dalam sesi ini. */
   consecutiveFallbacks?: number;
+  /** chat_summary_json.needs_human — LLM summarizer menandai tamu butuh manusia. */
+  summaryNeedsHuman?: boolean;
+  /** chat_summary_json.handoff_reason — alasan versi summarizer (bila ada). */
+  summaryHandoffReason?: string | null;
 }
 
 /**
@@ -485,12 +491,33 @@ export async function checkConversation(input: MonitorCheckInput): Promise<void>
     aiStatus,
     isFallback = false,
     consecutiveFallbacks = 0,
+    summaryNeedsHuman = false,
+    summaryHandoffReason = null,
   } = input;
 
   try {
     const inboundMsgs = messages.filter((m) => m.direction === "in");
     const lastInbound = [...inboundMsgs].reverse()[0];
     const lastMsg = lastInbound?.body ?? "";
+
+    // ── 0. NEEDS_HUMAN — summary LLM menandai tamu butuh manusia ────────────
+    // Non-blocking terhadap trigger lain; dedup via satu alert 'open' per
+    // thread per tipe (dispatchAlert), jadi tidak spam tiap turn.
+    if (summaryNeedsHuman && aiStatus === "auto") {
+      await dispatchAlert({
+        db,
+        threadId,
+        phone,
+        guestName,
+        triggerType: "needs_human",
+        triggerDetail: summaryHandoffReason
+          ? `Summary AI menandai butuh human: ${summaryHandoffReason}`
+          : "Summary AI menandai percakapan ini butuh penanganan manusia.",
+        lastMessage: lastMsg,
+        aiStatus,
+        severity: "high",
+      });
+    }
 
     // ── 1. KEYWORD — kata sensitif ───────────────────────────────────────────
     const foundSensitive = containsKeyword(lastMsg, SENSITIVE_KEYWORDS);

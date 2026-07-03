@@ -329,6 +329,16 @@ async function runAgent(
       `\n\nKONTEKS TERSTRUKTUR DARI SESI SEBELUMNYA (pakai sebagai default, JANGAN konfirmasi ulang kecuali tamu menyebut data baru):\n` +
       structuredLines +
       `\nKalau pesan terakhir tamu menyebut tanggal / tipe kamar / jumlah tamu yang BERBEDA dengan data di atas, ABAIKAN nilai lama dan ikuti pesan terbaru.`;
+    // Direktif eksplisit: pertanyaan yang tercatat belum terjawab WAJIB
+    // dituntaskan di turn ini — bukan sekadar konteks latar. Tanpa blok ini
+    // field tersebut hanya jadi satu baris pasif yang sering diabaikan model.
+    if (s.unresolved_question) {
+      systemPrompt +=
+        `\n\n⚠️ PERTANYAAN TAMU YANG BELUM TERJAWAB: "${s.unresolved_question}"\n` +
+        `WAJIB kamu jawab TUNTAS di balasan turn ini juga — jangan menunggu tamu mengulanginya. ` +
+        `Kalau jawabannya butuh data yang tidak kamu punya, katakan jujur dan jelaskan langkah berikutnya. ` +
+        `Setelah menjawabnya, lanjutkan menanggapi pesan terbaru tamu.`;
+    }
   }
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
     // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…

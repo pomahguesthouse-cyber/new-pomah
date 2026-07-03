@@ -2472,6 +2472,8 @@ export async function executeAutoreplyForPhone(
         aiStatus: aiAutoOn ? "auto" : "human",
         isFallback,
         consecutiveFallbacks,
+        summaryNeedsHuman: chatSummaryJson?.needs_human === true,
+        summaryHandoffReason: chatSummaryJson?.handoff_reason ?? null,
       });
     } catch (e) {
       console.warn("[Autoreply] ConvMonitor check failed (non-fatal):", e);
@@ -2490,7 +2492,11 @@ export async function executeAutoreplyForPhone(
   // Pakai sesi yang sedang berjalan; fallback ke sesi sebelumnya bila perlu.
   const summarizableMessages =
     currentSessionMessages.length >= SUMMARY_MIN_MESSAGES ? currentSessionMessages : previousSession;
-  const forced = shouldForceSummary(lastMessage);
+  // unresolved_question memaksa regen: begitu agent menjawabnya di turn ini,
+  // summary harus segera diperbarui agar field-nya terhapus — tanpa ini,
+  // cooldown 3 menit membuat "pertanyaan belum dijawab" basi menempel dan
+  // terus disuntikkan ke prompt turn-turn berikutnya.
+  const forced = shouldForceSummary(lastMessage) || !!chatSummaryJson?.unresolved_question;
   const summaryTextMissing = !chatSummary.trim();
 
   // Fallback deterministik: kalau kolom `chat_summary` masih kosong (thread
