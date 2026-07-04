@@ -22,6 +22,7 @@ import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
+import { Route as ApiWppRouteImport } from './routes/api.wpp'
 import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
@@ -130,6 +131,11 @@ const RoomsSlugRoute = RoomsSlugRouteImport.update({
 const LpSlugRoute = LpSlugRouteImport.update({
   id: '/lp/$slug',
   path: '/lp/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWppRoute = ApiWppRouteImport.update({
+  id: '/api/wpp',
+  path: '/api/wpp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiTelegramRoute = ApiTelegramRouteImport.update({
@@ -396,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -454,6 +461,7 @@ export interface FileRoutesByTo {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
@@ -514,6 +522,7 @@ export interface FileRoutesById {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
@@ -575,6 +584,7 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -633,6 +643,7 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin'
@@ -692,6 +703,7 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/admin/'
@@ -728,6 +740,7 @@ export interface RootRouteChildren {
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
   ApiTelegramRoute: typeof ApiTelegramRouteWithChildren
+  ApiWppRoute: typeof ApiWppRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
@@ -835,6 +848,13 @@ declare module '@tanstack/react-router' {
       path: '/lp/$slug'
       fullPath: '/lp/$slug'
       preLoaderRoute: typeof LpSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/wpp': {
+      id: '/api/wpp'
+      path: '/api/wpp'
+      fullPath: '/api/wpp'
+      preLoaderRoute: typeof ApiWppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/telegram': {
@@ -1256,6 +1276,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
   ApiTelegramRoute: ApiTelegramRouteWithChildren,
+  ApiWppRoute: ApiWppRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,

@@ -203,10 +203,7 @@ async function notifyNewSessionIfNeeded(input: {
   });
 }
 
-export const Route = createFileRoute("/api/fonnte")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
+export const wppWebhookPost = async ({ request }: { request: Request }): Promise<Response> => {
         const workerId = `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
         if (!verifyWppToken(request)) {
@@ -517,9 +514,9 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         return new Response("OK", { status: 200 });
-      },
+};
 
-      GET: async ({ request }) => {
+export const wppWebhookGet = async ({ request }: { request: Request }): Promise<Response> => {
         const url = new URL(request.url);
 
         const challenge = url.searchParams.get("challenge");
@@ -781,7 +778,13 @@ export const Route = createFileRoute("/api/fonnte")({
         }
 
         return new Response("Webhook is active (queue-based)", { status: 200 });
-      },
+};
+
+export const Route = createFileRoute("/api/fonnte")({
+  server: {
+    handlers: {
+      POST: wppWebhookPost,
+      GET: wppWebhookGet,
     },
   },
 });
