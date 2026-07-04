@@ -1,6 +1,6 @@
-# Alur Chatbot WhatsApp (Fonnte)
+# Alur Chatbot WhatsApp (WPPConnect)
 
-Dokumen ini menggambarkan alur runtime chatbot WhatsApp/Fonnte yang aktif di production, berdasarkan kode di:
+Dokumen ini menggambarkan alur runtime chatbot WhatsApp/WPPConnect yang aktif di production, berdasarkan kode di:
 
 - `src/routes/api.wpp.ts`
 - `src/services/queue.service.ts`
@@ -11,11 +11,11 @@ Dokumen ini menggambarkan alur runtime chatbot WhatsApp/Fonnte yang aktif di pro
 
 ## 1. Pipeline Webhook → DB Queue
 
-Webhook `/api/wpp` dibuat ringan. Tugas utamanya adalah menerima payload Fonnte, menyimpan pesan inbound, menjalankan notifikasi ringan secara background, lalu memasukkan pesan ke `wa_conversation_queue`. Webhook tidak menjalankan LLM langsung, sehingga bisa return `200 OK` cepat ke Fonnte.
+Webhook `/api/wpp` dibuat ringan. Tugas utamanya adalah menerima payload WPPConnect, menyimpan pesan inbound, menjalankan notifikasi ringan secara background, lalu memasukkan pesan ke `wa_conversation_queue`. Webhook tidak menjalankan LLM langsung, sehingga bisa return `200 OK` cepat ke WPPConnect.
 
 ```mermaid
 flowchart TD
-    A[POST /api/wpp] --> B[Verify token Fonnte<br/>mismatch: warn, lanjut]
+    A[POST /api/wpp] --> B[Verify token WPPConnect<br/>mismatch: warn, lanjut]
     B --> C[Parse body]
     C --> D{Payload valid?}
     D -- tidak --> Z([Return 200])
@@ -28,7 +28,7 @@ flowchart TD
     G -- ok --> H[Simpan intent badge<br/>fire-and-forget]
     H --> N[Notifikasi incoming / payment proof<br/>via waitUntil bila tersedia]
     N --> I[get_autoreply_context p_phone]
-    I --> J{auto_reply aktif / manager?<br/>fonnte_token ada?}
+    I --> J{auto_reply aktif / manager?<br/>wpp_token ada?}
     J -- tidak --> Z
     J -- ya --> K[resolveQueueTiming]
     K --> L[queueCleanupZombies]
@@ -74,7 +74,7 @@ Fungsi ini adalah inti balasan WhatsApp. Ia memuat konteks thread, data properti
 
 ```mermaid
 flowchart TD
-    A[Load get_autoreply_context] --> B{auto_reply aktif / manager<br/>dan token Fonnte ada?}
+    A[Load get_autoreply_context] --> B{auto_reply aktif / manager<br/>dan token WPPConnect ada?}
     B -- tidak --> X1([skipped_config])
     B -- ya --> C[Load property + room_types]
     C --> D{SOP enabled?}
@@ -102,7 +102,7 @@ flowchart TD
 
 ## 4. Penanganan Brosur / Lampiran
 
-Brosur disimpan di `sop_documents` dengan kategori `brosur` / `brochure`, dan file publiknya berada di bucket publik agar Fonnte bisa mengambil lampiran.
+Brosur disimpan di `sop_documents` dengan kategori `brosur` / `brochure`, dan file publiknya berada di bucket publik agar WPPConnect bisa mengambil lampiran.
 
 ```mermaid
 flowchart TD
