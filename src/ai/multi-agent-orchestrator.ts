@@ -295,6 +295,11 @@ async function runAgent(
   // Resolve tools dynamically per run so context-aware tool sets (e.g.
   // mode-gated Front Office tools) take effect; fall back to the static list.
   const agentTools = agent.getTools?.(agentCtx) ?? agent.tools;
+  // Daftar nama tool yang SAH untuk agent ini — dipakai untuk memblokir
+  // panggilan tool halusinasi di luar daftar (lihat enforcement di bawah).
+  const allowedToolNames = new Set(
+    (agentTools ?? []).map((t) => t.function?.name).filter(Boolean) as string[],
+  );
 
   // Drop trailing assistant turns: Gemini returns an empty completion when the
   // conversation ends on an assistant message (it has nothing new to answer).
@@ -502,6 +507,24 @@ async function runAgent(
           console.error(`[MultiAgent][manager] ask_agent → ${subKey} threw:`, msg);
           output = JSON.stringify({ ok: false, error: `Sub-agent ${subKey} threw: ${msg}` });
         }
+      } else if (!allowedToolNames.has(toolName)) {
+        // ENFORCEMENT (4 Jul 2026): executor global mengeksekusi tool apa pun
+        // di registry — LLM yang menghalusinasi nama tool di luar daftarnya
+        // (mis. `create_booking`, yang bahkan disebut di prompt front-office
+        // sebagai "TIDAK dimiliki") tetap tereksekusi. Insiden nyata: booking
+        // PG-57HH6 dibuat TANPA ringkasan konfirmasi + tanpa validasi
+        // kapasitas karena front-office mode tamu memanggil create_booking
+        // langsung. Tolak di sini, beri sinyal jelas ke LLM.
+        console.warn(
+          `[MultiAgent][${agent.key}] BLOCKED unauthorized tool call: ${toolName} (tidak ada di daftar tool agent)`,
+        );
+        output = JSON.stringify({
+          ok: false,
+          error:
+            `Tool ${toolName} tidak tersedia untuk kamu. Gunakan hanya tool yang terdaftar. ` +
+            `Untuk booking final, arahkan tamu mengikuti alur konfirmasi (state machine) — jangan membuat booking langsung.`,
+        });
+        toolLabel = null;
       } else {
         // Standard tool execution
         const result = await executeTool(toolName, rawArgs, toolCtx);
