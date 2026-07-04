@@ -115,7 +115,8 @@ export async function parseWppWebhook(
   const attachmentName = firstString(body.filename, (body as any).file_name, (body as any).media_name);
   const attachmentMime = firstString(body.mimetype, body.mime_type, body.media_type, (body as any).content_type);
 
-  if (!sender || (!message && !attachmentUrl)) return null;
+  const hasMedia = !!attachmentUrl || isMediaType || !!attachmentMime;
+  if (!sender || (!message && !hasMedia)) return null;
 
   const target = normalizePhoneCandidate(
     firstString(
