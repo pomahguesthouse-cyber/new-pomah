@@ -28,7 +28,6 @@ import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
 import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
-import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
 import { Route as AdminWppDiagnosticsRouteImport } from './routes/admin/wpp-diagnostics'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
@@ -162,11 +161,6 @@ const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
 const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
   id: '/api/place-photo',
   path: '/api/place-photo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiFonnteRoute = ApiFonnteRouteImport.update({
-  id: '/api/fonnte',
-  path: '/api/fonnte',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
@@ -403,7 +397,6 @@ export interface FileRoutesByFullPath {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -463,7 +456,6 @@ export interface FileRoutesByTo {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -525,7 +517,6 @@ export interface FileRoutesById {
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
-  '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -588,7 +579,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
-    | '/api/fonnte'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -648,7 +638,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
-    | '/api/fonnte'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -709,7 +698,6 @@ export interface FileRouteTypes {
     | '/admin/whatsapp'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
-    | '/api/fonnte'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -746,7 +734,6 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiDebugDbRoute: typeof ApiDebugDbRoute
-  ApiFonnteRoute: typeof ApiFonnteRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
@@ -902,13 +889,6 @@ declare module '@tanstack/react-router' {
       path: '/api/place-photo'
       fullPath: '/api/place-photo'
       preLoaderRoute: typeof ApiPlacePhotoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/fonnte': {
-      id: '/api/fonnte'
-      path: '/api/fonnte'
-      fullPath: '/api/fonnte'
-      preLoaderRoute: typeof ApiFonnteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/debug-db': {
@@ -1291,7 +1271,6 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiDebugDbRoute: ApiDebugDbRoute,
-  ApiFonnteRoute: ApiFonnteRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,

@@ -1,5 +1,5 @@
 /**
- * /api/fonnte — WhatsApp Webhook Endpoint
+ * /api/wpp — WhatsApp Webhook Endpoint (WPPConnect)
  *
  * Production path:
  *   1. Accept and persist incoming Wpp webhook payloads.
@@ -798,7 +798,7 @@ export const wppWebhookGet = async ({ request }: { request: Request }): Promise<
         return new Response("Webhook is active (queue-based)", { status: 200 });
 };
 
-export const Route = createFileRoute("/api/fonnte")({
+export const Route = createFileRoute("/api/wpp")({
   server: {
     handlers: {
       POST: wppWebhookPost,
