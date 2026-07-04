@@ -537,7 +537,7 @@ export const Route = createFileRoute("/api/fonnte")({
         if (wantsDebug) {
           const debugPhone = url.searchParams.get("phone") ?? "debug_test_000";
           const report: Record<string, unknown> = {
-            env_token_set: !!process.env.FONNTE_WEBHOOK_TOKEN,
+            env_token_set: !!(process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN),
             env_supabase_url_set: !!process.env.SUPABASE_URL,
             env_supabase_key_set: !!process.env.SUPABASE_PUBLISHABLE_KEY,
             env_lovable_api_key_set: !!process.env.LOVABLE_API_KEY,
