@@ -2,7 +2,7 @@
 
 Dokumen ini menggambarkan alur runtime chatbot WhatsApp/Fonnte yang aktif di production, berdasarkan kode di:
 
-- `src/routes/api.fonnte.ts`
+- `src/routes/api.wpp.ts`
 - `src/services/queue.service.ts`
 - `src/services/wa-autoreply.service.ts`
 - `src/ai/multi-agent-orchestrator.ts`
@@ -11,11 +11,11 @@ Dokumen ini menggambarkan alur runtime chatbot WhatsApp/Fonnte yang aktif di pro
 
 ## 1. Pipeline Webhook → DB Queue
 
-Webhook `/api/fonnte` dibuat ringan. Tugas utamanya adalah menerima payload Fonnte, menyimpan pesan inbound, menjalankan notifikasi ringan secara background, lalu memasukkan pesan ke `wa_conversation_queue`. Webhook tidak menjalankan LLM langsung, sehingga bisa return `200 OK` cepat ke Fonnte.
+Webhook `/api/wpp` dibuat ringan. Tugas utamanya adalah menerima payload Fonnte, menyimpan pesan inbound, menjalankan notifikasi ringan secara background, lalu memasukkan pesan ke `wa_conversation_queue`. Webhook tidak menjalankan LLM langsung, sehingga bisa return `200 OK` cepat ke Fonnte.
 
 ```mermaid
 flowchart TD
-    A[POST /api/fonnte] --> B[Verify token Fonnte<br/>mismatch: warn, lanjut]
+    A[POST /api/wpp] --> B[Verify token Fonnte<br/>mismatch: warn, lanjut]
     B --> C[Parse body]
     C --> D{Payload valid?}
     D -- tidak --> Z([Return 200])

@@ -79,7 +79,7 @@ Perbaikan tercepat dengan dampak terbesar: tambah scheduler cadangan independen,
 Tamu kirim WA
    │
    ▼
-Fonnte  ──webhook POST──►  /api/fonnte        (src/routes/api.fonnte.ts)
+Fonnte  ──webhook POST──►  /api/wpp        (src/routes/api.wpp.ts)
                               │  - verifikasi token
                               │  - parse + dedup
                               │  - simpan inbound
@@ -171,7 +171,7 @@ SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 20;
 
 - Fungsi pemulihan terdefinisi lengkap di `src/services/wa-autoreply.service.ts` (mencari pesan inbound yang belum punya entry antrian / belum dibalas, lalu meng-enqueue ulang).
 - Pencarian di seluruh `src/routes/**` **tidak menemukan** pemanggilnya. Cron `process-wa-queue` hanya memanggil `drainQueue` + `sendFailureFallbackToGuests`.
-- Sementara di webhook (`api.fonnte.ts`), bila `queueUpsert` gagal, blok catch hanya mencatat `[Webhook] enqueue error` lalu **tetap return 200**:
+- Sementara di webhook (`api.wpp.ts`), bila `queueUpsert` gagal, blok catch hanya mencatat `[Webhook] enqueue error` lalu **tetap return 200**:
   ```ts
   } catch (e) {
     console.error(`[Webhook] enqueue error: ${e} | ${logCtx}`);
@@ -330,4 +330,4 @@ Jika `cron.job_run_details` kosong/gagal padahal antrian terisi → akar masalah
 
 ---
 
-*Disusun dari pembacaan langsung berkas: `src/routes/api.fonnte.ts`, `src/routes/api.queue-worker.ts`, `src/routes/api.cron.process-wa-queue.ts`, `src/services/wa-autoreply.service.ts`, `src/services/queue.service.ts`, `src/services/whatsapp.service.ts`, `src/webhook/parser.ts`, `src/webhook/deduplicator.ts`, dan migrasi pg_cron/pg_net terkait.*
+*Disusun dari pembacaan langsung berkas: `src/routes/api.wpp.ts`, `src/routes/api.queue-worker.ts`, `src/routes/api.cron.process-wa-queue.ts`, `src/services/wa-autoreply.service.ts`, `src/services/queue.service.ts`, `src/services/whatsapp.service.ts`, `src/webhook/parser.ts`, `src/webhook/deduplicator.ts`, dan migrasi pg_cron/pg_net terkait.*
