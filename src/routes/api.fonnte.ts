@@ -259,7 +259,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
                 const byId = await (supabaseAdmin as any)
                   .from("whatsapp_messages")
                   .select("id")
-                  .eq("fonnte_id", wppId)
+                  .eq("wpp_id", wppId)
                   .maybeSingle();
                 existingMsg = byId.data ?? null;
               }
@@ -298,7 +298,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
                         }
                       : null,
                   },
-                  p_fonnte_id: wppId ?? null,
+                  p_wpp_id: wppId ?? null,
                 });
               }
             }
@@ -347,7 +347,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
             file_name: attachmentName ?? null,
             mime_type: attachmentMime ?? null,
             media_type: messageType ?? null,
-            fonnte_id: wppId ?? null,
+            wpp_id: wppId ?? null,
             attachment: attachmentUrl
               ? {
                   url: attachmentUrl,
@@ -461,7 +461,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
         const c = ctx as {
           thread_id: string;
           auto_reply_enabled: boolean;
-          fonnte_token: string;
+          wpp_token: string;
           smart_delay_config?: Record<string, unknown> | null;
         };
 
@@ -477,8 +477,8 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
           console.log(`[Webhook] auto_reply_enabled=false — skipping | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }
-        if (!c.fonnte_token) {
-          console.error(`[Webhook] fonnte_token not configured | ${logCtx}`);
+        if (!c.wpp_token) {
+          console.error(`[Webhook] wpp_token not configured | ${logCtx}`);
           return new Response("OK", { status: 200 });
         }
 
@@ -561,7 +561,7 @@ export const wppWebhookGet = async ({ request }: { request: Request }): Promise<
             if (ctx) {
               const c = ctx as Record<string, unknown>;
               report.auto_reply_enabled = c.auto_reply_enabled;
-              report.fonnte_token_set = !!(c.fonnte_token as string)?.length;
+              report.wpp_token_set = !!(c.wpp_token as string)?.length;
               report.message_count = Array.isArray(c.messages) ? c.messages.length : 0;
             }
           } catch (e) {
@@ -640,7 +640,7 @@ export const wppWebhookGet = async ({ request }: { request: Request }): Promise<
             const c = ctx as {
               thread_id: string;
               auto_reply_enabled: boolean;
-              fonnte_token: string;
+              wpp_token: string;
               chat_summary?: string | null;
               chat_summary_json?: Record<string, unknown> | null;
               messages: Array<{ direction: string; body: string; sent_at?: string }>;
@@ -754,9 +754,9 @@ export const wppWebhookGet = async ({ request }: { request: Request }): Promise<
             result.reply_ok = !!orchResult.reply;
             if (orchResult.error) result.error = orchResult.error;
 
-            if (url.searchParams.get("send") === "1" && orchResult.reply && c.fonnte_token) {
+            if (url.searchParams.get("send") === "1" && orchResult.reply && c.wpp_token) {
               const { ok, error: sendErr } = await sendWhatsAppMessage(
-                c.fonnte_token,
+                c.wpp_token,
                 testPhone,
                 orchResult.reply,
               );
