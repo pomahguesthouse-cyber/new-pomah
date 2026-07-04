@@ -232,6 +232,47 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         if (isOutgoing) {
           try {
+            // GLOBAL dedup dulu SEBELUM sentuh thread. WPPConnect meng-echo
+            // setiap pesan yang KITA kirim sendiri via API kembali ke webhook.
+            // Kalau kita tidak dedupe global, echo bisa nyasar ke thread lain
+            // (karena LID/PN device tidak sama dengan phone tamu di DB) dan
+            // muncul sebagai "pesan berulang" di admin UI.
+            if (wppId) {
+              const { data: existingById } = await (supabaseAdmin as any)
+                .from("whatsapp_messages")
+                .select("id")
+                .eq("wpp_id", wppId)
+                .maybeSingle();
+              if (existingById) return new Response("OK", { status: 200 });
+            }
+
+            // Fallback body-dedup global (2 menit) — echo dari API-send kita
+            // sendiri: body persis sama dengan yang baru saja app tulis via
+            // save_outbound_whatsapp / autoreply pipeline.
+            const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
+            const { data: existingByBody } = await (supabaseAdmin as any)
+              .from("whatsapp_messages")
+              .select("id")
+              .eq("direction", "out")
+              .eq("body", displayMessage)
+              .gte("sent_at", twoMinsAgo)
+              .limit(1)
+              .maybeSingle();
+            if (existingByBody) {
+              // Ini echo dari pesan yang KITA kirim. Update wpp_id di record
+              // kita bila belum ada, agar future dedup by wpp_id efektif.
+              if (wppId) {
+                await (supabaseAdmin as any)
+                  .from("whatsapp_messages")
+                  .update({ wpp_id: wppId })
+                  .eq("id", existingByBody.id)
+                  .is("wpp_id", null);
+              }
+              return new Response("OK", { status: 200 });
+            }
+
+            // Bukan echo — pesan asli yang dikirim manual dari HP operator.
+            // Baru sekarang cari/buat thread.
             const { data: thread } = await (supabaseAdmin as any)
               .from("whatsapp_threads")
               .select("id")
@@ -254,59 +295,36 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
             }
 
             if (threadId) {
-              let existingMsg: { id: string } | null = null;
-              if (wppId) {
-                const byId = await (supabaseAdmin as any)
-                  .from("whatsapp_messages")
-                  .select("id")
-                  .eq("wpp_id", wppId)
-                  .maybeSingle();
-                existingMsg = byId.data ?? null;
-              }
-
-              if (!existingMsg) {
-                const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
-                const byBody = await (supabaseAdmin as any)
-                  .from("whatsapp_messages")
-                  .select("id")
-                  .eq("thread_id", threadId)
-                  .eq("direction", "out")
-                  .eq("body", displayMessage)
-                  .gte("sent_at", twoMinsAgo)
-                  .maybeSingle();
-                existingMsg = byBody.data ?? null;
-              }
-
-              if (!existingMsg) {
-                await (supabaseAdmin as any).rpc("save_outbound_whatsapp", {
-                  p_thread_id: threadId,
-                  p_body: displayMessage,
-                  p_metadata: {
-                    is_native_human: true,
-                    source: "whatsapp_native",
-                    attachment_url: attachmentUrl ?? null,
-                    media_url: attachmentUrl ?? null,
-                    file_name: attachmentName ?? null,
-                    mime_type: attachmentMime ?? null,
-                    media_type: messageType ?? null,
-                    attachment: attachmentUrl
-                      ? {
-                          url: attachmentUrl,
-                          file_name: attachmentName ?? null,
-                          mime_type: attachmentMime ?? null,
-                          type: messageType ?? null,
-                        }
-                      : null,
-                  },
-                  p_wpp_id: wppId ?? null,
-                });
-              }
+              await (supabaseAdmin as any).rpc("save_outbound_whatsapp", {
+                p_thread_id: threadId,
+                p_body: displayMessage,
+                p_metadata: {
+                  is_native_human: true,
+                  source: "whatsapp_native",
+                  attachment_url: attachmentUrl ?? null,
+                  media_url: attachmentUrl ?? null,
+                  file_name: attachmentName ?? null,
+                  mime_type: attachmentMime ?? null,
+                  media_type: messageType ?? null,
+                  attachment: attachmentUrl
+                    ? {
+                        url: attachmentUrl,
+                        file_name: attachmentName ?? null,
+                        mime_type: attachmentMime ?? null,
+                        type: messageType ?? null,
+                      }
+                    : null,
+                },
+                p_wpp_id: wppId ?? null,
+              });
             }
           } catch (err) {
             console.error(`[Webhook] Error handling native outgoing message: ${err} | ${logCtx}`);
           }
           return new Response("OK", { status: 200 });
         }
+
+
 
         const dedupKey = buildDedupKey(wppId, sender, displayMessage);
         if (isDuplicate(dedupKey) || isDuplicateBody(sender, displayMessage)) {
