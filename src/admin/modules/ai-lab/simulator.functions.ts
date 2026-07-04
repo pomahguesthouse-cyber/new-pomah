@@ -4,7 +4,7 @@
  * Runs the SAME multi-agent orchestration pipeline used in production
  * (classifier → router → agent → tools → booking state machine) against a
  * sandbox/test phone number, so admins can exercise the WhatsApp bot from the
- * AI Lab without going through Fonnte.
+ * AI Lab without going through Wpp.
  *
  * NOTE: this is end-to-end. The booking state machine writes to
  * `wa_booking_states` and `create_booking` creates real booking/guest records
@@ -139,7 +139,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     const manager = await resolveManagerByPhone(data.phone);
     const isManager = !!manager || isConfiguredAdminPhone(data.phone);
 
-    // Dedup double-send (4 Jul 2026): fonnteId DETERMINISTIK per (phone, isi,
+    // Dedup double-send (4 Jul 2026): wppId DETERMINISTIK per (phone, isi,
     // jendela 15 detik) — dulu memakai Date.now()+random sehingga double-click
     // di UI menghasilkan dua ID unik → dua eksekusi AI → dua balasan berbeda
     // untuk satu pesan. Dedup durable fonnte_id di saveInboundMessage kini
@@ -153,7 +153,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       phone: data.phone,
       name: isManager ? (manager?.name ?? "Admin") : "Simulator Guest",
       body: data.message,
-      fonnteId: `sim-${data.phone}-${bodyHash}-${dedupBucket}`,
+      wppId: `sim-${data.phone}-${bodyHash}-${dedupBucket}`,
     });
     if (saveErr || !messageId) {
       return { ok: false as const, error: saveErr?.message ?? "Gagal menyimpan pesan simulator." };

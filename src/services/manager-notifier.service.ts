@@ -172,7 +172,7 @@ async function fanOutToAgentChannels(
 /* Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-async function getFonnteToken(db: Db): Promise<string | null> {
+async function getWppToken(db: Db): Promise<string | null> {
   const { data } = await db
     .from("properties")
     .select("fonnte_token")
@@ -264,7 +264,7 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
       return;
     }
     if (status === "failed") {
-      // Sudah dicoba 3x dan gagal dalam window 30 menit ini (Fonnte down?).
+      // Sudah dicoba 3x dan gagal dalam window 30 menit ini (Wpp down?).
       // Biarkan window berikutnya yang retry agar tidak spam tiap menit.
       console.info(`[ManagerNotifier] Skip — gagal di window ini, tunggu window berikutnya: ${opts.dedupeKey}`);
       return;
@@ -1083,7 +1083,7 @@ export async function notifyZombieTimeout(
       `Jumlah job yang lock-nya expired & di-reset: ${opts.count}\n` +
       `⏱️ Waktu: ${wibTime}\n\n` +
       (sampleLines ? `Contoh:\n${sampleLines}\n\n` : "") +
-      `Job akan dicoba ulang otomatis. Bila berulang, cek beban LLM / koneksi Fonnte.`;
+      `Job akan dicoba ulang otomatis. Bila berulang, cek beban LLM / koneksi Wpp.`;
 
     const sampleKey = opts.samples
       .map((s) => s.entryId)

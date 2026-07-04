@@ -1,5 +1,5 @@
 /**
- * Reliable WhatsApp autoreply: debounce wait → AI → Fonnte send.
+ * Reliable WhatsApp autoreply: debounce wait → AI → Wpp send.
  * Runs inside waitUntil from the webhook (not HTTP self-fetch).
  */
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -132,7 +132,7 @@ function pickAiBudgetMs(message: string): number {
   return HEAVY_INTENT_RE.test(text) ? AI_TIMEOUT_MS : AI_TIMEOUT_LIGHT_MS;
 }
 // Deadline dinding-jam untuk satu iterasi handleOne (klaim → orkestrasi →
-// persist → Fonnte → queueComplete). Harus < batas wall-time worker Cloudflare
+// persist → Wpp → queueComplete). Harus < batas wall-time worker Cloudflare
 // (≈30s) dan < timeout klien penggerak (pg_net/cron-job.org 30s). Jika
 // terlampaui, kita paksa queueFail supaya entry tidak menjadi zombie dan
 // fallback bisa dikirim di siklus cron berikutnya.
@@ -217,7 +217,7 @@ export type AutoreplyOutcome =
   | "fatal";
 
 /**
- * Generate reply and send via Fonnte (no queue claim required).
+ * Generate reply and send via Wpp (no queue claim required).
  *
  * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
@@ -1195,7 +1195,7 @@ export async function executeAutoreplyForPhone(
 
   // ── Zombie rescue: kirim ulang pesan outbound yang tersangkut 'pending' ──
   // Skenario: worker sebelumnya mati setelah menyimpan pesan ke DB
-  // (send_status='pending') tapi sebelum memanggil Fonnte API. Pesan itu
+  // (send_status='pending') tapi sebelum memanggil Wpp API. Pesan itu
   // tersimpan di DB tapi tidak pernah sampai ke tamu. Attempt berikutnya
   // (ini) harus mengirim ulang pesan itu alih-alih memanggil AI lagi —
   // lebih hemat dan mencegah dua balasan berbeda untuk pesan yang sama.
@@ -1218,7 +1218,7 @@ export async function executeAutoreplyForPhone(
     if (stuckMsg?.body) {
       // Atomic claim: ubah send_status pending → rescuing HANYA kalau masih
       // pending. Kalau worker lain duluan, `claimed` kosong → kita tidak
-      // memanggil Fonnte (mencegah double resend).
+      // memanggil Wpp (mencegah double resend).
       const { data: claimed } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
         .update({
@@ -1266,7 +1266,7 @@ export async function executeAutoreplyForPhone(
         })
         .eq("id", stuckMsg.id);
       console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
-      // Kalau resend juga gagal (Fonnte down), lanjutkan ke AI normal
+      // Kalau resend juga gagal (Wpp down), lanjutkan ke AI normal
       // supaya tamu tetap dapat respons dari attempt ini.
     }
   } catch (e) {
@@ -1323,7 +1323,7 @@ export async function executeAutoreplyForPhone(
   const rollingMessages: Array<{ direction: string; body: string; sent_at?: string; isHuman?: boolean }> =
     cleanedSession.slice(-10);
 
-  // Tandai outbound yang ditulis manual oleh admin (Fonnte native/WhatsApp Web)
+  // Tandai outbound yang ditulis manual oleh admin (Wpp native/WhatsApp Web)
   // agar LLM tahu ada intervensi manusia dan tidak menimpa/menganulir jawaban
   // admin. Kita ambil metadata->>is_native_human & source untuk pesan out di
   // window rolling ini, lalu cocokkan dengan body + sent_at.
@@ -1758,7 +1758,7 @@ export async function executeAutoreplyForPhone(
 
           // (2) Persist-then-send + race guard: tulis baris ack 'pending'
           // dulu, lalu pastikan baris kita yang paling awal. Kalau bukan,
-          // worker lain sudah menulis duluan → skip kirim Fonnte.
+          // worker lain sudah menulis duluan → skip kirim Wpp.
           const ackRowId = await saveOutboundMessage(supabaseAdmin, {
             threadId: c.thread_id,
             body: QUICK_ACK_MESSAGE,
@@ -2089,7 +2089,7 @@ export async function executeAutoreplyForPhone(
   let finalReply = cleanReplyBody(rawReply, pdfToStrip);
 
   // ── Duplicate-send guard ────────────────────────────────────────────────
-  // Worker bisa mati setelah Fonnte sukses tapi sebelum sempat menyimpan
+  // Worker bisa mati setelah Wpp sukses tapi sebelum sempat menyimpan
   // outbound + memanggil queueComplete (zombie_timeout). Retry berikutnya
   // akan mencoba mengirim ulang → tamu menerima pesan dobel.
   // Dua lapis pengaman:
@@ -2173,7 +2173,7 @@ export async function executeAutoreplyForPhone(
     ...buildLatencyMetadata(),
   };
 
-  // Persist outbound BEFORE calling Fonnte. Kalau worker mati setelah Fonnte
+  // Persist outbound BEFORE calling Wpp. Kalau worker mati setelah Wpp
   // sukses, baris ini sudah ada dan dedup-guard di atas akan mencegah
   // pengiriman ulang pada retry berikutnya.
   const outboundRowId = await saveOutboundMessage(supabaseAdmin, {
@@ -2188,7 +2188,7 @@ export async function executeAutoreplyForPhone(
   // ── Atomic claim per queue_entry_id ────────────────────────────────────
   // Dedup-guard di atas read-then-write: dua worker konkuren bisa sama-sama
   // lolos pengecekan dan dua-duanya menulis baris 'pending' + memanggil
-  // Fonnte → tamu menerima pesan dobel. Setelah persist, pastikan baris
+  // Wpp → tamu menerima pesan dobel. Setelah persist, pastikan baris
   // kita adalah final-reply pertama untuk entry ini. Kalau ada baris lebih
   // awal (non-ack, non-failed/superseded) milik worker lain, tandai punya
   // kita superseded dan jangan kirim.
@@ -2218,7 +2218,7 @@ export async function executeAutoreplyForPhone(
         }
         console.warn(
           `[Autoreply] Final-reply race lost for ${phone.slice(-6)} ` +
-            `(entry=${queueEntryId.slice(0, 8)}) — skip Fonnte`,
+            `(entry=${queueEntryId.slice(0, 8)}) — skip Wpp`,
         );
         void updateBookingFormSendLog({ body: finalReply, status: "superseded" });
         return "ok";
@@ -2228,7 +2228,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  // Heartbeat berbasis kemajuan: sebelum langkah I/O terakhir (Fonnte),
+  // Heartbeat berbasis kemajuan: sebelum langkah I/O terakhir (Wpp),
   // pastikan lock masih milik worker ini walau setInterval sempat di-skip.
   if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
 
@@ -2519,7 +2519,7 @@ export async function drainQueue(
     }, 7_000);
 
     // Deadline dinding-jam per klaim: kalau pipeline (orkestrasi + persist +
-    // Fonnte) melewati batas, kita paksa outcome fatal supaya cabang di bawah
+    // Wpp) melewati batas, kita paksa outcome fatal supaya cabang di bawah
     // memanggil queueFail SEBELUM Cloudflare mematikan worker. Tanpa ini,
     // worker mati diam-diam dan entry menjadi zombie (lock expired tanpa
     // completion) yang harus di-cleanup oleh cron dan tidak dapat fallback
@@ -2731,7 +2731,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 }> {
   const sinceIso = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
   // Grace period: jangan kirim fallback langsung setelah entry di-mark
-  // failed. Worker bisa saja masih hidup memproses outbound (Fonnte +
+  // failed. Worker bisa saja masih hidup memproses outbound (Wpp +
   // persistence) walau heartbeat telat. Tunggu 90 detik sejak completed_at
   // — jika benar-benar mati, fallback akan tetap terkirim. Jika worker
   // sebenarnya berhasil, pengecekan outbound di bawah akan menangkapnya
@@ -2835,7 +2835,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] outbound lookup failed:", e);
     }
 
-    // Ambil token Fonnte via context RPC.
+    // Ambil token Wpp via context RPC.
     let fonnteToken: string | null = null;
     let autoReplyEnabled = false;
     try {
@@ -2859,7 +2859,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
     // ── Atomic claim: tandai entry SEBELUM kirim (idempotency key) ─────────
     // Dua tick cron dapat melihat row 'failed' yang sama sebelum salah satu
-    // menyetel marker. Tanpa claim atomik, keduanya akan memanggil Fonnte
+    // menyetel marker. Tanpa claim atomik, keduanya akan memanggil Wpp
     // dan tamu menerima dua pesan "sistem sibuk". Update bersyarat ini
     // menjamin hanya satu pemanggil yang mendapat baris (`select` akan
     // kosong untuk pemanggil yang kalah race).
@@ -2880,8 +2880,8 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    // Persist outbound BEFORE Fonnte (pola persist-then-send). Jika worker
-    // mati setelah Fonnte tapi sebelum baris ini disimpan, claim di atas
+    // Persist outbound BEFORE Wpp (pola persist-then-send). Jika worker
+    // mati setelah Wpp tapi sebelum baris ini disimpan, claim di atas
     // sudah mengunci entry sehingga retry tidak akan kirim ulang.
     let outboundRowId: string | null = null;
     try {

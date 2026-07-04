@@ -12,7 +12,7 @@
  * Returns a JSON payload the agent can paraphrase into a warm message.
  * Does NOT itself send any WhatsApp message — that is the agent's job
  * via its normal reply path (which the WA worker post-processes and
- * delivers through Fonnte).
+ * delivers through Wpp).
  */
 
 import { fmtDateID } from "@/lib/date";

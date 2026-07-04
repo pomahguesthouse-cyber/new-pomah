@@ -61,7 +61,7 @@ export const listBookingFormSendLogs = createServerFn({ method: "GET" })
 
 /**
  * Kirim ulang tautan form booking untuk log yang gagal/superseded.
- * Membuat token baru (TTL fresh 30 menit), mengirim pesan WA via Fonnte
+ * Membuat token baru (TTL fresh 30 menit), mengirim pesan WA via Wpp
  * memakai kredensial properti, lalu mencatat log baru status `sent`/`failed`.
  */
 const resendInput = z.object({ logId: z.string().uuid() });
@@ -89,7 +89,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       .maybeSingle();
     if (logErr || !log) throw new Error("Log tidak ditemukan.");
 
-    // Resolusi kredensial Fonnte + base URL dari properti terkait.
+    // Resolusi kredensial Wpp + base URL dari properti terkait.
     let fonnteToken: string | null = null;
     let baseUrl = "https://pomahguesthouse.com";
     let propertyName = "Pomah Guesthouse";
@@ -107,7 +107,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       }
     }
     if (!fonnteToken) {
-      throw new Error("Properti belum mempunyai token Fonnte aktif.");
+      throw new Error("Properti belum mempunyai token Wpp aktif.");
     }
 
     // Buat token baru memakai prefill yang sama dengan log lama.

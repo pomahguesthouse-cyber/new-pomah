@@ -2,7 +2,7 @@
  * /api/fonnte — WhatsApp Webhook Endpoint
  *
  * Production path:
- *   1. Accept and persist incoming Fonnte webhook payloads.
+ *   1. Accept and persist incoming Wpp webhook payloads.
  *   2. Return 200 quickly.
  *   3. Enqueue inbound messages to `wa_conversation_queue`.
  *   4. Let queue workers run AI/autoreply asynchronously.
@@ -12,8 +12,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 
 // ── Webhook layer ──────────────────────────────────────────────────────────────
-import { verifyFonnteToken } from "@/webhook/verifier";
-import { parseFonnteBody } from "@/webhook/parser";
+import { verifyWppToken } from "@/webhook/verifier";
+import { parseWppWebhook } from "@/webhook/parser";
 import { isDuplicate, isDuplicateBody, buildDedupKey } from "@/webhook/deduplicator";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 
@@ -209,14 +209,14 @@ export const Route = createFileRoute("/api/fonnte")({
       POST: async ({ request }) => {
         const workerId = `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-        if (!verifyFonnteToken(request)) {
+        if (!verifyWppToken(request)) {
           console.warn("[Webhook] token mismatch — processing anyway");
         }
 
-        const event = await parseFonnteBody(request);
+        const event = await parseWppWebhook(request);
         if (!event) return new Response("OK", { status: 200 });
 
-        const { sender, message, name, fonnteId, isOutgoing, customerPhone, rawBody } = event;
+        const { sender, message, name, wppId, isOutgoing, customerPhone, rawBody } = event;
         const attachmentUrl = event.attachmentUrl;
         const attachmentName = event.attachmentName;
         const attachmentMime = event.attachmentMime;
@@ -258,11 +258,11 @@ export const Route = createFileRoute("/api/fonnte")({
 
             if (threadId) {
               let existingMsg: { id: string } | null = null;
-              if (fonnteId) {
+              if (wppId) {
                 const byId = await (supabaseAdmin as any)
                   .from("whatsapp_messages")
                   .select("id")
-                  .eq("fonnte_id", fonnteId)
+                  .eq("fonnte_id", wppId)
                   .maybeSingle();
                 existingMsg = byId.data ?? null;
               }
@@ -301,7 +301,7 @@ export const Route = createFileRoute("/api/fonnte")({
                         }
                       : null,
                   },
-                  p_fonnte_id: fonnteId ?? null,
+                  p_fonnte_id: wppId ?? null,
                 });
               }
             }
@@ -311,7 +311,7 @@ export const Route = createFileRoute("/api/fonnte")({
           return new Response("OK", { status: 200 });
         }
 
-        const dedupKey = buildDedupKey(fonnteId, sender, displayMessage);
+        const dedupKey = buildDedupKey(wppId, sender, displayMessage);
         if (isDuplicate(dedupKey) || isDuplicateBody(sender, displayMessage)) {
           console.log(`[Webhook] duplicate | ${logCtx}`);
           return new Response("OK", { status: 200 });
@@ -319,7 +319,7 @@ export const Route = createFileRoute("/api/fonnte")({
 
         const { messageId, duplicate, error: saveErr } = await saveInboundMessage(
           supabaseAdmin,
-          { phone: customerPhone, name, body: displayMessage, fonnteId },
+          { phone: customerPhone, name, body: displayMessage, wppId },
         );
         if (saveErr || !messageId) {
           console.error(`[Webhook] saveInbound failed: ${saveErr?.message ?? "no messageId"} | ${logCtx}`);
@@ -350,7 +350,7 @@ export const Route = createFileRoute("/api/fonnte")({
             file_name: attachmentName ?? null,
             mime_type: attachmentMime ?? null,
             media_type: messageType ?? null,
-            fonnte_id: fonnteId ?? null,
+            fonnte_id: wppId ?? null,
             attachment: attachmentUrl
               ? {
                   url: attachmentUrl,
@@ -523,7 +523,7 @@ export const Route = createFileRoute("/api/fonnte")({
         const url = new URL(request.url);
 
         const challenge = url.searchParams.get("challenge");
-        if (challenge && verifyFonnteToken(request)) {
+        if (challenge && verifyWppToken(request)) {
           return new Response(challenge, { status: 200 });
         }
 

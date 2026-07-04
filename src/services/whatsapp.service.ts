@@ -4,7 +4,7 @@
  * Single responsibility: send a message via a self-hosted WPPConnect server.
  * All callers receive a typed result — never raw fetch responses.
  *
- * Migration note (Fonnte -> WPPConnect):
+ * Migration note (Wpp -> WPPConnect):
  *   The public signature is unchanged, so all 13 call sites keep working:
  *     sendWhatsAppMessage(token, phone, message, fileUrl?, filename?)
  *   - `token`   -> the WPPConnect session Bearer token (stored, as before, in

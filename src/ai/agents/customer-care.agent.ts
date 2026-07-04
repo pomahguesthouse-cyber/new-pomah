@@ -20,7 +20,7 @@ const CUSTOMER_CARE_TOOLS: ToolDefinition[] = [
   // Agent uses. Gated at the tool layer (ctx.isManager === true), so guests
   // can't trick the agent into invoking it from a WA conversation. Useful so
   // a manager can ask Dewi via Telegram "balas tamu 0812... bilang handuknya
-  // sudah dikirim" and the WA reply goes out via Fonnte.
+  // sudah dikirim" and the WA reply goes out via Wpp.
   ...TOOL_DEFINITIONS.filter((t) => t.function.name === "reply_to_guest"),
   {
     type: "function",

@@ -103,14 +103,14 @@ export const sendMessage = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
 
-    let fonnteId: string | null = null;
+    let wppId: string | null = null;
     if (prop?.fonnte_token) {
       const sendResult = await sendWhatsAppMessage(prop.fonnte_token, thread.phone, data.body);
       if (!sendResult.ok) {
-        console.error("[Admin WhatsApp] Fonnte send failed:", sendResult.error);
+        console.error("[Admin WhatsApp] Wpp send failed:", sendResult.error);
       }
       const raw = sendResult.raw as any;
-      fonnteId =
+      wppId =
         raw?.id ??
         raw?.message_id ??
         raw?.data?.id ??
@@ -123,7 +123,7 @@ export const sendMessage = createServerFn({ method: "POST" })
       thread_id: data.threadId,
       direction: "out",
       body: data.body,
-      fonnte_id: fonnteId,
+      fonnte_id: wppId,
       metadata: {
         is_manual_admin: true,
         source: "admin_inbox",

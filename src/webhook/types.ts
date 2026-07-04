@@ -5,11 +5,11 @@
  * from any layer without pulling in heavy modules.
  */
 
-/** Raw payload that Fonnte sends to the webhook endpoint. */
-export interface FonntePayload {
+/** Raw payload that Wpp sends to the webhook endpoint. */
+export interface WppWebhookPayload {
   /** Sender phone number (e.g. "628123456789") */
   sender?:     string;
-  /** Alternate field name Fonnte sometimes uses */
+  /** Alternate field name Wpp sometimes uses */
   pengirim?:   string;
   /** Message body */
   message?:    string;
@@ -19,7 +19,7 @@ export interface FonntePayload {
   name?:       string;
   /** WhatsApp pushname */
   pushname?:   string;
-  /** Fonnte-assigned message ID (used for deduplication) */
+  /** Wpp-assigned message ID (used for deduplication) */
   id?:         string;
   message_id?: string;
   /** The WhatsApp device (phone number of our gateway).
@@ -35,7 +35,7 @@ export interface FonntePayload {
   media_type?: string;
   /** Tipe pesan (text|image|document|...) bila tersedia */
   type?:       string;
-  /** Receiver/target fields vary between Fonnte event types. */
+  /** Receiver/target fields vary between Wpp event types. */
   target?:     string;
   receiver?:   string;
   penerima?:   string;
@@ -52,7 +52,7 @@ export interface FonntePayload {
   phone?:      string;
 }
 
-/** Normalised, validated event after parsing the raw Fonnte body. */
+/** Normalised, validated event after parsing the raw Wpp body. */
 export interface ParsedWebhookEvent {
   /** Guest phone number */
   sender:     string;
@@ -60,8 +60,8 @@ export interface ParsedWebhookEvent {
   message:    string;
   /** Display name (falls back to sender) */
   name:       string;
-  /** Fonnte message ID when available; undefined otherwise */
-  fonnteId:   string | undefined;
+  /** Wpp message ID when available; undefined otherwise */
+  wppId:   string | undefined;
   /** The WhatsApp device phone */
   device:     string | undefined;
   /** True when this webhook fires for a message WE sent (should be skipped) */
@@ -72,7 +72,7 @@ export interface ParsedWebhookEvent {
   attachmentUrl?: string;
   /** Nama file lampiran (opsional) */
   attachmentName?: string;
-  /** MIME / media type attachment when provided by Fonnte. */
+  /** MIME / media type attachment when provided by Wpp. */
   attachmentMime?: string;
   /** Raw media/message type. */
   messageType?: string;
