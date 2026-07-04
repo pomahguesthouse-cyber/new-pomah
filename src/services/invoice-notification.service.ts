@@ -194,7 +194,7 @@ export async function generateAndSendInvoiceNotification({
     } else if (paymentStatus === "paid") {
       paymentLines = `• Status Pembayaran: LUNAS ✅`;
     } else {
-      paymentLines = `• Status Pembayaran: Belum dibayar` + bankDetails;
+      paymentLines = `• Status Pembayaran: Menunggu pembayaran ⏳` + bankDetails;
     }
 
     const messageBody = `Halo ${guest.full_name},

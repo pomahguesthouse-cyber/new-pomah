@@ -425,7 +425,7 @@ function ConfirmationPage() {
                       </p>
                     ) : (
                       <p className="mt-1 font-medium text-stone-700">
-                        Status pembayaran: belum dibayar.
+                        Status pembayaran: menunggu pembayaran.
                       </p>
                     )}
 
