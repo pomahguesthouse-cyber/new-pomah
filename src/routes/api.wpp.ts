@@ -442,6 +442,61 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
           smart_delay_config?: Record<string, unknown> | null;
         };
 
+        // OCR bukti transfer — sekarang sesudah `c` tersedia supaya kita bisa
+        // ambil media base64 lewat WPPConnect (`get-media-by-message`) pakai
+        // c.wpp_token. Tetap SEBELUM gate auto_reply_enabled: OCR & notifikasi
+        // manajer harus jalan meski auto-reply mati.
+        if (isImageMessage) {
+          runBackground(saveMessageMetadata(supabaseAdmin, {
+            messageId,
+            metadata: {
+              intent: "payment_proof",
+              agent_key: "finance",
+              tools_used: ["payment-proof-ocr"],
+              routing_confidence: 1,
+              fast_path: true,
+              pipeline: "payment_proof_ocr",
+            },
+          }).catch((e) => console.warn("[Webhook] payment_proof intent tag error:", e)));
+
+          runBackground((async () => {
+            try {
+              let imageForOcr: string | null = attachmentUrl ?? null;
+              if (!imageForOcr && isImageMessage && wppId && c.wpp_token) {
+                const { fetchWppMediaDataUri } = await import("@/services/whatsapp.service");
+                imageForOcr = await fetchWppMediaDataUri(c.wpp_token, wppId);
+              }
+              if (!imageForOcr) {
+                console.warn("[Webhook] payment_proof: tidak ada image (URL/data URI) — skip OCR");
+                return;
+              }
+              const { analyzePaymentProof } = await import("@/services/payment-proof.service");
+              const ocrResult = await analyzePaymentProof(
+                supabaseAdmin as any,
+                imageForOcr,
+                customerPhone,
+                messageId,
+              );
+
+              const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
+              await notifyPaymentProof(supabaseAdmin as any, {
+                threadId: null,
+                phone: customerPhone,
+                guestName: name,
+                imageUrl: attachmentUrl ?? undefined,
+                messageId,
+                ocrResult,
+              });
+            } catch (err) {
+              console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
+            }
+          })());
+        } else if (attachmentUrl) {
+          console.info(
+            `[Webhook] Skip OCR non-image attachment (mime=${attachmentMime ?? "?"}, type=${messageType ?? "?"})`,
+          );
+        }
+
         let isManager = false;
         try {
           const { resolveManagerByPhone } = await import("@/services/wa-autoreply.service");
