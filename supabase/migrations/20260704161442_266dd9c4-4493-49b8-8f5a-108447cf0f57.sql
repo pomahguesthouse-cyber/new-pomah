@@ -1,0 +1,1 @@
+UPDATE public.channel_status SET channel = 'whatsapp_wpp' WHERE channel = 'whatsapp_fonnte';

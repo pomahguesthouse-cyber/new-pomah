@@ -202,7 +202,7 @@ export function WebchatWindow({
   );
 
   const channelStatus = statusQuery.data?.channels ?? [];
-  const waChannel = channelStatus.find((c: any) => c.channel === "whatsapp_fonnte");
+  const waChannel = channelStatus.find((c: any) => c.channel === "whatsapp_wpp");
   const isWaDown  = waChannel && waChannel.status !== "online";
 
   // ─── Onboarding form ──────────────────────────────────────────────
