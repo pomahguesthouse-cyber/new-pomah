@@ -218,7 +218,8 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
         const attachmentName = event.attachmentName;
         const attachmentMime = event.attachmentMime;
         const messageType = event.messageType;
-        const displayMessage = message || (attachmentUrl ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
+        const isMediaMsg = !!attachmentUrl || (!!messageType && messageType.toLowerCase() !== "chat" && messageType.toLowerCase() !== "text") || !!attachmentMime;
+        const displayMessage = message || (isMediaMsg ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
         const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
 
         console.log("[Webhook]", {
