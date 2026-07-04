@@ -40,12 +40,12 @@ interface PropertyTokens {
 async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
   const { data } = await db
     .from("properties")
-    .select("fonnte_token, telegram_bot_token")
+    .select("wpp_token, telegram_bot_token")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
   return {
-    wppToken: (data?.fonnte_token as string | null) ?? null,
+    wppToken: (data?.wpp_token as string | null) ?? null,
     telegramToken: (data?.telegram_bot_token as string | null) ?? null,
   };
 }
@@ -175,11 +175,11 @@ async function fanOutToAgentChannels(
 async function getWppToken(db: Db): Promise<string | null> {
   const { data } = await db
     .from("properties")
-    .select("fonnte_token")
+    .select("wpp_token")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  return (data?.fonnte_token as string | null) ?? null;
+  return (data?.wpp_token as string | null) ?? null;
 }
 
 async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[]> {

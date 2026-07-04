@@ -88,10 +88,10 @@ export const replyToGuest: ToolHandler = async (
   // Resolve Wpp token.
   const { data: prop } = await (ctx.supabaseAdmin as any)
     .from("properties")
-    .select("fonnte_token")
+    .select("wpp_token")
     .limit(1)
     .maybeSingle();
-  const token = (prop?.fonnte_token as string | null) ?? null;
+  const token = (prop?.wpp_token as string | null) ?? null;
   if (!token) {
     return JSON.stringify({ ok: false, error: "Wpp token belum dikonfigurasi." });
   }

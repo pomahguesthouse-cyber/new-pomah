@@ -53,10 +53,10 @@ async function notifyAdmins(
   // Pull token + admin phones
   const { data: prop } = await (client as any)
     .from("properties")
-    .select("fonnte_token, public_domain")
+    .select("wpp_token, public_domain")
     .limit(1)
     .maybeSingle();
-  const token = (prop?.fonnte_token as string | null)?.trim();
+  const token = (prop?.wpp_token as string | null)?.trim();
   if (!token) return;
   const { data: managers } = await (client as any)
     .from("property_managers")

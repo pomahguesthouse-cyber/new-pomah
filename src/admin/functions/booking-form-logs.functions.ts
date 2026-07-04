@@ -96,11 +96,11 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
     if (log.property_id) {
       const { data: prop } = await admin
         .from("properties")
-        .select("name, fonnte_token, public_domain")
+        .select("name, wpp_token, public_domain")
         .eq("id", log.property_id)
         .maybeSingle();
       if (prop) {
-        wppToken = (prop.fonnte_token as string | null) ?? null;
+        wppToken = (prop.wpp_token as string | null) ?? null;
         propertyName = (prop.name as string | undefined) ?? propertyName;
         const domain = prop.public_domain as string | undefined;
         if (domain) baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
