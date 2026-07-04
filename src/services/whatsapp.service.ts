@@ -188,3 +188,60 @@ async function sendWhatsAppMessageWithOptions(
     clearTimeout(timeoutId);
   }
 }
+
+// ─── Presence helpers (best-effort, non-throwing) ─────────────────────────────
+// Digunakan untuk memberi "rasa manusiawi": tandai pesan dibaca dan tampilkan
+// indikator sedang mengetik saat bot memproses balasan. Kegagalan tidak boleh
+// menghentikan alur autoreply — cukup console.warn.
+
+const PRESENCE_TIMEOUT_MS = 5_000;
+
+async function callWppPresence(
+  token: string,
+  phone: string,
+  path: string,
+  extra: Record<string, unknown>,
+): Promise<void> {
+  if (!WPP_BASE_URL || !WPP_SESSION) {
+    console.warn(`[WhatsApp] ${path} skipped: WPPConnect belum terkonfigurasi`);
+    return;
+  }
+  if (!token) {
+    console.warn(`[WhatsApp] ${path} skipped: token kosong`);
+    return;
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PRESENCE_TIMEOUT_MS);
+  try {
+    const normalized = normalizeWppPhone(phone);
+    const res = await fetch(endpoint(path), {
+      method: "POST",
+      headers: {
+        Authorization: bearer(token),
+        "Content-Type": "application/json; charset=utf-8",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ phone: normalized, isGroup: false, ...extra }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[WhatsApp] ${path} HTTP ${res.status}: ${body.slice(0, 200)}`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(`[WhatsApp] ${path} gagal:`, msg);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/** Tandai chat sebagai sudah dibaca (best-effort). */
+export async function markWppSeen(token: string, phone: string): Promise<void> {
+  await callWppPresence(token, phone, "send-seen", {});
+}
+
+/** Nyalakan/matikan indikator "sedang mengetik" (best-effort). */
+export async function setWppTyping(token: string, phone: string, value: boolean): Promise<void> {
+  await callWppPresence(token, phone, "typing", { value });
+}
