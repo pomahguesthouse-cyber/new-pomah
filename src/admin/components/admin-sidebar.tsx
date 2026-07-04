@@ -102,6 +102,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/training", label: "Chatbot Training", icon: Brain },
       { to: "/admin/routing-debug", label: "Routing Debug", icon: RouteIcon },
       { to: "/admin/health", label: "Health Chatbot", icon: Activity },
+      { to: "/admin/wpp-diagnostics", label: "WPP Diagnostics", icon: Activity },
 
     ],
   },
