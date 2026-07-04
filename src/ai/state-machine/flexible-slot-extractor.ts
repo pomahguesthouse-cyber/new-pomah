@@ -291,8 +291,8 @@ export function extractAllSlots(
 
   // "anak 2", "2 anak", "children 3"
   const childrenPatterns = [
-    /(\d+)\s*(?:anak|child(?:ren)?|kids?)/i,
-    /(?:anak|child(?:ren)?|kids?)\s*(?::?\s*)(\d+)/i,
+    /(\d+)\s*(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)/i,
+    /(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\s*(?::?\s*)(\d+)/i,
   ];
   for (const re of childrenPatterns) {
     const m = text.match(re);

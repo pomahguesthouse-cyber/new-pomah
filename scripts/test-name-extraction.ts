@@ -57,5 +57,18 @@ console.log("— Kalimat tanya TIDAK boleh salah tangkap sebagai nama —");
 expectName("nama hotelnya apa ya min?", undefined);
 expectName("nama wifi nya apa?", undefined);
 
+console.log("— Jumlah tamu: slang anak (insiden 4 Jul 2026) —");
+{
+  const slots = extractAllSlots("Saya 2 dewasa dan 2 bocil", rooms, "6281251193914", "2026-07-03");
+  const ok = slots.adults === 2 && slots.children === 2;
+  if (ok) {
+    pass++;
+    console.log(`  ✅ "2 dewasa dan 2 bocil" → adults=2, children=2`);
+  } else {
+    fail++;
+    console.error(`  ❌ "2 dewasa dan 2 bocil" → adults=${slots.adults}, children=${slots.children}`);
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

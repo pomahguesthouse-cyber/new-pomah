@@ -490,10 +490,12 @@ function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | nu
 
 function parseGuestCountFollowup(message: string): ParsedGuestCount | null {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!text || !/\b(orang|dewasa|adult|anak|child|children|kids?|pax|tamu)\b/i.test(text)) return null;
+  // "bocil"/"bocah" = slang lazim untuk anak — insiden 4 Jul 2026: "2 dewasa
+  // dan 2 bocil" terhitung 2 tamu sehingga filter kapasitas salah.
+  if (!text || !/\b(orang|dewasa|adult|anak|bocil|bocah|balita|child|children|kids?|pax|tamu)\b/i.test(text)) return null;
 
   const adultMatch = text.match(/(?:dewasa|adult|pax|tamu)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:dewasa|adult|pax|tamu)\b/i);
-  const childMatch = text.match(/(?:anak|child(?:ren)?|kids?)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|child(?:ren)?|kids?)\b/i);
+  const childMatch = text.match(/(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\b/i);
   const genericMatch = text.match(/\b(\d{1,2})\s*(?:orang|pax|tamu)\b/i);
 
   let adults = adultMatch ? Number(adultMatch[1] ?? adultMatch[2]) : 0;
@@ -598,6 +600,28 @@ function messageOpensWithGreeting(message: string): boolean {
 /** Heuristik ringan: pesan tamu bernada booking_inquiry (tanya
  *  ketersediaan/harga/kamar) walau tanpa kata kunci tanggal. Dipakai untuk
  *  fast-path kontekstual yang meminjam tanggal dari state sebelumnya. */
+/**
+ * PERINTAH booking eksplisit ("saya pesan kamar deluxe tanggal 9-11 dengan
+ * 1 extrabed") — HARUS ditangani alur booking (AI + state machine), BUKAN
+ * fast-path availability yang hanya mengirim ulang daftar kamar. Insiden
+ * 4 Jul 2026: perintah tamu ditelan dua kali oleh fast-path kontekstual
+ * sehingga booking tidak pernah dimulai.
+ */
+const ORDER_VERB_RE =
+  /\b(pesan|pesankan|booking|bookingkan|book|ambil|fix(?:kan)?|deal|jadi\s+(?:pesan|booking|ambil))\b/i;
+function isExplicitBookingOrder(message: string, rooms: Array<{ name?: unknown }>): boolean {
+  const text = message.toLowerCase();
+  if (!ORDER_VERB_RE.test(text)) return false;
+  // Order dianggap eksplisit bila menyebut tipe kamar / extra bed / atas nama
+  // — tanpa itu ("mau pesan kamar dong") daftar ketersediaan masih jawaban
+  // yang tepat.
+  const mentionsRoom = (rooms ?? []).some((r) => {
+    const nm = String(r?.name ?? "").toLowerCase().trim();
+    return nm.length >= 3 && text.includes(nm);
+  });
+  return mentionsRoom || /\b(extra\s*-?\s*bed|extrabed|atas\s+nama)\b/i.test(text);
+}
+
 function looksLikeBookingInquiry(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text || text.length > 240) return false;
@@ -622,6 +646,8 @@ async function buildDeterministicAvailabilityReply(params: {
   origin: string;
 }): Promise<FastFaqResult | null> {
   if (!shouldUseDeterministicAvailability(params.message)) return null;
+  // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
+  if (isExplicitBookingOrder(params.message, params.rooms ?? [])) return null;
   const today = todayWIB();
   const range = parseAvailabilityDateRange(params.message, today);
   if (!range) return null;
@@ -666,6 +692,8 @@ async function buildContextualBookingInquiryReply(params: {
   chatSummary?: { check_in?: unknown; check_out?: unknown; guest_count?: unknown } | null;
 }): Promise<FastFaqResult | null> {
   if (!looksLikeBookingInquiry(params.message)) return null;
+  // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
+  if (isExplicitBookingOrder(params.message, params.rooms ?? [])) return null;
 
   const today = todayWIB();
   // Prioritas: tanggal yang di-parse dari pesan → slot booking aktif →
