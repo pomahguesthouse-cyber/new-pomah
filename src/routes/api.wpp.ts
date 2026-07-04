@@ -53,7 +53,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function getAuthorized(request: Request, url: URL): boolean {
   const tokenParam = url.searchParams.get("token");
   const authHeader = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  const webhookToken = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN;
+  const webhookToken = process.env.WPP_WEBHOOK_TOKEN;
   return !!webhookToken && (tokenParam === webhookToken || authHeader === webhookToken);
 }
 
