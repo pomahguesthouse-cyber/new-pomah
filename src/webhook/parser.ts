@@ -65,15 +65,55 @@ export async function parseFonnteBody(
     body = Object.fromEntries(params.entries()) as unknown as FonntePayload;
   }
 
-  const sender = normalizePhoneCandidate(firstString(body.sender, body.pengirim, body.from, body.number, body.phone));
-  const message = firstString(body.message, body.pesan, (body as any).caption, (body as any).text) ?? "";
-  const name = firstString(body.name, body.pushname, sender) ?? "";
-  const fonnteId = firstString(body.id, body.message_id, (body as any).messageId, (body as any).key_id);
-  const device = normalizePhoneCandidate(firstString(body.device, (body as any).device_number, (body as any).deviceNumber));
-  const attachmentUrl = firstString(body.url, body.filepath, body.file, (body as any).media_url, (body as any).mediaUrl);
+  // WPPConnect emits many event types (onack, onpresencechanged, onreactionmessage…)
+  // to the same webhook URL. Only message events carry a chat body we care about.
+  const eventName = firstString((body as any).event)?.toLowerCase();
+  if (eventName && !/message/.test(eventName)) return null;
+
+  // WPPConnect nests the message id as an object ({ _serialized, id, ... })
+  // whereas Fonnte sends a plain string. Support both.
+  const rawId = (body as any).id;
+  const idValue =
+    rawId && typeof rawId === "object"
+      ? firstString((rawId as any)._serialized, (rawId as any).id)
+      : firstString(rawId);
+
+  // WPPConnect `sender` is an OBJECT ({ id, pushname }); firstString ignores
+  // non-string values and falls through to `from` (the chat JID). Fonnte sends
+  // `sender` as a plain string. Both paths therefore resolve correctly.
+  const sender = normalizePhoneCandidate(
+    firstString(body.sender, body.pengirim, body.from, (body as any).author, body.number, body.phone),
+  );
+
+  // WPPConnect `type`: chat|image|video|document|audio|ptt|sticker|location.
+  // For media messages the `body` field holds base64 data — NOT caption — so
+  // it must not be treated as text.
+  const messageType = firstString(body.type, (body as any).message_type, (body as any).msg_type);
+  const typeLower = (messageType ?? "").toLowerCase();
+  const isMediaType = typeLower !== "" && typeLower !== "chat" && typeLower !== "text";
+
+  const caption = firstString((body as any).caption, (body as any).text);
+  // WPPConnect text lives in `body`; Fonnte in `message`/`pesan`.
+  const textBody = firstString(body.message, body.pesan, isMediaType ? undefined : (body as any).body);
+  const message = (isMediaType ? caption : (textBody ?? caption)) ?? "";
+
+  // WPPConnect display name = `notifyName`; Fonnte = `name`/`pushname`.
+  const name = firstString(body.name, body.pushname, (body as any).notifyName, sender) ?? "";
+  const fonnteId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
+  // `to`/`chatId` are WPPConnect fallbacks for our own device number.
+  const device = normalizePhoneCandidate(
+    firstString(body.device, (body as any).device_number, (body as any).deviceNumber, body.to, (body as any).chatId),
+  );
+  const attachmentUrl = firstString(
+    body.url,
+    body.filepath,
+    body.file,
+    (body as any).media_url,
+    (body as any).mediaUrl,
+    (body as any).deprecatedMms3Url,
+  );
   const attachmentName = firstString(body.filename, (body as any).file_name, (body as any).media_name);
   const attachmentMime = firstString(body.mimetype, body.mime_type, body.media_type, (body as any).content_type);
-  const messageType = firstString(body.type, (body as any).message_type, (body as any).msg_type);
 
   if (!sender || (!message && !attachmentUrl)) return null;
 
