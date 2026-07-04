@@ -1,11 +1,11 @@
 /**
- * E2E: webhook Fonnte → notifikasi super_admin → dedupe per messageId.
+ * E2E: webhook WPPConnect → notifikasi super_admin → dedupe per messageId.
  *
  * Script ini hanya mengirim 3 payload (1 unik + 2 duplikat) ke endpoint
- * /api/fonnte. Verifikasi `notification_logs` dilakukan terpisah via
+ * /api/wpp. Verifikasi `notification_logs` dilakukan terpisah via
  * supabase query (anon tidak punya akses baca tabel ini).
  *
- * Run: bun run scripts/test-fonnte-webhook-notify-dedupe.ts
+ * Run: bun run scripts/test-wpp-webhook-notify-dedupe.ts
  */
 
 const args = Object.fromEntries(
@@ -17,18 +17,18 @@ const args = Object.fromEntries(
 
 const BASE  = (args.base as string) || "https://new-pomah.lovable.app";
 const PHONE = (args.phone as string) || `6281200${Date.now().toString().slice(-7)}`;
-const TOKEN = process.env.FONNTE_WEBHOOK_TOKEN ?? "";
+const TOKEN = process.env.WPP_WEBHOOK_TOKEN ?? "";
 
 if (!TOKEN) {
-  console.error("✗ FONNTE_WEBHOOK_TOKEN tidak ditemukan");
+  console.error("✗ WPP_WEBHOOK_TOKEN tidak ditemukan");
   process.exit(1);
 }
 
-const FONNTE_ID = `e2e-${Date.now()}`;
+const WPP_ID = `e2e-${Date.now()}`;
 const MSG = `[E2E ${new Date().toISOString()}] uji notifikasi super admin & dedupe`;
 
 async function postWebhook(label: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/fonnte`, {
+  const res = await fetch(`${BASE}/api/wpp`, {
     method:  "POST",
     headers: {
       "Content-Type":  "application/json",
@@ -38,7 +38,7 @@ async function postWebhook(label: string): Promise<void> {
       sender:  PHONE,
       message: MSG,
       name:    "E2E Tester",
-      id:      FONNTE_ID,
+      id:      WPP_ID,
     }),
   });
   const text = await res.text();
@@ -49,7 +49,7 @@ async function postWebhook(label: string): Promise<void> {
 async function main(): Promise<void> {
   console.log(`▶ Base    : ${BASE}`);
   console.log(`▶ Phone   : ${PHONE}`);
-  console.log(`▶ FonnteID: ${FONNTE_ID}`);
+  console.log(`▶ WPPConnectID: ${WPP_ID}`);
   console.log("");
 
   console.log("[1] POST webhook pertama");
@@ -58,7 +58,7 @@ async function main(): Promise<void> {
   console.log("[2] Tunggu 8 detik agar waitUntil menyelesaikan notifikasi");
   await new Promise((r) => setTimeout(r, 8_000));
 
-  console.log("[3] POST webhook duplikat (fonnteId & body sama)");
+  console.log("[3] POST webhook duplikat (wppId & body sama)");
   await postWebhook("req#2");
   await postWebhook("req#3");
 
