@@ -2836,19 +2836,19 @@ export async function sendFailureFallbackToGuests(): Promise<{
     }
 
     // Ambil token Wpp via context RPC.
-    let fonnteToken: string | null = null;
+    let wppToken: string | null = null;
     let autoReplyEnabled = false;
     try {
       const { data: ctx } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
         p_phone: entry.phone,
       });
-      fonnteToken = (ctx as any)?.fonnte_token ?? null;
+      wppToken = (ctx as any)?.fonnte_token ?? null;
       autoReplyEnabled = !!(ctx as any)?.auto_reply_enabled;
     } catch (e) {
       console.warn("[Fallback] context fetch failed:", e);
     }
 
-    if (!fonnteToken || (!autoReplyEnabled && !isManagerEntry)) {
+    if (!wppToken || (!autoReplyEnabled && !isManagerEntry)) {
       // Tandai tetap supaya tidak dicek terus-menerus.
       await (supabaseAdmin as any)
         .from("wa_conversation_queue")
@@ -2901,7 +2901,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] save outbound (pending) failed:", e);
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(fonnteToken, entry.phone, fallbackBody);
+    const { ok, error: sendErr } = await sendWhatsAppMessage(wppToken, entry.phone, fallbackBody);
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);

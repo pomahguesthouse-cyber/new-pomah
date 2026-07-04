@@ -33,7 +33,7 @@ interface ManagerContact {
 type Channel = "wa" | "telegram";
 
 interface PropertyTokens {
-  fonnteToken: string | null;
+  wppToken: string | null;
   telegramToken: string | null;
 }
 
@@ -45,7 +45,7 @@ async function getPropertyTokens(db: Db): Promise<PropertyTokens> {
     .limit(1)
     .maybeSingle();
   return {
-    fonnteToken: (data?.fonnte_token as string | null) ?? null,
+    wppToken: (data?.fonnte_token as string | null) ?? null,
     telegramToken: (data?.telegram_bot_token as string | null) ?? null,
   };
 }
@@ -241,7 +241,7 @@ interface SendOptions {
  * memblokir kalau channel + key persis sama (mis. webhook + agent untuk
  * payment proof yang sama).
  */
-async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptions): Promise<void> {
+async function sendWithRetry(db: Db, wppToken: string | null, opts: SendOptions): Promise<void> {
   // Cegah duplikat per channel: jika (channel, dedupe_key) sudah ada
   // dengan status sent, skip.
   const { data: existing } = await db
@@ -318,7 +318,7 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
     if (delays[attempt - 1] > 0) {
       await new Promise((r) => setTimeout(r, delays[attempt - 1]));
     }
-    const result = await dispatchByChannel(opts, fonnteToken);
+    const result = await dispatchByChannel(opts, wppToken);
 
     if (result.ok) {
       await db
@@ -344,11 +344,11 @@ async function sendWithRetry(db: Db, fonnteToken: string | null, opts: SendOptio
 
 async function dispatchByChannel(
   opts: SendOptions,
-  fonnteToken: string | null,
+  wppToken: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (opts.channel === "wa") {
-    if (!fonnteToken) return { ok: false, error: "no fonnte token" };
-    const r = await sendWhatsAppMessage(fonnteToken, opts.recipient.phone, opts.message, opts.fileUrl);
+    if (!wppToken) return { ok: false, error: "no fonnte token" };
+    const r = await sendWhatsAppMessage(wppToken, opts.recipient.phone, opts.message, opts.fileUrl);
     return { ok: r.ok, error: r.error ?? undefined };
   }
   // telegram
@@ -403,7 +403,7 @@ async function getAgentBotToken(db: Db, agentKey: string): Promise<string | null
  */
 async function fanOut(
   db: Db,
-  fonnteToken: string | null,
+  wppToken: string | null,
   managers: ManagerContact[],
   base: Omit<SendOptions, "channel" | "recipient" | "dedupeKey"> & {
     dedupeKeyFor: (m: ManagerContact) => string;
@@ -415,7 +415,7 @@ async function fanOut(
     const baseDedup = base.dedupeKeyFor(m);
     if (m.phone) {
       tasks.push(
-        sendWithRetry(db, fonnteToken, {
+        sendWithRetry(db, wppToken, {
           eventType: base.eventType,
           message: base.message,
           fileUrl: base.fileUrl,
@@ -428,7 +428,7 @@ async function fanOut(
     }
     if (m.telegram_chat_id) {
       tasks.push(
-        sendWithRetry(db, fonnteToken, {
+        sendWithRetry(db, wppToken, {
           eventType: base.eventType,
           message: base.telegramOnly?.message ?? base.message,
           fileUrl: base.telegramOnly?.fileUrl ?? base.fileUrl,
@@ -519,7 +519,7 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
       `Booking Code:\n${b.reference_code ?? b.id}\n\n` +
       "Please review in Manager Dashboard.";
 
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const allManagers = await getActiveManagers(db);
     const managers = allManagers.filter((m) => !!m.phone || !!m.telegram_chat_id);
     if (managers.length === 0) {
@@ -528,7 +528,7 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
     }
 
     await Promise.all([
-      fanOut(db, fonnteToken, managers, {
+      fanOut(db, wppToken, managers, {
         eventType: "new_booking",
         message,
         relatedId: b.id,
@@ -654,14 +654,14 @@ export async function notifyBookingUpdated(
       lines.join("\n") +
       `\n\nDiubah oleh: ${actor}`;
 
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
     const changeHash = shortHash(lines.join("|"));
 
     await Promise.all([
-      fanOut(db, fonnteToken, managers, {
+      fanOut(db, wppToken, managers, {
         eventType: "booking_updated",
         message,
         relatedId: b.id,
@@ -787,7 +787,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         `\nLampiran:\n${input.imageUrl}`;
     }
 
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] Tidak ada super admin aktif untuk payment proof");
@@ -808,7 +808,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
       : undefined;
 
     await Promise.all([
-      fanOut(db, fonnteToken, superAdmins, {
+      fanOut(db, wppToken, superAdmins, {
         eventType: "payment_proof",
         message,
         fileUrl: input.imageUrl,
@@ -858,12 +858,12 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
       `Time:\n${new Date(c.created_at).toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })}\n\n` +
       "Please follow up immediately.";
 
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const managers = await getActiveManagers(db);
     if (managers.length === 0) return;
 
     await Promise.all([
-      fanOut(db, fonnteToken, managers, {
+      fanOut(db, wppToken, managers, {
         eventType: "complaint",
         message,
         relatedId: c.id,
@@ -906,7 +906,7 @@ export async function notifyNewConversationSession(
   },
 ): Promise<void> {
   try {
-    const { fonnteToken, telegramToken } = await getPropertyTokens(db);
+    const { wppToken, telegramToken } = await getPropertyTokens(db);
 
     // Super admin via property_managers (yang punya nomor HP / chat id)
     const superAdmins = await getActiveManagers(db, "super_admin");
@@ -943,7 +943,7 @@ export async function notifyNewConversationSession(
       // Kirim ke WA jika ada nomor
       if (admin.phone) {
         jobs.push(
-          sendWithRetry(db, fonnteToken, {
+          sendWithRetry(db, wppToken, {
             eventType: "new_session",
             message,
             relatedId: opts.threadId,
@@ -998,7 +998,7 @@ export async function notifyBotLoop(
   },
 ): Promise<void> {
   try {
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1025,7 +1025,7 @@ export async function notifyBotLoop(
 
     await Promise.all(
       targets.map((admin) =>
-        sendWithRetry(db, fonnteToken, {
+        sendWithRetry(db, wppToken, {
           eventType: "bot_loop",
           message,
           relatedId: opts.threadId,
@@ -1054,7 +1054,7 @@ export async function notifyZombieTimeout(
 ): Promise<void> {
   try {
     if (opts.count <= 0) return;
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1097,7 +1097,7 @@ export async function notifyZombieTimeout(
 
     await Promise.all(
       targets.map((admin) =>
-        sendWithRetry(db, fonnteToken, {
+        sendWithRetry(db, wppToken, {
           eventType: "zombie_timeout",
           message,
           relatedId: null,
@@ -1143,7 +1143,7 @@ export async function notifyBookingStuck(
   },
 ): Promise<void> {
   try {
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone || !!m.telegram_chat_id);
     if (targets.length === 0) return;
@@ -1180,7 +1180,7 @@ export async function notifyBookingStuck(
         const tasks: Promise<void>[] = [];
         if (admin.phone) {
           tasks.push(
-            sendWithRetry(db, fonnteToken, {
+            sendWithRetry(db, wppToken, {
               eventType: "booking_stuck",
               message,
               relatedId: opts.threadId,
@@ -1192,7 +1192,7 @@ export async function notifyBookingStuck(
         }
         if (admin.telegram_chat_id) {
           tasks.push(
-            sendWithRetry(db, fonnteToken, {
+            sendWithRetry(db, wppToken, {
               eventType: "booking_stuck",
               message,
               relatedId: opts.threadId,
@@ -1269,7 +1269,7 @@ export async function notifyIncomingMessage(
   },
 ): Promise<void> {
   try {
-    const { fonnteToken } = await getPropertyTokens(db);
+    const { wppToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     const targets = superAdmins.filter((m) => !!m.phone);
     if (targets.length === 0) return;
@@ -1294,7 +1294,7 @@ export async function notifyIncomingMessage(
 
     await Promise.all(
       targets.map((admin) =>
-        sendWithRetry(db, fonnteToken, {
+        sendWithRetry(db, wppToken, {
           eventType: "new_message",
           message,
           relatedId: opts.threadId,
@@ -1351,7 +1351,7 @@ export async function notifyRpcFailure(
     const total = hourlyCount ?? 1;
 
     // 3. Resolve target super_admin.
-    const { fonnteToken, telegramToken } = await getPropertyTokens(db);
+    const { wppToken, telegramToken } = await getPropertyTokens(db);
     const superAdmins = await getActiveManagers(db, "super_admin");
     if (superAdmins.length === 0) {
       console.info("[ManagerNotifier] notifyRpcFailure: no super_admin configured");
@@ -1384,7 +1384,7 @@ export async function notifyRpcFailure(
     for (const admin of superAdmins) {
       if (admin.phone) {
         jobs.push(
-          sendWithRetry(db, fonnteToken, {
+          sendWithRetry(db, wppToken, {
             eventType: "rpc_failure",
             message,
             recipient: admin,

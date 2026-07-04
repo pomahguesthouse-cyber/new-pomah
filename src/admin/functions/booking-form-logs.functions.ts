@@ -90,7 +90,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
     if (logErr || !log) throw new Error("Log tidak ditemukan.");
 
     // Resolusi kredensial Wpp + base URL dari properti terkait.
-    let fonnteToken: string | null = null;
+    let wppToken: string | null = null;
     let baseUrl = "https://pomahguesthouse.com";
     let propertyName = "Pomah Guesthouse";
     if (log.property_id) {
@@ -100,13 +100,13 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
         .eq("id", log.property_id)
         .maybeSingle();
       if (prop) {
-        fonnteToken = (prop.fonnte_token as string | null) ?? null;
+        wppToken = (prop.fonnte_token as string | null) ?? null;
         propertyName = (prop.name as string | undefined) ?? propertyName;
         const domain = prop.public_domain as string | undefined;
         if (domain) baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
       }
     }
-    if (!fonnteToken) {
+    if (!wppToken) {
       throw new Error("Properti belum mempunyai token Wpp aktif.");
     }
 
@@ -166,7 +166,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
     if (insErr) throw new Error(`Gagal mencatat log baru: ${insErr.message}`);
 
     const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
-    const result = await sendWhatsAppMessage(fonnteToken, log.phone, message);
+    const result = await sendWhatsAppMessage(wppToken, log.phone, message);
 
     const patch: Record<string, unknown> = {
       status: result.ok ? "sent" : "failed",
