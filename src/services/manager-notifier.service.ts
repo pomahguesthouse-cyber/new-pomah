@@ -347,7 +347,7 @@ async function dispatchByChannel(
   wppToken: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
   if (opts.channel === "wa") {
-    if (!wppToken) return { ok: false, error: "no fonnte token" };
+    if (!wppToken) return { ok: false, error: "no wpp token" };
     const r = await sendWhatsAppMessage(wppToken, opts.recipient.phone, opts.message, opts.fileUrl);
     return { ok: r.ok, error: r.error ?? undefined };
   }
