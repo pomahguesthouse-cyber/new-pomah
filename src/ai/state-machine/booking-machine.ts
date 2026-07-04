@@ -179,7 +179,7 @@ function cleanNameCandidate(candidate: string): string {
 // Kata kerja / kata tanya / kata fungsi yang TIDAK mungkin jadi nama orang.
 // Kalau salah satu muncul sebagai token, kandidat ditolak sebagai nama.
 const NON_NAME_TOKEN =
-  /^(mau|ingin|pengen|pingin|tanya|nanya|tanyakan|cek|cek?in|lihat|liat|minta|tolong|info|infonya|booking|pesan|reservasi|kamar|room|tipe|type|harga|tarif|biaya|fasilitas|wifi|parkir|sarapan|breakfast|lokasi|alamat|tersedia|ketersediaan|kosong|ada|apakah|apa|berapa|bagaimana|gimana|kapan|dimana|kenapa|mengapa|halo|hai|hello|hi|pagi|siang|sore|malam|ya|iya|tidak|gak|ga|ngga|enggak|ok|oke|sip|bisa|boleh|mohon|maaf|terima|kasih|thanks)$/i;
+  /^(mau|ingin|pengen|pingin|tanya|nanya|tanyakan|cek|cek?in|lihat|liat|minta|tolong|info|infonya|booking|pesan|reservasi|kamar|room|tipe|type|harga|tarif|biaya|fasilitas|wifi|parkir|sarapan|breakfast|lokasi|alamat|tersedia|ketersediaan|kosong|ada|apakah|apa|berapa|bagaimana|gimana|kapan|dimana|kenapa|mengapa|halo|hai|hello|hi|pagi|siang|sore|malam|ya|iya|tidak|gak|ga|ngga|enggak|ok|oke|sip|siap|baik|baiklah|mantap|sama|makasih|bisa|boleh|mohon|maaf|terima|kasih|thanks)$/i;
 
 export function looksLikePersonName(candidate: string): boolean {
   const t = candidate.trim();
@@ -1606,7 +1606,7 @@ export async function processBookingState(
         }) + "\n\n";
     }
 
-    // Check mandatory fields: Dates, Room type, guest name
+    // Check mandatory fields: Dates, Room type, guest name, JUMLAH TAMU.
     // guestPhone diisi otomatis dari nomor WA sesi (ctx.phone) bila kosong —
     // tidak perlu memintanya ke tamu yang sudah menghubungi via WhatsApp.
     if (!context.guestPhone || context.guestPhone.length < 8) {
@@ -1615,44 +1615,110 @@ export async function processBookingState(
     const hasDates = !!context.checkIn && !!context.checkOut;
     const hasRoom = !!context.roomName;
     const hasName = !!context.guestName && context.guestName.length >= 2;
-    const hasPhone = true; // selalu true — sudah diisi otomatis di atas
+    const hasGuestCount = (context.adults ?? 0) >= 1;
 
-    if (hasDates && hasRoom && hasName && hasPhone) {
-      // Prompt for optional email if not yet filled and not yet clarified
-      if (!context.guestEmail && !context.email_clarification_asked) {
-        // Special case: if user typed skip email or skipped in the message, we skip
-        const isSkipInput = EMAIL_SKIP_PATTERN.test(trimmedMessage);
-        if (isSkipInput) {
-          context.email_clarification_asked = true;
-        } else {
-          context.email_clarification_asked = true;
-          await updateBookingState(supabase, phone, "AWAITING_EMAIL", context);
-          return {
-            handled: true,
-            reply: `${inlineAnswerPrefix}Terima kasih Kak ${context.guestName}. Jika berkenan, mohon ketikkan alamat email Kakak (opsional, balas "lewati" atau "-" jika tidak ingin mengisi):`,
-          };
-        }
-      }
-
-      // Recompute extra bed policy
+    // ── KEBIJAKAN PRODUK (4 Jul 2026): 4 slot lengkap (nama, tanggal, tipe
+    // kamar, jumlah tamu) → LANGSUNG buat booking + kirim invoice. Email
+    // TIDAK lagi diminta sebelum booking — ditawarkan SETELAH invoice,
+    // opsional (ditangkap di state PAYMENT_PENDING). Validasi kapasitas
+    // tetap ditegakkan sebelum pembuatan.
+    if (hasDates && hasRoom && hasName && hasGuestCount) {
+      // Recompute extra bed policy + validasi kapasitas
       const totalRoomsCount = context.rooms?.reduce((s, r) => s + r.quantity, 0) ?? 1;
       const recomputePolicy = resolveRoomExtraBedPolicy(context, roomsList);
       if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
       const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
       context.extraBeds = eb.extraBeds;
 
+      if (eb.overCapacity) {
+        const roomLabel = recomputePolicy.roomTypeName ?? context.roomName ?? "kamar";
+        const totalMaxGuests = (recomputePolicy.capacity + recomputePolicy.extrabedCapacity) * totalRoomsCount;
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return {
+          handled: true,
+          reply:
+            `${inlineAnswerPrefix}Mohon maaf Kak, kapasitas maksimum ${totalRoomsCount} kamar ${roomLabel} ` +
+            `adalah ${totalMaxGuests} tamu (termasuk extra bed), sedangkan jumlah tamu ${getTotalGuests(context)} orang. ` +
+            `Mau tambah 1 kamar lagi, atau ganti ke tipe kamar berkapasitas lebih besar?`,
+        };
+      }
+
       if (context.checkIn && context.checkOut && context.pricePerNight) {
         const nights = countNights(context.checkIn, context.checkOut);
         context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
       }
 
-      const resolvedRates = await applyResolvedRatesToContext(ctx, context);
-      await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
-      const summaryResult = buildBookingSummaryFromResolved(ctx, context, resolvedRates);
-      if (inlineAnswerPrefix && summaryResult.reply) {
-        summaryResult.reply = inlineAnswerPrefix + summaryResult.reply;
+      try {
+        await applyResolvedRatesToContext(ctx, context);
+
+        const raw = await createBooking(
+          {
+            room_type: context.roomName,
+            rooms: context.rooms,
+            full_name: context.guestName,
+            email: context.guestEmail,
+            phone: context.guestPhone,
+            check_in: context.checkIn,
+            check_out: context.checkOut,
+            adults: context.adults ?? 1,
+            children: context.children ?? 0,
+            payment_type: context.paymentType ?? "full",
+            dp_amount: context.dpAmount ?? 0,
+            special_requests: context.specialRequests,
+            extra_beds: context.extraBeds ?? 0,
+          },
+          ctx,
+        );
+        let result: any = {};
+        try {
+          result = JSON.parse(raw);
+        } catch {
+          /* ignore */
+        }
+
+        if (!result.ok) {
+          await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+          return {
+            handled: true,
+            reply:
+              `${inlineAnswerPrefix}Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. ` +
+              `Data booking tetap saya simpan — Kakak bisa koreksi datanya, pilih kamar/tanggal lain, atau balas "batal".`,
+          };
+        }
+
+        context.bookingCode = result.reference_code;
+        await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+        console.info(
+          `[BookingState] auto-create on complete slots → ${result.reference_code} for ${phone.slice(-6)}`,
+        );
+
+        const guestLine =
+          (context.children ?? 0) > 0
+            ? `${context.adults} dewasa, ${context.children} anak`
+            : `${context.adults} dewasa`;
+        return {
+          handled: true,
+          reply:
+            `${inlineAnswerPrefix}Terima kasih Kak ${context.guestName}! Data sudah lengkap, ` +
+            `booking langsung saya buatkan ✅\n\n` +
+            `Kode booking: *${result.reference_code}*\n` +
+            `Kamar: ${context.roomName} — ${guestLine}` +
+            ((context.extraBeds ?? 0) > 0 ? ` (+${context.extraBeds} extra bed)` : "") +
+            `\n\nInvoice lengkap beserta info pembayaran menyusul di pesan berikutnya ya, Kak. ` +
+            `Kalau Kakak ingin invoice juga tercatat ke email, balas dengan alamat email Kakak (opsional).`,
+        };
+      } catch (e) {
+        // Pembuatan langsung gagal keras (mis. gangguan DB) — mundur ke alur
+        // konfirmasi lama supaya tamu tetap bisa lanjut dengan "Ya".
+        console.warn("[BookingState] auto-create failed, falling back to confirmation flow:", e);
+        const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
+        await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+        const summaryResult = buildBookingSummaryFromResolved(ctx, context, resolvedRates as any);
+        if (inlineAnswerPrefix && summaryResult.reply) {
+          summaryResult.reply = inlineAnswerPrefix + summaryResult.reply;
+        }
+        return summaryResult;
       }
-      return summaryResult;
     }
 
     // Still missing details: update state to COLLECTING_DATA
@@ -1662,6 +1728,7 @@ export async function processBookingState(
     if (!hasDates) missing.push("Tanggal check-in & check-out");
     if (!hasRoom) missing.push("Tipe kamar");
     if (!hasName) missing.push("Nama lengkap tamu");
+    if (!hasGuestCount) missing.push("Jumlah tamu (dewasa & anak)");
     // guestPhone otomatis dari nomor WA — tidak perlu diminta ke tamu
 
     const summary = formatPartialBookingSummary(context);
@@ -1670,7 +1737,7 @@ export async function processBookingState(
     missing.forEach((item, idx) => {
       reply += `${idx + 1}. ${item}\n`;
     });
-    reply += `\nKakak bisa mengetikkan data di atas sekaligus (contoh: "booking Deluxe, atas nama: Budi, tanggal 25-27 Juni, no hp: 08123456789").`;
+    reply += `\nKakak bisa mengetikkan data di atas sekaligus (contoh: "booking Deluxe, atas nama Budi, tanggal 25-27 Juni, 2 dewasa 1 anak").`;
 
     return {
       handled: true,
@@ -1894,6 +1961,29 @@ export async function processBookingState(
   }
 
   if (state === "PAYMENT_PENDING") {
+    // Email opsional PASCA-booking (kebijakan produk 4 Jul 2026): setelah
+    // invoice terkirim, bot menawarkan pencatatan email. Bila tamu membalas
+    // dengan alamat email, simpan ke booking context + record guest.
+    const emailCandidate = message.trim();
+    if (EMAIL_PATTERN.test(emailCandidate)) {
+      context.guestEmail = emailCandidate;
+      await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
+      try {
+        await (supabase as any)
+          .from("guests")
+          .update({ email: emailCandidate })
+          .eq("phone", phone);
+      } catch (e) {
+        console.warn("[BookingState] persist guest email failed (non-fatal):", e);
+      }
+      return {
+        handled: true,
+        reply:
+          `Email ${emailCandidate} sudah saya catat untuk booking` +
+          (context.bookingCode ? ` *${context.bookingCode}*` : "") +
+          ` ya Kak 📧. Invoice tetap bisa diakses kapan saja lewat tautan yang saya kirim sebelumnya.`,
+      };
+    }
     // Auto-reset bila tamu jelas memulai booking baru (mis. "mau pesan kamar
     // lagi tanggal 25", "ada kamar deluxe 30 Juni?"). Tanpa ini, state
     // tersangkut sampai 15-menit auto-expire dan tamu disambut Finance Agent

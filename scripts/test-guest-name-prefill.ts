@@ -59,7 +59,10 @@ const BASE_CONTEXT: BookingContext = {
   pricePerNight: 250000,
 } as BookingContext;
 
-async function run(knownGuestName: string | null, message = "2 dewasa ya kak") {
+// Catatan: pesan default sengaja TANPA jumlah tamu — sejak kebijakan
+// auto-book (4 Jul 2026), slot lengkap langsung memicu createBooking yang
+// butuh DB sungguhan; harness ini hanya menguji pengisian slot nama.
+async function run(knownGuestName: string | null, message = "🙏") {
   const supabase = makeFakeSupabase({ state: "COLLECTING_DATA", context: { ...BASE_CONTEXT } });
   const result = await processBookingState(
     makeCtx(supabase),
@@ -77,6 +80,7 @@ console.log("Test 1: nama dari summary dipakai — tidak tanya nama lagi");
   truthy("handled", result.handled);
   truthy("guestName terisi dari summary", finalContext.guestName === "Lutfi Jihan Priyanti");
   truthy("reply TIDAK meminta nama", !/nama lengkap/i.test(result.reply ?? ""));
+  truthy("reply meminta jumlah tamu (slot wajib baru)", /jumlah tamu/i.test(result.reply ?? ""));
 }
 
 console.log("Test 2: tanpa nama tersimpan — tetap minta nama (regresi)");
