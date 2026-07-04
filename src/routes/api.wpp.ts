@@ -218,7 +218,8 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
         const attachmentName = event.attachmentName;
         const attachmentMime = event.attachmentMime;
         const messageType = event.messageType;
-        const displayMessage = message || (attachmentUrl ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
+        const isMediaMsg = !!attachmentUrl || (!!messageType && messageType.toLowerCase() !== "chat" && messageType.toLowerCase() !== "text") || !!attachmentMime;
+        const displayMessage = message || (isMediaMsg ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
         const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
 
         console.log("[Webhook]", {
@@ -411,59 +412,17 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         // Gate OCR ke gambar SAJA. Sebelumnya semua attachment (PDF/video/
         // audio) ikut men-trigger Vision OCR — buang kredit & bikin log
-        // pipeline finance kotor. Kalau MIME kosong, cek ekstensi URL.
-        const isImageAttachment = (() => {
-          if (!attachmentUrl) return false;
+        // pipeline finance kotor. WPPConnect kadang tidak memberi URL —
+        // dalam kasus itu kita andalkan messageType/mime.
+        const isImageMessage = (() => {
           const mime = (attachmentMime ?? "").toLowerCase();
           if (mime.startsWith("image/")) return true;
-          if (mime && !mime.startsWith("image/")) return false;
-          return /\.(jpe?g|png|webp|heic|heif|gif)(\?|$)/i.test(attachmentUrl);
+          if ((messageType ?? "").toLowerCase() === "image") return true;
+          if (attachmentUrl && /\.(jpe?g|png|webp|heic|heif|gif)(\?|$)/i.test(attachmentUrl)) return true;
+          return false;
         })();
 
-        if (isImageAttachment && attachmentUrl) {
-          // Tag intent metadata SEBELUM OCR jalan supaya routing-debug bisa
-          // melihat pipeline payment_proof aktif meski OCR async selesai
-          // belakangan (atau gagal).
-          runBackground(saveMessageMetadata(supabaseAdmin, {
-            messageId,
-            metadata: {
-              intent: "payment_proof",
-              agent_key: "finance",
-              tools_used: ["payment-proof-ocr"],
-              routing_confidence: 1,
-              fast_path: true,
-              pipeline: "payment_proof_ocr",
-            },
-          }).catch((e) => console.warn("[Webhook] payment_proof intent tag error:", e)));
 
-          runBackground((async () => {
-            try {
-              const { analyzePaymentProof } = await import("@/services/payment-proof.service");
-              const ocrResult = await analyzePaymentProof(
-                supabaseAdmin as any,
-                attachmentUrl,
-                customerPhone,
-                messageId,
-              );
-
-              const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
-              await notifyPaymentProof(supabaseAdmin as any, {
-                threadId: null,
-                phone: customerPhone,
-                guestName: name,
-                imageUrl: attachmentUrl,
-                messageId,
-                ocrResult,
-              });
-            } catch (err) {
-              console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
-            }
-          })());
-        } else if (attachmentUrl) {
-          console.info(
-            `[Webhook] Skip OCR non-image attachment (mime=${attachmentMime ?? "?"}, type=${messageType ?? "?"})`,
-          );
-        }
 
 
         const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
@@ -482,6 +441,63 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
           wpp_token: string;
           smart_delay_config?: Record<string, unknown> | null;
         };
+
+        // OCR bukti transfer — sekarang sesudah `c` tersedia supaya kita bisa
+        // ambil media base64 lewat WPPConnect (`get-media-by-message`) pakai
+        // c.wpp_token. Tetap SEBELUM gate auto_reply_enabled: OCR & notifikasi
+        // manajer harus jalan meski auto-reply mati.
+        if (isImageMessage) {
+          runBackground(saveMessageMetadata(supabaseAdmin, {
+            messageId,
+            metadata: {
+              intent: "payment_proof",
+              agent_key: "finance",
+              tools_used: ["payment-proof-ocr"],
+              routing_confidence: 1,
+              fast_path: true,
+              pipeline: "payment_proof_ocr",
+            },
+          }).catch((e) => console.warn("[Webhook] payment_proof intent tag error:", e)));
+
+          runBackground((async () => {
+            try {
+              let imageForOcr: string | null = attachmentUrl ?? null;
+              if (!imageForOcr && isImageMessage && wppId && c.wpp_token) {
+                const { fetchWppMediaDataUri } = await import("@/services/whatsapp.service");
+                imageForOcr = await fetchWppMediaDataUri(c.wpp_token, wppId);
+              }
+              if (!imageForOcr) {
+                console.warn("[Webhook] payment_proof: tidak ada image (URL/data URI) — skip OCR");
+                return;
+              }
+              const { analyzePaymentProof } = await import("@/services/payment-proof.service");
+              const ocrResult = await analyzePaymentProof(
+                supabaseAdmin as any,
+                imageForOcr,
+                customerPhone,
+                messageId,
+              );
+
+              const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
+              if (attachmentUrl) {
+                await notifyPaymentProof(supabaseAdmin as any, {
+                  threadId: null,
+                  phone: customerPhone,
+                  guestName: name,
+                  imageUrl: attachmentUrl,
+                  messageId,
+                  ocrResult,
+                });
+              }
+            } catch (err) {
+              console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
+            }
+          })());
+        } else if (attachmentUrl) {
+          console.info(
+            `[Webhook] Skip OCR non-image attachment (mime=${attachmentMime ?? "?"}, type=${messageType ?? "?"})`,
+          );
+        }
 
         let isManager = false;
         try {
