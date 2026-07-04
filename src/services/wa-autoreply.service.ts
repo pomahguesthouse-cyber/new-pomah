@@ -153,7 +153,7 @@ function normalizePhone(raw: string): string {
   return p;
 }
 
-function isConfiguredAdminPhone(phone: string): boolean {
+export function isConfiguredAdminPhone(phone: string): boolean {
   const normalized = normalizePhone(phone);
   if (!normalized) return false;
   return (process.env.ADMIN_PHONE_NUMBERS || "")

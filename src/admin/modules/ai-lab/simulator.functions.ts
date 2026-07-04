@@ -27,6 +27,7 @@ import {
   updateThreadAutoReplyMeta,
 } from "@/repositories/message.repository";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
+import { resolveManagerByPhone, isConfiguredAdminPhone } from "@/services/wa-autoreply.service";
 import {
   findSessionStartIndex,
   pickAttachment,
@@ -131,6 +132,13 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       return { ok: false as const, error: "AI API key belum dikonfigurasi." };
     }
 
+    // Mirror production (handleOne): a registered manager/admin number must run
+    // the managerial pipeline, not the guest flow. Resolving by the simulator
+    // phone means entering a manager number (e.g. from Settings → Managers)
+    // exercises admin behaviour; any other number stays a guest.
+    const manager = await resolveManagerByPhone(data.phone);
+    const isManager = !!manager || isConfiguredAdminPhone(data.phone);
+
     // Dedup double-send (4 Jul 2026): fonnteId DETERMINISTIK per (phone, isi,
     // jendela 15 detik) — dulu memakai Date.now()+random sehingga double-click
     // di UI menghasilkan dua ID unik → dua eksekusi AI → dua balasan berbeda
@@ -143,7 +151,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     const dedupBucket = Math.floor(Date.now() / 15_000);
     const { messageId, duplicate, error: saveErr } = await saveInboundMessage(supabaseAdmin as any, {
       phone: data.phone,
-      name: "Simulator Guest",
+      name: isManager ? (manager?.name ?? "Admin") : "Simulator Guest",
       body: data.message,
       fonnteId: `sim-${data.phone}-${bodyHash}-${dedupBucket}`,
     });
@@ -207,6 +215,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     const t0 = Date.now();
     const orch = await runMultiAgentOrchestration({
       phone: data.phone,
+      isManager,
       messages,
       agentCtx: {
         property: env.property,
@@ -217,6 +226,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
         lastMessage,
         chatSummary: c.chat_summary || "",
         chatSummaryJson: (c.chat_summary_json as ChatSummaryStructured | null | undefined) || undefined,
+        managerName: manager?.name ?? (isManager ? "Admin" : undefined),
+        mode: isManager ? "managerial" : undefined,
       },
       toolCtx: {
         supabasePublic: supabasePublic as any,
