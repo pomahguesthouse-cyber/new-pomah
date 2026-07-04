@@ -54,6 +54,37 @@ export async function saveInboundMessage(
     if (!existing.error && existing.data?.id) {
       return { messageId: existing.data.id as string, duplicate: true, error: null };
     }
+  } else {
+    // Dedup durable TANPA fonnte_id (webchat/simulator, atau provider yang
+    // tidak mengirim ID): pesan identik dari nomor sama dalam 20 detik
+    // dianggap duplikat. Insiden 4 Jul 2026: simulator menembak webhook 2×
+    // berselisih 360ms → dedup in-memory kalah (isolate Worker berbeda) →
+    // dua entry antrian → tamu menerima dua balasan AI untuk satu pesan.
+    try {
+      const { data: thread } = await (client as any)
+        .from("whatsapp_threads")
+        .select("id")
+        .eq("phone", params.phone)
+        .maybeSingle();
+      if (thread?.id) {
+        const cutoff = new Date(Date.now() - 20_000).toISOString();
+        const { data: recent } = await (client as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", thread.id)
+          .eq("direction", "in")
+          .eq("body", params.body)
+          .gte("created_at", cutoff)
+          .limit(1)
+          .maybeSingle();
+        if (recent?.id) {
+          return { messageId: recent.id as string, duplicate: true, error: null };
+        }
+      }
+    } catch (e) {
+      // Non-fatal — bila cek dedup gagal, lanjut simpan seperti biasa.
+      console.warn("[MessageRepo] durable body-dedup check failed (continuing):", e);
+    }
   }
 
   const { data, error } = withFonnteId
