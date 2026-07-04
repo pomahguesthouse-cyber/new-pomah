@@ -30,6 +30,7 @@ import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiFonnteRouteImport } from './routes/api.fonnte'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
+import { Route as AdminWppDiagnosticsRouteImport } from './routes/admin/wpp-diagnostics'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
@@ -172,6 +173,11 @@ const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
   id: '/api/debug-db',
   path: '/api/debug-db',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminWppDiagnosticsRoute = AdminWppDiagnosticsRouteImport.update({
+  id: '/wpp-diagnostics',
+  path: '/wpp-diagnostics',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
   id: '/whatsapp',
@@ -395,6 +401,7 @@ export interface FileRoutesByFullPath {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -454,6 +461,7 @@ export interface FileRoutesByTo {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -515,6 +523,7 @@ export interface FileRoutesById {
   '/admin/training': typeof AdminTrainingRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
+  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/fonnte': typeof ApiFonnteRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -577,6 +586,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/webchat'
     | '/admin/whatsapp'
+    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
@@ -636,6 +646,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/webchat'
     | '/admin/whatsapp'
+    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
@@ -696,6 +707,7 @@ export interface FileRouteTypes {
     | '/admin/training'
     | '/admin/webchat'
     | '/admin/whatsapp'
+    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/fonnte'
     | '/api/place-photo'
@@ -905,6 +917,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/debug-db'
       preLoaderRoute: typeof ApiDebugDbRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/wpp-diagnostics': {
+      id: '/admin/wpp-diagnostics'
+      path: '/wpp-diagnostics'
+      fullPath: '/admin/wpp-diagnostics'
+      preLoaderRoute: typeof AdminWppDiagnosticsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/whatsapp': {
       id: '/admin/whatsapp'
@@ -1193,6 +1212,7 @@ interface AdminRouteChildren {
   AdminTrainingRoute: typeof AdminTrainingRoute
   AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
+  AdminWppDiagnosticsRoute: typeof AdminWppDiagnosticsRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -1221,6 +1241,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminTrainingRoute: AdminTrainingRoute,
   AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
+  AdminWppDiagnosticsRoute: AdminWppDiagnosticsRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
@@ -1295,13 +1316,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
