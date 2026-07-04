@@ -4,7 +4,7 @@
  */
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
-import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { sendWhatsAppMessage, markWppSeen, setWppTyping } from "@/services/whatsapp.service";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
@@ -1133,6 +1133,11 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
+  // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
+  // orchestration. Best-effort, tidak boleh memblokir alur balasan.
+  try { void markWppSeen(c.fonnte_token, phone); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.fonnte_token, phone, true); } catch { /* non-fatal */ }
+
   let bookingState: { state?: string | null; context?: unknown } | null = null;
   if (!isManager) {
     try {
@@ -2254,6 +2259,11 @@ export async function executeAutoreplyForPhone(
     ));
     metrics.sendFinishedAt = Date.now();
   }
+
+  // Matikan indikator "sedang mengetik" setelah kirim (sukses/gagal). Best-effort.
+  try { void setWppTyping(c.fonnte_token, phone, false); } catch { /* non-fatal */ }
+
+
 
   if (!sent) {
     console.error(`[Autoreply] Send failed ${phone}: ${sendErr}`);
