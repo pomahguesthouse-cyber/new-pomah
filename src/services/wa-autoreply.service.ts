@@ -1133,6 +1133,11 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
+  // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
+  // orchestration. Best-effort, tidak boleh memblokir alur balasan.
+  try { void markWppSeen(c.fonnte_token, phone); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.fonnte_token, phone, true); } catch { /* non-fatal */ }
+
   let bookingState: { state?: string | null; context?: unknown } | null = null;
   if (!isManager) {
     try {
