@@ -778,7 +778,13 @@ export const wppWebhookGet = async ({ request }: { request: Request }): Promise<
         }
 
         return new Response("Webhook is active (queue-based)", { status: 200 });
-      },
+};
+
+export const Route = createFileRoute("/api/fonnte")({
+  server: {
+    handlers: {
+      POST: wppWebhookPost,
+      GET: wppWebhookGet,
     },
   },
 });
