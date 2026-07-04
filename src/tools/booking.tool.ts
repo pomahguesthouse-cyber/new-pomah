@@ -699,11 +699,13 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       .eq("id", booking.id);
   }
 
-  // ── Upsert the invoice record (no WhatsApp send) ────────────────────────────
-  // The Finance Agent now owns the in-chat invoice delivery via the
-  // `send_invoice` tool, so this call passes skipWhatsApp:true. We still need
-  // it to keep the `invoices` table in sync (admin reporting, snapshot,
-  // future email channel) — only the duplicate WA message is suppressed.
+  // ── Upsert invoice record + kirim WA invoice ke tamu ──────────────────────
+  // Sebelumnya skipWhatsApp:true dengan asumsi Finance Agent akan memanggil
+  // `send_invoice` di turn berikutnya. Kenyataannya Front-Office Agent hanya
+  // berjanji "invoice menyusul" lalu berhenti, sehingga tamu tidak pernah
+  // menerima invoice. Kirim langsung di sini agar deterministic — sama
+  // seperti alur admin-manual (bookings.functions.ts).
+  // Idempotency dijaga oleh atomic claim `wa_sent_at` di service.
   const upsertInvoiceRecord = async () => {
     try {
       const { generateAndSendInvoiceNotification } = await import("@/services/invoice-notification.service");
@@ -711,8 +713,9 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         supabase: ctx.supabaseAdmin as any,
         bookingId: booking.id,
         origin: ctx.origin,
-        skipWhatsApp: true,
+        skipWhatsApp: false,
       });
+
       if (!res.ok) {
         console.error(`[create_booking] invoice record upsert failed for ${booking.id}: ${res.error}`);
       }
