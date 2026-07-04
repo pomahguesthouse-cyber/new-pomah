@@ -176,7 +176,7 @@ export async function resolveManagerByPhone(
   // NOTE: do NOT chain `.catch()` onto the Supabase query builder. In the
   // edge runtime it is a thenable, not a native Promise, and `.catch` is
   // undefined → calling it throws `TypeError: ... .catch is not a function`,
-  // which bubbles up as a 500 from /api/fonnte and silently kills every
+  // which bubbles up as a 500 from /api/wpp and silently kills every
   // incoming WhatsApp message. Schema fallback (missing `is_active` column)
   // is handled below via the standard `{ data, error }` return.
   const { data, error } = await (supabaseAdmin as any)
