@@ -20,7 +20,7 @@
  */
 
 function isWppTokenValid(request: Request): boolean {
-  const expected = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN;
+  const expected = process.env.WPP_WEBHOOK_TOKEN;
   if (!expected) return true;
 
   const authHeader = request.headers.get("authorization") ?? "";
