@@ -4,7 +4,7 @@
  */
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
 import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/message.repository";
-import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { sendWhatsAppMessage, markWppSeen, setWppTyping } from "@/services/whatsapp.service";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
