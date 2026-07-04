@@ -1129,14 +1129,14 @@ export async function executeAutoreplyForPhone(
   }
 
   const isManager = mode === "admin";
-  if ((!isManager && !c.auto_reply_enabled) || !c.fonnte_token) {
+  if ((!isManager && !c.auto_reply_enabled) || !c.wpp_token) {
     return "skipped_config";
   }
 
   // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
   // orchestration. Best-effort, tidak boleh memblokir alur balasan.
-  try { void markWppSeen(c.fonnte_token, phone); } catch { /* non-fatal */ }
-  try { void setWppTyping(c.fonnte_token, phone, true); } catch { /* non-fatal */ }
+  try { void markWppSeen(c.wpp_token, phone); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.wpp_token, phone, true); } catch { /* non-fatal */ }
 
   let bookingState: { state?: string | null; context?: unknown } | null = null;
   if (!isManager) {
@@ -1178,7 +1178,7 @@ export async function executeAutoreplyForPhone(
               } as any,
             });
             try {
-              await sendWhatsAppMessage(c.fonnte_token, phone, ackBody);
+              await sendWhatsAppMessage(c.wpp_token, phone, ackBody);
               await (supabaseAdmin as any)
                 .from("whatsapp_messages")
                 .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
@@ -1250,7 +1250,7 @@ export async function executeAutoreplyForPhone(
       );
       const { ok: reSent, error: reErr } = await (
         await import("@/services/whatsapp.service")
-      ).sendWhatsAppMessage(c.fonnte_token, phone, stuckMsg.body);
+      ).sendWhatsAppMessage(c.wpp_token, phone, stuckMsg.body);
 
       if (reSent) {
         await (supabaseAdmin as any)
@@ -1746,7 +1746,7 @@ export async function executeAutoreplyForPhone(
     CLOSING_CHITCHAT_RE.test(lastMessage ?? "");
 
   let quickAckTimer: ReturnType<typeof setTimeout> | undefined;
-  if (QUICK_ACK_ENABLED && !reply && !isManager && queueEntryId && c.fonnte_token && !isClosingChitchat) {
+  if (QUICK_ACK_ENABLED && !reply && !isManager && queueEntryId && c.wpp_token && !isClosingChitchat) {
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
@@ -1807,7 +1807,7 @@ export async function executeAutoreplyForPhone(
             return;
           }
 
-          const { ok, error: ackErr } = await sendWhatsAppMessage(c.fonnte_token, phone, QUICK_ACK_MESSAGE);
+          const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, phone, QUICK_ACK_MESSAGE);
           if (!ok) {
             console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
             try {
@@ -2239,7 +2239,7 @@ export async function executeAutoreplyForPhone(
 
   metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-    c.fonnte_token,
+    c.wpp_token,
     phone,
     finalReply,
     attachUrl,
@@ -2253,7 +2253,7 @@ export async function executeAutoreplyForPhone(
     console.warn(`[Autoreply] Send with attachment failed (${sendErr}) — retrying with link`);
     metrics.sendStartedAt = Date.now();
     ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
-      c.fonnte_token,
+      c.wpp_token,
       phone,
       `${finalReply}\n\n${attachUrl}`.trim(),
     ));
@@ -2261,7 +2261,7 @@ export async function executeAutoreplyForPhone(
   }
 
   // Matikan indikator "sedang mengetik" setelah kirim (sukses/gagal). Best-effort.
-  try { void setWppTyping(c.fonnte_token, phone, false); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.wpp_token, phone, false); } catch { /* non-fatal */ }
 
 
 
@@ -2695,8 +2695,8 @@ export async function recoverUnqueuedInboundMessages(options?: {
         continue;
       }
 
-      const c = ctx as { auto_reply_enabled?: boolean; fonnte_token?: string | null };
-      if (!c.auto_reply_enabled || !c.fonnte_token) continue;
+      const c = ctx as { auto_reply_enabled?: boolean; wpp_token?: string | null };
+      if (!c.auto_reply_enabled || !c.wpp_token) continue;
 
       const entry = await queueUpsert(supabaseAdmin, {
         phone,
@@ -2852,7 +2852,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       const { data: ctx } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
         p_phone: entry.phone,
       });
-      wppToken = (ctx as any)?.fonnte_token ?? null;
+      wppToken = (ctx as any)?.wpp_token ?? null;
       autoReplyEnabled = !!(ctx as any)?.auto_reply_enabled;
     } catch (e) {
       console.warn("[Fallback] context fetch failed:", e);
