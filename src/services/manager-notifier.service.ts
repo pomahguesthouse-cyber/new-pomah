@@ -685,7 +685,10 @@ export interface PaymentProofInput {
   threadId: string | null;
   phone: string;
   guestName: string | null;
-  imageUrl: string;
+  /** URL publik gambar bukti transfer. Opsional: WPPConnect tidak memberi URL
+   *  publik, jadi bisa undefined — dalam kasus itu notif dikirim teks saja
+   *  (tanpa forward gambar), dan hasil OCR tetap disertakan. */
+  imageUrl?: string;
   messageId: string;
   /** Hasil analisis Vision OCR (opsional — jika undefined, kirim notif sederhana) */
   ocrResult?: PaymentProofResult;
@@ -743,6 +746,11 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
     const ocr = input.ocrResult?.ocr;
     const match = input.ocrResult?.match;
 
+    // Hanya URL http(s) yang bisa diteruskan sebagai lampiran WA/Telegram.
+    // Data URI (WPPConnect base64) atau undefined → notif teks saja.
+    const publicImageUrl =
+      input.imageUrl && /^https?:\/\//i.test(input.imageUrl) ? input.imageUrl : undefined;
+
     let message: string;
 
     if (ocr && input.ocrResult?.ok) {
@@ -784,7 +792,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
         `Kode Booking: ${bookingCode ?? "-"}\n\n` +
         "Bukti transfer telah dikirim dan memerlukan verifikasi manual.\n" +
         (input.ocrResult?.error ? `\n⚠️ OCR gagal: ${input.ocrResult.error}\n` : "") +
-        `\nLampiran:\n${input.imageUrl}`;
+        (publicImageUrl ? `\nLampiran:\n${publicImageUrl}` : "");
     }
 
     const { wppToken } = await getPropertyTokens(db);
@@ -811,7 +819,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
       fanOut(db, wppToken, superAdmins, {
         eventType: "payment_proof",
         message,
-        fileUrl: input.imageUrl,
+        fileUrl: publicImageUrl,
         relatedId: bookingId,
         dedupeKeyFor: (m) => `payment_proof:${input.messageId}:${m.id}`,
         telegramOnly: tgMarkup ? { replyMarkup: tgMarkup } : undefined,
@@ -820,7 +828,7 @@ export async function notifyPaymentProof(db: Db, input: PaymentProofInput): Prom
       fanOutToAgentChannels(db, ["finance", "manager"], {
         eventType: "payment_proof",
         message,
-        fileUrl: input.imageUrl,
+        fileUrl: publicImageUrl,
         relatedId: bookingId,
         replyMarkup: tgMarkup,
         dedupeKeyFor: (agent, chat) => `payment_proof:${input.messageId}:agent:${agent}:${chat}`,

@@ -478,17 +478,18 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
                 messageId,
               );
 
+              // Selalu beri tahu manajer (OCR + teks) — meski gambar via
+              // WPPConnect tidak punya URL publik. imageUrl opsional: kalau
+              // undefined, notif dikirim teks saja tanpa forward gambar.
               const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
-              if (attachmentUrl) {
-                await notifyPaymentProof(supabaseAdmin as any, {
-                  threadId: null,
-                  phone: customerPhone,
-                  guestName: name,
-                  imageUrl: attachmentUrl,
-                  messageId,
-                  ocrResult,
-                });
-              }
+              await notifyPaymentProof(supabaseAdmin as any, {
+                threadId: null,
+                phone: customerPhone,
+                guestName: name,
+                imageUrl: attachmentUrl ?? undefined,
+                messageId,
+                ocrResult,
+              });
             } catch (err) {
               console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
             }
