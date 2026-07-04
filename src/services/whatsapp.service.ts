@@ -245,3 +245,63 @@ export async function markWppSeen(token: string, phone: string): Promise<void> {
 export async function setWppTyping(token: string, phone: string, value: boolean): Promise<void> {
   await callWppPresence(token, phone, "typing", { value });
 }
+
+// ─── Media download (get-media-by-message) ────────────────────────────────────
+// WPPConnect tidak memberi URL publik untuk lampiran WhatsApp. Untuk OCR bukti
+// transfer kita harus menarik base64-nya lewat endpoint get-media-by-message,
+// lalu bungkus jadi data URI supaya Vision LLM bisa memakainya sebagai
+// image_url.url tanpa perubahan pada payment-proof service.
+
+const MEDIA_FETCH_TIMEOUT_MS = 20_000;
+
+/**
+ * Tarik media WhatsApp via WPPConnect dan kembalikan sebagai data URI.
+ * Best-effort — return `null` (bukan throw) bila gagal, HTTP non-2xx,
+ * atau base64 kosong.
+ */
+export async function fetchWppMediaDataUri(
+  token: string,
+  messageId: string,
+): Promise<string | null> {
+  if (!WPP_BASE_URL || !WPP_SESSION) {
+    console.warn("[WhatsApp] fetchWppMediaDataUri skipped: WPPConnect belum terkonfigurasi");
+    return null;
+  }
+  if (!token || !messageId) {
+    console.warn("[WhatsApp] fetchWppMediaDataUri skipped: token/messageId kosong");
+    return null;
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
+  try {
+    const url = endpoint(`get-media-by-message/${encodeURIComponent(messageId)}`);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: bearer(token),
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[WhatsApp] get-media-by-message HTTP ${res.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
+    const data: any = await res.json().catch(() => null);
+    const base64 = data?.base64 ?? data?.data ?? null;
+    const mimetype = data?.mimetype ?? data?.mime ?? "application/octet-stream";
+    if (!base64 || typeof base64 !== "string") {
+      console.warn("[WhatsApp] get-media-by-message: base64 kosong");
+      return null;
+    }
+    const cleaned = base64.replace(/^data:[^;]+;base64,/, "");
+    return `data:${mimetype};base64,${cleaned}`;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[WhatsApp] fetchWppMediaDataUri gagal:", msg);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
