@@ -1,7 +1,7 @@
 /**
  * In-memory message deduplication (Layer 1).
  *
- * Uses a time-bucketed Map keyed on the Fonnte message ID when available,
+ * Uses a time-bucketed Map keyed on the Wpp message ID when available,
  * or a content-derived key as fallback.  Entries expire after 5 minutes.
  *
  * NOTE: This is per-Worker-instance.  For cross-instance deduplication,
@@ -45,7 +45,7 @@ export function isDuplicateBody(sender: string, message: string): boolean {
 
 /**
  * Build a stable dedup key.
- * Prefer the Fonnte message ID; fall back to
+ * Prefer the Wpp message ID; fall back to
  * "sender::body_prefix::timestamp_bucket" so legitimate repeated short
  * replies (e.g. "ya" / "ok" across distinct booking-flow turns within the
  * TTL window) are NOT swallowed. The 10s bucket still catches genuine
@@ -55,12 +55,12 @@ export function isDuplicateBody(sender: string, message: string): boolean {
 const DEDUP_BUCKET_MS = 10_000;
 
 export function buildDedupKey(
-  fonnteId: string | undefined,
+  wppId: string | undefined,
   sender:   string,
   message:  string,
   timestamp?: number,
 ): string {
-  if (fonnteId) return fonnteId;
+  if (wppId) return wppId;
   const ts = timestamp ?? Date.now();
   const bucket = Math.floor(ts / DEDUP_BUCKET_MS);
   return `${sender}::${message.slice(0, 100)}::${bucket}`;

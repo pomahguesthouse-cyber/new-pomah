@@ -167,7 +167,7 @@ export const updateBrandingSettings = createServerFn({ method: "POST" })
   });
 
 /* ------------------------------------------------------------------ */
-/* Integrations — Fonnte WhatsApp + Google services                    */
+/* Integrations — Wpp WhatsApp + Google services                    */
 /* ------------------------------------------------------------------ */
 
 const INTEGRATION_FIELDS = [

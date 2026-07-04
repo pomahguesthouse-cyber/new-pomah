@@ -1,12 +1,12 @@
 /**
- * Fonnte webhook body parser.
+ * Wpp webhook body parser.
  *
- * Fonnte may send either JSON or application/x-www-form-urlencoded.
+ * Wpp may send either JSON or application/x-www-form-urlencoded.
  * This parser handles both and returns a normalised event or null if
  * the payload is missing required fields (sender / message).
  */
 
-import type { FonntePayload, ParsedWebhookEvent } from "./types";
+import type { WppWebhookPayload, ParsedWebhookEvent } from "./types";
 
 function firstString(...values: unknown[]): string | undefined {
   for (const value of values) {
@@ -44,7 +44,7 @@ function samePhone(a: string | undefined, b: string | undefined): boolean {
   return !!left && !!right && left === right;
 }
 
-export async function parseFonnteBody(
+export async function parseWppWebhook(
   request: Request,
 ): Promise<ParsedWebhookEvent | null> {
   let rawText: string;
@@ -56,13 +56,13 @@ export async function parseFonnteBody(
 
   if (!rawText.trim()) return null;
 
-  let body: FonntePayload;
+  let body: WppWebhookPayload;
   try {
-    body = JSON.parse(rawText) as FonntePayload;
+    body = JSON.parse(rawText) as WppWebhookPayload;
   } catch {
     // Fall back to form-encoded
     const params = new URLSearchParams(rawText);
-    body = Object.fromEntries(params.entries()) as unknown as FonntePayload;
+    body = Object.fromEntries(params.entries()) as unknown as WppWebhookPayload;
   }
 
   // WPPConnect emits many event types (onack, onpresencechanged, onreactionmessage…)
@@ -71,7 +71,7 @@ export async function parseFonnteBody(
   if (eventName && !/message/.test(eventName)) return null;
 
   // WPPConnect nests the message id as an object ({ _serialized, id, ... })
-  // whereas Fonnte sends a plain string. Support both.
+  // whereas Wpp sends a plain string. Support both.
   const rawId = (body as any).id;
   const idValue =
     rawId && typeof rawId === "object"
@@ -79,7 +79,7 @@ export async function parseFonnteBody(
       : firstString(rawId);
 
   // WPPConnect `sender` is an OBJECT ({ id, pushname }); firstString ignores
-  // non-string values and falls through to `from` (the chat JID). Fonnte sends
+  // non-string values and falls through to `from` (the chat JID). Wpp sends
   // `sender` as a plain string. Both paths therefore resolve correctly.
   const sender = normalizePhoneCandidate(
     firstString(body.sender, body.pengirim, body.from, (body as any).author, body.number, body.phone),
@@ -93,13 +93,13 @@ export async function parseFonnteBody(
   const isMediaType = typeLower !== "" && typeLower !== "chat" && typeLower !== "text";
 
   const caption = firstString((body as any).caption, (body as any).text);
-  // WPPConnect text lives in `body`; Fonnte in `message`/`pesan`.
+  // WPPConnect text lives in `body`; Wpp in `message`/`pesan`.
   const textBody = firstString(body.message, body.pesan, isMediaType ? undefined : (body as any).body);
   const message = (isMediaType ? caption : (textBody ?? caption)) ?? "";
 
-  // WPPConnect display name = `notifyName`; Fonnte = `name`/`pushname`.
+  // WPPConnect display name = `notifyName`; Wpp = `name`/`pushname`.
   const name = firstString(body.name, body.pushname, (body as any).notifyName, sender) ?? "";
-  const fonnteId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
+  const wppId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
   // `to`/`chatId` are WPPConnect fallbacks for our own device number.
   const device = normalizePhoneCandidate(
     firstString(body.device, (body as any).device_number, (body as any).deviceNumber, body.to, (body as any).chatId),
@@ -146,7 +146,7 @@ export async function parseFonnteBody(
     sender,
     message: message ?? "",
     name:       name ?? sender,
-    fonnteId,
+    wppId,
     device,
     isOutgoing,
     customerPhone,

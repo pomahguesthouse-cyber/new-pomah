@@ -602,7 +602,7 @@ export async function checkConversation(input: MonitorCheckInput): Promise<void>
 
 /**
  * Cek thread yang mode Human Takeover dan belum dibalas >10 menit.
- * Dipanggil dari cron atau webhook Fonnte (fire-and-forget).
+ * Dipanggil dari cron atau webhook Wpp (fire-and-forget).
  */
 export async function checkUnresponsiveThreads(db: Db): Promise<void> {
   try {

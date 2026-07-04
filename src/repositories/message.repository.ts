@@ -16,7 +16,7 @@ type AnyClient = SupabaseClient<any>;
 export interface SaveInboundResult {
   /** UUID of the newly created whatsapp_messages row */
   messageId: string | null;
-  /** True when a durable Fonnte ID already existed, so callers should not enqueue. */
+  /** True when a durable Wpp ID already existed, so callers should not enqueue. */
   duplicate?: boolean;
   error:     Error   | null;
 }
@@ -31,23 +31,23 @@ export interface SaveInboundResult {
  */
 export async function saveInboundMessage(
   client: AnyClient,
-  params: { phone: string; name: string; body: string; fonnteId?: string | null },
+  params: { phone: string; name: string; body: string; wppId?: string | null },
 ): Promise<SaveInboundResult> {
   const rpcParams = {
     p_phone: params.phone,
     p_name:  params.name,
     p_body:  params.body,
   };
-  const withFonnteId =
-    params.fonnteId && params.fonnteId.trim()
-      ? { ...rpcParams, p_fonnte_id: params.fonnteId.trim() }
+  const withWppId =
+    params.wppId && params.wppId.trim()
+      ? { ...rpcParams, p_fonnte_id: params.wppId.trim() }
       : null;
 
-  if (withFonnteId) {
+  if (withWppId) {
     const existing = await (client as any)
       .from("whatsapp_messages")
       .select("id")
-      .eq("fonnte_id", withFonnteId.p_fonnte_id)
+      .eq("fonnte_id", withWppId.p_fonnte_id)
       .limit(1)
       .maybeSingle();
 
@@ -87,11 +87,11 @@ export async function saveInboundMessage(
     }
   }
 
-  const { data, error } = withFonnteId
-    ? await (client as any).rpc("receive_whatsapp_message", withFonnteId)
+  const { data, error } = withWppId
+    ? await (client as any).rpc("receive_whatsapp_message", withWppId)
     : await (client as any).rpc("receive_whatsapp_message", rpcParams);
 
-  if (error && withFonnteId && ((error as any).code === "PGRST202" || String((error as any).message).includes("function"))) {
+  if (error && withWppId && ((error as any).code === "PGRST202" || String((error as any).message).includes("function"))) {
     console.warn("[MessageRepo] 4-arg receive RPC unavailable, falling back to 3-arg:", (error as any).message);
     const fallback = await (client as any).rpc("receive_whatsapp_message", rpcParams);
     if (!fallback.error) {
@@ -99,7 +99,7 @@ export async function saveInboundMessage(
     }
     void reportRpcFailure(client, "receive_whatsapp_message", fallback.error, {
       phone: params.phone,
-      fonnteId: params.fonnteId ?? null,
+      wppId: params.wppId ?? null,
     });
     return {
       messageId: null,
@@ -110,7 +110,7 @@ export async function saveInboundMessage(
   if (error) {
     void reportRpcFailure(client, "receive_whatsapp_message", error, {
       phone: params.phone,
-      fonnteId: params.fonnteId ?? null,
+      wppId: params.wppId ?? null,
     });
     return {
       messageId: null,

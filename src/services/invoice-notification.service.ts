@@ -17,12 +17,12 @@ export interface InvoiceResult {
  * the app runs on Cloudflare Workers, where `@react-pdf/renderer`'s
  * `renderToBuffer` is unreliable — it can throw or produce a Supabase Storage
  * object that never persists (surfacing later as a 404). When that URL was
- * handed to Fonnte as an attachment, Fonnte rejected the whole request and the
+ * handed to Wpp as an attachment, Wpp rejected the whole request and the
  * guest received NOTHING. Instead we send the public confirmation page
  * (`/book/confirmation/{id}`), which renders and downloads the invoice
  * client-side (browser react-pdf) and always works.
  *
- * - The message is sent only when a Fonnte token is configured; the function
+ * - The message is sent only when a Wpp token is configured; the function
  *   still returns ok=true if WA is skipped (wa_sent=false).
  * - `skipWhatsApp` keeps the `invoices` record in sync (e.g. after a payment
  *   update) without re-messaging the guest.
@@ -166,7 +166,7 @@ export async function generateAndSendInvoiceNotification({
     }
 
     if (!fonnte_token) {
-      console.warn("[InvoiceNotification] Fonnte token not configured — WhatsApp skipped");
+      console.warn("[InvoiceNotification] Wpp token not configured — WhatsApp skipped");
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
     }
 
@@ -217,7 +217,7 @@ Terima kasih.`;
     // ── Atomic claim ────────────────────────────────────────────────────
     // Idempotency key = invoices.booking_id. Set wa_sent_at HANYA jika
     // masih NULL. Kalau worker/retry lain sudah klaim (baris terupdate <1),
-    // skip Fonnte total supaya tamu tidak menerima invoice WhatsApp dobel
+    // skip Wpp total supaya tamu tidak menerima invoice WhatsApp dobel
     // dari payment-webhook retry, manual resend, atau cron yang tumpang
     // tindih.
     const claimAt = new Date().toISOString();

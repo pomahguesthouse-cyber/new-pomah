@@ -3,7 +3,7 @@
  *
  * Lets a manager (typically via the Telegram bot) send a custom WhatsApp
  * reply to a guest thread without leaving the chat. The message is sent
- * via Fonnte and logged into whatsapp_messages so it shows up in the
+ * via Wpp and logged into whatsapp_messages so it shows up in the
  * admin inbox with the rest of the conversation.
  *
  * Guardrails:
@@ -85,7 +85,7 @@ export const replyToGuest: ToolHandler = async (
     });
   }
 
-  // Resolve Fonnte token.
+  // Resolve Wpp token.
   const { data: prop } = await (ctx.supabaseAdmin as any)
     .from("properties")
     .select("fonnte_token")
@@ -93,7 +93,7 @@ export const replyToGuest: ToolHandler = async (
     .maybeSingle();
   const token = (prop?.fonnte_token as string | null) ?? null;
   if (!token) {
-    return JSON.stringify({ ok: false, error: "Fonnte token belum dikonfigurasi." });
+    return JSON.stringify({ ok: false, error: "Wpp token belum dikonfigurasi." });
   }
 
   const sendRes = await sendWhatsAppMessage(token, phone, message);
