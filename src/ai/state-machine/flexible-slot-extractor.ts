@@ -17,7 +17,7 @@ import {
   findMentionedRoomType,
   normalizeRoomName,
 } from "./booking-machine";
-import { todayWIB } from "@/lib/date";
+import { todayWIB, fmtDateID } from "@/lib/date";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -470,9 +470,18 @@ export function formatPartialBookingSummary(context: {
   children?: number;
 }): string {
   const lines: string[] = [];
+  // Tanggal ditampilkan format Indonesia ("7 Juli 2026"), bukan ISO — ISO
+  // hanya untuk argumen tool/DB.
+  const fmt = (iso: string): string => {
+    try {
+      return fmtDateID(iso);
+    } catch {
+      return iso;
+    }
+  };
   if (context.roomName) lines.push(`Kamar: ${context.roomName}`);
-  if (context.checkIn) lines.push(`Check-in: ${context.checkIn}`);
-  if (context.checkOut) lines.push(`Check-out: ${context.checkOut}`);
+  if (context.checkIn) lines.push(`Check-in: ${fmt(context.checkIn)}`);
+  if (context.checkOut) lines.push(`Check-out: ${fmt(context.checkOut)}`);
   if (context.guestName) lines.push(`Nama: ${context.guestName}`);
   if (context.guestPhone) lines.push(`No HP: ${context.guestPhone}`);
   if (context.adults) lines.push(`Dewasa: ${context.adults}`);
