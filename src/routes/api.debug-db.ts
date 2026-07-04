@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const tokenParam = url.searchParams.get("token");
-  const webhookToken = process.env.FONNTE_WEBHOOK_TOKEN;
+  const webhookToken = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN;
 
   if (!webhookToken || tokenParam !== webhookToken) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {

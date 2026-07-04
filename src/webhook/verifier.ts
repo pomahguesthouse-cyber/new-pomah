@@ -5,8 +5,9 @@
  *   - `Authorization: Bearer <token>` header, OR
  *   - `?token=<token>` query param
  *
- * If FONNTE_WEBHOOK_TOKEN is not set, all requests are accepted
- * (useful for local development).
+ * If WPP_WEBHOOK_TOKEN is not set, all requests are accepted
+ * (useful for local development). Legacy FONNTE_WEBHOOK_TOKEN masih
+ * dibaca sebagai fallback selama transisi env di Cloudflare.
  *
  * IMPORTANT — soft mode by design.
  * The caller in src/routes/api.fonnte.ts has historically chosen to log
@@ -20,7 +21,7 @@
  */
 
 function isWppTokenValid(request: Request): boolean {
-  const expected = process.env.FONNTE_WEBHOOK_TOKEN;
+  const expected = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN;
   if (!expected) return true;
 
   const authHeader = request.headers.get("authorization") ?? "";

@@ -53,7 +53,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function getAuthorized(request: Request, url: URL): boolean {
   const tokenParam = url.searchParams.get("token");
   const authHeader = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
-  const webhookToken = process.env.FONNTE_WEBHOOK_TOKEN;
+  const webhookToken = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN;
   return !!webhookToken && (tokenParam === webhookToken || authHeader === webhookToken);
 }
 
@@ -537,7 +537,7 @@ export const Route = createFileRoute("/api/fonnte")({
         if (wantsDebug) {
           const debugPhone = url.searchParams.get("phone") ?? "debug_test_000";
           const report: Record<string, unknown> = {
-            env_token_set: !!process.env.FONNTE_WEBHOOK_TOKEN,
+            env_token_set: !!(process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN),
             env_supabase_url_set: !!process.env.SUPABASE_URL,
             env_supabase_key_set: !!process.env.SUPABASE_PUBLISHABLE_KEY,
             env_lovable_api_key_set: !!process.env.LOVABLE_API_KEY,
