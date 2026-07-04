@@ -8,7 +8,7 @@
  *   The public signature is unchanged, so all 13 call sites keep working:
  *     sendWhatsAppMessage(token, phone, message, fileUrl?, filename?)
  *   - `token`   -> the WPPConnect session Bearer token (stored, as before, in
- *                 properties.fonnte_token). "Bearer " prefix is added here.
+ *                 properties.wpp_token). "Bearer " prefix is added here.
  *   - base URL + session name come from env:
  *       WPP_BASE_URL  e.g. "http://IP_VPS:21465" or "https://wa.domain.com"
  *       WPP_SESSION   e.g. "pomah"
@@ -88,7 +88,7 @@ async function toDataUri(fileUrl: string, signal: AbortSignal): Promise<{ dataUr
 /**
  * Send a WhatsApp message via WPPConnect.
  *
- * @param token   WPPConnect session token (stored in properties.fonnte_token)
+ * @param token   WPPConnect session token (stored in properties.wpp_token)
  * @param phone   Recipient phone in international format, e.g. "628123456789"
  * @param message Text to send (plain text; WhatsApp formatting supported)
  * @param fileUrl Optional public URL of a file/image to attach
@@ -113,7 +113,7 @@ async function sendWhatsAppMessageWithOptions(
     return { ok: false, error: msg };
   }
   if (!input.token) {
-    return { ok: false, error: "WPPConnect token kosong (properties.fonnte_token belum diisi)" };
+    return { ok: false, error: "WPPConnect token kosong (properties.wpp_token belum diisi)" };
   }
 
   const controller = new AbortController();

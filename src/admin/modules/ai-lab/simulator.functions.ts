@@ -142,7 +142,7 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     // Dedup double-send (4 Jul 2026): wppId DETERMINISTIK per (phone, isi,
     // jendela 15 detik) — dulu memakai Date.now()+random sehingga double-click
     // di UI menghasilkan dua ID unik → dua eksekusi AI → dua balasan berbeda
-    // untuk satu pesan. Dedup durable fonnte_id di saveInboundMessage kini
+    // untuk satu pesan. Dedup durable wpp_id di saveInboundMessage kini
     // menangkap invokasi kedua.
     let bodyHash = 0;
     for (const ch of data.message.trim().toLowerCase()) {

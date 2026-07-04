@@ -99,13 +99,13 @@ export const sendMessage = createServerFn({ method: "POST" })
 
     const { data: prop } = await context.supabase
       .from("properties")
-      .select("fonnte_token")
+      .select("wpp_token")
       .limit(1)
       .maybeSingle();
 
     let wppId: string | null = null;
-    if (prop?.fonnte_token) {
-      const sendResult = await sendWhatsAppMessage(prop.fonnte_token, thread.phone, data.body);
+    if (prop?.wpp_token) {
+      const sendResult = await sendWhatsAppMessage(prop.wpp_token, thread.phone, data.body);
       if (!sendResult.ok) {
         console.error("[Admin WhatsApp] Wpp send failed:", sendResult.error);
       }
@@ -123,11 +123,11 @@ export const sendMessage = createServerFn({ method: "POST" })
       thread_id: data.threadId,
       direction: "out",
       body: data.body,
-      fonnte_id: wppId,
+      wpp_id: wppId,
       metadata: {
         is_manual_admin: true,
         source: "admin_inbox",
-        send_status: prop?.fonnte_token ? "sent" : "local_only",
+        send_status: prop?.wpp_token ? "sent" : "local_only",
       },
     } as any);
     if (error) throw error;

@@ -1,6 +1,6 @@
 const AUTH_HEADER_RE = /^Bearer\s+/i;
 
-type TokenRow = { fonnte_token?: string | null } | null;
+type TokenRow = { wpp_token?: string | null } | null;
 type TokenDb = {
   from: (table: string) => {
     select: (columns: string) => {
@@ -42,11 +42,11 @@ export async function isInternalRouteAuthorizedWithDbToken(
 
   const { data } = await db
     .from("properties")
-    .select("fonnte_token")
+    .select("wpp_token")
     .limit(1)
     .maybeSingle();
 
-  const dbToken = data?.fonnte_token?.trim();
+  const dbToken = data?.wpp_token?.trim();
   return !!dbToken && providedToken === dbToken;
 }
 

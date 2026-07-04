@@ -63,7 +63,7 @@ export async function generateAndSendInvoiceNotification({
           phone,
           whatsapp_number,
           public_domain,
-          fonnte_token,
+          wpp_token,
           payment_bank_name,
           payment_account_number,
           payment_account_holder
@@ -159,13 +159,13 @@ export async function generateAndSendInvoiceNotification({
 
     // ── 5. WhatsApp send (optional, skipped gracefully) ─────────────────
     let waSent = false;
-    const fonnte_token = property?.fonnte_token;
+    const wpp_token = property?.wpp_token;
 
     if (skipWhatsApp) {
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
     }
 
-    if (!fonnte_token) {
+    if (!wpp_token) {
       console.warn("[InvoiceNotification] Wpp token not configured — WhatsApp skipped");
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
     }
@@ -237,7 +237,7 @@ Terima kasih.`;
     }
 
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
-    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(fonnte_token, cleanedPhone, messageBody);
+    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(wpp_token, cleanedPhone, messageBody);
 
     if (sent) {
       waSent = true;
@@ -341,7 +341,7 @@ export async function sendExtraBedUpdateSummary({
         id, reference_code, check_in, check_out, total_amount,
         payment_status, paid_amount,
         guests ( id, full_name, phone ),
-        properties ( name, fonnte_token, public_domain )
+        properties ( name, wpp_token, public_domain )
         `,
       )
       .eq("id", bookingId)
@@ -354,8 +354,8 @@ export async function sendExtraBedUpdateSummary({
     if (!guest?.phone) {
       return { ok: false, wa_sent: false, error: "Guest tanpa nomor HP" };
     }
-    const fonnte_token = property?.fonnte_token;
-    if (!fonnte_token) {
+    const wpp_token = property?.wpp_token;
+    if (!wpp_token) {
       return { ok: true, wa_sent: false, error: null };
     }
 
@@ -417,7 +417,7 @@ Terima kasih.`;
     if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
 
     const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-      fonnte_token,
+      wpp_token,
       cleanedPhone,
       messageBody,
     );

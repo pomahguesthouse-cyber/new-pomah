@@ -40,14 +40,14 @@ export async function saveInboundMessage(
   };
   const withWppId =
     params.wppId && params.wppId.trim()
-      ? { ...rpcParams, p_fonnte_id: params.wppId.trim() }
+      ? { ...rpcParams, p_wpp_id: params.wppId.trim() }
       : null;
 
   if (withWppId) {
     const existing = await (client as any)
       .from("whatsapp_messages")
       .select("id")
-      .eq("fonnte_id", withWppId.p_fonnte_id)
+      .eq("wpp_id", withWppId.p_wpp_id)
       .limit(1)
       .maybeSingle();
 
@@ -55,7 +55,7 @@ export async function saveInboundMessage(
       return { messageId: existing.data.id as string, duplicate: true, error: null };
     }
   } else {
-    // Dedup durable TANPA fonnte_id (webchat/simulator, atau provider yang
+    // Dedup durable TANPA wpp_id (webchat/simulator, atau provider yang
     // tidak mengirim ID): pesan identik dari nomor sama dalam 20 detik
     // dianggap duplikat. Insiden 4 Jul 2026: simulator menembak webhook 2×
     // berselisih 360ms → dedup in-memory kalah (isolate Worker berbeda) →

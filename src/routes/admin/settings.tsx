@@ -691,7 +691,7 @@ function CredentialTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      fonnte_token?: string | null;
+      wpp_token?: string | null;
       telegram_bot_token?: string | null;
       ai_api_key?: string | null;
       ai_base_url?: string | null;
@@ -721,9 +721,9 @@ function CredentialTab() {
         description="Token sesi WPPConnect untuk menghubungkan WhatsApp gateway dengan aplikasi ini."
         placeholder="Token WPPConnect"
         secret
-        value={(data as any)?.fonnte_token ?? null}
+        value={(data as any)?.wpp_token ?? null}
         disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, fonnte_token: v })}
+        onSave={(v) => id && mutation.mutate({ id, wpp_token: v })}
       />
       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
         <strong>Webhook WPPConnect (wajib):</strong>{" "}
@@ -795,7 +795,7 @@ function IntegrationTab() {
   const mutation = useMutation({
     mutationFn: (v: {
       id: string;
-      fonnte_token?: string | null;
+      wpp_token?: string | null;
       google_place_id?: string | null;
       google_places_api_key?: string | null;
       google_analytics_id?: string | null;
