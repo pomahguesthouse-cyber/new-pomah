@@ -1309,6 +1309,7 @@ export type Database = {
           timezone: string
           updated_at: string
           whatsapp_number: string | null
+          wpp_token: string | null
           youtube_url: string | null
         }
         Insert: {
@@ -1361,6 +1362,7 @@ export type Database = {
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
+          wpp_token?: string | null
           youtube_url?: string | null
         }
         Update: {
@@ -1413,6 +1415,7 @@ export type Database = {
           timezone?: string
           updated_at?: string
           whatsapp_number?: string | null
+          wpp_token?: string | null
           youtube_url?: string | null
         }
         Relationships: []
@@ -2874,6 +2877,7 @@ export type Database = {
           metadata: Json | null
           sent_at: string
           thread_id: string
+          wpp_id: string | null
         }
         Insert: {
           ai_draft?: boolean
@@ -2884,6 +2888,7 @@ export type Database = {
           metadata?: Json | null
           sent_at?: string
           thread_id: string
+          wpp_id?: string | null
         }
         Update: {
           ai_draft?: boolean
@@ -2894,6 +2899,7 @@ export type Database = {
           metadata?: Json | null
           sent_at?: string
           thread_id?: string
+          wpp_id?: string | null
         }
         Relationships: [
           {
@@ -3257,15 +3263,26 @@ export type Database = {
         Args: { p_message_id: string; p_metadata: Json }
         Returns: undefined
       }
-      save_outbound_whatsapp: {
-        Args: {
-          p_body: string
-          p_fonnte_id?: string
-          p_metadata?: Json
-          p_thread_id: string
-        }
-        Returns: string
-      }
+      save_outbound_whatsapp:
+        | {
+            Args: {
+              p_body: string
+              p_fonnte_id?: string
+              p_metadata?: Json
+              p_thread_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_body: string
+              p_fonnte_id?: string
+              p_metadata?: Json
+              p_thread_id: string
+              p_wpp_id?: string
+            }
+            Returns: string
+          }
       test_context_summary: { Args: never; Returns: string }
       update_booking_state: {
         Args: { p_context: Json; p_phone: string; p_state: string }
