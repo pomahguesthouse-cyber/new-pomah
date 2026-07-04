@@ -34,7 +34,7 @@ type EnvCheck = {
 function envSnapshot(): EnvCheck {
   const baseUrl = (process.env.WPP_BASE_URL ?? "").replace(/\/+$/, "");
   const session = process.env.WPP_SESSION ?? "";
-  const webhook = process.env.WPP_WEBHOOK_TOKEN ?? process.env.FONNTE_WEBHOOK_TOKEN ?? "";
+  const webhook = process.env.WPP_WEBHOOK_TOKEN ?? "";
   return {
     hasBaseUrl: !!baseUrl,
     hasSession: !!session,

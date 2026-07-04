@@ -729,8 +729,8 @@ function CredentialTab() {
         <strong>Webhook WPPConnect (wajib):</strong>{" "}
         <code className="break-all">
           {typeof window !== "undefined"
-            ? `${window.location.origin}/api/fonnte`
-            : "https://pomahguesthouse.com/api/fonnte"}
+            ? `${window.location.origin}/api/wpp`
+            : "https://pomahguesthouse.com/api/wpp"}
         </code>
         <br />
         Jangan pakai Supabase Edge Function (<code>…/functions/v1/whatsapp-webhook</code>) — itu

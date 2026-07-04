@@ -3,7 +3,7 @@
 **Proyek:** new-pomah (Pomah Guesthouse)
 **Tanggal analisa awal:** 26 Juni 2026
 **Terakhir diperbarui:** 3 Juli 2026
-**Lingkup:** Jalur balasan WhatsApp end-to-end — webhook → antrian → worker → orchestration AI → pengiriman Fonnte.
+**Lingkup:** Jalur balasan WhatsApp end-to-end — webhook → antrian → worker → orchestration AI → pengiriman WPPConnect.
 **Status:** Sebagian besar temuan SUDAH DIPERBAIKI di kode. Dokumen ini diperbarui agar tidak menyesatkan.
 
 > **⚠️ Catatan revisi 27 Juni 2026**
@@ -12,7 +12,7 @@
 > zombie aktif). Hanya **Temuan #1** yang masih relevan, dan itu pun sedang
 > ditutup dengan scheduler cadangan (GitHub Actions). Tiap temuan di bawah
 > kini diawali blok status. Selain itu ditemukan **satu masalah baru di luar
-> kode** — auto-reply manual di panel Fonnte (lihat Temuan #7).
+> kode** — auto-reply manual di panel WPPConnect (lihat Temuan #7).
 
 > **⚠️ Catatan revisi 3 Juli 2026 — analisa ulang**
 >
@@ -79,7 +79,7 @@ Perbaikan tercepat dengan dampak terbesar: tambah scheduler cadangan independen,
 Tamu kirim WA
    │
    ▼
-Fonnte  ──webhook POST──►  /api/fonnte        (src/routes/api.fonnte.ts)
+WPPConnect  ──webhook POST──►  /api/wpp        (src/routes/api.wpp.ts)
                               │  - verifikasi token
                               │  - parse + dedup
                               │  - simpan inbound
@@ -100,7 +100,7 @@ Fonnte  ──webhook POST──►  /api/fonnte        (src/routes/api.fonnte.t
                               │  - klaim 1 entry (FOR UPDATE SKIP LOCKED)
                               │  - executeAutoreplyForPhone()
                               │      • orchestration AI (≤40s × 2 attempt)
-                              │      • kirim via Fonnte
+                              │      • kirim via WPPConnect
                               ▼
                         Balasan terkirim ke tamu
 ```
@@ -171,7 +171,7 @@ SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 20;
 
 - Fungsi pemulihan terdefinisi lengkap di `src/services/wa-autoreply.service.ts` (mencari pesan inbound yang belum punya entry antrian / belum dibalas, lalu meng-enqueue ulang).
 - Pencarian di seluruh `src/routes/**` **tidak menemukan** pemanggilnya. Cron `process-wa-queue` hanya memanggil `drainQueue` + `sendFailureFallbackToGuests`.
-- Sementara di webhook (`api.fonnte.ts`), bila `queueUpsert` gagal, blok catch hanya mencatat `[Webhook] enqueue error` lalu **tetap return 200**:
+- Sementara di webhook (`api.wpp.ts`), bila `queueUpsert` gagal, blok catch hanya mencatat `[Webhook] enqueue error` lalu **tetap return 200**:
   ```ts
   } catch (e) {
     console.error(`[Webhook] enqueue error: ${e} | ${logCtx}`);
@@ -243,10 +243,10 @@ const QUICK_ACK_AFTER_MS = 15_000;
 
 ---
 
-### 🔴 Temuan #7 — Auto-reply manual di Fonnte mengarah ke domain salah ketik (DI LUAR KODE)
+### 🔴 Temuan #7 — Auto-reply manual di WPPConnect mengarah ke domain salah ketik (DI LUAR KODE)
 
 > **Status (27 Juni 2026): ⚠️ DITEMUKAN dari screenshot produksi.** Sedang
-> ditangani di panel Fonnte (bukan di kode).
+> ditangani di panel WPPConnect (bukan di kode).
 
 **Bukti:** Pada percakapan tamu nyata (cek 7-9 Agustus), pesan balasan instan
 pertama berbunyi *"Mohon Maaf Chat Whatsapp Kami sedang Bermasalah silahkan
@@ -257,10 +257,10 @@ database**. Domain yang benar (`pomahguesthouse.com`) tersebar di banyak file;
 versi salah ketik tidak ada di mana pun.
 
 **Dampak:** Pesan ini hampir pasti berasal dari **fitur auto-reply manual di
-panel Fonnte/WhatsApp**, bukan dari chatbot. Tamu diarahkan ke URL yang rusak
+panel WPPConnect/WhatsApp**, bukan dari chatbot. Tamu diarahkan ke URL yang rusak
 ("Gak bisa dibuka ka") sebelum chatbot sempat memproses permintaan. Karena di
 luar kode, perbaikannya juga di luar kode: matikan/perbaiki template auto-reply
-di panel Fonnte. Tidak ada jalur kode yang bisa menghasilkan atau menambal ini.
+di panel WPPConnect. Tidak ada jalur kode yang bisa menghasilkan atau menambal ini.
 
 ---
 
@@ -274,7 +274,7 @@ di panel Fonnte. Tidak ada jalur kode yang bisa menghasilkan atau menambal ini.
 | 4 | Anggaran AI ~80s → zombie | Tinggi | ✅ Ditutup — timeout 28s × 2 | (dulu: timeout × attempt > wall-time) |
 | 5 | Drain serial `batch=1` | Tinggi | ✅ Ditutup — batch=2 paralel | (dulu: throughput 1/2 detik) |
 | 6 | Quick-ack default mati | Sedang | ✅ Ditutup — aktif default, 6s | (dulu: flag env tidak diaktifkan) |
-| 7 | Auto-reply Fonnte → domain salah ketik | Kritis | ⚠️ Di luar kode — tangani di panel Fonnte | Template auto-reply manual, bukan chatbot |
+| 7 | Auto-reply WPPConnect → domain salah ketik | Kritis | ⚠️ Di luar kode — tangani di panel WPPConnect | Template auto-reply manual, bukan chatbot |
 
 ---
 
@@ -304,7 +304,7 @@ di panel Fonnte. Tidak ada jalur kode yang bisa menghasilkan atau menambal ini.
    (alarm zombie sudah ada; alarm kegagalan cron belum) (Temuan #2).
 7. ✅ **SELESAI (sebagian).** `batch > 1` — kini `batch=2` paralel. Naikkan
    lebih lanjut hanya bila CPU budget Worker memungkinkan (Temuan #5).
-8. ⬜ **DI LUAR KODE.** Matikan/perbaiki auto-reply manual di panel Fonnte yang
+8. ⬜ **DI LUAR KODE.** Matikan/perbaiki auto-reply manual di panel WPPConnect yang
    mengarah ke domain salah ketik (Temuan #7).
 
 ---
@@ -330,4 +330,4 @@ Jika `cron.job_run_details` kosong/gagal padahal antrian terisi → akar masalah
 
 ---
 
-*Disusun dari pembacaan langsung berkas: `src/routes/api.fonnte.ts`, `src/routes/api.queue-worker.ts`, `src/routes/api.cron.process-wa-queue.ts`, `src/services/wa-autoreply.service.ts`, `src/services/queue.service.ts`, `src/services/whatsapp.service.ts`, `src/webhook/parser.ts`, `src/webhook/deduplicator.ts`, dan migrasi pg_cron/pg_net terkait.*
+*Disusun dari pembacaan langsung berkas: `src/routes/api.wpp.ts`, `src/routes/api.queue-worker.ts`, `src/routes/api.cron.process-wa-queue.ts`, `src/services/wa-autoreply.service.ts`, `src/services/queue.service.ts`, `src/services/whatsapp.service.ts`, `src/webhook/parser.ts`, `src/webhook/deduplicator.ts`, dan migrasi pg_cron/pg_net terkait.*
