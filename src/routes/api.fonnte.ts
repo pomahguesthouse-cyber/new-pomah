@@ -203,10 +203,7 @@ async function notifyNewSessionIfNeeded(input: {
   });
 }
 
-export const Route = createFileRoute("/api/fonnte")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
+export const wppWebhookPost = async ({ request }: { request: Request }): Promise<Response> => {
         const workerId = `w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
         if (!verifyWppToken(request)) {
