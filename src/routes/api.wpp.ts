@@ -412,59 +412,17 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         // Gate OCR ke gambar SAJA. Sebelumnya semua attachment (PDF/video/
         // audio) ikut men-trigger Vision OCR — buang kredit & bikin log
-        // pipeline finance kotor. Kalau MIME kosong, cek ekstensi URL.
-        const isImageAttachment = (() => {
-          if (!attachmentUrl) return false;
+        // pipeline finance kotor. WPPConnect kadang tidak memberi URL —
+        // dalam kasus itu kita andalkan messageType/mime.
+        const isImageMessage = (() => {
           const mime = (attachmentMime ?? "").toLowerCase();
           if (mime.startsWith("image/")) return true;
-          if (mime && !mime.startsWith("image/")) return false;
-          return /\.(jpe?g|png|webp|heic|heif|gif)(\?|$)/i.test(attachmentUrl);
+          if ((messageType ?? "").toLowerCase() === "image") return true;
+          if (attachmentUrl && /\.(jpe?g|png|webp|heic|heif|gif)(\?|$)/i.test(attachmentUrl)) return true;
+          return false;
         })();
 
-        if (isImageAttachment && attachmentUrl) {
-          // Tag intent metadata SEBELUM OCR jalan supaya routing-debug bisa
-          // melihat pipeline payment_proof aktif meski OCR async selesai
-          // belakangan (atau gagal).
-          runBackground(saveMessageMetadata(supabaseAdmin, {
-            messageId,
-            metadata: {
-              intent: "payment_proof",
-              agent_key: "finance",
-              tools_used: ["payment-proof-ocr"],
-              routing_confidence: 1,
-              fast_path: true,
-              pipeline: "payment_proof_ocr",
-            },
-          }).catch((e) => console.warn("[Webhook] payment_proof intent tag error:", e)));
 
-          runBackground((async () => {
-            try {
-              const { analyzePaymentProof } = await import("@/services/payment-proof.service");
-              const ocrResult = await analyzePaymentProof(
-                supabaseAdmin as any,
-                attachmentUrl,
-                customerPhone,
-                messageId,
-              );
-
-              const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
-              await notifyPaymentProof(supabaseAdmin as any, {
-                threadId: null,
-                phone: customerPhone,
-                guestName: name,
-                imageUrl: attachmentUrl,
-                messageId,
-                ocrResult,
-              });
-            } catch (err) {
-              console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
-            }
-          })());
-        } else if (attachmentUrl) {
-          console.info(
-            `[Webhook] Skip OCR non-image attachment (mime=${attachmentMime ?? "?"}, type=${messageType ?? "?"})`,
-          );
-        }
 
 
         const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
