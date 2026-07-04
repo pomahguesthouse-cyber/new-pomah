@@ -12,7 +12,7 @@ type TokenDb = {
 };
 
 export function getInternalRouteSecret(): string | undefined {
-  return process.env.INTERNAL_ROUTE_SECRET || process.env.CRON_SECRET || process.env.FONNTE_WEBHOOK_TOKEN;
+  return process.env.INTERNAL_ROUTE_SECRET || process.env.CRON_SECRET || process.env.WPP_WEBHOOK_TOKEN || process.env.FONNTE_WEBHOOK_TOKEN;
 }
 
 export function getProvidedInternalRouteToken(request: Request): string | undefined {
