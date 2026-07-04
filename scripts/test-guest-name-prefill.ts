@@ -104,6 +104,13 @@ console.log("Test 4: nama eksplisit di pesan menang atas summary");
   truthy("guestName = Budi Santoso (bukan dari summary)", finalContext.guestName === "Budi Santoso");
 }
 
+console.log("Test 4b: nama + nomor HP tanpa label (insiden 'Dian, 082175341673')");
+{
+  const { finalContext } = await run(null, "Dian, 082175341673");
+  truthy("guestName = Dian (digit HP tidak menggagalkan nama)", finalContext.guestName === "Dian");
+  truthy("guestPhone tertangkap", !!finalContext.guestPhone);
+}
+
 console.log("Test 5: koreksi data + konfirmasi \"Ya\" (regresi bug regex \\\\b)");
 {
   // Turn 1: tamu minta ganti nama → bot menyimpan pendingOverride & minta konfirmasi.

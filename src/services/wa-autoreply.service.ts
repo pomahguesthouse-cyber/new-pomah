@@ -1367,12 +1367,18 @@ export async function executeAutoreplyForPhone(
   let orchResult: any = null;
 
   const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
+  // A (4 Jul 2026): bila ada ≥2 pesan tamu beruntun yang belum terjawab,
+  // fast-path satu-intent DILARANG menjawab hanya pesan terakhir — keluhan/
+  // persetujuan di pesan sebelumnya ikut tertelan (insiden: "Maps ga bisa
+  // dibuka" + "Boleh" + "Wifi aman?" → hanya wifi terjawab). Serahkan ke AI
+  // yang melihat seluruh burst.
+  const multiPendingInbound = countConsecutiveInbound(rollingMessages) >= 2;
   // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
   // membalas di sesi berjalan atau tamu membuka dengan salam.
   const faqGreetingUsed =
     messageOpensWithGreeting(lastMessage) ||
     currentSessionMessages.some((m: { direction: string }) => m.direction === "out");
-  if (FAST_FAQ_ENABLED && !isManager && !bookingActive && lastMessage) {
+  if (FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
     const fastFaq = buildPropertyFaqReply({
       message: lastMessage,
       property: p as Record<string, unknown>,
@@ -1406,7 +1412,7 @@ export async function executeAutoreplyForPhone(
     (storedAvailabilitySlots.checkIn ?? chatSummaryJson?.check_in) &&
     (storedAvailabilitySlots.checkOut ?? chatSummaryJson?.check_out)
   );
-  if (!reply && !isManager && !bookingActive && lastMessage && !hasStoredAvailabilityDates) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage && !hasStoredAvailabilityDates) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
       reply = needDatesReply.reply;
@@ -1425,7 +1431,7 @@ export async function executeAutoreplyForPhone(
   // Guard "malam ini": tamu yang bertanya JAM ("bisa check-in hari ini jam 8
   // malam?") sedang bertanya kebijakan waktu, bukan harga malam ini.
   const asksTimeNotPrice = /\b(jam|pukul|check\s*[- ]?in|checkin|check\s*[- ]?out|checkout)\b/i.test(lastMessage ?? "");
-  if (!reply && !isManager && !bookingActive && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
     try {
       const tonightReply = await buildTonightPriceReply({
         rooms: rooms ?? [],
@@ -1449,7 +1455,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
     try {
       const activeSlots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
       const availabilitySlots = {
@@ -1481,7 +1487,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
     try {
       const availabilityReply = await buildDeterministicAvailabilityReply({
         message: lastMessage,
@@ -1528,7 +1534,7 @@ export async function executeAutoreplyForPhone(
   // Jalur ini WAJIB dijalankan sebelum LLM supaya beban tinggi tidak
   // memaksa orkestrator agent (p95 ~15 s) untuk pekerjaan yang bisa
   // dihitung deterministik dari `checkRoomAvailability`.
-  if (!reply && !isManager && !bookingActive && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
     try {
       const contextualReply = await buildContextualBookingInquiryReply({
         message: lastMessage,
@@ -1572,7 +1578,7 @@ export async function executeAutoreplyForPhone(
   // Fast-path deterministik untuk FAQ properti ringan (greeting, thanks,
   // alamat, kontak, jam check-in/out). Dijalankan setelah booking-inquiry
   // fast-path supaya "halo, ada kamar ga?" tetap masuk ke availability.
-  if (!reply && !isManager && !bookingActive && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
     try {
       const propertyFaq = buildPropertyFaqReply({
         message: lastMessage,

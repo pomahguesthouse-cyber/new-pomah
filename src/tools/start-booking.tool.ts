@@ -47,7 +47,13 @@ export const startBookingDetails: ToolHandler = async (
 
   const checkIn = isDateString(args.check_in) ? (args.check_in as string) : "";
   let checkOut = isDateString(args.check_out) ? (args.check_out as string) : "";
-  const adults = Math.max(1, Math.min(8, Number(args.adults) || 1));
+  // JANGAN default adults=1 saat agent tidak menyebutnya — jumlah tamu adalah
+  // slot WAJIB yang harus ditanya ke tamu. Insiden 4 Jul 2026: tamu bilang
+  // "untuk 4 orang", tool men-default 1 dewasa, slot dianggap terisi, dan
+  // booking nyaris tercipta untuk 1 tamu.
+  const adultsRaw = Number(args.adults);
+  const adults =
+    Number.isFinite(adultsRaw) && adultsRaw >= 1 ? Math.min(8, Math.floor(adultsRaw)) : undefined;
   const children = Math.max(0, Math.min(8, Number(args.children) || 0));
   const guestName = str(args.guest_name);
 

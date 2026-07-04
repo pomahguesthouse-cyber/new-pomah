@@ -65,6 +65,14 @@ const CASES: Case[] = [
   { label: "komplain + minta kontak (bukan FAQ)", input: "AC rusak, minta kontak admin dong", expectIntent: null },
   { label: "komplain parkir (bukan FAQ)", input: "mobil saya baret di area parkir", expectIntent: null },
   { label: "denda telat checkout (bukan FAQ)", input: "kalau telat checkout kena denda?", expectIntent: null },
+  // ≥2 pertanyaan dalam satu pesan → serahkan ke AI, jangan jawab sepotong
+  {
+    label: "multi-pertanyaan (bukan FAQ)",
+    input: "Lokasi dimana bun? Klo ke unnes apakah jauh bun?",
+    expectIntent: null,
+  },
+  // Varian komplain singkatan
+  { label: "komplain 'g bisa' (bukan FAQ)", input: "maps nya g bisa dibuka bun", expectIntent: null },
   // Mode early: blocklist kata booking aktif agar availability path menang
   { label: "early: halo + ada kamar → lolos ke availability", input: "halo, ada kamar ga?", expectIntent: null, mode: "early" },
   { label: "early: greeting murni tetap dijawab", input: "halo kak", expectIntent: "greeting", mode: "early" },

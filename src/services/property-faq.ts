@@ -43,7 +43,7 @@ export const FAQ_BLOCK_RE =
 
 /** Sinyal komplain/kerusakan — template FAQ dilarang menjawab keluhan. */
 export const COMPLAINT_SIGNAL_RE =
-  /\b(rusak|mati|lemot|lambat|putus|bocor|kotor|bau|berisik|bising|tidak bisa|ga bisa|gak bisa|nggak bisa|gabisa|error|eror|bermasalah|komplain|keluhan|kecewa|baret|lecet|hilang|kemalingan|denda)\b/i;
+  /\b(rusak|mati|lemot|lambat|putus|bocor|kotor|bau|berisik|bising|tidak bisa|ga bisa|gak bisa|nggak bisa|gabisa|g bisa|gbs|error|eror|bermasalah|komplain|keluhan|kecewa|baret|lecet|hilang|kemalingan|denda)\b/i;
 
 /** Sinyal tanggal/durasi menginap — pesan begini adalah jawaban tanggal. */
 const DATE_SIGNAL_RE =
@@ -79,6 +79,9 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (!raw || raw.length > 200) return null;
   if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
   if (input.mode === "early" && FAQ_BLOCK_RE.test(raw)) return null;
+  // ≥2 pertanyaan dalam satu pesan ("Lokasi dimana? Ke UNNES jauh?") — branch
+  // template hanya menjawab satu topik dan menelan sisanya. Serahkan ke AI.
+  if ((raw.match(/\?/g) ?? []).length >= 2) return null;
 
   const p = input.property ?? {};
   const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");

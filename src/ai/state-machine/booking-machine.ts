@@ -168,6 +168,12 @@ function cleanNameCandidate(candidate: string): string {
   return firstLine
     .replace(/^(?:atas\s+nama|a\s*\/\s*n|nama\s+saya|namaku|nama|name)\s*:?\s*/i, "")
     .replace(/^saya\s+/i, "")
+    // Buang nomor HP dari kandidat — tamu sering menjawab "Dian, 082175341673"
+    // sesuai contoh yang bot berikan; tanpa ini digit membuat nama ditolak
+    // (insiden 4 Jul 2026).
+    .replace(/(?:\+?62|0)[\s\-().]*8(?:[\s\-().]*\d){6,12}/g, " ")
+    .replace(/\b(?:nomor|no\.?|hp|wa|telp)\s*:?\s*/gi, " ")
+    .replace(/[,;]+/g, " ")
     .replace(HONORIFIC_TOKEN, " ")
     .replace(/[,.\-–—!]+$/g, " ")
     .replace(/\s+/g, " ")
@@ -1061,6 +1067,13 @@ export async function processBookingState(
      * sebelum booking dibuat, jadi aman dari salah orang.
      */
     knownGuestName?: string | null;
+    /**
+     * Jumlah tamu yang sudah diketahui dari sesi sebelumnya
+     * (chat_summary_json.guest_count) — prefill slot jumlah tamu bila tamu
+     * sudah pernah menyebutnya (insiden 4 Jul 2026: "untuk 4 orang" hilang
+     * saat alur booking dimulai dan tamu terdaftar 1 dewasa).
+     */
+    knownGuestCount?: number | null;
   },
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
@@ -1528,6 +1541,20 @@ export async function processBookingState(
           `[BookingState] guestName prefilled from chat summary for ${phone.slice(-6)} ("${prefillCandidate}")`,
         );
       }
+    }
+
+    // Prefill jumlah tamu dari context summary sesi sebelumnya.
+    if (
+      !context.adults &&
+      !extracted.adults &&
+      typeof opts?.knownGuestCount === "number" &&
+      opts.knownGuestCount >= 1 &&
+      opts.knownGuestCount <= 20
+    ) {
+      context.adults = Math.floor(opts.knownGuestCount);
+      console.info(
+        `[BookingState] adults prefilled from chat summary for ${phone.slice(-6)} (${context.adults})`,
+      );
     }
 
     if (extracted.email) context.guestEmail = extracted.email;

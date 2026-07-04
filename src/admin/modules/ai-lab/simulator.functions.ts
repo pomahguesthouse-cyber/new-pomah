@@ -131,14 +131,27 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
       return { ok: false as const, error: "AI API key belum dikonfigurasi." };
     }
 
-    const { messageId, error: saveErr } = await saveInboundMessage(supabaseAdmin as any, {
+    // Dedup double-send (4 Jul 2026): fonnteId DETERMINISTIK per (phone, isi,
+    // jendela 15 detik) — dulu memakai Date.now()+random sehingga double-click
+    // di UI menghasilkan dua ID unik → dua eksekusi AI → dua balasan berbeda
+    // untuk satu pesan. Dedup durable fonnte_id di saveInboundMessage kini
+    // menangkap invokasi kedua.
+    let bodyHash = 0;
+    for (const ch of data.message.trim().toLowerCase()) {
+      bodyHash = ((bodyHash << 5) - bodyHash + ch.charCodeAt(0)) | 0;
+    }
+    const dedupBucket = Math.floor(Date.now() / 15_000);
+    const { messageId, duplicate, error: saveErr } = await saveInboundMessage(supabaseAdmin as any, {
       phone: data.phone,
       name: "Simulator Guest",
       body: data.message,
-      fonnteId: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      fonnteId: `sim-${data.phone}-${bodyHash}-${dedupBucket}`,
     });
     if (saveErr || !messageId) {
       return { ok: false as const, error: saveErr?.message ?? "Gagal menyimpan pesan simulator." };
+    }
+    if (duplicate) {
+      return { ok: false as const, error: "Pesan duplikat (double-send terdeteksi) — diabaikan." };
     }
 
     await saveMessageMetadata(supabaseAdmin as any, {
