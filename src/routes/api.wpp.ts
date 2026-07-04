@@ -479,14 +479,16 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
               );
 
               const { notifyPaymentProof } = await import("@/services/manager-notifier.service");
-              await notifyPaymentProof(supabaseAdmin as any, {
-                threadId: null,
-                phone: customerPhone,
-                guestName: name,
-                imageUrl: attachmentUrl ?? undefined,
-                messageId,
-                ocrResult,
-              });
+              if (attachmentUrl) {
+                await notifyPaymentProof(supabaseAdmin as any, {
+                  threadId: null,
+                  phone: customerPhone,
+                  guestName: name,
+                  imageUrl: attachmentUrl,
+                  messageId,
+                  ocrResult,
+                });
+              }
             } catch (err) {
               console.warn("[Webhook] Payment proof OCR/notification gagal:", err);
             }
