@@ -514,9 +514,9 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
         }
 
         return new Response("OK", { status: 200 });
-      },
+};
 
-      GET: async ({ request }) => {
+export const wppWebhookGet = async ({ request }: { request: Request }): Promise<Response> => {
         const url = new URL(request.url);
 
         const challenge = url.searchParams.get("challenge");
