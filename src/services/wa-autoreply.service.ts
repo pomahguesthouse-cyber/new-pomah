@@ -2260,6 +2260,11 @@ export async function executeAutoreplyForPhone(
     metrics.sendFinishedAt = Date.now();
   }
 
+  // Matikan indikator "sedang mengetik" setelah kirim (sukses/gagal). Best-effort.
+  try { void setWppTyping(c.fonnte_token, phone, false); } catch { /* non-fatal */ }
+
+
+
   if (!sent) {
     console.error(`[Autoreply] Send failed ${phone}: ${sendErr}`);
     // Tandai outbound row sebagai gagal kirim supaya retry tahu boleh kirim ulang
