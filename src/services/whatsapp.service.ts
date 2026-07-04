@@ -124,21 +124,24 @@ async function sendWhatsAppMessageWithOptions(
     let url: string;
     let payload: Record<string, unknown>;
 
+    // WPPConnect's controller iterates `for (const contato of phone)`, so the
+    // API expects `phone` as an ARRAY. Passing a string makes some versions
+    // iterate character-by-character. Always send [phone].
     if (input.fileUrl) {
       const { dataUri } = await toDataUri(input.fileUrl, controller.signal);
       url = endpoint("send-file-base64");
       payload = {
-        phone,
+        phone: [phone],
         isGroup: false,
         base64: dataUri,
         filename: input.filename ?? "file",
-        // In WPPConnect send-file, `message` is the caption.
+        // In WPPConnect send-file, `message`/`caption` is the caption.
         message: input.message ?? "",
         caption: input.message ?? "",
       };
     } else {
       url = endpoint("send-message");
-      payload = { phone, isGroup: false, message: input.message };
+      payload = { phone: [phone], isGroup: false, message: input.message };
     }
 
     const res = await fetch(url, {
