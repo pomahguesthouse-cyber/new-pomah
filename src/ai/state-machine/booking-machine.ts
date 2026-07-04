@@ -1675,69 +1675,11 @@ export async function processBookingState(
         context.totalPrice = nights * context.pricePerNight * totalRoomsCount;
       }
 
+      // Jalur "fast booking" (auto-create sebelum tamu konfirmasi) dinonaktifkan
+      // atas permintaan owner karena menyebabkan pesan berulang dan booking
+      // ter-generate tanpa persetujuan eksplisit tamu. Selalu tampilkan
+      // ringkasan dan minta konfirmasi "Ya/Batal" dulu.
       try {
-        await applyResolvedRatesToContext(ctx, context);
-
-        const raw = await createBooking(
-          {
-            room_type: context.roomName,
-            rooms: context.rooms,
-            full_name: context.guestName,
-            email: context.guestEmail,
-            phone: context.guestPhone,
-            check_in: context.checkIn,
-            check_out: context.checkOut,
-            adults: context.adults ?? 1,
-            children: context.children ?? 0,
-            payment_type: context.paymentType ?? "full",
-            dp_amount: context.dpAmount ?? 0,
-            special_requests: context.specialRequests,
-            extra_beds: context.extraBeds ?? 0,
-          },
-          ctx,
-        );
-        let result: any = {};
-        try {
-          result = JSON.parse(raw);
-        } catch {
-          /* ignore */
-        }
-
-        if (!result.ok) {
-          await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
-          return {
-            handled: true,
-            reply:
-              `${inlineAnswerPrefix}Mohon maaf Kak, pemesanan belum bisa diproses: ${result.error ?? "terjadi kendala"}. ` +
-              `Data booking tetap saya simpan — Kakak bisa koreksi datanya, pilih kamar/tanggal lain, atau balas "batal".`,
-          };
-        }
-
-        context.bookingCode = result.reference_code;
-        await updateBookingState(supabase, phone, "PAYMENT_PENDING", context);
-        console.info(
-          `[BookingState] auto-create on complete slots → ${result.reference_code} for ${phone.slice(-6)}`,
-        );
-
-        const guestLine =
-          (context.children ?? 0) > 0
-            ? `${context.adults} dewasa, ${context.children} anak`
-            : `${context.adults} dewasa`;
-        return {
-          handled: true,
-          reply:
-            `${inlineAnswerPrefix}Terima kasih Kak ${context.guestName}! Data sudah lengkap, ` +
-            `booking langsung saya buatkan ✅\n\n` +
-            `Kode booking: *${result.reference_code}*\n` +
-            `Kamar: ${context.roomName} — ${guestLine}` +
-            ((context.extraBeds ?? 0) > 0 ? ` (+${context.extraBeds} extra bed)` : "") +
-            `\n\nInvoice lengkap beserta info pembayaran menyusul di pesan berikutnya ya, Kak. ` +
-            `Kalau Kakak ingin invoice juga tercatat ke email, balas dengan alamat email Kakak (opsional).`,
-        };
-      } catch (e) {
-        // Pembuatan langsung gagal keras (mis. gangguan DB) — mundur ke alur
-        // konfirmasi lama supaya tamu tetap bisa lanjut dengan "Ya".
-        console.warn("[BookingState] auto-create failed, falling back to confirmation flow:", e);
         const resolvedRates = await applyResolvedRatesToContext(ctx, context).catch(() => null);
         await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
         const summaryResult = buildBookingSummaryFromResolved(ctx, context, resolvedRates as any);
@@ -1745,8 +1687,18 @@ export async function processBookingState(
           summaryResult.reply = inlineAnswerPrefix + summaryResult.reply;
         }
         return summaryResult;
+      } catch (e) {
+        console.warn("[BookingState] summary build failed:", e);
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return {
+          handled: true,
+          reply:
+            `${inlineAnswerPrefix}Mohon maaf Kak, ada kendala menampilkan ringkasan booking. ` +
+            `Mohon ulangi permintaan booking-nya ya.`,
+        };
       }
     }
+
 
     // Still missing details: update state to COLLECTING_DATA
     await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
