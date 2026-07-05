@@ -206,6 +206,29 @@ export async function resolveManagerByPhone(
   return null;
 }
 
+/**
+ * Cek apakah manager sedang mengaktifkan "mode tamu" untuk keperluan tes.
+ * Row disimpan di tabel `manager_test_modes` (phone dinormalisasi 62xxx).
+ * Bila true, alur autoreply memperlakukan nomor tersebut sebagai tamu biasa
+ * sehingga booking flow (invoice, pembayaran, dsb) bisa diuji tanpa
+ * ter-route ke agen manajerial.
+ */
+export async function isManagerInGuestMode(phone: string): Promise<boolean> {
+  const needle = normalizePhone(phone);
+  if (!needle) return false;
+  try {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("manager_test_modes")
+      .select("guest_mode")
+      .eq("phone", needle)
+      .maybeSingle();
+    if (error) return false;
+    return !!(data && data.guest_mode);
+  } catch {
+    return false;
+  }
+}
+
 export type AutoreplyOutcome =
   | "ok"
   | "skipped_config"
