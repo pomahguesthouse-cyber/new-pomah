@@ -121,7 +121,14 @@ function WhatsappCorrectionsPage() {
     queryFn: () => messagesFn({ data: { threadId: selectedThread!.id } }),
   });
   const messages = (messagesData?.rows ?? []) as MessageRow[];
-  const visibleMessages = useMemo(() => messages.filter((m) => !isHiddenAttachmentPlaceholder(m.body)), [messages]);
+  const trainingMessages = useMemo(
+    () => messages.filter((m) => !isHiddenAttachmentPlaceholder(m.body)),
+    [messages],
+  );
+  const displayMessages = useMemo(
+    () => [...trainingMessages].sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()),
+    [trainingMessages],
+  );
 
   const { data: sessionsData } = useQuery({
     queryKey: ["wa-correction-sessions"],
@@ -137,9 +144,9 @@ function WhatsappCorrectionsPage() {
   }, [selectedThread?.id]);
 
   function previousInboundId(outMessageId: string) {
-    const idx = visibleMessages.findIndex((m) => m.id === outMessageId);
+    const idx = trainingMessages.findIndex((m) => m.id === outMessageId);
     for (let i = idx - 1; i >= 0; i--) {
-      if (visibleMessages[i].direction === "in") return visibleMessages[i].id;
+      if (trainingMessages[i].direction === "in") return trainingMessages[i].id;
     }
     return null;
   }
@@ -174,7 +181,7 @@ function WhatsappCorrectionsPage() {
   const saveSessionMut = useMutation({
     mutationFn: async () => {
       if (!selectedThread) throw new Error("Pilih percakapan dulu.");
-      const correctedTranscript = visibleMessages.map((m) => ({
+      const correctedTranscript = trainingMessages.map((m) => ({
         id: m.id,
         direction: m.direction,
         body: editedBodies[m.id] ?? m.body,
@@ -235,11 +242,11 @@ function WhatsappCorrectionsPage() {
             <div className="min-w-0"><p className="truncate font-semibold">{selectedThread?.display_name || selectedThread?.phone || "Pilih percakapan"}</p><p className="font-mono text-xs text-muted-foreground">{selectedThread?.phone}</p></div>
             <div className="flex shrink-0 gap-2">
               <Button variant="outline" disabled={!selectedThread || hideThreadMut.isPending} onClick={() => hideThreadMut.mutate()}><EyeOff className="mr-1 h-4 w-4" /> Sembunyikan dari Training</Button>
-              <Button disabled={!visibleMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
+              <Button disabled={!trainingMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : visibleMessages.map((m) => {
+            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : displayMessages.map((m) => {
               const outbound = m.direction === "out";
               const isEditing = editingMessageId === m.id;
               const shown = editedBodies[m.id] ?? m.body;
