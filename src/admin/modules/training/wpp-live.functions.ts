@@ -75,9 +75,7 @@ async function wpp(path: string, token: string, init?: RequestInit) {
   } finally { clearTimeout(timer); }
 }
 
-function chatIdOf(chat: any) {
-  return first(chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, pick(chat, "id._serialized"), pick(chat, "id.user"), chat.id, pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user"), chat.phone, chat.number);
-}
+function chatIdOf(chat: any) { return first(chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, pick(chat, "id._serialized"), pick(chat, "id.user"), chat.id, pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user"), chat.phone, chat.number); }
 function nameOf(chat: any) { return first(chat.name, chat.formattedName, chat.formattedTitle, chat.pushname, chat.notifyName, chat.shortName, pick(chat, "contact.name"), pick(chat, "contact.pushname"), chat.phone, chat.number); }
 function previewOf(chat: any) { const last = chat.lastMessage ?? chat.last_message ?? chat.lastMsg ?? (Array.isArray(chat.msgs) ? chat.msgs[chat.msgs.length - 1] : null); return first(chat.last_message_preview, chat.lastMessagePreview, chat.preview, last?.body, last?.caption, last?.text, last?.message); }
 function timeOf(value: any) {
@@ -89,7 +87,7 @@ function timeOf(value: any) {
 }
 function identityCandidates(chat: any): string[] {
   const values = [chat.phone, chat.number, chat.formattedNumber, chat.formattedPhone, chat.waNumber, chat.user, chat.userid, chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, chat.id, chat.contact, pick(chat, "contact.phone"), pick(chat, "contact.number"), pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user")];
-  return Array.from(new Set(values.map(first).filter((v): v is string => !!v)));
+  return Array.from(new Set(values.map((v) => first(v)).filter((v): v is string => !!v)));
 }
 async function resolveCanonical(...identities: unknown[]) {
   for (const identity of identities) { const phone = normalizePhone(identity); if (isPublicPhone(phone) && !isLid(identity)) return phone; }
