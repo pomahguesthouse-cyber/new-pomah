@@ -106,6 +106,7 @@ function WhatsappCorrectionsPage() {
   const [correctAgent, setCorrectAgent] = useState("front-office");
   const [errorType, setErrorType] = useState("incomplete_answer");
   const [summary, setSummary] = useState("");
+  const [rightTab, setRightTab] = useState<"context" | "saved">("context");
 
   const { data: threadsData, isFetching: loadingThreads } = useQuery({
     queryKey: ["wa-correction-threads"],
@@ -136,7 +137,7 @@ function WhatsappCorrectionsPage() {
 
   const { data: sessionsData } = useQuery({
     queryKey: ["wa-correction-sessions"],
-    queryFn: () => sessionsFn({ data: { limit: 20 } }),
+    queryFn: () => sessionsFn({ data: { limit: 80 } }),
   });
   const sessions = (sessionsData?.rows ?? []) as SessionRow[];
 
@@ -213,6 +214,7 @@ function WhatsappCorrectionsPage() {
     },
     onSuccess: () => {
       toast.success("Percakapan utuh disimpan sebagai training context.");
+      setRightTab("saved");
       qc.invalidateQueries({ queryKey: ["wa-correction-sessions"] });
     },
     onError: (e) => toast.error((e as Error).message),
@@ -220,7 +222,7 @@ function WhatsappCorrectionsPage() {
 
   return (
     <div className="flex h-screen min-h-0 flex-col bg-stone-100">
-      <main className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)_360px] overflow-hidden">
+      <main className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)_380px] overflow-hidden">
         <aside className="flex min-h-0 flex-col border-r bg-card">
           <div className="border-b p-3"><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" placeholder="Search name, phone, message" /></div></div>
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -268,10 +270,54 @@ function WhatsappCorrectionsPage() {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l bg-card p-4">
-          <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-muted-foreground">Ringkasan ini ikut di-embed bersama transcript terkoreksi.</p><Textarea rows={9} className="mt-3 text-xs" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="Ringkasan, status, dan konteks pesan terakhir akan tampil di sini..." /></section>
-          <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Default koreksi bubble</h2><div className="mt-3 grid grid-cols-1 gap-2"><SelectField label="Intent" value={correctIntent} onChange={setCorrectIntent} options={INTENTS} /><SelectField label="Agent" value={correctAgent} onChange={setCorrectAgent} options={AGENTS} /><SelectField label="Error" value={errorType} onChange={setErrorType} options={ERRORS} /></div></section>
-          <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Percakapan tersimpan</h2><div className="mt-2 space-y-2">{sessions.map((s) => <div key={s.id} className="rounded-lg border p-2 text-xs"><div className="flex justify-between"><Badge variant="outline" className="text-[9px]">{s.status}</Badge>{s.embedding_updated_at ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">embedded</Badge> : <Badge variant="outline" className="text-[9px]">no embedding</Badge>}</div><p className="mt-2 line-clamp-1 font-medium">{s.title || "Percakapan"}</p><p className="mt-1 line-clamp-2 text-muted-foreground">{s.conversation_summary || "—"}</p></div>)}</div></section>
+        <aside className="flex min-h-0 flex-col border-l bg-card">
+          <div className="border-b p-3">
+            <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              <button
+                type="button"
+                onClick={() => setRightTab("context")}
+                className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "context" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                Konteks
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightTab("saved")}
+                className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "saved" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              >
+                Tersimpan
+              </button>
+            </div>
+          </div>
+
+          {rightTab === "context" ? (
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+              <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-muted-foreground">Ringkasan ini ikut di-embed bersama transcript terkoreksi.</p><Textarea rows={9} className="mt-3 text-xs" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="Ringkasan, status, dan konteks pesan terakhir akan tampil di sini..." /></section>
+              <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Default koreksi bubble</h2><div className="mt-3 grid grid-cols-1 gap-2"><SelectField label="Intent" value={correctIntent} onChange={setCorrectIntent} options={INTENTS} /><SelectField label="Agent" value={correctAgent} onChange={setCorrectAgent} options={AGENTS} /><SelectField label="Error" value={errorType} onChange={setErrorType} options={ERRORS} /></div></section>
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="mb-3">
+                <h2 className="text-sm font-semibold">Percakapan tersimpan</h2>
+                <p className="text-xs text-muted-foreground">Daftar full conversation training yang sudah disimpan.</p>
+              </div>
+              <div className="space-y-3">
+                {sessions.length === 0 ? (
+                  <div className="rounded-xl border border-dashed p-4 text-center text-xs text-muted-foreground">Belum ada percakapan tersimpan.</div>
+                ) : sessions.map((s) => (
+                  <div key={s.id} className="rounded-xl border bg-background p-3 text-xs shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="outline" className="text-[9px]">{s.status}</Badge>
+                      {s.embedding_updated_at ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">embedded</Badge> : <Badge variant="outline" className="text-[9px]">no embedding</Badge>}
+                    </div>
+                    <p className="mt-3 font-semibold leading-snug">{s.title || "Percakapan"}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{s.conversation_summary || "—"}</p>
+                    <p className="mt-2 text-[10px] text-muted-foreground">{formatRelativeDateID(s.created_at)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
       </main>
     </div>
