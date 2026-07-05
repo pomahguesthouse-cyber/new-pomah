@@ -11,9 +11,24 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
+function decodeBasicAuth(value: string): string {
+  try {
+    const decoded = typeof atob === "function"
+      ? atob(value)
+      : String((globalThis as any).Buffer?.from(value, "base64")?.toString("utf8") ?? "");
+    const idx = decoded.indexOf(":");
+    if (idx < 0) return decoded.trim();
+    return decoded.slice(idx + 1).trim() || decoded.slice(0, idx).trim();
+  } catch {
+    return "";
+  }
+}
+
 function getSecret(req: Request): string {
   const url = new URL(req.url);
   const auth = req.headers.get("authorization") || "";
+  const basic = auth.match(/^Basic\s+(.+)$/i)?.[1];
+  if (basic) return decodeBasicAuth(basic);
   return url.searchParams.get("secret") || req.headers.get("x-cron-secret") || auth.replace(/^Bearer\s+/i, "") || "";
 }
 
