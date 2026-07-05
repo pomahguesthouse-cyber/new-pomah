@@ -75,9 +75,6 @@ CREATE TRIGGER trg_touch_wa_correction_dataset
 BEFORE UPDATE ON public.wa_correction_dataset
 FOR EACH ROW EXECUTE FUNCTION public.touch_wa_correction_dataset_updated_at();
 
--- Create a correction row directly from the real WhatsApp message IDs.
--- p_user_message_id should point to the guest's inbound message.
--- p_wrong_reply_message_id should point to the wrong outbound bot reply.
 CREATE OR REPLACE FUNCTION public.create_wa_correction_from_messages(
   p_user_message_id        uuid,
   p_wrong_reply_message_id uuid,
@@ -145,12 +142,8 @@ BEGIN
   v_phone := public.resolve_wa_canonical_phone(v_user_msg.phone);
 
   SELECT COALESCE(jsonb_agg(
-    jsonb_build_object(
-      'id', id,
-      'direction', direction,
-      'body', body,
-      'sent_at', sent_at
-    ) ORDER BY sent_at ASC
+    jsonb_build_object('id', id, 'direction', direction, 'body', body, 'sent_at', sent_at)
+    ORDER BY sent_at ASC
   ), '[]'::jsonb)
     INTO v_context
   FROM (
@@ -163,37 +156,14 @@ BEGIN
   ) s;
 
   INSERT INTO public.wa_correction_dataset (
-    canonical_phone,
-    thread_id,
-    user_message_id,
-    wrong_reply_message_id,
-    user_message,
-    bot_wrong_reply,
-    ideal_reply,
-    context_before,
-    correct_intent,
-    correct_agent,
-    error_type,
-    severity,
-    status,
-    notes,
-    source
+    canonical_phone, thread_id, user_message_id, wrong_reply_message_id,
+    user_message, bot_wrong_reply, ideal_reply, context_before,
+    correct_intent, correct_agent, error_type, severity, status, notes, source
   ) VALUES (
-    v_phone,
-    v_user_msg.thread_id,
-    v_user_msg.id,
-    v_wrong_msg.id,
-    v_user_msg.body,
-    v_wrong_msg.body,
-    btrim(p_ideal_reply),
-    v_context,
-    NULLIF(btrim(p_correct_intent), ''),
-    NULLIF(btrim(p_correct_agent), ''),
-    NULLIF(btrim(p_error_type), ''),
-    v_severity,
-    v_status,
-    NULLIF(btrim(p_notes), ''),
-    'whatsapp'
+    v_phone, v_user_msg.thread_id, v_user_msg.id, v_wrong_msg.id,
+    v_user_msg.body, v_wrong_msg.body, btrim(p_ideal_reply), v_context,
+    NULLIF(btrim(p_correct_intent), ''), NULLIF(btrim(p_correct_agent), ''),
+    NULLIF(btrim(p_error_type), ''), v_severity, v_status, NULLIF(btrim(p_notes), ''), 'whatsapp'
   )
   RETURNING id INTO v_id;
 
@@ -201,8 +171,6 @@ BEGIN
 END;
 $$;
 
--- Recent outbound replies paired with the nearest previous inbound message.
--- Admin UI can use this to choose the exact turn to correct.
 CREATE OR REPLACE FUNCTION public.list_wa_correction_candidates(p_limit int DEFAULT 40)
 RETURNS TABLE (
   thread_id uuid,
@@ -250,15 +218,12 @@ AS $$
   WHERE outm.direction = 'out'
     AND COALESCE(outm.metadata ->> 'simulator', 'false') <> 'true'
     AND NOT EXISTS (
-      SELECT 1
-      FROM public.wa_correction_dataset c
-      WHERE c.wrong_reply_message_id = outm.id
+      SELECT 1 FROM public.wa_correction_dataset c WHERE c.wrong_reply_message_id = outm.id
     )
   ORDER BY outm.sent_at DESC
   LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 40), 200));
 $$;
 
--- Positive retrieval: use the ideal reply as an approved example.
 CREATE OR REPLACE FUNCTION public.match_wa_correction_ideal_examples(
   query_embedding vector(1536),
   match_threshold float DEFAULT 0.78,
@@ -294,8 +259,6 @@ AS $$
   LIMIT match_count;
 $$;
 
--- Negative retrieval: expose the wrong reply + correction so the prompt can say
--- "do not answer like this; answer like that".
 CREATE OR REPLACE FUNCTION public.match_wa_correction_examples(
   query_embedding vector(1536),
   match_threshold float DEFAULT 0.78,
@@ -336,12 +299,12 @@ AS $$
   LIMIT match_count;
 $$;
 
-REVOKE ALL ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.list_wa_correction_candidates(int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.match_wa_correction_examples(vector, float, int) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.list_wa_correction_candidates(int) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_wa_correction_examples(vector, float, int) TO authenticated, service_role;
