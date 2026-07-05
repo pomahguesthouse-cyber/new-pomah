@@ -201,6 +201,63 @@ BEGIN
 END;
 $$;
 
+-- Recent outbound replies paired with the nearest previous inbound message.
+-- Admin UI can use this to choose the exact turn to correct.
+CREATE OR REPLACE FUNCTION public.list_wa_correction_candidates(p_limit int DEFAULT 40)
+RETURNS TABLE (
+  thread_id uuid,
+  phone text,
+  display_name text,
+  user_message_id uuid,
+  user_message text,
+  user_sent_at timestamptz,
+  wrong_reply_message_id uuid,
+  bot_wrong_reply text,
+  bot_sent_at timestamptz,
+  agent_key text,
+  intent text,
+  tools_used jsonb
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT
+    t.id AS thread_id,
+    t.phone,
+    t.display_name,
+    prev_in.id AS user_message_id,
+    prev_in.body AS user_message,
+    prev_in.sent_at AS user_sent_at,
+    outm.id AS wrong_reply_message_id,
+    outm.body AS bot_wrong_reply,
+    outm.sent_at AS bot_sent_at,
+    COALESCE(outm.metadata ->> 'agent_key', outm.metadata ->> 'agent') AS agent_key,
+    outm.metadata ->> 'intent' AS intent,
+    COALESCE(outm.metadata -> 'tools_used', '[]'::jsonb) AS tools_used
+  FROM public.whatsapp_messages outm
+  JOIN public.whatsapp_threads t ON t.id = outm.thread_id
+  JOIN LATERAL (
+    SELECT im.id, im.body, im.sent_at
+    FROM public.whatsapp_messages im
+    WHERE im.thread_id = outm.thread_id
+      AND im.direction = 'in'
+      AND im.sent_at <= outm.sent_at
+    ORDER BY im.sent_at DESC
+    LIMIT 1
+  ) prev_in ON true
+  WHERE outm.direction = 'out'
+    AND COALESCE(outm.metadata ->> 'simulator', 'false') <> 'true'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM public.wa_correction_dataset c
+      WHERE c.wrong_reply_message_id = outm.id
+    )
+  ORDER BY outm.sent_at DESC
+  LIMIT GREATEST(1, LEAST(COALESCE(p_limit, 40), 200));
+$$;
+
 -- Positive retrieval: use the ideal reply as an approved example.
 CREATE OR REPLACE FUNCTION public.match_wa_correction_ideal_examples(
   query_embedding vector(1536),
@@ -280,10 +337,12 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.list_wa_correction_candidates(int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.match_wa_correction_examples(vector, float, int) FROM PUBLIC;
 
 GRANT EXECUTE ON FUNCTION public.create_wa_correction_from_messages(uuid, uuid, text, text, text, text, text, text) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.list_wa_correction_candidates(int) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_wa_correction_examples(vector, float, int) TO authenticated, service_role;
 
