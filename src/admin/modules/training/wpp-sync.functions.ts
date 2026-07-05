@@ -58,6 +58,13 @@ function looksPublic(phone: string | null): boolean {
   return !!phone && /^62\d{8,14}$/.test(phone);
 }
 
+function aliasTypeOf(raw: string): "phone" | "jid" | "lid" | "unknown" {
+  if (/@lid(?:\b|[_@.-]|$)/i.test(raw)) return "lid";
+  if (/@(?:c\.us|s\.whatsapp\.net)$/i.test(raw)) return "jid";
+  if (looksPublic(normalizePhone(raw))) return "phone";
+  return "unknown";
+}
+
 function compact<T>(values: Array<T | null | undefined | false | "">): T[] {
   return Array.from(new Set(values.filter(Boolean) as T[]));
 }
@@ -97,6 +104,24 @@ function bodyOf(m: any): string {
 
 function directionOf(m: any): "in" | "out" {
   return m.fromMe === true || m.from_me === true || m.isFromMe === true ? "out" : "in";
+}
+
+function identityFromMessage(msg: any): string | null {
+  for (const raw of [
+    messageIdOf(msg),
+    pick(msg, "id.remote"),
+    pick(msg, "id._serialized"),
+    pick(msg, "from._serialized"),
+    pick(msg, "to._serialized"),
+    msg.from,
+    msg.to,
+    msg.author,
+    msg.sender,
+  ]) {
+    const phone = normalizePhone(raw);
+    if (looksPublic(phone)) return phone;
+  }
+  return null;
 }
 
 async function getWppToken(): Promise<string | null> {
@@ -142,6 +167,33 @@ async function resolveCanonical(identity: string | null): Promise<string | null>
   if (!identity) return null;
   const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: identity });
   return normalizePhone(data) ?? normalizePhone(identity);
+}
+
+async function rememberAliases(canonicalPhone: string | null, aliases: unknown[], displayName: string | null) {
+  if (!looksPublic(canonicalPhone)) return;
+  const unique = compact(aliases.map((value) => (typeof value === "string" ? value.trim() : null)));
+  for (const alias of unique) {
+    const normalized = normalizePhone(alias);
+    if (!normalized || normalized === canonicalPhone) continue;
+    await (supabaseAdmin as any).rpc("upsert_wa_identity_alias", {
+      p_canonical_phone: canonicalPhone,
+      p_alias_value: alias,
+      p_alias_type: aliasTypeOf(alias),
+      p_role: "guest",
+      p_display_name: displayName,
+      p_source: "wppconnect_thread_sync",
+      p_metadata: { note: "Alias dipelajari saat sync pesan WPPConnect" },
+    });
+  }
+}
+
+async function mergeCanonicalThread(canonicalPhone: string | null) {
+  if (!looksPublic(canonicalPhone)) return;
+  try {
+    await (supabaseAdmin as any).rpc("merge_wa_threads_to_canonical_phone", { p_canonical_phone: canonicalPhone });
+  } catch (e) {
+    console.warn("[wpp-sync] merge canonical thread skipped:", e);
+  }
 }
 
 async function fetchThreadMessages(token: string, rawIdentity: string, canonical: string | null, limit: number) {
@@ -215,9 +267,14 @@ export const syncWhatsappThreadFromWppConnect = createServerFn({ method: "POST" 
     const rawIdentity = String(thread.external_chat_id || thread.phone || "").trim();
     if (!rawIdentity) throw new Error("Identity WhatsApp kosong, tidak bisa sync.");
     const canonical = await resolveCanonical(rawIdentity);
-    const publicPhone = looksPublic(canonical) ? canonical : null;
-    const externalChatId = thread.external_chat_id || (publicPhone ? `${publicPhone}@c.us` : rawIdentity.includes("@") ? rawIdentity : `${rawIdentity}@lid`);
+    let publicPhone = looksPublic(canonical) ? canonical : null;
     const { messages, usedPath, triedIds } = await fetchThreadMessages(token, rawIdentity, publicPhone, data.limit);
+    for (const msg of messages) {
+      const inferred = identityFromMessage(msg);
+      if (!publicPhone && looksPublic(inferred)) publicPhone = inferred;
+    }
+    const externalChatId = thread.external_chat_id || (publicPhone ? `${publicPhone}@c.us` : rawIdentity.includes("@") ? rawIdentity : `${rawIdentity}@lid`);
+    await rememberAliases(publicPhone, [rawIdentity, thread.phone, thread.external_chat_id, externalChatId, ...triedIds], thread.display_name);
 
     let imported = 0;
     let updated = 0;
@@ -243,6 +300,7 @@ export const syncWhatsappThreadFromWppConnect = createServerFn({ method: "POST" 
       last_synced_at: new Date().toISOString(),
       sync_status: messages.length ? "synced" : "synced_empty",
     }).eq("id", thread.id);
+    await mergeCanonicalThread(publicPhone);
 
     await (supabaseAdmin as any).from("wa_wpp_sync_state").insert({
       sync_type: "thread",

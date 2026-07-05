@@ -308,7 +308,7 @@ export const listWhatsappCorrectionThreads = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { data: rows, error } = await supabaseAdmin
       .from("whatsapp_threads")
-      .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json, canonical_phone, external_chat_id, lid_alias, identity_type, sync_error")
+      .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json, canonical_phone, external_chat_id, lid_alias, identity_type, sync_error, last_synced_at")
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(data.limit);
     if (error) throw error;

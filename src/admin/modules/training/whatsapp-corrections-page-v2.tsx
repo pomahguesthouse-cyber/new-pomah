@@ -26,7 +26,7 @@ import {
   listWhatsappCorrectionThreads,
 } from "@/admin/modules/training/wa-correction.functions";
 import { deleteWhatsappCorrectionSession } from "@/admin/modules/training/wa-correction-session.functions";
-import { listWppSyncRuns } from "@/admin/modules/training/wpp-sync.functions";
+import { listWppSyncRuns, syncWhatsappThreadFromWppConnect } from "@/admin/modules/training/wpp-sync.functions";
 import { syncWhatsappChatListFromWppConnect } from "@/admin/modules/training/wpp-chat-list-sync.functions";
 
 type ThreadRow = {
@@ -38,6 +38,12 @@ type ThreadRow = {
   ai_auto: boolean | null;
   chat_summary: string | null;
   chat_summary_json?: Record<string, unknown> | null;
+  canonical_phone?: string | null;
+  external_chat_id?: string | null;
+  lid_alias?: string | null;
+  identity_type?: string | null;
+  sync_error?: string | null;
+  last_synced_at?: string | null;
 };
 type MessageRow = {
   id: string;
@@ -161,6 +167,19 @@ function formatWaPhone(phone: string | null | undefined) {
   const local = `+${p.slice(0, 2)} ${p.slice(2, 5)}-${p.slice(5, 9)}-${p.slice(9)}`;
   return local.replace(/-$/g, "");
 }
+function isPublicPhone(value: string | null | undefined) {
+  return /^62\d{8,14}$/.test(digits(value));
+}
+function primaryPhone(thread: ThreadRow | null | undefined) {
+  if (!thread) return null;
+  if (isPublicPhone(thread.canonical_phone)) return thread.canonical_phone;
+  if (isPublicPhone(thread.phone)) return thread.phone;
+  return thread.phone;
+}
+function hasUnresolvedIdentity(thread: ThreadRow | null | undefined) {
+  if (!thread) return false;
+  return !isPublicPhone(primaryPhone(thread)) || thread.identity_type === "lid" || !!thread.sync_error;
+}
 function looksLikeSession(value: string | null | undefined) {
   const text = String(value ?? "").trim().toLowerCase();
   return text === "pomahchatbot" || text.includes("session");
@@ -171,7 +190,7 @@ function displayName(thread: ThreadRow | null | undefined) {
   return name;
 }
 function avatarText(thread: ThreadRow | null | undefined) {
-  const source = displayName(thread) !== "No Name" ? displayName(thread) : formatWaPhone(thread?.phone);
+  const source = displayName(thread) !== "No Name" ? displayName(thread) : formatWaPhone(primaryPhone(thread));
   return source
     .split(/\s+/)
     .filter(Boolean)
@@ -211,7 +230,9 @@ export function WhatsappCorrectionsPage() {
   const sessionsFn = useServerFn(listWhatsappCorrectionSessions);
   const deleteSessionFn = useServerFn(deleteWhatsappCorrectionSession);
   const syncChatListFn = useServerFn(syncWhatsappChatListFromWppConnect);
+  const syncThreadFn = useServerFn(syncWhatsappThreadFromWppConnect);
   const syncRunsFn = useServerFn(listWppSyncRuns);
+  const autoSyncedThreadsRef = useRef<Set<string>>(new Set());
 
   const [search, setSearch] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -289,6 +310,24 @@ export function WhatsappCorrectionsPage() {
     },
     onError: (e) => toast.error((e as Error).message),
   });
+  const syncThreadMut = useMutation({
+    mutationFn: (threadId: string) => syncThreadFn({ data: { threadId, limit: 120 } }),
+    onSuccess: (res) => {
+      toast.success(`Pesan WPP tersinkron: ${res.imported} baru, ${res.updated} update.`);
+      qc.invalidateQueries({ queryKey: ["wa-correction-threads"] });
+      qc.invalidateQueries({ queryKey: ["wa-correction-messages", res.threadId] });
+      qc.invalidateQueries({ queryKey: ["wa-wpp-sync-runs"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  useEffect(() => {
+    if (!selectedThread?.id) return;
+    if (autoSyncedThreadsRef.current.has(selectedThread.id)) return;
+    if (!hasUnresolvedIdentity(selectedThread) && trainingMessages.length > 0) return;
+    autoSyncedThreadsRef.current.add(selectedThread.id);
+    syncThreadMut.mutate(selectedThread.id);
+  }, [selectedThread?.id]);
   const saveTurnMut = useMutation({
     mutationFn: async (message: MessageRow) => {
       const inboundId = previousInboundId(message.id);
@@ -399,7 +438,11 @@ export function WhatsappCorrectionsPage() {
       <section className="flex min-w-0 flex-1 flex-col">
         {selectedThread ? (
           <>
-            <ThreadHeader thread={selectedThread} />
+            <ThreadHeader
+              thread={selectedThread}
+              syncing={syncThreadMut.isPending}
+              onRefresh={() => syncThreadMut.mutate(selectedThread.id)}
+            />
             <div className="min-h-0 flex-1 overflow-y-auto px-[clamp(1.25rem,4vw,5rem)] py-5" style={CHAT_BG_STYLE}>
               {loadingMessages ? (
                 <p className="rounded-lg bg-white/80 px-3 py-2 text-sm text-[#667781] shadow-sm">Memuat pesan...</p>
@@ -485,10 +528,13 @@ function ThreadListItem({ thread, active, onClick }: { thread: ThreadRow; active
       <AvatarCircle thread={thread} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="truncate text-[13px] font-semibold text-[#111b21]">{formatWaPhone(thread.phone)}</p>
+          <p className="truncate text-[13px] font-semibold text-[#111b21]">{formatWaPhone(primaryPhone(thread))}</p>
           {thread.last_message_at && <span className="shrink-0 text-[10px] text-[#667781]">{formatRelativeDateID(thread.last_message_at)}</span>}
         </div>
-        <p className="mt-0.5 truncate text-xs text-[#667781]">{displayName(thread)}</p>
+        <p className="mt-0.5 truncate text-xs text-[#667781]">
+          {displayName(thread)}
+          {hasUnresolvedIdentity(thread) ? " · LID belum terpetakan" : ""}
+        </p>
         <div className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-[#667781]">
           <span>{thread.last_message_preview ? "↘" : ""}</span>
           <span className="truncate">{thread.last_message_preview || "-"}</span>
@@ -498,14 +544,28 @@ function ThreadListItem({ thread, active, onClick }: { thread: ThreadRow; active
   );
 }
 
-function ThreadHeader({ thread }: { thread: ThreadRow }) {
+function ThreadHeader({ thread, syncing, onRefresh }: { thread: ThreadRow; syncing: boolean; onRefresh: () => void }) {
   return (
     <header className="flex h-[58px] items-center gap-3 border-b border-[#e9edef] bg-white px-5">
       <AvatarCircle thread={thread} />
-      <div className="min-w-0">
-        <p className="truncate text-[15px] font-semibold text-[#111b21]">{formatWaPhone(thread.phone)}</p>
-        <p className="truncate text-xs text-[#667781]">{displayName(thread)}</p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold text-[#111b21]">{formatWaPhone(primaryPhone(thread))}</p>
+        <p className="truncate text-xs text-[#667781]">
+          {displayName(thread)}
+          {hasUnresolvedIdentity(thread) ? " · mencari nomor WA dari VPS" : ""}
+        </p>
       </div>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="h-8 rounded-full px-3 text-xs"
+        disabled={syncing}
+        onClick={onRefresh}
+      >
+        {syncing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1 h-3.5 w-3.5" />}
+        Refresh WPP
+      </Button>
     </header>
   );
 }

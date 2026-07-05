@@ -76,10 +76,17 @@ function identityCandidates(chat: any): string[] {
     chat.waNumber,
     chat.user,
     chat.userid,
+    chat.userId,
+    chat.phoneNumber,
     chat.chatId,
     chat.chat_id,
     chat.remoteJid,
     chat.remote_jid,
+    chat.remoteId,
+    chat.remote_id,
+    chat.remote,
+    chat.wid,
+    chat.lid,
     chat.jid,
     chat.id,
     chat.contact,
@@ -105,11 +112,21 @@ function identityCandidates(chat: any): string[] {
     "contact.id.id",
     "contact.phone",
     "contact.number",
+    "contact.phoneNumber",
+    "contact.userId",
     "contact.formattedNumber",
     "contact.formattedPhone",
     "contact.waNumber",
     "contact.userid",
     "contact.user",
+    "contact.wid",
+    "contact.lid",
+    "wid._serialized",
+    "wid.user",
+    "lid._serialized",
+    "lid.user",
+    "participant._serialized",
+    "participant.user",
     "lastMessage.id.remote",
     "lastMessage.id._serialized",
     "lastMessage.from._serialized",
@@ -220,6 +237,15 @@ async function upsertAliases(canonicalPhone: string, aliases: string[], chat: an
   }
 }
 
+async function mergeCanonicalThread(canonicalPhone: string | null) {
+  if (!isPublicPhone(canonicalPhone)) return;
+  try {
+    await (supabaseAdmin as any).rpc("merge_wa_threads_to_canonical_phone", { p_canonical_phone: canonicalPhone });
+  } catch (e) {
+    console.warn("[wpp-chat-list-sync] merge canonical thread skipped:", e);
+  }
+}
+
 async function callWpp(path: string, token: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -299,10 +325,12 @@ async function upsertChat(chat: any) {
   if (existing?.id) {
     const { error } = await (supabaseAdmin as any).from("whatsapp_threads").update(patch).eq("id", existing.id);
     if (error) throw error;
+    await mergeCanonicalThread(publicPhone);
     return "updated" as const;
   }
   const { error } = await (supabaseAdmin as any).from("whatsapp_threads").insert({ ...patch, unread_count: 0, status: "open" });
   if (error) throw error;
+  await mergeCanonicalThread(publicPhone);
   return "inserted" as const;
 }
 
