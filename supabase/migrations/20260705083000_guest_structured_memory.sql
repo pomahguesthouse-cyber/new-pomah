@@ -2,8 +2,10 @@
 -- Guest Structured Memory
 -- ============================================================
 -- Stores stable, structured guest context separately from short per-thread
--- summaries. This makes the chatbot remember important booking context across
--- turns/sessions without relying only on the last 10-30 WhatsApp messages.
+-- summaries. This version is tolerant of legacy LLM summary values where
+-- last_topic/payment_status may be free-text (for example: "Klarifikasi biaya"
+-- or "partial"). Those values are normalized before insert so check constraints
+-- stay clean.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.guest_structured_memory (
@@ -67,12 +69,8 @@ AS $$
 DECLARE
   v text := NULLIF(btrim(p_json ->> p_key), '');
 BEGIN
-  IF v IS NULL THEN
-    RETURN NULL;
-  END IF;
-  IF v !~ '^\d{4}-\d{2}-\d{2}$' THEN
-    RETURN NULL;
-  END IF;
+  IF v IS NULL THEN RETURN NULL; END IF;
+  IF v !~ '^\d{4}-\d{2}-\d{2}$' THEN RETURN NULL; END IF;
   RETURN v::date;
 EXCEPTION WHEN others THEN
   RETURN NULL;
@@ -88,12 +86,8 @@ AS $$
 DECLARE
   v text := NULLIF(btrim(p_json ->> p_key), '');
 BEGIN
-  IF v IS NULL THEN
-    RETURN NULL;
-  END IF;
-  IF v !~ '^\d+$' THEN
-    RETURN NULL;
-  END IF;
+  IF v IS NULL THEN RETURN NULL; END IF;
+  IF v !~ '^\d+$' THEN RETURN NULL; END IF;
   RETURN v::integer;
 EXCEPTION WHEN others THEN
   RETURN NULL;
@@ -109,16 +103,74 @@ AS $$
 DECLARE
   v text := lower(NULLIF(btrim(p_json ->> p_key), ''));
 BEGIN
-  IF v IS NULL THEN
-    RETURN p_default;
-  END IF;
-  IF v IN ('true','t','1','yes','ya') THEN
-    RETURN true;
-  END IF;
-  IF v IN ('false','f','0','no','tidak') THEN
-    RETURN false;
-  END IF;
+  IF v IS NULL THEN RETURN p_default; END IF;
+  IF v IN ('true','t','1','yes','ya') THEN RETURN true; END IF;
+  IF v IN ('false','f','0','no','tidak') THEN RETURN false; END IF;
   RETURN p_default;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.normalize_guest_memory_topic(p_value text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v text := lower(coalesce(p_value, ''));
+BEGIN
+  v := btrim(v);
+  IF v = '' THEN RETURN NULL; END IF;
+  IF v IN ('pricing','availability','facility','booking','payment','complaint','location','general') THEN RETURN v; END IF;
+  IF v ~ '(harga|tarif|rate|biaya|extra bed|extrabed|tagihan|total|diskon|promo)' THEN RETURN 'pricing'; END IF;
+  IF v ~ '(tersedia|available|availability|kosong|penuh|tanggal|kamar kosong)' THEN RETURN 'availability'; END IF;
+  IF v ~ '(fasilitas|wifi|parkir|ac|kamar mandi|sarapan|dapur)' THEN RETURN 'facility'; END IF;
+  IF v ~ '(booking|reservasi|pesan kamar|check.?in|check.?out|menginap|tamu|dewasa|anak)' THEN RETURN 'booking'; END IF;
+  IF v ~ '(bayar|pembayaran|transfer|dp|deposit|lunas|bukti)' THEN RETURN 'payment'; END IF;
+  IF v ~ '(komplain|keluhan|rusak|kotor|bau|tidak bisa|ga bisa|nggak bisa|maps.*tidak)' THEN RETURN 'complaint'; END IF;
+  IF v ~ '(lokasi|alamat|maps|map|arah|rute|dekat|undip|unnes)' THEN RETURN 'location'; END IF;
+  RETURN 'general';
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.normalize_guest_booking_status(p_value text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v text := lower(coalesce(p_value, ''));
+BEGIN
+  v := btrim(v);
+  IF v = '' THEN RETURN NULL; END IF;
+  IF v IN ('none','pending','confirmed','cancelled','checked_in','checked_out') THEN RETURN v; END IF;
+  IF v IN ('cancel','canceled','batal','dibatalkan') THEN RETURN 'cancelled'; END IF;
+  IF v IN ('confirm','confirmed','konfirmasi','terkonfirmasi','fix','deal') THEN RETURN 'confirmed'; END IF;
+  IF v ~ '(check.?in|sudah masuk)' THEN RETURN 'checked_in'; END IF;
+  IF v ~ '(check.?out|sudah keluar)' THEN RETURN 'checked_out'; END IF;
+  IF v ~ '(booking|reservasi|pending|menunggu)' THEN RETURN 'pending'; END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.normalize_guest_payment_status(p_value text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v text := lower(coalesce(p_value, ''));
+BEGIN
+  v := btrim(v);
+  IF v = '' THEN RETURN NULL; END IF;
+  IF v IN ('unpaid','down_payment','paid','pay_at_hotel') THEN RETURN v; END IF;
+  IF v IN ('partial','partially_paid','partial_paid','dp','deposit','down payment','uang muka','sebagian') THEN RETURN 'down_payment'; END IF;
+  IF v IN ('paid','lunas','sudah bayar','sudah transfer') THEN RETURN 'paid'; END IF;
+  IF v IN ('unpaid','belum bayar','belum transfer') THEN RETURN 'unpaid'; END IF;
+  IF v IN ('pay at hotel','pay_at_hotel','bayar di hotel','bayar ditempat','bayar di tempat') THEN RETURN 'pay_at_hotel'; END IF;
+  RETURN NULL;
 END;
 $$;
 
@@ -146,52 +198,29 @@ BEGIN
     v_phone := v_thread_phone;
   END IF;
 
-  IF v_phone IS NULL THEN
-    RETURN '{}'::jsonb;
-  END IF;
+  IF v_phone IS NULL THEN RETURN '{}'::jsonb; END IF;
 
   INSERT INTO public.guest_structured_memory (
-    canonical_phone,
-    thread_id,
-    guest_name,
-    last_topic,
-    room_type,
-    check_in,
-    check_out,
-    guest_count,
-    adults,
-    children,
-    booking_status,
-    payment_status,
-    source_channel,
-    budget_note,
-    special_requests,
-    preference_notes,
-    complaint_active,
-    complaint_summary,
-    unresolved_question,
-    needs_human,
-    handoff_reason,
-    next_action,
-    last_intent,
-    last_user_message,
-    last_bot_message,
-    raw_summary,
-    last_seen_at,
-    updated_at
+    canonical_phone, thread_id, guest_name, last_topic, room_type,
+    check_in, check_out, guest_count, adults, children,
+    booking_status, payment_status, source_channel, budget_note,
+    special_requests, preference_notes, complaint_active, complaint_summary,
+    unresolved_question, needs_human, handoff_reason, next_action,
+    last_intent, last_user_message, last_bot_message, raw_summary,
+    last_seen_at, updated_at
   ) VALUES (
     v_phone,
     p_thread_id,
     public._jsonb_text(v_payload, 'guest_name'),
-    public._jsonb_text(v_payload, 'last_topic'),
+    public.normalize_guest_memory_topic(public._jsonb_text(v_payload, 'last_topic')),
     public._jsonb_text(v_payload, 'room_type'),
     public._jsonb_date(v_payload, 'check_in'),
     public._jsonb_date(v_payload, 'check_out'),
     public._jsonb_int(v_payload, 'guest_count'),
     public._jsonb_int(v_payload, 'adults'),
     public._jsonb_int(v_payload, 'children'),
-    public._jsonb_text(v_payload, 'booking_status'),
-    public._jsonb_text(v_payload, 'payment_status'),
+    public.normalize_guest_booking_status(public._jsonb_text(v_payload, 'booking_status')),
+    public.normalize_guest_payment_status(public._jsonb_text(v_payload, 'payment_status')),
     public._jsonb_text(v_payload, 'source_channel'),
     public._jsonb_text(v_payload, 'budget_note'),
     public._jsonb_text(v_payload, 'special_requests'),
@@ -239,8 +268,7 @@ BEGIN
     last_seen_at = now(),
     updated_at = now();
 
-  SELECT jsonb_strip_nulls(to_jsonb(m))
-    INTO v_result
+  SELECT jsonb_strip_nulls(to_jsonb(m)) INTO v_result
   FROM public.guest_structured_memory m
   WHERE m.canonical_phone = v_phone;
 
@@ -256,11 +284,7 @@ SET search_path TO 'public'
 AS $$
 BEGIN
   IF COALESCE(NEW.chat_summary_json, '{}'::jsonb) <> '{}'::jsonb THEN
-    PERFORM public.upsert_guest_structured_memory_from_summary(
-      NEW.id,
-      NEW.phone,
-      NEW.chat_summary_json
-    );
+    PERFORM public.upsert_guest_structured_memory_from_summary(NEW.id, NEW.phone, NEW.chat_summary_json);
   END IF;
   RETURN NEW;
 END;
@@ -282,12 +306,9 @@ DECLARE
   v_phone text := public.resolve_wa_canonical_phone(p_phone);
   v_result jsonb;
 BEGIN
-  IF v_phone IS NULL THEN
-    RETURN '{}'::jsonb;
-  END IF;
+  IF v_phone IS NULL THEN RETURN '{}'::jsonb; END IF;
 
-  SELECT jsonb_strip_nulls(to_jsonb(m))
-    INTO v_result
+  SELECT jsonb_strip_nulls(to_jsonb(m)) INTO v_result
   FROM public.guest_structured_memory m
   WHERE m.canonical_phone = v_phone
   LIMIT 1;
@@ -296,37 +317,24 @@ BEGIN
 END;
 $$;
 
--- Backfill from existing thread summaries.
+-- Backfill from existing thread summaries. Legacy free-text enum values are normalized.
 INSERT INTO public.guest_structured_memory (
-  canonical_phone,
-  thread_id,
-  guest_name,
-  last_topic,
-  room_type,
-  check_in,
-  check_out,
-  guest_count,
-  booking_status,
-  payment_status,
-  complaint_active,
-  unresolved_question,
-  needs_human,
-  handoff_reason,
-  raw_summary,
-  last_seen_at,
-  updated_at
+  canonical_phone, thread_id, guest_name, last_topic, room_type,
+  check_in, check_out, guest_count, booking_status, payment_status,
+  complaint_active, unresolved_question, needs_human, handoff_reason,
+  raw_summary, last_seen_at, updated_at
 )
 SELECT DISTINCT ON (public.resolve_wa_canonical_phone(t.phone))
   public.resolve_wa_canonical_phone(t.phone),
   t.id,
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'guest_name'),
-  public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'last_topic'),
+  public.normalize_guest_memory_topic(public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'last_topic')),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'room_type'),
   public._jsonb_date(COALESCE(t.chat_summary_json, '{}'::jsonb), 'check_in'),
   public._jsonb_date(COALESCE(t.chat_summary_json, '{}'::jsonb), 'check_out'),
   public._jsonb_int(COALESCE(t.chat_summary_json, '{}'::jsonb), 'guest_count'),
-  public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'booking_status'),
-  public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'payment_status'),
+  public.normalize_guest_booking_status(public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'booking_status')),
+  public.normalize_guest_payment_status(public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'payment_status')),
   public._jsonb_bool(COALESCE(t.chat_summary_json, '{}'::jsonb), 'complaint_active', false),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'unresolved_question'),
   public._jsonb_bool(COALESCE(t.chat_summary_json, '{}'::jsonb), 'needs_human', false),
@@ -338,7 +346,19 @@ FROM public.whatsapp_threads t
 WHERE public.resolve_wa_canonical_phone(t.phone) IS NOT NULL
   AND COALESCE(t.chat_summary_json, '{}'::jsonb) <> '{}'::jsonb
 ORDER BY public.resolve_wa_canonical_phone(t.phone), t.last_message_at DESC NULLS LAST
-ON CONFLICT (canonical_phone) DO NOTHING;
+ON CONFLICT (canonical_phone) DO UPDATE SET
+  thread_id = EXCLUDED.thread_id,
+  guest_name = COALESCE(EXCLUDED.guest_name, public.guest_structured_memory.guest_name),
+  last_topic = COALESCE(EXCLUDED.last_topic, public.guest_structured_memory.last_topic),
+  room_type = COALESCE(EXCLUDED.room_type, public.guest_structured_memory.room_type),
+  check_in = COALESCE(EXCLUDED.check_in, public.guest_structured_memory.check_in),
+  check_out = COALESCE(EXCLUDED.check_out, public.guest_structured_memory.check_out),
+  guest_count = COALESCE(EXCLUDED.guest_count, public.guest_structured_memory.guest_count),
+  booking_status = COALESCE(EXCLUDED.booking_status, public.guest_structured_memory.booking_status),
+  payment_status = COALESCE(EXCLUDED.payment_status, public.guest_structured_memory.payment_status),
+  raw_summary = public.guest_structured_memory.raw_summary || EXCLUDED.raw_summary,
+  last_seen_at = EXCLUDED.last_seen_at,
+  updated_at = now();
 
 -- Canonical-aware get_autoreply_context + guest memory injection.
 CREATE OR REPLACE FUNCTION public.get_autoreply_context(p_phone text)
@@ -378,9 +398,7 @@ BEGIN
 
   IF v_thread_id IS NULL THEN RETURN NULL; END IF;
 
-  SELECT COALESCE(wpp_token, ''),
-         COALESCE(ai_lab_config, '{}'),
-         smart_delay_config
+  SELECT COALESCE(wpp_token, ''), COALESCE(ai_lab_config, '{}'), smart_delay_config
     INTO v_wpp_token, v_ai_lab_config, v_smart_delay_cfg
   FROM public.properties
   LIMIT 1;
@@ -393,17 +411,14 @@ BEGIN
     false
   ) AND v_ai_auto;
 
-  SELECT jsonb_agg(
-           jsonb_build_object('direction', direction, 'body', body, 'sent_at', sent_at)
-           ORDER BY sent_at ASC
-         )
+  SELECT jsonb_agg(jsonb_build_object('direction', direction, 'body', body, 'sent_at', sent_at) ORDER BY sent_at ASC)
     INTO v_messages
   FROM (
     SELECT direction, body, sent_at
-    FROM   public.whatsapp_messages
-    WHERE  thread_id = v_thread_id
-    ORDER  BY sent_at DESC
-    LIMIT  30
+    FROM public.whatsapp_messages
+    WHERE thread_id = v_thread_id
+    ORDER BY sent_at DESC
+    LIMIT 30
   ) sub;
 
   RETURN jsonb_build_object(
@@ -428,5 +443,8 @@ GRANT SELECT, INSERT, UPDATE ON public.guest_structured_memory TO anon;
 GRANT EXECUTE ON FUNCTION public.upsert_guest_structured_memory_from_summary(uuid, text, jsonb) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_guest_structured_memory(text) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_autoreply_context(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.normalize_guest_memory_topic(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.normalize_guest_booking_status(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.normalize_guest_payment_status(text) TO anon, authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
