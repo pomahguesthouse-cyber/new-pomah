@@ -101,6 +101,8 @@ export interface ParsedWebhookEvent {
   customerIdentity?: WaIdentityResolution;
   /** Identity diagnostics for our device target. */
   deviceIdentity?: WaIdentityResolution;
+  /** WPPConnect chat id for sending/replaying, e.g. 628xxx@c.us or 411...@lid. */
+  externalChatId?: string;
   /** The raw body payload */
   rawBody: any;
 }

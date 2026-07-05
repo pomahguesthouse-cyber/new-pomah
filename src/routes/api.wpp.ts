@@ -335,7 +335,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         const { messageId, duplicate, error: saveErr } = await saveInboundMessage(
           supabaseAdmin,
-          { phone: customerPhone, name, body: displayMessage, wppId },
+          { phone: customerPhone, name, body: displayMessage, wppId, externalChatId: event.externalChatId },
         );
         if (saveErr || !messageId) {
           console.error(`[Webhook] saveInbound failed: ${saveErr?.message ?? "no messageId"} | ${logCtx}`);
@@ -367,6 +367,10 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
             mime_type: attachmentMime ?? null,
             media_type: messageType ?? null,
             wpp_id: wppId ?? null,
+            external_chat_id: event.externalChatId ?? null,
+            wa_identity: event.customerIdentity ?? null,
+            wa_identity_candidates: event.customerIdentity?.identityCandidates ?? [],
+            identity_unresolved: event.customerIdentity?.identityUnresolved ?? false,
             attachment: attachmentUrl
               ? {
                   url: attachmentUrl,
@@ -425,10 +429,19 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
 
 
-        const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
+        let { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
           "get_autoreply_context",
           { p_phone: customerPhone },
         );
+
+        if ((ctxErr || !ctx) && event.externalChatId && event.externalChatId !== customerPhone) {
+          const retry = await (supabaseAdmin as any).rpc(
+            "get_autoreply_context",
+            { p_phone: event.externalChatId },
+          );
+          ctx = retry.data;
+          ctxErr = retry.error;
+        }
 
         if (ctxErr || !ctx) {
           console.error(`[Webhook] context RPC error: ${ctxErr?.message ?? "no context"} | ${logCtx}`);
@@ -437,6 +450,8 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         const c = ctx as {
           thread_id: string;
+          thread_phone?: string | null;
+          canonical_phone?: string | null;
           auto_reply_enabled: boolean;
           wpp_token: string;
           smart_delay_config?: Record<string, unknown> | null;
@@ -525,9 +540,10 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
           const { delayMs, maxWaitMs } = resolveQueueTiming(message, c.smart_delay_config as any);
 
           await queueCleanupZombies(supabaseAdmin);
+          const queuePhone = c.canonical_phone || c.thread_phone || event.externalChatId || customerPhone;
 
           const entry = await queueUpsert(supabaseAdmin, {
-            phone: customerPhone,
+            phone: queuePhone,
             threadId: c.thread_id,
             messageId,
             body: displayMessage,

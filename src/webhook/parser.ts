@@ -126,6 +126,16 @@ export function pickBestWaIdentity(...values: unknown[]): WaIdentityResolution {
   };
 }
 
+function externalChatIdOf(identity: WaIdentityResolution): string | undefined {
+  const raw = identity.rawIdentity;
+  const embedded = raw?.match(/([0-9]{8,18})@(lid|c\.us|s\.whatsapp\.net)/i);
+  if (embedded) return `${embedded[1]}@${embedded[2]}`.toLowerCase();
+  if (raw && /@(lid|c\.us|s\.whatsapp\.net)$/i.test(raw)) return raw.toLowerCase();
+  if (identity.identityType === "lid" && identity.phone) return `${identity.phone}@lid`;
+  if (looksLikePublicWaPhone(identity.phone)) return `${identity.phone}@c.us`;
+  return raw;
+}
+
 function samePhone(a: string | undefined, b: string | undefined): boolean {
   const left = normalizeWaPhone(a);
   const right = normalizeWaPhone(b);
@@ -175,6 +185,9 @@ export async function parseWppWebhook(
     senderObj?._serialized,
     body.sender,
     body.from,
+    (body as any).chatId,
+    (body as any).remoteJid,
+    (body as any).remote_jid,
     (body as any).author,
     idValue,
   );
@@ -239,6 +252,7 @@ export async function parseWppWebhook(
       ? (target && !samePhone(target, device) ? targetIdentity : !samePhone(sender, device) ? senderIdentity : targetIdentity.phone ? targetIdentity : senderIdentity)
       : senderIdentity;
   const customerPhone = customerIdentity.phone ?? sender;
+  const externalChatId = externalChatIdOf(customerIdentity);
 
   return {
     sender,
@@ -255,6 +269,7 @@ export async function parseWppWebhook(
     senderIdentity,
     customerIdentity,
     deviceIdentity,
+    externalChatId,
     rawBody: body,
   };
 }

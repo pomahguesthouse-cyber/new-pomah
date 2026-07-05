@@ -61,6 +61,28 @@ function normalizeWppPhone(phone: string): string {
   return p;
 }
 
+function unique(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(values.filter((v): v is string => !!v && !!v.trim())));
+}
+
+function wppPhoneCandidates(phone: string): string[] {
+  const raw = String(phone ?? "").trim().replace(/\s+/g, "");
+  const normalized = normalizeWppPhone(raw);
+  const digits = raw
+    .replace(/@(?:lid|c\.us|s\.whatsapp\.net)$/i, "")
+    .replace(/[^\d]/g, "");
+
+  if (/^62\d{8,14}$/.test(normalized)) {
+    return unique([normalized, `${normalized}@c.us`]);
+  }
+
+  if (/@lid$/i.test(raw) || (digits && !/^62\d{8,14}$/.test(digits))) {
+    return unique([normalized, raw.toLowerCase(), digits ? `${digits}@lid` : null, digits]);
+  }
+
+  return unique([normalized, raw]);
+}
+
 function bearer(token: string): string {
   const t = String(token ?? "").trim();
   return /^bearer\s+/i.test(t) ? t : `Bearer ${t}`;
@@ -135,65 +157,75 @@ async function sendWhatsAppMessageWithOptions(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
-  const phone = normalizeWppPhone(input.phone);
+  const phoneCandidates = wppPhoneCandidates(input.phone);
 
   try {
-    let url: string;
-    let payload: Record<string, unknown>;
+    let lastResult: SendResult | null = null;
+    const fileData = input.fileUrl ? await toDataUri(input.fileUrl, controller.signal) : null;
 
-    // WPPConnect's controller iterates `for (const contato of phone)`, so the
-    // API expects `phone` as an ARRAY. Passing a string makes some versions
-    // iterate character-by-character. Always send [phone].
-    if (input.fileUrl) {
-      const { dataUri } = await toDataUri(input.fileUrl, controller.signal);
-      url = endpoint("send-file-base64");
-      payload = {
-        phone: [phone],
-        isGroup: false,
-        base64: dataUri,
-        filename: input.filename ?? "file",
-        // In WPPConnect send-file, `message`/`caption` is the caption.
-        message: input.message ?? "",
-        caption: input.message ?? "",
-      };
-    } else {
-      url = endpoint("send-message");
-      payload = { phone: [phone], isGroup: false, message: input.message };
+    for (const phone of phoneCandidates) {
+      let url: string;
+      let payload: Record<string, unknown>;
+      const isLid = /@lid$/i.test(phone);
+
+      // WPPConnect's controller iterates `for (const contato of phone)`, so the
+      // API expects `phone` as an ARRAY. Passing a string makes some versions
+      // iterate character-by-character. Always send [phone].
+      if (fileData) {
+        url = endpoint("send-file-base64");
+        payload = {
+          phone: [phone],
+          isGroup: false,
+          isLid,
+          base64: fileData.dataUri,
+          filename: input.filename ?? "file",
+          // In WPPConnect send-file, `message`/`caption` is the caption.
+          message: input.message ?? "",
+          caption: input.message ?? "",
+        };
+      } else {
+        url = endpoint("send-message");
+        payload = { phone: [phone], isGroup: false, isLid, message: input.message };
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: bearer(input.token),
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      const responseText = await res.text().catch(() => "");
+      let responseJson: any = null;
+      try {
+        responseJson = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // WPPConnect normally returns JSON; keep non-JSON body for diagnostics.
+      }
+      const raw = responseJson ?? responseText;
+
+      if (!res.ok) {
+        const body = responseText || "(no body)";
+        console.error(`[WhatsApp] WPPConnect send error (${phone}):`, res.status, body);
+        lastResult = { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
+        continue;
+      }
+
+      const logicalError = parseWppLogicalError(responseJson);
+      if (logicalError) {
+        console.error(`[WhatsApp] WPPConnect API logic error (${phone}):`, logicalError);
+        lastResult = { ok: false, status: res.status, error: `WPPConnect API Error: ${logicalError}`, raw };
+        continue;
+      }
+
+      return { ok: true, status: res.status, error: null, raw };
     }
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: bearer(input.token),
-        "Content-Type": "application/json; charset=utf-8",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    const responseText = await res.text().catch(() => "");
-    let responseJson: any = null;
-    try {
-      responseJson = responseText ? JSON.parse(responseText) : null;
-    } catch {
-      // WPPConnect normally returns JSON; keep non-JSON body for diagnostics.
-    }
-    const raw = responseJson ?? responseText;
-
-    if (!res.ok) {
-      const body = responseText || "(no body)";
-      console.error("[WhatsApp] WPPConnect send error:", res.status, body);
-      return { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
-    }
-
-    const logicalError = parseWppLogicalError(responseJson);
-    if (logicalError) {
-      console.error("[WhatsApp] WPPConnect API logic error:", logicalError);
-      return { ok: false, status: res.status, error: `WPPConnect API Error: ${logicalError}`, raw };
-    }
-
-    return { ok: true, status: res.status, error: null, raw };
+    return lastResult ?? { ok: false, error: "Tidak ada target WPPConnect valid" };
   } catch (e) {
     const isAbort = (e as { name?: string })?.name === "AbortError";
     const msg = isAbort

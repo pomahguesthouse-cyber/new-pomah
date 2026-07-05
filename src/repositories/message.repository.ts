@@ -31,16 +31,21 @@ export interface SaveInboundResult {
  */
 export async function saveInboundMessage(
   client: AnyClient,
-  params: { phone: string; name: string; body: string; wppId?: string | null },
+  params: { phone: string; name: string; body: string; wppId?: string | null; externalChatId?: string | null },
 ): Promise<SaveInboundResult> {
   const rpcParams = {
     p_phone: params.phone,
     p_name:  params.name,
     p_body:  params.body,
   };
+  const externalChatId = params.externalChatId?.trim() || null;
   const withWppId =
     params.wppId && params.wppId.trim()
       ? { ...rpcParams, p_wpp_id: params.wppId.trim() }
+      : null;
+  const withExternalChatId =
+    externalChatId
+      ? { ...(withWppId ?? { ...rpcParams, p_wpp_id: null }), p_external_chat_id: externalChatId }
       : null;
 
   if (withWppId) {
@@ -87,19 +92,38 @@ export async function saveInboundMessage(
     }
   }
 
-  const { data, error } = withWppId
-    ? await (client as any).rpc("receive_whatsapp_message", withWppId)
-    : await (client as any).rpc("receive_whatsapp_message", rpcParams);
+  const { data, error } = withExternalChatId
+    ? await (client as any).rpc("receive_whatsapp_message", withExternalChatId)
+    : withWppId
+      ? await (client as any).rpc("receive_whatsapp_message", withWppId)
+      : await (client as any).rpc("receive_whatsapp_message", rpcParams);
 
-  if (error && withWppId && ((error as any).code === "PGRST202" || String((error as any).message).includes("function"))) {
-    console.warn("[MessageRepo] 4-arg receive RPC unavailable, falling back to 3-arg:", (error as any).message);
-    const fallback = await (client as any).rpc("receive_whatsapp_message", rpcParams);
+  if (error && (withExternalChatId || withWppId) && ((error as any).code === "PGRST202" || String((error as any).message).includes("function"))) {
+    console.warn("[MessageRepo] receive RPC variant unavailable, falling back:", (error as any).message);
+    const fallbackParams = withExternalChatId && withWppId ? withWppId : rpcParams;
+    const fallback = await (client as any).rpc("receive_whatsapp_message", fallbackParams);
     if (!fallback.error) {
       return { messageId: fallback.data as string | null, error: null };
+    }
+    if (fallbackParams !== rpcParams && ((fallback.error as any).code === "PGRST202" || String((fallback.error as any).message).includes("function"))) {
+      const legacy = await (client as any).rpc("receive_whatsapp_message", rpcParams);
+      if (!legacy.error) {
+        return { messageId: legacy.data as string | null, error: null };
+      }
+      void reportRpcFailure(client, "receive_whatsapp_message", legacy.error, {
+        phone: params.phone,
+        wppId: params.wppId ?? null,
+        externalChatId,
+      });
+      return {
+        messageId: null,
+        error:     new Error(`receive_whatsapp_message: ${(legacy.error as any).message}`),
+      };
     }
     void reportRpcFailure(client, "receive_whatsapp_message", fallback.error, {
       phone: params.phone,
       wppId: params.wppId ?? null,
+      externalChatId,
     });
     return {
       messageId: null,
