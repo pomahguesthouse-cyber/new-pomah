@@ -1134,7 +1134,11 @@ export async function executeAutoreplyForPhone(
   }
 
   const c = ctx as any;
-  const manager = await resolveManagerByPhone(phone);
+  const rawManager = await resolveManagerByPhone(phone);
+  // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
+  // invoice, pembayaran) tanpa ter-route ke agen manajerial.
+  const guestModeActive = rawManager ? await isManagerInGuestMode(phone) : false;
+  const manager = guestModeActive ? null : rawManager;
   const metrics = {
     workerStartedAt: Date.now(),
     contextLoadedAt: Date.now(),
@@ -1147,7 +1151,7 @@ export async function executeAutoreplyForPhone(
 
   // ── Mode selection ──────────────────────────────
   let mode = "guest"; // Default
-  if (manager || isConfiguredAdminPhone(phone)) {
+  if (manager || (isConfiguredAdminPhone(phone) && !guestModeActive)) {
     mode = "admin";
   }
 
