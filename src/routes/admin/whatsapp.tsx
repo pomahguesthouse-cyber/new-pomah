@@ -1376,34 +1376,34 @@ function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig
               {g.label}
             </span>
           </div>
-          <div className="space-y-1.5 relative z-10">
+          <div className="space-y-1 relative z-10">
             {g.items.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex flex-col group", m.direction === "out" ? "items-end pl-12" : "items-start pr-12")}
+                className={cn("flex flex-col group", m.direction === "out" ? "items-end pl-16" : "items-start pr-16")}
               >
                 <div
                   className={cn(
-                    "relative whitespace-pre-wrap rounded-lg px-2.5 pb-1.5 pt-1.5 text-[14.2px] shadow-sm flex flex-col",
+                    "relative whitespace-pre-wrap rounded-md px-2 pb-1 pt-1 text-[13px] shadow-sm flex flex-col",
                     m.direction === "out"
                       ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
                       : "rounded-tl-none bg-[#ffffff] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]",
                   )}
-                  style={{ maxWidth: '85%' }}
+                  style={{ maxWidth: '76%' }}
                 >
                   {/* Tail for bubbles */}
                   <div className={cn(
-                    "absolute top-0 w-2 h-3",
+                    "absolute top-0 h-2.5 w-1.5",
                     m.direction === "out"
-                      ? "-right-2 bg-[#d9fdd3] dark:bg-[#005c4b] rounded-bl-full"
-                      : "-left-2 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full"
+                      ? "-right-1.5 bg-[#d9fdd3] dark:bg-[#005c4b] rounded-bl-full"
+                      : "-left-1.5 bg-[#ffffff] dark:bg-[#202c33] rounded-br-full"
                   )} style={{ clipPath: m.direction === "out" ? 'polygon(0 0, 100% 0, 0 100%)' : 'polygon(0 0, 100% 0, 100% 100%)' }} />
 
                   <MessageAttachment m={m} />
-                  {m.body && <span className="leading-[19px]">{m.body}</span>}
+                  {m.body && <span className="leading-[17px]">{m.body}</span>}
                   <div
                     className={cn(
-                      "mt-[2px] self-end font-sans text-[10px] flex items-center gap-1",
+                      "mt-px self-end font-sans text-[9px] flex items-center gap-1",
                       m.direction === "out"
                         ? "text-[#667781] dark:text-[#8596a0]"
                         : "text-[#667781] dark:text-[#8596a0]",
