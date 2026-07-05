@@ -22,11 +22,11 @@ import {
   TrendingUp,
   LifeBuoy,
   Brain,
+  BrainCircuit,
   Link2,
   Route as RouteIcon,
   Activity,
   GripVertical,
-
 } from "lucide-react";
 import {
   DndContext,
@@ -99,11 +99,11 @@ const DEFAULT_GROUPS: NavGroup[] = [
       { to: "/admin/booking-form-logs", label: "Log Form Booking", icon: Link2 },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
       { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
+      { to: "/admin/whatsapp-corrections", label: "WhatsApp Corrections", icon: BrainCircuit },
       { to: "/admin/training", label: "Chatbot Training", icon: Brain },
       { to: "/admin/routing-debug", label: "Routing Debug", icon: RouteIcon },
       { to: "/admin/health", label: "Health Chatbot", icon: Activity },
       { to: "/admin/wpp-diagnostics", label: "WPP Diagnostics", icon: Activity },
-
     ],
   },
   {
@@ -257,8 +257,6 @@ function SortableNavRow({
     </SidebarMenuItem>
   );
 }
-
-// ─── Top-level component ──────────────────────────────────────────────────────
 
 export function AdminSidebar({ propertyName }: { propertyName?: string | null }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
