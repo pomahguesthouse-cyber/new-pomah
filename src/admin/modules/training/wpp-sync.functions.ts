@@ -58,6 +58,25 @@ function looksPublic(phone: string | null): boolean {
   return !!phone && /^62\d{8,14}$/.test(phone);
 }
 
+function compact<T>(values: Array<T | null | undefined | false | "">): T[] {
+  return Array.from(new Set(values.filter(Boolean) as T[]));
+}
+
+function chatCandidates(rawIdentity: string, canonical: string | null): string[] {
+  const raw = rawIdentity.trim();
+  const rawDigits = raw.replace(/[^\d]/g, "");
+  const publicPhone = looksPublic(canonical) ? canonical : null;
+  return compact<string>([
+    publicPhone,
+    publicPhone ? `${publicPhone}@c.us` : null,
+    raw,
+    raw.includes("@") ? raw : null,
+    rawDigits,
+    rawDigits ? `${rawDigits}@lid` : null,
+    rawDigits ? `${rawDigits}@c.us` : null,
+  ]);
+}
+
 function parseTimestamp(raw: unknown): string {
   if (typeof raw === "number" && Number.isFinite(raw)) return new Date((raw > 10000000000 ? raw : raw * 1000)).toISOString();
   if (typeof raw === "string" && raw.trim()) {
@@ -125,17 +144,16 @@ async function resolveCanonical(identity: string | null): Promise<string | null>
   return normalizePhone(data) ?? normalizePhone(identity);
 }
 
-async function fetchThreadMessages(token: string, phone: string, limit: number) {
-  const chat = `${phone}@c.us`;
-  const { data, usedPath } = await callFirst([
-    { path: `all-messages-in-chat/${encodeURIComponent(phone)}` },
-    { path: `all-messages-in-chat/${encodeURIComponent(chat)}` },
-    { path: "all-messages-in-chat", method: "POST", body: { phone, chatId: chat, isGroup: false, includeMe: true, includeNotifications: false, limit } },
-    { path: `get-messages/${encodeURIComponent(phone)}` },
-    { path: `get-messages/${encodeURIComponent(chat)}` },
-    { path: "get-messages", method: "POST", body: { phone, chatId: chat, limit } },
-  ], token);
-  return { messages: asArray(data).slice(-limit), usedPath };
+async function fetchThreadMessages(token: string, rawIdentity: string, canonical: string | null, limit: number) {
+  const ids = chatCandidates(rawIdentity, canonical);
+  const paths = ids.flatMap((id) => [
+    { path: `all-messages-in-chat/${encodeURIComponent(id)}` },
+    { path: "all-messages-in-chat", method: "POST" as const, body: { phone: id, chatId: id, isGroup: false, includeMe: true, includeNotifications: false, limit } },
+    { path: `get-messages/${encodeURIComponent(id)}` },
+    { path: "get-messages", method: "POST" as const, body: { phone: id, chatId: id, limit } },
+  ]);
+  const { data, usedPath } = await callFirst(paths, token);
+  return { messages: asArray(data).slice(-limit), usedPath, triedIds: ids };
 }
 
 async function upsertMessage(threadId: string, msg: any, externalChatId: string | null) {
@@ -188,16 +206,18 @@ export const syncWhatsappThreadFromWppConnect = createServerFn({ method: "POST" 
 
     const { data: thread, error: threadErr } = await (supabaseAdmin as any)
       .from("whatsapp_threads")
-      .select("id, phone, display_name, external_chat_id")
+      .select("id, phone, display_name, external_chat_id, last_message_preview, last_message_at")
       .eq("id", data.threadId)
       .maybeSingle();
     if (threadErr) throw threadErr;
     if (!thread) throw new Error("Percakapan tidak ditemukan.");
 
-    const canonical = await resolveCanonical(thread.phone);
-    if (!canonical || !looksPublic(canonical)) throw new Error(`Nomor belum valid untuk sync: ${thread.phone}`);
-    const externalChatId = thread.external_chat_id || `${canonical}@c.us`;
-    const { messages, usedPath } = await fetchThreadMessages(token, canonical, data.limit);
+    const rawIdentity = String(thread.external_chat_id || thread.phone || "").trim();
+    if (!rawIdentity) throw new Error("Identity WhatsApp kosong, tidak bisa sync.");
+    const canonical = await resolveCanonical(rawIdentity);
+    const publicPhone = looksPublic(canonical) ? canonical : null;
+    const externalChatId = thread.external_chat_id || (publicPhone ? `${publicPhone}@c.us` : rawIdentity.includes("@") ? rawIdentity : `${rawIdentity}@lid`);
+    const { messages, usedPath, triedIds } = await fetchThreadMessages(token, rawIdentity, publicPhone, data.limit);
 
     let imported = 0;
     let updated = 0;
@@ -211,22 +231,23 @@ export const syncWhatsappThreadFromWppConnect = createServerFn({ method: "POST" 
 
     const last = messages[messages.length - 1];
     const lastBody = last ? bodyOf(last) : null;
-    const lastAt = last ? parseTimestamp(last.t ?? last.timestamp ?? last.datetime ?? last.time ?? last.createdAt ?? last.sent_at) : new Date().toISOString();
+    const lastAt = last ? parseTimestamp(last.t ?? last.timestamp ?? last.datetime ?? last.time ?? last.createdAt ?? last.sent_at) : thread.last_message_at ?? new Date().toISOString();
     await (supabaseAdmin as any).from("whatsapp_threads").update({
-      phone: canonical,
-      canonical_phone: canonical,
+      phone: publicPhone || thread.phone,
+      canonical_phone: publicPhone,
       external_chat_id: externalChatId,
+      identity_type: publicPhone ? "phone" : "lid",
+      sync_error: publicPhone ? null : `Identity belum terpetakan ke nomor publik: ${rawIdentity}`,
       last_message_preview: lastBody ? lastBody.slice(0, 120) : thread.last_message_preview,
       last_message_at: lastAt,
       last_synced_at: new Date().toISOString(),
-      sync_status: "synced",
-      sync_error: null,
+      sync_status: messages.length ? "synced" : "synced_empty",
     }).eq("id", thread.id);
 
     await (supabaseAdmin as any).from("wa_wpp_sync_state").insert({
       sync_type: "thread",
       thread_id: thread.id,
-      phone: canonical,
+      phone: publicPhone || thread.phone,
       external_chat_id: externalChatId,
       status: "success",
       started_at: new Date().toISOString(),
@@ -235,10 +256,10 @@ export const syncWhatsappThreadFromWppConnect = createServerFn({ method: "POST" 
       imported_count: imported,
       updated_count: updated,
       skipped_count: skipped,
-      metadata: { usedPath, message_count: messages.length },
+      metadata: { usedPath, message_count: messages.length, tried_ids: triedIds, public_phone_resolved: !!publicPhone },
     });
 
-    return { ok: true, threadId: thread.id, phone: canonical, imported, updated, skipped, total: messages.length, usedPath };
+    return { ok: true, threadId: thread.id, phone: publicPhone || thread.phone, imported, updated, skipped, total: messages.length, usedPath };
   });
 
 export const listWppSyncRuns = createServerFn({ method: "GET" })
