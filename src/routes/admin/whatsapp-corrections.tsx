@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { ArrowLeft, CheckCircle2, Edit3, Loader2, RefreshCw, Save, Search, X } from "lucide-react";
+import { CheckCircle2, Edit3, Loader2, Save, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn, formatRelativeDateID, formatTimeID } from "@/lib/utils";
 import {
-  backfillWhatsappCorrectionEmbeddings,
   createWhatsappCorrectionFromMessages,
   createWhatsappCorrectionSession,
   listWhatsappCorrectionSessions,
@@ -62,7 +61,6 @@ function WhatsappCorrectionsPage() {
   const createCorrectionFn = useServerFn(createWhatsappCorrectionFromMessages);
   const createSessionFn = useServerFn(createWhatsappCorrectionSession);
   const sessionsFn = useServerFn(listWhatsappCorrectionSessions);
-  const backfillFn = useServerFn(backfillWhatsappCorrectionEmbeddings);
 
   const [search, setSearch] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -172,22 +170,8 @@ function WhatsappCorrectionsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const backfillMut = useMutation({
-    mutationFn: () => backfillFn({ data: { maxRows: 50 } }),
-    onSuccess: (res) => toast.success(`Embedding bubble diproses: ${res.ok}/${res.processed}`),
-    onError: (e) => toast.error((e as Error).message),
-  });
-
   return (
     <div className="flex h-screen min-h-0 flex-col bg-stone-100">
-      <header className="flex items-center justify-between border-b bg-card px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Link to="/admin" className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-sm hover:bg-muted"><ArrowLeft className="h-4 w-4" /> Admin</Link>
-          <div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Training Mode</p><h1 className="text-lg font-semibold">WhatsApp Corrections</h1></div>
-        </div>
-        <div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => qc.invalidateQueries()}><RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh</Button><Button size="sm" disabled={backfillMut.isPending} onClick={() => backfillMut.mutate()}>Backfill Bubble</Button></div>
-      </header>
-
       <main className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)_360px] overflow-hidden">
         <aside className="flex min-h-0 flex-col border-r bg-card">
           <div className="border-b p-3"><div className="relative"><Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" placeholder="Search name, phone, message" /></div></div>
