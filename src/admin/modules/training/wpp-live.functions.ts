@@ -155,15 +155,29 @@ async function fallbackMirrorMessages(chatId: string, limit: number) {
   const canonical = await resolveCanonical(chatId, normalized);
   const candidates = Array.from(new Set([chatId, normalized, canonical].filter(Boolean) as string[]));
   const normalizedCandidates = candidates.map((c) => normalizePhone(c)).filter(Boolean);
-  const { data: thread } = await (supabaseAdmin as any)
-    .from("whatsapp_threads")
-    .select("id")
-    .or([...candidates.map((c) => `phone.eq.${c}`), ...candidates.map((c) => `canonical_phone.eq.${c}`), ...candidates.map((c) => `external_chat_id.eq.${c}`), ...candidates.map((c) => `lid_alias.eq.${c}`), ...normalizedCandidates.map((c) => `phone.eq.${c}`), ...normalizedCandidates.map((c) => `canonical_phone.eq.${c}`), ...normalizedCandidates.map((c) => `lid_alias.eq.${c}`)].join(","))
-    .order("last_message_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(chatId);
+
+  let thread: { id: string } | null = null;
+  if (isUuid) {
+    const direct = await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id")
+      .eq("id", chatId)
+      .maybeSingle();
+    thread = direct.data ?? null;
+  }
+
+  if (!thread) {
+    const { data } = await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id")
+      .or([...candidates.map((c) => `phone.eq.${c}`), ...candidates.map((c) => `canonical_phone.eq.${c}`), ...candidates.map((c) => `external_chat_id.eq.${c}`), ...candidates.map((c) => `lid_alias.eq.${c}`), ...normalizedCandidates.map((c) => `phone.eq.${c}`), ...normalizedCandidates.map((c) => `canonical_phone.eq.${c}`), ...normalizedCandidates.map((c) => `lid_alias.eq.${c}`)].join(","))
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     thread = data ?? null;
   }
+
   if (!thread?.id) return [];
   const { data: messages } = await (supabaseAdmin as any)
     .from("whatsapp_messages")
@@ -178,25 +192,8 @@ export const listWppLiveChats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ limit: z.number().int().min(1).max(500).default(200) }).parse(d ?? {}))
   .handler(async ({ data }) => {
-    try {
-      if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
-      const token = await getToken();
-      if (!token) throw new Error("properties.wpp_token kosong.");
-      const { chats, usedPath } = await fetchChats(token, data.limit);
-      const mapped = await Promise.all(chats.map(async (chat: any, idx: number) => {
-        const externalChatId = chatIdOf(chat) || `unknown-${idx}`;
-        const candidates = identityCandidates(chat);
-        const canonicalPhone = publicPhoneOf(chat) || await resolveCanonical(externalChatId, ...candidates);
-        const rawDigits = normalizePhone(externalChatId);
-        const phone = canonicalPhone || rawDigits || externalChatId;
-        return { id: `live:${encodeURIComponent(String(externalChatId))}`, phone, display_name: nameOf(chat), status: "open", unread_count: Number(chat.unreadCount ?? chat.unread_count ?? 0), ai_auto: true, last_message_preview: previewOf(chat)?.slice(0, 120) ?? null, last_message_at: timeOf(chat), chat_summary: null, chat_summary_json: null, canonical_phone: canonicalPhone, external_chat_id: String(externalChatId), lid_alias: isLid(externalChatId) ? normalizePhone(externalChatId) : null, identity_type: canonicalPhone ? "phone" : isLid(externalChatId) ? "lid" : "jid", sync_error: canonicalPhone ? null : "Live dari WPPConnect: nomor publik belum terpetakan", last_synced_at: new Date().toISOString(), source: "wppconnect_live", used_path: usedPath };
-      }));
-      return { rows: mapped, usedPath, source: "wppconnect_live" };
-    } catch (e) {
-      console.warn("[wpp-live] live chat list failed, fallback to Supabase mirror:", e);
-      const fallback = await fallbackMirrorChats(data.limit);
-      return { rows: fallback, usedPath: "supabase_mirror", source: "supabase_mirror_fallback", warning: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) };
-    }
+    const rows = await fallbackMirrorChats(data.limit);
+    return { rows, usedPath: "supabase_mirror", source: "supabase_mirror" };
   });
 
 export const listWppLiveMessages = createServerFn({ method: "GET" })
