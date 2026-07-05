@@ -76,6 +76,92 @@ async function embedSessionAsync(sessionId: string, summary: string | null | und
   }
 }
 
+function normalizeWaIdentity(raw: unknown): string | null {
+  if (raw == null) return null;
+  let value = String(raw).trim();
+  if (!value) return null;
+  value = value
+    .replace(/@(?:c|s|g)\.(?:us|whatsapp\.net)$/i, "")
+    .replace(/@lid(?:\b.*)?$/i, "")
+    .replace(/@.*$/i, "")
+    .replace(/[^\d+]/g, "")
+    .replace(/^\+/, "");
+  if (!value) return null;
+  if (value.startsWith("620")) value = "62" + value.slice(3);
+  else if (value.startsWith("0")) value = "62" + value.slice(1);
+  else if (/^8\d{7,14}$/.test(value)) value = "62" + value;
+  return value;
+}
+
+function isPublicWaPhone(value: unknown): boolean {
+  const phone = normalizeWaIdentity(value);
+  return !!phone && /^62\d{8,14}$/.test(phone);
+}
+
+async function resolvePublicWaPhone(...identities: unknown[]): Promise<string | null> {
+  for (const identity of identities) {
+    const normalized = normalizeWaIdentity(identity);
+    if (normalized && isPublicWaPhone(normalized)) return normalized;
+  }
+
+  for (const identity of identities) {
+    const raw = typeof identity === "string" ? identity.trim() : "";
+    if (!raw) continue;
+    try {
+      const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: raw });
+      const resolved = normalizeWaIdentity(data);
+      if (resolved && isPublicWaPhone(resolved)) return resolved;
+    } catch (e) {
+      console.warn("[wa-correction] canonical phone resolve failed:", e);
+    }
+  }
+
+  return null;
+}
+
+async function normalizeCorrectionThreadRows(rows: any[]) {
+  const normalizedRows = await Promise.all(rows.map(async (row) => {
+    const publicPhone = await resolvePublicWaPhone(
+      row.canonical_phone,
+      row.phone,
+      row.external_chat_id,
+      row.lid_alias,
+    );
+    if (!publicPhone || publicPhone === row.phone) return row;
+
+    void (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .update({
+        phone: publicPhone,
+        canonical_phone: publicPhone,
+        identity_type: "phone",
+        sync_error: null,
+      })
+      .eq("id", row.id)
+      .then(({ error }: { error?: { message?: string } | null }) => {
+        if (error) console.warn("[wa-correction] thread phone cleanup failed:", error.message);
+      });
+
+    return {
+      ...row,
+      phone: publicPhone,
+      canonical_phone: publicPhone,
+      identity_type: "phone",
+      sync_error: null,
+    };
+  }));
+
+  const byPhone = new Map<string, any>();
+  for (const row of normalizedRows) {
+    const key = isPublicWaPhone(row.phone) ? normalizeWaIdentity(row.phone)! : `thread:${row.id}`;
+    const current = byPhone.get(key);
+    if (!current || new Date(row.last_message_at ?? 0).getTime() > new Date(current.last_message_at ?? 0).getTime()) {
+      byPhone.set(key, row);
+    }
+  }
+  return [...byPhone.values()];
+}
+
 export const createWhatsappCorrectionFromMessages = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -222,11 +308,11 @@ export const listWhatsappCorrectionThreads = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { data: rows, error } = await supabaseAdmin
       .from("whatsapp_threads")
-      .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json")
+      .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json, canonical_phone, external_chat_id, lid_alias, identity_type, sync_error")
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(data.limit);
     if (error) throw error;
-    return { rows: rows ?? [] };
+    return { rows: await normalizeCorrectionThreadRows((rows ?? []) as any[]) };
   });
 
 export const listWhatsappCorrectionThreadMessages = createServerFn({ method: "GET" })
