@@ -30,6 +30,7 @@ type ThreadRow = {
   status: string | null;
   ai_auto: boolean | null;
   chat_summary: string | null;
+  chat_summary_json?: Record<string, unknown> | null;
 };
 
 type MessageRow = {
@@ -57,6 +58,34 @@ const HIDDEN_ATTACHMENT_RE = /^\[Lampiran\s+(e2e_notification|notification_templ
 
 function isHiddenAttachmentPlaceholder(body: string | null | undefined) {
   return HIDDEN_ATTACHMENT_RE.test((body ?? "").trim());
+}
+
+function formatTrainingContext(thread: ThreadRow | null, messages: MessageRow[]) {
+  const json = thread?.chat_summary_json ?? null;
+  const jsonSummary = typeof json?.summary === "string" ? json.summary.trim() : "";
+  const jsonTopic = typeof json?.last_topic === "string" ? json.last_topic.trim() : "";
+  const jsonRoom = typeof json?.room_type === "string" ? json.room_type.trim() : "";
+  const jsonCheckIn = typeof json?.check_in === "string" ? json.check_in.trim() : "";
+  const jsonCheckOut = typeof json?.check_out === "string" ? json.check_out.trim() : "";
+  const jsonQuestion = typeof json?.unresolved_question === "string" ? json.unresolved_question.trim() : "";
+  const lines: string[] = [];
+
+  if (thread?.display_name || thread?.phone) lines.push(`Tamu: ${thread?.display_name || "—"} (${thread?.phone || "—"})`);
+  if (jsonSummary) lines.push(`Ringkasan: ${jsonSummary}`);
+  else if (thread?.chat_summary?.trim()) lines.push(`Ringkasan: ${thread.chat_summary.trim()}`);
+  if (jsonTopic) lines.push(`Topik terakhir: ${jsonTopic}`);
+  if (jsonRoom) lines.push(`Tipe kamar: ${jsonRoom}`);
+  if (jsonCheckIn || jsonCheckOut) lines.push(`Tanggal: ${jsonCheckIn || "—"} s/d ${jsonCheckOut || "—"}`);
+  if (jsonQuestion) lines.push(`Pertanyaan belum terjawab: ${jsonQuestion}`);
+
+  const recent = messages.slice(-8).map((m) => {
+    const who = m.direction === "in" ? "Tamu" : "Bot/Admin";
+    return `${who}: ${m.body}`;
+  });
+  if (recent.length) lines.push(`\nKonteks pesan terakhir:\n${recent.join("\n")}`);
+
+  if (!lines.length) return "Belum ada ringkasan. Koreksi bubble atau simpan percakapan utuh untuk membuat training context.";
+  return lines.join("\n");
 }
 
 function WhatsappCorrectionsPage() {
@@ -115,8 +144,11 @@ function WhatsappCorrectionsPage() {
     setEditedBodies({});
     setEditingMessageId(null);
     setDraftBody("");
-    setSummary(selectedThread?.chat_summary || selectedThread?.last_message_preview || "");
   }, [selectedThread?.id]);
+
+  useEffect(() => {
+    setSummary(formatTrainingContext(selectedThread, trainingMessages));
+  }, [selectedThread?.id, trainingMessages.length]);
 
   useEffect(() => {
     if (!loadingMessages && trainingMessages.length > 0) {
@@ -237,7 +269,7 @@ function WhatsappCorrectionsPage() {
         </section>
 
         <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l bg-card p-4">
-          <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-muted-foreground">Ringkasan ini ikut di-embed bersama transcript terkoreksi.</p><Textarea rows={5} className="mt-3 text-xs" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="Ringkas konteks percakapan..." /></section>
+          <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-muted-foreground">Ringkasan ini ikut di-embed bersama transcript terkoreksi.</p><Textarea rows={9} className="mt-3 text-xs" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="Ringkasan, status, dan konteks pesan terakhir akan tampil di sini..." /></section>
           <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Default koreksi bubble</h2><div className="mt-3 grid grid-cols-1 gap-2"><SelectField label="Intent" value={correctIntent} onChange={setCorrectIntent} options={INTENTS} /><SelectField label="Agent" value={correctAgent} onChange={setCorrectAgent} options={AGENTS} /><SelectField label="Error" value={errorType} onChange={setErrorType} options={ERRORS} /></div></section>
           <section className="rounded-xl border p-3"><h2 className="text-sm font-semibold">Percakapan tersimpan</h2><div className="mt-2 space-y-2">{sessions.map((s) => <div key={s.id} className="rounded-lg border p-2 text-xs"><div className="flex justify-between"><Badge variant="outline" className="text-[9px]">{s.status}</Badge>{s.embedding_updated_at ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">embedded</Badge> : <Badge variant="outline" className="text-[9px]">no embedding</Badge>}</div><p className="mt-2 line-clamp-1 font-medium">{s.title || "Percakapan"}</p><p className="mt-1 line-clamp-2 text-muted-foreground">{s.conversation_summary || "—"}</p></div>)}</div></section>
         </aside>
