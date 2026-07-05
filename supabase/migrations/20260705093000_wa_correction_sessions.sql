@@ -192,10 +192,73 @@ AS $$
   LIMIT match_count;
 $$;
 
+-- Extend the existing RPC already used by the chatbot so full corrected
+-- conversations are retrieved without needing TypeScript pipeline changes.
+CREATE OR REPLACE FUNCTION public.match_wa_correction_ideal_examples(
+  query_embedding vector(1536),
+  match_threshold float DEFAULT 0.78,
+  match_count int DEFAULT 3
+)
+RETURNS TABLE (
+  id uuid,
+  user_message text,
+  ideal_assistant_response text,
+  intent text,
+  stage text,
+  similarity float
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT *
+  FROM (
+    SELECT
+      c.id,
+      c.user_message,
+      c.ideal_reply AS ideal_assistant_response,
+      c.correct_intent AS intent,
+      c.correct_agent AS stage,
+      1 - (c.embedding <=> query_embedding) AS similarity
+    FROM public.wa_correction_dataset c
+    WHERE c.embedding IS NOT NULL
+      AND c.status = 'approved'
+      AND c.user_message IS NOT NULL
+      AND c.ideal_reply IS NOT NULL
+      AND 1 - (c.embedding <=> query_embedding) >= match_threshold
+
+    UNION ALL
+
+    SELECT
+      s.id,
+      COALESCE(s.conversation_summary, s.title, 'Contoh percakapan WhatsApp terkoreksi') AS user_message,
+      LEFT(
+        COALESCE(
+          s.conversation_summary || E'\n\nTranscript terkoreksi:\n' || s.corrected_transcript::text,
+          s.corrected_transcript::text
+        ),
+        3500
+      ) AS ideal_assistant_response,
+      'conversation_context'::text AS intent,
+      'front-office'::text AS stage,
+      1 - (s.embedding <=> query_embedding) AS similarity
+    FROM public.wa_correction_sessions s
+    WHERE s.embedding IS NOT NULL
+      AND s.status = 'approved'
+      AND COALESCE(s.corrected_transcript, '[]'::jsonb) <> '[]'::jsonb
+      AND 1 - (s.embedding <=> query_embedding) >= GREATEST(0.68, match_threshold - 0.06)
+  ) x
+  ORDER BY similarity DESC
+  LIMIT match_count;
+$$;
+
 REVOKE ALL ON FUNCTION public.create_wa_correction_session_from_thread(uuid, text, text, jsonb, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.match_wa_correction_session_examples(vector, float, int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.create_wa_correction_session_from_thread(uuid, text, text, jsonb, text) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.match_wa_correction_session_examples(vector, float, int) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.match_wa_correction_ideal_examples(vector, float, int) TO authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.wa_correction_sessions TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
