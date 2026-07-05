@@ -27,21 +27,48 @@ function normalizePhoneCandidate(value: unknown): string | undefined {
   if (!raw) return undefined;
   const cleaned = raw
     .replace(/@(?:c|s)\.whatsapp\.net$/i, "")
-    .replace(/[^\d+]/g, "");
+    .replace(/@lid$/i, "")
+    .replace(/[^​\d+]/g, "")
+    .replace(/\u200b/g, "");
   return cleaned || undefined;
 }
 
+function normalizeIndonesianPhone(value: string | undefined): string {
+  let p = String(value ?? "").replace(/\D/g, "");
+  if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (p.startsWith("8")) p = "62" + p;
+  return p;
+}
+
 function samePhone(a: string | undefined, b: string | undefined): boolean {
-  const normalize = (value: string | undefined) => {
-    let p = String(value ?? "").replace(/\D/g, "");
-    if (p.startsWith("620")) p = "62" + p.slice(3);
-    else if (p.startsWith("0")) p = "62" + p.slice(1);
-    else if (p.startsWith("8")) p = "62" + p;
-    return p;
-  };
-  const left = normalize(a);
-  const right = normalize(b);
+  const left = normalizeIndonesianPhone(a);
+  const right = normalizeIndonesianPhone(b);
   return !!left && !!right && left === right;
+}
+
+function looksLikePublicPhone(value: string | undefined): boolean {
+  const p = normalizeIndonesianPhone(value);
+  // Indonesian WA numbers normally become 62 + 9-13 digits. LID values can be
+  // long arbitrary digits and often do not start with 62.
+  return /^62\d{8,14}$/.test(p);
+}
+
+function pickBestIdentity(...values: unknown[]): string | undefined {
+  const candidates = values
+    .map((v) => normalizePhoneCandidate(v))
+    .filter((v): v is string => !!v);
+
+  // Prefer the actual public phone number over LID/JID. WPPConnect multi-device
+  // may send `from` / `sender.id` as a LID while `number` / `phone` still holds
+  // the real 62xxx number. If we pick the LID first, managers and guests split
+  // into different threads and lose context.
+  const phone = candidates.find(looksLikePublicPhone);
+  if (phone) return normalizeIndonesianPhone(phone);
+
+  // Fallback: keep the first identity, usually a LID. Alias resolution in the DB
+  // can map it back to a canonical phone when known.
+  return candidates[0];
 }
 
 export async function parseWppWebhook(
@@ -82,22 +109,20 @@ export async function parseWppWebhook(
     ? ((body as any).sender as Record<string, unknown>)
     : null;
 
-  // WPPConnect can send `from` as a LID/chat JID on some multi-device payloads,
-  // while the real phone number is nested in `sender.id` / `sender.phone`.
-  // Prefer the nested sender phone first so manager detection sees 62xxx, not a LID.
-  const sender = normalizePhoneCandidate(
-    firstString(
-      senderObj?.id,
-      senderObj?.phone,
-      senderObj?.number,
-      senderObj?._serialized,
-      body.number,
-      body.phone,
-      body.pengirim,
-      body.sender,
-      body.from,
-      (body as any).author,
-    ),
+  // WPPConnect can send multiple identities for the same contact: public phone,
+  // chat JID, and LID. Always prefer a public 62xxx phone when present; keep LID
+  // only as fallback so existing alias mappings can resolve it.
+  const sender = pickBestIdentity(
+    senderObj?.phone,
+    senderObj?.number,
+    body.number,
+    body.phone,
+    body.pengirim,
+    senderObj?.id,
+    senderObj?._serialized,
+    body.sender,
+    body.from,
+    (body as any).author,
   );
 
   // WPPConnect `type`: chat|image|video|document|audio|ptt|sticker|location.
@@ -116,8 +141,12 @@ export async function parseWppWebhook(
   const name = firstString(body.name, body.pushname, (body as any).notifyName, senderObj?.pushname, sender) ?? "";
   const wppId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
   // `to`/`chatId` are WPPConnect fallbacks for our own device number.
-  const device = normalizePhoneCandidate(
-    firstString(body.device, (body as any).device_number, (body as any).deviceNumber, body.to, (body as any).chatId),
+  const device = pickBestIdentity(
+    body.device,
+    (body as any).device_number,
+    (body as any).deviceNumber,
+    body.to,
+    (body as any).chatId,
   );
   const attachmentUrl = firstString(
     body.url,
@@ -133,18 +162,16 @@ export async function parseWppWebhook(
   const hasMedia = !!attachmentUrl || isMediaType || !!attachmentMime;
   if (!sender || (!message && !hasMedia)) return null;
 
-  const target = normalizePhoneCandidate(
-    firstString(
-      body.target,
-      body.receiver,
-      body.penerima,
-      body.to,
-      body.recipient,
-      body.destination,
-      body.tujuan,
-      (body as any).remoteJid,
-      (body as any).remote_jid,
-    ),
+  const target = pickBestIdentity(
+    body.target,
+    body.receiver,
+    body.penerima,
+    body.to,
+    body.recipient,
+    body.destination,
+    body.tujuan,
+    (body as any).remoteJid,
+    (body as any).remote_jid,
   );
   const explicitOutgoing =
     boolish(body.fromMe) ||
