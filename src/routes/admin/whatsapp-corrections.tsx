@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CheckCircle2, Edit3, Loader2, Save, Search, X } from "lucide-react";
+import { CheckCircle2, Edit3, Loader2, Save, Search, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import {
   listWhatsappCorrectionThreadMessages,
   listWhatsappCorrectionThreads,
 } from "@/admin/modules/training/wa-correction.functions";
+import { deleteWhatsappCorrectionSession } from "@/admin/modules/training/wa-correction-session.functions";
 
 export const Route = createFileRoute("/admin/whatsapp-corrections")({
   component: WhatsappCorrectionsPage,
@@ -96,6 +97,7 @@ function WhatsappCorrectionsPage() {
   const createCorrectionFn = useServerFn(createWhatsappCorrectionFromMessages);
   const createSessionFn = useServerFn(createWhatsappCorrectionSession);
   const sessionsFn = useServerFn(listWhatsappCorrectionSessions);
+  const deleteSessionFn = useServerFn(deleteWhatsappCorrectionSession);
 
   const [search, setSearch] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -220,6 +222,15 @@ function WhatsappCorrectionsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const deleteSessionMut = useMutation({
+    mutationFn: async (sessionId: string) => deleteSessionFn({ data: { id: sessionId } }),
+    onSuccess: () => {
+      toast.success("Percakapan tersimpan dihapus dari training.");
+      qc.invalidateQueries({ queryKey: ["wa-correction-sessions"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   return (
     <div className="flex h-screen min-h-0 flex-col bg-stone-100">
       <main className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)_380px] overflow-hidden">
@@ -273,20 +284,8 @@ function WhatsappCorrectionsPage() {
         <aside className="flex min-h-0 flex-col border-l bg-card">
           <div className="border-b p-3">
             <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-              <button
-                type="button"
-                onClick={() => setRightTab("context")}
-                className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "context" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                Konteks
-              </button>
-              <button
-                type="button"
-                onClick={() => setRightTab("saved")}
-                className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "saved" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}
-              >
-                Tersimpan
-              </button>
+              <button type="button" onClick={() => setRightTab("context")} className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "context" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Konteks</button>
+              <button type="button" onClick={() => setRightTab("saved")} className={cn("rounded-md px-3 py-2 text-xs font-semibold transition", rightTab === "saved" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground")}>Tersimpan</button>
             </div>
           </div>
 
@@ -308,7 +307,24 @@ function WhatsappCorrectionsPage() {
                   <div key={s.id} className="rounded-xl border bg-background p-3 text-xs shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <Badge variant="outline" className="text-[9px]">{s.status}</Badge>
-                      {s.embedding_updated_at ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">embedded</Badge> : <Badge variant="outline" className="text-[9px]">no embedding</Badge>}
+                      <div className="flex items-center gap-1">
+                        {s.embedding_updated_at ? <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">embedded</Badge> : <Badge variant="outline" className="text-[9px]">no embedding</Badge>}
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={deleteSessionMut.isPending}
+                          title="Hapus percakapan tersimpan"
+                          onClick={() => {
+                            if (window.confirm("Hapus percakapan tersimpan ini dari training? Chat WhatsApp asli tidak ikut terhapus.")) {
+                              deleteSessionMut.mutate(s.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     <p className="mt-3 font-semibold leading-snug">{s.title || "Percakapan"}</p>
                     <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{s.conversation_summary || "—"}</p>
