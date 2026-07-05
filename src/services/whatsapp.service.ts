@@ -36,11 +36,28 @@ export interface SendWhatsAppMessageInput {
 
 const SEND_TIMEOUT_MS = 12_000;
 
-/** WPPConnect wants the raw MSISDN in digits, e.g. "628123456789". */
+/**
+ * WPPConnect normally wants MSISDN digits (628xxx). Since WhatsApp/WPPConnect
+ * can now surface LID-only identities, keep/restore the @lid chat id when the
+ * value is clearly not an Indonesian public phone. This lets the queue attempt
+ * a reply instead of going silent while the LID->phone alias is still unknown.
+ */
 function normalizeWppPhone(phone: string): string {
-  let p = String(phone ?? "").replace(/@(?:c|s|g)\.(?:us|whatsapp\.net)$/i, "");
-  p = p.replace(/[^\d]/g, "");
-  if (p.startsWith("0")) p = "62" + p.slice(1);
+  const raw = String(phone ?? "").trim().replace(/\s+/g, "");
+  if (!raw) return "";
+
+  if (/@lid(?:\b|$)/i.test(raw)) {
+    return raw.toLowerCase();
+  }
+
+  let p = raw.replace(/@(?:c|s|g)\.(?:us|whatsapp\.net)$/i, "");
+  p = p.replace(/@c\.us$/i, "").replace(/[^\d]/g, "");
+  if (p.startsWith("620")) p = "62" + p.slice(3);
+  else if (p.startsWith("0")) p = "62" + p.slice(1);
+  else if (/^8\d{7,14}$/.test(p)) p = "62" + p;
+
+  if (/^62\d{8,14}$/.test(p)) return p;
+  if (/^\d{10,18}$/.test(p)) return `${p}@lid`;
   return p;
 }
 
