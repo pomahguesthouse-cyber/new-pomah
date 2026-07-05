@@ -502,8 +502,11 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
 
         let isManager = false;
         try {
-          const { resolveManagerByPhone } = await import("@/services/wa-autoreply.service");
-          isManager = !!(await resolveManagerByPhone(customerPhone));
+          const { resolveManagerByPhone, isManagerInGuestMode } = await import("@/services/wa-autoreply.service");
+          const mgr = await resolveManagerByPhone(customerPhone);
+          // Hormati guest-mode: manager yang sedang menguji alur tamu tidak
+          // dianggap manager di gate auto_reply agar bisa disimulasikan penuh.
+          isManager = !!mgr && !(await isManagerInGuestMode(customerPhone));
         } catch (e) {
           console.warn(`[Webhook] resolveManagerByPhone failed (non-fatal): ${e} | ${logCtx}`);
         }
