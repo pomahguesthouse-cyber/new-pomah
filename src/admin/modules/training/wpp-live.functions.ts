@@ -105,6 +105,66 @@ async function resolveCanonical(...identities: unknown[]) {
 async function resolveThreadPhone(thread: any) {
   return resolveCanonical(thread.canonical_phone, thread.phone, thread.external_chat_id, thread.lid_alias);
 }
+function wppIdentityCandidates(...identities: unknown[]) {
+  const values = identities.map((v) => first(v)).filter((v): v is string => !!v);
+  const expanded = values.flatMap((value) => {
+    const digits = normalizePhone(value);
+    return [value, digits && !isPublicPhone(digits) ? `${digits}@lid` : null];
+  });
+  return Array.from(new Set(expanded.filter((v): v is string => !!v)));
+}
+function publicPhoneFromPnLidEntry(data: any) {
+  const candidates = [
+    data?.phoneNumber?._serialized,
+    data?.phoneNumber?.user,
+    data?.phoneNumber?.wid,
+    data?.phoneNumber,
+    data?.contact?.id?._serialized,
+    data?.contact?.phoneNumber,
+    data?.contact?.formattedPhone,
+    data?.contact?.number,
+  ];
+  for (const candidate of candidates) {
+    if (isLid(candidate)) continue;
+    const phone = normalizePhone(candidate);
+    if (isPublicPhone(phone)) return phone;
+  }
+  return null;
+}
+async function rememberWppAlias(canonicalPhone: string, thread: any, resolvedBy: string) {
+  const aliases = wppIdentityCandidates(thread.phone, thread.external_chat_id, thread.lid_alias, resolvedBy);
+  for (const alias of aliases) {
+    try {
+      await (supabaseAdmin as any).rpc("upsert_wa_identity_alias", {
+        p_canonical_phone: canonicalPhone,
+        p_alias_value: alias,
+        p_alias_type: isLid(alias) || !isPublicPhone(normalizePhone(alias)) ? "lid" : "phone",
+        p_role: "guest",
+        p_display_name: thread.display_name ?? null,
+        p_source: "wppconnect_get_pn_lid_entry",
+        p_metadata: { thread_id: thread.id ?? null, external_chat_id: thread.external_chat_id ?? null },
+      });
+    } catch {}
+  }
+  try { await (supabaseAdmin as any).rpc("merge_wa_threads_to_canonical_phone", { p_canonical_phone: canonicalPhone }); } catch {}
+}
+async function resolveThreadPhoneViaWpp(token: string | null, thread: any) {
+  if (!token) return null;
+  for (const identity of wppIdentityCandidates(thread.external_chat_id, thread.lid_alias, thread.phone)) {
+    const normalized = normalizePhone(identity);
+    if (isPublicPhone(normalized) && !isLid(identity)) return normalized;
+    if (!isLid(identity) && (!normalized || isPublicPhone(normalized))) continue;
+    try {
+      const data = await wpp(`contact/pn-lid/${encodeURIComponent(identity)}`, token);
+      const phone = publicPhoneFromPnLidEntry(data);
+      if (phone) {
+        await rememberWppAlias(phone, thread, identity);
+        return phone;
+      }
+    } catch {}
+  }
+  return null;
+}
 async function fetchChats(token: string, limit: number) {
   const errors: string[] = [];
   for (const path of ["all-chats", "list-chats", "chats", "get-all-chats"]) { try { const data = rows(await wpp(path, token)).slice(0, limit); if (data.length > 0) return { chats: data, usedPath: path }; } catch (e) { errors.push(`${path}: ${e instanceof Error ? e.message : String(e)}`); } }
@@ -131,8 +191,10 @@ async function fallbackMirrorChats(limit: number) {
     .order("last_message_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
+  const hasUnresolvedLid = ((data ?? []) as any[]).some((t) => !isPublicPhone(normalizePhone(t.canonical_phone)) && (isLid(t.external_chat_id) || isLid(t.lid_alias) || t.identity_type === "lid"));
+  const token = hasUnresolvedLid ? await getToken() : null;
   const resolved = await Promise.all(((data ?? []) as any[]).map(async (t) => {
-    const canonicalPhone = await resolveThreadPhone(t);
+    const canonicalPhone = await resolveThreadPhone(t) || await resolveThreadPhoneViaWpp(token, t);
     return {
       id: String(t.id),
       phone: canonicalPhone || t.canonical_phone || t.phone,
