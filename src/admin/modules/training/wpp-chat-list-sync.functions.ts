@@ -7,6 +7,8 @@ const WPP_BASE_URL = (process.env.WPP_BASE_URL ?? "").replace(/\/+$/, "");
 const WPP_SESSION = process.env.WPP_SESSION ?? "";
 const TIMEOUT_MS = 18000;
 
+type AliasType = "phone" | "jid" | "lid" | "unknown";
+
 function first(...values: unknown[]) {
   for (const v of values) {
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -30,7 +32,7 @@ function rows(value: any): any[] {
 function normalizePhone(raw: unknown) {
   const value = first(raw);
   if (!value) return null;
-  let p = value.replace(/@.*$/i, "").replace(/[^\d]/g, "");
+  let p = value.replace(/@(?:c|s)\.whatsapp\.net$/i, "").replace(/@c\.us$/i, "").replace(/@lid(?:\b.*)?$/i, "").replace(/@.*$/i, "").replace(/[^\d+]/g, "").replace(/^\+/, "");
   if (!p) return null;
   if (p.startsWith("620")) p = "62" + p.slice(3);
   else if (p.startsWith("0")) p = "62" + p.slice(1);
@@ -40,6 +42,96 @@ function normalizePhone(raw: unknown) {
 
 function isPublicPhone(phone: string | null) {
   return !!phone && /^62\d{8,14}$/.test(phone);
+}
+
+function isLidIdentity(raw: unknown) {
+  const value = first(raw);
+  return !!value && /@lid(?:\b|[_@.-]|$)/i.test(value);
+}
+
+function isJidIdentity(raw: unknown) {
+  const value = first(raw);
+  return !!value && /@(c|s)\.whatsapp\.net$|@c\.us$/i.test(value);
+}
+
+function addCandidate(target: string[], value: unknown) {
+  const direct = first(value);
+  if (direct) target.push(direct);
+
+  if (value && typeof value === "object") {
+    for (const path of ["_serialized", "serialized", "user", "id", "server"]) {
+      const nested = first(pick(value, path));
+      if (nested) target.push(nested);
+    }
+  }
+}
+
+function identityCandidates(chat: any): string[] {
+  const out: string[] = [];
+  for (const value of [
+    chat.phone,
+    chat.number,
+    chat.formattedNumber,
+    chat.formattedPhone,
+    chat.waNumber,
+    chat.user,
+    chat.userid,
+    chat.chatId,
+    chat.chat_id,
+    chat.remoteJid,
+    chat.remote_jid,
+    chat.jid,
+    chat.id,
+    chat.contact,
+    chat.sender,
+    chat.lastMessage?.from,
+    chat.lastMessage?.to,
+    chat.lastMessage?.author,
+    chat.lastMessage?.sender,
+    chat.last_message?.from,
+    chat.last_message?.to,
+    chat.last_message?.author,
+    chat.last_message?.sender,
+  ]) {
+    addCandidate(out, value);
+  }
+
+  for (const path of [
+    "id._serialized",
+    "id.user",
+    "id.id",
+    "contact.id._serialized",
+    "contact.id.user",
+    "contact.id.id",
+    "contact.phone",
+    "contact.number",
+    "contact.formattedNumber",
+    "contact.formattedPhone",
+    "contact.waNumber",
+    "contact.userid",
+    "contact.user",
+    "lastMessage.id.remote",
+    "lastMessage.id._serialized",
+    "lastMessage.from._serialized",
+    "lastMessage.to._serialized",
+    "last_message.id.remote",
+    "last_message.id._serialized",
+    "last_message.from._serialized",
+    "last_message.to._serialized",
+  ]) {
+    addCandidate(out, pick(chat, path));
+  }
+
+  return Array.from(new Set(out.map((v) => String(v).trim()).filter(Boolean)));
+}
+
+function publicPhoneOf(chat: any) {
+  for (const raw of identityCandidates(chat)) {
+    if (isLidIdentity(raw)) continue;
+    const phone = normalizePhone(raw);
+    if (isPublicPhone(phone)) return phone;
+  }
+  return null;
 }
 
 function chatIdOf(chat: any) {
@@ -80,6 +172,24 @@ function timeOf(chat: any) {
   return new Date().toISOString();
 }
 
+function aliasTypeOf(raw: string): AliasType {
+  const phone = normalizePhone(raw);
+  if (isLidIdentity(raw)) return "lid";
+  if (isJidIdentity(raw)) return "jid";
+  if (isPublicPhone(phone)) return "phone";
+  if (phone && /^\d{10,18}$/.test(phone)) return "lid";
+  return "unknown";
+}
+
+function lidAliasesOf(chat: any) {
+  return identityCandidates(chat)
+    .filter((raw) => {
+      const phone = normalizePhone(raw);
+      return isLidIdentity(raw) || (!!phone && !isPublicPhone(phone) && /^\d{10,18}$/.test(phone));
+    })
+    .map((raw) => normalizePhone(raw) || raw);
+}
+
 async function getToken() {
   const { data } = await supabaseAdmin.from("properties").select("wpp_token").limit(1).maybeSingle();
   return ((data as { wpp_token?: string } | null)?.wpp_token || "").trim();
@@ -88,6 +198,26 @@ async function getToken() {
 async function resolveCanonical(identity: string) {
   const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: identity });
   return normalizePhone(data) ?? normalizePhone(identity);
+}
+
+async function upsertAliases(canonicalPhone: string, aliases: string[], chat: any, rawId: string, externalChatId: string) {
+  const uniqueAliases = Array.from(new Set(aliases.map((a) => normalizePhone(a) || a).filter(Boolean)));
+  for (const alias of uniqueAliases) {
+    if (!alias || alias === canonicalPhone) continue;
+    await (supabaseAdmin as any).rpc("upsert_wa_identity_alias", {
+      p_canonical_phone: canonicalPhone,
+      p_alias_value: alias,
+      p_alias_type: aliasTypeOf(alias),
+      p_role: "guest",
+      p_display_name: nameOf(chat) || null,
+      p_source: "wppconnect_chat_list_sync",
+      p_metadata: {
+        raw_id: rawId,
+        external_chat_id: externalChatId,
+        note: "Alias LID/JID dipetakan dari daftar chat WPPConnect",
+      },
+    });
+  }
 }
 
 async function callWpp(path: string, token: string) {
@@ -123,17 +253,31 @@ async function fetchChats(token: string, limit: number) {
 async function upsertChat(chat: any) {
   const rawId = chatIdOf(chat);
   if (!rawId) return "skipped" as const;
-  const canonical = await resolveCanonical(rawId);
-  const publicPhone = isPublicPhone(canonical) ? canonical : null;
-  const rawDigits = rawId.replace(/[^\d]/g, "");
-  const externalChatId = rawId.includes("@") ? rawId : publicPhone ? `${publicPhone}@c.us` : `${rawDigits || rawId}@lid`;
-  const phone = publicPhone || rawDigits || rawId;
+
+  const resolvedFromAlias = await resolveCanonical(rawId);
+  const publicPhone = publicPhoneOf(chat) || (isPublicPhone(resolvedFromAlias) ? resolvedFromAlias : null);
+  const rawDigits = normalizePhone(rawId);
+  const identityType: AliasType = publicPhone ? "phone" : aliasTypeOf(rawId);
+  const externalChatId = String(rawId).includes("@")
+    ? String(rawId)
+    : identityType === "lid" && rawDigits
+      ? `${rawDigits}@lid`
+      : publicPhone
+        ? `${publicPhone}@c.us`
+        : `${rawDigits || rawId}@lid`;
+
+  if (publicPhone) {
+    await upsertAliases(publicPhone, [rawId, ...lidAliasesOf(chat), ...identityCandidates(chat)], chat, String(rawId), externalChatId);
+  }
+
+  const phone = publicPhone || rawDigits || String(rawId);
   const patch = {
     phone,
     display_name: nameOf(chat) || phone,
     external_chat_id: externalChatId,
     canonical_phone: publicPhone,
-    identity_type: publicPhone ? "phone" : rawId.includes("@lid") || /^\d{12,18}$/.test(rawDigits) ? "lid" : "jid",
+    identity_type: identityType,
+    lid_alias: lidAliasesOf(chat)[0] ?? (identityType === "lid" ? rawDigits : null),
     last_message_preview: previewOf(chat)?.slice(0, 120) ?? null,
     last_message_at: timeOf(chat),
     last_synced_at: new Date().toISOString(),
@@ -142,7 +286,16 @@ async function upsertChat(chat: any) {
   };
 
   const { data: byExternal } = await (supabaseAdmin as any).from("whatsapp_threads").select("id").eq("external_chat_id", externalChatId).maybeSingle();
-  const existing = byExternal?.id ? byExternal : (await (supabaseAdmin as any).from("whatsapp_threads").select("id").eq("phone", phone).order("last_message_at", { ascending: false }).limit(1).maybeSingle()).data;
+  const existing = byExternal?.id
+    ? byExternal
+    : (await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id")
+      .or(publicPhone ? `phone.eq.${publicPhone},canonical_phone.eq.${publicPhone}` : `phone.eq.${phone}`)
+      .order("last_message_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()).data;
+
   if (existing?.id) {
     const { error } = await (supabaseAdmin as any).from("whatsapp_threads").update(patch).eq("id", existing.id);
     if (error) throw error;
