@@ -53,6 +53,11 @@ type SessionRow = {
 const INTENTS = ["general", "availability_check", "pricing_inquiry", "booking_start", "booking_inquiry", "payment", "complaint", "room_detail_question"];
 const AGENTS = ["front-office", "pricing", "customer-care", "finance", "manager"];
 const ERRORS = ["wrong_intent", "wrong_agent", "wrong_date", "wrong_room_context", "availability_wrong", "price_wrong", "incomplete_answer", "too_short", "ignored_context", "tool_not_used"];
+const HIDDEN_ATTACHMENT_RE = /^\[Lampiran\s+(e2e_notification|notification_template|ciphertext)\]$/i;
+
+function isHiddenAttachmentPlaceholder(body: string | null | undefined) {
+  return HIDDEN_ATTACHMENT_RE.test((body ?? "").trim());
+}
 
 function WhatsappCorrectionsPage() {
   const qc = useQueryClient();
@@ -94,6 +99,7 @@ function WhatsappCorrectionsPage() {
     queryFn: () => messagesFn({ data: { threadId: selectedThread!.id } }),
   });
   const messages = (messagesData?.rows ?? []) as MessageRow[];
+  const visibleMessages = useMemo(() => messages.filter((m) => !isHiddenAttachmentPlaceholder(m.body)), [messages]);
 
   const { data: sessionsData } = useQuery({
     queryKey: ["wa-correction-sessions"],
@@ -109,9 +115,9 @@ function WhatsappCorrectionsPage() {
   }, [selectedThread?.id]);
 
   function previousInboundId(outMessageId: string) {
-    const idx = messages.findIndex((m) => m.id === outMessageId);
+    const idx = visibleMessages.findIndex((m) => m.id === outMessageId);
     for (let i = idx - 1; i >= 0; i--) {
-      if (messages[i].direction === "in") return messages[i].id;
+      if (visibleMessages[i].direction === "in") return visibleMessages[i].id;
     }
     return null;
   }
@@ -146,7 +152,7 @@ function WhatsappCorrectionsPage() {
   const saveSessionMut = useMutation({
     mutationFn: async () => {
       if (!selectedThread) throw new Error("Pilih percakapan dulu.");
-      const correctedTranscript = messages.map((m) => ({
+      const correctedTranscript = visibleMessages.map((m) => ({
         id: m.id,
         direction: m.direction,
         body: editedBodies[m.id] ?? m.body,
@@ -190,10 +196,10 @@ function WhatsappCorrectionsPage() {
         <section className="flex min-h-0 flex-col bg-[#eee8df]">
           <div className="flex items-center justify-between border-b bg-card px-4 py-3">
             <div><p className="font-semibold">{selectedThread?.display_name || selectedThread?.phone || "Pilih percakapan"}</p><p className="font-mono text-xs text-muted-foreground">{selectedThread?.phone}</p></div>
-            <Button disabled={!messages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
+            <Button disabled={!visibleMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : messages.map((m) => {
+            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : visibleMessages.map((m) => {
               const outbound = m.direction === "out";
               const isEditing = editingMessageId === m.id;
               const shown = editedBodies[m.id] ?? m.body;
