@@ -36,7 +36,13 @@ function rows(value: unknown): any[] {
 function normalizePhone(raw: unknown) {
   const value = first(raw);
   if (!value) return null;
-  let p = value.replace(/@(?:c|s)\.whatsapp\.net$/i, "").replace(/@c\.us$/i, "").replace(/@lid(?:\b.*)?$/i, "").replace(/@.*$/i, "").replace(/[^\d+]/g, "").replace(/^\+/, "");
+  let p = value
+    .replace(/@(?:c|s)\.whatsapp\.net$/i, "")
+    .replace(/@c\.us$/i, "")
+    .replace(/@lid(?:\b.*)?$/i, "")
+    .replace(/@.*$/i, "")
+    .replace(/[^\d+]/g, "")
+    .replace(/^\+/, "");
   if (!p) return null;
   if (p.startsWith("620")) p = "62" + p.slice(3);
   else if (p.startsWith("0")) p = "62" + p.slice(1);
@@ -75,32 +81,107 @@ async function wpp(path: string, token: string, init?: RequestInit) {
   } finally { clearTimeout(timer); }
 }
 
-function chatIdOf(chat: any) { return first(chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, pick(chat, "id._serialized"), pick(chat, "id.user"), chat.id, pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user"), chat.phone, chat.number); }
-function nameOf(chat: any) { return first(chat.name, chat.formattedName, chat.formattedTitle, chat.pushname, chat.notifyName, chat.shortName, pick(chat, "contact.name"), pick(chat, "contact.pushname"), chat.phone, chat.number); }
-function previewOf(chat: any) { const last = chat.lastMessage ?? chat.last_message ?? chat.lastMsg ?? (Array.isArray(chat.msgs) ? chat.msgs[chat.msgs.length - 1] : null); return first(chat.last_message_preview, chat.lastMessagePreview, chat.preview, last?.body, last?.caption, last?.text, last?.message); }
+function chatIdOf(chat: any) {
+  return first(
+    chat.chatId,
+    chat.chat_id,
+    chat.remoteJid,
+    chat.remote_jid,
+    chat.jid,
+    pick(chat, "id._serialized"),
+    pick(chat, "id.user"),
+    chat.id,
+    pick(chat, "contact.id._serialized"),
+    pick(chat, "contact.id.user"),
+    chat.phone,
+    chat.number,
+  );
+}
+
+function nameOf(chat: any) {
+  return first(
+    chat.formattedName,
+    chat.formattedTitle,
+    chat.verifiedName,
+    chat.contactName,
+    chat.contact_name,
+    pick(chat, "contact.formattedName"),
+    pick(chat, "contact.formattedTitle"),
+    pick(chat, "contact.verifiedName"),
+    pick(chat, "contact.name"),
+    pick(chat, "contact.pushname"),
+    chat.name,
+    chat.pushname,
+    chat.notifyName,
+    chat.shortName,
+    chat.phone,
+    chat.number,
+  );
+}
+
+function previewOf(chat: any) {
+  const last = chat.lastMessage ?? chat.last_message ?? chat.lastMsg ?? chat.last_msg ?? (Array.isArray(chat.msgs) ? chat.msgs[chat.msgs.length - 1] : null);
+  return first(
+    chat.last_message_preview,
+    chat.lastMessagePreview,
+    chat.preview,
+    chat.body,
+    chat.text,
+    last?.body,
+    last?.caption,
+    last?.text,
+    last?.message,
+    pick(last, "content.body"),
+    pick(last, "content.text"),
+  );
+}
+
 function timeOf(value: any) {
-  const last = value?.lastMessage ?? value?.last_message ?? value?.lastMsg ?? (Array.isArray(value?.msgs) ? value.msgs[value.msgs.length - 1] : null);
+  const last = value?.lastMessage ?? value?.last_message ?? value?.lastMsg ?? value?.last_msg ?? (Array.isArray(value?.msgs) ? value.msgs[value.msgs.length - 1] : null);
   const raw = value?.t ?? value?.timestamp ?? value?.lastMessageAt ?? value?.last_message_at ?? value?.createdAt ?? value?.sent_at ?? last?.t ?? last?.timestamp ?? last?.createdAt;
   if (typeof raw === "number") return new Date((raw > 10000000000 ? raw : raw * 1000)).toISOString();
   if (typeof raw === "string" && raw.trim()) { if (/^\d+$/.test(raw.trim())) return timeOf({ t: Number(raw) }); const d = new Date(raw); if (!Number.isNaN(d.getTime())) return d.toISOString(); }
   return new Date().toISOString();
 }
+
 function identityCandidates(chat: any): string[] {
-  const values = [chat.phone, chat.number, chat.formattedNumber, chat.formattedPhone, chat.waNumber, chat.user, chat.userid, chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, chat.id, chat.contact, pick(chat, "contact.phone"), pick(chat, "contact.number"), pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user")];
+  const paths = [
+    "phone", "number", "phoneNumber", "formattedNumber", "formattedPhone", "waNumber", "user", "userid",
+    "chatId", "chat_id", "remoteJid", "remote_jid", "jid", "id", "wid", "lid",
+    "id._serialized", "id.user", "wid._serialized", "wid.user", "lid._serialized", "lid.user",
+    "contact.phone", "contact.number", "contact.phoneNumber", "contact.formattedNumber", "contact.formattedPhone", "contact.waNumber",
+    "contact.user", "contact.userid", "contact.userId", "contact.wid", "contact.lid",
+    "contact.id._serialized", "contact.id.user", "contact.id.id", "contact.wid._serialized", "contact.wid.user", "contact.lid._serialized", "contact.lid.user",
+    "lastMessage.from", "lastMessage.to", "lastMessage.author", "lastMessage.id.remote", "lastMessage.from._serialized", "lastMessage.to._serialized",
+  ];
+  const values = paths.map((path) => pick(chat, path));
   return Array.from(new Set(values.map((v) => first(v)).filter((v): v is string => !!v)));
 }
+
+function publicPhoneOf(chat: any) {
+  for (const raw of identityCandidates(chat)) {
+    if (isLid(raw)) continue;
+    const phone = normalizePhone(raw);
+    if (isPublicPhone(phone)) return phone;
+  }
+  return null;
+}
+
 async function resolveCanonical(...identities: unknown[]) {
   for (const identity of identities) { const phone = normalizePhone(identity); if (isPublicPhone(phone) && !isLid(identity)) return phone; }
   for (const identity of identities) { const raw = first(identity); if (!raw) continue; try { const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: raw }); const phone = normalizePhone(data); if (isPublicPhone(phone)) return phone; } catch {} }
   return null;
 }
+
 async function fetchChats(token: string, limit: number) {
   const errors: string[] = [];
   for (const path of ["all-chats", "list-chats", "chats", "get-all-chats"]) { try { return { chats: rows(await wpp(path, token)).slice(0, limit), usedPath: path }; } catch (e) { errors.push(`${path}: ${e instanceof Error ? e.message : String(e)}`); } }
   throw new Error(errors.join(" | "));
 }
+
 function messageIdOf(message: any, fallback: string) { return first(pick(message, "id._serialized"), pick(message, "id.id"), message._serialized, message.messageId, message.keyId, message.id, fallback)!; }
 function bodyOf(message: any) { return first(message.body, message.caption, message.content, message.text, message.message) || `[Lampiran ${first(message.type, message.kind, message.mediaType) || "media"}]`; }
+
 async function fetchMessages(token: string, chatId: string, limit: number) {
   const digits = normalizePhone(chatId);
   const ids = Array.from(new Set([chatId, digits, digits && isPublicPhone(digits) ? `${digits}@c.us` : null].filter(Boolean) as string[]));
@@ -123,7 +204,8 @@ export const listWppLiveChats = createServerFn({ method: "GET" })
     const { chats, usedPath } = await fetchChats(token, data.limit);
     const mapped = await Promise.all(chats.map(async (chat: any, idx: number) => {
       const externalChatId = chatIdOf(chat) || `unknown-${idx}`;
-      const canonicalPhone = await resolveCanonical(externalChatId, ...identityCandidates(chat));
+      const candidates = identityCandidates(chat);
+      const canonicalPhone = publicPhoneOf(chat) || await resolveCanonical(externalChatId, ...candidates);
       const rawDigits = normalizePhone(externalChatId);
       const phone = canonicalPhone || rawDigits || externalChatId;
       return { id: `live:${encodeURIComponent(String(externalChatId))}`, phone, display_name: nameOf(chat), status: "open", unread_count: Number(chat.unreadCount ?? chat.unread_count ?? 0), ai_auto: true, last_message_preview: previewOf(chat)?.slice(0, 120) ?? null, last_message_at: timeOf(chat), chat_summary: null, chat_summary_json: null, canonical_phone: canonicalPhone, external_chat_id: String(externalChatId), lid_alias: isLid(externalChatId) ? normalizePhone(externalChatId) : null, identity_type: canonicalPhone ? "phone" : isLid(externalChatId) ? "lid" : "jid", sync_error: canonicalPhone ? null : "Live dari WPPConnect: nomor publik belum terpetakan", last_synced_at: new Date().toISOString(), source: "wppconnect_live", used_path: usedPath };
