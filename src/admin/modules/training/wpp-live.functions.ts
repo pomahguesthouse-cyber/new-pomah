@@ -81,16 +81,9 @@ async function wpp(path: string, token: string, init?: RequestInit) {
   } finally { clearTimeout(timer); }
 }
 
-function chatIdOf(chat: any) {
-  return first(chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, pick(chat, "id._serialized"), pick(chat, "id.user"), chat.id, pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user"), chat.phone, chat.number);
-}
-function nameOf(chat: any) {
-  return first(chat.formattedName, chat.formattedTitle, chat.verifiedName, chat.contactName, chat.contact_name, pick(chat, "contact.formattedName"), pick(chat, "contact.formattedTitle"), pick(chat, "contact.verifiedName"), pick(chat, "contact.name"), pick(chat, "contact.pushname"), chat.name, chat.pushname, chat.notifyName, chat.shortName, chat.phone, chat.number);
-}
-function previewOf(chat: any) {
-  const last = chat.lastMessage ?? chat.last_message ?? chat.lastMsg ?? chat.last_msg ?? (Array.isArray(chat.msgs) ? chat.msgs[chat.msgs.length - 1] : null);
-  return first(chat.last_message_preview, chat.lastMessagePreview, chat.preview, chat.body, chat.text, last?.body, last?.caption, last?.text, last?.message, pick(last, "content.body"), pick(last, "content.text"));
-}
+function chatIdOf(chat: any) { return first(chat.chatId, chat.chat_id, chat.remoteJid, chat.remote_jid, chat.jid, pick(chat, "id._serialized"), pick(chat, "id.user"), chat.id, pick(chat, "contact.id._serialized"), pick(chat, "contact.id.user"), chat.phone, chat.number); }
+function nameOf(chat: any) { return first(chat.formattedName, chat.formattedTitle, chat.verifiedName, chat.contactName, chat.contact_name, pick(chat, "contact.formattedName"), pick(chat, "contact.formattedTitle"), pick(chat, "contact.verifiedName"), pick(chat, "contact.name"), pick(chat, "contact.pushname"), chat.name, chat.pushname, chat.notifyName, chat.shortName, chat.phone, chat.number); }
+function previewOf(chat: any) { const last = chat.lastMessage ?? chat.last_message ?? chat.lastMsg ?? chat.last_msg ?? (Array.isArray(chat.msgs) ? chat.msgs[chat.msgs.length - 1] : null); return first(chat.last_message_preview, chat.lastMessagePreview, chat.preview, chat.body, chat.text, last?.body, last?.caption, last?.text, last?.message, pick(last, "content.body"), pick(last, "content.text")); }
 function timeOf(value: any) {
   const last = value?.lastMessage ?? value?.last_message ?? value?.lastMsg ?? value?.last_msg ?? (Array.isArray(value?.msgs) ? value.msgs[value.msgs.length - 1] : null);
   const raw = value?.t ?? value?.timestamp ?? value?.lastMessageAt ?? value?.last_message_at ?? value?.createdAt ?? value?.sent_at ?? last?.t ?? last?.timestamp ?? last?.createdAt;
@@ -103,14 +96,7 @@ function identityCandidates(chat: any): string[] {
   const values = paths.map((path) => pick(chat, path));
   return Array.from(new Set(values.map((v) => first(v)).filter((v): v is string => !!v)));
 }
-function publicPhoneOf(chat: any) {
-  for (const raw of identityCandidates(chat)) {
-    if (isLid(raw)) continue;
-    const phone = normalizePhone(raw);
-    if (isPublicPhone(phone)) return phone;
-  }
-  return null;
-}
+function publicPhoneOf(chat: any) { for (const raw of identityCandidates(chat)) { if (isLid(raw)) continue; const phone = normalizePhone(raw); if (isPublicPhone(phone)) return phone; } return null; }
 async function resolveCanonical(...identities: unknown[]) {
   for (const identity of identities) { const phone = normalizePhone(identity); if (isPublicPhone(phone) && !isLid(identity)) return phone; }
   for (const identity of identities) { const raw = first(identity); if (!raw) continue; try { const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: raw }); const phone = normalizePhone(data); if (isPublicPhone(phone)) return phone; } catch {} }
@@ -118,7 +104,7 @@ async function resolveCanonical(...identities: unknown[]) {
 }
 async function fetchChats(token: string, limit: number) {
   const errors: string[] = [];
-  for (const path of ["all-chats", "list-chats", "chats", "get-all-chats"]) { try { return { chats: rows(await wpp(path, token)).slice(0, limit), usedPath: path }; } catch (e) { errors.push(`${path}: ${e instanceof Error ? e.message : String(e)}`); } }
+  for (const path of ["all-chats", "list-chats", "chats", "get-all-chats"]) { try { const data = rows(await wpp(path, token)).slice(0, limit); if (data.length > 0) return { chats: data, usedPath: path }; } catch (e) { errors.push(`${path}: ${e instanceof Error ? e.message : String(e)}`); } }
   throw new Error(errors.join(" | "));
 }
 function messageIdOf(message: any, fallback: string) { return first(pick(message, "id._serialized"), pick(message, "id.id"), message._serialized, message.messageId, message.keyId, message.id, fallback)!; }
@@ -131,13 +117,37 @@ async function fetchMessages(token: string, chatId: string, limit: number) {
   tries.push(() => wpp("all-messages-in-chat", token, { method: "POST", body: JSON.stringify({ phone: digits || chatId, chatId, isGroup: false, includeMe: true, limit }) }));
   tries.push(() => wpp("get-messages", token, { method: "POST", body: JSON.stringify({ phone: digits || chatId, chatId, limit }) }));
   const errors: string[] = [];
-  for (const fn of tries) {
-    try {
-      const data = rows(await fn()).slice(-limit);
-      if (data.length > 0) return data;
-    } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
-  }
+  for (const fn of tries) { try { const data = rows(await fn()).slice(-limit); if (data.length > 0) return data; } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); } }
   throw new Error(errors.join(" | "));
+}
+
+async function fallbackMirrorChats(limit: number) {
+  const { data, error } = await (supabaseAdmin as any)
+    .from("whatsapp_threads")
+    .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json, canonical_phone, external_chat_id, lid_alias, identity_type, sync_error, last_synced_at")
+    .order("last_message_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((t) => ({
+    id: String(t.id),
+    phone: t.canonical_phone || t.phone,
+    display_name: t.display_name ?? null,
+    status: t.status ?? "open",
+    unread_count: t.unread_count ?? 0,
+    ai_auto: t.ai_auto ?? true,
+    last_message_preview: t.last_message_preview ?? null,
+    last_message_at: t.last_message_at ?? null,
+    chat_summary: t.chat_summary ?? null,
+    chat_summary_json: t.chat_summary_json ?? null,
+    canonical_phone: t.canonical_phone ?? null,
+    external_chat_id: t.external_chat_id ?? t.phone,
+    lid_alias: t.lid_alias ?? null,
+    identity_type: t.identity_type ?? null,
+    sync_error: t.sync_error ?? null,
+    last_synced_at: t.last_synced_at ?? null,
+    source: "supabase_mirror_fallback",
+    used_path: "supabase_mirror",
+  }));
 }
 
 async function fallbackMirrorMessages(chatId: string, limit: number) {
@@ -145,68 +155,57 @@ async function fallbackMirrorMessages(chatId: string, limit: number) {
   const canonical = await resolveCanonical(chatId, normalized);
   const candidates = Array.from(new Set([chatId, normalized, canonical].filter(Boolean) as string[]));
   const normalizedCandidates = candidates.map((c) => normalizePhone(c)).filter(Boolean);
-
   const { data: thread } = await (supabaseAdmin as any)
     .from("whatsapp_threads")
     .select("id")
-    .or([
-      ...candidates.map((c) => `phone.eq.${c}`),
-      ...candidates.map((c) => `canonical_phone.eq.${c}`),
-      ...candidates.map((c) => `external_chat_id.eq.${c}`),
-      ...candidates.map((c) => `lid_alias.eq.${c}`),
-      ...normalizedCandidates.map((c) => `phone.eq.${c}`),
-      ...normalizedCandidates.map((c) => `canonical_phone.eq.${c}`),
-      ...normalizedCandidates.map((c) => `lid_alias.eq.${c}`),
-    ].join(","))
+    .or([...candidates.map((c) => `phone.eq.${c}`), ...candidates.map((c) => `canonical_phone.eq.${c}`), ...candidates.map((c) => `external_chat_id.eq.${c}`), ...candidates.map((c) => `lid_alias.eq.${c}`), ...normalizedCandidates.map((c) => `phone.eq.${c}`), ...normalizedCandidates.map((c) => `canonical_phone.eq.${c}`), ...normalizedCandidates.map((c) => `lid_alias.eq.${c}`)].join(","))
     .order("last_message_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!thread?.id) return [];
-
   const { data: messages } = await (supabaseAdmin as any)
     .from("whatsapp_messages")
     .select("id, thread_id, direction, body, sent_at, metadata")
     .eq("thread_id", thread.id)
     .order("sent_at", { ascending: false })
     .limit(limit);
-  return ((messages ?? []) as any[]).reverse().map((m) => ({
-    id: String(m.id),
-    thread_id: String(m.thread_id),
-    direction: m.direction,
-    body: m.body,
-    sent_at: m.sent_at,
-    metadata: { ...(m.metadata ?? {}), source: "supabase_mirror_fallback", external_chat_id: chatId },
-  }));
+  return ((messages ?? []) as any[]).reverse().map((m) => ({ id: String(m.id), thread_id: String(m.thread_id), direction: m.direction, body: m.body, sent_at: m.sent_at, metadata: { ...(m.metadata ?? {}), source: "supabase_mirror_fallback", external_chat_id: chatId } }));
 }
 
 export const listWppLiveChats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ limit: z.number().int().min(1).max(500).default(200) }).parse(d ?? {}))
   .handler(async ({ data }) => {
-    if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
-    const token = await getToken();
-    if (!token) throw new Error("properties.wpp_token kosong.");
-    const { chats, usedPath } = await fetchChats(token, data.limit);
-    const mapped = await Promise.all(chats.map(async (chat: any, idx: number) => {
-      const externalChatId = chatIdOf(chat) || `unknown-${idx}`;
-      const candidates = identityCandidates(chat);
-      const canonicalPhone = publicPhoneOf(chat) || await resolveCanonical(externalChatId, ...candidates);
-      const rawDigits = normalizePhone(externalChatId);
-      const phone = canonicalPhone || rawDigits || externalChatId;
-      return { id: `live:${encodeURIComponent(String(externalChatId))}`, phone, display_name: nameOf(chat), status: "open", unread_count: Number(chat.unreadCount ?? chat.unread_count ?? 0), ai_auto: true, last_message_preview: previewOf(chat)?.slice(0, 120) ?? null, last_message_at: timeOf(chat), chat_summary: null, chat_summary_json: null, canonical_phone: canonicalPhone, external_chat_id: String(externalChatId), lid_alias: isLid(externalChatId) ? normalizePhone(externalChatId) : null, identity_type: canonicalPhone ? "phone" : isLid(externalChatId) ? "lid" : "jid", sync_error: canonicalPhone ? null : "Live dari WPPConnect: nomor publik belum terpetakan", last_synced_at: new Date().toISOString(), source: "wppconnect_live", used_path: usedPath };
-    }));
-    return { rows: mapped, usedPath };
+    try {
+      if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
+      const token = await getToken();
+      if (!token) throw new Error("properties.wpp_token kosong.");
+      const { chats, usedPath } = await fetchChats(token, data.limit);
+      const mapped = await Promise.all(chats.map(async (chat: any, idx: number) => {
+        const externalChatId = chatIdOf(chat) || `unknown-${idx}`;
+        const candidates = identityCandidates(chat);
+        const canonicalPhone = publicPhoneOf(chat) || await resolveCanonical(externalChatId, ...candidates);
+        const rawDigits = normalizePhone(externalChatId);
+        const phone = canonicalPhone || rawDigits || externalChatId;
+        return { id: `live:${encodeURIComponent(String(externalChatId))}`, phone, display_name: nameOf(chat), status: "open", unread_count: Number(chat.unreadCount ?? chat.unread_count ?? 0), ai_auto: true, last_message_preview: previewOf(chat)?.slice(0, 120) ?? null, last_message_at: timeOf(chat), chat_summary: null, chat_summary_json: null, canonical_phone: canonicalPhone, external_chat_id: String(externalChatId), lid_alias: isLid(externalChatId) ? normalizePhone(externalChatId) : null, identity_type: canonicalPhone ? "phone" : isLid(externalChatId) ? "lid" : "jid", sync_error: canonicalPhone ? null : "Live dari WPPConnect: nomor publik belum terpetakan", last_synced_at: new Date().toISOString(), source: "wppconnect_live", used_path: usedPath };
+      }));
+      return { rows: mapped, usedPath, source: "wppconnect_live" };
+    } catch (e) {
+      console.warn("[wpp-live] live chat list failed, fallback to Supabase mirror:", e);
+      const fallback = await fallbackMirrorChats(data.limit);
+      return { rows: fallback, usedPath: "supabase_mirror", source: "supabase_mirror_fallback", warning: e instanceof Error ? e.message.slice(0, 500) : String(e).slice(0, 500) };
+    }
   });
 
 export const listWppLiveMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ chatId: z.string().trim().min(1), limit: z.number().int().min(1).max(300).default(120) }).parse(d ?? {}))
   .handler(async ({ data }) => {
-    if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
-    const token = await getToken();
-    if (!token) throw new Error("properties.wpp_token kosong.");
     const decodedChatId = decodeURIComponent(data.chatId.replace(/^live:/, ""));
     try {
+      if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
+      const token = await getToken();
+      if (!token) throw new Error("properties.wpp_token kosong.");
       const messages = await fetchMessages(token, decodedChatId, data.limit);
       const mapped = messages.map((m: any, idx: number) => {
         const external = messageIdOf(m, `${decodedChatId}-${idx}`);
