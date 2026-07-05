@@ -102,6 +102,9 @@ async function resolveCanonical(...identities: unknown[]) {
   for (const identity of identities) { const raw = first(identity); if (!raw) continue; try { const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: raw }); const phone = normalizePhone(data); if (isPublicPhone(phone)) return phone; } catch {} }
   return null;
 }
+async function resolveThreadPhone(thread: any) {
+  return resolveCanonical(thread.canonical_phone, thread.phone, thread.external_chat_id, thread.lid_alias);
+}
 async function fetchChats(token: string, limit: number) {
   const errors: string[] = [];
   for (const path of ["all-chats", "list-chats", "chats", "get-all-chats"]) { try { const data = rows(await wpp(path, token)).slice(0, limit); if (data.length > 0) return { chats: data, usedPath: path }; } catch (e) { errors.push(`${path}: ${e instanceof Error ? e.message : String(e)}`); } }
@@ -128,26 +131,30 @@ async function fallbackMirrorChats(limit: number) {
     .order("last_message_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  return ((data ?? []) as any[]).map((t) => ({
-    id: String(t.id),
-    phone: t.canonical_phone || t.phone,
-    display_name: t.display_name ?? null,
-    status: t.status ?? "open",
-    unread_count: t.unread_count ?? 0,
-    ai_auto: t.ai_auto ?? true,
-    last_message_preview: t.last_message_preview ?? null,
-    last_message_at: t.last_message_at ?? null,
-    chat_summary: t.chat_summary ?? null,
-    chat_summary_json: t.chat_summary_json ?? null,
-    canonical_phone: t.canonical_phone ?? null,
-    external_chat_id: t.external_chat_id ?? t.phone,
-    lid_alias: t.lid_alias ?? null,
-    identity_type: t.identity_type ?? null,
-    sync_error: t.sync_error ?? null,
-    last_synced_at: t.last_synced_at ?? null,
-    source: "supabase_mirror_fallback",
-    used_path: "supabase_mirror",
+  const resolved = await Promise.all(((data ?? []) as any[]).map(async (t) => {
+    const canonicalPhone = await resolveThreadPhone(t);
+    return {
+      id: String(t.id),
+      phone: canonicalPhone || t.canonical_phone || t.phone,
+      display_name: t.display_name ?? null,
+      status: t.status ?? "open",
+      unread_count: t.unread_count ?? 0,
+      ai_auto: t.ai_auto ?? true,
+      last_message_preview: t.last_message_preview ?? null,
+      last_message_at: t.last_message_at ?? null,
+      chat_summary: t.chat_summary ?? null,
+      chat_summary_json: t.chat_summary_json ?? null,
+      canonical_phone: canonicalPhone || t.canonical_phone || null,
+      external_chat_id: t.external_chat_id ?? t.phone,
+      lid_alias: t.lid_alias ?? null,
+      identity_type: canonicalPhone ? "phone" : t.identity_type ?? null,
+      sync_error: t.sync_error ?? null,
+      last_synced_at: t.last_synced_at ?? null,
+      source: "supabase_mirror_fallback",
+      used_path: "supabase_mirror",
+    };
   }));
+  return resolved;
 }
 
 async function fallbackMirrorMessages(chatId: string, limit: number) {
