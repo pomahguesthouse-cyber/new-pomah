@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -61,6 +61,7 @@ function isHiddenAttachmentPlaceholder(body: string | null | undefined) {
 
 function WhatsappCorrectionsPage() {
   const qc = useQueryClient();
+  const latestMessageRef = useRef<HTMLDivElement | null>(null);
   const threadsFn = useServerFn(listWhatsappCorrectionThreads);
   const messagesFn = useServerFn(listWhatsappCorrectionThreadMessages);
   const createCorrectionFn = useServerFn(createWhatsappCorrectionFromMessages);
@@ -103,10 +104,6 @@ function WhatsappCorrectionsPage() {
     () => messages.filter((m) => !isHiddenAttachmentPlaceholder(m.body)),
     [messages],
   );
-  const displayMessages = useMemo(
-    () => [...trainingMessages].sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()),
-    [trainingMessages],
-  );
 
   const { data: sessionsData } = useQuery({
     queryKey: ["wa-correction-sessions"],
@@ -120,6 +117,12 @@ function WhatsappCorrectionsPage() {
     setDraftBody("");
     setSummary(selectedThread?.chat_summary || selectedThread?.last_message_preview || "");
   }, [selectedThread?.id]);
+
+  useEffect(() => {
+    if (!loadingMessages && trainingMessages.length > 0) {
+      window.setTimeout(() => latestMessageRef.current?.scrollIntoView({ block: "start" }), 80);
+    }
+  }, [loadingMessages, selectedThread?.id, trainingMessages.length]);
 
   function previousInboundId(outMessageId: string) {
     const idx = trainingMessages.findIndex((m) => m.id === outMessageId);
@@ -206,12 +209,13 @@ function WhatsappCorrectionsPage() {
             <Button className="shrink-0 whitespace-nowrap" disabled={!trainingMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : displayMessages.map((m) => {
+            {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : trainingMessages.map((m, idx) => {
               const outbound = m.direction === "out";
               const isEditing = editingMessageId === m.id;
               const shown = editedBodies[m.id] ?? m.body;
+              const isLatest = idx === trainingMessages.length - 1;
               return (
-                <div key={m.id} className={cn("mb-3 flex", outbound ? "justify-end" : "justify-start")}>
+                <div key={m.id} ref={isLatest ? latestMessageRef : undefined} className={cn("mb-3 flex scroll-mt-4", outbound ? "justify-end" : "justify-start")}>
                   <div className={cn("max-w-[76%] rounded-xl px-3 py-2 shadow-sm", outbound ? "bg-green-100" : "bg-white")}>
                     {isEditing ? <Textarea rows={5} value={draftBody} onChange={(e) => setDraftBody(e.target.value)} className="min-w-[420px] bg-white text-sm" /> : <p className="whitespace-pre-wrap text-sm leading-relaxed">{shown}</p>}
                     <div className="mt-2 flex flex-wrap items-center justify-end gap-1 text-[10px] text-muted-foreground">
@@ -228,6 +232,7 @@ function WhatsappCorrectionsPage() {
                 </div>
               );
             })}
+            <div className="h-[70vh]" />
           </div>
         </section>
 
