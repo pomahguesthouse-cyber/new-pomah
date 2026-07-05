@@ -2,16 +2,13 @@
  * Training RAG service.
  *
  * Mengindeks pasangan tanya–jawab di `ai_conversation_logs` (yang sudah
- * ditandai admin sebagai `rating='good'` & `used=true`) sebagai vector
- * embeddings, lalu meretrieve top-K contoh paling mirip dengan pesan
- * terakhir tamu. Hasilnya dipakai sebagai few-shot examples di prompt
- * sistem agent sehingga koreksi admin di simulator benar-benar
- * memengaruhi jawaban chatbot di produksi.
+ * ditandai admin sebagai `rating='good'` & `used=true`) serta koreksi dari
+ * `wa_correction_dataset` sebagai vector embeddings, lalu meretrieve top-K
+ * contoh paling mirip dengan pesan terakhir tamu.
  *
- * Catatan:
- * - Pakai model embedding yang sama dengan sop_chunks (`text-embedding-3-small`,
- *   1536 dim) supaya konsisten dan re-pakai `generateEmbedding`.
- * - Hanya jalan dari server (memerlukan apiKey + supabaseAdmin).
+ * Hasilnya dipakai sebagai few-shot examples di prompt sistem agent sehingga
+ * koreksi admin di simulator maupun koreksi dari percakapan WhatsApp asli
+ * benar-benar memengaruhi jawaban chatbot di produksi.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -33,6 +30,18 @@ function composeEmbeddingText(userMessage: string, effectiveAnswer: string): str
   const q = (userMessage ?? "").trim().slice(0, 1500);
   const a = (effectiveAnswer ?? "").trim().slice(0, 2500);
   return `Tamu: ${q}\nAsisten: ${a}`;
+}
+
+/** Susun teks embedding untuk koreksi: konteks error + jawaban ideal. */
+function composeCorrectionEmbeddingText(userMessage: string, badReply: string, idealReply: string): string {
+  const q = (userMessage ?? "").trim().slice(0, 1500);
+  const bad = (badReply ?? "").trim().slice(0, 1200);
+  const ideal = (idealReply ?? "").trim().slice(0, 2500);
+  return [
+    `Tamu: ${q}`,
+    bad ? `Jawaban salah yang pernah terjadi: ${bad}` : "",
+    `Jawaban benar: ${ideal}`,
+  ].filter(Boolean).join("\n");
 }
 
 /**
@@ -84,6 +93,60 @@ export async function embedTrainingExample(
       embedding_updated_at: new Date().toISOString(),
     })
     .eq("id", logId);
+
+  if (updErr) {
+    return { ok: false, reason: updErr.message };
+  }
+  return { ok: true };
+}
+
+/**
+ * Hitung & simpan embedding untuk satu baris `wa_correction_dataset`.
+ * Dipakai saat admin menandai jawaban WhatsApp asli sebagai salah dan memberi
+ * balasan ideal. Row ini akan muncul sebagai positive + negative training signal.
+ */
+export async function embedWaCorrectionExample(
+  supabaseAdmin: SupabaseClient,
+  correctionId: string,
+  llmConfig: AiClientConfig,
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!llmConfig.apiKey) {
+    return { ok: false, reason: "missing-api-key" };
+  }
+
+  const { data: row, error: readErr } = await supabaseAdmin
+    .from("wa_correction_dataset")
+    .select("id, user_message, bot_wrong_reply, ideal_reply, status")
+    .eq("id", correctionId)
+    .maybeSingle();
+
+  if (readErr || !row) {
+    return { ok: false, reason: readErr?.message ?? "not-found" };
+  }
+
+  const userMessage = (((row as Record<string, unknown>).user_message as string | null) ?? "").trim();
+  const badReply = (((row as Record<string, unknown>).bot_wrong_reply as string | null) ?? "").trim();
+  const idealReply = (((row as Record<string, unknown>).ideal_reply as string | null) ?? "").trim();
+
+  if (!userMessage || !idealReply) {
+    return { ok: false, reason: "empty-content" };
+  }
+
+  const embedding = await generateEmbedding(
+    llmConfig,
+    composeCorrectionEmbeddingText(userMessage, badReply, idealReply),
+  );
+  if (!embedding) {
+    return { ok: false, reason: "embedding-failed" };
+  }
+
+  const { error: updErr } = await supabaseAdmin
+    .from("wa_correction_dataset")
+    .update({
+      embedding: embedding as unknown as string,
+      embedding_updated_at: new Date().toISOString(),
+    })
+    .eq("id", correctionId);
 
   if (updErr) {
     return { ok: false, reason: updErr.message };
