@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   CheckCircle2,
   Clock,
-  Inbox,
   LayoutDashboard,
   Loader2,
   MessageCircle,
@@ -67,7 +66,7 @@ const ERRORS = ["wrong_intent", "wrong_agent", "wrong_date", "wrong_room_context
 const AI_LAB_MENU = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/admin/ai-lab" },
   { label: "WhatsApp", icon: MessageCircle, to: "/admin/ai-lab" },
-  { label: "Koreksi WA", icon: BrainCircuit, to: "/admin/whatsapp-corrections", active: true },
+  { label: "WhatsApp Corrections", icon: BrainCircuit, to: "/admin/whatsapp-corrections", active: true },
   { label: "Simulator Bot", icon: Bot, to: "/admin/ai-lab" },
   { label: "Knowledge & SOP", icon: BookOpen, to: "/admin/ai-lab" },
   { label: "RAG Settings", icon: Sparkles, to: "/admin/ai-lab" },
