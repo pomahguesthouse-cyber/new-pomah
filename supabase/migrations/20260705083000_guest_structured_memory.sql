@@ -100,6 +100,28 @@ EXCEPTION WHEN others THEN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public._jsonb_bool(p_json jsonb, p_key text, p_default boolean DEFAULT false)
+RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v text := lower(NULLIF(btrim(p_json ->> p_key), ''));
+BEGIN
+  IF v IS NULL THEN
+    RETURN p_default;
+  END IF;
+  IF v IN ('true','t','1','yes','ya') THEN
+    RETURN true;
+  END IF;
+  IF v IN ('false','f','0','no','tidak') THEN
+    RETURN false;
+  END IF;
+  RETURN p_default;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.upsert_guest_structured_memory_from_summary(
   p_thread_id uuid,
   p_phone     text,
@@ -174,10 +196,10 @@ BEGIN
     public._jsonb_text(v_payload, 'budget_note'),
     public._jsonb_text(v_payload, 'special_requests'),
     public._jsonb_text(v_payload, 'preference_notes'),
-    COALESCE((v_payload ->> 'complaint_active')::boolean, false),
+    public._jsonb_bool(v_payload, 'complaint_active', false),
     public._jsonb_text(v_payload, 'complaint_summary'),
     public._jsonb_text(v_payload, 'unresolved_question'),
-    COALESCE((v_payload ->> 'needs_human')::boolean, false),
+    public._jsonb_bool(v_payload, 'needs_human', false),
     public._jsonb_text(v_payload, 'handoff_reason'),
     public._jsonb_text(v_payload, 'next_action'),
     public._jsonb_text(v_payload, 'last_intent'),
@@ -225,6 +247,29 @@ BEGIN
   RETURN COALESCE(v_result, '{}'::jsonb);
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION public.sync_guest_structured_memory_from_thread()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+BEGIN
+  IF COALESCE(NEW.chat_summary_json, '{}'::jsonb) <> '{}'::jsonb THEN
+    PERFORM public.upsert_guest_structured_memory_from_summary(
+      NEW.id,
+      NEW.phone,
+      NEW.chat_summary_json
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_guest_structured_memory ON public.whatsapp_threads;
+CREATE TRIGGER trg_sync_guest_structured_memory
+AFTER INSERT OR UPDATE OF phone, chat_summary_json, display_name ON public.whatsapp_threads
+FOR EACH ROW EXECUTE FUNCTION public.sync_guest_structured_memory_from_thread();
 
 CREATE OR REPLACE FUNCTION public.get_guest_structured_memory(p_phone text)
 RETURNS jsonb
@@ -282,9 +327,9 @@ SELECT DISTINCT ON (public.resolve_wa_canonical_phone(t.phone))
   public._jsonb_int(COALESCE(t.chat_summary_json, '{}'::jsonb), 'guest_count'),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'booking_status'),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'payment_status'),
-  COALESCE((COALESCE(t.chat_summary_json, '{}'::jsonb) ->> 'complaint_active')::boolean, false),
+  public._jsonb_bool(COALESCE(t.chat_summary_json, '{}'::jsonb), 'complaint_active', false),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'unresolved_question'),
-  COALESCE((COALESCE(t.chat_summary_json, '{}'::jsonb) ->> 'needs_human')::boolean, false),
+  public._jsonb_bool(COALESCE(t.chat_summary_json, '{}'::jsonb), 'needs_human', false),
   public._jsonb_text(COALESCE(t.chat_summary_json, '{}'::jsonb), 'handoff_reason'),
   COALESCE(t.chat_summary_json, '{}'::jsonb),
   COALESCE(t.last_message_at, t.created_at, now()),
@@ -313,6 +358,7 @@ DECLARE
   v_chat_summary            text    := '';
   v_chat_summary_json       jsonb   := '{}'::jsonb;
   v_guest_memory            jsonb   := '{}'::jsonb;
+  v_effective_summary_json  jsonb   := '{}'::jsonb;
   v_chat_summary_version    integer := 1;
   v_chat_summary_updated_at timestamptz;
   v_messages                jsonb   := '[]';
@@ -340,6 +386,7 @@ BEGIN
   LIMIT 1;
 
   v_guest_memory := public.get_guest_structured_memory(v_phone);
+  v_effective_summary_json := jsonb_strip_nulls(v_guest_memory) || jsonb_strip_nulls(v_chat_summary_json);
 
   v_auto_reply := COALESCE(
     (v_ai_lab_config -> 'agents' -> 'front-office' ->> 'autoReply')::boolean,
@@ -368,7 +415,7 @@ BEGIN
     'messages',                COALESCE(v_messages, '[]'::jsonb),
     'smart_delay_config',      v_smart_delay_cfg,
     'chat_summary',            v_chat_summary,
-    'chat_summary_json',       v_chat_summary_json,
+    'chat_summary_json',       v_effective_summary_json,
     'guest_memory',            v_guest_memory,
     'chat_summary_version',    v_chat_summary_version,
     'chat_summary_updated_at', v_chat_summary_updated_at
