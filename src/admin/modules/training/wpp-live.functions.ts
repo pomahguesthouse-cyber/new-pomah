@@ -145,8 +145,20 @@ async function fallbackMirrorMessages(chatId: string, limit: number) {
   const canonical = await resolveCanonical(chatId, normalized);
   const candidates = Array.from(new Set([chatId, normalized, canonical].filter(Boolean) as string[]));
   const normalizedCandidates = candidates.map((c) => normalizePhone(c)).filter(Boolean);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(chatId);
 
-  const { data: thread } = await (supabaseAdmin as any)
+  let thread: { id: string } | null = null;
+  if (isUuid) {
+    const direct = await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id")
+      .eq("id", chatId)
+      .maybeSingle();
+    thread = direct.data ?? null;
+  }
+
+  if (!thread) {
+    const { data } = await (supabaseAdmin as any)
     .from("whatsapp_threads")
     .select("id")
     .or([
@@ -161,6 +173,8 @@ async function fallbackMirrorMessages(chatId: string, limit: number) {
     .order("last_message_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+    thread = data ?? null;
+  }
   if (!thread?.id) return [];
 
   const { data: messages } = await (supabaseAdmin as any)
@@ -183,29 +197,41 @@ export const listWppLiveChats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ limit: z.number().int().min(1).max(500).default(200) }).parse(d ?? {}))
   .handler(async ({ data }) => {
-    if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
-    const token = await getToken();
-    if (!token) throw new Error("properties.wpp_token kosong.");
-    const { chats, usedPath } = await fetchChats(token, data.limit);
-    const mapped = await Promise.all(chats.map(async (chat: any, idx: number) => {
-      const externalChatId = chatIdOf(chat) || `unknown-${idx}`;
-      const candidates = identityCandidates(chat);
-      const canonicalPhone = publicPhoneOf(chat) || await resolveCanonical(externalChatId, ...candidates);
-      const rawDigits = normalizePhone(externalChatId);
-      const phone = canonicalPhone || rawDigits || externalChatId;
-      return { id: `live:${encodeURIComponent(String(externalChatId))}`, phone, display_name: nameOf(chat), status: "open", unread_count: Number(chat.unreadCount ?? chat.unread_count ?? 0), ai_auto: true, last_message_preview: previewOf(chat)?.slice(0, 120) ?? null, last_message_at: timeOf(chat), chat_summary: null, chat_summary_json: null, canonical_phone: canonicalPhone, external_chat_id: String(externalChatId), lid_alias: isLid(externalChatId) ? normalizePhone(externalChatId) : null, identity_type: canonicalPhone ? "phone" : isLid(externalChatId) ? "lid" : "jid", sync_error: canonicalPhone ? null : "Live dari WPPConnect: nomor publik belum terpetakan", last_synced_at: new Date().toISOString(), source: "wppconnect_live", used_path: usedPath };
+    const { data: rows, error } = await (supabaseAdmin as any)
+      .from("whatsapp_threads")
+      .select("id, phone, display_name, status, unread_count, ai_auto, last_message_preview, last_message_at, chat_summary, chat_summary_json, canonical_phone, external_chat_id, lid_alias, identity_type, sync_error, last_synced_at")
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(data.limit);
+    if (error) throw error;
+
+    const mapped = ((rows ?? []) as any[]).map((thread) => ({
+      ...thread,
+      canonical_phone: thread.canonical_phone ?? normalizePhone(thread.phone),
+      external_chat_id: thread.external_chat_id ?? (isPublicPhone(normalizePhone(thread.phone)) ? `${normalizePhone(thread.phone)}@c.us` : null),
+      identity_type: thread.identity_type ?? (isPublicPhone(normalizePhone(thread.phone)) ? "phone" : "unknown"),
+      source: "supabase_mirror",
+      used_path: "supabase.whatsapp_threads",
     }));
-    return { rows: mapped, usedPath };
+    return { rows: mapped, usedPath: "supabase.whatsapp_threads" };
   });
 
 export const listWppLiveMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) => z.object({ chatId: z.string().trim().min(1), limit: z.number().int().min(1).max(300).default(120) }).parse(d ?? {}))
   .handler(async ({ data }) => {
-    if (!WPP_BASE_URL || !WPP_SESSION) throw new Error("WPPConnect belum dikonfigurasi: set WPP_BASE_URL dan WPP_SESSION.");
-    const token = await getToken();
-    if (!token) throw new Error("properties.wpp_token kosong.");
     const decodedChatId = decodeURIComponent(data.chatId.replace(/^live:/, ""));
+    const mirrorRows = await fallbackMirrorMessages(decodedChatId, data.limit);
+    if (mirrorRows.length > 0) {
+      return { rows: mirrorRows, chatId: decodedChatId, source: "supabase_mirror" };
+    }
+
+    if (!WPP_BASE_URL || !WPP_SESSION) {
+      return { rows: [], chatId: decodedChatId, source: "supabase_mirror", warning: "Percakapan belum ada di Supabase mirror dan WPPConnect belum dikonfigurasi." };
+    }
+    const token = await getToken();
+    if (!token) {
+      return { rows: [], chatId: decodedChatId, source: "supabase_mirror", warning: "Percakapan belum ada di Supabase mirror dan properties.wpp_token kosong." };
+    }
     try {
       const messages = await fetchMessages(token, decodedChatId, data.limit);
       const mapped = messages.map((m: any, idx: number) => {
@@ -216,7 +242,6 @@ export const listWppLiveMessages = createServerFn({ method: "GET" })
       return { rows: mapped, chatId: decodedChatId, source: "wppconnect_live" };
     } catch (e) {
       console.warn("[wpp-live] live message fetch failed, fallback to Supabase mirror:", e);
-      const fallback = await fallbackMirrorMessages(decodedChatId, data.limit);
-      return { rows: fallback, chatId: decodedChatId, source: "supabase_mirror_fallback", warning: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) };
+      return { rows: [], chatId: decodedChatId, source: "supabase_mirror", warning: e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300) };
     }
   });
