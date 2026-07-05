@@ -78,11 +78,26 @@ export async function parseWppWebhook(
       ? firstString((rawId as any)._serialized, (rawId as any).id)
       : firstString(rawId);
 
-  // WPPConnect `sender` is an OBJECT ({ id, pushname }); firstString ignores
-  // non-string values and falls through to `from` (the chat JID). Wpp sends
-  // `sender` as a plain string. Both paths therefore resolve correctly.
+  const senderObj = (body as any).sender && typeof (body as any).sender === "object"
+    ? ((body as any).sender as Record<string, unknown>)
+    : null;
+
+  // WPPConnect can send `from` as a LID/chat JID on some multi-device payloads,
+  // while the real phone number is nested in `sender.id` / `sender.phone`.
+  // Prefer the nested sender phone first so manager detection sees 62xxx, not a LID.
   const sender = normalizePhoneCandidate(
-    firstString(body.sender, body.pengirim, body.from, (body as any).author, body.number, body.phone),
+    firstString(
+      senderObj?.id,
+      senderObj?.phone,
+      senderObj?.number,
+      senderObj?._serialized,
+      body.number,
+      body.phone,
+      body.pengirim,
+      body.sender,
+      body.from,
+      (body as any).author,
+    ),
   );
 
   // WPPConnect `type`: chat|image|video|document|audio|ptt|sticker|location.
@@ -97,8 +112,8 @@ export async function parseWppWebhook(
   const textBody = firstString(body.message, body.pesan, isMediaType ? undefined : (body as any).body);
   const message = (isMediaType ? caption : (textBody ?? caption)) ?? "";
 
-  // WPPConnect display name = `notifyName`; Wpp = `name`/`pushname`.
-  const name = firstString(body.name, body.pushname, (body as any).notifyName, sender) ?? "";
+  // WPPConnect display name = `notifyName` or `sender.pushname`; Wpp = `name`/`pushname`.
+  const name = firstString(body.name, body.pushname, (body as any).notifyName, senderObj?.pushname, sender) ?? "";
   const wppId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
   // `to`/`chatId` are WPPConnect fallbacks for our own device number.
   const device = normalizePhoneCandidate(
