@@ -1134,6 +1134,7 @@ export async function executeAutoreplyForPhone(
   }
 
   const c = ctx as any;
+  const sendTarget = String(c.send_target || c.external_chat_id || phone);
   const rawManager = await resolveManagerByPhone(phone);
   // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
   // invoice, pembayaran) tanpa ter-route ke agen manajerial.
@@ -1162,8 +1163,8 @@ export async function executeAutoreplyForPhone(
 
   // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
   // orchestration. Best-effort, tidak boleh memblokir alur balasan.
-  try { void markWppSeen(c.wpp_token, phone); } catch { /* non-fatal */ }
-  try { void setWppTyping(c.wpp_token, phone, true); } catch { /* non-fatal */ }
+  try { void markWppSeen(c.wpp_token, sendTarget); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.wpp_token, sendTarget, true); } catch { /* non-fatal */ }
 
   let bookingState: { state?: string | null; context?: unknown } | null = null;
   if (!isManager) {
@@ -1205,7 +1206,7 @@ export async function executeAutoreplyForPhone(
               } as any,
             });
             try {
-              await sendWhatsAppMessage(c.wpp_token, phone, ackBody);
+              await sendWhatsAppMessage(c.wpp_token, sendTarget, ackBody);
               await (supabaseAdmin as any)
                 .from("whatsapp_messages")
                 .update({ metadata: { agent: "system", agent_key: "handoff-ack", handoff_ack: true, send_status: "sent" } })
@@ -1277,7 +1278,7 @@ export async function executeAutoreplyForPhone(
       );
       const { ok: reSent, error: reErr } = await (
         await import("@/services/whatsapp.service")
-      ).sendWhatsAppMessage(c.wpp_token, phone, stuckMsg.body);
+      ).sendWhatsAppMessage(c.wpp_token, sendTarget, stuckMsg.body);
 
       if (reSent) {
         await (supabaseAdmin as any)
@@ -1834,7 +1835,7 @@ export async function executeAutoreplyForPhone(
             return;
           }
 
-          const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, phone, QUICK_ACK_MESSAGE);
+          const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, sendTarget, QUICK_ACK_MESSAGE);
           if (!ok) {
             console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
             try {
@@ -2267,7 +2268,7 @@ export async function executeAutoreplyForPhone(
   metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.wpp_token,
-    phone,
+    sendTarget,
     finalReply,
     attachUrl,
     attachName,
@@ -2281,14 +2282,14 @@ export async function executeAutoreplyForPhone(
     metrics.sendStartedAt = Date.now();
     ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.wpp_token,
-      phone,
+      sendTarget,
       `${finalReply}\n\n${attachUrl}`.trim(),
     ));
     metrics.sendFinishedAt = Date.now();
   }
 
   // Matikan indikator "sedang mengetik" setelah kirim (sukses/gagal). Best-effort.
-  try { void setWppTyping(c.wpp_token, phone, false); } catch { /* non-fatal */ }
+  try { void setWppTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
 
 
 
@@ -2875,12 +2876,15 @@ export async function sendFailureFallbackToGuests(): Promise<{
     // Ambil token Wpp via context RPC.
     let wppToken: string | null = null;
     let autoReplyEnabled = false;
+    let fallbackSendTarget = entry.phone;
     try {
       const { data: ctx } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
         p_phone: entry.phone,
       });
-      wppToken = (ctx as any)?.wpp_token ?? null;
-      autoReplyEnabled = !!(ctx as any)?.auto_reply_enabled;
+      const c = ctx as any;
+      wppToken = c?.wpp_token ?? null;
+      autoReplyEnabled = !!c?.auto_reply_enabled;
+      fallbackSendTarget = String(c?.send_target || c?.external_chat_id || entry.phone);
     } catch (e) {
       console.warn("[Fallback] context fetch failed:", e);
     }
@@ -2938,7 +2942,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] save outbound (pending) failed:", e);
     }
 
-    const { ok, error: sendErr } = await sendWhatsAppMessage(wppToken, entry.phone, fallbackBody);
+    const { ok, error: sendErr } = await sendWhatsAppMessage(wppToken, fallbackSendTarget, fallbackBody);
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
