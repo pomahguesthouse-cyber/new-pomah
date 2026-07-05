@@ -158,6 +158,35 @@ function initials(name?: string | null, fallback?: string) {
     .join("");
 }
 
+function digitsOnly(value?: string | null) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function looksLikePhone(value?: string | null) {
+  const digits = digitsOnly(value);
+  return digits.length >= 9 && digits.length <= 16;
+}
+
+function looksLikeSession(value?: string | null) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return text === "pomahchatbot" || text.includes("session");
+}
+
+function conversationPhoneLabel(thread: { phone?: string | null; display_name?: string | null }) {
+  const fromPhone = looksLikePhone(thread.phone) ? thread.phone : null;
+  const fromName = looksLikePhone(thread.display_name) ? thread.display_name : null;
+  return fromPhone || fromName || thread.phone || "—";
+}
+
+function conversationNameLabel(thread: { phone?: string | null; display_name?: string | null }) {
+  const name = String(thread.display_name ?? "").trim();
+  const phoneDigits = digitsOnly(thread.phone);
+  const nameDigits = digitsOnly(name);
+  if (!name || looksLikeSession(name) || looksLikePhone(name)) return "No Name";
+  if (phoneDigits && nameDigits && phoneDigits === nameDigits) return "No Name";
+  return name;
+}
+
 export function WhatsAppPage() {
   const listFn = useServerFn(listThreads);
   const getFn = useServerFn(getThread);
@@ -618,15 +647,15 @@ export function WhatsAppPage() {
                 </button>
                 <Avatar className="h-9 w-9 md:h-10 md:w-10 shrink-0">
                   <AvatarFallback className="text-xs font-semibold">
-                    {initials(thread.thread.display_name, thread.thread.phone)}
+                    {initials(conversationNameLabel(thread.thread), conversationPhoneLabel(thread.thread))}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="text-sm font-semibold">
-                    {thread.thread.display_name ?? thread.thread.phone}
+                    {conversationPhoneLabel(thread.thread)}
                   </p>
                   <p className="font-mono text-[11px] text-muted-foreground">
-                    {thread.thread.phone}
+                    {conversationNameLabel(thread.thread)}
                   </p>
                 </div>
                 {thread.thread.intent && (
@@ -810,15 +839,15 @@ export function WhatsAppPage() {
                 <div className="mt-2 flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarFallback className="text-sm font-semibold">
-                      {initials(thread.thread.display_name, thread.thread.phone)}
+                      {initials(conversationNameLabel(thread.thread), conversationPhoneLabel(thread.thread))}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <p className="text-sm font-semibold">
-                      {thread.thread.display_name ?? "Unknown"}
+                      {conversationNameLabel(thread.thread)}
                     </p>
                     <p className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
-                      <Phone className="h-3 w-3" /> {thread.thread.phone}
+                      <Phone className="h-3 w-3" /> {conversationPhoneLabel(thread.thread)}
                     </p>
                   </div>
                 </div>
