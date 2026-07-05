@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { CheckCircle2, Edit3, EyeOff, Loader2, Save, Search, X } from "lucide-react";
+import { CheckCircle2, Edit3, Loader2, Save, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +16,6 @@ import {
   listWhatsappCorrectionThreadMessages,
   listWhatsappCorrectionThreads,
 } from "@/admin/modules/training/wa-correction.functions";
-import {
-  hideWhatsappCorrectionThread,
-  listIgnoredWhatsappTrainingThreads,
-} from "@/admin/modules/training/wa-training-ignore.functions";
 
 export const Route = createFileRoute("/admin/whatsapp-corrections")({
   component: WhatsappCorrectionsPage,
@@ -54,11 +50,6 @@ type SessionRow = {
   created_at: string;
 };
 
-type IgnoredThreadRow = {
-  thread_id: string;
-  status: string;
-};
-
 const INTENTS = ["general", "availability_check", "pricing_inquiry", "booking_start", "booking_inquiry", "payment", "complaint", "room_detail_question"];
 const AGENTS = ["front-office", "pricing", "customer-care", "finance", "manager"];
 const ERRORS = ["wrong_intent", "wrong_agent", "wrong_date", "wrong_room_context", "availability_wrong", "price_wrong", "incomplete_answer", "too_short", "ignored_context", "tool_not_used"];
@@ -75,8 +66,6 @@ function WhatsappCorrectionsPage() {
   const createCorrectionFn = useServerFn(createWhatsappCorrectionFromMessages);
   const createSessionFn = useServerFn(createWhatsappCorrectionSession);
   const sessionsFn = useServerFn(listWhatsappCorrectionSessions);
-  const ignoredThreadsFn = useServerFn(listIgnoredWhatsappTrainingThreads);
-  const hideThreadFn = useServerFn(hideWhatsappCorrectionThread);
 
   const [search, setSearch] = useState("");
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -92,18 +81,7 @@ function WhatsappCorrectionsPage() {
     queryKey: ["wa-correction-threads"],
     queryFn: () => threadsFn({ data: { limit: 100 } }),
   });
-  const { data: ignoredData } = useQuery({
-    queryKey: ["wa-correction-ignored-threads"],
-    queryFn: () => ignoredThreadsFn({ data: { status: "active" } }),
-  });
-  const ignoredIds = useMemo(
-    () => new Set(((ignoredData?.rows ?? []) as IgnoredThreadRow[]).map((r) => r.thread_id).filter(Boolean)),
-    [ignoredData?.rows],
-  );
-  const threads = useMemo(
-    () => ((threadsData?.rows ?? []) as ThreadRow[]).filter((t) => !ignoredIds.has(t.id)),
-    [threadsData?.rows, ignoredIds],
-  );
+  const threads = (threadsData?.rows ?? []) as ThreadRow[];
   const filteredThreads = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return threads;
@@ -205,21 +183,6 @@ function WhatsappCorrectionsPage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  const hideThreadMut = useMutation({
-    mutationFn: async () => {
-      if (!selectedThread) throw new Error("Pilih percakapan dulu.");
-      return hideThreadFn({ data: { threadId: selectedThread.id, reason: "Disembunyikan dari WhatsApp Corrections" } });
-    },
-    onSuccess: () => {
-      toast.success("Percakapan disembunyikan dari training.");
-      setSelectedThreadId(null);
-      qc.invalidateQueries({ queryKey: ["wa-correction-ignored-threads"] });
-      qc.invalidateQueries({ queryKey: ["wa-correction-threads"] });
-      qc.invalidateQueries({ queryKey: ["wa-correction-sessions"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
   return (
     <div className="flex h-screen min-h-0 flex-col bg-stone-100">
       <main className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)_360px] overflow-hidden">
@@ -238,12 +201,9 @@ function WhatsappCorrectionsPage() {
         </aside>
 
         <section className="flex min-h-0 flex-col bg-[#eee8df]">
-          <div className="flex items-center justify-between gap-3 border-b bg-card px-4 py-3">
-            <div className="min-w-0"><p className="truncate font-semibold">{selectedThread?.display_name || selectedThread?.phone || "Pilih percakapan"}</p><p className="font-mono text-xs text-muted-foreground">{selectedThread?.phone}</p></div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="outline" disabled={!selectedThread || hideThreadMut.isPending} onClick={() => hideThreadMut.mutate()}><EyeOff className="mr-1 h-4 w-4" /> Sembunyikan dari Training</Button>
-              <Button disabled={!trainingMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
-            </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b bg-card px-4 py-3">
+            <div className="min-w-0 pr-3"><p className="truncate font-semibold">{selectedThread?.display_name || selectedThread?.phone || "Pilih percakapan"}</p><p className="truncate font-mono text-xs text-muted-foreground">{selectedThread?.phone}</p></div>
+            <Button className="shrink-0 whitespace-nowrap" disabled={!trainingMessages.length || saveSessionMut.isPending} onClick={() => saveSessionMut.mutate()}>{saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} Simpan Percakapan Utuh</Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {loadingMessages ? <p className="text-sm text-muted-foreground">Memuat pesan...</p> : displayMessages.map((m) => {
