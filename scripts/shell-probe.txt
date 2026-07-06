@@ -1,1 +1,0 @@
-perl -0pi -e 's/a/b/' file
