@@ -13,10 +13,12 @@ function fixXyflowDefaultImport() {
     enforce: "pre" as const,
     transform(code: string) {
       if (!code.includes("@xyflow/react")) return null;
-      const next = code.replace(
+      let next = code.replace(
         /import\s+ReactFlow\s*,\s*\{/g,
         "import { ReactFlow,",
       );
+      next = next.replace(/\n\s*Controls,/g, "");
+      next = next.replace(/\n\s*<Controls[^>]*\/?>/g, "");
       if (next === code) return null;
       return { code: next, map: null };
     },
