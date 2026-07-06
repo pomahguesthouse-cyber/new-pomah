@@ -44,6 +44,25 @@
  * Keep these selectors deliberately narrow so the change only affects the
  * dark WhatsApp AI Control Room page without rewriting the whole route file.
  */
+div[class*="bg-[#070b14]"] {
+  min-height: 100vh !important;
+  height: auto !important;
+  overflow-y: visible !important;
+}
+
+html:has(div[class*="bg-[#070b14]"]),
+body:has(div[class*="bg-[#070b14]"]) {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+div[class*="bg-[#070b14]"] > main {
+  align-items: start !important;
+  padding-bottom: 5rem !important;
+}
+
 div[class*="bg-[#070b14]"] section[class*="2xl:grid-cols-6"] {
   gap: 0.375rem !important;
 }
@@ -94,4 +113,59 @@ div[class*="bg-[#070b14]"] div[class*="min-h-[560px]"][class*="overflow-hidden"]
 div[class*="bg-[#070b14]"] div[class*="min-h-[560px]"][class*="overflow-hidden"] > div[class*="origin-top-left"] {
   flex: 0 0 auto !important;
   transform-origin: center center !important;
+}
+
+@media (min-width: 1280px) {
+  div[class*="bg-[#070b14]"] > main {
+    max-width: 1680px !important;
+    grid-template-columns: 232px minmax(0, 1fr) !important;
+  }
+
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type {
+    position: fixed !important;
+    top: 96px !important;
+    right: 14px !important;
+    z-index: 40 !important;
+    width: 352px !important;
+    max-height: calc(100vh - 112px) !important;
+    overflow-y: auto !important;
+    padding-left: 46px !important;
+    transform: translateX(calc(100% - 48px)) !important;
+    transition: transform 220ms ease, filter 220ms ease, opacity 220ms ease !important;
+    filter: drop-shadow(0 24px 42px rgba(0, 0, 0, 0.42));
+    opacity: 0.92 !important;
+  }
+
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type:hover,
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type:focus-within {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+  }
+
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type::before {
+    content: "DETAIL";
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    width: 38px;
+    min-height: 152px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(51, 65, 85, 0.95);
+    border-right: 0;
+    border-radius: 16px 0 0 16px;
+    background: rgba(15, 23, 42, 0.96);
+    color: rgb(110, 231, 183);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type > * {
+    background-color: rgba(2, 6, 23, 0.98) !important;
+    backdrop-filter: blur(16px);
+  }
 }
