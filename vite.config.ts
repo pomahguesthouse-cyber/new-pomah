@@ -30,25 +30,16 @@ function makeAiLabRootScrollable() {
     transform(code: string) {
       if (!code.includes("WhatsApp AI Control Room")) return null;
       let next = code.replace(
-        'className="min-h-[100dvh] bg-[#070b14] text-slate-100"',
-        'className="h-[100dvh] overflow-y-auto overscroll-y-contain bg-slate-950 text-slate-100"',
+        '<div className="min-h-[100dvh] bg-[#070b14] text-slate-100">',
+        '<div className="bg-slate-950 text-slate-100" style={{ height: "100dvh", overflowY: "auto", overscrollBehaviorY: "contain" }}>',
       );
       next = next.replace(
-        'className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]"',
-        'className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)]"',
+        '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">',
+        '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>',
       );
       next = next.replace(/\n\s*<aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">\n\s*<InspectorPanel selectedNode=\{selectedNode\} config=\{config\} snapshot=\{snapshot\} health=\{health\} quality=\{quality \?\? \[\]\} openDrawer=\{setDrawer\} \/>\n\s*<AuditMiniPanel openDrawer=\{setDrawer\} \/>\n\s*<\/aside>/, "");
       if (next === code) return null;
       return { code: next, map: null };
-    },
-  };
-}
-
-function aiControlPanelScrollStyles() {
-  return {
-    name: "ai-control-panel-scroll-styles",
-    transformIndexHtml(html: string) {
-      return html;
     },
   };
 }
@@ -60,6 +51,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [fixXyflowDefaultImport(), makeAiLabRootScrollable(), aiControlPanelScrollStyles(), mcpPlugin()],
+    plugins: [fixXyflowDefaultImport(), makeAiLabRootScrollable(), mcpPlugin()],
   },
 });
