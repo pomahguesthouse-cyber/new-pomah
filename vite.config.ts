@@ -23,6 +23,22 @@ function fixXyflowDefaultImport() {
   };
 }
 
+function makeAiLabRootScrollable() {
+  return {
+    name: "make-ai-lab-root-scrollable",
+    enforce: "pre" as const,
+    transform(code: string) {
+      if (!code.includes("WhatsApp AI Control Room")) return null;
+      const next = code.replace(
+        'className="min-h-[100dvh] bg-[#070b14] text-slate-100"',
+        'className="h-[100dvh] overflow-y-auto overscroll-y-contain bg-[#070b14] text-slate-100"',
+      );
+      if (next === code) return null;
+      return { code: next, map: null };
+    },
+  };
+}
+
 function aiControlPanelScrollStyles() {
   const css = `
 html:has(div[class*="bg-[#070b14]"]),
@@ -31,7 +47,7 @@ body:has(div[class*="bg-[#070b14]"]) {
   min-height: 100% !important;
   max-height: none !important;
   overflow-x: hidden !important;
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
   scrollbar-gutter: stable !important;
 }
 body:has(div[class*="bg-[#070b14]"]) {
@@ -41,23 +57,22 @@ body:has(div[class*="bg-[#070b14]"]) {
 body:has(div[class*="bg-[#070b14]"]) > div,
 body:has(div[class*="bg-[#070b14]"]) #root,
 body:has(div[class*="bg-[#070b14]"]) [data-tanstack-router-root] {
-  height: auto !important;
-  min-height: 100% !important;
-  max-height: none !important;
-  overflow-y: visible !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow-y: hidden !important;
 }
 div[class*="bg-[#070b14]"] {
-  min-height: 100vh !important;
-  height: auto !important;
-  max-height: none !important;
-  overflow-y: visible !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
 }
 div[class*="bg-[#070b14]"] > main,
 div[class*="bg-[#070b14]"] > main > section,
 div[class*="bg-[#070b14]"] > main > aside {
   min-height: 0 !important;
-  max-height: none !important;
-  overflow: visible !important;
 }
 div[class*="bg-[#070b14]"] .react-flow__pane,
 div[class*="bg-[#070b14]"] .react-flow__viewport {
@@ -84,6 +99,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [fixXyflowDefaultImport(), aiControlPanelScrollStyles(), mcpPlugin()],
+    plugins: [fixXyflowDefaultImport(), makeAiLabRootScrollable(), aiControlPanelScrollStyles(), mcpPlugin()],
   },
 });
