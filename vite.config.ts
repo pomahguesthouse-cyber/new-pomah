@@ -31,7 +31,7 @@ function makeAiLabRootScrollable() {
       if (!code.includes("WhatsApp AI Control Room")) return null;
       let next = code.replace(
         'className="min-h-[100dvh] bg-[#070b14] text-slate-100"',
-        'className="h-[100dvh] overflow-y-auto overscroll-y-contain bg-[#070b14] text-slate-100"',
+        'className="h-[100dvh] overflow-y-auto overscroll-y-contain bg-slate-950 text-slate-100"',
       );
       next = next.replace(
         'className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]"',
@@ -45,54 +45,10 @@ function makeAiLabRootScrollable() {
 }
 
 function aiControlPanelScrollStyles() {
-  const css = `
-html:has(div[class*="bg-[#070b14]"]),
-body:has(div[class*="bg-[#070b14]"]) {
-  height: auto !important;
-  min-height: 100% !important;
-  max-height: none !important;
-  overflow-x: hidden !important;
-  overflow-y: hidden !important;
-  scrollbar-gutter: stable !important;
-}
-body:has(div[class*="bg-[#070b14]"]) > div,
-body:has(div[class*="bg-[#070b14]"]) #root,
-body:has(div[class*="bg-[#070b14]"]) [data-tanstack-router-root] {
-  height: 100dvh !important;
-  min-height: 100dvh !important;
-  max-height: 100dvh !important;
-  overflow-y: hidden !important;
-}
-div[class*="bg-[#070b14]"] {
-  height: 100dvh !important;
-  min-height: 100dvh !important;
-  max-height: 100dvh !important;
-  overflow-y: auto !important;
-  scrollbar-width: thin !important;
-}
-html body div[class*="bg-[#070b14]"] > main {
-  grid-template-columns: 232px minmax(0, 1fr) !important;
-  max-width: 1500px !important;
-}
-html body div[class*="bg-[#070b14]"] > main > aside:last-of-type::before,
-html body div[class*="bg-[#070b14]"] > main > aside:last-child::before {
-  content: none !important;
-  display: none !important;
-}
-div[class*="bg-[#070b14]"] .react-flow__pane,
-div[class*="bg-[#070b14]"] .react-flow__viewport {
-  overscroll-behavior: contain !important;
-}
-`;
-
   return {
     name: "ai-control-panel-scroll-styles",
     transformIndexHtml(html: string) {
-      if (html.includes("ai-control-panel-scroll-styles")) return html;
-      return html.replace(
-        "</head>",
-        `<style id="ai-control-panel-scroll-styles">${css}</style></head>`,
-      );
+      return html;
     },
   };
 }
