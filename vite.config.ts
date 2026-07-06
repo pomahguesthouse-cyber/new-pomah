@@ -4,6 +4,7 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
@@ -15,5 +16,13 @@ export default defineConfig({
   },
   vite: {
     plugins: [mcpPlugin()],
+    resolve: {
+      alias: [
+        {
+          find: /^@xyflow\/react$/,
+          replacement: fileURLToPath(new URL("./src/lib/xyflow-react-shim.ts", import.meta.url)),
+        },
+      ],
+    },
   },
 });
