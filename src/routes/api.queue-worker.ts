@@ -18,6 +18,14 @@ function requestQueueToken(request: Request): string | null {
   return url.searchParams.get("token") || authHeader || request.headers.get("x-queue-token");
 }
 
+function isManualQueueRequest(request: Request): boolean {
+  const url = new URL(request.url);
+  return (
+    url.searchParams.get("manual") === "1" ||
+    request.headers.get("x-queue-manual") === "1"
+  );
+}
+
 function authorizeQueueWorker(request: Request): Response | null {
   const expected = expectedQueueToken();
   if (!expected) {
@@ -26,15 +34,23 @@ function authorizeQueueWorker(request: Request): Response | null {
   if (requestQueueToken(request) !== expected) {
     return json({ error: "Unauthorized" }, 403);
   }
+  if (!isManualQueueRequest(request)) {
+    return json({
+      accepted: false,
+      disabled: true,
+      reason: "Automatic queue-worker drain is disabled. Production uses /api/cron/process-wa-queue only.",
+    }, 202);
+  }
   return null;
 }
 
 /**
- * Poll-based queue worker.
+ * Manual queue worker.
  *
- * Invoked by pg_net triggers and trusted schedulers. The webhook itself remains
- * protected by Wpp token verification; this worker only drains entries that
- * already exist in the database queue via atomic claim (FOR UPDATE SKIP LOCKED).
+ * Production drain is handled only by /api/cron/process-wa-queue to avoid two
+ * independent worker triggers racing the same WhatsApp conversation. This route
+ * is kept for manual/debug runs and requires both a valid token and manual=1
+ * (or x-queue-manual: 1).
  */
 export const Route = createFileRoute("/api/queue-worker")({
   server: {
@@ -47,7 +63,7 @@ export const Route = createFileRoute("/api/queue-worker")({
         // Keep each Worker invocation to one queue entry to avoid CPU-budget
         // eviction during heavy LLM/tool orchestration.
         const { processed } = await drainQueue(origin, 1, request.signal);
-        return new Response(JSON.stringify({ processed }), {
+        return new Response(JSON.stringify({ processed, manual: true }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
