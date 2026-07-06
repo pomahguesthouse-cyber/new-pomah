@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as ExploreRouteImport } from './routes/explore'
@@ -56,6 +57,8 @@ import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
 import { Route as AdminBookingFormLogsRouteImport } from './routes/admin/booking-form-logs'
 import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
 import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
@@ -67,6 +70,7 @@ import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cro
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
@@ -79,6 +83,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -307,6 +316,18 @@ const AdminAiLabRoute = AdminAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AdminRoute,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BookingFormTokenRoute = BookingFormTokenRouteImport.update({
   id: '/booking/form/$token',
   path: '/booking/form/$token',
@@ -364,6 +385,12 @@ const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
   path: '/api/booking-invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -388,8 +415,11 @@ export interface FileRoutesByFullPath {
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
@@ -429,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
@@ -450,8 +481,11 @@ export interface FileRoutesByTo {
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
@@ -491,6 +525,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/rooms': typeof RoomsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
@@ -514,8 +549,11 @@ export interface FileRoutesById {
   '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
+  '/mcp': typeof McpRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/admin/ai-lab': typeof AdminAiLabRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/booking-form-logs': typeof AdminBookingFormLogsRoute
@@ -555,6 +593,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/rooms/': typeof RoomsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
@@ -579,8 +618,11 @@ export interface FileRouteTypes {
     | '/explore'
     | '/llms.txt'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/booking-form-logs'
@@ -620,6 +662,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
@@ -641,8 +684,11 @@ export interface FileRouteTypes {
     | '/explore'
     | '/llms.txt'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/booking-form-logs'
@@ -682,6 +728,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/book'
     | '/rooms'
+    | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
@@ -704,8 +751,11 @@ export interface FileRouteTypes {
     | '/explore'
     | '/llms.txt'
     | '/login'
+    | '/mcp'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/admin/ai-lab'
     | '/admin/analytics'
     | '/admin/booking-form-logs'
@@ -745,6 +795,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/book/'
     | '/rooms/'
+    | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/process-wa-queue'
@@ -768,8 +819,11 @@ export interface RootRouteChildren {
   ExploreRoute: typeof ExploreRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
+  McpRoute: typeof McpRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiDebugDbRoute: typeof ApiDebugDbRoute
   ApiEvolutionRoute: typeof ApiEvolutionRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
@@ -782,6 +836,7 @@ export interface RootRouteChildren {
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   RoomsIndexRoute: typeof RoomsIndexRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
@@ -809,6 +864,13 @@ declare module '@tanstack/react-router' {
       path: '/robots.txt'
       fullPath: '/robots.txt'
       preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -1126,6 +1188,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAiLabRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/booking/form/$token': {
       id: '/booking/form/$token'
       path: '/booking/form/$token'
@@ -1201,6 +1277,13 @@ declare module '@tanstack/react-router' {
       path: '/api/booking-invoice/$id'
       fullPath: '/api/booking-invoice/$id'
       preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/confirmation/$id/chat': {
@@ -1330,8 +1413,12 @@ const rootRouteChildren: RootRouteChildren = {
   ExploreRoute: ExploreRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
+  McpRoute: McpRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiDebugDbRoute: ApiDebugDbRoute,
   ApiEvolutionRoute: ApiEvolutionRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
@@ -1344,6 +1431,7 @@ const rootRouteChildren: RootRouteChildren = {
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
   RoomsIndexRoute: RoomsIndexRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,

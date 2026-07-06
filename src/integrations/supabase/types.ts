@@ -809,6 +809,110 @@ export type Database = {
         }
         Relationships: []
       }
+      guest_structured_memory: {
+        Row: {
+          adults: number | null
+          booking_status: string | null
+          budget_note: string | null
+          canonical_phone: string
+          check_in: string | null
+          check_out: string | null
+          children: number | null
+          complaint_active: boolean
+          complaint_summary: string | null
+          first_seen_at: string
+          guest_count: number | null
+          guest_name: string | null
+          handoff_reason: string | null
+          last_bot_message: string | null
+          last_intent: string | null
+          last_seen_at: string
+          last_topic: string | null
+          last_user_message: string | null
+          needs_human: boolean
+          next_action: string | null
+          payment_status: string | null
+          preference_notes: string | null
+          raw_summary: Json
+          room_type: string | null
+          source_channel: string | null
+          special_requests: string | null
+          thread_id: string | null
+          unresolved_question: string | null
+          updated_at: string
+        }
+        Insert: {
+          adults?: number | null
+          booking_status?: string | null
+          budget_note?: string | null
+          canonical_phone: string
+          check_in?: string | null
+          check_out?: string | null
+          children?: number | null
+          complaint_active?: boolean
+          complaint_summary?: string | null
+          first_seen_at?: string
+          guest_count?: number | null
+          guest_name?: string | null
+          handoff_reason?: string | null
+          last_bot_message?: string | null
+          last_intent?: string | null
+          last_seen_at?: string
+          last_topic?: string | null
+          last_user_message?: string | null
+          needs_human?: boolean
+          next_action?: string | null
+          payment_status?: string | null
+          preference_notes?: string | null
+          raw_summary?: Json
+          room_type?: string | null
+          source_channel?: string | null
+          special_requests?: string | null
+          thread_id?: string | null
+          unresolved_question?: string | null
+          updated_at?: string
+        }
+        Update: {
+          adults?: number | null
+          booking_status?: string | null
+          budget_note?: string | null
+          canonical_phone?: string
+          check_in?: string | null
+          check_out?: string | null
+          children?: number | null
+          complaint_active?: boolean
+          complaint_summary?: string | null
+          first_seen_at?: string
+          guest_count?: number | null
+          guest_name?: string | null
+          handoff_reason?: string | null
+          last_bot_message?: string | null
+          last_intent?: string | null
+          last_seen_at?: string
+          last_topic?: string | null
+          last_user_message?: string | null
+          needs_human?: boolean
+          next_action?: string | null
+          payment_status?: string | null
+          preference_notes?: string | null
+          raw_summary?: Json
+          room_type?: string | null
+          source_channel?: string | null
+          special_requests?: string | null
+          thread_id?: string | null
+          unresolved_question?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_structured_memory_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guests: {
         Row: {
           country: string | null
@@ -2602,6 +2706,251 @@ export type Database = {
           },
         ]
       }
+      wa_correction_dataset: {
+        Row: {
+          bot_wrong_reply: string
+          canonical_phone: string | null
+          context_after: Json
+          context_before: Json
+          correct_agent: string | null
+          correct_intent: string | null
+          created_at: string
+          created_by: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          error_type: string | null
+          id: string
+          ideal_reply: string
+          notes: string | null
+          session_id: string | null
+          severity: string
+          source: string
+          status: string
+          thread_id: string | null
+          turn_index: number | null
+          updated_at: string
+          user_message: string
+          user_message_id: string | null
+          wrong_reply_message_id: string | null
+        }
+        Insert: {
+          bot_wrong_reply: string
+          canonical_phone?: string | null
+          context_after?: Json
+          context_before?: Json
+          correct_agent?: string | null
+          correct_intent?: string | null
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          error_type?: string | null
+          id?: string
+          ideal_reply: string
+          notes?: string | null
+          session_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          thread_id?: string | null
+          turn_index?: number | null
+          updated_at?: string
+          user_message: string
+          user_message_id?: string | null
+          wrong_reply_message_id?: string | null
+        }
+        Update: {
+          bot_wrong_reply?: string
+          canonical_phone?: string | null
+          context_after?: Json
+          context_before?: Json
+          correct_agent?: string | null
+          correct_intent?: string | null
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          error_type?: string | null
+          id?: string
+          ideal_reply?: string
+          notes?: string | null
+          session_id?: string | null
+          severity?: string
+          source?: string
+          status?: string
+          thread_id?: string | null
+          turn_index?: number | null
+          updated_at?: string
+          user_message?: string
+          user_message_id?: string | null
+          wrong_reply_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_correction_dataset_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "wa_correction_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_audit"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_review"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_user_message_id_fkey"
+            columns: ["user_message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_wrong_reply_message_id_fkey"
+            columns: ["wrong_reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_audit"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_wrong_reply_message_id_fkey"
+            columns: ["wrong_reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_routing_review"
+            referencedColumns: ["message_id"]
+          },
+          {
+            foreignKeyName: "wa_correction_dataset_wrong_reply_message_id_fkey"
+            columns: ["wrong_reply_message_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_correction_sessions: {
+        Row: {
+          canonical_phone: string | null
+          conversation_summary: string | null
+          corrected_transcript: Json
+          created_at: string
+          created_by: string | null
+          embedding: string | null
+          embedding_updated_at: string | null
+          full_transcript: Json
+          guest_memory_snapshot: Json
+          id: string
+          source: string
+          status: string
+          thread_id: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          canonical_phone?: string | null
+          conversation_summary?: string | null
+          corrected_transcript?: Json
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          full_transcript?: Json
+          guest_memory_snapshot?: Json
+          id?: string
+          source?: string
+          status?: string
+          thread_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canonical_phone?: string | null
+          conversation_summary?: string | null
+          corrected_transcript?: Json
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          embedding_updated_at?: string | null
+          full_transcript?: Json
+          guest_memory_snapshot?: Json
+          id?: string
+          source?: string
+          status?: string
+          thread_id?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_correction_sessions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_identity_aliases: {
+        Row: {
+          alias_type: string
+          alias_value: string
+          canonical_phone: string
+          created_at: string
+          display_name: string | null
+          first_seen_at: string
+          is_active: boolean
+          last_seen_at: string
+          metadata: Json
+          role: string
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          alias_type?: string
+          alias_value: string
+          canonical_phone: string
+          created_at?: string
+          display_name?: string | null
+          first_seen_at?: string
+          is_active?: boolean
+          last_seen_at?: string
+          metadata?: Json
+          role?: string
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          alias_type?: string
+          alias_value?: string
+          canonical_phone?: string
+          created_at?: string
+          display_name?: string | null
+          first_seen_at?: string
+          is_active?: boolean
+          last_seen_at?: string
+          metadata?: Json
+          role?: string
+          source?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       wa_message_queue: {
         Row: {
           body: string
@@ -2724,6 +3073,124 @@ export type Database = {
             columns: ["message_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_training_ignored_threads: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          ignored_at: string
+          ignored_by: string | null
+          phone: string | null
+          reason: string | null
+          restored_at: string | null
+          status: string
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          ignored_at?: string
+          ignored_by?: string | null
+          phone?: string | null
+          reason?: string | null
+          restored_at?: string | null
+          status?: string
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          ignored_at?: string
+          ignored_by?: string | null
+          phone?: string | null
+          reason?: string | null
+          restored_at?: string | null
+          status?: string
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_training_ignored_threads_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wa_wpp_sync_state: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          external_chat_id: string | null
+          finished_at: string | null
+          id: string
+          imported_count: number
+          last_cursor: string | null
+          last_synced_at: string | null
+          metadata: Json
+          phone: string | null
+          skipped_count: number
+          started_at: string | null
+          status: string
+          sync_type: string
+          thread_id: string | null
+          updated_at: string
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          external_chat_id?: string | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number
+          last_cursor?: string | null
+          last_synced_at?: string | null
+          metadata?: Json
+          phone?: string | null
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          sync_type: string
+          thread_id?: string | null
+          updated_at?: string
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          external_chat_id?: string | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number
+          last_cursor?: string | null
+          last_synced_at?: string | null
+          metadata?: Json
+          phone?: string | null
+          skipped_count?: number
+          started_at?: string | null
+          status?: string
+          sync_type?: string
+          thread_id?: string | null
+          updated_at?: string
+          updated_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wa_wpp_sync_state_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -2869,9 +3336,16 @@ export type Database = {
           ai_draft: boolean
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
+          external_chat_id: string | null
+          external_message_id: string | null
+          from_me: boolean | null
           id: string
           metadata: Json | null
+          raw_payload: Json | null
           sent_at: string
+          source: string
+          sync_status: string
+          synced_at: string | null
           thread_id: string
           wpp_id: string | null
         }
@@ -2879,9 +3353,16 @@ export type Database = {
           ai_draft?: boolean
           body: string
           direction: Database["public"]["Enums"]["message_direction"]
+          external_chat_id?: string | null
+          external_message_id?: string | null
+          from_me?: boolean | null
           id?: string
           metadata?: Json | null
+          raw_payload?: Json | null
           sent_at?: string
+          source?: string
+          sync_status?: string
+          synced_at?: string | null
           thread_id: string
           wpp_id?: string | null
         }
@@ -2889,9 +3370,16 @@ export type Database = {
           ai_draft?: boolean
           body?: string
           direction?: Database["public"]["Enums"]["message_direction"]
+          external_chat_id?: string | null
+          external_message_id?: string | null
+          from_me?: boolean | null
           id?: string
           metadata?: Json | null
+          raw_payload?: Json | null
           sent_at?: string
+          source?: string
+          sync_status?: string
+          synced_at?: string | null
           thread_id?: string
           wpp_id?: string | null
         }
@@ -2910,21 +3398,28 @@ export type Database = {
           ai_analysis: Json | null
           ai_auto: boolean
           assigned_to: string | null
+          canonical_phone: string | null
           chat_summary: string | null
           chat_summary_json: Json
           chat_summary_updated_at: string | null
           chat_summary_version: number
           created_at: string
           display_name: string | null
+          external_chat_id: string | null
           guest_id: string | null
           id: string
+          identity_type: string | null
           intent: string | null
           is_training_example: boolean
           last_message_at: string
           last_message_preview: string | null
+          last_synced_at: string | null
+          lid_alias: string | null
           phone: string
           pinned: boolean
           status: Database["public"]["Enums"]["thread_status"]
+          sync_error: string | null
+          sync_status: string
           tags: string[] | null
           unread_count: number
         }
@@ -2932,21 +3427,28 @@ export type Database = {
           ai_analysis?: Json | null
           ai_auto?: boolean
           assigned_to?: string | null
+          canonical_phone?: string | null
           chat_summary?: string | null
           chat_summary_json?: Json
           chat_summary_updated_at?: string | null
           chat_summary_version?: number
           created_at?: string
           display_name?: string | null
+          external_chat_id?: string | null
           guest_id?: string | null
           id?: string
+          identity_type?: string | null
           intent?: string | null
           is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
+          last_synced_at?: string | null
+          lid_alias?: string | null
           phone: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
+          sync_error?: string | null
+          sync_status?: string
           tags?: string[] | null
           unread_count?: number
         }
@@ -2954,21 +3456,28 @@ export type Database = {
           ai_analysis?: Json | null
           ai_auto?: boolean
           assigned_to?: string | null
+          canonical_phone?: string | null
           chat_summary?: string | null
           chat_summary_json?: Json
           chat_summary_updated_at?: string | null
           chat_summary_version?: number
           created_at?: string
           display_name?: string | null
+          external_chat_id?: string | null
           guest_id?: string | null
           id?: string
+          identity_type?: string | null
           intent?: string | null
           is_training_example?: boolean
           last_message_at?: string
           last_message_preview?: string | null
+          last_synced_at?: string | null
+          lid_alias?: string | null
           phone?: string
           pinned?: boolean
           status?: Database["public"]["Enums"]["thread_status"]
+          sync_error?: string | null
+          sync_status?: string
           tags?: string[] | null
           unread_count?: number
         }
@@ -3126,6 +3635,13 @@ export type Database = {
       }
     }
     Functions: {
+      _jsonb_bool: {
+        Args: { p_default?: boolean; p_json: Json; p_key: string }
+        Returns: boolean
+      }
+      _jsonb_date: { Args: { p_json: Json; p_key: string }; Returns: string }
+      _jsonb_int: { Args: { p_json: Json; p_key: string }; Returns: number }
+      _jsonb_text: { Args: { p_json: Json; p_key: string }; Returns: string }
       claim_queue_winner: {
         Args: {
           p_body: string
@@ -3133,6 +3649,30 @@ export type Database = {
           p_message_id: string
           p_phone: string
           p_thread_id: string
+        }
+        Returns: string
+      }
+      create_wa_correction_from_messages: {
+        Args: {
+          p_correct_agent?: string
+          p_correct_intent?: string
+          p_error_type?: string
+          p_ideal_reply: string
+          p_notes?: string
+          p_severity?: string
+          p_status?: string
+          p_user_message_id: string
+          p_wrong_reply_message_id: string
+        }
+        Returns: string
+      }
+      create_wa_correction_session_from_thread: {
+        Args: {
+          p_conversation_summary?: string
+          p_corrected_transcript?: Json
+          p_status?: string
+          p_thread_id: string
+          p_title?: string
         }
         Returns: string
       }
@@ -3153,6 +3693,7 @@ export type Database = {
           google_places_api_key: string
         }[]
       }
+      get_guest_structured_memory: { Args: { p_phone: string }; Returns: Json }
       get_public_property: { Args: never; Returns: Json }
       has_role: {
         Args: {
@@ -3161,12 +3702,35 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_lid_identity: { Args: { p_raw: string }; Returns: boolean }
       is_newest_pending_for_phone: {
         Args: { p_phone: string; p_queue_id: string }
         Returns: boolean
       }
+      is_public_wa_phone: { Args: { p_raw: string }; Returns: boolean }
+      is_resolved_public_wa_phone: {
+        Args: { p_identity: string }
+        Returns: boolean
+      }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       is_still_winner: { Args: { p_entry_id: string }; Returns: boolean }
+      list_wa_correction_candidates: {
+        Args: { p_limit?: number }
+        Returns: {
+          agent_key: string
+          bot_sent_at: string
+          bot_wrong_reply: string
+          display_name: string
+          intent: string
+          phone: string
+          thread_id: string
+          tools_used: Json
+          user_message: string
+          user_message_id: string
+          user_sent_at: string
+          wrong_reply_message_id: string
+        }[]
+      }
       log_webchat_message: {
         Args: {
           p_ai_response: string
@@ -3233,8 +3797,92 @@ export type Database = {
           user_message: string
         }[]
       }
-      receive_whatsapp_message: {
-        Args: { p_body: string; p_name: string; p_phone: string }
+      match_wa_correction_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          bad_response: string
+          correct_agent: string
+          correct_intent: string
+          correction: string
+          error_type: string
+          id: string
+          similarity: number
+          user_message: string
+        }[]
+      }
+      match_wa_correction_ideal_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          ideal_assistant_response: string
+          intent: string
+          similarity: number
+          stage: string
+          user_message: string
+        }[]
+      }
+      match_wa_correction_session_examples: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          id: string
+          ideal_assistant_response: string
+          intent: string
+          similarity: number
+          stage: string
+          user_message: string
+        }[]
+      }
+      normalize_guest_booking_status: {
+        Args: { p_value: string }
+        Returns: string
+      }
+      normalize_guest_memory_topic: {
+        Args: { p_value: string }
+        Returns: string
+      }
+      normalize_guest_payment_status: {
+        Args: { p_value: string }
+        Returns: string
+      }
+      normalize_wa_identity: { Args: { p_raw: string }; Returns: string }
+      receive_whatsapp_message:
+        | {
+            Args: { p_body: string; p_name: string; p_phone: string }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_body: string
+              p_name: string
+              p_phone: string
+              p_wpp_id?: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_body: string
+              p_external_chat_id: string
+              p_name: string
+              p_phone: string
+              p_wpp_id: string
+            }
+            Returns: string
+          }
+      resolve_wa_canonical_phone: {
+        Args: { p_identity: string }
         Returns: string
       }
       room_type_availability: {
@@ -3283,6 +3931,22 @@ export type Database = {
       update_thread_autoreply_meta: {
         Args: { p_thread_id: string; p_tools_used: string[] }
         Returns: undefined
+      }
+      upsert_guest_structured_memory_from_summary: {
+        Args: { p_phone: string; p_summary: Json; p_thread_id: string }
+        Returns: Json
+      }
+      upsert_wa_identity_alias: {
+        Args: {
+          p_alias_type?: string
+          p_alias_value: string
+          p_canonical_phone: string
+          p_display_name?: string
+          p_metadata?: Json
+          p_role?: string
+          p_source?: string
+        }
+        Returns: string
       }
       wa_queue_claim: {
         Args: { p_entry_id: string; p_worker_id: string }
