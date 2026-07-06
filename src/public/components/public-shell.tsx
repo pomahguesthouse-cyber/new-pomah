@@ -281,6 +281,7 @@ export function PublicFooter({
                 { to: "/rooms", label: "Kamar" },
                 { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
+                { to: "/connect", label: "Hubungkan AI" },
               ].map((l) => (
                 <li key={l.label}>
                   <Link to={l.to} className="text-teal-200/80 transition hover:text-white">
