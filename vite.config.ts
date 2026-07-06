@@ -40,6 +40,10 @@ function makeAiLabRootScrollable() {
         '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>',
       );
       next = next.replace(
+        /\n\s*<KpiStrip snapshot=\{snapshot\} metrics=\{metrics\} health=\{health\} latestQueue=\{latestQueue\} openDrawer=\{setDrawer\} \/>\n\s*<OperationalAlerts snapshot=\{snapshot\} health=\{health\} retryTotal=\{retryTotal\} openDrawer=\{setDrawer\} \/>\n\s*(<AiReactFlowCanvas[\s\S]*?\n\s*\/>)\n\s*<QualityScorePanel/,
+        `\n          $1\n          <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />\n          <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />\n          <QualityScorePanel`,
+      );
+      next = next.replace(
         '<section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">',
         '<section className="grid" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "8px" }}>',
       );
