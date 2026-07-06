@@ -81,6 +81,17 @@ export function isBrochureRequest(text: string): boolean {
   return BROCHURE_REQUEST_PATTERNS.some((p) => p.test(text));
 }
 
+const BROCHURE_DENIAL_PATTERNS: RegExp[] = [
+  /\btidak\s+menyediakan\s+brosur\b/i,
+  /\btidak\s+(?:ada|tersedia)\s+brosur\b/i,
+  /\bbelum\s+(?:ada|tersedia|punya)\s+brosur\b/i,
+  /\bbrosur(?:\s+(?:fisik|digital))?\s+(?:tidak|belum)\s+(?:ada|tersedia|disediakan)\b/i,
+];
+
+function deniesBrochure(reply: string): boolean {
+  return BROCHURE_DENIAL_PATTERNS.some((p) => p.test(reply));
+}
+
 export interface BrosurFile {
   name: string;
   url: string;
@@ -89,6 +100,27 @@ export interface BrosurFile {
 export interface AttachmentPick {
   url?: string;
   name?: string;
+}
+
+/**
+ * If a brochure is being attached, the visible caption must not contradict it.
+ * LLMs can still inherit stale SOP/training text such as "tidak menyediakan
+ * brosur" while our deterministic attachment picker has already found the PDF.
+ */
+export function normalizeBrochureReply(
+  guestMessage: string,
+  reply: string,
+  attachmentName?: string,
+): string {
+  if (!attachmentName || !isBrochureRequest(guestMessage) || !deniesBrochure(reply)) {
+    return reply;
+  }
+
+  const fileText = attachmentName.trim() ? ` (${attachmentName.trim()})` : "";
+  return (
+    `Baik Kak, berikut saya kirimkan brosur kamar Pomah Guesthouse${fileText} ya.\n\n` +
+    "Silakan dibuka PDF-nya. Kalau ingin saya bantu pilih kamar, sebutkan tanggal menginap dan jumlah tamunya."
+  );
 }
 
 /**

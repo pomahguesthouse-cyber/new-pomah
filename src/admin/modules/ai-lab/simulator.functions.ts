@@ -31,6 +31,7 @@ import { resolveManagerByPhone, isConfiguredAdminPhone } from "@/services/wa-aut
 import {
   findSessionStartIndex,
   pickAttachment,
+  normalizeBrochureReply,
   cleanReplyBody,
   isBrosurDoc,
 } from "@/services/reply-postprocess";
@@ -258,7 +259,8 @@ export const simulateChatTurn = createServerFn({ method: "POST" })
     if (orch.reply) {
       const picked = pickAttachment(lastMessage, orch.reply, env.brosurFiles);
       const pdfToStrip = picked.url && /\.pdf(\?|$)/i.test(picked.url) ? picked.url : undefined;
-      displayReply = cleanReplyBody(orch.reply, pdfToStrip);
+      const normalizedReply = normalizeBrochureReply(lastMessage, orch.reply, picked.name);
+      displayReply = cleanReplyBody(normalizedReply, pdfToStrip);
       if (picked.url) attachment = { url: picked.url, name: picked.name };
     }
 

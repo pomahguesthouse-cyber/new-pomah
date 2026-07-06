@@ -10,6 +10,11 @@ import {
   mergeAiLabConfig,
 } from "../src/admin/modules/ai-lab/ai-lab.functions";
 import { frontOfficeAgent } from "../src/ai/agents/front-office.agent";
+import {
+  cleanReplyBody,
+  normalizeBrochureReply,
+  pickAttachment,
+} from "../src/services/reply-postprocess";
 import type { AgentContext } from "../src/ai/agents/types";
 
 let passed = 0;
@@ -62,6 +67,29 @@ truthy("runtime prompt preserves live date context", prompt.includes("Hari ini t
 truthy("runtime prompt preserves room context", prompt.includes("Deluxe"));
 truthy("runtime prompt preserves SOP context", prompt.includes("Check-in mulai pukul 14.00."));
 truthy("runtime prompt preserves hard availability guard", prompt.includes("check_room_availability") && prompt.includes("jangan menebak"));
+
+const brochureFiles = [
+  {
+    name: "brosur kamar pomah guesthouse.pdf",
+    url: "https://example.com/brosur-kamar-pomah-guesthouse.pdf",
+  },
+];
+const badBrochureReply =
+  "Pomah Guesthouse tidak menyediakan brosur fisik maupun digital. Untuk informasi lengkap silakan kunjungi situs web resmi kami.";
+const pickedBrochure = pickAttachment("minta brosur dong", badBrochureReply, brochureFiles);
+const normalizedBrochureReply = normalizeBrochureReply(
+  "minta brosur dong",
+  badBrochureReply,
+  pickedBrochure.name,
+);
+const finalBrochureReply = cleanReplyBody(normalizedBrochureReply, pickedBrochure.url);
+
+truthy("brochure request selects uploaded PDF", pickedBrochure.name === brochureFiles[0].name);
+truthy(
+  "brochure denial is replaced when PDF is attached",
+  /berikut saya kirimkan brosur/i.test(finalBrochureReply) &&
+    !/tidak menyediakan brosur/i.test(finalBrochureReply),
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

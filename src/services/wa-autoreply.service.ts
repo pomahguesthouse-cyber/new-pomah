@@ -12,6 +12,7 @@ import {
   findSessionStartIndex,
   isBrosurDoc,
   pickAttachment,
+  normalizeBrochureReply,
   cleanReplyBody,
 } from "@/services/reply-postprocess";
 import { checkConversation } from "@/services/conversation-monitor.service";
@@ -2119,7 +2120,8 @@ export async function executeAutoreplyForPhone(
 
   // Strip any inline PDF URL that became the attachment + bare image URLs.
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
-  let finalReply = cleanReplyBody(rawReply, pdfToStrip);
+  const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
+  let finalReply = cleanReplyBody(normalizedReply, pdfToStrip);
 
   // ── Duplicate-send guard ────────────────────────────────────────────────
   // Worker bisa mati setelah Wpp sukses tapi sebelum sempat menyimpan
