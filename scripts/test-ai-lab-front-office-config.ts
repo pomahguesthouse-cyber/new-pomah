@@ -53,10 +53,15 @@ const prompt = frontOfficeAgent.buildSystemPrompt({
 } as AgentContext);
 
 truthy("runtime prompt includes custom instruction", prompt.includes("Kamu adalah Front Office Agent Pomah Guesthouse"));
+truthy(
+  "runtime prompt appends custom instruction below hard guard",
+  prompt.includes("INSTRUKSI TAMBAHAN DARI AI LAB") &&
+    prompt.indexOf("BOOKING VIA CHAT:") < prompt.indexOf("INSTRUKSI TAMBAHAN DARI AI LAB"),
+);
 truthy("runtime prompt preserves live date context", prompt.includes("Hari ini tanggal"));
 truthy("runtime prompt preserves room context", prompt.includes("Deluxe"));
 truthy("runtime prompt preserves SOP context", prompt.includes("Check-in mulai pukul 14.00."));
-truthy("runtime prompt includes tool-result guard", prompt.includes("hasil tool sebagai sumber kebenaran"));
+truthy("runtime prompt preserves hard availability guard", prompt.includes("check_room_availability") && prompt.includes("jangan menebak"));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

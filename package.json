@@ -5,15 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "node scratch/generate_routes.js && vite build",
-    "build:dev": "node scratch/generate_routes.js && vite build --mode development",
+    "build": "npm run test:ai-lab && node scratch/generate_routes.js && vite build",
+    "build:dev": "npm run test:ai-lab && node scratch/generate_routes.js && vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "test:admin-bookings": "bun run scripts/test-admin-booking-types.ts",
     "test:awaiting-alt-room": "bun run scripts/test-awaiting-alternative-room-type.ts",
-    "test:chatbot-fastpath": "bun run scripts/test-chatbot-fastpath.ts"
+    "test:chatbot-fastpath": "bun run scripts/test-chatbot-fastpath.ts",
+    "test:ai-lab": "tsx scripts/test-ai-lab-front-office-config.ts",
+    "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",

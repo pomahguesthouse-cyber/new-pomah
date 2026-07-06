@@ -209,11 +209,28 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
 
   const property = (propertyData ?? null) as PublicProperty | null;
 
-  const roomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
+  const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
     rooms: undefined,
     total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
   }));
+
+  const roomTypesByKey = new Map<string, any>();
+
+  for (const rt of normalizedRoomTypes) {
+    const key = String(rt.slug || rt.name || rt.id).trim().toLowerCase();
+    const existing = roomTypesByKey.get(key);
+    const existingRooms = Number(existing?.total_physical_rooms ?? 0);
+    const currentRooms = Number(rt.total_physical_rooms ?? 0);
+
+    if (!existing || currentRooms > existingRooms) {
+      roomTypesByKey.set(key, rt);
+    }
+  }
+
+  const roomTypes = Array.from(roomTypesByKey.values()).sort(
+    (a: any, b: any) => Number(a.base_rate ?? 0) - Number(b.base_rate ?? 0),
+  );
 
   return { property, roomTypes };
 });

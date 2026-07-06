@@ -32,6 +32,10 @@ function expectedWebhookToken(): string | undefined {
   return process.env.EVOLUTION_WEBHOOK_TOKEN || process.env.WPP_WEBHOOK_TOKEN;
 }
 
+function expectedQueueToken(): string | undefined {
+  return process.env.QUEUE_WORKER_TOKEN || process.env.EVOLUTION_WEBHOOK_TOKEN || process.env.WPP_WEBHOOK_TOKEN;
+}
+
 function isAuthorized(request: Request): boolean {
   const expected = expectedWebhookToken();
   if (!expected) return true;
@@ -64,7 +68,11 @@ function scheduleQueueNudge(
   runBackground((async () => {
     await sleep(nudgeDelayMs);
     try {
-      const res = await fetch(`${origin}/api/queue-worker`, { method: "POST" });
+      const queueToken = expectedQueueToken();
+      const res = await fetch(`${origin}/api/queue-worker`, {
+        method: "POST",
+        headers: queueToken ? { "x-queue-token": queueToken } : undefined,
+      });
       if (!res.ok) {
         console.warn(`[EvolutionWebhook] queue nudge failed status=${res.status} | ${logCtx}`);
       }
@@ -261,6 +269,7 @@ export const evolutionWebhookGet = async ({ request }: { request: Request }): Pr
       ok: true,
       route: "/api/evolution",
       token_set: !!expectedWebhookToken(),
+      queue_token_set: !!expectedQueueToken(),
       supabase_url_set: !!process.env.SUPABASE_URL,
       supabase_service_key_set: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       provider: process.env.WHATSAPP_PROVIDER ?? "wppconnect",

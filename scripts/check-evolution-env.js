@@ -1,49 +1,45 @@
 import process from "node:process";
 
-const keys = {
-  provider: ["WHATSAPP", "PROVIDER"].join("_"),
-  baseUrl: ["EVOLUTION", "BASE", "URL"].join("_"),
-  instance: ["EVOLUTION", "INSTANCE"].join("_"),
-  apiKey: ["EVOLUTION", "API", "KEY"].join("_"),
-  webhookToken: ["EVOLUTION", "WEBHOOK", "TOKEN"].join("_"),
-  supabaseUrl: ["SUPABASE", "URL"].join("_"),
-  supabaseService: ["SUPABASE", "SERVICE", "ROLE", "KEY"].join("_"),
-  queueToken: ["QUEUE", "WORKER", "TOKEN"].join("_"),
-};
-
-const required = [
-  keys.provider,
-  keys.baseUrl,
-  keys.instance,
-  keys.apiKey,
-  keys.webhookToken,
-  keys.supabaseUrl,
-  keys.supabaseService,
+const REQUIRED = [
+  "WHATSAPP_PROVIDER",
+  "EVOLUTION_BASE_URL",
+  "EVOLUTION_INSTANCE",
+  "EVOLUTION_API_KEY",
+  "EVOLUTION_WEBHOOK_TOKEN",
+  "SUPABASE_URL",
+  "SUPABASE_SERVICE_ROLE_KEY",
 ];
 
-const missing = required.filter((key) => !String(process.env[key] ?? "").trim());
-const provider = String(process.env[keys.provider] ?? "").trim().toLowerCase();
-
 function mask(value) {
-  const raw = String(value ?? "");
-  if (!raw) return "<missing>";
-  if (raw.length <= 8) return "***";
-  return `${raw.slice(0, 4)}…${raw.slice(-4)}`;
+  const text = String(value ?? "");
+  if (!text) return "<missing>";
+  if (text.length <= 8) return `${text.slice(0, 2)}***${text.slice(-2)}`;
+  return `${text.slice(0, 4)}***${text.slice(-4)}`;
 }
 
-console.log("Evolution deployment env check");
-for (const key of required) {
-  console.log(`- ${key}: ${mask(process.env[key])}`);
-}
-console.log(`- ${keys.queueToken}: ${process.env[keys.queueToken] ? mask(process.env[keys.queueToken]) : "<fallback to webhook token>"}`);
+const missing = REQUIRED.filter((key) => !String(process.env[key] ?? "").trim());
+const invalid = [];
+const provider = String(process.env.WHATSAPP_PROVIDER ?? "").trim().toLowerCase();
+const queueToken = process.env.QUEUE_WORKER_TOKEN || process.env.EVOLUTION_WEBHOOK_TOKEN;
 
-if (provider && provider !== "evolution") {
-  missing.push(`${keys.provider}=evolution`);
+if (provider !== "evolution") {
+  invalid.push("WHATSAPP_PROVIDER must be 'evolution'");
 }
 
-if (missing.length > 0) {
-  console.error(`\nMissing/invalid env: ${missing.join(", ")}`);
+if (missing.length > 0 || invalid.length > 0) {
+  console.error("[check:evolution-env] INVALID");
+  if (missing.length > 0) console.error(`Missing: ${missing.join(", ")}`);
+  for (const item of invalid) console.error(item);
   process.exit(1);
 }
 
-console.log("\nOK: Evolution env is complete.");
+console.log("[check:evolution-env] OK");
+for (const key of REQUIRED) {
+  console.log(`${key}=${mask(process.env[key])}`);
+}
+console.log(
+  `QUEUE_WORKER_TOKEN=${
+    process.env.QUEUE_WORKER_TOKEN ? mask(process.env.QUEUE_WORKER_TOKEN) : "(fallback EVOLUTION_WEBHOOK_TOKEN)"
+  }`,
+);
+console.log(`QUEUE_TOKEN_EFFECTIVE=${mask(queueToken)}`);
