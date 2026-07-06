@@ -22,7 +22,6 @@ export const Route = createFileRoute("/llms.txt")({
         if (property?.email) lines.push(`- Email: ${property.email}`);
         lines.push("", "## Pages");
         lines.push(`- [Home](${origin}/)`);
-        lines.push(`- [Rooms](${origin}/rooms)`);
         lines.push(`- [Book](${origin}/book)`);
         lines.push("", "## Rooms");
         for (const r of roomTypes ?? []) {
