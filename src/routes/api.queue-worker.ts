@@ -27,19 +27,24 @@ function isManualQueueRequest(request: Request): boolean {
 }
 
 function authorizeQueueWorker(request: Request): Response | null {
-  const expected = expectedQueueToken();
-  if (!expected) {
-    return json({ error: "Queue worker token is not configured" }, 503);
-  }
-  if (requestQueueToken(request) !== expected) {
-    return json({ error: "Unauthorized" }, 403);
-  }
+  // Production must not drain through this endpoint anymore. Return a successful
+  // disabled response for automatic/nudge calls BEFORE token validation, so old
+  // webhook nudge calls do not produce noisy 403 logs and still cannot process
+  // any queue entry.
   if (!isManualQueueRequest(request)) {
     return json({
       accepted: false,
       disabled: true,
       reason: "Automatic queue-worker drain is disabled. Production uses /api/cron/process-wa-queue only.",
     }, 202);
+  }
+
+  const expected = expectedQueueToken();
+  if (!expected) {
+    return json({ error: "Queue worker token is not configured" }, 503);
+  }
+  if (requestQueueToken(request) !== expected) {
+    return json({ error: "Unauthorized" }, 403);
   }
   return null;
 }
