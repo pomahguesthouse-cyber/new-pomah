@@ -356,6 +356,7 @@ function AiLab() {
   const [drawer, setDrawer] = useState<DrawerKey>(null);
   const [selectedNodeId, setSelectedNodeId] = useState("front-office");
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspector");
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -384,17 +385,22 @@ function AiLab() {
   );
 
   return (
-    <div className="min-h-[100dvh] overflow-hidden bg-[#070b14] text-slate-100">
-      <div className="flex min-h-[100dvh]">
+    <div className="h-[100dvh] overflow-hidden bg-[#070b14] text-slate-100">
+      <div className="flex h-full min-h-0">
         <ControlSidebar
           section={section}
           setSection={setSection}
           openDrawer={setDrawer}
         />
-        <main className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="min-w-0 space-y-3 overflow-y-auto pr-0 xl:pr-1">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <Topbar inspectorOpen={inspectorOpen} setInspectorOpen={setInspectorOpen} />
+          <div
+            className={cn(
+              "grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3",
+              inspectorOpen && "xl:grid-cols-[minmax(0,1fr)_320px]",
+            )}
+          >
+            <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto overscroll-contain pb-6 pr-0 xl:pr-1">
               <KpiStrip openDrawer={setDrawer} />
               <FlowCanvas
                 selectedNodeId={selectedNodeId}
@@ -403,12 +409,15 @@ function AiLab() {
               />
               <BottomAnalytics openDrawer={setDrawer} />
             </div>
-            <InspectorPanel
-              tab={inspectorTab}
-              setTab={setInspectorTab}
-              selectedNode={selectedNode}
-              openDrawer={setDrawer}
-            />
+            {inspectorOpen && (
+              <InspectorPanel
+                tab={inspectorTab}
+                setTab={setInspectorTab}
+                selectedNode={selectedNode}
+                openDrawer={setDrawer}
+                onHide={() => setInspectorOpen(false)}
+              />
+            )}
           </div>
         </main>
       </div>
@@ -501,7 +510,13 @@ function ControlSidebar({
   );
 }
 
-function Topbar() {
+function Topbar({
+  inspectorOpen,
+  setInspectorOpen,
+}: {
+  inspectorOpen: boolean;
+  setInspectorOpen: (open: boolean) => void;
+}) {
   return (
     <header className="flex min-h-[72px] items-center gap-3 border-b border-slate-800/80 bg-[#090f1c]/95 px-4 md:px-6">
       <div className="flex min-w-0 items-center gap-3 lg:hidden">
@@ -522,6 +537,14 @@ function Topbar() {
         <kbd className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-500">⌘K</kbd>
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="hidden border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white xl:inline-flex"
+          onClick={() => setInspectorOpen(!inspectorOpen)}
+        >
+          {inspectorOpen ? "Hide Inspector" : "Show Inspector"}
+        </Button>
         <span className="hidden items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 sm:flex">
           <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.9)]" />
           Live
@@ -603,22 +626,22 @@ function KpiStrip({ openDrawer }: { openDrawer: (drawer: DrawerKey) => void }) {
   ];
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => (
         <ControlCard
           key={card.label}
-          className={cn(card.onClick && "cursor-pointer hover:border-emerald-400/50")}
+          className={cn("rounded-xl p-3", card.onClick && "cursor-pointer hover:border-emerald-400/50")}
           onClick={card.onClick}
         >
-          <div className="flex items-center justify-between gap-3">
-            <span className={cn("flex h-11 w-11 items-center justify-center rounded-xl", toneClass(card.tone, "bg"))}>
-              <card.icon className={cn("h-5 w-5", toneClass(card.tone, "text"))} />
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
+              <card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />
             </span>
             <Sparkline tone={card.tone} />
           </div>
-          <p className="mt-3 text-xs text-slate-400">{card.label}</p>
-          <p className="mt-1 text-2xl font-semibold tracking-tight text-white">{card.value}</p>
-          <p className={cn("mt-1 text-[11px]", toneClass(card.tone, "text"))}>{card.delta}</p>
+          <p className="mt-2 truncate text-[11px] text-slate-400">{card.label}</p>
+          <p className="mt-0.5 truncate text-xl font-semibold tracking-tight text-white">{card.value}</p>
+          <p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
         </ControlCard>
       ))}
     </section>
@@ -661,7 +684,7 @@ function FlowCanvas({
       </div>
 
       <div
-        className="relative min-h-[640px] overflow-x-auto"
+        className="relative min-h-[520px] overflow-auto"
         style={{
           backgroundImage: "radial-gradient(rgba(255,255,255,.08) 1px, transparent 1px)",
           backgroundSize: "18px 18px",
@@ -773,11 +796,13 @@ function InspectorPanel({
   setTab,
   selectedNode,
   openDrawer,
+  onHide,
 }: {
   tab: InspectorTab;
   setTab: (tab: InspectorTab) => void;
   selectedNode: FlowNode;
   openDrawer: (drawer: DrawerKey) => void;
+  onHide: () => void;
 }) {
   const routingFn = useServerFn(getAgentRoutingStats);
   const historyFn = useServerFn(getIntentCallHistory);
@@ -800,14 +825,24 @@ function InspectorPanel({
   const executions = recentBooking?.items ?? [];
 
   return (
-    <aside className="min-h-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as InspectorTab)} className="flex h-full min-h-[640px] flex-col">
-        <div className="border-b border-slate-800 px-4 pt-3">
-          <TabsList className="grid w-full grid-cols-3 bg-slate-900">
-            <TabsTrigger value="inspector">Inspector</TabsTrigger>
-            <TabsTrigger value="executions">Executions</TabsTrigger>
-            <TabsTrigger value="logs">Logs</TabsTrigger>
-          </TabsList>
+    <aside className="hidden min-h-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80 xl:block">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as InspectorTab)} className="flex h-full min-h-0 flex-col">
+        <div className="border-b border-slate-800 px-3 py-3">
+          <div className="flex items-center gap-2">
+            <TabsList className="grid flex-1 grid-cols-3 bg-slate-900">
+              <TabsTrigger value="inspector">Inspector</TabsTrigger>
+              <TabsTrigger value="executions">Executions</TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
+            </TabsList>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9 px-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
+              onClick={onHide}
+            >
+              Hide
+            </Button>
+          </div>
         </div>
 
         <TabsContent value="inspector" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
@@ -1536,7 +1571,7 @@ function ScoreBadge({ score }: { score: number }) {
 function Sparkline({ tone }: { tone: string }) {
   const stroke = tone === "rose" ? "#fb7185" : tone === "amber" ? "#f59e0b" : tone === "violet" ? "#a78bfa" : "#34d399";
   return (
-    <svg viewBox="0 0 72 24" className="h-7 w-20 opacity-80">
+    <svg viewBox="0 0 72 24" className="h-5 w-14 opacity-80">
       <polyline points="0,18 8,16 16,20 24,12 32,14 40,8 48,11 56,5 64,9 72,3" fill="none" stroke={stroke} strokeWidth="2" />
     </svg>
   );
