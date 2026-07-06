@@ -134,6 +134,8 @@ Untuk 2 orang, saya sarankan Deluxe. Masih tersedia 4 kamar, harga Rp250.000 per
 Kalau ingin yang lebih lega, ada Grand Deluxe Rp300.000.
 Mau saya bantu booking Deluxe?"`;
 
+const LEGACY_FRONT_OFFICE_DEFAULT_PREFIX = "Anda adalah Rani yang bertugas sebagai Front Office Agent";
+
 /** Default persona prompt for each specialized agent. */
 export const AGENT_DEFAULTS: Record<string, string> = {
   "front-office": FRONT_OFFICE_DEFAULT_INSTRUCTIONS,
@@ -238,6 +240,15 @@ export const TOOL_DEFAULTS: Record<string, string> = {
   "faq-memory": "Kumpulan pertanyaan umum tamu beserta jawabannya.",
 };
 
+function normalizeAgentInstructions(key: string, value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return AGENT_DEFAULTS[key] ?? "";
+  if (key === "front-office" && trimmed.startsWith(LEGACY_FRONT_OFFICE_DEFAULT_PREFIX)) {
+    return FRONT_OFFICE_DEFAULT_INSTRUCTIONS;
+  }
+  return normalizeAssistantName(trimmed, "");
+}
+
 /** Coerce a stored (possibly partial) document into a full `AiLabConfig`. */
 export function mergeAiLabConfig(raw: unknown): AiLabConfig {
   const c = (raw ?? {}) as Partial<AiLabConfig>;
@@ -247,9 +258,7 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
     agents[k] = {
       enabled:     a?.enabled     ?? true,
       autoReply:   a?.autoReply   ?? false,
-      instructions: a?.instructions?.trim()
-        ? normalizeAssistantName(a.instructions, "")
-        : (AGENT_DEFAULTS[k] ?? ""),
+      instructions: normalizeAgentInstructions(k, a?.instructions),
       managerName: normalizeAssistantName(a?.managerName, ""),
       avatarUrl:   a?.avatarUrl   ?? "",
     };

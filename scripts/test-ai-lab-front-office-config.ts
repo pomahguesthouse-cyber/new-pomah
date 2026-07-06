@@ -32,6 +32,18 @@ truthy(
     merged.agents["front-office"].instructions.includes("Kamu adalah Front Office Agent Pomah Guesthouse"),
 );
 
+const legacyMerged = mergeAiLabConfig({
+  agents: {
+    "front-office": {
+      instructions: "Anda adalah Rani yang bertugas sebagai Front Office Agent untuk {{PROPERTY_NAME}}.",
+    },
+  },
+});
+truthy(
+  "legacy front office default is upgraded",
+  legacyMerged.agents["front-office"].instructions === FRONT_OFFICE_DEFAULT_INSTRUCTIONS,
+);
+
 const prompt = frontOfficeAgent.buildSystemPrompt({
   property: { id: "prop-test", name: "Pomah Guesthouse" },
   rooms: [{ id: "rt-deluxe", name: "Deluxe", base_rate: 250000, capacity: 2 }],
