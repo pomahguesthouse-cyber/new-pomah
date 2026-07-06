@@ -4,21 +4,20 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
-const xyflowShimPath = fileURLToPath(new URL("./src/lib/xyflow-react-shim.ts", import.meta.url));
-
-function xyflowDefaultExportShim() {
+function fixAiLabXyflowImport() {
   return {
-    name: "xyflow-default-export-shim",
+    name: "fix-ai-lab-xyflow-import",
     enforce: "pre" as const,
-    resolveId(source: string, importer?: string) {
-      if (source !== "@xyflow/react") return null;
-      if (importer?.endsWith("xyflow-react-shim.ts")) return null;
-      if (importer?.endsWith("src/routes/admin/ai-lab.tsx")) return xyflowShimPath;
-      return null;
+    transform(code: string, id: string) {
+      if (!id.endsWith("src/routes/admin/ai-lab.tsx")) return null;
+      if (!code.includes('import ReactFlow, {')) return null;
+      return {
+        code: code.replace('import ReactFlow, {', 'import { ReactFlow,'),
+        map: null,
+      };
     },
   };
 }
@@ -30,6 +29,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [xyflowDefaultExportShim(), mcpPlugin()],
+    plugins: [fixAiLabXyflowImport(), mcpPlugin()],
   },
 });
