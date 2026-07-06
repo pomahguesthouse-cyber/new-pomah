@@ -11,7 +11,7 @@ export const Route = createFileRoute("/sitemap.xml")({
           supabasePublic.from("seo_pages").select("slug, updated_at"),
           supabasePublic.from("room_types").select("slug"),
         ]);
-        const urls = new Set<string>(["/", "/rooms", "/book"]);
+        const urls = new Set<string>(["/", "/book"]);
         for (const p of pages ?? []) {
           if (!p.slug) continue;
           const slug = p.slug.startsWith("/") ? p.slug : `/${p.slug}`;
