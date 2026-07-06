@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -12,7 +12,6 @@ import {
   Bot,
   Brain,
   CalendarCheck,
-  CheckCircle2,
   Clock,
   Database,
   Gauge,
@@ -21,7 +20,6 @@ import {
   Inbox,
   LifeBuoy,
   MessageCircle,
-  Network,
   PauseCircle,
   PlayCircle,
   RefreshCw,
@@ -32,7 +30,6 @@ import {
   Sparkles,
   Users,
   Wallet,
-  Zap,
 } from "lucide-react";
 
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
@@ -40,11 +37,12 @@ import { getChatbotHealthSnapshot } from "@/admin/functions/health.functions";
 import { getAgentRoutingStats } from "@/admin/functions/routing-debug.functions";
 import {
   getAiLabConfig,
-  updateAiLabConfig,
+  getQueueMetricsStats,
+  getRetryStats,
   mergeAiLabConfig,
+  updateAiLabConfig,
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
-import { getQueueMetricsStats, getRetryStats } from "@/admin/modules/ai-lab/ai-lab.functions";
 import {
   getAiLabAuditTrail,
   getAiLabControlSnapshot,
@@ -73,15 +71,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/ai-lab")({
   component: AiLab,
@@ -101,27 +92,9 @@ type DrawerKey =
   | "audit"
   | null;
 
-type FlowNodeId =
-  | "incoming"
-  | "parser"
-  | "queue"
-  | "intent"
-  | "router"
-  | "front-office"
-  | "pricing"
-  | "customer-care"
-  | "finance"
-  | "manager"
-  | "content"
-  | "availability"
-  | "booking"
-  | "send-reply"
-  | "handover"
-  | "rag";
-
 type Tone = "green" | "blue" | "violet" | "amber" | "rose" | "cyan" | "slate";
 
-interface AgentCard {
+interface AgentMeta {
   key: string;
   name: string;
   desc: string;
@@ -130,19 +103,18 @@ interface AgentCard {
 }
 
 interface FlowNode {
-  id: FlowNodeId;
+  id: string;
   title: string;
   desc: string;
-  drawer?: Exclude<DrawerKey, null>;
   icon: ComponentType<{ className?: string }>;
   tone: Tone;
-  status: "Trigger" | "Auto" | "AI" | "Tool" | "Manual" | "Safety";
+  drawer?: Exclude<DrawerKey, null>;
 }
 
-const AGENTS: AgentCard[] = [
-  { key: "front-office", name: "Front Office", desc: "Booking, availability, FAQ tamu", icon: Users, safeAuto: true },
+const AGENTS: AgentMeta[] = [
+  { key: "front-office", name: "Front Office", desc: "Booking, availability, FAQ", icon: Users, safeAuto: true },
   { key: "pricing", name: "Pricing", desc: "Harga, promo, paket", icon: Wallet, safeAuto: true },
-  { key: "customer-care", name: "Customer Care", desc: "Keluhan dan layanan tamu", icon: Headphones, safeAuto: false },
+  { key: "customer-care", name: "Customer Care", desc: "Keluhan dan layanan", icon: Headphones, safeAuto: false },
   { key: "finance", name: "Finance", desc: "Pembayaran dan bukti transfer", icon: Bell, safeAuto: false },
   { key: "manager", name: "Manager", desc: "Eskalasi dan instruksi admin", icon: ShieldAlert, safeAuto: false },
   { key: "content", name: "Content", desc: "SEO dan city guide", icon: Sparkles, safeAuto: false },
@@ -157,183 +129,126 @@ const TOOLS = [
 ];
 
 const FLOW_NODES: FlowNode[] = [
-  { id: "incoming", title: "Incoming WhatsApp", desc: "Evolution webhook masuk", icon: MessageCircle, tone: "green", status: "Trigger", drawer: "inbox" },
-  { id: "parser", title: "Webhook Parser", desc: "Normalisasi phone, LID/JID, dedup", icon: Network, tone: "cyan", status: "Auto" },
-  { id: "queue", title: "Queue + Smart Delay", desc: "Debounce pesan beruntun", icon: Clock, tone: "blue", status: "Auto", drawer: "queue" },
-  { id: "intent", title: "Intent Classifier", desc: "Rule + fallback AI", icon: Brain, tone: "violet", status: "AI", drawer: "routing" },
-  { id: "router", title: "Router", desc: "Intent → agent", icon: GitBranch, tone: "cyan", status: "Auto", drawer: "routing" },
-  { id: "front-office", title: "Front Office", desc: "Kamar, booking, FAQ", icon: Users, tone: "cyan", status: "AI", drawer: "settings" },
-  { id: "pricing", title: "Pricing", desc: "Tarif dan promo", icon: Wallet, tone: "blue", status: "AI", drawer: "settings" },
-  { id: "customer-care", title: "Customer Care", desc: "Keluhan dan service", icon: Headphones, tone: "green", status: "AI", drawer: "settings" },
-  { id: "finance", title: "Finance", desc: "Payment proof & invoice", icon: Bell, tone: "amber", status: "AI", drawer: "settings" },
-  { id: "manager", title: "Manager", desc: "Escalation gate", icon: ShieldAlert, tone: "rose", status: "Safety", drawer: "telegram" },
-  { id: "content", title: "Content", desc: "SEO / city guide", icon: Sparkles, tone: "slate", status: "Manual", drawer: "settings" },
-  { id: "availability", title: "Check Availability", desc: "Tool wajib sebelum harga/stok", icon: CalendarCheck, tone: "green", status: "Tool" },
-  { id: "booking", title: "Create Booking", desc: "Masuk PMS/calendar", icon: CalendarCheck, tone: "blue", status: "Tool" },
-  { id: "send-reply", title: "Send Reply", desc: "Kirim via WhatsApp provider", icon: Send, tone: "green", status: "Auto" },
-  { id: "handover", title: "Human Handover", desc: "Pause AI dan staf ambil alih", icon: LifeBuoy, tone: "rose", status: "Manual", drawer: "inbox" },
-  { id: "rag", title: "RAG / SOP Lookup", desc: "Training examples + SOP", icon: Database, tone: "violet", status: "Tool", drawer: "knowledge" },
+  { id: "incoming", title: "Incoming WA", desc: "Evolution webhook", icon: MessageCircle, tone: "green", drawer: "inbox" },
+  { id: "parser", title: "Parser", desc: "Normalize phone + dedup", icon: GitBranch, tone: "cyan" },
+  { id: "queue", title: "Queue + Delay", desc: "Debounce pesan beruntun", icon: Clock, tone: "blue", drawer: "queue" },
+  { id: "intent", title: "Intent AI", desc: "Rule + LLM fallback", icon: Brain, tone: "violet", drawer: "routing" },
+  { id: "router", title: "Router", desc: "Intent ke agent", icon: GitBranch, tone: "cyan", drawer: "routing" },
+  { id: "front-office", title: "Front Office", desc: "Booking dan FAQ", icon: Users, tone: "cyan", drawer: "settings" },
+  { id: "pricing", title: "Pricing", desc: "Tarif real-time", icon: Wallet, tone: "blue", drawer: "settings" },
+  { id: "finance", title: "Finance", desc: "Payment proof", icon: Bell, tone: "amber", drawer: "settings" },
+  { id: "availability", title: "Availability Tool", desc: "Wajib sebelum stok/harga", icon: CalendarCheck, tone: "green" },
+  { id: "rag", title: "RAG / SOP", desc: "Knowledge context", icon: Database, tone: "violet", drawer: "knowledge" },
+  { id: "send", title: "Send Reply", desc: "WhatsApp provider", icon: Send, tone: "green" },
+  { id: "handover", title: "Human Handover", desc: "Staf ambil alih", icon: LifeBuoy, tone: "rose", drawer: "inbox" },
 ];
 
 function AiLab() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState<DrawerKey>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState<FlowNodeId>("front-office");
-  const [mobileTab, setMobileTab] = useState<"overview" | "flow" | "quality" | "settings">("overview");
+  const [selectedNode, setSelectedNode] = useState(FLOW_NODES[5]);
 
-  const getConfig = useServerFn(getAiLabConfig);
-  const updateConfig = useServerFn(updateAiLabConfig);
-  const getSnapshot = useServerFn(getAiLabControlSnapshot);
-  const getMetrics = useServerFn(getDashboardMetrics);
-  const getHealth = useServerFn(getChatbotHealthSnapshot);
-  const getQueue = useServerFn(getQueueMetricsStats);
-  const getRetry = useServerFn(getRetryStats);
-  const getRouting = useServerFn(getAgentRoutingStats);
-  const getQuality = useServerFn(getAgentQualityScores);
-  const getAudit = useServerFn(getAiLabAuditTrail);
+  const configFn = useServerFn(getAiLabConfig);
+  const updateFn = useServerFn(updateAiLabConfig);
+  const snapshotFn = useServerFn(getAiLabControlSnapshot);
+  const metricsFn = useServerFn(getDashboardMetrics);
+  const healthFn = useServerFn(getChatbotHealthSnapshot);
+  const queueFn = useServerFn(getQueueMetricsStats);
+  const retryFn = useServerFn(getRetryStats);
+  const routingFn = useServerFn(getAgentRoutingStats);
+  const qualityFn = useServerFn(getAgentQualityScores);
 
-  const { data: configData, isFetching: configLoading } = useQuery({
-    queryKey: ["ai-lab-config"],
-    queryFn: () => getConfig(),
-  });
-  const { data: snapshot } = useQuery({
-    queryKey: ["ai-lab-control-snapshot"],
-    queryFn: () => getSnapshot(),
-    refetchInterval: 15_000,
-  });
-  const { data: metrics } = useQuery({ queryKey: ["control-room-dashboard"], queryFn: () => getMetrics(), refetchInterval: 60_000 });
-  const { data: health } = useQuery({ queryKey: ["control-room-health"], queryFn: () => getHealth(), refetchInterval: 30_000 });
-  const { data: queue } = useQuery({ queryKey: ["control-room-queue-stats"], queryFn: () => getQueue(), refetchInterval: 15_000 });
-  const { data: retry } = useQuery({ queryKey: ["control-room-retry-stats"], queryFn: () => getRetry(), refetchInterval: 60_000 });
-  const { data: routing } = useQuery({ queryKey: ["control-room-routing"], queryFn: () => getRouting(), refetchInterval: 60_000 });
-  const { data: quality } = useQuery({ queryKey: ["control-room-agent-quality"], queryFn: () => getQuality(), refetchInterval: 60_000 });
-  const { data: audit } = useQuery({ queryKey: ["ai-lab-audit-trail"], queryFn: () => getAudit(), refetchInterval: 120_000 });
+  const { data: configData } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => configFn() });
+  const { data: snapshot } = useQuery({ queryKey: ["ai-lab-control-snapshot"], queryFn: () => snapshotFn(), refetchInterval: 15_000 });
+  const { data: metrics } = useQuery({ queryKey: ["control-room-dashboard"], queryFn: () => metricsFn(), refetchInterval: 60_000 });
+  const { data: health } = useQuery({ queryKey: ["control-room-health"], queryFn: () => healthFn(), refetchInterval: 30_000 });
+  const { data: queue } = useQuery({ queryKey: ["control-room-queue-stats"], queryFn: () => queueFn(), refetchInterval: 15_000 });
+  const { data: retry } = useQuery({ queryKey: ["control-room-retry-stats"], queryFn: () => retryFn(), refetchInterval: 60_000 });
+  const { data: routing } = useQuery({ queryKey: ["control-room-routing"], queryFn: () => routingFn(), refetchInterval: 60_000 });
+  const { data: quality } = useQuery({ queryKey: ["control-room-agent-quality"], queryFn: () => qualityFn(), refetchInterval: 60_000 });
 
   const config = configData?.config ?? mergeAiLabConfig({});
-  const selectedNode = FLOW_NODES.find((n) => n.id === selectedNodeId) ?? FLOW_NODES[0];
   const latestQueue = queue?.[0];
   const retryTotal = retry?.reduce((sum, row) => sum + Number(row.total ?? 0), 0) ?? 0;
 
-  async function commitConfig(next: AiLabConfig, success = "Konfigurasi AI Lab tersimpan") {
+  async function commitConfig(next: AiLabConfig, message = "Konfigurasi AI Lab tersimpan") {
     if (!configData?.id) {
       toast.error("Properti belum tersedia.");
       return;
     }
-    await updateConfig({ data: { id: configData.id, config: next as unknown as Record<string, unknown> } });
-    toast.success(success);
+    await updateFn({ data: { id: configData.id, config: next as unknown as Record<string, unknown> } });
+    toast.success(message);
     await Promise.all([
       qc.invalidateQueries({ queryKey: ["ai-lab-config"] }),
       qc.invalidateQueries({ queryKey: ["ai-lab-control-snapshot"] }),
-      qc.invalidateQueries({ queryKey: ["ai-lab-agent-quality"] }),
+      qc.invalidateQueries({ queryKey: ["control-room-agent-quality"] }),
     ]);
   }
 
-  const setAllAutoReply = (mode: "pause" | "safe" | "full") => {
-    const next = structuredClone(config) as AiLabConfig;
+  function updateAutoReply(mode: "pause" | "safe" | "full") {
+    const next = JSON.parse(JSON.stringify(config)) as AiLabConfig;
     for (const agent of AGENTS) {
-      const current = next.agents[agent.key];
-      if (!current) continue;
-      if (mode === "pause") current.autoReply = false;
-      if (mode === "safe") current.autoReply = agent.safeAuto && current.enabled;
-      if (mode === "full") current.autoReply = current.enabled;
+      if (!next.agents[agent.key]) continue;
+      if (mode === "pause") next.agents[agent.key].autoReply = false;
+      if (mode === "safe") next.agents[agent.key].autoReply = agent.safeAuto && next.agents[agent.key].enabled;
+      if (mode === "full") next.agents[agent.key].autoReply = next.agents[agent.key].enabled;
     }
-    const label = mode === "pause" ? "Semua auto reply dipause" : mode === "safe" ? "Safe Auto Reply aktif" : "Full Auto Reply aktif";
-    void commitConfig(next, label);
-  };
+    const message = mode === "pause" ? "Semua auto reply dipause" : mode === "safe" ? "Safe Auto Reply aktif" : "Full Auto Reply aktif";
+    void commitConfig(next, message);
+  }
 
   return (
     <div className="min-h-[100dvh] bg-[#070b14] text-slate-100">
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090f1c]/95 backdrop-blur">
-        <div className="flex min-h-[72px] items-center gap-3 px-4 md:px-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
+        <div className="flex min-h-[72px] flex-wrap items-center gap-3 px-4 py-3 md:px-6">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
             <MessageCircle className="h-5 w-5" />
-          </div>
+          </span>
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold md:text-lg">WhatsApp AI Control Room</h1>
-            <p className="truncate text-xs text-slate-400">Pomah Guesthouse • AI Lab Operasional</p>
+            <p className="truncate text-xs text-slate-400">Pomah Guesthouse • operational AI Lab</p>
           </div>
-          <div className="ml-auto hidden items-center gap-2 lg:flex">
-            <StatusPill snapshot={snapshot} configLoading={configLoading} />
-            <Button size="sm" variant="outline" className="border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20" onClick={() => setAllAutoReply("pause")}>
-              <PauseCircle className="mr-2 h-4 w-4" /> Pause All
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <StatusBadge snapshot={snapshot} />
+            <Button size="sm" variant="outline" className="border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20" onClick={() => updateAutoReply("pause")}>
+              <PauseCircle className="mr-2 h-4 w-4" /> Pause
             </Button>
-            <Button size="sm" variant="outline" className="border-sky-400/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20" onClick={() => setAllAutoReply("safe")}>
-              <ShieldAlert className="mr-2 h-4 w-4" /> Safe Mode
+            <Button size="sm" variant="outline" className="border-sky-400/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20" onClick={() => updateAutoReply("safe")}>
+              <ShieldAlert className="mr-2 h-4 w-4" /> Safe
             </Button>
-            <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => setAllAutoReply("full")}>
-              <PlayCircle className="mr-2 h-4 w-4" /> Full Auto
+            <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => updateAutoReply("full")}>
+              <PlayCircle className="mr-2 h-4 w-4" /> Full
             </Button>
           </div>
-          <Button size="icon" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => setDrawer("audit")}>
-            <Bell className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="grid grid-cols-4 gap-1 border-t border-slate-800 px-2 py-2 lg:hidden">
-          {[
-            ["overview", "Overview"],
-            ["flow", "Flow"],
-            ["quality", "Quality"],
-            ["settings", "Settings"],
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => setMobileTab(key as typeof mobileTab)}
-              className={cn(
-                "rounded-lg px-2 py-2 text-xs font-medium",
-                mobileTab === key ? "bg-emerald-500 text-slate-950" : "bg-slate-900 text-slate-400",
-              )}
-            >
-              {label}
-            </button>
-          ))}
         </div>
       </header>
 
       <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">
-        <aside className="hidden space-y-3 xl:block">
-          <ControlNav openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
-          <SafetyCard snapshot={snapshot} onPause={() => setAllAutoReply("pause")} onSafe={() => setAllAutoReply("safe")} onFull={() => setAllAutoReply("full")} />
+        <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
+          <Navigation openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
+          <SafetyCard snapshot={snapshot} onPause={() => updateAutoReply("pause")} onSafe={() => updateAutoReply("safe")} onFull={() => updateAutoReply("full")} />
         </aside>
 
         <section className="min-w-0 space-y-4">
-          {(mobileTab === "overview" || isDesktop()) && (
-            <>
-              <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
-              <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
-            </>
-          )}
-          {(mobileTab === "flow" || isDesktop()) && (
-            <FlowMap selectedNodeId={selectedNodeId} setSelectedNodeId={setSelectedNodeId} openDrawer={setDrawer} />
-          )}
-          {(mobileTab === "quality" || isDesktop()) && (
-            <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
-          )}
-          {mobileTab === "settings" && (
-            <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
-          )}
+          <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
+          <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
+          <FlowMap selected={selectedNode.id} onSelect={setSelectedNode} openDrawer={setDrawer} />
+          <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
+          <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
         </section>
 
-        <aside className="hidden min-w-0 space-y-4 xl:block">
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
           <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} openDrawer={setDrawer} />
-          <AuditMiniPanel audit={audit} openDrawer={setDrawer} />
+          <AuditMiniPanel openDrawer={setDrawer} />
         </aside>
       </main>
 
-      <FeatureDrawer
-        drawer={drawer}
-        setDrawer={setDrawer}
-        config={config}
-        commitConfig={commitConfig}
-      />
+      <FeatureDrawer drawer={drawer} setDrawer={setDrawer} config={config} commitConfig={commitConfig} />
     </div>
   );
 }
 
-function isDesktop() {
-  return true;
-}
-
-function ControlNav({ openDrawer, unread }: { openDrawer: (drawer: DrawerKey) => void; unread: number }) {
+function Navigation({ openDrawer, unread }: { openDrawer: (drawer: DrawerKey) => void; unread: number }) {
   const items: Array<{ label: string; drawer: Exclude<DrawerKey, null>; icon: ComponentType<{ className?: string }> }> = [
     { label: "Inbox", drawer: "inbox", icon: Inbox },
     { label: "Simulator", drawer: "simulator", icon: PlayCircle },
@@ -347,18 +262,12 @@ function ControlNav({ openDrawer, unread }: { openDrawer: (drawer: DrawerKey) =>
   return (
     <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-3 text-slate-100">
       <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Navigation</div>
-      <div className="space-y-1">
+      <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 xl:grid-cols-1">
         {items.map((item) => (
-          <button
-            key={item.drawer}
-            onClick={() => openDrawer(item.drawer)}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
-          >
+          <button key={item.drawer} onClick={() => openDrawer(item.drawer)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition hover:bg-slate-800/70 hover:text-white">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 text-left">{item.label}</span>
-            {item.drawer === "inbox" && unread > 0 && (
-              <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">{unread}</span>
-            )}
+            {item.drawer === "inbox" && unread > 0 && <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">{unread}</span>}
           </button>
         ))}
       </div>
@@ -366,39 +275,26 @@ function ControlNav({ openDrawer, unread }: { openDrawer: (drawer: DrawerKey) =>
   );
 }
 
+function StatusBadge({ snapshot }: { snapshot?: AiLabControlSnapshot }) {
+  if (snapshot?.globalAutoReplyPaused) return <Badge className="bg-amber-500/15 text-amber-300 hover:bg-amber-500/15">Auto Reply Paused</Badge>;
+  return <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/15">Live • {snapshot?.autoReplyAgents ?? 0} auto agents</Badge>;
+}
+
 function SafetyCard({ snapshot, onPause, onSafe, onFull }: { snapshot?: AiLabControlSnapshot; onPause: () => void; onSafe: () => void; onFull: () => void }) {
   return (
     <Card className="rounded-2xl border-amber-400/20 bg-amber-500/10 p-4 text-amber-50">
-      <div className="flex items-start gap-3">
-        <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-300" />
-        <div>
-          <p className="font-semibold">AI Safety Mode</p>
-          <p className="mt-1 text-xs text-amber-100/80">Auto reply aktif di {snapshot?.autoReplyAgents ?? 0}/{snapshot?.totalAgents ?? 0} agent.</p>
-        </div>
-      </div>
-      <div className="mt-4 grid gap-2">
-        <Button size="sm" variant="outline" className="border-amber-400/30 bg-slate-950/50 text-amber-100 hover:bg-slate-900" onClick={onPause}>Pause All Auto Reply</Button>
-        <Button size="sm" variant="outline" className="border-sky-400/30 bg-slate-950/50 text-sky-100 hover:bg-slate-900" onClick={onSafe}>Safe Auto Reply</Button>
-        <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={onFull}>Full Auto Reply</Button>
-      </div>
+      <div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">AI Safety Mode</p><p className="mt-1 text-xs text-amber-100/80">Auto reply aktif di {snapshot?.autoReplyAgents ?? 0}/{snapshot?.totalAgents ?? AGENTS.length} agent.</p></div></div>
+      <div className="mt-4 grid gap-2"><Button size="sm" variant="outline" className="border-amber-400/30 bg-slate-950/50 text-amber-100 hover:bg-slate-900" onClick={onPause}>Pause All</Button><Button size="sm" variant="outline" className="border-sky-400/30 bg-slate-950/50 text-sky-100 hover:bg-slate-900" onClick={onSafe}>Safe Auto</Button><Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={onFull}>Full Auto</Button></div>
     </Card>
   );
-}
-
-function StatusPill({ snapshot, configLoading }: { snapshot?: AiLabControlSnapshot; configLoading: boolean }) {
-  if (configLoading) return <Badge className="bg-slate-800 text-slate-300">Loading config</Badge>;
-  if (snapshot?.globalAutoReplyPaused) {
-    return <Badge className="bg-amber-500/15 text-amber-300 hover:bg-amber-500/15">Auto Reply Paused</Badge>;
-  }
-  return <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/15">Live • {snapshot?.autoReplyAgents ?? 0} auto agents</Badge>;
 }
 
 function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snapshot?: AiLabControlSnapshot; metrics: any; health: any; latestQueue: any; openDrawer: (drawer: DrawerKey) => void }) {
   const summary = metrics?.summary;
   const cards = [
-    { label: "Unread Inbox", value: fmtNum(snapshot?.unreadMessages ?? 0), delta: `${fmtNum(snapshot?.unreadThreads ?? 0)} thread belum dibaca`, icon: Inbox, tone: "green" as Tone, drawer: "inbox" as DrawerKey },
+    { label: "Unread Inbox", value: fmtNum(snapshot?.unreadMessages ?? 0), delta: `${fmtNum(snapshot?.unreadThreads ?? 0)} thread`, icon: Inbox, tone: "green" as Tone, drawer: "inbox" as DrawerKey },
     { label: "Conversations", value: fmtNum(summary?.waThreads ?? health?.delivery?.total ?? 0), delta: `${summary?.waConversionPct ?? 0}% conversion`, icon: MessageCircle, tone: "blue" as Tone, drawer: "health" as DrawerKey },
-    { label: "Auto Agents", value: `${snapshot?.autoReplyAgents ?? 0}/${snapshot?.totalAgents ?? AGENTS.length}`, delta: snapshot?.globalAutoReplyPaused ? "paused" : "auto reply aktif", icon: Bot, tone: snapshot?.globalAutoReplyPaused ? "amber" as Tone : "cyan" as Tone, drawer: "settings" as DrawerKey },
+    { label: "Auto Agents", value: `${snapshot?.autoReplyAgents ?? 0}/${snapshot?.totalAgents ?? AGENTS.length}`, delta: snapshot?.globalAutoReplyPaused ? "paused" : "aktif", icon: Bot, tone: snapshot?.globalAutoReplyPaused ? "amber" as Tone : "cyan" as Tone, drawer: "settings" as DrawerKey },
     { label: "Response p50", value: fmtMsShort(health?.latency?.p50Ms ?? null), delta: `p95 ${fmtMsShort(health?.latency?.p95Ms ?? null)}`, icon: Clock, tone: "violet" as Tone, drawer: "health" as DrawerKey },
     { label: "Queue", value: `${snapshot?.queuePending ?? latestQueue?.queued ?? 0}`, delta: `${snapshot?.queueFailed ?? latestQueue?.failed ?? 0} failed`, icon: Gauge, tone: "rose" as Tone, drawer: "queue" as DrawerKey },
     { label: "Open Handoff", value: fmtNum(health?.openHandoffTickets ?? 0), delta: "butuh staf", icon: LifeBuoy, tone: "amber" as Tone, drawer: "inbox" as DrawerKey },
@@ -407,15 +303,8 @@ function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snap
     <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {cards.map((card) => (
         <button key={card.label} onClick={() => card.drawer && openDrawer(card.drawer)} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-left text-slate-100 transition hover:border-emerald-400/50">
-          <div className="flex items-center justify-between gap-2">
-            <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
-              <card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />
-            </span>
-            <Sparkline tone={card.tone} />
-          </div>
-          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p>
-          <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p>
-          <p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
+          <div className="flex items-center justify-between gap-2"><span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}><card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} /></span><Sparkline tone={card.tone} /></div>
+          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p><p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p><p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
         </button>
       ))}
     </section>
@@ -424,64 +313,20 @@ function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snap
 
 function OperationalAlerts({ snapshot, health, retryTotal, openDrawer }: { snapshot?: AiLabControlSnapshot; health: any; retryTotal: number; openDrawer: (drawer: DrawerKey) => void }) {
   const alerts = [
-    snapshot?.globalAutoReplyPaused ? { tone: "amber" as Tone, title: "Auto reply sedang pause", desc: "Semua tamu masuk mode manual/draft. Aman untuk investigasi.", drawer: "settings" as DrawerKey } : null,
-    (snapshot?.queueFailed ?? 0) > 0 ? { tone: "rose" as Tone, title: "Ada queue failed", desc: `${snapshot?.queueFailed ?? 0} job gagal. Cek retry detail sebelum traffic ramai.`, drawer: "retry" as DrawerKey } : null,
-    retryTotal > 0 ? { tone: "violet" as Tone, title: "Retry AI terdeteksi", desc: `${retryTotal} retry tercatat di rollup. Pantau latency/model.`, drawer: "retry" as DrawerKey } : null,
+    snapshot?.globalAutoReplyPaused ? { tone: "amber" as Tone, title: "Auto reply sedang pause", desc: "Semua tamu masuk mode manual/draft.", drawer: "settings" as DrawerKey } : null,
+    (snapshot?.queueFailed ?? 0) > 0 ? { tone: "rose" as Tone, title: "Ada queue failed", desc: `${snapshot?.queueFailed ?? 0} job gagal.`, drawer: "retry" as DrawerKey } : null,
+    retryTotal > 0 ? { tone: "violet" as Tone, title: "Retry AI terdeteksi", desc: `${retryTotal} retry tercatat.`, drawer: "retry" as DrawerKey } : null,
     (health?.openHandoffTickets ?? 0) > 0 ? { tone: "amber" as Tone, title: "Handoff terbuka", desc: `${health.openHandoffTickets} percakapan butuh staf.`, drawer: "inbox" as DrawerKey } : null,
   ].filter(Boolean) as Array<{ tone: Tone; title: string; desc: string; drawer: DrawerKey }>;
-
-  if (alerts.length === 0) {
-    return (
-      <Card className="rounded-2xl border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-50">
-        <div className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><div><p className="font-semibold">Operational signal normal</p><p className="text-sm text-emerald-100/75">Tidak ada alert besar dari queue, retry, atau handoff.</p></div></div>
-      </Card>
-    );
-  }
-
-  return (
-    <section className="grid gap-2 md:grid-cols-2">
-      {alerts.map((alert) => (
-        <button key={alert.title} onClick={() => alert.drawer && openDrawer(alert.drawer)} className={cn("rounded-2xl border p-4 text-left transition", toneBorder(alert.tone))}>
-          <div className="flex items-start gap-3">
-            <AlertTriangle className={cn("mt-0.5 h-5 w-5", toneClass(alert.tone, "text"))} />
-            <div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm text-slate-400">{alert.desc}</p></div>
-          </div>
-        </button>
-      ))}
-    </section>
-  );
+  if (alerts.length === 0) return <Card className="rounded-2xl border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-50"><div className="flex items-center gap-3"><Activity className="h-5 w-5 text-emerald-300" /><div><p className="font-semibold">Operational signal normal</p><p className="text-sm text-emerald-100/75">Tidak ada alert besar dari queue, retry, atau handoff.</p></div></div></Card>;
+  return <section className="grid gap-2 md:grid-cols-2">{alerts.map((alert) => <button key={alert.title} onClick={() => alert.drawer && openDrawer(alert.drawer)} className={cn("rounded-2xl border p-4 text-left transition", toneBorder(alert.tone))}><div className="flex items-start gap-3"><AlertTriangle className={cn("mt-0.5 h-5 w-5", toneClass(alert.tone, "text"))} /><div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm text-slate-400">{alert.desc}</p></div></div></button>)}</section>;
 }
 
-function FlowMap({ selectedNodeId, setSelectedNodeId, openDrawer }: { selectedNodeId: FlowNodeId; setSelectedNodeId: (id: FlowNodeId) => void; openDrawer: (drawer: DrawerKey) => void }) {
+function FlowMap({ selected, onSelect, openDrawer }: { selected: string; onSelect: (node: FlowNode) => void; openDrawer: (drawer: DrawerKey) => void }) {
   return (
     <Card className="overflow-hidden rounded-2xl border-slate-800 bg-slate-950/70 p-0 text-slate-100">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center gap-3"><Badge className="bg-slate-800 text-slate-300">Interactive Flow</Badge><div><h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2><p className="text-xs text-slate-500">Klik node untuk lihat status, drawer, dan tindakan.</p></div></div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("routing")}><GitBranch className="mr-2 h-4 w-4" />Routing</Button>
-          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}><PlayCircle className="mr-2 h-4 w-4" />Simulator</Button>
-        </div>
-      </div>
-      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
-        {FLOW_NODES.map((node, idx) => (
-          <button
-            key={node.id}
-            onClick={() => {
-              setSelectedNodeId(node.id);
-              if (node.drawer && ["queue", "routing", "simulator", "knowledge"].includes(node.drawer)) openDrawer(node.drawer);
-            }}
-            className={cn(
-              "relative rounded-xl border bg-slate-900/50 p-4 text-left transition hover:border-emerald-400/50",
-              selectedNodeId === node.id ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.18)]" : "border-slate-800",
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", toneClass(node.tone, "bg"))}><node.icon className={cn("h-5 w-5", toneClass(node.tone, "text"))} /></span>
-              <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">{idx + 1}</span><Badge className={toneClass(node.tone, "badge")}>{node.status}</Badge></div><p className="mt-2 font-semibold text-white">{node.title}</p><p className="mt-1 text-xs text-slate-400">{node.desc}</p></div>
-            </div>
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3"><div className="flex items-center gap-3"><Badge className="bg-slate-800 text-slate-300">Interactive Flow</Badge><div><h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2><p className="text-xs text-slate-500">Klik node untuk inspector dan detail drawer.</p></div></div><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}><PlayCircle className="mr-2 h-4 w-4" />Simulator</Button></div>
+      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">{FLOW_NODES.map((node, idx) => <button key={node.id} onClick={() => { onSelect(node); if (node.drawer && ["queue", "routing", "knowledge"].includes(node.drawer)) openDrawer(node.drawer); }} className={cn("rounded-xl border bg-slate-900/50 p-4 text-left transition hover:border-emerald-400/50", selected === node.id ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.18)]" : "border-slate-800")}><div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", toneClass(node.tone, "bg"))}><node.icon className={cn("h-5 w-5", toneClass(node.tone, "text"))} /></span><div className="min-w-0"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">{idx + 1}</span><Badge className={toneClass(node.tone, "badge")}>{node.drawer ? "Open" : "Auto"}</Badge></div><p className="mt-2 font-semibold text-white">{node.title}</p><p className="mt-1 text-xs text-slate-400">{node.desc}</p></div></div></button>)}</div>
     </Card>
   );
 }
@@ -492,34 +337,10 @@ function QualityScorePanel({ rows, routing, retryTotal }: { rows: AgentQualitySc
     for (const row of routing?.rows ?? []) totals.set(row.intent, (totals.get(row.intent) ?? 0) + Number(row.count ?? 0));
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [routing]);
-
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Quality Score</p><h2 className="mt-1 text-lg font-semibold text-white">Agent performance signal</h2></div><Badge className="bg-slate-800 text-slate-300">Retry total {retryTotal}</Badge></div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {rows.map((row) => {
-            const agent = AGENTS.find((a) => a.key === row.agentKey);
-            const Icon = agent?.icon ?? Bot;
-            return (
-              <div key={row.agentKey} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{agent?.name ?? row.agentKey}</span></span><ScoreBadge score={row.score} /></div>
-                <p className="mt-2 text-xs text-slate-400">{row.signal}</p>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.score}%` }} /></div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-        <p className="text-sm font-semibold text-white">Top intents</p>
-        <div className="mt-4 space-y-3">
-          {topIntents.length === 0 && <p className="text-sm text-slate-500">Belum ada data routing.</p>}
-          {topIntents.map(([intent, count]) => (
-            <div key={intent} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0"><span className="truncate text-sm text-slate-300">{prettyIntent(intent)}</span><Badge className="bg-slate-800 text-slate-300">{count}</Badge></div>
-          ))}
-        </div>
-      </Card>
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Quality Score</p><h2 className="mt-1 text-lg font-semibold text-white">Agent performance signal</h2></div><Badge className="bg-slate-800 text-slate-300">Retry {retryTotal}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((row) => { const agent = AGENTS.find((a) => a.key === row.agentKey); const Icon = agent?.icon ?? Bot; return <div key={row.agentKey} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{agent?.name ?? row.agentKey}</span></span><ScoreBadge score={row.score} /></div><p className="mt-2 text-xs text-slate-400">{row.signal}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.score}%` }} /></div></div>; })}</div></Card>
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><p className="text-sm font-semibold text-white">Top intents</p><div className="mt-4 space-y-3">{topIntents.length === 0 && <p className="text-sm text-slate-500">Belum ada data routing.</p>}{topIntents.map(([intent, count]) => <div key={intent} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0"><span className="truncate text-sm text-slate-300">{prettyIntent(intent)}</span><Badge className="bg-slate-800 text-slate-300">{count}</Badge></div>)}</div></Card>
     </section>
   );
 }
@@ -527,62 +348,13 @@ function QualityScorePanel({ rows, routing, retryTotal }: { rows: AgentQualitySc
 function InspectorPanel({ selectedNode, config, snapshot, openDrawer }: { selectedNode: FlowNode; config: AiLabConfig; snapshot?: AiLabControlSnapshot; openDrawer: (drawer: DrawerKey) => void }) {
   const agent = AGENTS.find((a) => a.key === selectedNode.id);
   const agentConfig = agent ? config.agents[agent.key] : null;
-  return (
-    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-      <div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}><selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} /></span><div><p className="font-semibold text-white">{selectedNode.title}</p><p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p></div></div>
-      <div className="mt-4 space-y-2 text-sm">
-        <MetricRow label="Status" value={selectedNode.status} />
-        {agentConfig && <MetricRow label="Agent active" value={agentConfig.enabled ? "Yes" : "Off"} tone={agentConfig.enabled ? "green" : undefined} />}
-        {agentConfig && <MetricRow label="Auto reply" value={agentConfig.autoReply ? "Auto" : "Manual"} tone={agentConfig.autoReply ? "green" : undefined} />}
-        {selectedNode.id === "queue" && <MetricRow label="Pending / Failed" value={`${snapshot?.queuePending ?? 0} / ${snapshot?.queueFailed ?? 0}`} />}
-        {selectedNode.id === "incoming" && <MetricRow label="Unread" value={`${snapshot?.unreadMessages ?? 0} pesan`} />}
-      </div>
-      <div className="mt-4 grid gap-2">
-        {selectedNode.drawer && <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>Open detail</Button>}
-        <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>Test in simulator</Button>
-      </div>
-    </Card>
-  );
+  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}><selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} /></span><div><p className="font-semibold text-white">{selectedNode.title}</p><p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p></div></div><div className="mt-4 space-y-2 text-sm"><MetricRow label="Status" value={selectedNode.drawer ? "Detail tersedia" : "Auto step"} />{agentConfig && <MetricRow label="Agent active" value={agentConfig.enabled ? "Yes" : "Off"} tone={agentConfig.enabled ? "green" : undefined} />}{agentConfig && <MetricRow label="Auto reply" value={agentConfig.autoReply ? "Auto" : "Manual"} tone={agentConfig.autoReply ? "green" : undefined} />}{selectedNode.id === "queue" && <MetricRow label="Pending / Failed" value={`${snapshot?.queuePending ?? 0} / ${snapshot?.queueFailed ?? 0}`} />}</div><div className="mt-4 grid gap-2">{selectedNode.drawer && <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>Open detail</Button>}<Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>Test in simulator</Button></div></Card>;
 }
 
 function SettingsPanel({ config, commitConfig, openDrawer }: { config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void>; openDrawer: (drawer: DrawerKey) => void }) {
-  const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => {
-    const next = structuredClone(config) as AiLabConfig;
-    next.agents[key] = { ...next.agents[key], ...patch };
-    void commitConfig(next, `${AGENTS.find((a) => a.key === key)?.name ?? key} diperbarui`);
-  };
-  const updateTool = (key: string, enabled: boolean) => {
-    const next = structuredClone(config) as AiLabConfig;
-    next.tools[key] = { ...next.tools[key], enabled };
-    void commitConfig(next, `${TOOLS.find((t) => t.key === key)?.name ?? key} diperbarui`);
-  };
-  return (
-    <div className="space-y-4">
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Agents</p><h2 className="mt-1 text-lg font-semibold text-white">Auto Reply & Safety</h2></div><Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => openDrawer("audit")}>Audit Trail</Button></div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {AGENTS.map((agent) => {
-            const c = config.agents[agent.key];
-            return (
-              <div key={agent.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-                <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><agent.icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">{agent.name}</p><p className="text-xs text-slate-400">{agent.desc}</p></div></div>
-                <div className="mt-4 space-y-3"><SettingSwitch title="Active" checked={!!c?.enabled} onChange={(v) => updateAgent(agent.key, { enabled: v })} /><SettingSwitch title="Auto Reply" checked={!!c?.autoReply} onChange={(v) => updateAgent(agent.key, { autoReply: v })} /></div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-        <p className="text-lg font-semibold text-white">Tool Enablement</p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {TOOLS.map((tool) => {
-            const c = config.tools[tool.key];
-            return <div key={tool.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><tool.icon className="h-5 w-5 text-sky-300" /><p className="mt-3 text-sm font-semibold text-white">{tool.name}</p><p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p><div className="mt-3"><Switch checked={!!c?.enabled} onCheckedChange={(v) => updateTool(tool.key, v)} /></div></div>;
-          })}
-        </div>
-      </Card>
-    </div>
-  );
+  const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => { const next = JSON.parse(JSON.stringify(config)) as AiLabConfig; next.agents[key] = { ...next.agents[key], ...patch }; void commitConfig(next, `${AGENTS.find((a) => a.key === key)?.name ?? key} diperbarui`); };
+  const updateTool = (key: string, enabled: boolean) => { const next = JSON.parse(JSON.stringify(config)) as AiLabConfig; next.tools[key] = { ...next.tools[key], enabled }; void commitConfig(next, `${TOOLS.find((t) => t.key === key)?.name ?? key} diperbarui`); };
+  return <div className="space-y-4"><Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Agents</p><h2 className="mt-1 text-lg font-semibold text-white">Auto Reply & Safety</h2></div><Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => openDrawer("audit")}>Audit Trail</Button></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{AGENTS.map((agent) => { const c = config.agents[agent.key]; return <div key={agent.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><agent.icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">{agent.name}</p><p className="text-xs text-slate-400">{agent.desc}</p></div></div><div className="mt-4 space-y-3"><SettingSwitch title="Active" checked={!!c?.enabled} onChange={(v) => updateAgent(agent.key, { enabled: v })} /><SettingSwitch title="Auto Reply" checked={!!c?.autoReply} onChange={(v) => updateAgent(agent.key, { autoReply: v })} /></div></div>; })}</div></Card><Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><p className="text-lg font-semibold text-white">Tool Enablement</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{TOOLS.map((tool) => { const c = config.tools[tool.key]; return <div key={tool.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><tool.icon className="h-5 w-5 text-sky-300" /><p className="mt-3 text-sm font-semibold text-white">{tool.name}</p><p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p><div className="mt-3"><Switch checked={!!c?.enabled} onCheckedChange={(v) => updateTool(tool.key, v)} /></div></div>; })}</div></Card></div>;
 }
 
 function SettingSwitch({ title, checked, onChange }: { title: string; checked: boolean; onChange: (v: boolean) => void }) {
@@ -604,13 +376,7 @@ function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: Dr
     audit: { title: "Audit & Rollback", desc: "Config history, rollback readiness, and change governance." },
   };
   const m = drawer ? meta[drawer] : null;
-  return (
-    <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}>
-      <SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">
-        {m && drawer && <div className="flex h-full min-h-0 flex-col"><SheetHeader className="border-b border-slate-800 px-5 py-4 text-left"><SheetTitle className="text-white">{m.title}</SheetTitle><SheetDescription className="text-slate-400">{m.desc}</SheetDescription></SheetHeader><div className="min-h-0 flex-1 overflow-y-auto"><DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} /></div></div>}
-      </SheetContent>
-    </Sheet>
-  );
+  return <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}><SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">{m && drawer && <div className="flex h-full min-h-0 flex-col"><SheetHeader className="border-b border-slate-800 px-5 py-4 text-left"><SheetTitle className="text-white">{m.title}</SheetTitle><SheetDescription className="text-slate-400">{m.desc}</SheetDescription></SheetHeader><div className="min-h-0 flex-1 overflow-y-auto"><DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} /></div></div>}</SheetContent></Sheet>;
 }
 
 function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<DrawerKey, null>; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
@@ -629,11 +395,7 @@ function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<Drawe
 }
 
 function SimulatorSafetyGate() {
-  return (
-    <Card className="rounded-2xl border-amber-400/30 bg-amber-500/10 p-4 text-amber-50">
-      <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">Simulator Safety Gate</p><p className="mt-1 text-sm text-amber-100/80">Simulator memakai pipeline asli. Gunakan nomor test khusus dan cek hasil booking dengan label simulator sebelum merge ke produksi.</p></div></div>
-    </Card>
-  );
+  return <Card className="rounded-2xl border-amber-400/30 bg-amber-500/10 p-4 text-amber-50"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">Simulator Safety Gate</p><p className="mt-1 text-sm text-amber-100/80">Simulator memakai pipeline asli. Gunakan nomor test khusus dan cek booking test sebelum merge ke produksi.</p></div></div></Card>;
 }
 
 function RagDebugger() {
@@ -652,39 +414,20 @@ function RagDebugger() {
       setLoading(false);
     }
   }
-  return (
-    <Card className="rounded-2xl border-violet-400/20 bg-violet-500/10 p-4 text-slate-100">
-      <div className="flex flex-wrap items-end gap-3"><div className="min-w-[240px] flex-1"><Label className="text-violet-100">RAG retrieval preview</Label><Input value={query} onChange={(e) => setQuery(e.target.value)} className="mt-2 border-slate-700 bg-slate-950 text-white" /></div><Button onClick={runPreview} disabled={loading} className="bg-violet-500 text-white hover:bg-violet-400"><Search className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />Preview</Button></div>
-      <div className="mt-4 space-y-2">
-        {rows.length === 0 && <p className="text-sm text-violet-100/70">Masukkan pertanyaan tamu lalu klik Preview untuk melihat contoh training yang kemungkinan tersuntik ke prompt.</p>}
-        {rows.map((row) => <div key={row.id} className="rounded-xl border border-violet-400/20 bg-slate-950/70 p-3"><div className="flex items-center justify-between gap-3"><Badge className={row.used ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-800 text-slate-300"}>{row.used ? "Dipakai" : "Cadangan"}</Badge><span className="text-xs text-slate-500">match {row.lexicalScore}%</span></div><p className="mt-2 text-sm text-white">{row.userMessage || "(tanpa user message)"}</p><p className="mt-1 line-clamp-2 text-xs text-slate-400">{row.idealResponse || "Belum ada ideal response"}</p></div>)}
-      </div>
-    </Card>
-  );
+  return <Card className="rounded-2xl border-violet-400/20 bg-violet-500/10 p-4 text-slate-100"><div className="flex flex-wrap items-end gap-3"><div className="min-w-[240px] flex-1"><Label className="text-violet-100">RAG retrieval preview</Label><Input value={query} onChange={(e) => setQuery(e.target.value)} className="mt-2 border-slate-700 bg-slate-950 text-white" /></div><Button onClick={runPreview} disabled={loading} className="bg-violet-500 text-white hover:bg-violet-400"><Search className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />Preview</Button></div><div className="mt-4 space-y-2">{rows.length === 0 && <p className="text-sm text-violet-100/70">Masukkan pertanyaan tamu lalu klik Preview untuk melihat contoh training yang kemungkinan masuk prompt.</p>}{rows.map((row) => <div key={row.id} className="rounded-xl border border-violet-400/20 bg-slate-950/70 p-3"><div className="flex items-center justify-between gap-3"><Badge className={row.used ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-800 text-slate-300"}>{row.used ? "Dipakai" : "Cadangan"}</Badge><span className="text-xs text-slate-500">match {row.lexicalScore}%</span></div><p className="mt-2 text-sm text-white">{row.userMessage || "(tanpa user message)"}</p><p className="mt-1 line-clamp-2 text-xs text-slate-400">{row.idealResponse || "Belum ada ideal response"}</p></div>)}</div></Card>;
 }
 
 function AuditTrailPanel() {
   const auditFn = useServerFn(getAiLabAuditTrail);
   const { data, isFetching, refetch } = useQuery({ queryKey: ["ai-lab-audit-trail-full"], queryFn: () => auditFn() });
-  return (
-    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-      <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Audit Trail</p><h2 className="mt-1 text-lg font-semibold text-white">Prompt & setting history</h2></div><Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => refetch()}><RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />Refresh</Button></div>
-      {!data?.installed && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Tabel audit belum terpasang atau belum ada perubahan tercatat. Fondasi UI sudah siap; jalankan migration audit sebelum mengaktifkan rollback penuh.</div>}
-      <div className="mt-4 space-y-2">{data?.rows?.map((row) => <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div className="flex items-center justify-between gap-3"><p className="font-medium text-white">{row.section}</p><span className="text-xs text-slate-500">{fmtDate(row.changedAt)}</span></div><p className="mt-1 text-xs text-slate-400">{row.reason} • {row.changedBy}</p></div>)}</div>
-    </Card>
-  );
+  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Audit Trail</p><h2 className="mt-1 text-lg font-semibold text-white">Prompt & setting history</h2></div><Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => refetch()}><RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />Refresh</Button></div>{!data?.installed && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Tabel audit belum terpasang atau belum ada perubahan tercatat. UI sudah siap; migration audit diperlukan untuk rollback penuh.</div>}<div className="mt-4 space-y-2">{data?.rows?.map((row) => <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div className="flex items-center justify-between gap-3"><p className="font-medium text-white">{row.section}</p><span className="text-xs text-slate-500">{fmtDate(row.changedAt)}</span></div><p className="mt-1 text-xs text-slate-400">{row.reason} • {row.changedBy}</p></div>)}</div></Card>;
 }
 
-function AuditMiniPanel({ audit, openDrawer }: { audit: any; openDrawer: (drawer: DrawerKey) => void }) {
-  return (
-    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
-      <div className="flex items-center justify-between"><p className="font-semibold text-white">Audit</p><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("audit")}>Open</Button></div>
-      <p className="mt-2 text-sm text-slate-400">{audit?.installed ? `${audit.rows.length} perubahan terakhir` : "Audit table belum aktif"}</p>
-    </Card>
-  );
+function AuditMiniPanel({ openDrawer }: { openDrawer: (drawer: DrawerKey) => void }) {
+  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><p className="font-semibold text-white">Audit</p><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("audit")}>Open</Button></div><p className="mt-2 text-sm text-slate-400">History & rollback readiness.</p></Card>;
 }
 
-function DarkDrawerBody({ children }: { children: React.ReactNode }) {
+function DarkDrawerBody({ children }: { children: ReactNode }) {
   return <div className="space-y-4 bg-[#070b14] p-4 text-slate-100 [&_.bg-background]:bg-slate-950 [&_.text-foreground]:text-slate-100">{children}</div>;
 }
 
@@ -703,7 +446,7 @@ function Sparkline({ tone }: { tone: Tone }) {
 }
 
 function toneClass(tone: Tone, part: "bg" | "text" | "badge") {
-  const map: Record<Tone, Record<typeof part, string>> = {
+  const map = {
     green: { bg: "bg-emerald-500/15", text: "text-emerald-300", badge: "bg-emerald-500/15 text-emerald-300" },
     blue: { bg: "bg-sky-500/15", text: "text-sky-300", badge: "bg-sky-500/15 text-sky-300" },
     violet: { bg: "bg-violet-500/15", text: "text-violet-300", badge: "bg-violet-500/15 text-violet-300" },
@@ -711,7 +454,7 @@ function toneClass(tone: Tone, part: "bg" | "text" | "badge") {
     rose: { bg: "bg-rose-500/15", text: "text-rose-300", badge: "bg-rose-500/15 text-rose-300" },
     cyan: { bg: "bg-cyan-500/15", text: "text-cyan-300", badge: "bg-cyan-500/15 text-cyan-300" },
     slate: { bg: "bg-slate-700/60", text: "text-slate-300", badge: "bg-slate-800 text-slate-300" },
-  } as const;
+  } satisfies Record<Tone, Record<"bg" | "text" | "badge", string>>;
   return map[tone][part];
 }
 
