@@ -28,6 +28,7 @@ import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
 import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
+import { Route as ApiEvolutionRouteImport } from './routes/api.evolution'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
 import { Route as AdminWppDiagnosticsRouteImport } from './routes/admin/wpp-diagnostics'
 import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
@@ -163,6 +164,11 @@ const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
 const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
   id: '/api/place-photo',
   path: '/api/place-photo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEvolutionRoute = ApiEvolutionRouteImport.update({
+  id: '/api/evolution',
+  path: '/api/evolution',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
@@ -411,6 +417,7 @@ export interface FileRoutesByFullPath {
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
+  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -472,6 +479,7 @@ export interface FileRoutesByTo {
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
+  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -535,6 +543,7 @@ export interface FileRoutesById {
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
   '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
+  '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
   '/api/public-site': typeof ApiPublicSiteRoute
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
@@ -599,6 +608,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp-corrections'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
+    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -660,6 +670,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp-corrections'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
+    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -722,6 +733,7 @@ export interface FileRouteTypes {
     | '/admin/whatsapp-corrections'
     | '/admin/wpp-diagnostics'
     | '/api/debug-db'
+    | '/api/evolution'
     | '/api/place-photo'
     | '/api/public-site'
     | '/api/public-site-data'
@@ -759,6 +771,7 @@ export interface RootRouteChildren {
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiDebugDbRoute: typeof ApiDebugDbRoute
+  ApiEvolutionRoute: typeof ApiEvolutionRoute
   ApiPlacePhotoRoute: typeof ApiPlacePhotoRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
@@ -915,6 +928,13 @@ declare module '@tanstack/react-router' {
       path: '/api/place-photo'
       fullPath: '/api/place-photo'
       preLoaderRoute: typeof ApiPlacePhotoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/evolution': {
+      id: '/api/evolution'
+      path: '/api/evolution'
+      fullPath: '/api/evolution'
+      preLoaderRoute: typeof ApiEvolutionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/debug-db': {
@@ -1313,6 +1333,7 @@ const rootRouteChildren: RootRouteChildren = {
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiDebugDbRoute: ApiDebugDbRoute,
+  ApiEvolutionRoute: ApiEvolutionRoute,
   ApiPlacePhotoRoute: ApiPlacePhotoRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,

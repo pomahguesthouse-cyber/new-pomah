@@ -18,6 +18,10 @@
 
 const WPP_BASE_URL = (process.env.WPP_BASE_URL ?? "").replace(/\/+$/, "");
 const WPP_SESSION = process.env.WPP_SESSION ?? "";
+const WHATSAPP_PROVIDER = (process.env.WHATSAPP_PROVIDER ?? "").trim().toLowerCase();
+const EVOLUTION_BASE_URL = (process.env.EVOLUTION_BASE_URL ?? "").replace(/\/+$/, "");
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE ?? "";
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
 
 export interface SendResult {
   ok: boolean;
@@ -146,6 +150,10 @@ export async function sendWhatsAppMessage(
 async function sendWhatsAppMessageWithOptions(
   input: SendWhatsAppMessageInput,
 ): Promise<SendResult> {
+  if (WHATSAPP_PROVIDER === "evolution" || (!!EVOLUTION_BASE_URL && !!EVOLUTION_INSTANCE)) {
+    return sendEvolutionMessage(input);
+  }
+
   if (!WPP_BASE_URL || !WPP_SESSION) {
     const msg = "WPPConnect not configured: set WPP_BASE_URL and WPP_SESSION";
     console.error("[WhatsApp]", msg);
@@ -232,6 +240,106 @@ async function sendWhatsAppMessageWithOptions(
       ? `WPPConnect timeout setelah ${SEND_TIMEOUT_MS}ms`
       : e instanceof Error ? e.message : String(e);
     console.error("[WhatsApp] WPPConnect fetch exception:", msg);
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+function evolutionApiKey(fallbackToken: string): string {
+  return EVOLUTION_API_KEY || fallbackToken;
+}
+
+function evolutionEndpoint(path: string): string {
+  return `${EVOLUTION_BASE_URL}/${path}/${encodeURIComponent(EVOLUTION_INSTANCE)}`;
+}
+
+function evolutionNumberCandidates(phone: string): string[] {
+  const raw = String(phone ?? "").trim().replace(/\s+/g, "");
+  const normalized = normalizeWppPhone(raw);
+  const digits = raw
+    .replace(/@(?:lid|c\.us|s\.whatsapp\.net)$/i, "")
+    .replace(/[^\d]/g, "");
+
+  if (/^62\d{8,14}$/.test(normalized)) return unique([normalized]);
+  if (/@lid$/i.test(raw) || (digits && !/^62\d{8,14}$/.test(digits))) {
+    return unique([raw.toLowerCase(), normalized, digits]);
+  }
+  return unique([normalized, raw]);
+}
+
+async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<SendResult> {
+  if (!EVOLUTION_BASE_URL || !EVOLUTION_INSTANCE) {
+    const msg = "Evolution API not configured: set EVOLUTION_BASE_URL and EVOLUTION_INSTANCE";
+    console.error("[WhatsApp]", msg);
+    return { ok: false, error: msg };
+  }
+
+  const apiKey = evolutionApiKey(input.token);
+  if (!apiKey) {
+    return { ok: false, error: "Evolution API key kosong (set EVOLUTION_API_KEY atau token properti)" };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+  const candidates = evolutionNumberCandidates(input.phone);
+
+  try {
+    let lastResult: SendResult | null = null;
+
+    for (const number of candidates) {
+      const hasMedia = !!input.fileUrl;
+      const url = evolutionEndpoint(hasMedia ? "message/sendMedia" : "message/sendText");
+      const payload = hasMedia
+        ? {
+            number,
+            mediatype: "document",
+            media: input.fileUrl,
+            fileName: input.filename ?? "file",
+            caption: input.message ?? "",
+          }
+        : {
+            number,
+            text: input.message,
+          };
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          apikey: apiKey,
+          "Content-Type": "application/json; charset=utf-8",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      const responseText = await res.text().catch(() => "");
+      let responseJson: any = null;
+      try {
+        responseJson = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // Keep text body below.
+      }
+      const raw = responseJson ?? responseText;
+
+      if (!res.ok) {
+        const body = responseText || "(no body)";
+        console.error(`[WhatsApp] Evolution send error (${number}):`, res.status, body.slice(0, 500));
+        lastResult = { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
+        continue;
+      }
+
+      return { ok: true, status: res.status, error: null, raw };
+    }
+
+    return lastResult ?? { ok: false, error: "Tidak ada target Evolution valid" };
+  } catch (e) {
+    const isAbort = (e as { name?: string })?.name === "AbortError";
+    const msg = isAbort
+      ? `Evolution API timeout setelah ${SEND_TIMEOUT_MS}ms`
+      : e instanceof Error ? e.message : String(e);
+    console.error("[WhatsApp] Evolution fetch exception:", msg);
     return { ok: false, error: msg };
   } finally {
     clearTimeout(timeoutId);

@@ -106,3 +106,16 @@ export interface ParsedWebhookEvent {
   /** The raw body payload */
   rawBody: any;
 }
+
+/** Raw Evolution API webhook payload shape. Evolution nests WhatsApp messages
+ * under `data`, but field names vary slightly by event/version. */
+export interface EvolutionWebhookPayload {
+  event?: string;
+  instance?: string;
+  data?: any;
+  destination?: string;
+  date_time?: string;
+  sender?: string;
+  server_url?: string;
+  apikey?: string;
+}

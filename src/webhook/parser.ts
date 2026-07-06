@@ -6,7 +6,13 @@
  * the payload is missing required fields (sender / message).
  */
 
-import type { WppWebhookPayload, ParsedWebhookEvent, WaIdentityResolution, WaIdentityType } from "./types";
+import type {
+  EvolutionWebhookPayload,
+  WppWebhookPayload,
+  ParsedWebhookEvent,
+  WaIdentityResolution,
+  WaIdentityType,
+} from "./types";
 
 function firstString(...values: unknown[]): string | undefined {
   for (const value of values) {
@@ -269,6 +275,189 @@ export async function parseWppWebhook(
     senderIdentity,
     customerIdentity,
     deviceIdentity,
+    externalChatId,
+    rawBody: body,
+  };
+}
+
+function objectAt(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstEvolutionMessage(payload: EvolutionWebhookPayload): Record<string, unknown> | null {
+  const data = (payload as any).data;
+  if (Array.isArray(data)) return objectAt(data[0]);
+  const dataObj = objectAt(data);
+  if (!dataObj) return null;
+
+  const message = dataObj.message;
+  if (Array.isArray(message)) {
+    return { ...dataObj, message: message[0] };
+  }
+
+  return dataObj;
+}
+
+function textFromEvolutionMessage(data: Record<string, unknown>): string {
+  const message = objectAt(data.message);
+  const type = firstString(data.messageType, data.type, data.message_type)?.toLowerCase();
+
+  const candidates = [
+    message?.conversation,
+    objectAt(message?.extendedTextMessage)?.text,
+    objectAt(message?.imageMessage)?.caption,
+    objectAt(message?.videoMessage)?.caption,
+    objectAt(message?.documentMessage)?.caption,
+    objectAt(message?.buttonsResponseMessage)?.selectedDisplayText,
+    objectAt(message?.listResponseMessage)?.title,
+    objectAt(message?.templateButtonReplyMessage)?.selectedDisplayText,
+    objectAt(message?.interactiveResponseMessage)?.body,
+    data.text,
+    data.body,
+    data.messageText,
+  ];
+
+  const text = firstString(...candidates);
+  if (text) return text;
+
+  if (type && !["conversation", "extendedtextmessage", "text"].includes(type)) {
+    return `[Lampiran ${type}]`;
+  }
+
+  return "";
+}
+
+function evolutionAttachment(data: Record<string, unknown>): {
+  url?: string;
+  name?: string;
+  mime?: string;
+  type?: string;
+} {
+  const message = objectAt(data.message);
+  const image = objectAt(message?.imageMessage);
+  const video = objectAt(message?.videoMessage);
+  const audio = objectAt(message?.audioMessage);
+  const document = objectAt(message?.documentMessage);
+  const media = image ?? video ?? audio ?? document ?? objectAt((data as any).media);
+  const type = firstString(data.messageType, data.type, data.message_type);
+
+  return {
+    url: firstString(
+      data.mediaUrl,
+      data.media_url,
+      data.url,
+      media?.url,
+      media?.mediaUrl,
+      media?.directPath,
+    ),
+    name: firstString(data.fileName, data.filename, media?.fileName, media?.filename),
+    mime: firstString(data.mimeType, data.mimetype, data.mime_type, media?.mimetype, media?.mimeType),
+    type: type || (image ? "image" : video ? "video" : audio ? "audio" : document ? "document" : undefined),
+  };
+}
+
+function evolutionMessageId(data: Record<string, unknown>): string | undefined {
+  const key = objectAt(data.key);
+  return firstString(
+    key?.id,
+    data.id,
+    data.messageId,
+    data.message_id,
+    data.keyId,
+  );
+}
+
+/**
+ * Parse Evolution API v2 webhook payloads into the same domain event used by
+ * WPPConnect. The important LID rule: when `remoteJid` is `...@lid` and
+ * `remoteJidAlt` is a public WhatsApp JID, store the public phone as
+ * customerPhone while preserving the LID in externalChatId/metadata.
+ */
+export async function parseEvolutionWebhook(
+  request: Request,
+): Promise<ParsedWebhookEvent | null> {
+  let rawText: string;
+  try {
+    rawText = await request.text();
+  } catch {
+    return null;
+  }
+
+  if (!rawText.trim()) return null;
+
+  let body: EvolutionWebhookPayload;
+  try {
+    body = JSON.parse(rawText) as EvolutionWebhookPayload;
+  } catch {
+    return null;
+  }
+
+  const eventName = firstString(body.event)?.toLowerCase();
+  if (eventName && !/(message|send\.message|messages\.)/.test(eventName)) return null;
+
+  const data = firstEvolutionMessage(body);
+  if (!data) return null;
+
+  const key = objectAt(data.key);
+  const remoteJid = firstString(key?.remoteJid, data.remoteJid, data.remote_jid);
+  const remoteJidAlt = firstString(key?.remoteJidAlt, data.remoteJidAlt, data.remote_jid_alt);
+  const participant = firstString(key?.participant, data.participant);
+  const participantAlt = firstString(key?.participantAlt, data.participantAlt);
+  const fromMe = boolish(key?.fromMe) || boolish(data.fromMe);
+
+  const senderIdentity = pickBestWaIdentity(
+    remoteJidAlt,
+    participantAlt,
+    remoteJid,
+    participant,
+    body.sender,
+    data.sender,
+    data.from,
+    data.phone,
+    data.number,
+  );
+
+  const targetIdentity = pickBestWaIdentity(
+    data.to,
+    data.recipient,
+    data.destination,
+    body.destination,
+  );
+
+  const customerIdentity = fromMe && targetIdentity.phone ? targetIdentity : senderIdentity;
+  const customerPhone = customerIdentity.phone;
+  const message = textFromEvolutionMessage(data);
+  const attachment = evolutionAttachment(data);
+  const hasMedia = !!attachment.url || !!attachment.mime || (!!attachment.type && !/conversation|text/i.test(attachment.type));
+
+  if (!customerPhone || (!message && !hasMedia)) return null;
+
+  const publicExternal = looksLikePublicWaPhone(customerPhone) ? `${customerPhone}@s.whatsapp.net` : undefined;
+  const externalChatId =
+    isLidIdentity(remoteJid)
+      ? remoteJid?.toLowerCase()
+      : remoteJid?.toLowerCase() || publicExternal;
+
+  const wppId = evolutionMessageId(data);
+  const name = firstString(data.pushName, data.pushname, data.notifyName, data.name, customerPhone) ?? customerPhone;
+
+  return {
+    sender: customerPhone,
+    message,
+    name,
+    wppId: wppId ? `evo:${body.instance ?? "default"}:${wppId}` : undefined,
+    device: undefined,
+    isOutgoing: fromMe,
+    customerPhone,
+    attachmentUrl: attachment.url,
+    attachmentName: attachment.name,
+    attachmentMime: attachment.mime,
+    messageType: attachment.type,
+    senderIdentity,
+    customerIdentity,
+    deviceIdentity: undefined,
     externalChatId,
     rawBody: body,
   };
