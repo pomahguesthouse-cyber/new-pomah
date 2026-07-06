@@ -7,17 +7,18 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
-function fixAiLabXyflowImport() {
+function fixXyflowDefaultImport() {
   return {
-    name: "fix-ai-lab-xyflow-import",
+    name: "fix-xyflow-default-import",
     enforce: "pre" as const,
-    transform(code: string, id: string) {
-      if (!id.endsWith("src/routes/admin/ai-lab.tsx")) return null;
-      if (!code.includes('import ReactFlow, {')) return null;
-      return {
-        code: code.replace('import ReactFlow, {', 'import { ReactFlow,'),
-        map: null,
-      };
+    transform(code: string) {
+      if (!code.includes("@xyflow/react")) return null;
+      const next = code.replace(
+        /import\s+ReactFlow\s*,\s*\{/g,
+        "import { ReactFlow,",
+      );
+      if (next === code) return null;
+      return { code: next, map: null };
     },
   };
 }
@@ -29,6 +30,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [fixAiLabXyflowImport(), mcpPlugin()],
+    plugins: [fixXyflowDefaultImport(), mcpPlugin()],
   },
 });
