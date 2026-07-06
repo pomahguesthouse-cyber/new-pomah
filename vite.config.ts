@@ -29,10 +29,15 @@ function makeAiLabRootScrollable() {
     enforce: "pre" as const,
     transform(code: string) {
       if (!code.includes("WhatsApp AI Control Room")) return null;
-      const next = code.replace(
+      let next = code.replace(
         'className="min-h-[100dvh] bg-[#070b14] text-slate-100"',
         'className="h-[100dvh] overflow-y-auto overscroll-y-contain bg-[#070b14] text-slate-100"',
       );
+      next = next.replace(
+        'className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]"',
+        'className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)]"',
+      );
+      next = next.replace(/\n\s*<aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">\n\s*<InspectorPanel selectedNode=\{selectedNode\} config=\{config\} snapshot=\{snapshot\} health=\{health\} quality=\{quality \?\? \[\]\} openDrawer=\{setDrawer\} \/>\n\s*<AuditMiniPanel openDrawer=\{setDrawer\} \/>\n\s*<\/aside>/, "");
       if (next === code) return null;
       return { code: next, map: null };
     },
@@ -50,10 +55,6 @@ body:has(div[class*="bg-[#070b14]"]) {
   overflow-y: hidden !important;
   scrollbar-gutter: stable !important;
 }
-body:has(div[class*="bg-[#070b14]"]) {
-  position: static !important;
-  overscroll-behavior-y: auto !important;
-}
 body:has(div[class*="bg-[#070b14]"]) > div,
 body:has(div[class*="bg-[#070b14]"]) #root,
 body:has(div[class*="bg-[#070b14]"]) [data-tanstack-router-root] {
@@ -69,84 +70,28 @@ div[class*="bg-[#070b14]"] {
   overflow-y: auto !important;
   scrollbar-width: thin !important;
 }
-div[class*="bg-[#070b14]"] > main,
-div[class*="bg-[#070b14]"] > main > section,
-div[class*="bg-[#070b14]"] > main > aside {
-  min-height: 0 !important;
+html body div[class*="bg-[#070b14]"] > main {
+  grid-template-columns: 232px minmax(0, 1fr) !important;
+  max-width: 1500px !important;
 }
-@media (min-width: 1280px) {
-  html body div[class*="bg-[#070b14]"] > main {
-    grid-template-columns: 232px minmax(0, 1fr) !important;
-    max-width: 1500px !important;
-  }
-  html body div[class*="bg-[#070b14]"] > main > aside:last-of-type,
-  html body div[class*="bg-[#070b14]"] > main > aside:last-child,
-  html body div[class*="bg-[#070b14]"] > main > aside[class*="xl:sticky"]:last-of-type {
-    position: static !important;
-    inset: auto !important;
-    top: auto !important;
-    right: auto !important;
-    left: auto !important;
-    bottom: auto !important;
-    z-index: auto !important;
-    grid-column: 2 / 3 !important;
-    width: auto !important;
-    max-width: none !important;
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding-left: 0 !important;
-    transform: none !important;
-    translate: none !important;
-    transition: none !important;
-    filter: none !important;
-    opacity: 1 !important;
-  }
-  html body div[class*="bg-[#070b14]"] > main > aside:last-of-type::before,
-  html body div[class*="bg-[#070b14]"] > main > aside:last-child::before,
-  html body div[class*="bg-[#070b14]"] > main > aside[class*="xl:sticky"]:last-of-type::before {
-    content: none !important;
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
-  }
+html body div[class*="bg-[#070b14]"] > main > aside:last-of-type::before,
+html body div[class*="bg-[#070b14]"] > main > aside:last-child::before {
+  content: none !important;
+  display: none !important;
 }
 div[class*="bg-[#070b14]"] .react-flow__pane,
 div[class*="bg-[#070b14]"] .react-flow__viewport {
   overscroll-behavior: contain !important;
 }
 `;
-  const js = `
-(function () {
-  var css = ${JSON.stringify(css)};
-  function install() {
-    var old = document.getElementById('ai-control-panel-scroll-styles-runtime');
-    if (old) old.remove();
-    var style = document.createElement('style');
-    style.id = 'ai-control-panel-scroll-styles-runtime';
-    style.textContent = css;
-    document.head.appendChild(style);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
-  else install();
-})();`;
 
   return {
     name: "ai-control-panel-scroll-styles",
     transformIndexHtml(html: string) {
-      const withHead = html.includes("ai-control-panel-scroll-styles")
-        ? html
-        : html.replace(
-            "</head>",
-            `<style id="ai-control-panel-scroll-styles">${css}</style></head>`,
-          );
-      if (withHead.includes("ai-control-panel-scroll-styles-runtime")) return withHead;
-      return withHead.replace(
-        "</body>",
-        `<script id="ai-control-panel-scroll-styles-runtime">${js}</script></body>`,
+      if (html.includes("ai-control-panel-scroll-styles")) return html;
+      return html.replace(
+        "</head>",
+        `<style id="ai-control-panel-scroll-styles">${css}</style></head>`,
       );
     },
   };
