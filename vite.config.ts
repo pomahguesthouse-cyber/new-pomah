@@ -74,6 +74,32 @@ div[class*="bg-[#070b14]"] > main > section,
 div[class*="bg-[#070b14]"] > main > aside {
   min-height: 0 !important;
 }
+@media (min-width: 1280px) {
+  div[class*="bg-[#070b14]"] > main {
+    grid-template-columns: 232px minmax(0, 1fr) !important;
+    max-width: 1500px !important;
+  }
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type {
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    right: auto !important;
+    z-index: auto !important;
+    grid-column: 2 / 3 !important;
+    width: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-left: 0 !important;
+    transform: none !important;
+    transition: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+  div[class*="bg-[#070b14]"] > main > aside:last-of-type::before {
+    content: none !important;
+    display: none !important;
+  }
+}
 div[class*="bg-[#070b14]"] .react-flow__pane,
 div[class*="bg-[#070b14]"] .react-flow__viewport {
   overscroll-behavior: contain !important;
