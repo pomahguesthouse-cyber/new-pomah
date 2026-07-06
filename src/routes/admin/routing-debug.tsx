@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Route as Route3, Activity, ArrowRight, X } from "lucide-react";
@@ -30,10 +30,13 @@ import {
 } from "@/components/ui/table";
 
 export const Route = createFileRoute("/admin/routing-debug")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/ai-lab", search: { panel: "routing" } });
+  },
   component: RoutingDebugPage,
 });
 
-function RoutingDebugPage() {
+export function RoutingDebugPage() {
   const statsFn = useServerFn(getAgentRoutingStats);
   const historyFn = useServerFn(getIntentCallHistory);
   const { data, isLoading } = useQuery({

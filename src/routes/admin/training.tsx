@@ -42,7 +42,7 @@ export const Route = createFileRoute("/admin/training")({
   component: TrainingPage,
 });
 
-function TrainingPage() {
+export function TrainingPage() {
   return (
     <div className="space-y-6 p-4 md:p-8 lg:p-10">
       <header>

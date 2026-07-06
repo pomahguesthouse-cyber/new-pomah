@@ -17,15 +17,10 @@ import {
   Compass,
   AlertTriangle,
   Bell,
-  Send,
   Newspaper,
   TrendingUp,
   LifeBuoy,
-  Brain,
-  BrainCircuit,
   Link2,
-  Route as RouteIcon,
-  Activity,
   GripVertical,
 } from "lucide-react";
 import {
@@ -91,19 +86,13 @@ const DEFAULT_GROUPS: NavGroup[] = [
   {
     label: "Guests & Comms",
     items: [
-      { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
-      { to: "/admin/webchat", label: "Web Chat", icon: MessageCircle },
-      { to: "/admin/telegram", label: "Telegram", icon: Send },
+      { to: "/admin/ai-lab", label: "AI Control Room", icon: FlaskConical },
+      { to: "/admin/whatsapp", label: "WhatsApp Inbox", icon: MessageCircle },
       { to: "/admin/complaints", label: "Komplain", icon: AlertTriangle },
       { to: "/admin/handoff", label: "Human Handoff", icon: LifeBuoy },
+      { to: "/admin/webchat", label: "Web Chat", icon: MessageCircle },
       { to: "/admin/booking-form-logs", label: "Log Form Booking", icon: Link2 },
       { to: "/admin/notifications", label: "Log Notifikasi", icon: Bell },
-      { to: "/admin/ai-lab", label: "AI Lab", icon: FlaskConical },
-      { to: "/admin/whatsapp-corrections", label: "WhatsApp Corrections", icon: BrainCircuit },
-      { to: "/admin/training", label: "Chatbot Training", icon: Brain },
-      { to: "/admin/routing-debug", label: "Routing Debug", icon: RouteIcon },
-      { to: "/admin/health", label: "Health Chatbot", icon: Activity },
-      { to: "/admin/wpp-diagnostics", label: "WPP Diagnostics", icon: Activity },
     ],
   },
   {

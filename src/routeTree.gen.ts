@@ -19,7 +19,6 @@ import { Route as ConnectRouteImport } from './routes/connect'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as RoomsIndexRouteImport } from './routes/rooms.index'
 import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
@@ -124,11 +123,6 @@ const AdminRoute = AdminRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoomsIndexRoute = RoomsIndexRouteImport.update({
-  id: '/rooms/',
-  path: '/rooms/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookIndexRoute = BookIndexRouteImport.update({
@@ -465,7 +459,6 @@ export interface FileRoutesByFullPath {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
-  '/rooms/': typeof RoomsIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -532,7 +525,6 @@ export interface FileRoutesByTo {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
-  '/rooms': typeof RoomsIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -601,7 +593,6 @@ export interface FileRoutesById {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
-  '/rooms/': typeof RoomsIndexRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -671,7 +662,6 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
-    | '/rooms/'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -738,7 +728,6 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin'
     | '/book'
-    | '/rooms'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -806,7 +795,6 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
-    | '/rooms/'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -848,7 +836,6 @@ export interface RootRouteChildren {
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
-  RoomsIndexRoute: typeof RoomsIndexRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
@@ -933,13 +920,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rooms/': {
-      id: '/rooms/'
-      path: '/rooms'
-      fullPath: '/rooms/'
-      preLoaderRoute: typeof RoomsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book/': {
@@ -1451,7 +1431,6 @@ const rootRouteChildren: RootRouteChildren = {
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
-  RoomsIndexRoute: RoomsIndexRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
@@ -1468,13 +1447,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

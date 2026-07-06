@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, AlertTriangle, CheckCircle2, Clock, LifeBuoy } from "lucide-react";
@@ -7,6 +7,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/admin/health")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/ai-lab", search: { panel: "health" } });
+  },
   component: HealthPage,
 });
 
@@ -19,7 +22,7 @@ function fmtMs(v: number | null) {
   return `${v.toFixed(0)} ms`;
 }
 
-function HealthPage() {
+export function HealthPage() {
   const fetchFn = useServerFn(getChatbotHealthSnapshot);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["chatbot-health"],

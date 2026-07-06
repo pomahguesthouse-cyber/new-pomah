@@ -11,7 +11,7 @@
  *      opens it in Telegram → bot fires /start <token> → server links
  *      their chat_id.
  */
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -35,10 +35,13 @@ import { toast } from "sonner";
 import { Send, Link2, Copy, Trash2, RefreshCw, Zap, Users, Bot, Key } from "lucide-react";
 
 export const Route = createFileRoute("/admin/telegram")({
+  beforeLoad: () => {
+    throw redirect({ to: "/admin/ai-lab", search: { panel: "telegram" } });
+  },
   component: TelegramPage,
 });
 
-function TelegramPage() {
+export function TelegramPage() {
   const listFn = useServerFn(listTelegramStatus);
   const genFn = useServerFn(generateTelegramLinkToken);
   const unlinkFn = useServerFn(unlinkTelegram);
