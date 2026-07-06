@@ -119,9 +119,10 @@ const DEFAULT_GROUPS: NavGroup[] = [
   },
 ];
 
-// Bumped to reset stale client-side order after the AI Lab redesign briefly
-// moved chatbot routes into other groups. Users can still reorder again.
-const STORAGE_KEY = "admin-sidebar:order:v2";
+// Bumped again because stale client-side order can otherwise keep routes in
+// the wrong section after deploy. Stored order is now section-safe below.
+const LEGACY_STORAGE_KEYS = ["admin-sidebar:order:v1", "admin-sidebar:order:v2"];
+const STORAGE_KEY = "admin-sidebar:order:v3";
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
@@ -131,6 +132,7 @@ type PersistedOrder = { groups: Array<{ label: string; paths: string[] }> };
 function readStored(): PersistedOrder | null {
   if (typeof window === "undefined") return null;
   try {
+    for (const key of LEGACY_STORAGE_KEYS) window.localStorage.removeItem(key);
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedOrder;
@@ -150,6 +152,14 @@ function writeStored(order: PersistedOrder): void {
   }
 }
 
+function getDefaultGroupByPath(defaults: NavGroup[]): Map<string, string> {
+  const groupByPath = new Map<string, string>();
+  for (const g of defaults) {
+    for (const item of g.items) groupByPath.set(item.to, g.label);
+  }
+  return groupByPath;
+}
+
 /**
  * Merge stored order with the default nav so:
  *  • Items removed from the code are pruned from saved state.
@@ -157,6 +167,8 @@ function writeStored(order: PersistedOrder): void {
  *    section at the end, instead of vanishing because they weren't in
  *    the user's saved order.
  *  • Group labels and order follow the code (sections are not user-reorderable).
+ *  • Saved cross-section moves are ignored, so stale browser state cannot keep
+ *    admin pages in the wrong section after a layout change.
  */
 function mergeWithDefaults(
   stored: PersistedOrder | null,
@@ -166,6 +178,7 @@ function mergeWithDefaults(
   for (const g of defaults) {
     for (const it of g.items) itemByPath.set(it.to, it);
   }
+  const defaultGroupByPath = getDefaultGroupByPath(defaults);
 
   // Track which paths the stored order has already placed somewhere.
   const placed = new Set<string>();
@@ -180,7 +193,7 @@ function mergeWithDefaults(
     const orderedItems: NavItem[] = [];
     for (const p of storedPaths) {
       const item = itemByPath.get(p);
-      if (item && !placed.has(p)) {
+      if (item && !placed.has(p) && defaultGroupByPath.get(p) === g.label) {
         orderedItems.push(item);
         placed.add(p);
       }
@@ -314,7 +327,7 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
     if (!from) return;
 
     // `over.id` is either another item path (drop on a row) or a group
-    // sentinel "group:<label>" (drop on an empty section's drop zone).
+    // sentinel "group:<label>".
     let targetGroupIdx: number;
     let targetItemIdx: number;
     const overId = String(over.id);
@@ -331,19 +344,20 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
       targetItemIdx  = to.itemIdx;
     }
 
+    // Keep admin sections canonical. Users may reorder inside a section, but
+    // cross-section drops are ignored so the sidebar cannot drift away from
+    // DEFAULT_GROUPS and confuse non-AI Lab pages.
+    if (from.groupIdx !== targetGroupIdx) return;
+
     setGroups((prev) => {
       // Clone arrays we touch; leave the rest by reference.
       const next = prev.map((g) => ({ ...g, items: [...g.items] }));
       const [moved] = next[from.groupIdx].items.splice(from.itemIdx, 1);
       // Same-group reorder uses arrayMove semantics so dragging down past
       // the original spot lands correctly.
-      if (from.groupIdx === targetGroupIdx) {
-        const restored = next[from.groupIdx].items;
-        restored.splice(from.itemIdx, 0, moved); // undo splice for arrayMove
-        next[from.groupIdx].items = arrayMove(restored, from.itemIdx, targetItemIdx);
-      } else {
-        next[targetGroupIdx].items.splice(targetItemIdx, 0, moved);
-      }
+      const restored = next[from.groupIdx].items;
+      restored.splice(from.itemIdx, 0, moved); // undo splice for arrayMove
+      next[from.groupIdx].items = arrayMove(restored, from.itemIdx, targetItemIdx);
       writeStored(toPersisted(next));
       return next;
     });
