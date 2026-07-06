@@ -1,14 +1,6 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ComponentType,
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-} from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
@@ -21,8 +13,6 @@ import {
   Brain,
   CalendarCheck,
   CheckCircle2,
-  ChevronRight,
-  ClipboardList,
   Clock,
   Database,
   Gauge,
@@ -30,10 +20,9 @@ import {
   Headphones,
   Inbox,
   LifeBuoy,
-  LineChart,
   MessageCircle,
-  MessageSquare,
   Network,
+  PauseCircle,
   PlayCircle,
   RefreshCw,
   Search,
@@ -41,7 +30,6 @@ import {
   Settings,
   ShieldAlert,
   Sparkles,
-  UserCog,
   Users,
   Wallet,
   Zap,
@@ -49,27 +37,23 @@ import {
 
 import { getDashboardMetrics } from "@/admin/functions/dashboard.functions";
 import { getChatbotHealthSnapshot } from "@/admin/functions/health.functions";
-import {
-  getAgentRoutingStats,
-  getIntentCallHistory,
-} from "@/admin/functions/routing-debug.functions";
-import {
-  evaluateRecentWhatsAppConversations,
-  promoteEvaluationToTrainingExample,
-  type ChatbotEvaluationRow,
-} from "@/admin/functions/chatbot-evaluation.functions";
+import { getAgentRoutingStats } from "@/admin/functions/routing-debug.functions";
 import {
   getAiLabConfig,
   updateAiLabConfig,
   mergeAiLabConfig,
-  AGENT_DEFAULTS,
-  TOOL_DEFAULTS,
   type AiLabConfig,
 } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { getQueueMetricsStats, getRetryStats } from "@/admin/modules/ai-lab/ai-lab.functions";
 import {
-  getQueueMetricsStats,
-  getRetryStats,
-} from "@/admin/modules/ai-lab/ai-lab.functions";
+  getAiLabAuditTrail,
+  getAiLabControlSnapshot,
+  getAgentQualityScores,
+  previewTrainingRagMatches,
+  type AgentQualityScore,
+  type AiLabControlSnapshot,
+  type RagPreviewRow,
+} from "@/admin/modules/ai-lab/ai-lab-control.functions";
 import { ChatSimulatorView } from "@/admin/modules/ai-lab/chat-simulator-view";
 import { IntentRulesView } from "@/admin/modules/ai-lab/intent-rules-view";
 import { QueueMonitoringView } from "@/admin/modules/ai-lab/queue-monitoring-view";
@@ -87,13 +71,6 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -104,21 +81,11 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/ai-lab")({
   component: AiLab,
 });
-
-type ControlSection =
-  | "dashboard"
-  | "flows"
-  | "agents"
-  | "inbox"
-  | "analytics"
-  | "knowledge"
-  | "settings";
 
 type DrawerKey =
   | "training"
@@ -131,1648 +98,649 @@ type DrawerKey =
   | "queue"
   | "retry"
   | "simulator"
+  | "audit"
   | null;
 
-type InspectorTab = "inspector" | "executions" | "logs";
-type ConfigEdit = { type: "agent" | "tool"; key: string } | null;
+type FlowNodeId =
+  | "incoming"
+  | "parser"
+  | "queue"
+  | "intent"
+  | "router"
+  | "front-office"
+  | "pricing"
+  | "customer-care"
+  | "finance"
+  | "manager"
+  | "content"
+  | "availability"
+  | "booking"
+  | "send-reply"
+  | "handover"
+  | "rag";
 
-interface FlowNode {
-  id: string;
-  title: string;
-  subtitle: string;
-  column: number;
-  row: number;
+type Tone = "green" | "blue" | "violet" | "amber" | "rose" | "cyan" | "slate";
+
+interface AgentCard {
+  key: string;
+  name: string;
+  desc: string;
   icon: ComponentType<{ className?: string }>;
-  tone: "green" | "blue" | "violet" | "amber" | "rose" | "cyan" | "slate";
-  status: "Trigger" | "Active" | "Auto" | "Manual" | "Optional";
+  safeAuto: boolean;
 }
 
-const INTERNAL_NAV: Array<{
-  key: ControlSection;
-  label: string;
+interface FlowNode {
+  id: FlowNodeId;
+  title: string;
+  desc: string;
+  drawer?: Exclude<DrawerKey, null>;
   icon: ComponentType<{ className?: string }>;
-}> = [
-  { key: "dashboard", label: "Dashboard", icon: Gauge },
-  { key: "flows", label: "Flows", icon: GitBranch },
-  { key: "agents", label: "Agents", icon: Bot },
-  { key: "inbox", label: "Inbox", icon: Inbox },
-  { key: "analytics", label: "Analytics", icon: BarChart3 },
-  { key: "knowledge", label: "Knowledge Base", icon: BookOpen },
-  { key: "settings", label: "Settings", icon: Settings },
+  tone: Tone;
+  status: "Trigger" | "Auto" | "AI" | "Tool" | "Manual" | "Safety";
+}
+
+const AGENTS: AgentCard[] = [
+  { key: "front-office", name: "Front Office", desc: "Booking, availability, FAQ tamu", icon: Users, safeAuto: true },
+  { key: "pricing", name: "Pricing", desc: "Harga, promo, paket", icon: Wallet, safeAuto: true },
+  { key: "customer-care", name: "Customer Care", desc: "Keluhan dan layanan tamu", icon: Headphones, safeAuto: false },
+  { key: "finance", name: "Finance", desc: "Pembayaran dan bukti transfer", icon: Bell, safeAuto: false },
+  { key: "manager", name: "Manager", desc: "Eskalasi dan instruksi admin", icon: ShieldAlert, safeAuto: false },
+  { key: "content", name: "Content", desc: "SEO dan city guide", icon: Sparkles, safeAuto: false },
 ];
 
-const FLOW_NODES: FlowNode[] = [
-  {
-    id: "incoming",
-    title: "Incoming WhatsApp Message",
-    subtitle: "Evolution Webhook",
-    column: 1,
-    row: 3,
-    icon: MessageCircle,
-    tone: "green",
-    status: "Trigger",
-  },
-  {
-    id: "parser",
-    title: "Webhook Parser",
-    subtitle: "Normalize phone, LID/JID",
-    column: 2,
-    row: 2,
-    icon: Network,
-    tone: "cyan",
-    status: "Auto",
-  },
-  {
-    id: "queue",
-    title: "Queue + Smart Delay",
-    subtitle: "Dedup & debounce",
-    column: 2,
-    row: 4,
-    icon: Clock,
-    tone: "blue",
-    status: "Auto",
-  },
-  {
-    id: "intent",
-    title: "Intent Detection AI",
-    subtitle: "Classify message",
-    column: 3,
-    row: 3,
-    icon: Brain,
-    tone: "violet",
-    status: "Active",
-  },
-  {
-    id: "router",
-    title: "Router",
-    subtitle: "Intent -> Agent",
-    column: 4,
-    row: 3,
-    icon: GitBranch,
-    tone: "cyan",
-    status: "Auto",
-  },
-  {
-    id: "front-office",
-    title: "Front Office Agent",
-    subtitle: "Booking, availability, guest FAQ",
-    column: 5,
-    row: 1,
-    icon: Users,
-    tone: "cyan",
-    status: "Active",
-  },
-  {
-    id: "pricing",
-    title: "Pricing Agent",
-    subtitle: "Price inquiry",
-    column: 5,
-    row: 2,
-    icon: Wallet,
-    tone: "blue",
-    status: "Active",
-  },
-  {
-    id: "customer-care",
-    title: "Customer Care Agent",
-    subtitle: "Service request",
-    column: 5,
-    row: 3,
-    icon: Headphones,
-    tone: "green",
-    status: "Active",
-  },
-  {
-    id: "finance",
-    title: "Finance Agent",
-    subtitle: "Payment / invoice",
-    column: 5,
-    row: 4,
-    icon: ClipboardList,
-    tone: "amber",
-    status: "Active",
-  },
-  {
-    id: "manager",
-    title: "Manager Agent",
-    subtitle: "Escalation / admin command",
-    column: 5,
-    row: 5,
-    icon: ShieldAlert,
-    tone: "rose",
-    status: "Manual",
-  },
-  {
-    id: "content",
-    title: "Content Agent",
-    subtitle: "SEO / city guide optional",
-    column: 5,
-    row: 6,
-    icon: Sparkles,
-    tone: "slate",
-    status: "Optional",
-  },
-  {
-    id: "availability",
-    title: "Check Availability",
-    subtitle: "Check slots",
-    column: 6,
-    row: 1,
-    icon: CalendarCheck,
-    tone: "green",
-    status: "Auto",
-  },
-  {
-    id: "create-booking",
-    title: "Create Booking",
-    subtitle: "Add to calendar",
-    column: 6,
-    row: 2,
-    icon: CalendarCheck,
-    tone: "blue",
-    status: "Manual",
-  },
-  {
-    id: "send-reply",
-    title: "Send Reply",
-    subtitle: "WhatsApp message",
-    column: 6,
-    row: 3,
-    icon: Send,
-    tone: "green",
-    status: "Auto",
-  },
-  {
-    id: "notify-manager",
-    title: "Notify Manager",
-    subtitle: "Internal notification",
-    column: 6,
-    row: 4,
-    icon: Bell,
-    tone: "amber",
-    status: "Auto",
-  },
-  {
-    id: "human",
-    title: "Escalate to Human",
-    subtitle: "Live agent handover",
-    column: 6,
-    row: 5,
-    icon: LifeBuoy,
-    tone: "rose",
-    status: "Manual",
-  },
-  {
-    id: "rag",
-    title: "RAG / SOP Lookup",
-    subtitle: "Knowledge context",
-    column: 6,
-    row: 6,
-    icon: Database,
-    tone: "violet",
-    status: "Auto",
-  },
-];
-
-const AGENT_CONFIGS = [
-  { key: "front-office", name: "Front Office Agent", desc: "Booking, availability, guest FAQ", icon: Users },
-  { key: "pricing", name: "Pricing Agent", desc: "Price inquiry and pricing clarity", icon: Wallet },
-  { key: "customer-care", name: "Customer Care Agent", desc: "Service request and complaints", icon: Headphones },
-  { key: "finance", name: "Finance Agent", desc: "Payment, proof, invoice", icon: ClipboardList },
-  { key: "manager", name: "Manager Agent", desc: "Escalation and admin command", icon: ShieldAlert },
-  { key: "content", name: "Content Agent", desc: "City guide and public content", icon: Sparkles },
-];
-
-const TOOL_CONFIGS = [
+const TOOLS = [
   { key: "pms-database", name: "PMS Database", icon: Database },
   { key: "room-availability", name: "Room Availability", icon: CalendarCheck },
   { key: "sop-knowledge", name: "SOP Knowledge", icon: BookOpen },
-  { key: "pricing-engine", name: "Pricing Engine", icon: LineChart },
+  { key: "pricing-engine", name: "Pricing Engine", icon: BarChart3 },
   { key: "faq-memory", name: "FAQ Memory", icon: Brain },
 ];
 
-const FLOW_CANVAS_WIDTH = 1180;
-const FLOW_CANVAS_HEIGHT = 584;
-const FLOW_NODE_WIDTH = 170;
-const FLOW_NODE_HEIGHT = 76;
-const FLOW_LEFTS = [8, 208, 408, 608, 808, 1000];
-const FLOW_TOPS = [8, 100, 192, 284, 376, 468];
+const FLOW_NODES: FlowNode[] = [
+  { id: "incoming", title: "Incoming WhatsApp", desc: "Evolution webhook masuk", icon: MessageCircle, tone: "green", status: "Trigger", drawer: "inbox" },
+  { id: "parser", title: "Webhook Parser", desc: "Normalisasi phone, LID/JID, dedup", icon: Network, tone: "cyan", status: "Auto" },
+  { id: "queue", title: "Queue + Smart Delay", desc: "Debounce pesan beruntun", icon: Clock, tone: "blue", status: "Auto", drawer: "queue" },
+  { id: "intent", title: "Intent Classifier", desc: "Rule + fallback AI", icon: Brain, tone: "violet", status: "AI", drawer: "routing" },
+  { id: "router", title: "Router", desc: "Intent → agent", icon: GitBranch, tone: "cyan", status: "Auto", drawer: "routing" },
+  { id: "front-office", title: "Front Office", desc: "Kamar, booking, FAQ", icon: Users, tone: "cyan", status: "AI", drawer: "settings" },
+  { id: "pricing", title: "Pricing", desc: "Tarif dan promo", icon: Wallet, tone: "blue", status: "AI", drawer: "settings" },
+  { id: "customer-care", title: "Customer Care", desc: "Keluhan dan service", icon: Headphones, tone: "green", status: "AI", drawer: "settings" },
+  { id: "finance", title: "Finance", desc: "Payment proof & invoice", icon: Bell, tone: "amber", status: "AI", drawer: "settings" },
+  { id: "manager", title: "Manager", desc: "Escalation gate", icon: ShieldAlert, tone: "rose", status: "Safety", drawer: "telegram" },
+  { id: "content", title: "Content", desc: "SEO / city guide", icon: Sparkles, tone: "slate", status: "Manual", drawer: "settings" },
+  { id: "availability", title: "Check Availability", desc: "Tool wajib sebelum harga/stok", icon: CalendarCheck, tone: "green", status: "Tool" },
+  { id: "booking", title: "Create Booking", desc: "Masuk PMS/calendar", icon: CalendarCheck, tone: "blue", status: "Tool" },
+  { id: "send-reply", title: "Send Reply", desc: "Kirim via WhatsApp provider", icon: Send, tone: "green", status: "Auto" },
+  { id: "handover", title: "Human Handover", desc: "Pause AI dan staf ambil alih", icon: LifeBuoy, tone: "rose", status: "Manual", drawer: "inbox" },
+  { id: "rag", title: "RAG / SOP Lookup", desc: "Training examples + SOP", icon: Database, tone: "violet", status: "Tool", drawer: "knowledge" },
+];
 
 function AiLab() {
-  const [section, setSection] = useState<ControlSection>("dashboard");
+  const qc = useQueryClient();
   const [drawer, setDrawer] = useState<DrawerKey>(null);
-  const [selectedNodeId, setSelectedNodeId] = useState("front-office");
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>("inspector");
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState<FlowNodeId>("front-office");
+  const [mobileTab, setMobileTab] = useState<"overview" | "flow" | "quality" | "settings">("overview");
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const panel = params.get("panel") ?? params.get("view");
-    const map: Record<string, DrawerKey> = {
-      training: "training",
-      corrections: "training",
-      health: "health",
-      routing: "routing",
-      telegram: "telegram",
-      knowledge: "knowledge",
-      rag: "knowledge",
-      settings: "settings",
-      queue: "queue",
-      retry: "retry",
-      whatsapp: "inbox",
-      inbox: "inbox",
-    };
-    if (panel && map[panel]) setDrawer(map[panel]);
-  }, []);
+  const getConfig = useServerFn(getAiLabConfig);
+  const updateConfig = useServerFn(updateAiLabConfig);
+  const getSnapshot = useServerFn(getAiLabControlSnapshot);
+  const getMetrics = useServerFn(getDashboardMetrics);
+  const getHealth = useServerFn(getChatbotHealthSnapshot);
+  const getQueue = useServerFn(getQueueMetricsStats);
+  const getRetry = useServerFn(getRetryStats);
+  const getRouting = useServerFn(getAgentRoutingStats);
+  const getQuality = useServerFn(getAgentQualityScores);
+  const getAudit = useServerFn(getAiLabAuditTrail);
 
-  const selectedNode = useMemo(
-    () => FLOW_NODES.find((n) => n.id === selectedNodeId) ?? FLOW_NODES[0],
-    [selectedNodeId],
-  );
+  const { data: configData, isFetching: configLoading } = useQuery({
+    queryKey: ["ai-lab-config"],
+    queryFn: () => getConfig(),
+  });
+  const { data: snapshot } = useQuery({
+    queryKey: ["ai-lab-control-snapshot"],
+    queryFn: () => getSnapshot(),
+    refetchInterval: 15_000,
+  });
+  const { data: metrics } = useQuery({ queryKey: ["control-room-dashboard"], queryFn: () => getMetrics(), refetchInterval: 60_000 });
+  const { data: health } = useQuery({ queryKey: ["control-room-health"], queryFn: () => getHealth(), refetchInterval: 30_000 });
+  const { data: queue } = useQuery({ queryKey: ["control-room-queue-stats"], queryFn: () => getQueue(), refetchInterval: 15_000 });
+  const { data: retry } = useQuery({ queryKey: ["control-room-retry-stats"], queryFn: () => getRetry(), refetchInterval: 60_000 });
+  const { data: routing } = useQuery({ queryKey: ["control-room-routing"], queryFn: () => getRouting(), refetchInterval: 60_000 });
+  const { data: quality } = useQuery({ queryKey: ["control-room-agent-quality"], queryFn: () => getQuality(), refetchInterval: 60_000 });
+  const { data: audit } = useQuery({ queryKey: ["ai-lab-audit-trail"], queryFn: () => getAudit(), refetchInterval: 120_000 });
+
+  const config = configData?.config ?? mergeAiLabConfig({});
+  const selectedNode = FLOW_NODES.find((n) => n.id === selectedNodeId) ?? FLOW_NODES[0];
+  const latestQueue = queue?.[0];
+  const retryTotal = retry?.reduce((sum, row) => sum + Number(row.total ?? 0), 0) ?? 0;
+
+  async function commitConfig(next: AiLabConfig, success = "Konfigurasi AI Lab tersimpan") {
+    if (!configData?.id) {
+      toast.error("Properti belum tersedia.");
+      return;
+    }
+    await updateConfig({ data: { id: configData.id, config: next as unknown as Record<string, unknown> } });
+    toast.success(success);
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["ai-lab-config"] }),
+      qc.invalidateQueries({ queryKey: ["ai-lab-control-snapshot"] }),
+      qc.invalidateQueries({ queryKey: ["ai-lab-agent-quality"] }),
+    ]);
+  }
+
+  const setAllAutoReply = (mode: "pause" | "safe" | "full") => {
+    const next = structuredClone(config) as AiLabConfig;
+    for (const agent of AGENTS) {
+      const current = next.agents[agent.key];
+      if (!current) continue;
+      if (mode === "pause") current.autoReply = false;
+      if (mode === "safe") current.autoReply = agent.safeAuto && current.enabled;
+      if (mode === "full") current.autoReply = current.enabled;
+    }
+    const label = mode === "pause" ? "Semua auto reply dipause" : mode === "safe" ? "Safe Auto Reply aktif" : "Full Auto Reply aktif";
+    void commitConfig(next, label);
+  };
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#070b14] text-slate-100">
-      <div className="flex h-full min-h-0">
-        <ControlSidebar
-          section={section}
-          setSection={setSection}
-          openDrawer={setDrawer}
-        />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <Topbar inspectorOpen={inspectorOpen} setInspectorOpen={setInspectorOpen} />
-          <div
-            className={cn(
-              "grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3",
-              inspectorOpen && "xl:grid-cols-[minmax(0,1fr)_320px]",
-            )}
-          >
-            <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto overscroll-contain pb-6 pr-0 xl:pr-1">
-              <KpiStrip openDrawer={setDrawer} />
-              <FlowCanvas
-                selectedNodeId={selectedNodeId}
-                setSelectedNodeId={setSelectedNodeId}
-                openDrawer={setDrawer}
-              />
-              <BottomAnalytics openDrawer={setDrawer} />
-            </div>
-            {inspectorOpen && (
-              <InspectorPanel
-                tab={inspectorTab}
-                setTab={setInspectorTab}
-                selectedNode={selectedNode}
-                openDrawer={setDrawer}
-                onHide={() => setInspectorOpen(false)}
-              />
-            )}
+    <div className="min-h-[100dvh] bg-[#070b14] text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090f1c]/95 backdrop-blur">
+        <div className="flex min-h-[72px] items-center gap-3 px-4 md:px-6">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
+            <MessageCircle className="h-5 w-5" />
           </div>
-        </main>
-      </div>
-      <FeatureDrawer drawer={drawer} setDrawer={setDrawer} />
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold md:text-lg">WhatsApp AI Control Room</h1>
+            <p className="truncate text-xs text-slate-400">Pomah Guesthouse • AI Lab Operasional</p>
+          </div>
+          <div className="ml-auto hidden items-center gap-2 lg:flex">
+            <StatusPill snapshot={snapshot} configLoading={configLoading} />
+            <Button size="sm" variant="outline" className="border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20" onClick={() => setAllAutoReply("pause")}>
+              <PauseCircle className="mr-2 h-4 w-4" /> Pause All
+            </Button>
+            <Button size="sm" variant="outline" className="border-sky-400/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20" onClick={() => setAllAutoReply("safe")}>
+              <ShieldAlert className="mr-2 h-4 w-4" /> Safe Mode
+            </Button>
+            <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => setAllAutoReply("full")}>
+              <PlayCircle className="mr-2 h-4 w-4" /> Full Auto
+            </Button>
+          </div>
+          <Button size="icon" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => setDrawer("audit")}>
+            <Bell className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-4 gap-1 border-t border-slate-800 px-2 py-2 lg:hidden">
+          {[
+            ["overview", "Overview"],
+            ["flow", "Flow"],
+            ["quality", "Quality"],
+            ["settings", "Settings"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setMobileTab(key as typeof mobileTab)}
+              className={cn(
+                "rounded-lg px-2 py-2 text-xs font-medium",
+                mobileTab === key ? "bg-emerald-500 text-slate-950" : "bg-slate-900 text-slate-400",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">
+        <aside className="hidden space-y-3 xl:block">
+          <ControlNav openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
+          <SafetyCard snapshot={snapshot} onPause={() => setAllAutoReply("pause")} onSafe={() => setAllAutoReply("safe")} onFull={() => setAllAutoReply("full")} />
+        </aside>
+
+        <section className="min-w-0 space-y-4">
+          {(mobileTab === "overview" || isDesktop()) && (
+            <>
+              <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
+              <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
+            </>
+          )}
+          {(mobileTab === "flow" || isDesktop()) && (
+            <FlowMap selectedNodeId={selectedNodeId} setSelectedNodeId={setSelectedNodeId} openDrawer={setDrawer} />
+          )}
+          {(mobileTab === "quality" || isDesktop()) && (
+            <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
+          )}
+          {mobileTab === "settings" && (
+            <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
+          )}
+        </section>
+
+        <aside className="hidden min-w-0 space-y-4 xl:block">
+          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} openDrawer={setDrawer} />
+          <AuditMiniPanel audit={audit} openDrawer={setDrawer} />
+        </aside>
+      </main>
+
+      <FeatureDrawer
+        drawer={drawer}
+        setDrawer={setDrawer}
+        config={config}
+        commitConfig={commitConfig}
+      />
     </div>
   );
 }
 
-function ControlSidebar({
-  section,
-  setSection,
-  openDrawer,
-}: {
-  section: ControlSection;
-  setSection: (section: ControlSection) => void;
-  openDrawer: (drawer: DrawerKey) => void;
-}) {
-  const unread = 12;
-  return (
-    <aside className="hidden w-[232px] shrink-0 border-r border-slate-800/80 bg-[#090f1c] lg:flex lg:flex-col">
-      <div className="border-b border-slate-800/80 px-5 py-5">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
-            <MessageCircle className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-sm font-semibold">WhatsApp AI</h1>
-            <p className="text-xs text-slate-400">Control Room</p>
-          </div>
-        </div>
-      </div>
+function isDesktop() {
+  return true;
+}
 
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {INTERNAL_NAV.map((item) => (
+function ControlNav({ openDrawer, unread }: { openDrawer: (drawer: DrawerKey) => void; unread: number }) {
+  const items: Array<{ label: string; drawer: Exclude<DrawerKey, null>; icon: ComponentType<{ className?: string }> }> = [
+    { label: "Inbox", drawer: "inbox", icon: Inbox },
+    { label: "Simulator", drawer: "simulator", icon: PlayCircle },
+    { label: "Training", drawer: "training", icon: Sparkles },
+    { label: "Knowledge", drawer: "knowledge", icon: BookOpen },
+    { label: "Routing", drawer: "routing", icon: GitBranch },
+    { label: "Queue", drawer: "queue", icon: Gauge },
+    { label: "Health", drawer: "health", icon: Activity },
+    { label: "Settings", drawer: "settings", icon: Settings },
+  ];
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-3 text-slate-100">
+      <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Navigation</div>
+      <div className="space-y-1">
+        {items.map((item) => (
           <button
-            key={item.key}
-            onClick={() => {
-              setSection(item.key);
-              if (item.key === "inbox") openDrawer("inbox");
-              if (item.key === "knowledge") openDrawer("knowledge");
-              if (item.key === "settings") openDrawer("settings");
-            }}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition",
-              section === item.key
-                ? "bg-emerald-500/12 text-white shadow-[0_0_24px_rgba(16,185,129,0.12)] ring-1 ring-emerald-400/20"
-                : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100",
-            )}
+            key={item.drawer}
+            onClick={() => openDrawer(item.drawer)}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition hover:bg-slate-800/70 hover:text-white"
           >
             <item.icon className="h-4 w-4" />
             <span className="flex-1 text-left">{item.label}</span>
-            {item.key === "inbox" && (
-              <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">
-                {unread}
-              </span>
+            {item.drawer === "inbox" && unread > 0 && (
+              <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950">{unread}</span>
             )}
           </button>
         ))}
-      </nav>
-
-      <div className="space-y-3 border-t border-slate-800/80 p-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-slate-400">Environment</span>
-            <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/15">Live</Badge>
-          </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
-            <div className="h-full w-[78%] rounded-full bg-emerald-400" />
-          </div>
-          <p className="mt-2 text-[11px] text-slate-500">78% / 10K msgs</p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            size="sm"
-            className="bg-slate-800 text-slate-100 hover:bg-slate-700"
-            onClick={() => openDrawer("training")}
-          >
-            Training
-          </Button>
-          <Button
-            size="sm"
-            className="bg-slate-800 text-slate-100 hover:bg-slate-700"
-            onClick={() => openDrawer("health")}
-          >
-            Health
-          </Button>
-        </div>
       </div>
-    </aside>
+    </Card>
   );
 }
 
-function Topbar({
-  inspectorOpen,
-  setInspectorOpen,
-}: {
-  inspectorOpen: boolean;
-  setInspectorOpen: (open: boolean) => void;
-}) {
+function SafetyCard({ snapshot, onPause, onSafe, onFull }: { snapshot?: AiLabControlSnapshot; onPause: () => void; onSafe: () => void; onFull: () => void }) {
   return (
-    <header className="flex min-h-[72px] items-center gap-3 border-b border-slate-800/80 bg-[#090f1c]/95 px-4 md:px-6">
-      <div className="flex min-w-0 items-center gap-3 lg:hidden">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300">
-          <MessageCircle className="h-5 w-5" />
-        </span>
-      </div>
-      <div className="min-w-0">
-        <h2 className="truncate text-base font-semibold md:text-lg">WhatsApp AI Control Room</h2>
-        <p className="truncate text-xs text-slate-400">Pomah Guesthouse Workspace</p>
-      </div>
-      <div className="mx-auto hidden w-full max-w-[540px] items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 md:flex">
-        <Search className="h-4 w-4 text-slate-500" />
-        <input
-          className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-500"
-          placeholder="Search flows, agents, intents..."
-        />
-        <kbd className="rounded-md border border-slate-700 px-1.5 py-0.5 text-[10px] text-slate-500">⌘K</kbd>
-      </div>
-      <div className="ml-auto flex shrink-0 items-center gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          className="hidden border border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white xl:inline-flex"
-          onClick={() => setInspectorOpen(!inspectorOpen)}
-        >
-          {inspectorOpen ? "Hide Inspector" : "Show Inspector"}
-        </Button>
-        <span className="hidden items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 sm:flex">
-          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.9)]" />
-          Live
-          <Activity className="h-3.5 w-3.5" />
-        </span>
-        <Button size="icon" variant="ghost" className="text-slate-300 hover:bg-slate-800 hover:text-white">
-          <Bell className="h-4 w-4" />
-        </Button>
-        <div className="hidden items-center gap-3 border-l border-slate-800 pl-3 md:flex">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-300 to-sky-400 text-sm font-bold text-slate-950">
-            PG
-          </div>
-          <div>
-            <p className="text-sm font-medium">Pomah Admin</p>
-            <p className="text-xs text-slate-500">Admin</p>
-          </div>
+    <Card className="rounded-2xl border-amber-400/20 bg-amber-500/10 p-4 text-amber-50">
+      <div className="flex items-start gap-3">
+        <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-300" />
+        <div>
+          <p className="font-semibold">AI Safety Mode</p>
+          <p className="mt-1 text-xs text-amber-100/80">Auto reply aktif di {snapshot?.autoReplyAgents ?? 0}/{snapshot?.totalAgents ?? 0} agent.</p>
         </div>
       </div>
-    </header>
+      <div className="mt-4 grid gap-2">
+        <Button size="sm" variant="outline" className="border-amber-400/30 bg-slate-950/50 text-amber-100 hover:bg-slate-900" onClick={onPause}>Pause All Auto Reply</Button>
+        <Button size="sm" variant="outline" className="border-sky-400/30 bg-slate-950/50 text-sky-100 hover:bg-slate-900" onClick={onSafe}>Safe Auto Reply</Button>
+        <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={onFull}>Full Auto Reply</Button>
+      </div>
+    </Card>
   );
 }
 
-function KpiStrip({ openDrawer }: { openDrawer: (drawer: DrawerKey) => void }) {
-  const metricsFn = useServerFn(getDashboardMetrics);
-  const healthFn = useServerFn(getChatbotHealthSnapshot);
-  const queueFn = useServerFn(getQueueMetricsStats);
-  const { data: metrics } = useQuery({ queryKey: ["control-room-dashboard"], queryFn: () => metricsFn() });
-  const { data: health } = useQuery({ queryKey: ["control-room-health"], queryFn: () => healthFn(), refetchInterval: 60_000 });
-  const { data: queue } = useQuery({ queryKey: ["control-room-queue-stats"], queryFn: () => queueFn() });
+function StatusPill({ snapshot, configLoading }: { snapshot?: AiLabControlSnapshot; configLoading: boolean }) {
+  if (configLoading) return <Badge className="bg-slate-800 text-slate-300">Loading config</Badge>;
+  if (snapshot?.globalAutoReplyPaused) {
+    return <Badge className="bg-amber-500/15 text-amber-300 hover:bg-amber-500/15">Auto Reply Paused</Badge>;
+  }
+  return <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/15">Live • {snapshot?.autoReplyAgents ?? 0} auto agents</Badge>;
+}
 
-  const latestQueue = queue?.[0];
+function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snapshot?: AiLabControlSnapshot; metrics: any; health: any; latestQueue: any; openDrawer: (drawer: DrawerKey) => void }) {
   const summary = metrics?.summary;
   const cards = [
-    {
-      label: "Conversations Today",
-      value: fmtNum(summary?.waThreads ?? health?.delivery.total ?? 0),
-      delta: `${summary?.waConversionPct ?? 0}% conversion`,
-      icon: MessageCircle,
-      tone: "green",
-    },
-    {
-      label: "Auto-resolved",
-      value: fmtNum(summary?.aiUsed30d ?? 0),
-      delta: `${summary?.aiAdoptionPct ?? 0}% of AI replies`,
-      icon: CheckCircle2,
-      tone: "blue",
-    },
-    {
-      label: "Escalations",
-      value: fmtNum(health?.openHandoffTickets ?? 0),
-      delta: "open handoff tickets",
-      icon: Headphones,
-      tone: "amber",
-    },
-    {
-      label: "Avg Response Time",
-      value: fmtMsShort(health?.latency.p50Ms ?? null),
-      delta: `p95 ${fmtMsShort(health?.latency.p95Ms ?? null)}`,
-      icon: Clock,
-      tone: "violet",
-    },
-    {
-      label: "Active Agents",
-      value: "6 / 6",
-      delta: "All systems operational",
-      icon: Bot,
-      tone: "cyan",
-    },
-    {
-      label: "Queue Pending / Failed",
-      value: `${health?.queue.pending ?? latestQueue?.queued ?? 0} / ${
-        health?.queue.terminalFailures ?? latestQueue?.failed ?? 0
-      }`,
-      delta: "click for queue health",
-      icon: Gauge,
-      tone: "rose",
-      onClick: () => openDrawer("queue"),
-    },
+    { label: "Unread Inbox", value: fmtNum(snapshot?.unreadMessages ?? 0), delta: `${fmtNum(snapshot?.unreadThreads ?? 0)} thread belum dibaca`, icon: Inbox, tone: "green" as Tone, drawer: "inbox" as DrawerKey },
+    { label: "Conversations", value: fmtNum(summary?.waThreads ?? health?.delivery?.total ?? 0), delta: `${summary?.waConversionPct ?? 0}% conversion`, icon: MessageCircle, tone: "blue" as Tone, drawer: "health" as DrawerKey },
+    { label: "Auto Agents", value: `${snapshot?.autoReplyAgents ?? 0}/${snapshot?.totalAgents ?? AGENTS.length}`, delta: snapshot?.globalAutoReplyPaused ? "paused" : "auto reply aktif", icon: Bot, tone: snapshot?.globalAutoReplyPaused ? "amber" as Tone : "cyan" as Tone, drawer: "settings" as DrawerKey },
+    { label: "Response p50", value: fmtMsShort(health?.latency?.p50Ms ?? null), delta: `p95 ${fmtMsShort(health?.latency?.p95Ms ?? null)}`, icon: Clock, tone: "violet" as Tone, drawer: "health" as DrawerKey },
+    { label: "Queue", value: `${snapshot?.queuePending ?? latestQueue?.queued ?? 0}`, delta: `${snapshot?.queueFailed ?? latestQueue?.failed ?? 0} failed`, icon: Gauge, tone: "rose" as Tone, drawer: "queue" as DrawerKey },
+    { label: "Open Handoff", value: fmtNum(health?.openHandoffTickets ?? 0), delta: "butuh staf", icon: LifeBuoy, tone: "amber" as Tone, drawer: "inbox" as DrawerKey },
   ];
-
   return (
-    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {cards.map((card) => (
-        <ControlCard
-          key={card.label}
-          className={cn("rounded-xl p-3", card.onClick && "cursor-pointer hover:border-emerald-400/50")}
-          onClick={card.onClick}
-        >
+        <button key={card.label} onClick={() => card.drawer && openDrawer(card.drawer)} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-left text-slate-100 transition hover:border-emerald-400/50">
           <div className="flex items-center justify-between gap-2">
-            <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
+            <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
               <card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />
             </span>
             <Sparkline tone={card.tone} />
           </div>
-          <p className="mt-2 truncate text-[11px] text-slate-400">{card.label}</p>
-          <p className="mt-0.5 truncate text-xl font-semibold tracking-tight text-white">{card.value}</p>
+          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p>
+          <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p>
           <p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
-        </ControlCard>
+        </button>
       ))}
     </section>
   );
 }
 
-function FlowCanvas({
-  selectedNodeId,
-  setSelectedNodeId,
-  openDrawer,
-}: {
-  selectedNodeId: string;
-  setSelectedNodeId: (id: string) => void;
-  openDrawer: (drawer: DrawerKey) => void;
-}) {
+function OperationalAlerts({ snapshot, health, retryTotal, openDrawer }: { snapshot?: AiLabControlSnapshot; health: any; retryTotal: number; openDrawer: (drawer: DrawerKey) => void }) {
+  const alerts = [
+    snapshot?.globalAutoReplyPaused ? { tone: "amber" as Tone, title: "Auto reply sedang pause", desc: "Semua tamu masuk mode manual/draft. Aman untuk investigasi.", drawer: "settings" as DrawerKey } : null,
+    (snapshot?.queueFailed ?? 0) > 0 ? { tone: "rose" as Tone, title: "Ada queue failed", desc: `${snapshot?.queueFailed ?? 0} job gagal. Cek retry detail sebelum traffic ramai.`, drawer: "retry" as DrawerKey } : null,
+    retryTotal > 0 ? { tone: "violet" as Tone, title: "Retry AI terdeteksi", desc: `${retryTotal} retry tercatat di rollup. Pantau latency/model.`, drawer: "retry" as DrawerKey } : null,
+    (health?.openHandoffTickets ?? 0) > 0 ? { tone: "amber" as Tone, title: "Handoff terbuka", desc: `${health.openHandoffTickets} percakapan butuh staf.`, drawer: "inbox" as DrawerKey } : null,
+  ].filter(Boolean) as Array<{ tone: Tone; title: string; desc: string; drawer: DrawerKey }>;
+
+  if (alerts.length === 0) {
+    return (
+      <Card className="rounded-2xl border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-50">
+        <div className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><div><p className="font-semibold">Operational signal normal</p><p className="text-sm text-emerald-100/75">Tidak ada alert besar dari queue, retry, atau handoff.</p></div></div>
+      </Card>
+    );
+  }
+
   return (
-    <ControlCard className="overflow-hidden p-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Badge className="bg-slate-800 text-slate-300 hover:bg-slate-800">Flow</Badge>
-          <div>
-            <h3 className="text-sm font-semibold text-white">WhatsApp Customer Support</h3>
-            <p className="text-xs text-slate-500">Incoming message &gt; AI routing &gt; tools &gt; reply</p>
+    <section className="grid gap-2 md:grid-cols-2">
+      {alerts.map((alert) => (
+        <button key={alert.title} onClick={() => alert.drawer && openDrawer(alert.drawer)} className={cn("rounded-2xl border p-4 text-left transition", toneBorder(alert.tone))}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className={cn("mt-0.5 h-5 w-5", toneClass(alert.tone, "text"))} />
+            <div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm text-slate-400">{alert.desc}</p></div>
           </div>
-        </div>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function FlowMap({ selectedNodeId, setSelectedNodeId, openDrawer }: { selectedNodeId: FlowNodeId; setSelectedNodeId: (id: FlowNodeId) => void; openDrawer: (drawer: DrawerKey) => void }) {
+  return (
+    <Card className="overflow-hidden rounded-2xl border-slate-800 bg-slate-950/70 p-0 text-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <div className="flex items-center gap-3"><Badge className="bg-slate-800 text-slate-300">Interactive Flow</Badge><div><h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2><p className="text-xs text-slate-500">Klik node untuk lihat status, drawer, dan tindakan.</p></div></div>
         <div className="flex items-center gap-2">
-          <span className="hidden items-center gap-2 text-xs text-slate-400 sm:flex">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            Auto-saved 2s ago
-          </span>
-          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800 hover:text-white" onClick={() => openDrawer("routing")}>
-            <GitBranch className="mr-2 h-4 w-4" />
-            Routing
-          </Button>
-          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800 hover:text-white" onClick={() => openDrawer("simulator")}>
-            <PlayCircle className="mr-2 h-4 w-4" />
-            Simulator
-          </Button>
+          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("routing")}><GitBranch className="mr-2 h-4 w-4" />Routing</Button>
+          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}><PlayCircle className="mr-2 h-4 w-4" />Simulator</Button>
         </div>
       </div>
-
-      <div
-        className="relative min-h-[520px] overflow-auto"
-        style={{
-          backgroundImage: "radial-gradient(rgba(255,255,255,.08) 1px, transparent 1px)",
-          backgroundSize: "18px 18px",
-        }}
-      >
-        <div
-          className="relative"
-          style={{ width: FLOW_CANVAS_WIDTH, height: FLOW_CANVAS_HEIGHT }}
-        >
-          <CanvasConnectors />
-          {FLOW_NODES.map((node) => (
-            <div
-              key={node.id}
-              className="absolute z-10"
-              style={{
-                left: nodeLeft(node.column),
-                top: nodeTop(node.row),
-                width: FLOW_NODE_WIDTH,
-                height: FLOW_NODE_HEIGHT,
-              }}
-            >
-              <FlowNodeCard
-                node={node}
-                selected={selectedNodeId === node.id}
-                onClick={() => setSelectedNodeId(node.id)}
-              />
+      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+        {FLOW_NODES.map((node, idx) => (
+          <button
+            key={node.id}
+            onClick={() => {
+              setSelectedNodeId(node.id);
+              if (node.drawer && ["queue", "routing", "simulator", "knowledge"].includes(node.drawer)) openDrawer(node.drawer);
+            }}
+            className={cn(
+              "relative rounded-xl border bg-slate-900/50 p-4 text-left transition hover:border-emerald-400/50",
+              selectedNodeId === node.id ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.18)]" : "border-slate-800",
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", toneClass(node.tone, "bg"))}><node.icon className={cn("h-5 w-5", toneClass(node.tone, "text"))} /></span>
+              <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">{idx + 1}</span><Badge className={toneClass(node.tone, "badge")}>{node.status}</Badge></div><p className="mt-2 font-semibold text-white">{node.title}</p><p className="mt-1 text-xs text-slate-400">{node.desc}</p></div>
             </div>
-          ))}
-        </div>
+          </button>
+        ))}
       </div>
-    </ControlCard>
+    </Card>
   );
 }
 
-function nodeLeft(column: number): number {
-  return FLOW_LEFTS[column - 1] ?? 0;
-}
-
-function nodeTop(row: number): number {
-  return FLOW_TOPS[row - 1] ?? 0;
-}
-
-function nodeCenter(column: number, row: number) {
-  return {
-    x: nodeLeft(column) + FLOW_NODE_WIDTH / 2,
-    y: nodeTop(row) + FLOW_NODE_HEIGHT / 2,
-  };
-}
-
-function nodePort(column: number, row: number, side: "left" | "right") {
-  const center = nodeCenter(column, row);
-  return {
-    x: side === "left" ? nodeLeft(column) : nodeLeft(column) + FLOW_NODE_WIDTH,
-    y: center.y,
-  };
-}
-
-function curvePath(
-  fromColumn: number,
-  fromRow: number,
-  toColumn: number,
-  toRow: number,
-): string {
-  const from = nodePort(fromColumn, fromRow, "right");
-  const to = nodePort(toColumn, toRow, "left");
-  const dx = Math.max(18, Math.min(90, (to.x - from.x) * 0.5));
-  return `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`;
-}
-
-function CanvasConnectors() {
-  const primaryPaths = [
-    curvePath(1, 3, 2, 2),
-    curvePath(1, 3, 2, 4),
-    curvePath(2, 2, 3, 3),
-    curvePath(2, 4, 3, 3),
-    curvePath(3, 3, 4, 3),
-  ];
-  const routerOut = nodePort(4, 3, "right");
-  const routerBusX = nodeLeft(5) - 22;
-  const agentRows = [1, 2, 3, 4, 5, 6];
-  const toolPairs = [
-    [5, 1, 6, 1],
-    [5, 2, 6, 2],
-    [5, 3, 6, 3],
-    [5, 4, 6, 4],
-    [5, 5, 6, 5],
-    [5, 6, 6, 6],
-  ];
-  const busTop = nodeCenter(5, 1).y;
-  const busBottom = nodeCenter(5, 6).y;
-
-  return (
-    <svg
-      className="pointer-events-none absolute inset-0 z-0"
-      viewBox={`0 0 ${FLOW_CANVAS_WIDTH} ${FLOW_CANVAS_HEIGHT}`}
-      aria-hidden="true"
-    >
-      <defs>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      {primaryPaths.map((d, i) => (
-        <path
-          key={i}
-          d={d}
-          fill="none"
-          stroke="rgba(52,211,153,.65)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          filter="url(#glow)"
-        />
-      ))}
-      <path
-        d={`M ${routerOut.x} ${routerOut.y} C ${routerOut.x + 32} ${routerOut.y}, ${routerBusX - 24} ${routerOut.y}, ${routerBusX} ${routerOut.y}`}
-        fill="none"
-        stroke="rgba(52,211,153,.7)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        filter="url(#glow)"
-      />
-      <line
-        x1={routerBusX}
-        y1={busTop}
-        x2={routerBusX}
-        y2={busBottom}
-        stroke="rgba(52,211,153,.32)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeDasharray="2 8"
-      />
-      {agentRows.map((row) => {
-        const to = nodePort(5, row, "left");
-        return (
-          <path
-            key={`router-agent-${row}`}
-            d={`M ${routerBusX} ${to.y} C ${routerBusX + 18} ${to.y}, ${to.x - 22} ${to.y}, ${to.x} ${to.y}`}
-            fill="none"
-            stroke="rgba(52,211,153,.58)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeDasharray={row > 3 ? "5 6" : undefined}
-          />
-        );
-      })}
-      {toolPairs.map(([fromColumn, fromRow, toColumn, toRow]) => (
-        <path
-          key={`agent-tool-${fromRow}`}
-          d={curvePath(fromColumn, fromRow, toColumn, toRow)}
-          fill="none"
-          stroke="rgba(52,211,153,.45)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeDasharray="5 7"
-        />
-      ))}
-      {[nodePort(1, 3, "right"), nodePort(3, 3, "right"), { x: routerBusX, y: routerOut.y }].map((dot, i) => (
-        <circle
-          key={`dot-${i}`}
-          cx={dot.x}
-          cy={dot.y}
-          r="4"
-          fill="#34d399"
-          stroke="#07111f"
-          strokeWidth="2"
-        />
-      ))}
-    </svg>
-  );
-}
-
-function FlowNodeCard({
-  node,
-  selected,
-  onClick,
-}: {
-  node: FlowNode;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "relative flex h-full w-full items-center gap-3 rounded-xl border bg-slate-950/90 px-3 text-left transition",
-        selected
-          ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.28)]"
-          : "border-slate-800 hover:border-slate-600 hover:bg-slate-900/90",
-      )}
-    >
-      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", toneClass(node.tone, "bg"))}>
-        <node.icon className={cn("h-5 w-5", toneClass(node.tone, "text"))} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-white">{node.title}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-400">{node.subtitle}</span>
-        <span className={cn("mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-semibold", toneClass(node.tone, "badge"))}>
-          {node.status}
-        </span>
-      </span>
-      {selected && <span className="absolute -right-1 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-emerald-300" />}
-    </button>
-  );
-}
-
-function InspectorPanel({
-  tab,
-  setTab,
-  selectedNode,
-  openDrawer,
-  onHide,
-}: {
-  tab: InspectorTab;
-  setTab: (tab: InspectorTab) => void;
-  selectedNode: FlowNode;
-  openDrawer: (drawer: DrawerKey) => void;
-  onHide: () => void;
-}) {
-  const routingFn = useServerFn(getAgentRoutingStats);
-  const historyFn = useServerFn(getIntentCallHistory);
-  const { data: routing } = useQuery({ queryKey: ["control-room-routing"], queryFn: () => routingFn() });
-  const { data: recentBooking } = useQuery({
-    queryKey: ["control-room-booking-history"],
-    queryFn: () => historyFn({ data: { intent: "booking_inquiry", limit: 5 } }),
-  });
-
+function QualityScorePanel({ rows, routing, retryTotal }: { rows: AgentQualityScore[]; routing: any; retryTotal: number }) {
   const topIntents = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const row of routing?.rows ?? []) totals.set(row.intent, (totals.get(row.intent) ?? 0) + row.count);
-    const rows = Array.from(totals.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
-    const total = rows.reduce((sum, [, count]) => sum + count, 0) || 1;
-    return rows.map(([intent, count]) => ({ intent, count, pct: Math.round((count / total) * 100) }));
+    for (const row of routing?.rows ?? []) totals.set(row.intent, (totals.get(row.intent) ?? 0) + Number(row.count ?? 0));
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [routing]);
 
-  const executions = recentBooking?.items ?? [];
-
   return (
-    <aside className="hidden min-h-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/80 xl:block">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as InspectorTab)} className="flex h-full min-h-0 flex-col">
-        <div className="border-b border-slate-800 px-3 py-3">
-          <div className="flex items-center gap-2">
-            <TabsList className="grid flex-1 grid-cols-3 bg-slate-900">
-              <TabsTrigger value="inspector">Inspector</TabsTrigger>
-              <TabsTrigger value="executions">Executions</TabsTrigger>
-              <TabsTrigger value="logs">Logs</TabsTrigger>
-            </TabsList>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-9 px-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"
-              onClick={onHide}
-            >
-              Hide
-            </Button>
-          </div>
-        </div>
-
-        <TabsContent value="inspector" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          <ControlCard>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Live Intent Insights</h3>
-              <Badge className="bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/15">LIVE</Badge>
-            </div>
-            <div className="mt-4 space-y-3">
-              {(topIntents.length ? topIntents : fallbackIntents()).map((row) => (
-                <div key={row.intent}>
-                  <div className="mb-1 flex justify-between text-xs">
-                    <span className="truncate text-slate-300">{prettyIntent(row.intent)}</span>
-                    <span className="text-slate-500">{row.pct}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-slate-800">
-                    <div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ControlCard>
-
-          <ControlCard>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Selected Node</p>
-            <div className="mt-3 flex items-start gap-3">
-              <span className={cn("flex h-11 w-11 items-center justify-center rounded-xl", toneClass(selectedNode.tone, "bg"))}>
-                <selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} />
-              </span>
-              <div className="min-w-0">
-                <h3 className="truncate font-semibold text-white">{selectedNode.title}</h3>
-                <p className="text-xs text-slate-400">{selectedNode.subtitle}</p>
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Quality Score</p><h2 className="mt-1 text-lg font-semibold text-white">Agent performance signal</h2></div><Badge className="bg-slate-800 text-slate-300">Retry total {retryTotal}</Badge></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {rows.map((row) => {
+            const agent = AGENTS.find((a) => a.key === row.agentKey);
+            const Icon = agent?.icon ?? Bot;
+            return (
+              <div key={row.agentKey} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{agent?.name ?? row.agentKey}</span></span><ScoreBadge score={row.score} /></div>
+                <p className="mt-2 text-xs text-slate-400">{row.signal}</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.score}%` }} /></div>
               </div>
-            </div>
-            <div className="mt-4 space-y-2 text-sm">
-              <MetricRow label="Status" value={selectedNode.status} tone="green" />
-              <MetricRow label="Success Rate" value="96.7%" />
-              <MetricRow label="Avg Response Time" value="1m 08s" />
-              <MetricRow label="Executions Today" value={fmtNum(routing?.totalMessages ?? 0)} />
-            </div>
-            <Button className="mt-4 w-full bg-slate-800 text-white hover:bg-slate-700" onClick={() => openDrawer("routing")}>
-              View Node Details
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </ControlCard>
-        </TabsContent>
-
-        <TabsContent value="executions" className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-          {executions.length === 0 ? (
-            <EmptyPanel text="Belum ada execution untuk intent booking terbaru." />
-          ) : (
-            executions.map((item: any) => (
-              <ControlCard key={item.id} className="p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white">{item.agentKey || item.agent || "Agent"}</p>
-                    <p className="truncate text-xs text-slate-500">{item.request || "No request payload"}</p>
-                  </div>
-                  <Badge className={cn(item.isFallback ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300")}>
-                    {item.isFallback ? "fallback" : "ok"}
-                  </Badge>
-                </div>
-              </ControlCard>
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="logs" className="min-h-0 flex-1 overflow-y-auto p-4">
-          <ControlCard>
-            <h3 className="text-sm font-semibold text-white">Recent Execution Logs</h3>
-            <div className="mt-3 space-y-2">
-              {["Booking Agent", "Pricing Agent", "Complaint Agent", "Manager Agent", "FAQ Agent"].map((agent, index) => (
-                <div key={agent} className="flex items-center justify-between rounded-lg bg-slate-900/80 px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2 text-slate-300">
-                    <span className={cn("h-2 w-2 rounded-full", index === 2 ? "bg-amber-400" : "bg-emerald-400")} />
-                    {agent}
-                  </span>
-                  <span className="text-xs text-slate-500">{2 + index * 3}s ago</span>
-                </div>
-              ))}
-            </div>
-          </ControlCard>
-        </TabsContent>
-      </Tabs>
-    </aside>
-  );
-}
-
-function BottomAnalytics({ openDrawer }: { openDrawer: (drawer: DrawerKey) => void }) {
-  const healthFn = useServerFn(getChatbotHealthSnapshot);
-  const retryFn = useServerFn(getRetryStats);
-  const { data: health } = useQuery({ queryKey: ["control-room-health-bottom"], queryFn: () => healthFn() });
-  const { data: retries } = useQuery({ queryKey: ["control-room-retry-stats"], queryFn: () => retryFn() });
-  const retryTotal = (retries ?? []).reduce((sum, row) => sum + (row.total ?? 0), 0);
-
-  return (
-    <section className="grid gap-3 xl:grid-cols-5">
-      <ControlCard className="xl:col-span-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">Conversations Over Time</h3>
-          <Badge className="bg-slate-800 text-slate-300 hover:bg-slate-800">Today</Badge>
+            );
+          })}
         </div>
-        <div className="mt-5 h-24 rounded-xl bg-gradient-to-t from-emerald-500/20 to-transparent">
-          <svg viewBox="0 0 340 96" className="h-full w-full">
-            <polyline
-              points="0,82 28,58 56,70 84,35 112,48 140,31 168,38 196,24 224,35 252,26 280,36 308,18 340,28"
-              fill="none"
-              stroke="#34d399"
-              strokeWidth="3"
-            />
-          </svg>
-        </div>
-      </ControlCard>
-
-      <ControlCard>
-        <h3 className="text-sm font-semibold text-white">Resolution Breakdown</h3>
-        <div className="mt-5 flex items-center gap-4">
-          <Donut value={Math.round((health?.delivery.rate ?? 0.7) * 100)} />
-          <div className="space-y-1 text-xs">
-            <Legend color="bg-sky-400" label="Auto-resolved" value={`${Math.round((health?.delivery.rate ?? 0.7) * 100)}%`} />
-            <Legend color="bg-violet-400" label="Human resolved" value="21%" />
-            <Legend color="bg-amber-400" label="Escalated" value="9%" />
-          </div>
-        </div>
-      </ControlCard>
-
-      <ControlCard>
-        <h3 className="text-sm font-semibold text-white">Top Intents</h3>
+      </Card>
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <p className="text-sm font-semibold text-white">Top intents</p>
         <div className="mt-4 space-y-3">
-          {fallbackIntents().slice(0, 5).map((row) => (
-            <div key={row.intent} className="grid grid-cols-[1fr_70px] items-center gap-3 text-xs">
-              <span className="truncate text-slate-400">{prettyIntent(row.intent)}</span>
-              <div className="h-1.5 rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-sky-400" style={{ width: `${row.pct}%` }} />
-              </div>
-            </div>
+          {topIntents.length === 0 && <p className="text-sm text-slate-500">Belum ada data routing.</p>}
+          {topIntents.map(([intent, count]) => (
+            <div key={intent} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0"><span className="truncate text-sm text-slate-300">{prettyIntent(intent)}</span><Badge className="bg-slate-800 text-slate-300">{count}</Badge></div>
           ))}
         </div>
-      </ControlCard>
-
-      <ControlCard className="cursor-pointer hover:border-emerald-400/50" onClick={() => openDrawer("health")}>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">Queue Health</h3>
-          <RefreshCw className="h-4 w-4 text-slate-500" />
-        </div>
-        <p className="mt-4 text-3xl font-semibold text-white">{health?.queue.pending ?? 0}</p>
-        <p className="mt-1 text-xs text-slate-400">pending / retrying</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <MetricPill label="failed" value={health?.queue.terminalFailures ?? 0} tone="rose" />
-          <MetricPill label="zombie" value={health?.queue.zombieCount ?? 0} tone="amber" />
-        </div>
-        <Button size="sm" className="mt-4 w-full bg-slate-800 text-white hover:bg-slate-700" onClick={(e) => { e.stopPropagation(); openDrawer("retry"); }}>
-          Retry Detail
-        </Button>
-        <p className="mt-2 text-[11px] text-slate-500">Retry events: {retryTotal}</p>
-      </ControlCard>
+      </Card>
     </section>
   );
 }
 
-function FeatureDrawer({
-  drawer,
-  setDrawer,
-}: {
-  drawer: DrawerKey;
-  setDrawer: (drawer: DrawerKey) => void;
-}) {
-  const titles: Record<Exclude<DrawerKey, null>, { title: string; desc: string }> = {
-    training: {
-      title: "Training & Evaluation",
-      desc: "Curated examples, conversation logs, WhatsApp corrections, and auto evaluation.",
-    },
-    knowledge: {
-      title: "Knowledge / RAG",
-      desc: "SOP knowledge, training RAG settings, and retrieval controls.",
-    },
-    telegram: {
-      title: "Managerial / Telegram Setup",
-      desc: "Telegram bot per agent, manager linking, and agent channels.",
-    },
-    health: {
-      title: "Health Detail",
-      desc: "Delivery rate, latency, queue, handoff, and intent distribution.",
-    },
-    routing: {
-      title: "Routing Detail",
-      desc: "Intent to agent mapping, actual agent, mismatch warning, and recent calls.",
-    },
-    settings: {
-      title: "Control Room Settings",
-      desc: "Smart delay, agent toggles, tool enablement, prompt and persona config.",
-    },
-    inbox: {
-      title: "WhatsApp Inbox",
-      desc: "Human handoff and live guest conversation workspace.",
-    },
-    queue: {
-      title: "Queue Health Detail",
-      desc: "Queue latency, LLM duration, current jobs, and zombie monitoring.",
-    },
-    retry: {
-      title: "Health & Retry Detail",
-      desc: "AI gateway retry observability and failed response audit.",
-    },
-    simulator: {
-      title: "Chat Simulator",
-      desc: "Run a controlled WhatsApp turn using the same orchestration pipeline.",
-    },
-  };
+function InspectorPanel({ selectedNode, config, snapshot, openDrawer }: { selectedNode: FlowNode; config: AiLabConfig; snapshot?: AiLabControlSnapshot; openDrawer: (drawer: DrawerKey) => void }) {
+  const agent = AGENTS.find((a) => a.key === selectedNode.id);
+  const agentConfig = agent ? config.agents[agent.key] : null;
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}><selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} /></span><div><p className="font-semibold text-white">{selectedNode.title}</p><p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p></div></div>
+      <div className="mt-4 space-y-2 text-sm">
+        <MetricRow label="Status" value={selectedNode.status} />
+        {agentConfig && <MetricRow label="Agent active" value={agentConfig.enabled ? "Yes" : "Off"} tone={agentConfig.enabled ? "green" : undefined} />}
+        {agentConfig && <MetricRow label="Auto reply" value={agentConfig.autoReply ? "Auto" : "Manual"} tone={agentConfig.autoReply ? "green" : undefined} />}
+        {selectedNode.id === "queue" && <MetricRow label="Pending / Failed" value={`${snapshot?.queuePending ?? 0} / ${snapshot?.queueFailed ?? 0}`} />}
+        {selectedNode.id === "incoming" && <MetricRow label="Unread" value={`${snapshot?.unreadMessages ?? 0} pesan`} />}
+      </div>
+      <div className="mt-4 grid gap-2">
+        {selectedNode.drawer && <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>Open detail</Button>}
+        <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>Test in simulator</Button>
+      </div>
+    </Card>
+  );
+}
 
-  const meta = drawer ? titles[drawer] : null;
+function SettingsPanel({ config, commitConfig, openDrawer }: { config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void>; openDrawer: (drawer: DrawerKey) => void }) {
+  const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => {
+    const next = structuredClone(config) as AiLabConfig;
+    next.agents[key] = { ...next.agents[key], ...patch };
+    void commitConfig(next, `${AGENTS.find((a) => a.key === key)?.name ?? key} diperbarui`);
+  };
+  const updateTool = (key: string, enabled: boolean) => {
+    const next = structuredClone(config) as AiLabConfig;
+    next.tools[key] = { ...next.tools[key], enabled };
+    void commitConfig(next, `${TOOLS.find((t) => t.key === key)?.name ?? key} diperbarui`);
+  };
+  return (
+    <div className="space-y-4">
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Agents</p><h2 className="mt-1 text-lg font-semibold text-white">Auto Reply & Safety</h2></div><Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => openDrawer("audit")}>Audit Trail</Button></div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {AGENTS.map((agent) => {
+            const c = config.agents[agent.key];
+            return (
+              <div key={agent.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><agent.icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">{agent.name}</p><p className="text-xs text-slate-400">{agent.desc}</p></div></div>
+                <div className="mt-4 space-y-3"><SettingSwitch title="Active" checked={!!c?.enabled} onChange={(v) => updateAgent(agent.key, { enabled: v })} /><SettingSwitch title="Auto Reply" checked={!!c?.autoReply} onChange={(v) => updateAgent(agent.key, { autoReply: v })} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <p className="text-lg font-semibold text-white">Tool Enablement</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {TOOLS.map((tool) => {
+            const c = config.tools[tool.key];
+            return <div key={tool.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><tool.icon className="h-5 w-5 text-sky-300" /><p className="mt-3 text-sm font-semibold text-white">{tool.name}</p><p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p><div className="mt-3"><Switch checked={!!c?.enabled} onCheckedChange={(v) => updateTool(tool.key, v)} /></div></div>;
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function SettingSwitch({ title, checked, onChange }: { title: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return <div className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2"><span className="text-sm text-slate-300">{title}</span><Switch checked={checked} onCheckedChange={onChange} /></div>;
+}
+
+function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: DrawerKey; setDrawer: (drawer: DrawerKey) => void; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
+  const meta: Record<Exclude<DrawerKey, null>, { title: string; desc: string }> = {
+    training: { title: "Training & Evaluation", desc: "Curated examples, correction loop, and auto evaluation." },
+    knowledge: { title: "Knowledge / RAG", desc: "SOP knowledge, RAG settings, and retrieval debugger." },
+    telegram: { title: "Managerial / Telegram", desc: "Manager linking and internal agent channels." },
+    health: { title: "Health Detail", desc: "Delivery, latency, handoff, and intent distribution." },
+    routing: { title: "Routing Detail", desc: "Intent mapping, actual agent, mismatch warning." },
+    settings: { title: "Control Room Settings", desc: "Auto reply, agent toggles, tool enablement, and safety." },
+    inbox: { title: "WhatsApp Inbox", desc: "Human handoff and live guest workspace." },
+    queue: { title: "Queue Health Detail", desc: "Latency, current jobs, zombie monitoring." },
+    retry: { title: "Health & Retry Detail", desc: "AI gateway retry observability." },
+    simulator: { title: "Chat Simulator", desc: "Controlled WhatsApp turn using production pipeline." },
+    audit: { title: "Audit & Rollback", desc: "Config history, rollback readiness, and change governance." },
+  };
+  const m = drawer ? meta[drawer] : null;
   return (
     <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}>
-      <SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[980px]">
-        {meta && (
-          <div className="flex h-full min-h-0 flex-col">
-            <SheetHeader className="border-b border-slate-800 px-5 py-4 text-left">
-              <SheetTitle className="text-white">{meta.title}</SheetTitle>
-              <SheetDescription className="text-slate-400">{meta.desc}</SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <DrawerContent drawer={drawer as Exclude<DrawerKey, null>} />
-            </div>
-          </div>
-        )}
+      <SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">
+        {m && drawer && <div className="flex h-full min-h-0 flex-col"><SheetHeader className="border-b border-slate-800 px-5 py-4 text-left"><SheetTitle className="text-white">{m.title}</SheetTitle><SheetDescription className="text-slate-400">{m.desc}</SheetDescription></SheetHeader><div className="min-h-0 flex-1 overflow-y-auto"><DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} /></div></div>}
       </SheetContent>
     </Sheet>
   );
 }
 
-function DrawerContent({ drawer }: { drawer: Exclude<DrawerKey, null> }) {
-  if (drawer === "training") {
-    return (
-      <DarkDrawerBody>
-        <EvaluationCenter />
-        <LegacyFrame>
-          <TrainingPage />
-        </LegacyFrame>
-        <LegacyFrame>
-          <WhatsappCorrectionsPage />
-        </LegacyFrame>
-      </DarkDrawerBody>
-    );
-  }
-  if (drawer === "knowledge") {
-    return (
-      <DarkDrawerBody>
-        <LegacyFrame>
-          <SopKnowledgeView />
-        </LegacyFrame>
-        <LegacyFrame>
-          <TrainingRagSettings />
-        </LegacyFrame>
-      </DarkDrawerBody>
-    );
-  }
-  if (drawer === "telegram") return <LegacyFrame><TelegramPage /></LegacyFrame>;
-  if (drawer === "health") return <LegacyFrame><HealthPage /></LegacyFrame>;
-  if (drawer === "routing") return <LegacyFrame><RoutingDebugPage /></LegacyFrame>;
-  if (drawer === "settings") return <SettingsCenter />;
-  if (drawer === "inbox") return <LegacyFrame><WhatsAppPage /></LegacyFrame>;
-  if (drawer === "queue") return <LegacyFrame><QueueMonitoringView /></LegacyFrame>;
-  if (drawer === "retry") return <LegacyFrame><RetryObservabilityView /></LegacyFrame>;
-  if (drawer === "simulator") return <LegacyFrame><ChatSimulatorView /></LegacyFrame>;
+function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<DrawerKey, null>; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
+  if (drawer === "training") return <DarkDrawerBody><TrainingPage /><WhatsappCorrectionsPage /></DarkDrawerBody>;
+  if (drawer === "knowledge") return <DarkDrawerBody><RagDebugger /><SopKnowledgeView /><TrainingRagSettings /></DarkDrawerBody>;
+  if (drawer === "telegram") return <DarkDrawerBody><TelegramPage /></DarkDrawerBody>;
+  if (drawer === "health") return <DarkDrawerBody><HealthPage /></DarkDrawerBody>;
+  if (drawer === "routing") return <DarkDrawerBody><RoutingDebugPage /></DarkDrawerBody>;
+  if (drawer === "settings") return <DarkDrawerBody><SettingsPanel config={config} commitConfig={commitConfig} openDrawer={() => undefined} /><SmartDelaySettings /><IntentRulesView /></DarkDrawerBody>;
+  if (drawer === "inbox") return <DarkDrawerBody><WhatsAppPage /></DarkDrawerBody>;
+  if (drawer === "queue") return <DarkDrawerBody><QueueMonitoringView /></DarkDrawerBody>;
+  if (drawer === "retry") return <DarkDrawerBody><RetryObservabilityView /></DarkDrawerBody>;
+  if (drawer === "simulator") return <DarkDrawerBody><SimulatorSafetyGate /><ChatSimulatorView /></DarkDrawerBody>;
+  if (drawer === "audit") return <DarkDrawerBody><AuditTrailPanel /></DarkDrawerBody>;
   return null;
 }
 
-function EvaluationCenter() {
-  const qc = useQueryClient();
-  const evalFn = useServerFn(evaluateRecentWhatsAppConversations);
-  const promoteFn = useServerFn(promoteEvaluationToTrainingExample);
-  const [limit, setLimit] = useState(20);
-  const [editing, setEditing] = useState<ChatbotEvaluationRow | null>(null);
-  const [ideal, setIdeal] = useState("");
-
-  const query = useQuery({
-    queryKey: ["chatbot-evaluations", limit],
-    queryFn: () => evalFn({ data: { limit, windowDays: 7 } }),
-  });
-
-  const promote = useMutation({
-    mutationFn: (row: ChatbotEvaluationRow) =>
-      promoteFn({
-        data: {
-          user_message: row.userMessage,
-          current_response: row.currentResponse,
-          ideal_response: ideal.trim() || row.suggestedFix,
-          intent: row.intent,
-          agent_key: row.agent,
-        },
-      }),
-    onSuccess: (res) => {
-      if (res.ok) toast.success("Evaluation dipromosikan ke training example");
-      else toast.warning("Schema insert gagal; draft payload tersedia di response.");
-      setEditing(null);
-      setIdeal("");
-      qc.invalidateQueries({ queryKey: ["chatbot-evaluations"] });
-    },
-    onError: (err) => toast.error((err as Error).message),
-  });
-
+function SimulatorSafetyGate() {
   return (
-    <ControlCard className="border-emerald-400/20 bg-slate-950">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Evaluation Center</p>
-          <h3 className="mt-1 text-lg font-semibold text-white">Auto Evaluation MVP</h3>
-          <p className="text-sm text-slate-400">Heuristic score untuk percakapan WhatsApp terbaru.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min={1}
-            max={100}
-            value={limit}
-            onChange={(e) => setLimit(Number(e.target.value) || 20)}
-            className="h-9 w-20 border-slate-700 bg-slate-900 text-white"
-          />
-          <Button
-            className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-            onClick={() => query.refetch()}
-            disabled={query.isFetching}
-          >
-            <RefreshCw className={cn("mr-2 h-4 w-4", query.isFetching && "animate-spin")} />
-            Evaluate recent WhatsApp conversations
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-5 overflow-x-auto rounded-xl border border-slate-800">
-        <table className="min-w-[900px] w-full text-left text-sm">
-          <thead className="bg-slate-900 text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-2">Thread</th>
-              <th className="px-3 py-2">Guest</th>
-              <th className="px-3 py-2">Intent</th>
-              <th className="px-3 py-2">Agent</th>
-              <th className="px-3 py-2">Score</th>
-              <th className="px-3 py-2">Issue</th>
-              <th className="px-3 py-2">Suggested fix</th>
-              <th className="px-3 py-2">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {query.isLoading && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Memuat evaluasi...</td></tr>
-            )}
-            {!query.isLoading && (query.data?.evaluations.length ?? 0) === 0 && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Belum ada data evaluasi.</td></tr>
-            )}
-            {query.data?.evaluations.map((row) => (
-              <tr key={row.id} className="align-top">
-                <td className="px-3 py-3 font-mono text-xs text-slate-400">{row.threadId?.slice(0, 8) ?? "-"}</td>
-                <td className="px-3 py-3 text-slate-300">{row.guest}</td>
-                <td className="px-3 py-3 text-slate-300">{prettyIntent(row.intent)}</td>
-                <td className="px-3 py-3 text-slate-300">{row.agent}</td>
-                <td className="px-3 py-3"><ScoreBadge score={row.score} /></td>
-                <td className="max-w-[180px] px-3 py-3 text-slate-300">{row.issue}</td>
-                <td className="max-w-[260px] px-3 py-3 text-slate-400">{row.suggestedFix}</td>
-                <td className="px-3 py-3">
-                  <Button
-                    size="sm"
-                    className="bg-slate-800 text-white hover:bg-slate-700"
-                    onClick={() => {
-                      setEditing(row);
-                      setIdeal(row.currentResponse);
-                    }}
-                  >
-                    Promote
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Promote to training example</DialogTitle>
-          </DialogHeader>
-          {editing && (
-            <div className="space-y-3">
-              <div>
-                <Label>User message</Label>
-                <p className="mt-1 rounded-md bg-muted p-3 text-sm">{editing.userMessage || "-"}</p>
-              </div>
-              <div>
-                <Label>Ideal response</Label>
-                <Textarea rows={8} value={ideal} onChange={(e) => setIdeal(e.target.value)} />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button disabled={!editing || promote.isPending} onClick={() => editing && promote.mutate(editing)}>
-              {promote.isPending ? "Saving..." : "Promote"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </ControlCard>
-  );
-}
-
-function SettingsCenter() {
-  const cfgFn = useServerFn(getAiLabConfig);
-  const updateFn = useServerFn(updateAiLabConfig);
-  const { data } = useQuery({ queryKey: ["ai-lab-config"], queryFn: () => cfgFn() });
-  const [cfg, setCfg] = useState<AiLabConfig>(() => mergeAiLabConfig({}));
-  const [edit, setEdit] = useState<ConfigEdit>(null);
-
-  useEffect(() => {
-    if (data?.config) setCfg(data.config);
-  }, [data]);
-
-  const save = async () => {
-    if (!data?.id) {
-      toast.error("Properti belum tersedia.");
-      return;
-    }
-    await updateFn({ data: { id: data.id, config: cfg as unknown as Record<string, unknown> } });
-    toast.success("Konfigurasi AI tersimpan");
-    setEdit(null);
-  };
-
-  return (
-    <DarkDrawerBody>
-      <ControlCard>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Settings</p>
-            <h3 className="mt-1 text-lg font-semibold text-white">Agents & Tools</h3>
-            <p className="text-sm text-slate-400">Auto-reply toggle, tool enablement, prompt and persona config.</p>
-          </div>
-          <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => setEdit({ type: "agent", key: "front-office" })}>
-            Edit Front Office Prompt
-          </Button>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {AGENT_CONFIGS.map((agent) => {
-            const c = cfg.agents[agent.key];
-            return (
-              <button key={agent.key} onClick={() => setEdit({ type: "agent", key: agent.key })} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-left hover:border-emerald-400/50">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
-                    <agent.icon className="h-5 w-5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-white">{agent.name}</p>
-                    <p className="text-xs text-slate-400">{agent.desc}</p>
-                    <div className="mt-2 flex gap-1.5">
-                      <Badge className={cn(c?.enabled ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-700 text-slate-300")}>
-                        {c?.enabled ? "Active" : "Off"}
-                      </Badge>
-                      <Badge className={cn(c?.autoReply ? "bg-sky-500/15 text-sky-300" : "bg-amber-500/15 text-amber-300")}>
-                        {c?.autoReply ? "Auto" : "Manual"}
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </ControlCard>
-
-      <ControlCard>
-        <h3 className="text-lg font-semibold text-white">Tool Enablement</h3>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {TOOL_CONFIGS.map((tool) => {
-            const c = cfg.tools[tool.key];
-            return (
-              <button key={tool.key} onClick={() => setEdit({ type: "tool", key: tool.key })} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-left hover:border-sky-400/50">
-                <tool.icon className="h-5 w-5 text-sky-300" />
-                <p className="mt-3 text-sm font-semibold text-white">{tool.name}</p>
-                <p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p>
-              </button>
-            );
-          })}
-        </div>
-      </ControlCard>
-
-      <LegacyFrame>
-        <SmartDelaySettings />
-      </LegacyFrame>
-      <LegacyFrame>
-        <IntentRulesView />
-      </LegacyFrame>
-
-      <ConfigDialog edit={edit} cfg={cfg} setCfg={setCfg} onClose={() => setEdit(null)} onSave={save} />
-    </DarkDrawerBody>
-  );
-}
-
-function ConfigDialog({
-  edit,
-  cfg,
-  setCfg,
-  onClose,
-  onSave,
-}: {
-  edit: ConfigEdit;
-  cfg: AiLabConfig;
-  setCfg: Dispatch<SetStateAction<AiLabConfig>>;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  const agent = edit?.type === "agent" ? AGENT_CONFIGS.find((a) => a.key === edit.key) : null;
-  const tool = edit?.type === "tool" ? TOOL_CONFIGS.find((t) => t.key === edit.key) : null;
-
-  return (
-    <Dialog open={!!edit} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{agent?.name ?? tool?.name ?? "Settings"}</DialogTitle>
-        </DialogHeader>
-        {agent && edit && (
-          <div className="space-y-4">
-            <SettingRow title="Active" desc="Agent ikut menangani percakapan.">
-              <Switch
-                checked={cfg.agents[edit.key]?.enabled ?? false}
-                onCheckedChange={(enabled) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], enabled } },
-                  }))
-                }
-              />
-            </SettingRow>
-            <SettingRow title="Auto Reply" desc="Jika mati, balasan menunggu persetujuan staf.">
-              <Switch
-                checked={cfg.agents[edit.key]?.autoReply ?? false}
-                onCheckedChange={(autoReply) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: { ...c.agents, [edit.key]: { ...c.agents[edit.key], autoReply } },
-                  }))
-                }
-              />
-            </SettingRow>
-            <div className="space-y-1.5">
-              <Label>Persona name</Label>
-              <Input
-                value={cfg.agents[edit.key]?.managerName ?? ""}
-                onChange={(e) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: {
-                      ...c.agents,
-                      [edit.key]: { ...c.agents[edit.key], managerName: e.target.value },
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label>Prompt / persona instructions</Label>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 text-xs"
-                  onClick={() =>
-                    setCfg((c) => ({
-                      ...c,
-                      agents: {
-                        ...c.agents,
-                        [edit.key]: {
-                          ...c.agents[edit.key],
-                          instructions: AGENT_DEFAULTS[edit.key] ?? "",
-                        },
-                      },
-                    }))
-                  }
-                >
-                  Reset default
-                </Button>
-              </div>
-              <Textarea
-                rows={14}
-                value={cfg.agents[edit.key]?.instructions ?? ""}
-                onChange={(e) =>
-                  setCfg((c) => ({
-                    ...c,
-                    agents: {
-                      ...c.agents,
-                      [edit.key]: { ...c.agents[edit.key], instructions: e.target.value },
-                    },
-                  }))
-                }
-              />
-            </div>
-          </div>
-        )}
-        {tool && edit && (
-          <div className="space-y-4">
-            <SettingRow title="Enabled" desc="Agent boleh memakai sumber data ini.">
-              <Switch
-                checked={cfg.tools[edit.key]?.enabled ?? false}
-                onCheckedChange={(enabled) =>
-                  setCfg((c) => ({
-                    ...c,
-                    tools: { ...c.tools, [edit.key]: { ...c.tools[edit.key], enabled } },
-                  }))
-                }
-              />
-            </SettingRow>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <Label>Source note</Label>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="h-auto p-0 text-xs"
-                  onClick={() =>
-                    setCfg((c) => ({
-                      ...c,
-                      tools: {
-                        ...c.tools,
-                        [edit.key]: { ...c.tools[edit.key], note: TOOL_DEFAULTS[edit.key] ?? "" },
-                      },
-                    }))
-                  }
-                >
-                  Fill default
-                </Button>
-              </div>
-              <Textarea
-                rows={8}
-                value={cfg.tools[edit.key]?.note ?? ""}
-                onChange={(e) =>
-                  setCfg((c) => ({
-                    ...c,
-                    tools: { ...c.tools, [edit.key]: { ...c.tools[edit.key], note: e.target.value } },
-                  }))
-                }
-              />
-            </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={onSave}>Save</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function ControlCard({
-  children,
-  className,
-  onClick,
-}: {
-  children: ReactNode;
-  className?: string;
-  onClick?: () => void;
-}) {
-  return (
-    <Card
-      onClick={onClick}
-      className={cn("rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100 shadow-none", className)}
-    >
-      {children}
+    <Card className="rounded-2xl border-amber-400/30 bg-amber-500/10 p-4 text-amber-50">
+      <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">Simulator Safety Gate</p><p className="mt-1 text-sm text-amber-100/80">Simulator memakai pipeline asli. Gunakan nomor test khusus dan cek hasil booking dengan label simulator sebelum merge ke produksi.</p></div></div>
     </Card>
   );
 }
 
-function DarkDrawerBody({ children }: { children: ReactNode }) {
-  return <div className="space-y-4 bg-[#070b14] p-4 text-slate-100">{children}</div>;
-}
-
-function LegacyFrame({ children }: { children: ReactNode }) {
+function RagDebugger() {
+  const previewFn = useServerFn(previewTrainingRagMatches);
+  const [query, setQuery] = useState("kalau deluxe malam ini ada?");
+  const [rows, setRows] = useState<RagPreviewRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  async function runPreview() {
+    setLoading(true);
+    try {
+      const res = await previewFn({ data: { query, limit: 5 } });
+      setRows(res.rows ?? []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Preview RAG gagal");
+    } finally {
+      setLoading(false);
+    }
+  }
   return (
-    <div className="min-h-[320px] overflow-hidden rounded-2xl border border-slate-800 bg-background text-foreground">
-      {children}
-    </div>
-  );
-}
-
-function SettingRow({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-      <div>
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground">{desc}</p>
+    <Card className="rounded-2xl border-violet-400/20 bg-violet-500/10 p-4 text-slate-100">
+      <div className="flex flex-wrap items-end gap-3"><div className="min-w-[240px] flex-1"><Label className="text-violet-100">RAG retrieval preview</Label><Input value={query} onChange={(e) => setQuery(e.target.value)} className="mt-2 border-slate-700 bg-slate-950 text-white" /></div><Button onClick={runPreview} disabled={loading} className="bg-violet-500 text-white hover:bg-violet-400"><Search className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />Preview</Button></div>
+      <div className="mt-4 space-y-2">
+        {rows.length === 0 && <p className="text-sm text-violet-100/70">Masukkan pertanyaan tamu lalu klik Preview untuk melihat contoh training yang kemungkinan tersuntik ke prompt.</p>}
+        {rows.map((row) => <div key={row.id} className="rounded-xl border border-violet-400/20 bg-slate-950/70 p-3"><div className="flex items-center justify-between gap-3"><Badge className={row.used ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-800 text-slate-300"}>{row.used ? "Dipakai" : "Cadangan"}</Badge><span className="text-xs text-slate-500">match {row.lexicalScore}%</span></div><p className="mt-2 text-sm text-white">{row.userMessage || "(tanpa user message)"}</p><p className="mt-1 line-clamp-2 text-xs text-slate-400">{row.idealResponse || "Belum ada ideal response"}</p></div>)}
       </div>
-      {children}
-    </div>
+    </Card>
   );
+}
+
+function AuditTrailPanel() {
+  const auditFn = useServerFn(getAiLabAuditTrail);
+  const { data, isFetching, refetch } = useQuery({ queryKey: ["ai-lab-audit-trail-full"], queryFn: () => auditFn() });
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Audit Trail</p><h2 className="mt-1 text-lg font-semibold text-white">Prompt & setting history</h2></div><Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => refetch()}><RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />Refresh</Button></div>
+      {!data?.installed && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Tabel audit belum terpasang atau belum ada perubahan tercatat. Fondasi UI sudah siap; jalankan migration audit sebelum mengaktifkan rollback penuh.</div>}
+      <div className="mt-4 space-y-2">{data?.rows?.map((row) => <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div className="flex items-center justify-between gap-3"><p className="font-medium text-white">{row.section}</p><span className="text-xs text-slate-500">{fmtDate(row.changedAt)}</span></div><p className="mt-1 text-xs text-slate-400">{row.reason} • {row.changedBy}</p></div>)}</div>
+    </Card>
+  );
+}
+
+function AuditMiniPanel({ audit, openDrawer }: { audit: any; openDrawer: (drawer: DrawerKey) => void }) {
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-center justify-between"><p className="font-semibold text-white">Audit</p><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("audit")}>Open</Button></div>
+      <p className="mt-2 text-sm text-slate-400">{audit?.installed ? `${audit.rows.length} perubahan terakhir` : "Audit table belum aktif"}</p>
+    </Card>
+  );
+}
+
+function DarkDrawerBody({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-4 bg-[#070b14] p-4 text-slate-100 [&_.bg-background]:bg-slate-950 [&_.text-foreground]:text-slate-100">{children}</div>;
 }
 
 function MetricRow({ label, value, tone }: { label: string; value: string; tone?: "green" }) {
-  return (
-    <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0 last:pb-0">
-      <span className="text-slate-500">{label}</span>
-      <span className={cn("font-medium text-slate-200", tone === "green" && "text-emerald-300")}>{value}</span>
-    </div>
-  );
-}
-
-function MetricPill({ label, value, tone }: { label: string; value: number; tone: "rose" | "amber" }) {
-  return (
-    <div className={cn("rounded-lg px-2 py-1", tone === "rose" ? "bg-rose-500/10 text-rose-300" : "bg-amber-500/10 text-amber-300")}>
-      <span className="font-semibold">{value}</span> {label}
-    </div>
-  );
-}
-
-function EmptyPanel({ text }: { text: string }) {
-  return <ControlCard><p className="text-sm text-slate-500">{text}</p></ControlCard>;
+  return <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0 last:pb-0"><span className="text-slate-500">{label}</span><span className={cn("font-medium text-slate-200", tone === "green" && "text-emerald-300")}>{value}</span></div>;
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  const cls =
-    score >= 85
-      ? "bg-emerald-500/15 text-emerald-300"
-      : score >= 70
-        ? "bg-amber-500/15 text-amber-300"
-        : "bg-rose-500/15 text-rose-300";
+  const cls = score >= 85 ? "bg-emerald-500/15 text-emerald-300" : score >= 70 ? "bg-amber-500/15 text-amber-300" : "bg-rose-500/15 text-rose-300";
   return <Badge className={cls}>{score}</Badge>;
 }
 
-function Sparkline({ tone }: { tone: string }) {
+function Sparkline({ tone }: { tone: Tone }) {
   const stroke = tone === "rose" ? "#fb7185" : tone === "amber" ? "#f59e0b" : tone === "violet" ? "#a78bfa" : "#34d399";
-  return (
-    <svg viewBox="0 0 72 24" className="h-5 w-14 opacity-80">
-      <polyline points="0,18 8,16 16,20 24,12 32,14 40,8 48,11 56,5 64,9 72,3" fill="none" stroke={stroke} strokeWidth="2" />
-    </svg>
-  );
+  return <svg viewBox="0 0 72 24" className="h-5 w-14 opacity-80"><polyline points="0,18 8,16 16,20 24,12 32,14 40,8 48,11 56,5 64,9 72,3" fill="none" stroke={stroke} strokeWidth="2" /></svg>;
 }
 
-function Donut({ value }: { value: number }) {
-  return (
-    <div
-      className="h-20 w-20 rounded-full"
-      style={{ background: `conic-gradient(#38bdf8 ${value}%, #8b5cf6 ${value}% ${value + 18}%, #f59e0b 0)` }}
-    >
-      <div className="m-5 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white">
-        {value}%
-      </div>
-    </div>
-  );
+function toneClass(tone: Tone, part: "bg" | "text" | "badge") {
+  const map: Record<Tone, Record<typeof part, string>> = {
+    green: { bg: "bg-emerald-500/15", text: "text-emerald-300", badge: "bg-emerald-500/15 text-emerald-300" },
+    blue: { bg: "bg-sky-500/15", text: "text-sky-300", badge: "bg-sky-500/15 text-sky-300" },
+    violet: { bg: "bg-violet-500/15", text: "text-violet-300", badge: "bg-violet-500/15 text-violet-300" },
+    amber: { bg: "bg-amber-500/15", text: "text-amber-300", badge: "bg-amber-500/15 text-amber-300" },
+    rose: { bg: "bg-rose-500/15", text: "text-rose-300", badge: "bg-rose-500/15 text-rose-300" },
+    cyan: { bg: "bg-cyan-500/15", text: "text-cyan-300", badge: "bg-cyan-500/15 text-cyan-300" },
+    slate: { bg: "bg-slate-700/60", text: "text-slate-300", badge: "bg-slate-800 text-slate-300" },
+  } as const;
+  return map[tone][part];
 }
 
-function Legend({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={cn("h-2 w-2 rounded-full", color)} />
-      <span className="text-slate-400">{label}</span>
-      <span className="ml-auto text-slate-300">{value}</span>
-    </div>
-  );
-}
-
-function toneClass(tone: string, part: "bg" | "text" | "badge") {
-  const map: Record<string, Record<"bg" | "text" | "badge", string>> = {
-    green: {
-      bg: "bg-emerald-500/12",
-      text: "text-emerald-300",
-      badge: "bg-emerald-500/15 text-emerald-300",
-    },
-    blue: {
-      bg: "bg-sky-500/12",
-      text: "text-sky-300",
-      badge: "bg-sky-500/15 text-sky-300",
-    },
-    violet: {
-      bg: "bg-violet-500/12",
-      text: "text-violet-300",
-      badge: "bg-violet-500/15 text-violet-300",
-    },
-    amber: {
-      bg: "bg-amber-500/12",
-      text: "text-amber-300",
-      badge: "bg-amber-500/15 text-amber-300",
-    },
-    rose: {
-      bg: "bg-rose-500/12",
-      text: "text-rose-300",
-      badge: "bg-rose-500/15 text-rose-300",
-    },
-    cyan: {
-      bg: "bg-cyan-500/12",
-      text: "text-cyan-300",
-      badge: "bg-cyan-500/15 text-cyan-300",
-    },
-    slate: {
-      bg: "bg-slate-700/60",
-      text: "text-slate-300",
-      badge: "bg-slate-700 text-slate-300",
-    },
-  };
-  return (map[tone] ?? map.slate)[part];
-}
-
-function fallbackIntents() {
-  return [
-    { intent: "booking inquiry", count: 32, pct: 32 },
-    { intent: "price check", count: 21, pct: 21 },
-    { intent: "general question", count: 18, pct: 18 },
-    { intent: "complaint", count: 14, pct: 14 },
-    { intent: "urgent issue", count: 9, pct: 9 },
-    { intent: "others", count: 6, pct: 6 },
-  ];
-}
-
-function prettyIntent(intent: string) {
-  return intent.replace(/[_-]+/g, " ");
+function toneBorder(tone: Tone) {
+  if (tone === "rose") return "border-rose-400/20 bg-rose-500/10";
+  if (tone === "amber") return "border-amber-400/20 bg-amber-500/10";
+  if (tone === "violet") return "border-violet-400/20 bg-violet-500/10";
+  return "border-slate-800 bg-slate-950/70";
 }
 
 function fmtNum(value: number) {
-  return Number(value ?? 0).toLocaleString("id-ID");
+  return new Intl.NumberFormat("id-ID").format(Number(value || 0));
 }
 
-function fmtMsShort(value: number | null) {
-  if (value == null) return "0s";
-  if (value >= 60_000) return `${Math.round(value / 60_000)}m ${Math.round((value % 60_000) / 1000)}s`;
-  if (value >= 1000) return `${Math.round(value / 1000)}s`;
-  return `${Math.round(value)}ms`;
+function fmtMsShort(ms: number | null) {
+  if (ms == null || !Number.isFinite(ms)) return "-";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function fmtDate(value: string | null | undefined) {
+  if (!value) return "-";
+  try {
+    return new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function prettyIntent(intent: string) {
+  return intent.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
