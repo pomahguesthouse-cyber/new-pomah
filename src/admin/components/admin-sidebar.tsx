@@ -119,10 +119,11 @@ const DEFAULT_GROUPS: NavGroup[] = [
   },
 ];
 
-// Bumped again because stale client-side order can otherwise keep routes in
-// the wrong section after deploy. Stored order is now section-safe below.
-const LEGACY_STORAGE_KEYS = ["admin-sidebar:order:v1", "admin-sidebar:order:v2"];
-const STORAGE_KEY = "admin-sidebar:order:v3";
+const SIDEBAR_STORAGE_KEYS = [
+  "admin-sidebar:order:v1",
+  "admin-sidebar:order:v2",
+  "admin-sidebar:order:v3",
+];
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
@@ -132,24 +133,15 @@ type PersistedOrder = { groups: Array<{ label: string; paths: string[] }> };
 function readStored(): PersistedOrder | null {
   if (typeof window === "undefined") return null;
   try {
-    for (const key of LEGACY_STORAGE_KEYS) window.localStorage.removeItem(key);
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedOrder;
-    if (!parsed || !Array.isArray(parsed.groups)) return null;
-    return parsed;
+    for (const key of SIDEBAR_STORAGE_KEYS) window.localStorage.removeItem(key);
   } catch {
-    return null;
+    /* localStorage may be unavailable. Default nav still renders. */
   }
+  return null;
 }
 
 function writeStored(order: PersistedOrder): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
-  } catch {
-    /* localStorage may be unavailable (private mode quota) — ignore. */
-  }
+  void order;
 }
 
 function getDefaultGroupByPath(defaults: NavGroup[]): Map<string, string> {
@@ -167,8 +159,9 @@ function getDefaultGroupByPath(defaults: NavGroup[]): Map<string, string> {
  *    section at the end, instead of vanishing because they weren't in
  *    the user's saved order.
  *  • Group labels and order follow the code (sections are not user-reorderable).
- *  • Saved cross-section moves are ignored, so stale browser state cannot keep
- *    admin pages in the wrong section after a layout change.
+ * Persisted browser order is intentionally ignored. The admin sidebar is a
+ * canonical operational menu; old localStorage state once moved AI Lab routes
+ * into other admin sections and made restored pages look unchanged.
  */
 function mergeWithDefaults(
   stored: PersistedOrder | null,

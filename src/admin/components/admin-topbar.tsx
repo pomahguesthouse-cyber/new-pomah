@@ -37,27 +37,59 @@ import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 
 const SECTION_TITLES: Record<string, string> = {
-  "/": "Overview",
-  "/bookings": "Bookings",
-  "/rooms": "Rooms",
-  "/pricing": "Pricing",
-  "/whatsapp": "WhatsApp",
-  "/training": "Training",
-  "/analytics": "Analytics",
-  "/seo": "SEO",
-  "/settings": "Settings",
+  "/admin": "Overview",
+  "/admin/calendar": "Calendar",
+  "/admin/bookings": "Bookings",
+  "/admin/rooms": "Rooms",
+  "/admin/media": "Media Library",
+  "/admin/pages": "Page Builder",
+  "/admin/explore": "City Guide",
+  "/admin/content-manager": "Content Manager",
+  "/admin/pricing-calendar": "Calendar Pricing",
+  "/admin/competitor-prices": "PriceS Analyst",
+  "/admin/whatsapp": "WhatsApp",
+  "/admin/webchat": "Web Chat",
+  "/admin/telegram": "Telegram",
+  "/admin/complaints": "Komplain",
+  "/admin/handoff": "Human Handoff",
+  "/admin/booking-form-logs": "Log Form Booking",
+  "/admin/notifications": "Log Notifikasi",
+  "/admin/whatsapp-corrections": "WhatsApp Corrections",
+  "/admin/training": "Chatbot Training",
+  "/admin/routing-debug": "Routing Debug",
+  "/admin/health": "Health Chatbot",
+  "/admin/wpp-diagnostics": "WPP Diagnostics",
+  "/admin/analytics": "Analytics",
+  "/admin/seo": "SEO",
+  "/admin/settings": "Settings",
 };
 
 const COMMANDS = [
-  { to: "/", label: "Overview" },
-  { to: "/bookings", label: "Bookings" },
-  { to: "/rooms", label: "Rooms" },
-  { to: "/pricing", label: "Pricing" },
-  { to: "/whatsapp", label: "WhatsApp" },
-  { to: "/training", label: "Training" },
-  { to: "/analytics", label: "Analytics" },
-  { to: "/seo", label: "SEO" },
-  { to: "/settings", label: "Settings" },
+  { to: "/admin", label: "Overview" },
+  { to: "/admin/calendar", label: "Calendar" },
+  { to: "/admin/bookings", label: "Bookings" },
+  { to: "/admin/rooms", label: "Rooms" },
+  { to: "/admin/media", label: "Media Library" },
+  { to: "/admin/pages", label: "Page Builder" },
+  { to: "/admin/explore", label: "City Guide" },
+  { to: "/admin/content-manager", label: "Content Manager" },
+  { to: "/admin/pricing-calendar", label: "Calendar Pricing" },
+  { to: "/admin/competitor-prices", label: "PriceS Analyst" },
+  { to: "/admin/whatsapp", label: "WhatsApp" },
+  { to: "/admin/webchat", label: "Web Chat" },
+  { to: "/admin/telegram", label: "Telegram" },
+  { to: "/admin/complaints", label: "Komplain" },
+  { to: "/admin/handoff", label: "Human Handoff" },
+  { to: "/admin/booking-form-logs", label: "Log Form Booking" },
+  { to: "/admin/notifications", label: "Log Notifikasi" },
+  { to: "/admin/whatsapp-corrections", label: "WhatsApp Corrections" },
+  { to: "/admin/training", label: "Chatbot Training" },
+  { to: "/admin/routing-debug", label: "Routing Debug" },
+  { to: "/admin/health", label: "Health Chatbot" },
+  { to: "/admin/wpp-diagnostics", label: "WPP Diagnostics" },
+  { to: "/admin/analytics", label: "Analytics" },
+  { to: "/admin/seo", label: "SEO" },
+  { to: "/admin/settings", label: "Settings" },
 ];
 
 function initials(name?: string | null) {
@@ -85,7 +117,12 @@ export function AdminTopbar({
 
   const title =
     SECTION_TITLES[path] ??
-    (path !== "/" ? path.replace(/^\//, "").replace(/\b\w/g, (m) => m.toUpperCase()) : "Overview");
+    (path !== "/admin"
+      ? path
+          .replace(/^\/admin\/?/, "")
+          .replace(/-/g, " ")
+          .replace(/\b\w/g, (m) => m.toUpperCase())
+      : "Overview");
 
   // Cmd/Ctrl + K
   useEffect(() => {
