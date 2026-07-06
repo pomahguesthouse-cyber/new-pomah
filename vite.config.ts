@@ -7,31 +7,26 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
 
-function fixXyflowDefaultImport() {
-  return {
-    name: "fix-xyflow-default-import",
-    enforce: "pre" as const,
-    transform(code: string) {
-      if (!code.includes("@xyflow/react")) return null;
-      let next = code.replace(
-        /import\s+ReactFlow\s*,\s*\{/g,
-        "import { ReactFlow,",
-      );
-      next = next.replace(/\n\s*Controls,/g, "");
-      next = next.replace(/\n\s*<Controls[^>]*\/?>/g, "");
-      if (next === code) return null;
-      return { code: next, map: null };
-    },
-  };
+function isAiLabRoute(id: string) {
+  return id.includes("/src/routes/admin/ai-lab.tsx") || id.includes("\\src\\routes\\admin\\ai-lab.tsx");
 }
 
-function makeAiLabRootScrollable() {
+function aiLabRouteTransforms() {
   return {
-    name: "make-ai-lab-root-scrollable",
+    name: "ai-lab-route-only-transforms",
     enforce: "pre" as const,
-    transform(code: string) {
-      if (!code.includes("WhatsApp AI Control Room")) return null;
-      let next = code.replace(
+    transform(code: string, id: string) {
+      if (!isAiLabRoute(id)) return null;
+      let next = code;
+
+      // React Flow exports ReactFlow as a named export. Keep this fix scoped to
+      // AI Lab so other routes/packages are never rewritten.
+      next = next.replace(/import\s+ReactFlow\s*,\s*\{/g, "import { ReactFlow,");
+      next = next.replace(/\n\s*Controls,/g, "");
+      next = next.replace(/\n\s*<Controls[^>]*\/?>/g, "");
+
+      // Keep the AI Lab page scrollable without using global CSS selectors.
+      next = next.replace(
         '<div className="min-h-[100dvh] bg-[#070b14] text-slate-100">',
         '<div className="bg-slate-950 text-slate-100" style={{ height: "100dvh", overflowY: "auto", overscrollBehaviorY: "contain" }}>',
       );
@@ -39,10 +34,15 @@ function makeAiLabRootScrollable() {
         '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">',
         '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>',
       );
+
+      // Canvas first, compact KPI cards below it, then alerts and panels.
       next = next.replace(
         /\n\s*<KpiStrip snapshot=\{snapshot\} metrics=\{metrics\} health=\{health\} latestQueue=\{latestQueue\} openDrawer=\{setDrawer\} \/>\n\s*<OperationalAlerts snapshot=\{snapshot\} health=\{health\} retryTotal=\{retryTotal\} openDrawer=\{setDrawer\} \/>\n\s*(<AiReactFlowCanvas[\s\S]*?\n\s*\/>)\n\s*<QualityScorePanel/,
         `\n          $1\n          <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />\n          <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />\n          <QualityScorePanel`,
       );
+
+      // Compact KPI row. Inline styles are used because Tailwind does not scan
+      // strings injected by Vite transforms.
       next = next.replace(
         '<section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">',
         '<section className="grid" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "8px" }}>',
@@ -71,7 +71,10 @@ function makeAiLabRootScrollable() {
         '<p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>',
         '<p className={cn("mt-0.5 truncate text-[9px] leading-3", toneClass(card.tone, "text"))}>{card.delta}</p>',
       );
+
+      // Remove the old right detail drawer from AI Lab only.
       next = next.replace(/\n\s*<aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">\n\s*<InspectorPanel selectedNode=\{selectedNode\} config=\{config\} snapshot=\{snapshot\} health=\{health\} quality=\{quality \?\? \[\]\} openDrawer=\{setDrawer\} \/>\n\s*<AuditMiniPanel openDrawer=\{setDrawer\} \/>\n\s*<\/aside>/, "");
+
       if (next === code) return null;
       return { code: next, map: null };
     },
@@ -85,6 +88,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [fixXyflowDefaultImport(), makeAiLabRootScrollable(), mcpPlugin()],
+    plugins: [aiLabRouteTransforms(), mcpPlugin()],
   },
 });
