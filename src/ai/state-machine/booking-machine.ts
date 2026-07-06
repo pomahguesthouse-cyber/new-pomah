@@ -613,7 +613,7 @@ function buildBookingSummaryFromResolved(
   return buildBookingSummary(context, ctx.rooms);
 }
 
-async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContext): Promise<StateMachineResult> {
+export async function buildBookingSummaryAsync(ctx: ToolContext, context: BookingContext): Promise<StateMachineResult> {
   let resolved: ResolvedBookingRates = null;
   try {
     resolved = await resolveBookingSummaryRates(ctx, context);

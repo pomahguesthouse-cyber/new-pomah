@@ -9,7 +9,11 @@
  */
 
 import { isDateString, todayWIB } from "@/lib/date";
-import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
+import {
+  buildBookingSummaryAsync,
+  updateBookingState,
+  type BookingContext,
+} from "@/ai/state-machine/booking-machine";
 import type { RoomTypeRow } from "@/ai/context-builder";
 import type { ToolContext, ToolHandler } from "./types";
 
@@ -226,15 +230,36 @@ export const startBookingDetails: ToolHandler = async (
 
   ctx.lastDates = { checkIn, checkOut };
 
-  // Masuk ke state COLLECTING_DATA (flexible slot-filling).
-  // Semua data yang sudah tersedia (tanggal, kamar, nama jika ada) sudah
-  // tersimpan di context. Pesan selanjutnya akan diekstrak oleh extractor
-  // untuk mengisi slot yang masih kosong.
+  // Masuk ke state machine. Jika slot wajib sudah lengkap, langsung tampilkan
+  // ringkasan final dan simpan state CONFIRMING_BOOKING. Ini mencegah jawaban
+  // "ya" berikutnya jatuh kembali ke agent/tool loop dan mengulang prompt.
   let message: string;
+  const hasCompleteRequiredSlots =
+    guestName.length >= 2 &&
+    !!context.checkIn &&
+    !!context.checkOut &&
+    !!context.roomName &&
+    (context.adults ?? 0) >= 1;
+
+  if (hasCompleteRequiredSlots) {
+    context.guestName = guestName;
+    await updateBookingState(ctx.supabaseAdmin, ctx.phone, "CONFIRMING_BOOKING", context);
+    const summary = await buildBookingSummaryAsync(ctx, context);
+    return JSON.stringify({
+      ok: true,
+      relay_verbatim: true,
+      message:
+        summary.reply ??
+        `Baik, data booking ${roomsDescription} sudah saya catat atas nama "${guestName}". ` +
+          `Balas "Ya" atau "Lanjut" untuk konfirmasi booking.`,
+    });
+  }
+
   if (guestName.length >= 2) {
     context.guestName = guestName;
-    // guestPhone sudah terisi dari ctx.phone — langsung ke konfirmasi.
-    message = `Baik, data booking ${roomsDescription} sudah saya catat atas nama "${guestName}". Mohon konfirmasi untuk melanjutkan pemesanan.`;
+    message =
+      `Baik, data booking ${roomsDescription} sudah saya catat atas nama "${guestName}". ` +
+      `Mohon lengkapi jumlah tamu untuk melanjutkan pemesanan.`;
   } else {
     message = `Baik Kak, untuk memproses pemesanan kamar ${roomsDescription}, mohon ketikkan nama lengkap Kakak (bisa langsung sekaligus dengan nomor HP, contoh: "atas nama: Budi, nomor: 08123456789"):`;
   }
