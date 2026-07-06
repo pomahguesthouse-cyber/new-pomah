@@ -20,9 +20,13 @@ import {
   Inbox,
   LifeBuoy,
   MessageCircle,
+  Minus,
+  Move,
   PauseCircle,
   PlayCircle,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   Send,
   Settings,
@@ -106,9 +110,26 @@ interface FlowNode {
   id: string;
   title: string;
   desc: string;
+  x: number;
+  y: number;
   icon: ComponentType<{ className?: string }>;
   tone: Tone;
   drawer?: Exclude<DrawerKey, null>;
+  kind: "trigger" | "system" | "ai" | "agent" | "tool" | "output" | "manual";
+}
+
+interface FlowEdge {
+  from: string;
+  to: string;
+  label?: string;
+  tone?: Tone;
+}
+
+interface FlowRuntime {
+  label: string;
+  detail: string;
+  tone: Tone;
+  pulse?: boolean;
 }
 
 const AGENTS: AgentMeta[] = [
@@ -128,25 +149,57 @@ const TOOLS = [
   { key: "faq-memory", name: "FAQ Memory", icon: Brain },
 ];
 
+const NODE_WIDTH = 178;
+const NODE_HEIGHT = 86;
+const CANVAS_WIDTH = 1180;
+const CANVAS_HEIGHT = 640;
+
 const FLOW_NODES: FlowNode[] = [
-  { id: "incoming", title: "Incoming WA", desc: "Evolution webhook", icon: MessageCircle, tone: "green", drawer: "inbox" },
-  { id: "parser", title: "Parser", desc: "Normalize phone + dedup", icon: GitBranch, tone: "cyan" },
-  { id: "queue", title: "Queue + Delay", desc: "Debounce pesan beruntun", icon: Clock, tone: "blue", drawer: "queue" },
-  { id: "intent", title: "Intent AI", desc: "Rule + LLM fallback", icon: Brain, tone: "violet", drawer: "routing" },
-  { id: "router", title: "Router", desc: "Intent ke agent", icon: GitBranch, tone: "cyan", drawer: "routing" },
-  { id: "front-office", title: "Front Office", desc: "Booking dan FAQ", icon: Users, tone: "cyan", drawer: "settings" },
-  { id: "pricing", title: "Pricing", desc: "Tarif real-time", icon: Wallet, tone: "blue", drawer: "settings" },
-  { id: "finance", title: "Finance", desc: "Payment proof", icon: Bell, tone: "amber", drawer: "settings" },
-  { id: "availability", title: "Availability Tool", desc: "Wajib sebelum stok/harga", icon: CalendarCheck, tone: "green" },
-  { id: "rag", title: "RAG / SOP", desc: "Knowledge context", icon: Database, tone: "violet", drawer: "knowledge" },
-  { id: "send", title: "Send Reply", desc: "WhatsApp provider", icon: Send, tone: "green" },
-  { id: "handover", title: "Human Handover", desc: "Staf ambil alih", icon: LifeBuoy, tone: "rose", drawer: "inbox" },
+  { id: "incoming", title: "Incoming WA", desc: "Evolution webhook", x: 24, y: 272, icon: MessageCircle, tone: "green", drawer: "inbox", kind: "trigger" },
+  { id: "parser", title: "Parser", desc: "Normalize phone + dedup", x: 228, y: 196, icon: GitBranch, tone: "cyan", kind: "system" },
+  { id: "queue", title: "Queue + Delay", desc: "Debounce pesan beruntun", x: 228, y: 348, icon: Clock, tone: "blue", drawer: "queue", kind: "system" },
+  { id: "intent", title: "Intent AI", desc: "Rule + LLM fallback", x: 432, y: 272, icon: Brain, tone: "violet", drawer: "routing", kind: "ai" },
+  { id: "router", title: "Router", desc: "Intent ke agent", x: 636, y: 272, icon: GitBranch, tone: "cyan", drawer: "routing", kind: "system" },
+  { id: "front-office", title: "Front Office", desc: "Booking dan FAQ", x: 838, y: 32, icon: Users, tone: "cyan", drawer: "settings", kind: "agent" },
+  { id: "pricing", title: "Pricing", desc: "Tarif real-time", x: 838, y: 136, icon: Wallet, tone: "blue", drawer: "settings", kind: "agent" },
+  { id: "customer-care", title: "Customer Care", desc: "Keluhan & layanan", x: 838, y: 240, icon: Headphones, tone: "green", drawer: "settings", kind: "agent" },
+  { id: "finance", title: "Finance", desc: "Payment proof", x: 838, y: 344, icon: Bell, tone: "amber", drawer: "settings", kind: "agent" },
+  { id: "manager", title: "Manager", desc: "Escalation gate", x: 838, y: 448, icon: ShieldAlert, tone: "rose", drawer: "telegram", kind: "agent" },
+  { id: "content", title: "Content", desc: "SEO / city guide", x: 838, y: 552, icon: Sparkles, tone: "slate", drawer: "settings", kind: "agent" },
+  { id: "availability", title: "Availability", desc: "Cek stok & harga", x: 1030, y: 84, icon: CalendarCheck, tone: "green", kind: "tool" },
+  { id: "rag", title: "RAG / SOP", desc: "Knowledge context", x: 1030, y: 292, icon: Database, tone: "violet", drawer: "knowledge", kind: "tool" },
+  { id: "send", title: "Send Reply", desc: "WhatsApp provider", x: 1030, y: 396, icon: Send, tone: "green", kind: "output" },
+  { id: "handover", title: "Human Handover", desc: "Staf ambil alih", x: 1030, y: 500, icon: LifeBuoy, tone: "rose", drawer: "inbox", kind: "manual" },
+];
+
+const FLOW_EDGES: FlowEdge[] = [
+  { from: "incoming", to: "parser", label: "webhook" },
+  { from: "incoming", to: "queue", label: "burst" },
+  { from: "parser", to: "intent" },
+  { from: "queue", to: "intent", label: "ready" },
+  { from: "intent", to: "router", label: "intent" },
+  { from: "router", to: "front-office" },
+  { from: "router", to: "pricing" },
+  { from: "router", to: "customer-care" },
+  { from: "router", to: "finance" },
+  { from: "router", to: "manager", tone: "rose" },
+  { from: "router", to: "content", tone: "slate" },
+  { from: "front-office", to: "availability", label: "tool" },
+  { from: "pricing", to: "availability", label: "rate" },
+  { from: "front-office", to: "rag" },
+  { from: "customer-care", to: "rag" },
+  { from: "finance", to: "rag" },
+  { from: "front-office", to: "send" },
+  { from: "pricing", to: "send" },
+  { from: "finance", to: "send" },
+  { from: "manager", to: "handover", tone: "rose" },
+  { from: "send", to: "handover", label: "fallback", tone: "amber" },
 ];
 
 function AiLab() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState<DrawerKey>(null);
-  const [selectedNode, setSelectedNode] = useState(FLOW_NODES[5]);
+  const [selectedNode, setSelectedNode] = useState(FLOW_NODES.find((node) => node.id === "front-office") ?? FLOW_NODES[0]);
 
   const configFn = useServerFn(getAiLabConfig);
   const updateFn = useServerFn(updateAiLabConfig);
@@ -232,13 +285,21 @@ function AiLab() {
         <section className="min-w-0 space-y-4">
           <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
           <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
-          <FlowMap selected={selectedNode.id} onSelect={setSelectedNode} openDrawer={setDrawer} />
+          <FlowMap
+            selected={selectedNode.id}
+            config={config}
+            snapshot={snapshot}
+            health={health}
+            quality={quality ?? []}
+            onSelect={setSelectedNode}
+            openDrawer={setDrawer}
+          />
           <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
           <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} openDrawer={setDrawer} />
+          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} health={health} quality={quality ?? []} openDrawer={setDrawer} />
           <AuditMiniPanel openDrawer={setDrawer} />
         </aside>
       </main>
@@ -283,8 +344,18 @@ function StatusBadge({ snapshot }: { snapshot?: AiLabControlSnapshot }) {
 function SafetyCard({ snapshot, onPause, onSafe, onFull }: { snapshot?: AiLabControlSnapshot; onPause: () => void; onSafe: () => void; onFull: () => void }) {
   return (
     <Card className="rounded-2xl border-amber-400/20 bg-amber-500/10 p-4 text-amber-50">
-      <div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">AI Safety Mode</p><p className="mt-1 text-xs text-amber-100/80">Auto reply aktif di {snapshot?.autoReplyAgents ?? 0}/{snapshot?.totalAgents ?? AGENTS.length} agent.</p></div></div>
-      <div className="mt-4 grid gap-2"><Button size="sm" variant="outline" className="border-amber-400/30 bg-slate-950/50 text-amber-100 hover:bg-slate-900" onClick={onPause}>Pause All</Button><Button size="sm" variant="outline" className="border-sky-400/30 bg-slate-950/50 text-sky-100 hover:bg-slate-900" onClick={onSafe}>Safe Auto</Button><Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={onFull}>Full Auto</Button></div>
+      <div className="flex items-start gap-3">
+        <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-300" />
+        <div>
+          <p className="font-semibold">AI Safety Mode</p>
+          <p className="mt-1 text-xs text-amber-100/80">Auto reply aktif di {snapshot?.autoReplyAgents ?? 0}/{snapshot?.totalAgents ?? AGENTS.length} agent.</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2">
+        <Button size="sm" variant="outline" className="border-amber-400/30 bg-slate-950/50 text-amber-100 hover:bg-slate-900" onClick={onPause}>Pause All</Button>
+        <Button size="sm" variant="outline" className="border-sky-400/30 bg-slate-950/50 text-sky-100 hover:bg-slate-900" onClick={onSafe}>Safe Auto</Button>
+        <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={onFull}>Full Auto</Button>
+      </div>
     </Card>
   );
 }
@@ -303,8 +374,15 @@ function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snap
     <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       {cards.map((card) => (
         <button key={card.label} onClick={() => card.drawer && openDrawer(card.drawer)} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-left text-slate-100 transition hover:border-emerald-400/50">
-          <div className="flex items-center justify-between gap-2"><span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}><card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} /></span><Sparkline tone={card.tone} /></div>
-          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p><p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p><p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
+          <div className="flex items-center justify-between gap-2">
+            <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
+              <card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />
+            </span>
+            <Sparkline tone={card.tone} />
+          </div>
+          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p>
+          <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p>
+          <p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
         </button>
       ))}
     </section>
@@ -318,17 +396,298 @@ function OperationalAlerts({ snapshot, health, retryTotal, openDrawer }: { snaps
     retryTotal > 0 ? { tone: "violet" as Tone, title: "Retry AI terdeteksi", desc: `${retryTotal} retry tercatat.`, drawer: "retry" as DrawerKey } : null,
     (health?.openHandoffTickets ?? 0) > 0 ? { tone: "amber" as Tone, title: "Handoff terbuka", desc: `${health.openHandoffTickets} percakapan butuh staf.`, drawer: "inbox" as DrawerKey } : null,
   ].filter(Boolean) as Array<{ tone: Tone; title: string; desc: string; drawer: DrawerKey }>;
-  if (alerts.length === 0) return <Card className="rounded-2xl border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-50"><div className="flex items-center gap-3"><Activity className="h-5 w-5 text-emerald-300" /><div><p className="font-semibold">Operational signal normal</p><p className="text-sm text-emerald-100/75">Tidak ada alert besar dari queue, retry, atau handoff.</p></div></div></Card>;
-  return <section className="grid gap-2 md:grid-cols-2">{alerts.map((alert) => <button key={alert.title} onClick={() => alert.drawer && openDrawer(alert.drawer)} className={cn("rounded-2xl border p-4 text-left transition", toneBorder(alert.tone))}><div className="flex items-start gap-3"><AlertTriangle className={cn("mt-0.5 h-5 w-5", toneClass(alert.tone, "text"))} /><div><p className="font-semibold text-white">{alert.title}</p><p className="mt-1 text-sm text-slate-400">{alert.desc}</p></div></div></button>)}</section>;
+  if (alerts.length === 0) {
+    return (
+      <Card className="rounded-2xl border-emerald-400/20 bg-emerald-500/10 p-4 text-emerald-50">
+        <div className="flex items-center gap-3">
+          <Activity className="h-5 w-5 text-emerald-300" />
+          <div>
+            <p className="font-semibold">Operational signal normal</p>
+            <p className="text-sm text-emerald-100/75">Tidak ada alert besar dari queue, retry, atau handoff.</p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <section className="grid gap-2 md:grid-cols-2">
+      {alerts.map((alert) => (
+        <button key={alert.title} onClick={() => alert.drawer && openDrawer(alert.drawer)} className={cn("rounded-2xl border p-4 text-left transition", toneBorder(alert.tone))}>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className={cn("mt-0.5 h-5 w-5", toneClass(alert.tone, "text"))} />
+            <div>
+              <p className="font-semibold text-white">{alert.title}</p>
+              <p className="mt-1 text-sm text-slate-400">{alert.desc}</p>
+            </div>
+          </div>
+        </button>
+      ))}
+    </section>
+  );
 }
 
-function FlowMap({ selected, onSelect, openDrawer }: { selected: string; onSelect: (node: FlowNode) => void; openDrawer: (drawer: DrawerKey) => void }) {
+function FlowMap({
+  selected,
+  config,
+  snapshot,
+  health,
+  quality,
+  onSelect,
+  openDrawer,
+}: {
+  selected: string;
+  config: AiLabConfig;
+  snapshot?: AiLabControlSnapshot;
+  health: any;
+  quality: AgentQualityScore[];
+  onSelect: (node: FlowNode) => void;
+  openDrawer: (drawer: DrawerKey) => void;
+}) {
+  const [zoom, setZoom] = useState(0.92);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const selectedNode = FLOW_NODES.find((node) => node.id === selected) ?? FLOW_NODES[0];
+
+  const resetView = () => {
+    setZoom(0.92);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const adjustZoom = (delta: number) => setZoom((value) => Math.min(1.25, Math.max(0.65, Number((value + delta).toFixed(2)))));
+  const movePan = (dx: number, dy: number) => setPan((value) => ({ x: value.x + dx, y: value.y + dy }));
+
   return (
     <Card className="overflow-hidden rounded-2xl border-slate-800 bg-slate-950/70 p-0 text-slate-100">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3"><div className="flex items-center gap-3"><Badge className="bg-slate-800 text-slate-300">Interactive Flow</Badge><div><h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2><p className="text-xs text-slate-500">Klik node untuk inspector dan detail drawer.</p></div></div><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}><PlayCircle className="mr-2 h-4 w-4" />Simulator</Button></div>
-      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">{FLOW_NODES.map((node, idx) => <button key={node.id} onClick={() => { onSelect(node); if (node.drawer && ["queue", "routing", "knowledge"].includes(node.drawer)) openDrawer(node.drawer); }} className={cn("rounded-xl border bg-slate-900/50 p-4 text-left transition hover:border-emerald-400/50", selected === node.id ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.18)]" : "border-slate-800")}><div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", toneClass(node.tone, "bg"))}><node.icon className={cn("h-5 w-5", toneClass(node.tone, "text"))} /></span><div className="min-w-0"><div className="flex items-center gap-2"><span className="text-xs text-slate-500">{idx + 1}</span><Badge className={toneClass(node.tone, "badge")}>{node.drawer ? "Open" : "Auto"}</Badge></div><p className="mt-2 font-semibold text-white">{node.title}</p><p className="mt-1 text-xs text-slate-400">{node.desc}</p></div></div></button>)}</div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Badge className="bg-emerald-500/15 text-emerald-300">Interactive Flow Canvas</Badge>
+          <div>
+            <h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2>
+            <p className="text-xs text-slate-500">Klik node, buka detail drawer, zoom, pan, dan lihat status real-time.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-300 hover:bg-slate-800" onClick={() => adjustZoom(-0.08)} aria-label="Zoom out">
+            <Minus className="h-4 w-4" />
+          </Button>
+          <span className="min-w-12 text-center text-xs text-slate-400">{Math.round(zoom * 100)}%</span>
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-300 hover:bg-slate-800" onClick={() => adjustZoom(0.08)} aria-label="Zoom in">
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-300 hover:bg-slate-800" onClick={() => movePan(-48, 0)} aria-label="Pan left">
+            <Move className="h-4 w-4 rotate-45" />
+          </Button>
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-slate-300 hover:bg-slate-800" onClick={() => movePan(48, 0)} aria-label="Pan right">
+            <Move className="h-4 w-4 -rotate-45" />
+          </Button>
+          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={resetView}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset
+          </Button>
+          <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>
+            <PlayCircle className="mr-2 h-4 w-4" /> Simulator
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_240px]">
+        <div className="relative min-h-[560px] overflow-hidden border-b border-slate-800 bg-[radial-gradient(circle_at_1px_1px,rgba(148,163,184,.16)_1px,transparent_0)] [background-size:24px_24px] xl:border-b-0 xl:border-r">
+          <div
+            className="relative origin-top-left transition-transform duration-200"
+            style={{
+              width: CANVAS_WIDTH,
+              height: CANVAS_HEIGHT,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            }}
+          >
+            <FlowEdges selected={selected} />
+            {FLOW_NODES.map((node) => (
+              <FlowCanvasNode
+                key={node.id}
+                node={node}
+                selected={selected === node.id}
+                runtime={getNodeRuntime(node, config, snapshot, health, quality)}
+                onClick={() => {
+                  onSelect(node);
+                }}
+                onOpen={() => node.drawer && openDrawer(node.drawer)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-3 bg-slate-950/80 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Canvas Inspector</p>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <div className="flex items-start gap-3">
+              <span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}>
+                <selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} />
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-white">{selectedNode.title}</p>
+                <p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2 text-sm">
+              {(() => {
+                const runtime = getNodeRuntime(selectedNode, config, snapshot, health, quality);
+                return (
+                  <>
+                    <MetricRow label="Runtime" value={runtime.label} tone={runtime.tone === "green" ? "green" : undefined} />
+                    <MetricRow label="Detail" value={runtime.detail} />
+                    <MetricRow label="Type" value={selectedNode.kind} />
+                  </>
+                );
+              })()}
+            </div>
+            <div className="mt-3 grid gap-2">
+              {selectedNode.drawer && (
+                <Button size="sm" className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>
+                  Open detail
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>
+                Test node path
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-slate-300">Mini map</p>
+              <span className="text-[10px] text-slate-500">{FLOW_NODES.length} nodes</span>
+            </div>
+            <svg viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`} className="h-32 w-full rounded-lg bg-slate-950/80">
+              {FLOW_EDGES.map((edge) => {
+                const from = getFlowNode(edge.from);
+                const to = getFlowNode(edge.to);
+                if (!from || !to) return null;
+                return <line key={`${edge.from}-${edge.to}`} x1={from.x + NODE_WIDTH / 2} y1={from.y + NODE_HEIGHT / 2} x2={to.x + NODE_WIDTH / 2} y2={to.y + NODE_HEIGHT / 2} stroke="rgba(148,163,184,.35)" strokeWidth={8} strokeLinecap="round" />;
+              })}
+              {FLOW_NODES.map((node) => (
+                <rect key={node.id} x={node.x} y={node.y} width={NODE_WIDTH} height={NODE_HEIGHT} rx={16} className={selected === node.id ? "fill-emerald-400" : "fill-slate-600"} opacity={selected === node.id ? 0.95 : 0.55} />
+              ))}
+            </svg>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+            <p className="font-medium text-slate-300">Interaksi</p>
+            <p className="mt-1">Klik node untuk inspector. Node dengan drawer bisa dibuka dari tombol Open detail. Gunakan zoom dan pan untuk membaca flow besar.</p>
+          </div>
+        </div>
+      </div>
     </Card>
   );
+}
+
+function FlowEdges({ selected }: { selected: string }) {
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}>
+      <defs>
+        <marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(148,163,184,.72)" />
+        </marker>
+        <marker id="flow-arrow-hot" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="rgb(52,211,153)" />
+        </marker>
+      </defs>
+      {FLOW_EDGES.map((edge) => {
+        const from = getFlowNode(edge.from);
+        const to = getFlowNode(edge.to);
+        if (!from || !to) return null;
+        const active = selected === edge.from || selected === edge.to;
+        const x1 = from.x + NODE_WIDTH;
+        const y1 = from.y + NODE_HEIGHT / 2;
+        const x2 = to.x;
+        const y2 = to.y + NODE_HEIGHT / 2;
+        const mid = Math.max(42, Math.abs(x2 - x1) / 2);
+        const path = `M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}`;
+        return (
+          <g key={`${edge.from}-${edge.to}`}>
+            <path
+              d={path}
+              fill="none"
+              stroke={active ? "rgb(52,211,153)" : edge.tone === "rose" ? "rgba(251,113,133,.7)" : "rgba(148,163,184,.38)"}
+              strokeWidth={active ? 3 : 2}
+              strokeDasharray={edge.label === "fallback" ? "8 8" : undefined}
+              markerEnd={active ? "url(#flow-arrow-hot)" : "url(#flow-arrow)"}
+            />
+            {edge.label && (
+              <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 8} textAnchor="middle" className="fill-slate-500 text-[10px]">
+                {edge.label}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function FlowCanvasNode({ node, selected, runtime, onClick, onOpen }: { node: FlowNode; selected: boolean; runtime: FlowRuntime; onClick: () => void; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onDoubleClick={onOpen}
+      className={cn(
+        "absolute rounded-2xl border bg-slate-950/95 p-3 text-left shadow-xl transition hover:-translate-y-0.5 hover:border-emerald-400/70",
+        selected ? "border-emerald-400 shadow-[0_0_34px_rgba(16,185,129,.26)]" : "border-slate-800",
+      )}
+      style={{ left: node.x, top: node.y, width: NODE_WIDTH, height: NODE_HEIGHT }}
+    >
+      <span className={cn("absolute right-3 top-3 h-2.5 w-2.5 rounded-full", runtimeDot(runtime.tone), runtime.pulse && "animate-pulse")} />
+      <div className="flex items-start gap-3">
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl", toneClass(node.tone, "bg"))}>
+          <node.icon className={cn("h-4.5 w-4.5", toneClass(node.tone, "text"))} />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">{node.title}</p>
+          <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-400">{node.desc}</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            <Badge className={toneClass(runtime.tone, "badge")}>{runtime.label}</Badge>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function getNodeRuntime(node: FlowNode, config: AiLabConfig, snapshot?: AiLabControlSnapshot, health?: any, quality: AgentQualityScore[] = []): FlowRuntime {
+  if (node.id === "incoming") {
+    const unread = snapshot?.unreadMessages ?? 0;
+    return unread > 0
+      ? { label: `${unread} unread`, detail: `${snapshot?.unreadThreads ?? 0} thread belum dibaca`, tone: "amber", pulse: true }
+      : { label: "listening", detail: "Webhook siap menerima pesan", tone: "green" };
+  }
+  if (node.id === "queue") {
+    if ((snapshot?.queueFailed ?? 0) > 0) return { label: "failed", detail: `${snapshot?.queueFailed ?? 0} job gagal`, tone: "rose", pulse: true };
+    if ((snapshot?.queuePending ?? 0) > 0) return { label: "pending", detail: `${snapshot?.queuePending ?? 0} job menunggu`, tone: "amber", pulse: true };
+    return { label: "clear", detail: "Tidak ada backlog queue", tone: "green" };
+  }
+  if (node.id === "send") {
+    if (snapshot?.globalAutoReplyPaused) return { label: "paused", detail: "Auto reply global sedang pause", tone: "amber", pulse: true };
+    return { label: "ready", detail: "Provider siap dipakai dari pipeline", tone: "green" };
+  }
+  if (node.id === "handover") {
+    const count = health?.openHandoffTickets ?? 0;
+    return count > 0 ? { label: `${count} open`, detail: "Ada percakapan butuh staf", tone: "rose", pulse: true } : { label: "standby", detail: "Tidak ada handoff terbuka", tone: "green" };
+  }
+  const agent = AGENTS.find((item) => item.key === node.id);
+  if (agent) {
+    const cfg = config.agents[agent.key];
+    if (!cfg?.enabled) return { label: "off", detail: "Agent tidak aktif", tone: "slate" };
+    if (!cfg.autoReply) return { label: "manual", detail: "Agent aktif, auto reply mati", tone: "amber" };
+    const score = quality.find((row) => row.agentKey === agent.key)?.score;
+    return { label: score ? `auto ${score}` : "auto", detail: "Agent aktif dan auto reply menyala", tone: "green" };
+  }
+  if (node.id === "availability") return { label: "tool", detail: "Digunakan sebelum menjawab stok/harga", tone: "green" };
+  if (node.id === "rag") return { label: "context", detail: "SOP dan training examples tersedia via drawer Knowledge", tone: "violet" };
+  if (node.id === "intent") return { label: "classify", detail: "Rule-based + fallback AI", tone: "violet" };
+  if (node.id === "router") return { label: "route", detail: "Menghubungkan intent ke agent", tone: "cyan" };
+  return { label: "auto", detail: "Langkah sistem otomatis", tone: node.tone };
+}
+
+function getFlowNode(id: string) {
+  return FLOW_NODES.find((node) => node.id === id);
 }
 
 function QualityScorePanel({ rows, routing, retryTotal }: { rows: AgentQualityScore[]; routing: any; retryTotal: number }) {
@@ -337,28 +696,175 @@ function QualityScorePanel({ rows, routing, retryTotal }: { rows: AgentQualitySc
     for (const row of routing?.rows ?? []) totals.set(row.intent, (totals.get(row.intent) ?? 0) + Number(row.count ?? 0));
     return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   }, [routing]);
+
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Quality Score</p><h2 className="mt-1 text-lg font-semibold text-white">Agent performance signal</h2></div><Badge className="bg-slate-800 text-slate-300">Retry {retryTotal}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((row) => { const agent = AGENTS.find((a) => a.key === row.agentKey); const Icon = agent?.icon ?? Bot; return <div key={row.agentKey} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><div className="flex items-center justify-between"><span className="flex items-center gap-2"><Icon className="h-4 w-4 text-emerald-300" /><span className="font-semibold text-white">{agent?.name ?? row.agentKey}</span></span><ScoreBadge score={row.score} /></div><p className="mt-2 text-xs text-slate-400">{row.signal}</p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.score}%` }} /></div></div>; })}</div></Card>
-      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><p className="text-sm font-semibold text-white">Top intents</p><div className="mt-4 space-y-3">{topIntents.length === 0 && <p className="text-sm text-slate-500">Belum ada data routing.</p>}{topIntents.map(([intent, count]) => <div key={intent} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0"><span className="truncate text-sm text-slate-300">{prettyIntent(intent)}</span><Badge className="bg-slate-800 text-slate-300">{count}</Badge></div>)}</div></Card>
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Quality Score</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Agent performance signal</h2>
+          </div>
+          <Badge className="bg-slate-800 text-slate-300">Retry {retryTotal}</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {rows.map((row) => {
+            const agent = AGENTS.find((a) => a.key === row.agentKey);
+            const Icon = agent?.icon ?? Bot;
+            return (
+              <div key={row.agentKey} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-emerald-300" />
+                    <span className="font-semibold text-white">{agent?.name ?? row.agentKey}</span>
+                  </span>
+                  <ScoreBadge score={row.score} />
+                </div>
+                <p className="mt-2 text-xs text-slate-400">{row.signal}</p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${row.score}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <p className="text-sm font-semibold text-white">Top intents</p>
+        <div className="mt-4 space-y-3">
+          {topIntents.length === 0 && <p className="text-sm text-slate-500">Belum ada data routing.</p>}
+          {topIntents.map(([intent, count]) => (
+            <div key={intent} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2 last:border-0">
+              <span className="truncate text-sm text-slate-300">{prettyIntent(intent)}</span>
+              <Badge className="bg-slate-800 text-slate-300">{count}</Badge>
+            </div>
+          ))}
+        </div>
+      </Card>
     </section>
   );
 }
 
-function InspectorPanel({ selectedNode, config, snapshot, openDrawer }: { selectedNode: FlowNode; config: AiLabConfig; snapshot?: AiLabControlSnapshot; openDrawer: (drawer: DrawerKey) => void }) {
+function InspectorPanel({
+  selectedNode,
+  config,
+  snapshot,
+  health,
+  quality,
+  openDrawer,
+}: {
+  selectedNode: FlowNode;
+  config: AiLabConfig;
+  snapshot?: AiLabControlSnapshot;
+  health: any;
+  quality: AgentQualityScore[];
+  openDrawer: (drawer: DrawerKey) => void;
+}) {
   const agent = AGENTS.find((a) => a.key === selectedNode.id);
   const agentConfig = agent ? config.agents[agent.key] : null;
-  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-start gap-3"><span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}><selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} /></span><div><p className="font-semibold text-white">{selectedNode.title}</p><p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p></div></div><div className="mt-4 space-y-2 text-sm"><MetricRow label="Status" value={selectedNode.drawer ? "Detail tersedia" : "Auto step"} />{agentConfig && <MetricRow label="Agent active" value={agentConfig.enabled ? "Yes" : "Off"} tone={agentConfig.enabled ? "green" : undefined} />}{agentConfig && <MetricRow label="Auto reply" value={agentConfig.autoReply ? "Auto" : "Manual"} tone={agentConfig.autoReply ? "green" : undefined} />}{selectedNode.id === "queue" && <MetricRow label="Pending / Failed" value={`${snapshot?.queuePending ?? 0} / ${snapshot?.queueFailed ?? 0}`} />}</div><div className="mt-4 grid gap-2">{selectedNode.drawer && <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>Open detail</Button>}<Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>Test in simulator</Button></div></Card>;
+  const runtime = getNodeRuntime(selectedNode, config, snapshot, health, quality);
+
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-start gap-3">
+        <span className={cn("flex h-10 w-10 items-center justify-center rounded-lg", toneClass(selectedNode.tone, "bg"))}>
+          <selectedNode.icon className={cn("h-5 w-5", toneClass(selectedNode.tone, "text"))} />
+        </span>
+        <div>
+          <p className="font-semibold text-white">{selectedNode.title}</p>
+          <p className="mt-1 text-xs text-slate-400">{selectedNode.desc}</p>
+        </div>
+      </div>
+      <div className="mt-4 space-y-2 text-sm">
+        <MetricRow label="Runtime" value={runtime.label} tone={runtime.tone === "green" ? "green" : undefined} />
+        <MetricRow label="Detail" value={runtime.detail} />
+        <MetricRow label="Node type" value={selectedNode.kind} />
+        {agentConfig && <MetricRow label="Agent active" value={agentConfig.enabled ? "Yes" : "Off"} tone={agentConfig.enabled ? "green" : undefined} />}
+        {agentConfig && <MetricRow label="Auto reply" value={agentConfig.autoReply ? "Auto" : "Manual"} tone={agentConfig.autoReply ? "green" : undefined} />}
+        {selectedNode.id === "queue" && <MetricRow label="Pending / Failed" value={`${snapshot?.queuePending ?? 0} / ${snapshot?.queueFailed ?? 0}`} />}
+      </div>
+      <div className="mt-4 grid gap-2">
+        {selectedNode.drawer && <Button className="bg-emerald-500 text-slate-950 hover:bg-emerald-400" onClick={() => openDrawer(selectedNode.drawer!)}>Open detail</Button>}
+        <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>Test in simulator</Button>
+      </div>
+    </Card>
+  );
 }
 
 function SettingsPanel({ config, commitConfig, openDrawer }: { config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void>; openDrawer: (drawer: DrawerKey) => void }) {
-  const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => { const next = JSON.parse(JSON.stringify(config)) as AiLabConfig; next.agents[key] = { ...next.agents[key], ...patch }; void commitConfig(next, `${AGENTS.find((a) => a.key === key)?.name ?? key} diperbarui`); };
-  const updateTool = (key: string, enabled: boolean) => { const next = JSON.parse(JSON.stringify(config)) as AiLabConfig; next.tools[key] = { ...next.tools[key], enabled }; void commitConfig(next, `${TOOLS.find((t) => t.key === key)?.name ?? key} diperbarui`); };
-  return <div className="space-y-4"><Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Agents</p><h2 className="mt-1 text-lg font-semibold text-white">Auto Reply & Safety</h2></div><Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => openDrawer("audit")}>Audit Trail</Button></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{AGENTS.map((agent) => { const c = config.agents[agent.key]; return <div key={agent.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><div className="flex items-start gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300"><agent.icon className="h-5 w-5" /></span><div className="min-w-0 flex-1"><p className="font-semibold text-white">{agent.name}</p><p className="text-xs text-slate-400">{agent.desc}</p></div></div><div className="mt-4 space-y-3"><SettingSwitch title="Active" checked={!!c?.enabled} onChange={(v) => updateAgent(agent.key, { enabled: v })} /><SettingSwitch title="Auto Reply" checked={!!c?.autoReply} onChange={(v) => updateAgent(agent.key, { autoReply: v })} /></div></div>; })}</div></Card><Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><p className="text-lg font-semibold text-white">Tool Enablement</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{TOOLS.map((tool) => { const c = config.tools[tool.key]; return <div key={tool.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4"><tool.icon className="h-5 w-5 text-sky-300" /><p className="mt-3 text-sm font-semibold text-white">{tool.name}</p><p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p><div className="mt-3"><Switch checked={!!c?.enabled} onCheckedChange={(v) => updateTool(tool.key, v)} /></div></div>; })}</div></Card></div>;
+  const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => {
+    const next = JSON.parse(JSON.stringify(config)) as AiLabConfig;
+    next.agents[key] = { ...next.agents[key], ...patch };
+    void commitConfig(next, `${AGENTS.find((a) => a.key === key)?.name ?? key} diperbarui`);
+  };
+  const updateTool = (key: string, enabled: boolean) => {
+    const next = JSON.parse(JSON.stringify(config)) as AiLabConfig;
+    next.tools[key] = { ...next.tools[key], enabled };
+    void commitConfig(next, `${TOOLS.find((t) => t.key === key)?.name ?? key} diperbarui`);
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Agents</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">Auto Reply & Safety</h2>
+          </div>
+          <Button variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => openDrawer("audit")}>Audit Trail</Button>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {AGENTS.map((agent) => {
+            const c = config.agents[agent.key];
+            return (
+              <div key={agent.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-300">
+                    <agent.icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-white">{agent.name}</p>
+                    <p className="text-xs text-slate-400">{agent.desc}</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  <SettingSwitch title="Active" checked={!!c?.enabled} onChange={(v) => updateAgent(agent.key, { enabled: v })} />
+                  <SettingSwitch title="Auto Reply" checked={!!c?.autoReply} onChange={(v) => updateAgent(agent.key, { autoReply: v })} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+        <p className="text-lg font-semibold text-white">Tool Enablement</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {TOOLS.map((tool) => {
+            const c = config.tools[tool.key];
+            return (
+              <div key={tool.key} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <tool.icon className="h-5 w-5 text-sky-300" />
+                <p className="mt-3 text-sm font-semibold text-white">{tool.name}</p>
+                <p className="mt-1 text-xs text-slate-500">{c?.enabled ? "Enabled" : "Disabled"}</p>
+                <div className="mt-3"><Switch checked={!!c?.enabled} onCheckedChange={(v) => updateTool(tool.key, v)} /></div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
 }
 
 function SettingSwitch({ title, checked, onChange }: { title: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return <div className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2"><span className="text-sm text-slate-300">{title}</span><Switch checked={checked} onCheckedChange={onChange} /></div>;
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
+      <span className="text-sm text-slate-300">{title}</span>
+      <Switch checked={checked} onCheckedChange={onChange} />
+    </div>
+  );
 }
 
 function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: DrawerKey; setDrawer: (drawer: DrawerKey) => void; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
@@ -376,7 +882,23 @@ function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: Dr
     audit: { title: "Audit & Rollback", desc: "Config history, rollback readiness, and change governance." },
   };
   const m = drawer ? meta[drawer] : null;
-  return <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}><SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">{m && drawer && <div className="flex h-full min-h-0 flex-col"><SheetHeader className="border-b border-slate-800 px-5 py-4 text-left"><SheetTitle className="text-white">{m.title}</SheetTitle><SheetDescription className="text-slate-400">{m.desc}</SheetDescription></SheetHeader><div className="min-h-0 flex-1 overflow-y-auto"><DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} /></div></div>}</SheetContent></Sheet>;
+  return (
+    <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}>
+      <SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">
+        {m && drawer && (
+          <div className="flex h-full min-h-0 flex-col">
+            <SheetHeader className="border-b border-slate-800 px-5 py-4 text-left">
+              <SheetTitle className="text-white">{m.title}</SheetTitle>
+              <SheetDescription className="text-slate-400">{m.desc}</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} />
+            </div>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
 }
 
 function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<DrawerKey, null>; config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> }) {
@@ -395,7 +917,17 @@ function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<Drawe
 }
 
 function SimulatorSafetyGate() {
-  return <Card className="rounded-2xl border-amber-400/30 bg-amber-500/10 p-4 text-amber-50"><div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" /><div><p className="font-semibold">Simulator Safety Gate</p><p className="mt-1 text-sm text-amber-100/80">Simulator memakai pipeline asli. Gunakan nomor test khusus dan cek booking test sebelum merge ke produksi.</p></div></div></Card>;
+  return (
+    <Card className="rounded-2xl border-amber-400/30 bg-amber-500/10 p-4 text-amber-50">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" />
+        <div>
+          <p className="font-semibold">Simulator Safety Gate</p>
+          <p className="mt-1 text-sm text-amber-100/80">Simulator memakai pipeline asli. Gunakan nomor test khusus dan cek booking test sebelum merge ke produksi.</p>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function RagDebugger() {
@@ -414,17 +946,74 @@ function RagDebugger() {
       setLoading(false);
     }
   }
-  return <Card className="rounded-2xl border-violet-400/20 bg-violet-500/10 p-4 text-slate-100"><div className="flex flex-wrap items-end gap-3"><div className="min-w-[240px] flex-1"><Label className="text-violet-100">RAG retrieval preview</Label><Input value={query} onChange={(e) => setQuery(e.target.value)} className="mt-2 border-slate-700 bg-slate-950 text-white" /></div><Button onClick={runPreview} disabled={loading} className="bg-violet-500 text-white hover:bg-violet-400"><Search className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />Preview</Button></div><div className="mt-4 space-y-2">{rows.length === 0 && <p className="text-sm text-violet-100/70">Masukkan pertanyaan tamu lalu klik Preview untuk melihat contoh training yang kemungkinan masuk prompt.</p>}{rows.map((row) => <div key={row.id} className="rounded-xl border border-violet-400/20 bg-slate-950/70 p-3"><div className="flex items-center justify-between gap-3"><Badge className={row.used ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-800 text-slate-300"}>{row.used ? "Dipakai" : "Cadangan"}</Badge><span className="text-xs text-slate-500">match {row.lexicalScore}%</span></div><p className="mt-2 text-sm text-white">{row.userMessage || "(tanpa user message)"}</p><p className="mt-1 line-clamp-2 text-xs text-slate-400">{row.idealResponse || "Belum ada ideal response"}</p></div>)}</div></Card>;
+  return (
+    <Card className="rounded-2xl border-violet-400/20 bg-violet-500/10 p-4 text-slate-100">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[240px] flex-1">
+          <Label className="text-violet-100">RAG retrieval preview</Label>
+          <Input value={query} onChange={(e) => setQuery(e.target.value)} className="mt-2 border-slate-700 bg-slate-950 text-white" />
+        </div>
+        <Button onClick={runPreview} disabled={loading} className="bg-violet-500 text-white hover:bg-violet-400">
+          <Search className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />Preview
+        </Button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {rows.length === 0 && <p className="text-sm text-violet-100/70">Masukkan pertanyaan tamu lalu klik Preview untuk melihat contoh training yang kemungkinan masuk prompt.</p>}
+        {rows.map((row) => (
+          <div key={row.id} className="rounded-xl border border-violet-400/20 bg-slate-950/70 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <Badge className={row.used ? "bg-emerald-500/15 text-emerald-300" : "bg-slate-800 text-slate-300"}>{row.used ? "Dipakai" : "Cadangan"}</Badge>
+              <span className="text-xs text-slate-500">match {row.lexicalScore}%</span>
+            </div>
+            <p className="mt-2 text-sm text-white">{row.userMessage || "(tanpa user message)"}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-slate-400">{row.idealResponse || "Belum ada ideal response"}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 function AuditTrailPanel() {
   const auditFn = useServerFn(getAiLabAuditTrail);
   const { data, isFetching, refetch } = useQuery({ queryKey: ["ai-lab-audit-trail-full"], queryFn: () => auditFn() });
-  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Audit Trail</p><h2 className="mt-1 text-lg font-semibold text-white">Prompt & setting history</h2></div><Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => refetch()}><RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />Refresh</Button></div>{!data?.installed && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Tabel audit belum terpasang atau belum ada perubahan tercatat. UI sudah siap; migration audit diperlukan untuk rollback penuh.</div>}<div className="mt-4 space-y-2">{data?.rows?.map((row) => <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3"><div className="flex items-center justify-between gap-3"><p className="font-medium text-white">{row.section}</p><span className="text-xs text-slate-500">{fmtDate(row.changedAt)}</span></div><p className="mt-1 text-xs text-slate-400">{row.reason} • {row.changedBy}</p></div>)}</div></Card>;
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Audit Trail</p>
+          <h2 className="mt-1 text-lg font-semibold text-white">Prompt & setting history</h2>
+        </div>
+        <Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200" onClick={() => refetch()}>
+          <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />Refresh
+        </Button>
+      </div>
+      {!data?.installed && <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">Tabel audit belum terpasang atau belum ada perubahan tercatat. UI sudah siap; migration audit diperlukan untuk rollback penuh.</div>}
+      <div className="mt-4 space-y-2">
+        {data?.rows?.map((row) => (
+          <div key={row.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium text-white">{row.section}</p>
+              <span className="text-xs text-slate-500">{fmtDate(row.changedAt)}</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">{row.reason} • {row.changedBy}</p>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 function AuditMiniPanel({ openDrawer }: { openDrawer: (drawer: DrawerKey) => void }) {
-  return <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100"><div className="flex items-center justify-between"><p className="font-semibold text-white">Audit</p><Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("audit")}>Open</Button></div><p className="mt-2 text-sm text-slate-400">History & rollback readiness.</p></Card>;
+  return (
+    <Card className="rounded-2xl border-slate-800 bg-slate-950/70 p-4 text-slate-100">
+      <div className="flex items-center justify-between">
+        <p className="font-semibold text-white">Audit</p>
+        <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("audit")}>Open</Button>
+      </div>
+      <p className="mt-2 text-sm text-slate-400">History & rollback readiness.</p>
+    </Card>
+  );
 }
 
 function DarkDrawerBody({ children }: { children: ReactNode }) {
@@ -432,7 +1021,12 @@ function DarkDrawerBody({ children }: { children: ReactNode }) {
 }
 
 function MetricRow({ label, value, tone }: { label: string; value: string; tone?: "green" }) {
-  return <div className="flex items-center justify-between border-b border-slate-800/70 pb-2 last:border-0 last:pb-0"><span className="text-slate-500">{label}</span><span className={cn("font-medium text-slate-200", tone === "green" && "text-emerald-300")}>{value}</span></div>;
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-slate-800/70 pb-2 last:border-0 last:pb-0">
+      <span className="text-slate-500">{label}</span>
+      <span className={cn("text-right font-medium text-slate-200", tone === "green" && "text-emerald-300")}>{value}</span>
+    </div>
+  );
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -443,6 +1037,16 @@ function ScoreBadge({ score }: { score: number }) {
 function Sparkline({ tone }: { tone: Tone }) {
   const stroke = tone === "rose" ? "#fb7185" : tone === "amber" ? "#f59e0b" : tone === "violet" ? "#a78bfa" : "#34d399";
   return <svg viewBox="0 0 72 24" className="h-5 w-14 opacity-80"><polyline points="0,18 8,16 16,20 24,12 32,14 40,8 48,11 56,5 64,9 72,3" fill="none" stroke={stroke} strokeWidth="2" /></svg>;
+}
+
+function runtimeDot(tone: Tone) {
+  if (tone === "green") return "bg-emerald-400";
+  if (tone === "amber") return "bg-amber-400";
+  if (tone === "rose") return "bg-rose-400";
+  if (tone === "violet") return "bg-violet-400";
+  if (tone === "cyan") return "bg-cyan-400";
+  if (tone === "blue") return "bg-sky-400";
+  return "bg-slate-400";
 }
 
 function toneClass(tone: Tone, part: "bg" | "text" | "badge") {
