@@ -39,6 +39,34 @@ function makeAiLabRootScrollable() {
         '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">',
         '<main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>',
       );
+      next = next.replace(
+        '<section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">',
+        '<section className="grid" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "8px" }}>',
+      );
+      next = next.replace(
+        'className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-left text-slate-100 transition hover:border-emerald-400/50"',
+        'className="rounded-xl border border-slate-800 bg-slate-950/70 text-left text-slate-100 transition hover:border-emerald-400/50" style={{ minHeight: "74px", padding: "8px 10px" }}',
+      );
+      next = next.replace(
+        'className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}',
+        'className={cn("flex items-center justify-center rounded-lg", toneClass(card.tone, "bg"))} style={{ width: "26px", height: "26px" }}',
+      );
+      next = next.replace(
+        '<card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />',
+        '<card.icon className={cn("h-3.5 w-3.5", toneClass(card.tone, "text"))} />',
+      );
+      next = next.replace(
+        '<p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p>',
+        '<p className="mt-1.5 truncate text-[10px] leading-3 text-slate-400">{card.label}</p>',
+      );
+      next = next.replace(
+        '<p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p>',
+        '<p className="mt-0.5 truncate text-lg font-semibold leading-5 tracking-tight text-white">{card.value}</p>',
+      );
+      next = next.replace(
+        '<p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>',
+        '<p className={cn("mt-0.5 truncate text-[9px] leading-3", toneClass(card.tone, "text"))}>{card.delta}</p>',
+      );
       next = next.replace(/\n\s*<aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">\n\s*<InspectorPanel selectedNode=\{selectedNode\} config=\{config\} snapshot=\{snapshot\} health=\{health\} quality=\{quality \?\? \[\]\} openDrawer=\{setDrawer\} \/>\n\s*<AuditMiniPanel openDrawer=\{setDrawer\} \/>\n\s*<\/aside>/, "");
       if (next === code) return null;
       return { code: next, map: null };
