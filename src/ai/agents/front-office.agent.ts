@@ -89,6 +89,30 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   };
 }
 
+/** Apply admin-saved AI Lab custom instructions while preserving live context. */
+function applyCustomInstructions(custom: string, s: Scaffold, ctx: AgentContext): string {
+  const rendered = custom
+    .replace(/\{\{PROPERTY_NAME\}\}/g, s.propName)
+    .replace(/\{\{TODAY\}\}/g, s.todayLine.replace(/^Hari ini tanggal /, "").split(" (")[0])
+    .replace(/\{\{TODAY_RAW\}\}/g, s.todayRaw)
+    .replace(/\{\{ROOM_DATA\}\}/g, s.roomSummary)
+    .replace(/\{\{SOP_DATA\}\}/g, ctx.sopText ?? "");
+
+  return [
+    rendered,
+    "KONTEKS OPERASIONAL SISTEM:",
+    s.todayLine,
+    s.roomSummary,
+    ctx.sopText ? `Basis Pengetahuan SOP:\n${ctx.sopText}` : "",
+    "Gunakan format YYYY-MM-DD hanya untuk argumen tool. Ke tamu, tampilkan tanggal dalam format Indonesia.",
+    "Jika memanggil tool, gunakan hasil tool sebagai sumber kebenaran. Jangan mengarang harga, stok, status booking, fasilitas, atau kebijakan.",
+    "Setelah panggil `start_booking_details`, sampaikan field `message` dari hasil tool VERBATIM.",
+    "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 // ─── Guest mode (the heavy path) ─────────────────────────────────────────────
 
 function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
@@ -395,6 +419,8 @@ export const frontOfficeAgent: AgentDefinition = {
 
   buildSystemPrompt(ctx: AgentContext): string {
     const scaffold = buildScaffold(ctx);
-    return ctx.mode === "managerial" ? buildManagerialPrompt(scaffold) : buildGuestPrompt(scaffold, ctx);
+    if (ctx.mode === "managerial") return buildManagerialPrompt(scaffold);
+    if (ctx.customInstructions?.trim()) return applyCustomInstructions(ctx.customInstructions, scaffold, ctx);
+    return buildGuestPrompt(scaffold, ctx);
   },
 };
