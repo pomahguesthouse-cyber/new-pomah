@@ -351,6 +351,13 @@ const TOOL_CONFIGS = [
   { key: "faq-memory", name: "FAQ Memory", icon: Brain },
 ];
 
+const FLOW_CANVAS_WIDTH = 1180;
+const FLOW_CANVAS_HEIGHT = 584;
+const FLOW_NODE_WIDTH = 170;
+const FLOW_NODE_HEIGHT = 76;
+const FLOW_LEFTS = [8, 208, 408, 608, 808, 1000];
+const FLOW_TOPS = [8, 100, 192, 284, 376, 468];
+
 function AiLab() {
   const [section, setSection] = useState<ControlSection>("dashboard");
   const [drawer, setDrawer] = useState<DrawerKey>(null);
@@ -690,35 +697,98 @@ function FlowCanvas({
           backgroundSize: "18px 18px",
         }}
       >
-        <div className="relative min-w-[1180px] px-6 py-6">
+        <div
+          className="relative"
+          style={{ width: FLOW_CANVAS_WIDTH, height: FLOW_CANVAS_HEIGHT }}
+        >
           <CanvasConnectors />
-          <div className="grid grid-cols-6 gap-x-7 gap-y-4">
-            {Array.from({ length: 36 }).map((_, index) => {
-              const column = (index % 6) + 1;
-              const row = Math.floor(index / 6) + 1;
-              const node = FLOW_NODES.find((n) => n.column === column && n.row === row);
-              return (
-                <div key={`${column}-${row}`} className="min-h-[76px]">
-                  {node && (
-                    <FlowNodeCard
-                      node={node}
-                      selected={selectedNodeId === node.id}
-                      onClick={() => setSelectedNodeId(node.id)}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {FLOW_NODES.map((node) => (
+            <div
+              key={node.id}
+              className="absolute z-10"
+              style={{
+                left: nodeLeft(node.column),
+                top: nodeTop(node.row),
+                width: FLOW_NODE_WIDTH,
+                height: FLOW_NODE_HEIGHT,
+              }}
+            >
+              <FlowNodeCard
+                node={node}
+                selected={selectedNodeId === node.id}
+                onClick={() => setSelectedNodeId(node.id)}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </ControlCard>
   );
 }
 
+function nodeLeft(column: number): number {
+  return FLOW_LEFTS[column - 1] ?? 0;
+}
+
+function nodeTop(row: number): number {
+  return FLOW_TOPS[row - 1] ?? 0;
+}
+
+function nodeCenter(column: number, row: number) {
+  return {
+    x: nodeLeft(column) + FLOW_NODE_WIDTH / 2,
+    y: nodeTop(row) + FLOW_NODE_HEIGHT / 2,
+  };
+}
+
+function nodePort(column: number, row: number, side: "left" | "right") {
+  const center = nodeCenter(column, row);
+  return {
+    x: side === "left" ? nodeLeft(column) : nodeLeft(column) + FLOW_NODE_WIDTH,
+    y: center.y,
+  };
+}
+
+function curvePath(
+  fromColumn: number,
+  fromRow: number,
+  toColumn: number,
+  toRow: number,
+): string {
+  const from = nodePort(fromColumn, fromRow, "right");
+  const to = nodePort(toColumn, toRow, "left");
+  const dx = Math.max(18, Math.min(90, (to.x - from.x) * 0.5));
+  return `M ${from.x} ${from.y} C ${from.x + dx} ${from.y}, ${to.x - dx} ${to.y}, ${to.x} ${to.y}`;
+}
+
 function CanvasConnectors() {
+  const primaryPaths = [
+    curvePath(1, 3, 2, 2),
+    curvePath(1, 3, 2, 4),
+    curvePath(2, 2, 3, 3),
+    curvePath(2, 4, 3, 3),
+    curvePath(3, 3, 4, 3),
+  ];
+  const routerOut = nodePort(4, 3, "right");
+  const routerBusX = nodeLeft(5) - 22;
+  const agentRows = [1, 2, 3, 4, 5, 6];
+  const toolPairs = [
+    [5, 1, 6, 1],
+    [5, 2, 6, 2],
+    [5, 3, 6, 3],
+    [5, 4, 6, 4],
+    [5, 5, 6, 5],
+    [5, 6, 6, 6],
+  ];
+  const busTop = nodeCenter(5, 1).y;
+  const busBottom = nodeCenter(5, 6).y;
+
   return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full min-w-[1180px]" aria-hidden="true">
+    <svg
+      className="pointer-events-none absolute inset-0 z-0"
+      viewBox={`0 0 ${FLOW_CANVAS_WIDTH} ${FLOW_CANVAS_HEIGHT}`}
+      aria-hidden="true"
+    >
       <defs>
         <filter id="glow">
           <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
@@ -728,29 +798,69 @@ function CanvasConnectors() {
           </feMerge>
         </filter>
       </defs>
-      {[
-        ["17%", "50%", "32%", "35%"],
-        ["17%", "50%", "32%", "65%"],
-        ["34%", "35%", "49%", "50%"],
-        ["34%", "65%", "49%", "50%"],
-        ["51%", "50%", "66%", "50%"],
-        ["68%", "50%", "83%", "13%"],
-        ["68%", "50%", "83%", "28%"],
-        ["68%", "50%", "83%", "43%"],
-        ["68%", "50%", "83%", "58%"],
-        ["68%", "50%", "83%", "73%"],
-        ["68%", "50%", "83%", "88%"],
-      ].map(([x1, y1, x2, y2], i) => (
-        <line
+      {primaryPaths.map((d, i) => (
+        <path
           key={i}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
+          d={d}
+          fill="none"
           stroke="rgba(52,211,153,.65)"
           strokeWidth="2"
-          strokeDasharray={i > 4 ? "4 5" : undefined}
+          strokeLinecap="round"
           filter="url(#glow)"
+        />
+      ))}
+      <path
+        d={`M ${routerOut.x} ${routerOut.y} C ${routerOut.x + 32} ${routerOut.y}, ${routerBusX - 24} ${routerOut.y}, ${routerBusX} ${routerOut.y}`}
+        fill="none"
+        stroke="rgba(52,211,153,.7)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        filter="url(#glow)"
+      />
+      <line
+        x1={routerBusX}
+        y1={busTop}
+        x2={routerBusX}
+        y2={busBottom}
+        stroke="rgba(52,211,153,.32)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeDasharray="2 8"
+      />
+      {agentRows.map((row) => {
+        const to = nodePort(5, row, "left");
+        return (
+          <path
+            key={`router-agent-${row}`}
+            d={`M ${routerBusX} ${to.y} C ${routerBusX + 18} ${to.y}, ${to.x - 22} ${to.y}, ${to.x} ${to.y}`}
+            fill="none"
+            stroke="rgba(52,211,153,.58)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeDasharray={row > 3 ? "5 6" : undefined}
+          />
+        );
+      })}
+      {toolPairs.map(([fromColumn, fromRow, toColumn, toRow]) => (
+        <path
+          key={`agent-tool-${fromRow}`}
+          d={curvePath(fromColumn, fromRow, toColumn, toRow)}
+          fill="none"
+          stroke="rgba(52,211,153,.45)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="5 7"
+        />
+      ))}
+      {[nodePort(1, 3, "right"), nodePort(3, 3, "right"), { x: routerBusX, y: routerOut.y }].map((dot, i) => (
+        <circle
+          key={`dot-${i}`}
+          cx={dot.x}
+          cy={dot.y}
+          r="4"
+          fill="#34d399"
+          stroke="#07111f"
+          strokeWidth="2"
         />
       ))}
     </svg>
@@ -770,7 +880,7 @@ function FlowNodeCard({
     <button
       onClick={onClick}
       className={cn(
-        "relative flex h-[76px] w-full items-center gap-3 rounded-xl border bg-slate-950/90 px-3 text-left transition",
+        "relative flex h-full w-full items-center gap-3 rounded-xl border bg-slate-950/90 px-3 text-left transition",
         selected
           ? "border-emerald-400 shadow-[0_0_26px_rgba(16,185,129,.28)]"
           : "border-slate-800 hover:border-slate-600 hover:bg-slate-900/90",
