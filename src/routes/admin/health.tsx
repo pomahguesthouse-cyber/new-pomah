@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Activity, AlertTriangle, CheckCircle2, Clock, LifeBuoy } from "lucide-react";
@@ -7,9 +7,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const Route = createFileRoute("/admin/health")({
-  beforeLoad: () => {
-    throw redirect({ to: "/admin/ai-lab", search: { panel: "health" } });
-  },
   component: HealthPage,
 });
 

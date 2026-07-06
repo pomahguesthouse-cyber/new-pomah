@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Route as Route3, Activity, ArrowRight, X } from "lucide-react";
@@ -30,9 +30,6 @@ import {
 } from "@/components/ui/table";
 
 export const Route = createFileRoute("/admin/routing-debug")({
-  beforeLoad: () => {
-    throw redirect({ to: "/admin/ai-lab", search: { panel: "routing" } });
-  },
   component: RoutingDebugPage,
 });
 
