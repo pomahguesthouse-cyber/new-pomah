@@ -119,8 +119,9 @@ const DEFAULT_GROUPS: NavGroup[] = [
   },
 ];
 
-// Bumped if the persisted format changes incompatibly.
-const STORAGE_KEY = "admin-sidebar:order:v1";
+// Bumped to reset stale client-side order after the AI Lab redesign briefly
+// moved chatbot routes into other groups. Users can still reorder again.
+const STORAGE_KEY = "admin-sidebar:order:v2";
 
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
