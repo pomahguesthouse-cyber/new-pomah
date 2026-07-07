@@ -309,12 +309,7 @@ function AiLab() {
         />
       </section>
 
-      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)] 2xl:grid-cols-[232px_minmax(0,1fr)_340px]">
-        <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
-          <Navigation openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
-          <SafetyCard snapshot={snapshot} onPause={() => updateAutoReply("pause")} onSafe={() => updateAutoReply("safe")} onFull={() => updateAutoReply("full")} />
-        </aside>
-
+      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="min-w-0 space-y-4">
           <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
           <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
@@ -323,7 +318,6 @@ function AiLab() {
         </section>
 
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} health={health} quality={quality ?? []} openDrawer={setDrawer} />
           <AuditMiniPanel openDrawer={setDrawer} />
         </aside>
       </main>
@@ -541,7 +535,8 @@ function AiReactFlowCanvas({
             proOptions={{ hideAttribution: true }}
             className="ai-lab-react-flow"
           >
-            <Background color="rgba(148,163,184,.2)" gap={24} size={1} variant={BackgroundVariant.Dots} />
+            <Background id="grid-minor" color="rgba(148,163,184,.07)" gap={24} variant={BackgroundVariant.Lines} />
+            <Background id="grid-major" color="rgba(148,163,184,.12)" gap={120} variant={BackgroundVariant.Lines} />
             <Panel position="top-left" className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-xl">
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
             </Panel>
@@ -560,7 +555,7 @@ function AiFlowNode({ data, selected }: NodeProps<Node<AiFlowNodeData>>) {
   return (
     <div className={cn(
       "min-w-[196px] rounded-2xl border bg-slate-950/95 p-3 text-left shadow-2xl backdrop-blur transition",
-      selected ? "border-emerald-400 shadow-[0_0_34px_rgba(16,185,129,.28)]" : "border-slate-800 hover:border-emerald-400/60",
+      selected ? "border-emerald-400 shadow-[0_0_34px_rgba(16,185,129,.28)]" : "border-slate-600 hover:border-emerald-400/70",
     )}>
       <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !border-slate-950 !bg-slate-500" />
       <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !border-slate-950 !bg-emerald-400" />
