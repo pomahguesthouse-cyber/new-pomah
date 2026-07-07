@@ -38,6 +38,8 @@ import {
   LogOut,
   PauseCircle,
   PlayCircle,
+  Save,
+  RotateCcw,
   RefreshCw,
   Search,
   Send,
@@ -209,6 +211,18 @@ const FLOW_EDGES: FlowEdgeMeta[] = [
   { from: "manager", to: "handover", tone: "rose" },
   { from: "send", to: "handover", label: "fallback", tone: "amber" },
 ];
+
+const NODE_POS_KEY = "ai-lab:node-positions:v1";
+
+function loadNodePositions(): Record<string, { x: number; y: number }> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(NODE_POS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, { x: number; y: number }>) : {};
+  } catch {
+    return {};
+  }
+}
 
 const nodeTypes = { aiNode: AiFlowNode };
 
@@ -500,6 +514,43 @@ function AiReactFlowCanvas({
   const selectedNode = FLOW_NODES.find((node) => node.id === selected) ?? FLOW_NODES[0];
   const selectedRuntime = runtimeById.get(selectedNode.id) ?? { label: "ready", detail: selectedNode.desc, tone: selectedNode.tone };
 
+  // Apply saved node positions once on mount (client only).
+  useEffect(() => {
+    const saved = loadNodePositions();
+    if (Object.keys(saved).length === 0) return;
+    setNodes((current) =>
+      current.map((node) => (saved[node.id] ? { ...node, position: saved[node.id] } : node)),
+    );
+  }, [setNodes]);
+
+  const saveNodePositions = () => {
+    const map: Record<string, { x: number; y: number }> = {};
+    nodes.forEach((node) => {
+      map[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
+    });
+    try {
+      window.localStorage.setItem(NODE_POS_KEY, JSON.stringify(map));
+      toast.success("Posisi node disimpan");
+    } catch {
+      toast.error("Gagal menyimpan posisi");
+    }
+  };
+
+  const resetNodePositions = () => {
+    try {
+      window.localStorage.removeItem(NODE_POS_KEY);
+    } catch {
+      /* ignore */
+    }
+    setNodes((current) =>
+      current.map((node) => {
+        const meta = FLOW_NODES.find((item) => item.id === node.id);
+        return meta ? { ...node, position: { x: meta.x, y: meta.y } } : node;
+      }),
+    );
+    toast.success("Posisi dikembalikan ke default");
+  };
+
   useEffect(() => {
     setNodes((current) => current.map((node) => {
       const meta = FLOW_NODES.find((item) => item.id === node.id);
@@ -519,13 +570,19 @@ function AiReactFlowCanvas({
           <Badge className="bg-emerald-500/15 text-emerald-300">React Flow Canvas</Badge>
           <div>
             <h2 className="text-sm font-semibold text-white">WhatsApp AI Pipeline</h2>
-            <p className="text-xs text-slate-500">Drag node, zoom, pan, minimap, dan double click untuk membuka detail.</p>
+            <p className="text-xs text-slate-500">Drag node (snap ke grid), zoom, pan, dan double click untuk membuka detail.</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
           <Badge className={toneClass(selectedRuntime.tone, "badge")}>{selectedNode.title}: {selectedRuntime.label}</Badge>
           <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>
             <PlayCircle className="mr-2 h-4 w-4" /> Simulator
+          </Button>
+          <Button size="sm" variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" onClick={saveNodePositions}>
+            <Save className="mr-2 h-4 w-4" /> Simpan posisi
+          </Button>
+          <Button size="sm" variant="ghost" className="text-slate-400 hover:bg-slate-800" onClick={resetNodePositions}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset
           </Button>
         </div>
       </div>
@@ -549,14 +606,16 @@ function AiReactFlowCanvas({
             fitViewOptions={{ padding: 0.14 }}
             minZoom={0.35}
             maxZoom={1.35}
+            snapToGrid
+            snapGrid={[16, 16]}
             nodesDraggable
             nodesConnectable={false}
             elementsSelectable
             proOptions={{ hideAttribution: true }}
             className="ai-lab-react-flow"
           >
-            <Background id="grid-minor" color="rgba(148,163,184,.07)" gap={24} variant={BackgroundVariant.Lines} />
-            <Background id="grid-major" color="rgba(148,163,184,.12)" gap={120} variant={BackgroundVariant.Lines} />
+            <Background id="grid-minor" color="rgba(148,163,184,.06)" gap={16} variant={BackgroundVariant.Lines} />
+            <Background id="grid-major" color="rgba(148,163,184,.11)" gap={80} variant={BackgroundVariant.Lines} />
             <Panel position="top-left" className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-xl">
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
             </Panel>
