@@ -199,3 +199,15 @@
     color: var(--color-foreground);
   }
 }
+
+/*
+ * AI Lab is a bare admin route with a large React Flow canvas. In local dev,
+ * React Flow and dev wrappers can make the browser hide or trap page scrolling.
+ * Keep the document scrollable whenever this route is mounted.
+ */
+html:has(.ai-lab-react-flow),
+body:has(.ai-lab-react-flow) {
+  min-height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
