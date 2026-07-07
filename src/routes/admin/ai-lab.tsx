@@ -274,7 +274,9 @@ function buildSimPath(res: { agentKey?: string | null; toolsUsed?: string[] | nu
   if (tools.some((tt) => /sop|spec|specification/.test(tt))) toolNodes.push("sop-knowledge");
   if (tools.some((tt) => /rag|faq|knowledge|memory|training|retriev|doc/.test(tt))) toolNodes.push("faq-memory");
   const path: string[][] = [["incoming"], ["parser", "queue"], ["intent"], ["router"], [agent]];
-  if (toolNodes.length) path.push(toolNodes);
+  // Keep the agent active alongside its tools so the follow-up edge agent -> send
+  // still lights — the tool is a branch, not on the main line to Send Reply.
+  if (toolNodes.length) path.push([agent, ...toolNodes]);
   path.push(res.escalated || agent === "manager" ? ["manager", "handover"] : ["send"]);
   return path;
 }
