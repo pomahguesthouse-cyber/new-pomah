@@ -292,7 +292,7 @@ function AiLab() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>
+      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)] 2xl:grid-cols-[232px_minmax(0,1fr)_340px]">
         <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
           <Navigation openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
           <SafetyCard snapshot={snapshot} onPause={() => updateAutoReply("pause")} onSafe={() => updateAutoReply("safe")} onFull={() => updateAutoReply("full")} />
@@ -313,6 +313,11 @@ function AiLab() {
           <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
           <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
         </section>
+
+        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} health={health} quality={quality ?? []} openDrawer={setDrawer} />
+          <AuditMiniPanel openDrawer={setDrawer} />
+        </aside>
       </main>
 
       <FeatureDrawer drawer={drawer} setDrawer={setDrawer} config={config} commitConfig={commitConfig} />
