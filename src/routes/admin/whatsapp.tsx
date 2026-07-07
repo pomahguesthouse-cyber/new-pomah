@@ -1235,12 +1235,48 @@ function WhatsappSummary({
   );
 }
 
+function StatusBadge({
+  kind,
+  value,
+}: {
+  kind: "booking" | "payment";
+  value: string | null | undefined;
+}) {
+  if (!value) return <span className="text-[11px] font-medium text-[#0F172A]">—</span>;
+  const v = String(value).toLowerCase();
+  let cls = "bg-slate-100 text-slate-700 border-slate-200";
+  if (kind === "payment") {
+    if (/(lunas|paid|success|completed|settled)/.test(v)) cls = "bg-emerald-100 text-emerald-800 border-emerald-200";
+    else if (/(pending|menunggu|proses|processing|dp|partial)/.test(v)) cls = "bg-amber-100 text-amber-800 border-amber-200";
+    else if (/(gagal|failed|refund|cancel|batal)/.test(v)) cls = "bg-rose-100 text-rose-800 border-rose-200";
+  } else {
+    if (/(confirmed|checked_?in|active|aktif|paid)/.test(v)) cls = "bg-emerald-100 text-emerald-800 border-emerald-200";
+    else if (/(pending|hold|menunggu|awaiting|inquiry)/.test(v)) cls = "bg-amber-100 text-amber-800 border-amber-200";
+    else if (/(cancel|batal|no_?show|failed)/.test(v)) cls = "bg-rose-100 text-rose-800 border-rose-200";
+    else if (/(checked_?out|completed|done|selesai)/.test(v)) cls = "bg-slate-100 text-slate-700 border-slate-200";
+  }
+  return (
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls)}>
+      {value}
+    </span>
+  );
+}
+
 function SummaryField({ label, value }: { label: string; value: string | null | undefined }) {
   const display = value && String(value).trim() ? String(value) : "—";
+  const lower = label.toLowerCase();
+  const isBooking = lower.includes("status booking") || lower === "status booking";
+  const isPayment = lower.includes("pembayaran") || lower.includes("payment");
   return (
-    <div className="rounded border border-border/60 bg-background/40 px-2 py-1">
-      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="truncate text-[11px] font-medium">{display}</p>
+    <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2 py-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">{label}</p>
+      {isBooking || isPayment ? (
+        <div className="mt-1">
+          <StatusBadge kind={isPayment ? "payment" : "booking"} value={value ?? null} />
+        </div>
+      ) : (
+        <p className="truncate text-[11px] font-medium text-[#0F172A]">{display}</p>
+      )}
     </div>
   );
 }
@@ -1257,10 +1293,10 @@ function Row({
   if (!value) return null;
   return (
     <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-3 w-3 text-muted-foreground" />
+      <Icon className="mt-0.5 h-3 w-3 text-[#64748B]" />
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-        <p className="truncate text-xs">{value}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">{label}</p>
+        <p className="truncate text-xs font-medium text-[#0F172A]">{value}</p>
       </div>
     </div>
   );
