@@ -189,10 +189,13 @@ const FLOW_NODES: FlowNodeMeta[] = [
   { id: "finance", title: "Finance", desc: "Payment proof", x: 960, y: 335, icon: Bell, tone: "amber", drawer: "settings", kind: "agent" },
   { id: "manager", title: "Manager", desc: "Escalation gate", x: 960, y: 440, icon: ShieldAlert, tone: "rose", drawer: "telegram", kind: "agent" },
   { id: "content", title: "Content", desc: "SEO / city guide", x: 960, y: 545, icon: Sparkles, tone: "slate", drawer: "settings", kind: "agent" },
-  { id: "availability", title: "Availability", desc: "Cek stok & harga", x: 1245, y: 70, icon: CalendarCheck, tone: "green", kind: "tool" },
-  { id: "rag", title: "RAG / SOP", desc: "Knowledge context", x: 1245, y: 270, icon: Database, tone: "violet", drawer: "knowledge", kind: "tool" },
-  { id: "send", title: "Send Reply", desc: "WhatsApp provider", x: 1245, y: 390, icon: Send, tone: "green", kind: "output" },
-  { id: "handover", title: "Human Handover", desc: "Staf ambil alih", x: 1245, y: 510, icon: LifeBuoy, tone: "rose", drawer: "inbox", kind: "manual" },
+  { id: "room-availability", title: "Room Availability", desc: "Cek stok & harga", x: 1245, y: 0, icon: CalendarCheck, tone: "green", kind: "tool" },
+  { id: "pms-database", title: "PMS Database", desc: "Booking & pembayaran", x: 1245, y: 110, icon: Database, tone: "cyan", kind: "tool" },
+  { id: "pricing-engine", title: "Pricing Engine", desc: "Tarif & override", x: 1245, y: 220, icon: BarChart3, tone: "blue", kind: "tool" },
+  { id: "sop-knowledge", title: "SOP Knowledge", desc: "SOP & spesifikasi", x: 1245, y: 330, icon: BookOpen, tone: "violet", drawer: "knowledge", kind: "tool" },
+  { id: "faq-memory", title: "FAQ Memory", desc: "FAQ & training", x: 1245, y: 440, icon: Brain, tone: "amber", drawer: "knowledge", kind: "tool" },
+  { id: "send", title: "Send Reply", desc: "WhatsApp provider", x: 1540, y: 180, icon: Send, tone: "green", kind: "output" },
+  { id: "handover", title: "Human Handover", desc: "Staf ambil alih", x: 1540, y: 460, icon: LifeBuoy, tone: "rose", drawer: "inbox", kind: "manual" },
 ];
 
 const FLOW_EDGES: FlowEdgeMeta[] = [
@@ -207,14 +210,25 @@ const FLOW_EDGES: FlowEdgeMeta[] = [
   { from: "router", to: "finance" },
   { from: "router", to: "manager", tone: "rose" },
   { from: "router", to: "content", tone: "slate" },
-  { from: "front-office", to: "availability", label: "tool" },
-  { from: "pricing", to: "availability", label: "rate" },
-  { from: "front-office", to: "rag" },
-  { from: "customer-care", to: "rag" },
-  { from: "finance", to: "rag" },
+  // Agent -> tool routing (based on each agent's real allowed tools).
+  { from: "front-office", to: "room-availability", label: "avail" },
+  { from: "front-office", to: "pms-database" },
+  { from: "front-office", to: "sop-knowledge" },
+  { from: "front-office", to: "faq-memory" },
+  { from: "pricing", to: "room-availability", label: "rate" },
+  { from: "pricing", to: "pricing-engine" },
+  { from: "customer-care", to: "sop-knowledge" },
+  { from: "customer-care", to: "faq-memory" },
+  { from: "finance", to: "pms-database" },
+  { from: "manager", to: "pms-database" },
+  { from: "manager", to: "room-availability" },
+  // Agent -> reply
   { from: "front-office", to: "send" },
   { from: "pricing", to: "send" },
+  { from: "customer-care", to: "send" },
   { from: "finance", to: "send" },
+  { from: "content", to: "send" },
+  // Escalation
   { from: "manager", to: "handover", tone: "rose" },
   { from: "send", to: "handover", label: "fallback", tone: "amber" },
 ];
@@ -254,8 +268,11 @@ function buildSimPath(res: { agentKey?: string | null; toolsUsed?: string[] | nu
   const agent = res.agentKey && SIM_KNOWN_NODES.has(res.agentKey) ? res.agentKey : "front-office";
   const tools = (res.toolsUsed ?? []).map((tt) => tt.toLowerCase());
   const toolNodes: string[] = [];
-  if (tools.some((tt) => /avail|room|kamar|price|tarif|rate|stok/.test(tt))) toolNodes.push("availability");
-  if (tools.some((tt) => /rag|sop|knowledge|retriev|doc/.test(tt))) toolNodes.push("rag");
+  if (tools.some((tt) => /avail|room|kamar|stok/.test(tt))) toolNodes.push("room-availability");
+  if (tools.some((tt) => /booking|payment|invoice|pms|slot|form/.test(tt))) toolNodes.push("pms-database");
+  if (tools.some((tt) => /price|tarif|rate|pricing/.test(tt))) toolNodes.push("pricing-engine");
+  if (tools.some((tt) => /sop|spec|specification/.test(tt))) toolNodes.push("sop-knowledge");
+  if (tools.some((tt) => /rag|faq|knowledge|memory|training|retriev|doc/.test(tt))) toolNodes.push("faq-memory");
   const path: string[][] = [["incoming"], ["parser", "queue"], ["intent"], ["router"], [agent]];
   if (toolNodes.length) path.push(toolNodes);
   path.push(res.escalated || agent === "manager" ? ["manager", "handover"] : ["send"]);
@@ -880,8 +897,11 @@ function getNodeRuntime(node: FlowNodeMeta, config: AiLabConfig, snapshot?: AiLa
     const score = quality.find((row) => row.agentKey === agent.key)?.score;
     return { label: score ? `auto ${score}` : "auto", detail: "Agent aktif dan auto reply menyala", tone: "green" };
   }
-  if (node.id === "availability") return { label: "tool", detail: "Digunakan sebelum menjawab stok/harga", tone: "green" };
-  if (node.id === "rag") return { label: "context", detail: "SOP dan training examples tersedia via drawer Knowledge", tone: "violet" };
+  if (node.id === "room-availability") return { label: "tool", detail: "Cek stok kamar & harga real-time", tone: "green" };
+  if (node.id === "pms-database") return { label: "tool", detail: "Data booking & pembayaran (PMS)", tone: "cyan" };
+  if (node.id === "pricing-engine") return { label: "tool", detail: "Tarif live & override harga", tone: "blue" };
+  if (node.id === "sop-knowledge") return { label: "context", detail: "SOP & spesifikasi kamar", tone: "violet" };
+  if (node.id === "faq-memory") return { label: "context", detail: "FAQ & training examples", tone: "amber" };
   if (node.id === "intent") return { label: "classify", detail: "Rule-based + fallback AI", tone: "violet" };
   if (node.id === "router") return { label: "route", detail: "Menghubungkan intent ke agent", tone: "cyan" };
   return { label: "auto", detail: "Langkah sistem otomatis", tone: node.tone };
