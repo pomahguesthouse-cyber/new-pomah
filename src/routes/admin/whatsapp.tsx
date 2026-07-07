@@ -237,6 +237,7 @@ export function WhatsAppPage() {
   const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
   const [draft, setDraft] = useState("");
   const [manualAlertNote, setManualAlertNote] = useState("");
+  const [rightOpen, setRightOpen] = useState(true);
 
   const filteredThreads = useMemo(() => {
     return threads.filter((t) => {
