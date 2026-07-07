@@ -3,18 +3,23 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { simulateChatTurn } from "@/admin/modules/ai-lab/simulator.functions";
+import { simulateChatTurn, resetSimulation } from "@/admin/modules/ai-lab/simulator.functions";
 import { ReactFlow,
   Background,
   BackgroundVariant,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
   Handle,
   MarkerType,
+  NodeToolbar,
   Panel,
   Position,
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from "@xyflow/react";
@@ -215,6 +220,33 @@ const FLOW_EDGES: FlowEdgeMeta[] = [
 ];
 
 const nodeTypes = { aiNode: AiFlowNode };
+
+/** Edge with a bright dot that travels along the path while the simulation passes through it. */
+function SimEdge({ id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, markerEnd, style, label, data }: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const active = (data as { sim?: boolean } | undefined)?.sim === true;
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div
+            style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`, pointerEvents: "none" }}
+            className="rounded bg-[#0b1220]/90 px-1.5 py-0.5 text-[11px] font-semibold text-slate-300"
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+      {active ? (
+        <circle r={5} fill="#34d399" stroke="#064e3b" strokeWidth={1}>
+          <animateMotion dur="0.9s" repeatCount="indefinite" path={edgePath} />
+        </circle>
+      ) : null}
+    </>
+  );
+}
+const edgeTypes = { sim: SimEdge };
 
 /** Build the REAL pipeline path from a simulation result (actual agent + tools). */
 const SIM_KNOWN_NODES = new Set(FLOW_NODES.map((n) => n.id));
@@ -475,6 +507,7 @@ function AiReactFlowCanvas({
   }, [config, health, quality, snapshot]);
 
   const simulateFn = useServerFn(simulateChatTurn);
+  const resetFn = useServerFn(resetSimulation);
   const [simOpen, setSimOpen] = useState(false);
   const [simPhone, setSimPhone] = useState("6282226749990");
   const [simMessage, setSimMessage] = useState("Hallo Kak, mau tanya harga kamar buat tanggal 20 Agustus");
@@ -482,17 +515,19 @@ function AiReactFlowCanvas({
   const [simPath, setSimPath] = useState<string[][] | null>(null);
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
+  const [simTurns, setSimTurns] = useState<Array<{ role: "guest" | "ai"; text: string }>>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [simResult, setSimResult] = useState<any>(null);
 
   const runRealSim = async () => {
     if (simLoading || simStep !== null) return;
-    if (!simPhone.trim() || !simMessage.trim()) return;
+    const phone = simPhone.trim();
+    const message = simMessage.trim();
+    if (!phone || !message) return;
     setSimError(null);
-    setSimResult(null);
     setSimLoading(true);
     try {
-      const res = await simulateFn({ data: { phone: simPhone.trim(), message: simMessage.trim() } });
+      const res = await simulateFn({ data: { phone, message } });
       if (!res.ok) {
         setSimError(res.error ?? "Simulasi gagal.");
         return;
@@ -500,11 +535,29 @@ function AiReactFlowCanvas({
       setSimResult(res);
       setSimPath(buildSimPath(res));
       setSimStep(0);
+      setSimTurns((prev) => [...prev, { role: "guest", text: message }, { role: "ai", text: res.reply ?? "" }]);
+      setSimMessage("");
     } catch (e) {
       setSimError((e as Error).message ?? "Simulasi gagal.");
     } finally {
       setSimLoading(false);
     }
+  };
+
+  const resetSim = async () => {
+    const phone = simPhone.trim();
+    if (phone) {
+      try {
+        await resetFn({ data: { phone } });
+      } catch {
+        /* ignore */
+      }
+    }
+    setSimTurns([]);
+    setSimResult(null);
+    setSimPath(null);
+    setSimStep(null);
+    setSimError(null);
   };
 
   const baseNodes = useMemo<Node<AiFlowNodeData>[]>(
@@ -531,7 +584,8 @@ function AiReactFlowCanvas({
           source: edge.from,
           target: edge.to,
           label: edge.label,
-          type: "default",
+          type: "sim",
+          data: { sim: inSim },
           animated: dashed || inSim,
           markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
           style: {
@@ -539,8 +593,6 @@ function AiReactFlowCanvas({
             stroke: color,
             strokeDasharray: dashed ? "6 6" : undefined,
           },
-          labelStyle: { fill: "#cbd5e1", fontSize: 11, fontWeight: 600 },
-          labelBgStyle: { fill: "#0b1220", fillOpacity: 0.9 },
         };
       });
     },
@@ -654,6 +706,7 @@ function AiReactFlowCanvas({
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={(_, node) => {
@@ -683,25 +736,41 @@ function AiReactFlowCanvas({
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
             </Panel>
             {simOpen && (
-              <Panel position="bottom-left" className="w-80 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
+              <Panel position="bottom-left" className="flex max-h-[74vh] w-80 flex-col rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-xs font-semibold text-emerald-300">Simulasi AI (nyata)</span>
-                  <button onClick={() => setSimOpen(false)} className="text-xs text-slate-400 hover:text-white">Tutup</button>
+                  <div className="flex items-center gap-2 text-xs">
+                    <button onClick={resetSim} className="text-slate-400 hover:text-white">Reset</button>
+                    <button onClick={() => setSimOpen(false)} className="text-slate-400 hover:text-white">Tutup</button>
+                  </div>
                 </div>
-                <p className="mb-2 text-[11px] leading-snug text-slate-400">
-                  Kirim no HP + pesan tamu. AI dijalankan sungguhan; kanvas mengikuti jalur nyata (intent, agent, tools).
-                </p>
                 <input
                   value={simPhone}
                   onChange={(e) => setSimPhone(e.target.value)}
                   placeholder="628xxxxxxxxxx"
                   className="mb-2 h-9 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-400"
                 />
+                {simTurns.length > 0 && (
+                  <div className="mb-2 max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-slate-800 bg-slate-900/40 p-2">
+                    {simTurns.map((turn, i) => (
+                      <div key={i} className={cn("flex", turn.role === "guest" ? "justify-end" : "justify-start")}>
+                        <div
+                          className={cn(
+                            "max-w-[85%] whitespace-pre-wrap rounded-2xl px-2.5 py-1.5 text-[11px] leading-snug",
+                            turn.role === "guest" ? "bg-sky-600 text-white" : "bg-emerald-600/90 text-white",
+                          )}
+                        >
+                          {turn.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   value={simMessage}
                   onChange={(e) => setSimMessage(e.target.value)}
                   rows={2}
-                  placeholder="Tulis pesan tamu..."
+                  placeholder="Tulis pesan tamu berikutnya..."
                   className="mb-2 w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-400"
                 />
                 <Button
@@ -710,33 +779,37 @@ function AiReactFlowCanvas({
                   onClick={runRealSim}
                   className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
                 >
-                  {simLoading ? "Menjalankan AI..." : simStep !== null ? "Menganimasikan..." : "Kirim & Jalankan AI"}
+                  {simLoading ? "Menjalankan AI..." : simStep !== null ? "Menganimasikan..." : simTurns.length ? "Kirim lanjutan" : "Kirim & Jalankan AI"}
                 </Button>
                 {simStep !== null && simPath && (
                   <p className="mt-2 text-[11px] font-medium text-emerald-300">Memproses: {stepLabel(simPath[simStep])}</p>
                 )}
                 {simError && <p className="mt-2 text-[11px] text-rose-400">{simError}</p>}
                 {simResult && (
-                  <div className="mt-2 space-y-1 rounded-lg border border-slate-700 bg-slate-900/60 p-2 text-[11px]">
-                    <p>
-                      <span className="text-slate-400">Intent:</span>{" "}
-                      <span className="text-emerald-300">{simResult.intent ?? "-"}</span>
-                    </p>
-                    <p>
-                      <span className="text-slate-400">Agent:</span>{" "}
-                      <span className="text-emerald-300">{simResult.agentKey ?? "-"}</span>
-                    </p>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    Intent <span className="text-emerald-300">{simResult.intent ?? "-"}</span> {"\u00b7"} Agent{" "}
+                    <span className="text-emerald-300">{simResult.agentKey ?? "-"}</span>
                     {simResult.toolsUsed?.length ? (
-                      <p>
-                        <span className="text-slate-400">Tools:</span> {simResult.toolsUsed.join(", ")}
-                      </p>
+                      <>
+                        {" "}
+                        {"\u00b7"} Tools <span className="text-emerald-300">{simResult.toolsUsed.join(", ")}</span>
+                      </>
                     ) : null}
-                    <p className="pt-1 text-slate-400">Balasan AI:</p>
-                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-slate-100">{simResult.reply}</p>
-                  </div>
+                  </p>
                 )}
               </Panel>
             )}
+            <NodeToolbar
+              nodeId="send"
+              isVisible={!!simResult?.reply && simStep === null}
+              position={Position.Bottom}
+              className="pointer-events-none"
+            >
+              <div className="max-w-[260px] rounded-2xl border border-emerald-500/40 bg-slate-900 px-3 py-2 text-[11px] text-slate-100 shadow-2xl">
+                <p className="mb-1 text-[10px] font-semibold text-emerald-300">Balasan AI ke tamu</p>
+                <p className="max-h-40 overflow-y-auto whitespace-pre-wrap">{simResult?.reply}</p>
+              </div>
+            </NodeToolbar>
           </ReactFlow>
         </ReactFlowProvider>
       </div>
