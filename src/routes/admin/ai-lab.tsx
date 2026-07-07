@@ -461,20 +461,39 @@ function AiReactFlowCanvas({
     })),
     [runtimeById],
   );
-  const baseEdges = useMemo<Edge[]>(() => FLOW_EDGES.map((edge) => ({
-    id: `${edge.from}-${edge.to}`,
-    source: edge.from,
-    target: edge.to,
-    label: edge.label,
-    animated: edge.tone === "rose" || edge.label === "fallback",
-    markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18 },
-    style: {
-      strokeWidth: selected === edge.from || selected === edge.to ? 3 : 2,
-      stroke: selected === edge.from || selected === edge.to ? "rgb(52,211,153)" : edge.tone === "rose" ? "rgba(251,113,133,.8)" : "rgba(148,163,184,.52)",
-    },
-    labelStyle: { fill: "#94a3b8", fontSize: 11, fontWeight: 600 },
-    labelBgStyle: { fill: "#020617", fillOpacity: 0.85 },
-  })), [selected]);
+  const baseEdges = useMemo<Edge[]>(
+    () =>
+      FLOW_EDGES.map((edge) => {
+        const isActive = selected === edge.from || selected === edge.to;
+        const isRouterOut = edge.from === "router";
+        const isEscalation = edge.tone === "rose" || edge.label === "fallback";
+        const dashed = isEscalation || edge.to === "manager";
+        const color = isActive
+          ? "rgb(52,211,153)"
+          : isRouterOut
+            ? "rgba(16,185,129,.9)"
+            : isEscalation
+              ? "rgba(244,114,182,.85)"
+              : "rgba(148,163,184,.5)";
+        return {
+          id: `${edge.from}-${edge.to}`,
+          source: edge.from,
+          target: edge.to,
+          label: edge.label,
+          type: "default",
+          animated: dashed,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
+          style: {
+            strokeWidth: isActive ? 3 : 2,
+            stroke: color,
+            strokeDasharray: dashed ? "6 6" : undefined,
+          },
+          labelStyle: { fill: "#cbd5e1", fontSize: 11, fontWeight: 600 },
+          labelBgStyle: { fill: "#0b1220", fillOpacity: 0.9 },
+        };
+      }),
+    [selected],
+  );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
@@ -527,6 +546,7 @@ function AiReactFlowCanvas({
               if (meta?.drawer) openDrawer(meta.drawer);
             }}
             fitView
+            fitViewOptions={{ padding: 0.14 }}
             minZoom={0.35}
             maxZoom={1.35}
             nodesDraggable
