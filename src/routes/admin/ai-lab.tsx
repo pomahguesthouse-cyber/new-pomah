@@ -8,7 +8,6 @@ import { ReactFlow,
   BackgroundVariant,
   Handle,
   MarkerType,
-  MiniMap,
   Panel,
   Position,
   ReactFlowProvider,
@@ -543,7 +542,6 @@ function AiReactFlowCanvas({
             className="ai-lab-react-flow"
           >
             <Background color="rgba(148,163,184,.2)" gap={24} size={1} variant={BackgroundVariant.Dots} />
-            <MiniMap pannable zoomable nodeStrokeWidth={3} className="!bg-slate-950/90 !border !border-slate-800" nodeColor={(node) => toneMiniMapColor((node.data as AiFlowNodeData)?.runtime?.tone ?? "slate")} />
             <Panel position="top-left" className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-xl">
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
             </Panel>
