@@ -217,7 +217,7 @@ const nodeTypes = { aiNode: AiFlowNode };
 function AiLab() {
   const qc = useQueryClient();
   const [drawer, setDrawer] = useState<DrawerKey>(null);
-  const [selectedNode, setSelectedNode] = useState(FLOW_NODES.find((node) => node.id === "front-office") ?? FLOW_NODES[0]);
+  const [selectedNode, setSelectedNode] = useState<FlowNodeMeta | null>(null);
 
   const configFn = useServerFn(getAiLabConfig);
   const updateFn = useServerFn(updateAiLabConfig);
@@ -301,7 +301,7 @@ function AiLab() {
 
       <section className="mx-auto w-full max-w-[1500px] px-3 pt-3 md:px-5 md:pt-5">
         <AiReactFlowCanvas
-          selected={selectedNode.id}
+          selected={selectedNode?.id ?? null}
           config={config}
           commitConfig={commitConfig}
           snapshot={snapshot}
@@ -442,12 +442,12 @@ function AiReactFlowCanvas({
   openDrawer,
   commitConfig,
 }: {
-  selected: string;
+  selected: string | null;
   config: AiLabConfig;
   snapshot?: AiLabControlSnapshot;
   health: any;
   quality: AgentQualityScore[];
-  onSelect: (node: FlowNodeMeta) => void;
+  onSelect: (node: FlowNodeMeta | null) => void;
   openDrawer: (drawer: DrawerKey) => void;
   commitConfig: (next: AiLabConfig, message?: string) => void;
 }) {
@@ -496,8 +496,10 @@ function AiReactFlowCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseEdges);
-  const selectedNode = FLOW_NODES.find((node) => node.id === selected) ?? FLOW_NODES[0];
-  const selectedRuntime = runtimeById.get(selectedNode.id) ?? { label: "ready", detail: selectedNode.desc, tone: selectedNode.tone };
+  const selectedNode = selected ? FLOW_NODES.find((node) => node.id === selected) ?? null : null;
+  const selectedRuntime = selectedNode
+    ? runtimeById.get(selectedNode.id) ?? { label: "ready", detail: selectedNode.desc, tone: selectedNode.tone }
+    : null;
 
   // Apply node positions saved in the database whenever they change.
   const layoutKey = JSON.stringify(config.nodeLayout ?? {});
@@ -551,7 +553,11 @@ function AiReactFlowCanvas({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <Badge className={toneClass(selectedRuntime.tone, "badge")}>{selectedNode.title}: {selectedRuntime.label}</Badge>
+          {selectedNode && selectedRuntime && (
+            <Badge className={toneClass(selectedRuntime.tone, "badge")}>
+              {selectedNode.title}: {selectedRuntime.label}
+            </Badge>
+          )}
           <Button size="sm" variant="ghost" className="text-slate-300 hover:bg-slate-800" onClick={() => openDrawer("simulator")}>
             <PlayCircle className="mr-2 h-4 w-4" /> Simulator
           </Button>
@@ -575,6 +581,7 @@ function AiReactFlowCanvas({
               const meta = FLOW_NODES.find((item) => item.id === node.id);
               if (meta) onSelect(meta);
             }}
+            onPaneClick={() => onSelect(null)}
             onNodeDoubleClick={(_, node) => {
               const meta = FLOW_NODES.find((item) => item.id === node.id);
               if (meta?.drawer) openDrawer(meta.drawer);
