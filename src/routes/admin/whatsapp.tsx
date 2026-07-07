@@ -36,6 +36,8 @@ import {
   BellOff,
   SendHorizonal,
   ArrowLeft,
+  ChevronRight,
+  ChevronLeft,
 } from "lucide-react";
 import {
   listThreads,
