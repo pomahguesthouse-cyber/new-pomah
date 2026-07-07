@@ -834,12 +834,39 @@ export function WhatsAppPage() {
       </section>
 
       {/* GUEST CONTEXT */}
-      <aside className="hidden lg:flex min-h-0 flex-col border-l border-border bg-sidebar">
+      {!rightOpen ? (
+        <aside className="hidden lg:flex min-h-0 flex-col items-center border-l border-[#E2E8F0] bg-[#F8FAFC] py-3">
+          <button
+            type="button"
+            onClick={() => setRightOpen(true)}
+            className="rounded-md p-1.5 text-[#64748B] hover:bg-white hover:text-[#0F172A]"
+            title="Buka panel tamu"
+            aria-label="Buka panel tamu"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+        </aside>
+      ) : (
+      <aside className="hidden lg:flex min-h-0 flex-col border-l border-[#E2E8F0] bg-[#F8FAFC] text-[#0F172A]">
+        <div className="flex items-center justify-between border-b border-[#E2E8F0] px-4 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
+            Panel Tamu
+          </p>
+          <button
+            type="button"
+            onClick={() => setRightOpen(false)}
+            className="rounded-md p-1 text-[#64748B] hover:bg-white hover:text-[#0F172A]"
+            title="Tutup panel tamu"
+            aria-label="Tutup panel tamu"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
         {current && thread?.thread ? (
           <ScrollArea className="flex-1">
-            <div className="space-y-5 p-5">
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="space-y-4 p-4">
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                   Guest
                 </p>
                 <div className="mt-2 flex items-center gap-3">
@@ -848,11 +875,11 @@ export function WhatsAppPage() {
                       {initials(conversationNameLabel(thread.thread), conversationPhoneLabel(thread.thread))}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-[#0F172A]">
                       {conversationNameLabel(thread.thread)}
                     </p>
-                    <p className="flex items-center gap-1 font-mono text-[11px] text-muted-foreground">
+                    <p className="flex items-center gap-1 font-mono text-[11px] text-[#64748B]">
                       <Phone className="h-3 w-3" /> {conversationPhoneLabel(thread.thread)}
                     </p>
                   </div>
@@ -868,14 +895,12 @@ export function WhatsAppPage() {
                 )}
               </div>
 
-              <Separator />
-
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                   Profile
                 </p>
                 {thread.guest ? (
-                  <dl className="mt-2 space-y-2 text-xs">
+                  <dl className="mt-2 space-y-2">
                     <Row icon={UserIcon} label="Name" value={thread.guest.full_name} />
                     {thread.guest.email && (
                       <Row icon={UserIcon} label="Email" value={thread.guest.email} />
@@ -884,55 +909,49 @@ export function WhatsAppPage() {
                       <Row icon={UserIcon} label="Country" value={thread.guest.country} />
                     )}
                     {thread.guest.notes && (
-                      <div className="rounded-md border border-border bg-card p-2">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <div className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#64748B]">
                           Notes
                         </p>
-                        <p className="mt-1 text-xs">{thread.guest.notes}</p>
+                        <p className="mt-1 text-xs font-medium text-[#0F172A]">{thread.guest.notes}</p>
                       </div>
                     )}
                   </dl>
                 ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-[#64748B]">
                     No guest profile linked to this number yet.
                   </p>
                 )}
               </div>
 
-              <Separator />
-
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                   Latest Booking
                 </p>
                 {thread.booking ? (
-                  <div className="mt-2 rounded-md border border-border bg-card p-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-medium">
+                  <div className="mt-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 font-medium text-[#0F172A]">
                         <CalendarDays className="h-3.5 w-3.5 text-primary" />
                         {formatDateID(thread.booking.check_in)} →{" "}
                         {formatDateID(thread.booking.check_out)}
                       </span>
-                      <Badge variant="outline" className="text-[9px]">
-                        {thread.booking.status}
-                      </Badge>
+                      <StatusBadge kind="booking" value={thread.booking.status} />
                     </div>
-                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    <p className="mt-1.5 text-[11px] font-medium text-[#0F172A]">
                       {thread.booking.adults} adult{thread.booking.adults !== 1 && "s"}
                       {thread.booking.children > 0 && `, ${thread.booking.children} child`}
                     </p>
                     {thread.booking.special_requests && (
-                      <p className="mt-2 border-t border-border pt-2 text-[11px] italic text-muted-foreground">
+                      <p className="mt-2 border-t border-[#E2E8F0] pt-2 text-[11px] italic text-[#64748B]">
                         "{thread.booking.special_requests}"
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">No booking on file.</p>
+                  <p className="mt-2 text-xs text-[#64748B]">No booking on file.</p>
                 )}
               </div>
-
-              <Separator />
 
               <WhatsappSummary
                 thread={thread.thread}
@@ -948,19 +967,17 @@ export function WhatsAppPage() {
                 clearing={clearSummaryMut.isPending}
               />
 
-              <Separator />
-
               {/* ── MANUAL ALERT TO TELEGRAM ───────────────────────── */}
-              <div>
-                <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground flex items-center gap-1">
+              <div className="rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-[#64748B]">
                   <ShieldAlert className="h-3 w-3 text-rose-500" />
                   Eskalasi ke Super Admin
                 </p>
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-[11px] text-[#64748B]">
                   Kirim alert langsung ke super admin via Telegram jika percakapan ini butuh perhatian segera.
                 </p>
                 <textarea
-                  className="mt-2 w-full resize-none rounded-md border border-border bg-background p-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-rose-400"
+                  className="mt-2 w-full resize-none rounded-md border border-[#E2E8F0] bg-[#F8FAFC] p-2 text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:ring-1 focus:ring-rose-400"
                   rows={2}
                   placeholder="Catatan untuk super admin (wajib)…"
                   value={manualAlertNote}
@@ -984,11 +1001,12 @@ export function WhatsAppPage() {
             </div>
           </ScrollArea>
         ) : (
-          <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-muted-foreground">
+          <div className="flex flex-1 items-center justify-center p-6 text-center text-xs text-[#64748B]">
             Guest context will appear here.
           </div>
         )}
       </aside>
+      )}
     </div>
   );
 }
