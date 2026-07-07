@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Search,
+  BedDouble,
   Bell,
   Sun,
   Moon,
@@ -147,11 +148,18 @@ export function AdminTopbar({
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-1 h-5" />
 
-        <div className="flex min-w-0 flex-col">
-          <p className="truncate text-sm font-semibold leading-none tracking-tight">{title}</p>
-          <p className="mt-0.5 hidden font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:block">
-            Pomah Guesthouse · Single property
-          </p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <BedDouble className="h-4 w-4" />
+          </span>
+          <div className="flex min-w-0 flex-col">
+            <p className="truncate text-sm font-semibold uppercase leading-none tracking-[0.14em]">
+              Pomah Guesthouse
+            </p>
+            <p className="mt-0.5 hidden truncate font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:block">
+              {title}
+            </p>
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">

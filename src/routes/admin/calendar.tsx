@@ -18,13 +18,20 @@ import {
   getMonth,
 } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2 } from "lucide-react";
 
 import {
   getCalendarData,
   createBookingFromAdmin,
   updateBookingFromAdmin,
 } from "@/admin/functions/calendar.functions";
+import {
+  downloadCsv,
+  openPrintView,
+  openBlankPrintWindow,
+  type ExportRow,
+} from "@/admin/lib/booking-export";
+import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,6 +91,59 @@ function fmtIso(d: Date) {
   return format(d, "yyyy-MM-dd");
 }
 
+function nightsBetween(checkIn?: string | null, checkOut?: string | null) {
+  if (!checkIn || !checkOut) return 0;
+  const a = Date.parse(`${checkIn}T00:00:00Z`);
+  const b = Date.parse(`${checkOut}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86400000));
+}
+
+/**
+ * The calendar loads bookings flattened one-entry-per-room. Collapse them back
+ * to one export row per booking, building room labels from the room/type lookups.
+ */
+function calendarRowsToExport(bookings: any[], rooms: any[], roomTypes: any[]): ExportRow[] {
+  const roomById = new Map(rooms.map((r) => [r.id, r]));
+  const typeById = new Map(roomTypes.map((t) => [t.id, t]));
+  const byId = new Map<string, any>();
+  for (const b of bookings) {
+    const entry = byId.get(b.id) ?? { ...b, _labels: [] as string[], _rates: [] as number[] };
+    const room = roomById.get(b.room_id);
+    const type = typeById.get(b.room_type_id ?? room?.room_type_id);
+    const name = type?.name ?? "?";
+    entry._labels.push(room?.number ? `${name} (${room.number})` : name);
+    entry._rates.push(Number(b.nightly_rate ?? 0));
+    byId.set(b.id, entry);
+  }
+  return [...byId.values()].map((b) => {
+    const total = Number(b.total_amount ?? 0);
+    const paid = Number(b.paid_amount ?? 0);
+    return {
+      reference_code: b.reference_code ?? "",
+      guest_name: b.guests?.full_name ?? "",
+      guest_email: b.guests?.email ?? "",
+      guest_phone: b.guests?.phone ?? "",
+      check_in: b.check_in ?? "",
+      check_out: b.check_out ?? "",
+      nights: nightsBetween(b.check_in, b.check_out),
+      rooms: b._labels.join("; "),
+      room_count: b._labels.length,
+      adults: Number(b.adults ?? 0),
+      children: Number(b.children ?? 0),
+      status: b.status ?? "",
+      source: b.source ?? "",
+      payment_status: b.payment_status ?? "",
+      total_amount: total,
+      paid_amount: paid,
+      outstanding: Math.max(0, total - paid),
+      nightly_rate_min: b._rates.length ? Math.min(...b._rates) : 0,
+      nightly_rate_max: b._rates.length ? Math.max(...b._rates) : 0,
+      created_at: b.created_at ?? "",
+    } as ExportRow;
+  });
+}
+
 function CalendarPage() {
   const [anchor, setAnchor] = React.useState<Date>(startOfDay(new Date()));
   const queryClient = useQueryClient();
@@ -104,17 +164,60 @@ function CalendarPage() {
 
   const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<any>(null);
+  const [newOpen, setNewOpen] = React.useState(false);
+  const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
+
+  async function runExport(kind: "csv" | "pdf") {
+    let printWindow: Window | null = null;
+    if (kind === "pdf") {
+      printWindow = openBlankPrintWindow();
+      if (!printWindow) {
+        toast.error("Tidak bisa membuka tab cetak. Izinkan popup lalu coba lagi.");
+        return;
+      }
+    }
+    setExporting(kind);
+    try {
+      const rows = calendarRowsToExport(
+        data?.bookings ?? [],
+        data?.rooms ?? [],
+        data?.roomTypes ?? [],
+      );
+      if (rows.length === 0) {
+        toast.info("Tidak ada booking pada rentang tanggal ini.");
+        printWindow?.close();
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (kind === "csv") {
+        downloadCsv(rows, `calendar_${from}_${to}_${stamp}`);
+        toast.success(`CSV diunduh — ${rows.length} booking.`);
+      } else {
+        openPrintView(rows, { filterSummary: `Kalender ${from} → ${to}`, targetWindow: printWindow });
+        toast.success("Dialog cetak terbuka — pilih Save as PDF.");
+      }
+    } catch (e) {
+      printWindow?.close();
+      toast.error((e as Error).message ?? "Export gagal.");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-background w-full overflow-hidden">
       {/* Header Utama - Z-Index 40 agar di bawah Sidebar (biasanya z-50) tapi di atas Kalender */}
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border bg-card px-6 py-3 shadow-sm z-40 relative">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 font-black text-primary mr-2">
-            <CalendarDays className="h-6 w-6" />
-            <span className="tracking-tighter hidden md:block uppercase">Calendar</span>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="mr-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Reservations
+            </p>
+            <h1 className="text-xl font-semibold uppercase tracking-tight text-foreground">
+              Calendar
+            </h1>
           </div>
 
           <Button
@@ -158,24 +261,51 @@ function CalendarPage() {
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1 border">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-background"
+              onClick={() => setAnchor(addDays(anchor, -7))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 hover:bg-background"
+              onClick={() => setAnchor(addDays(anchor, 7))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1 border">
+        <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 hover:bg-background"
-            onClick={() => setAnchor(addDays(anchor, -7))}
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            disabled={exporting !== null}
+            onClick={() => runExport("csv")}
           >
-            <ChevronLeft className="h-4 w-4" />
+            {exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
+            Export CSV
           </Button>
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 hover:bg-background"
-            onClick={() => setAnchor(addDays(anchor, 7))}
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            disabled={exporting !== null}
+            onClick={() => runExport("pdf")}
           >
-            <ChevronRight className="h-4 w-4" />
+            {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            Cetak / PDF
+          </Button>
+          <Button size="sm" className="h-9 gap-2" onClick={() => setNewOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Booking Baru
           </Button>
         </div>
       </header>
@@ -219,6 +349,7 @@ function CalendarPage() {
         onClose={() => setEditCtx(null)}
         onSaved={invalidate}
       />
+      <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   );
 }
@@ -270,10 +401,12 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
           className={cn(
             "absolute top-2.5 bottom-2.5 flex items-center px-3 rounded-lg border text-[10px] font-black shadow-md transition-all hover:scale-[1.01] overflow-hidden z-10",
             b.status === "confirmed"
-              ? "bg-blue-100 border-blue-300 text-blue-800"
+              ? "bg-emerald-600 border-emerald-700 text-white"
               : b.status === "checked_in"
-                ? "bg-emerald-100 border-emerald-300 text-emerald-800"
-                : "bg-amber-100 border-amber-300 text-amber-800",
+                ? "bg-emerald-800 border-emerald-900 text-white"
+                : b.status === "pending"
+                  ? "bg-amber-100 border-amber-300 text-amber-800"
+                  : "bg-rose-100 border-rose-300 text-rose-700",
           )}
           style={{ left: left + 2, width: Math.max(width - 4, 40) }}
         >

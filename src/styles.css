@@ -124,6 +124,71 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/*
+ * Admin brand theme (green). Scoped to the standard admin shell only via the
+ * `.admin-theme` wrapper class in admin-shell.tsx. The public site and the
+ * route-scoped AI Lab / Page Builder (bare routes) keep the neutral base above.
+ */
+.admin-theme {
+  --background: oklch(0.994 0.004 152);
+  --foreground: oklch(0.22 0.03 155);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 155);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.03 155);
+  --primary: oklch(0.47 0.075 152);
+  --primary-foreground: oklch(0.98 0.01 152);
+  --secondary: oklch(0.95 0.02 152);
+  --secondary-foreground: oklch(0.30 0.05 152);
+  --muted: oklch(0.96 0.012 152);
+  --muted-foreground: oklch(0.48 0.03 152);
+  --accent: oklch(0.94 0.03 152);
+  --accent-foreground: oklch(0.30 0.05 152);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(0.90 0.015 152);
+  --input: oklch(0.90 0.015 152);
+  --ring: oklch(0.55 0.08 152);
+  --sidebar: oklch(0.27 0.035 155);
+  --sidebar-foreground: oklch(0.92 0.015 152);
+  --sidebar-primary: oklch(0.60 0.09 152);
+  --sidebar-primary-foreground: oklch(0.15 0.02 152);
+  --sidebar-accent: oklch(0.33 0.045 155);
+  --sidebar-accent-foreground: oklch(0.97 0.01 152);
+  --sidebar-border: oklch(0.36 0.03 155);
+  --sidebar-ring: oklch(0.55 0.08 152);
+}
+
+.dark .admin-theme {
+  --background: oklch(0.20 0.02 155);
+  --foreground: oklch(0.96 0.01 152);
+  --card: oklch(0.25 0.025 155);
+  --card-foreground: oklch(0.96 0.01 152);
+  --popover: oklch(0.25 0.025 155);
+  --popover-foreground: oklch(0.96 0.01 152);
+  --primary: oklch(0.62 0.09 152);
+  --primary-foreground: oklch(0.15 0.02 152);
+  --secondary: oklch(0.28 0.03 155);
+  --secondary-foreground: oklch(0.96 0.01 152);
+  --muted: oklch(0.28 0.03 155);
+  --muted-foreground: oklch(0.72 0.03 152);
+  --accent: oklch(0.30 0.04 155);
+  --accent-foreground: oklch(0.96 0.01 152);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.55 0.08 152);
+  --sidebar: oklch(0.17 0.02 155);
+  --sidebar-foreground: oklch(0.92 0.015 152);
+  --sidebar-primary: oklch(0.62 0.09 152);
+  --sidebar-primary-foreground: oklch(0.15 0.02 152);
+  --sidebar-accent: oklch(0.25 0.03 155);
+  --sidebar-accent-foreground: oklch(0.96 0.01 152);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.55 0.08 152);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

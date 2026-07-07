@@ -6,7 +6,6 @@ import { Plus, Search, X, ChevronLeft, ChevronRight, Trash2, Receipt, FileDown, 
 import { supabase } from "@/integrations/supabase/client";
 import { downloadCsv, openPrintView, openBlankPrintWindow, type ExportRow } from "@/admin/lib/booking-export";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,7 +35,26 @@ const SOURCE_OPTIONS = [
   { value: "manager_chat", label: "Manager Chat" },
 ];
 const PAGE_SIZE = 20;
+/** Shared grid template for the bookings column header + each card row (lg+). */
+const BOOKING_GRID = "104px 1.4fr 1.1fr 72px 1.05fr 1.3fr 118px 108px 128px 40px";
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+
+function statusPillClass(status: BookingStatus) {
+  switch (status) {
+    case "confirmed":
+      return "bg-primary text-primary-foreground";
+    case "pending":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300";
+    case "cancelled":
+      return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
+    case "checked_in":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300";
+    case "checked_out":
+      return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
+    default:
+      return "bg-muted text-muted-foreground";
+  }
+}
 const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 const BASE_SELECT = "id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 
@@ -300,31 +318,50 @@ function BookingsPage() {
         {filtersActive && <Button variant="ghost" size="sm" className="h-9 gap-1.5" onClick={resetFilters}><X className="h-3.5 w-3.5" />Reset</Button>}
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <div className="overflow-x-auto md:overflow-visible">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border bg-muted/40"><tr className="text-left font-mono text-[10px] uppercase tracking-widest text-muted-foreground"><th className="px-4 py-3">Kode Booking</th><th className="px-4 py-3">Nama Tamu</th><th className="px-4 py-3">Kamar</th><th className="px-4 py-3 text-center">Jumlah Kamar</th><th className="px-4 py-3">Tanggal</th><th className="px-4 py-3">Pembayaran</th><th className="px-4 py-3"><button type="button" onClick={() => setSort("status")} className="inline-flex items-center gap-1 hover:text-foreground">Status <ArrowUpDown className="h-3 w-3" />{sortLabel("status")}</button></th><th className="px-4 py-3">Sumber</th><th className="px-4 py-3"><button type="button" onClick={() => setSort("created_at")} className="inline-flex items-center gap-1 hover:text-foreground">Tgl Pemesanan <ArrowUpDown className="h-3 w-3" />{sortLabel("created_at")}</button></th><th className="px-4 py-3" /></tr></thead>
-            <tbody className="divide-y divide-border">
-              {isLoading && <tr><td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">Loading…</td></tr>}
-              {!isLoading && !error && bookings.length === 0 && <tr><td colSpan={10} className="px-4 py-10 text-center text-sm text-muted-foreground">{filtersActive ? "Tidak ada booking yang cocok dengan filter ini." : "Belum ada booking."}</td></tr>}
-              {bookings.map((b) => (
-                <tr key={b.id} onClick={() => setEditCtx(b as unknown as EditableBooking)} className="cursor-pointer transition-colors hover:bg-muted/40">
-                  <td className="px-4 py-3"><span className="font-mono text-xs font-semibold text-foreground">{b.reference_code ?? "—"}</span></td>
-                  <td className="px-4 py-3"><p className="font-medium">{b.guests?.full_name}</p>{b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-primary hover:underline tabular-nums">{b.guests.phone}</a> : <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>}</td>
-                  <td className="px-4 py-3"><RoomSummary rooms={b.booking_rooms} /></td>
-                  <td className="px-4 py-3 font-mono tabular-nums text-center">{b.booking_rooms?.length ?? 0}</td>
-                  <td className="px-4 py-3 text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-In</p><p className="font-mono tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></td>
-                  <td className="px-4 py-3"><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} /></td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}><Select value={b.status} onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}><SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent></Select></td>
-                  <td className="px-4 py-3"><Badge variant="outline">{b.source}</Badge></td>
-                  <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</td>
-                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Hapus booking" onClick={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}><Trash2 className="h-4 w-4" /></Button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!error && total > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-4 py-3"><p className="text-xs text-muted-foreground">Menampilkan <span className="font-medium text-foreground">{rangeFrom}</span>–<span className="font-medium text-foreground">{rangeTo}</span> dari <span className="font-medium text-foreground">{total}</span> booking{isFetching && <span className="ml-2 italic opacity-70">memuat…</span>}</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-3.5 w-3.5" />Sebelumnya</Button><span className="px-1 font-mono text-xs text-muted-foreground tabular-nums">{page} / {totalPages}</span><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page >= totalPages || isFetching} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Berikutnya<ChevronRight className="h-3.5 w-3.5" /></Button></div></div>}
+      {/* Column header — mirrors the card grid on large screens */}
+      <div className="hidden items-center gap-4 px-5 lg:grid" style={{ gridTemplateColumns: BOOKING_GRID }}>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Kode Booking</span>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Nama Tamu</span>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Kamar</span>
+        <span className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Jumlah Kamar</span>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Tanggal</span>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Pembayaran</span>
+        <button type="button" onClick={() => setSort("status")} className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">Status <ArrowUpDown className="h-3 w-3" />{sortLabel("status")}</button>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Sumber</span>
+        <button type="button" onClick={() => setSort("created_at")} className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground">Tgl Pemesanan <ArrowUpDown className="h-3 w-3" />{sortLabel("created_at")}</button>
+        <span />
+      </div>
+
+      <div className="space-y-3">
+        {isLoading && <div className="rounded-xl border border-border bg-card px-4 py-12 text-center text-muted-foreground">Loading…</div>}
+        {!isLoading && !error && bookings.length === 0 && <div className="rounded-xl border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">{filtersActive ? "Tidak ada booking yang cocok dengan filter ini." : "Belum ada booking."}</div>}
+
+        {bookings.map((b) => (
+          <div
+            key={b.id}
+            onClick={() => setEditCtx(b as unknown as EditableBooking)}
+            className="flex cursor-pointer flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5"
+            style={{ gridTemplateColumns: BOOKING_GRID }}
+          >
+            <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
+            <div><p className="font-medium">{b.guests?.full_name}</p>{b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-primary hover:underline tabular-nums">{b.guests.phone}</a> : <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>}</div>
+            <div><RoomSummary rooms={b.booking_rooms} /></div>
+            <div className="font-mono tabular-nums lg:text-center">{b.booking_rooms?.length ?? 0}</div>
+            <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-On</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
+            <div><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} /></div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Select value={b.status} onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}>
+                <SelectTrigger className={`h-7 w-fit gap-1 rounded-full border-0 px-3 text-xs font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger>
+                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><span className="inline-block rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{b.source}</span></div>
+            <div className="font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</div>
+            <div className="lg:text-right" onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Hapus booking" onClick={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}><Trash2 className="h-4 w-4" /></Button></div>
+          </div>
+        ))}
+
+        {!error && total > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Menampilkan <span className="font-medium text-foreground">{rangeFrom}</span>–<span className="font-medium text-foreground">{rangeTo}</span> dari <span className="font-medium text-foreground">{total}</span> booking{isFetching && <span className="ml-2 italic opacity-70">memuat…</span>}</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-3.5 w-3.5" />Sebelumnya</Button><span className="px-1 font-mono text-xs text-muted-foreground tabular-nums">{page} / {totalPages}</span><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page >= totalPages || isFetching} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Berikutnya<ChevronRight className="h-3.5 w-3.5" /></Button></div></div>}
       </div>
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />

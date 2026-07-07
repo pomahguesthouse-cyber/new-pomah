@@ -16,7 +16,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="admin-theme">
       <AdminSidebar propertyName="Pomah Guesthouse" />
       <SidebarInset className="bg-background min-w-0 overflow-hidden">
         <AdminTopbar fullName="Admin" email={null} />

@@ -4,8 +4,30 @@
 //     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... } }) if needed.
+import { sep } from "path";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
+
+// Windows fix: @lovable.dev/mcp-js resolves routesDir with `path.resolve` (which
+// returns native "\" separators on Windows) and then asserts it starts with
+// Vite's `config.root`, which Vite normalizes to POSIX "/". On Windows those never
+// match and dev/build throws `routesDir "src/routes" must resolve under ...`.
+// We hand the plugin a `config.root` using native separators so its internal
+// resolve() and the assertion agree. No-op on POSIX (sep === "/"), so Lovable's
+// Linux cloud builds are unaffected.
+function mcpPluginWin() {
+  const plugin = mcpPlugin();
+  const originalConfigResolved = plugin.configResolved as
+    | ((config: { root: string }) => unknown)
+    | undefined;
+  if (typeof originalConfigResolved === "function") {
+    plugin.configResolved = function (config: { root: string }) {
+      const nativeRoot = config.root.split("/").join(sep);
+      return originalConfigResolved.call(this, { ...config, root: nativeRoot });
+    } as typeof plugin.configResolved;
+  }
+  return plugin;
+}
 
 function isAiLabRoute(id: string) {
   return id.includes("/src/routes/admin/ai-lab.tsx") || id.includes("\\src\\routes\\admin\\ai-lab.tsx");
@@ -88,6 +110,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: [aiLabRouteTransforms(), mcpPlugin()],
+    plugins: [aiLabRouteTransforms(), mcpPluginWin()],
   },
 });
