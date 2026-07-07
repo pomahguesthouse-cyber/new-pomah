@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
+import { simulateChatTurn } from "@/admin/modules/ai-lab/simulator.functions";
 import { ReactFlow,
   Background,
   BackgroundVariant,
@@ -151,6 +152,7 @@ interface FlowRuntime {
 interface AiFlowNodeData extends Record<string, unknown> {
   meta: FlowNodeMeta;
   runtime: FlowRuntime;
+  processing?: boolean;
 }
 
 const AGENTS: AgentMeta[] = [
@@ -213,6 +215,21 @@ const FLOW_EDGES: FlowEdgeMeta[] = [
 ];
 
 const nodeTypes = { aiNode: AiFlowNode };
+
+/** Build the REAL pipeline path from a simulation result (actual agent + tools). */
+const SIM_KNOWN_NODES = new Set(FLOW_NODES.map((n) => n.id));
+function buildSimPath(res: { agentKey?: string | null; toolsUsed?: string[] | null; escalated?: boolean }): string[][] {
+  const agent = res.agentKey && SIM_KNOWN_NODES.has(res.agentKey) ? res.agentKey : "front-office";
+  const tools = (res.toolsUsed ?? []).map((tt) => tt.toLowerCase());
+  const toolNodes: string[] = [];
+  if (tools.some((tt) => /avail|room|kamar|price|tarif|rate|stok/.test(tt))) toolNodes.push("availability");
+  if (tools.some((tt) => /rag|sop|knowledge|retriev|doc/.test(tt))) toolNodes.push("rag");
+  const path: string[][] = [["incoming"], ["parser", "queue"], ["intent"], ["router"], [agent]];
+  if (toolNodes.length) path.push(toolNodes);
+  path.push(res.escalated || agent === "manager" ? ["manager", "handover"] : ["send"]);
+  return path;
+}
+const stepLabel = (ids: string[]) => ids.map((id) => FLOW_NODES.find((n) => n.id === id)?.title ?? id).join(" + ");
 
 function AiLab() {
   const qc = useQueryClient();
@@ -457,6 +474,39 @@ function AiReactFlowCanvas({
     return map;
   }, [config, health, quality, snapshot]);
 
+  const simulateFn = useServerFn(simulateChatTurn);
+  const [simOpen, setSimOpen] = useState(false);
+  const [simPhone, setSimPhone] = useState("6282226749990");
+  const [simMessage, setSimMessage] = useState("Hallo Kak, mau tanya harga kamar buat tanggal 20 Agustus");
+  const [simStep, setSimStep] = useState<number | null>(null);
+  const [simPath, setSimPath] = useState<string[][] | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [simResult, setSimResult] = useState<any>(null);
+
+  const runRealSim = async () => {
+    if (simLoading || simStep !== null) return;
+    if (!simPhone.trim() || !simMessage.trim()) return;
+    setSimError(null);
+    setSimResult(null);
+    setSimLoading(true);
+    try {
+      const res = await simulateFn({ data: { phone: simPhone.trim(), message: simMessage.trim() } });
+      if (!res.ok) {
+        setSimError(res.error ?? "Simulasi gagal.");
+        return;
+      }
+      setSimResult(res);
+      setSimPath(buildSimPath(res));
+      setSimStep(0);
+    } catch (e) {
+      setSimError((e as Error).message ?? "Simulasi gagal.");
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
   const baseNodes = useMemo<Node<AiFlowNodeData>[]>(
     () => FLOW_NODES.map((meta) => ({
       id: meta.id,
@@ -467,31 +517,34 @@ function AiReactFlowCanvas({
     [runtimeById],
   );
   const baseEdges = useMemo<Edge[]>(
-    () =>
-      FLOW_EDGES.map((edge) => {
+    () => {
+      const simSet = simStep !== null && simPath ? new Set(simPath[simStep]) : null;
+      return FLOW_EDGES.map((edge) => {
         const isActive = selected === edge.from || selected === edge.to;
         const isEscalation = edge.tone === "rose" || edge.label === "fallback";
         const dashed = isEscalation || edge.to === "manager";
-        // Default: semua garis abu-abu. Hanya edge dari node yang dipilih jadi hijau.
-        const color = isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
+        const inSim = simSet ? simSet.has(edge.to) : false;
+        // Default abu-abu; hijau saat node dipilih atau saat simulasi melewatinya.
+        const color = inSim || isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
         return {
           id: `${edge.from}-${edge.to}`,
           source: edge.from,
           target: edge.to,
           label: edge.label,
           type: "default",
-          animated: dashed,
+          animated: dashed || inSim,
           markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
           style: {
-            strokeWidth: isActive ? 3 : 2,
+            strokeWidth: inSim ? 3.2 : isActive ? 3 : 2,
             stroke: color,
             strokeDasharray: dashed ? "6 6" : undefined,
           },
           labelStyle: { fill: "#cbd5e1", fontSize: 11, fontWeight: 600 },
           labelBgStyle: { fill: "#0b1220", fillOpacity: 0.9 },
         };
-      }),
-    [selected],
+      });
+    },
+    [selected, simStep, simPath],
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(baseNodes);
@@ -534,13 +587,36 @@ function AiReactFlowCanvas({
     setNodes((current) => current.map((node) => {
       const meta = FLOW_NODES.find((item) => item.id === node.id);
       if (!meta) return node;
-      return { ...node, data: { meta, runtime: runtimeById.get(meta.id) ?? { label: "ready", detail: meta.desc, tone: meta.tone } } };
+      return { ...node, data: { ...node.data, meta, runtime: runtimeById.get(meta.id) ?? { label: "ready", detail: meta.desc, tone: meta.tone } } };
     }));
   }, [runtimeById, setNodes]);
 
   useEffect(() => {
     setEdges(baseEdges);
   }, [baseEdges, setEdges]);
+
+  // Message-flow simulation: step through the pipeline, highlighting each stage.
+  useEffect(() => {
+    if (simStep === null) return;
+    if (!simPath || simStep >= simPath.length - 1) {
+      const t = setTimeout(() => setSimStep(null), 1100);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setSimStep((s) => (s === null ? null : s + 1)), 850);
+    return () => clearTimeout(t);
+  }, [simStep, simPath]);
+
+  useEffect(() => {
+    const active = new Set(simStep !== null && simPath ? simPath[simStep] : []);
+    setNodes((current) =>
+      current.map((node) => {
+        const proc = active.has(node.id);
+        return (node.data as AiFlowNodeData).processing === proc
+          ? node
+          : { ...node, data: { ...node.data, processing: proc } };
+      }),
+    );
+  }, [simStep, simPath, setNodes]);
 
   return (
     <Card className="overflow-hidden rounded-2xl border-slate-800 bg-slate-950/70 p-0 text-slate-100">
@@ -566,6 +642,9 @@ function AiReactFlowCanvas({
           </Button>
           <Button size="sm" variant="ghost" className="text-slate-400 hover:bg-slate-800" onClick={resetNodePositions}>
             <RotateCcw className="mr-2 h-4 w-4" /> Reset
+          </Button>
+          <Button size="sm" variant="ghost" className="text-emerald-300 hover:bg-slate-800" onClick={() => setSimOpen((o) => !o)}>
+            <PlayCircle className="mr-2 h-4 w-4" /> Simulasi
           </Button>
         </div>
       </div>
@@ -603,6 +682,61 @@ function AiReactFlowCanvas({
             <Panel position="top-left" className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-xl">
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
             </Panel>
+            {simOpen && (
+              <Panel position="bottom-left" className="w-80 rounded-2xl border border-slate-700 bg-slate-950/95 p-3 text-slate-100 shadow-2xl">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-emerald-300">Simulasi AI (nyata)</span>
+                  <button onClick={() => setSimOpen(false)} className="text-xs text-slate-400 hover:text-white">Tutup</button>
+                </div>
+                <p className="mb-2 text-[11px] leading-snug text-slate-400">
+                  Kirim no HP + pesan tamu. AI dijalankan sungguhan; kanvas mengikuti jalur nyata (intent, agent, tools).
+                </p>
+                <input
+                  value={simPhone}
+                  onChange={(e) => setSimPhone(e.target.value)}
+                  placeholder="628xxxxxxxxxx"
+                  className="mb-2 h-9 w-full rounded-md border border-slate-700 bg-slate-900 px-2 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-400"
+                />
+                <textarea
+                  value={simMessage}
+                  onChange={(e) => setSimMessage(e.target.value)}
+                  rows={2}
+                  placeholder="Tulis pesan tamu..."
+                  className="mb-2 w-full resize-none rounded-md border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-emerald-400"
+                />
+                <Button
+                  size="sm"
+                  disabled={simLoading || simStep !== null || !simPhone.trim() || !simMessage.trim()}
+                  onClick={runRealSim}
+                  className="w-full bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                >
+                  {simLoading ? "Menjalankan AI..." : simStep !== null ? "Menganimasikan..." : "Kirim & Jalankan AI"}
+                </Button>
+                {simStep !== null && simPath && (
+                  <p className="mt-2 text-[11px] font-medium text-emerald-300">Memproses: {stepLabel(simPath[simStep])}</p>
+                )}
+                {simError && <p className="mt-2 text-[11px] text-rose-400">{simError}</p>}
+                {simResult && (
+                  <div className="mt-2 space-y-1 rounded-lg border border-slate-700 bg-slate-900/60 p-2 text-[11px]">
+                    <p>
+                      <span className="text-slate-400">Intent:</span>{" "}
+                      <span className="text-emerald-300">{simResult.intent ?? "-"}</span>
+                    </p>
+                    <p>
+                      <span className="text-slate-400">Agent:</span>{" "}
+                      <span className="text-emerald-300">{simResult.agentKey ?? "-"}</span>
+                    </p>
+                    {simResult.toolsUsed?.length ? (
+                      <p>
+                        <span className="text-slate-400">Tools:</span> {simResult.toolsUsed.join(", ")}
+                      </p>
+                    ) : null}
+                    <p className="pt-1 text-slate-400">Balasan AI:</p>
+                    <p className="max-h-32 overflow-y-auto whitespace-pre-wrap text-slate-100">{simResult.reply}</p>
+                  </div>
+                )}
+              </Panel>
+            )}
           </ReactFlow>
         </ReactFlowProvider>
       </div>
@@ -619,6 +753,7 @@ function AiFlowNode({ data, selected }: NodeProps<Node<AiFlowNodeData>>) {
     <div className={cn(
       "min-w-[196px] rounded-2xl border bg-slate-950/95 p-3 text-left shadow-2xl backdrop-blur transition",
       selected ? "border-emerald-400 shadow-[0_0_34px_rgba(16,185,129,.28)]" : "border-slate-600 hover:border-emerald-400/70",
+      nodeData.processing && "border-emerald-400 shadow-[0_0_30px_rgba(16,185,129,.5)] animate-pulse",
     )}>
       <Handle type="target" position={Position.Left} className="!h-2.5 !w-2.5 !border-slate-950 !bg-slate-500" />
       <Handle type="source" position={Position.Right} className="!h-2.5 !w-2.5 !border-slate-950 !bg-emerald-400" />
