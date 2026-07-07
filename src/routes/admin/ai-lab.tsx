@@ -3,10 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import ReactFlow, {
+import { ReactFlow,
   Background,
   BackgroundVariant,
-  Controls,
   Handle,
   MarkerType,
   MiniMap,
@@ -268,7 +267,7 @@ function AiLab() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#070b14] text-slate-100">
+    <div className="bg-slate-950 text-slate-100" style={{ height: "100dvh", overflowY: "auto", overscrollBehaviorY: "contain" }}>
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-[#090f1c]/95 backdrop-blur">
         <div className="flex min-h-[72px] flex-wrap items-center gap-3 px-4 py-3 md:px-6">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/30">
@@ -293,7 +292,7 @@ function AiLab() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)_340px]">
+      <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5" style={{ gridTemplateColumns: "232px minmax(0, 1fr)", alignItems: "start" }}>
         <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
           <Navigation openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
           <SafetyCard snapshot={snapshot} onPause={() => updateAutoReply("pause")} onSafe={() => updateAutoReply("safe")} onFull={() => updateAutoReply("full")} />
@@ -314,11 +313,6 @@ function AiLab() {
           <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
           <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
         </section>
-
-        <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start">
-          <InspectorPanel selectedNode={selectedNode} config={config} snapshot={snapshot} health={health} quality={quality ?? []} openDrawer={setDrawer} />
-          <AuditMiniPanel openDrawer={setDrawer} />
-        </aside>
       </main>
 
       <FeatureDrawer drawer={drawer} setDrawer={setDrawer} config={config} commitConfig={commitConfig} />
@@ -388,15 +382,15 @@ function KpiStrip({ snapshot, metrics, health, latestQueue, openDrawer }: { snap
     { label: "Open Handoff", value: fmtNum(health?.openHandoffTickets ?? 0), delta: "butuh staf", icon: LifeBuoy, tone: "amber" as Tone, drawer: "inbox" as DrawerKey },
   ];
   return (
-    <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <section className="grid" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "8px" }}>
       {cards.map((card) => (
-        <button key={card.label} onClick={() => card.drawer && openDrawer(card.drawer)} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-left text-slate-100 transition hover:border-emerald-400/50">
-          <span className={cn("flex h-9 w-9 items-center justify-center rounded-lg", toneClass(card.tone, "bg"))}>
-            <card.icon className={cn("h-4 w-4", toneClass(card.tone, "text"))} />
+        <button key={card.label} onClick={() => card.drawer && openDrawer(card.drawer)} className="rounded-xl border border-slate-800 bg-slate-950/70 text-left text-slate-100 transition hover:border-emerald-400/50" style={{ minHeight: "74px", padding: "8px 10px" }}>
+          <span className={cn("flex items-center justify-center rounded-lg", toneClass(card.tone, "bg"))} style={{ width: "26px", height: "26px" }}>
+            <card.icon className={cn("h-3.5 w-3.5", toneClass(card.tone, "text"))} />
           </span>
-          <p className="mt-3 truncate text-[11px] text-slate-400">{card.label}</p>
-          <p className="mt-0.5 truncate text-2xl font-semibold tracking-tight text-white">{card.value}</p>
-          <p className={cn("mt-0.5 truncate text-[10px]", toneClass(card.tone, "text"))}>{card.delta}</p>
+          <p className="mt-1.5 truncate text-[10px] leading-3 text-slate-400">{card.label}</p>
+          <p className="mt-0.5 truncate text-lg font-semibold leading-5 tracking-tight text-white">{card.value}</p>
+          <p className={cn("mt-0.5 truncate text-[9px] leading-3", toneClass(card.tone, "text"))}>{card.delta}</p>
         </button>
       ))}
     </section>
@@ -535,7 +529,6 @@ function AiReactFlowCanvas({
             className="ai-lab-react-flow"
           >
             <Background color="rgba(148,163,184,.2)" gap={24} size={1} variant={BackgroundVariant.Dots} />
-            <Controls className="!border-slate-700 !bg-slate-950/90 !text-slate-200" />
             <MiniMap pannable zoomable nodeStrokeWidth={3} className="!bg-slate-950/90 !border !border-slate-800" nodeColor={(node) => toneMiniMapColor((node.data as AiFlowNodeData)?.runtime?.tone ?? "slate")} />
             <Panel position="top-left" className="rounded-xl border border-slate-800 bg-slate-950/90 px-3 py-2 text-xs text-slate-300 shadow-xl">
               {FLOW_NODES.length} nodes • {FLOW_EDGES.length} routes
