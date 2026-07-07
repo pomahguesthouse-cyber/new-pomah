@@ -1677,10 +1677,16 @@ export type Database = {
           hero_image_url: string | null
           id: string
           images: string[]
+          is_active: boolean | null
+          is_published: boolean | null
+          max_occupancy: number | null
           name: string
           property_id: string
+          short_description: string | null
           size_sqm: number | null
           slug: string
+          total_units: number | null
+          updated_at: string | null
         }
         Insert: {
           amenities?: string[] | null
@@ -1696,10 +1702,16 @@ export type Database = {
           hero_image_url?: string | null
           id?: string
           images?: string[]
+          is_active?: boolean | null
+          is_published?: boolean | null
+          max_occupancy?: number | null
           name: string
           property_id: string
+          short_description?: string | null
           size_sqm?: number | null
           slug: string
+          total_units?: number | null
+          updated_at?: string | null
         }
         Update: {
           amenities?: string[] | null
@@ -1715,10 +1727,16 @@ export type Database = {
           hero_image_url?: string | null
           id?: string
           images?: string[]
+          is_active?: boolean | null
+          is_published?: boolean | null
+          max_occupancy?: number | null
           name?: string
           property_id?: string
+          short_description?: string | null
           size_sqm?: number | null
           slug?: string
+          total_units?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
