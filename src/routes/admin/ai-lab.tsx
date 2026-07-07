@@ -470,16 +470,10 @@ function AiReactFlowCanvas({
     () =>
       FLOW_EDGES.map((edge) => {
         const isActive = selected === edge.from || selected === edge.to;
-        const isRouterOut = edge.from === "router";
         const isEscalation = edge.tone === "rose" || edge.label === "fallback";
         const dashed = isEscalation || edge.to === "manager";
-        const color = isActive
-          ? "rgb(52,211,153)"
-          : isRouterOut
-            ? "rgba(16,185,129,.9)"
-            : isEscalation
-              ? "rgba(244,114,182,.85)"
-              : "rgba(148,163,184,.5)";
+        // Default: semua garis abu-abu. Hanya edge dari node yang dipilih jadi hijau.
+        const color = isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
         return {
           id: `${edge.from}-${edge.to}`,
           source: edge.from,
