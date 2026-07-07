@@ -571,12 +571,16 @@ function AiReactFlowCanvas({
   );
   const baseEdges = useMemo<Edge[]>(
     () => {
-      const simSet = simStep !== null && simPath ? new Set(simPath[simStep]) : null;
       return FLOW_EDGES.map((edge) => {
         const isActive = selected === edge.from || selected === edge.to;
         const isEscalation = edge.tone === "rose" || edge.label === "fallback";
         const dashed = isEscalation || edge.to === "manager";
-        const inSim = simSet ? simSet.has(edge.to) : false;
+        // Route-precise: an edge lights only when it connects the previous sim
+        // step to the current one, so only the actual agent/tool path glows.
+        const inSim =
+          simStep !== null && simPath && simStep > 0
+            ? simPath[simStep - 1].includes(edge.from) && simPath[simStep].includes(edge.to)
+            : false;
         // Default abu-abu; hijau saat node dipilih atau saat simulasi melewatinya.
         const color = inSim || isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
         return {
