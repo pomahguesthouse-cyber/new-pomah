@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ import {
   Inbox,
   LifeBuoy,
   MessageCircle,
+  LogOut,
   PauseCircle,
   PlayCircle,
   RefreshCw,
@@ -278,6 +279,11 @@ function AiLab() {
             <p className="truncate text-xs text-slate-400">Pomah Guesthouse • operational AI Lab</p>
           </div>
           <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline" className="border-slate-700 bg-slate-900/50 text-slate-200 hover:bg-slate-800">
+              <Link to="/admin">
+                <LogOut className="mr-2 h-4 w-4" /> Keluar
+              </Link>
+            </Button>
             <StatusBadge snapshot={snapshot} />
             <Button size="sm" variant="outline" className="border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20" onClick={() => updateAutoReply("pause")}>
               <PauseCircle className="mr-2 h-4 w-4" /> Pause
@@ -292,6 +298,18 @@ function AiLab() {
         </div>
       </header>
 
+      <section className="mx-auto w-full max-w-[1500px] px-3 pt-3 md:px-5 md:pt-5">
+        <AiReactFlowCanvas
+          selected={selectedNode.id}
+          config={config}
+          snapshot={snapshot}
+          health={health}
+          quality={quality ?? []}
+          onSelect={setSelectedNode}
+          openDrawer={setDrawer}
+        />
+      </section>
+
       <main className="mx-auto grid max-w-[1500px] gap-4 p-3 md:p-5 xl:grid-cols-[232px_minmax(0,1fr)] 2xl:grid-cols-[232px_minmax(0,1fr)_340px]">
         <aside className="space-y-3 xl:sticky xl:top-24 xl:self-start">
           <Navigation openDrawer={setDrawer} unread={snapshot?.unreadThreads ?? 0} />
@@ -301,15 +319,6 @@ function AiLab() {
         <section className="min-w-0 space-y-4">
           <KpiStrip snapshot={snapshot} metrics={metrics} health={health} latestQueue={latestQueue} openDrawer={setDrawer} />
           <OperationalAlerts snapshot={snapshot} health={health} retryTotal={retryTotal} openDrawer={setDrawer} />
-          <AiReactFlowCanvas
-            selected={selectedNode.id}
-            config={config}
-            snapshot={snapshot}
-            health={health}
-            quality={quality ?? []}
-            onSelect={setSelectedNode}
-            openDrawer={setDrawer}
-          />
           <QualityScorePanel rows={quality ?? []} routing={routing} retryTotal={retryTotal} />
           <SettingsPanel config={config} commitConfig={commitConfig} openDrawer={setDrawer} />
         </section>
