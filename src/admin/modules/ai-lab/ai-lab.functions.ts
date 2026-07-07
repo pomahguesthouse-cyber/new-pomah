@@ -98,6 +98,8 @@ export interface AiLabConfig {
   agents: Record<string, AgentConfig>;
   tools: Record<string, ToolConfig>;
   trainingRag: TrainingRagConfig;
+  /** Saved React Flow canvas node positions, keyed by node id. */
+  nodeLayout: Record<string, { x: number; y: number }>;
 }
 
 export const FRONT_OFFICE_DEFAULT_INSTRUCTIONS = `Kamu adalah Front Office Agent Pomah Guesthouse.
@@ -285,7 +287,15 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
         ? minSimilarity
         : TRAINING_RAG_DEFAULTS.minSimilarity,
   };
-  return { agents, tools, trainingRag };
+  const nodeLayout: Record<string, { x: number; y: number }> = {};
+  const rawLayout = (c.nodeLayout ?? {}) as Record<string, unknown>;
+  for (const [nid, pos] of Object.entries(rawLayout)) {
+    const p = pos as { x?: unknown; y?: unknown } | null;
+    const x = Number(p?.x);
+    const y = Number(p?.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) nodeLayout[nid] = { x, y };
+  }
+  return { agents, tools, trainingRag, nodeLayout };
 }
 
 /** Read the AI LAB configuration from the first property row. */

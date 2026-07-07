@@ -212,18 +212,6 @@ const FLOW_EDGES: FlowEdgeMeta[] = [
   { from: "send", to: "handover", label: "fallback", tone: "amber" },
 ];
 
-const NODE_POS_KEY = "ai-lab:node-positions:v1";
-
-function loadNodePositions(): Record<string, { x: number; y: number }> {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(NODE_POS_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, { x: number; y: number }>) : {};
-  } catch {
-    return {};
-  }
-}
-
 const nodeTypes = { aiNode: AiFlowNode };
 
 function AiLab() {
@@ -315,6 +303,7 @@ function AiLab() {
         <AiReactFlowCanvas
           selected={selectedNode.id}
           config={config}
+          commitConfig={commitConfig}
           snapshot={snapshot}
           health={health}
           quality={quality ?? []}
@@ -451,6 +440,7 @@ function AiReactFlowCanvas({
   quality,
   onSelect,
   openDrawer,
+  commitConfig,
 }: {
   selected: string;
   config: AiLabConfig;
@@ -459,6 +449,7 @@ function AiReactFlowCanvas({
   quality: AgentQualityScore[];
   onSelect: (node: FlowNodeMeta) => void;
   openDrawer: (drawer: DrawerKey) => void;
+  commitConfig: (next: AiLabConfig, message?: string) => void;
 }) {
   const runtimeById = useMemo(() => {
     const map = new Map<string, FlowRuntime>();
@@ -514,41 +505,33 @@ function AiReactFlowCanvas({
   const selectedNode = FLOW_NODES.find((node) => node.id === selected) ?? FLOW_NODES[0];
   const selectedRuntime = runtimeById.get(selectedNode.id) ?? { label: "ready", detail: selectedNode.desc, tone: selectedNode.tone };
 
-  // Apply saved node positions once on mount (client only).
+  // Apply node positions saved in the database whenever they change.
+  const layoutKey = JSON.stringify(config.nodeLayout ?? {});
   useEffect(() => {
-    const saved = loadNodePositions();
-    if (Object.keys(saved).length === 0) return;
+    const layout = config.nodeLayout ?? {};
+    if (Object.keys(layout).length === 0) return;
     setNodes((current) =>
-      current.map((node) => (saved[node.id] ? { ...node, position: saved[node.id] } : node)),
+      current.map((node) => (layout[node.id] ? { ...node, position: layout[node.id] } : node)),
     );
-  }, [setNodes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutKey, setNodes]);
 
   const saveNodePositions = () => {
-    const map: Record<string, { x: number; y: number }> = {};
+    const nodeLayout: Record<string, { x: number; y: number }> = {};
     nodes.forEach((node) => {
-      map[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
+      nodeLayout[node.id] = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
     });
-    try {
-      window.localStorage.setItem(NODE_POS_KEY, JSON.stringify(map));
-      toast.success("Posisi node disimpan");
-    } catch {
-      toast.error("Gagal menyimpan posisi");
-    }
+    commitConfig({ ...config, nodeLayout }, "Posisi node disimpan");
   };
 
   const resetNodePositions = () => {
-    try {
-      window.localStorage.removeItem(NODE_POS_KEY);
-    } catch {
-      /* ignore */
-    }
     setNodes((current) =>
       current.map((node) => {
         const meta = FLOW_NODES.find((item) => item.id === node.id);
         return meta ? { ...node, position: { x: meta.x, y: meta.y } } : node;
       }),
     );
-    toast.success("Posisi dikembalikan ke default");
+    commitConfig({ ...config, nodeLayout: {} }, "Posisi dikembalikan ke default");
   };
 
   useEffect(() => {
