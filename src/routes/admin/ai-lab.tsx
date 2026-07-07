@@ -594,25 +594,31 @@ function AiReactFlowCanvas({
         const isActive = selected === edge.from || selected === edge.to;
         const isEscalation = edge.tone === "rose" || edge.label === "fallback";
         const dashed = isEscalation || edge.to === "manager";
-        // Route-precise: an edge lights only when it connects the previous sim
-        // step to the current one, so only the actual agent/tool path glows.
-        const inSim =
+        // Moving-chip edge for the step currently "arriving" during animation.
+        const inStep =
           simStep !== null && simPath && simStep > 0
             ? simPath[simStep - 1].includes(edge.from) && simPath[simStep].includes(edge.to)
             : false;
-        // Default abu-abu; hijau saat node dipilih atau saat simulasi melewatinya.
-        const color = inSim || isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
+        // After the animation settles (simStep null but a route exists), keep the
+        // WHOLE last route lit until Reset or the next message.
+        const inRoute =
+          simStep === null && simPath
+            ? simPath.some((step, k) => k > 0 && simPath[k - 1].includes(edge.from) && step.includes(edge.to))
+            : false;
+        const lit = inStep || inRoute;
+        // Default abu-abu; hijau saat node dipilih, dilewati simulasi, atau rute terakhir.
+        const color = lit || isActive ? "rgb(52,211,153)" : "rgba(148,163,184,.55)";
         return {
           id: `${edge.from}-${edge.to}`,
           source: edge.from,
           target: edge.to,
           label: edge.label,
           type: "sim",
-          data: { sim: inSim },
-          animated: dashed || inSim,
+          data: { sim: inStep },
+          animated: dashed || inStep,
           markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color },
           style: {
-            strokeWidth: inSim ? 3.2 : isActive ? 3 : 2,
+            strokeWidth: lit ? 3.2 : isActive ? 3 : 2,
             stroke: color,
             strokeDasharray: dashed ? "6 6" : undefined,
           },
