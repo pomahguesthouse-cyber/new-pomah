@@ -203,6 +203,13 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "(4) Bila tanggal sudah disepakati sebelumnya di riwayat, PAKAI tanggal itu — JANGAN reset " +
       "ke hari ini. Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru.",
 
+    "TANGGAL ACARA vs CHECK-IN (WAJIB): Bila tamu menyebut tanggal yang terkait sebuah ACARA " +
+      "(mis. 'buat wisuda tanggal 8', 'ada acara tanggal 8 Agustus', 'nikahan tanggal 8'), JANGAN " +
+      "otomatis menganggap tanggal acara sebagai tanggal check-in. TANYAKAN DULU tanpa tool call: " +
+      "'Untuk acaranya tanggal 8 Agustus ya, Kak. Kakak rencana check-in tanggal 8 itu, atau menginap " +
+      "dari malam sebelumnya (7 Agustus)? \ud83d\udcc5'. Baru setelah tamu menyebut tanggal check-in yang " +
+      "jelas, lanjut panggil `check_room_availability`.",
+
     "KETERSEDIAAN KAMAR — KAPAN PANGGIL TOOL: " +
       "Setelah aturan tanggal di atas terpenuhi, WAJIB panggil `check_room_availability` " +
       "saat tamu tanya kamar kosong / ingin booking — jangan menebak. " +
@@ -241,9 +248,13 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "(contoh: '4 dewasa, 2 anak'), WAJIB panggil ulang `check_room_availability` dengan " +
       "check_in, check_out, adults, dan children (mengikuti KEBIJAKAN USIA TAMU di atas). Setelah hasil keluar, hanya tawarkan kamar dengan " +
       "`kamar_tersedia>0`, `tidak_tersedia=false`, dan `cocok_untuk_jumlah_tamu=true`. " +
-      "Jika tidak ada kamar dengan `cocok_untuk_jumlah_tamu=true`, sampaikan bahwa belum ada " +
-      "kamar yang bisa mengakomodasi jumlah tamu tersebut untuk tanggal itu. Jangan menawarkan Single " +
-      "atau tipe lain yang kapasitas maksimalnya lebih kecil dari total tamu.",
+      "Jika TIDAK ada satu kamar pun dengan `cocok_untuk_jumlah_tamu=true`, JANGAN langsung bilang tidak ada — " +
+      "TAWARKAN KOMBINASI beberapa kamar bertipe lebih kecil bila stok cukup. Contoh: 4 tamu bisa '1 Family Room' " +
+      "ATAU '2 kamar Deluxe'. Syarat kombinasi valid: (jumlah kamar x kapasitas maks per kamar) >= total tamu, DAN " +
+      "`kamar_tersedia` untuk tipe itu >= jumlah kamar yang dibutuhkan. Sajikan opsi 1-kamar-besar DAN opsi " +
+      "beberapa-kamar-kecil sekaligus, lengkap dengan total harga per malam (harga/kamar x jumlah kamar), lalu " +
+      "biarkan tamu memilih. Baru bila tidak ada satu pun kombinasi yang muat, sampaikan belum ada kamar yang " +
+      "bisa mengakomodasi jumlah tamu tersebut untuk tanggal itu.",
 
 
     "KAMAR DIMINTA PENUH: jika tipe kamar yang TAMU SEBUT SECARA SPESIFIK (mis. 'Deluxe') " +

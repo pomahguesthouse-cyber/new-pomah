@@ -1127,20 +1127,22 @@ export async function processBookingState(
     return { handled: false };
   }
 
-  // Cancellation is destructive, so ask for explicit confirmation first.
+  // Guest aborts mid-inquiry ("nggak jadi", "batal", "tidak jadi"). At these
+  // states there is no confirmed reservation yet, so we simply stop the flow and
+  // close politely — no two-step "Ya, batalkan / Jangan" confirmation.
   if (
     CANCELLATION_PATTERNS.test(message) &&
     state !== "IDLE" &&
     state !== "PAYMENT_PENDING" &&
     state !== "COMPLETED"
   ) {
-    context.cancelPreviousState = state;
-    await updateBookingState(supabase, phone, "AWAITING_CANCEL_CONFIRMATION", context);
+    await cleanupPendingBookingAndInvoice(supabase, phone);
+    await updateBookingState(supabase, phone, "IDLE", {});
     return {
       handled: true,
       reply:
-        "Saya tangkap Kakak ingin membatalkan reservasi ini. " +
-        'Untuk memastikan, balas "Ya, batalkan". Kalau tidak jadi batal, balas "Jangan".',
+        "Baik Kak, tidak masalah \ud83d\ude4f prosesnya saya hentikan dulu ya. Kalau nanti berubah pikiran " +
+        "atau mau tanya-tanya soal kamar dan tanggal lain, kabari saya kapan saja. Terima kasih, Kak! \ud83d\ude0a",
     };
   }
 
