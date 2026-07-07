@@ -797,12 +797,12 @@ function FeatureDrawer({ drawer, setDrawer, config, commitConfig }: { drawer: Dr
   const m = drawer ? meta[drawer] : null;
   return (
     <Sheet open={!!drawer} onOpenChange={(open) => !open && setDrawer(null)}>
-      <SheetContent side="right" className="w-full overflow-hidden border-slate-800 bg-[#070b14] p-0 text-slate-100 sm:max-w-[1040px]">
+      <SheetContent side="right" className="admin-theme w-full overflow-hidden border-border bg-background p-0 text-foreground sm:max-w-[1040px]">
         {m && drawer && (
           <div className="flex h-full min-h-0 flex-col">
-            <SheetHeader className="border-b border-slate-800 px-5 py-4 text-left">
-              <SheetTitle className="text-white">{m.title}</SheetTitle>
-              <SheetDescription className="text-slate-400">{m.desc}</SheetDescription>
+            <SheetHeader className="border-b border-border bg-card px-5 py-4 text-left">
+              <SheetTitle className="text-foreground">{m.title}</SheetTitle>
+              <SheetDescription className="text-muted-foreground">{m.desc}</SheetDescription>
             </SheetHeader>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <DrawerContent drawer={drawer} config={config} commitConfig={commitConfig} />
@@ -930,7 +930,7 @@ function AuditMiniPanel({ openDrawer }: { openDrawer: (drawer: DrawerKey) => voi
 }
 
 function DarkDrawerBody({ children }: { children: ReactNode }) {
-  return <div className="space-y-4 bg-[#070b14] p-4 text-slate-100 [&_.bg-background]:bg-slate-950 [&_.text-foreground]:text-slate-100">{children}</div>;
+  return <div className="space-y-4 bg-background p-4 text-foreground">{children}</div>;
 }
 
 function MetricRow({ label, value, tone }: { label: string; value: string; tone?: "green" }) {
