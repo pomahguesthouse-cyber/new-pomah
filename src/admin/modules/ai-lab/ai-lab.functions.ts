@@ -100,6 +100,8 @@ export interface AiLabConfig {
   trainingRag: TrainingRagConfig;
   /** Saved React Flow canvas node positions, keyed by node id. */
   nodeLayout: Record<string, { x: number; y: number }>;
+  /** Human-takeover auto-pause: minutes to silence AI after a human reply (0 = off). */
+  humanTakeover: { autoPauseMinutes: number };
 }
 
 export const FRONT_OFFICE_DEFAULT_INSTRUCTIONS = `Kamu adalah Front Office Agent Pomah Guesthouse.
@@ -295,7 +297,23 @@ export function mergeAiLabConfig(raw: unknown): AiLabConfig {
     const y = Number(p?.y);
     if (Number.isFinite(x) && Number.isFinite(y)) nodeLayout[nid] = { x, y };
   }
-  return { agents, tools, trainingRag, nodeLayout };
+  const htMinutesRaw = Number((c.humanTakeover as { autoPauseMinutes?: unknown } | undefined)?.autoPauseMinutes);
+  const humanTakeover = {
+    autoPauseMinutes: Number.isFinite(htMinutesRaw) && htMinutesRaw >= 0 ? Math.round(htMinutesRaw) : 1,
+  };
+  return { agents, tools, trainingRag, nodeLayout, humanTakeover };
+}
+
+/** Auto-pause window (ms) after a human reply. 0 = disabled. Default 1 minute. */
+export async function resolveHumanTakeoverMs(client: SupabaseClient): Promise<number> {
+  try {
+    const { data } = await client.from("properties").select("ai_lab_config").limit(1).maybeSingle();
+    const minutes = mergeAiLabConfig((data as { ai_lab_config?: unknown } | null)?.ai_lab_config)
+      .humanTakeover.autoPauseMinutes;
+    return Math.max(0, minutes) * 60000;
+  } catch {
+    return 60000;
+  }
 }
 
 /** Read the AI LAB configuration from the first property row. */

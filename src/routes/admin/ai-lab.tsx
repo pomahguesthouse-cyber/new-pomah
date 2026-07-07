@@ -762,6 +762,41 @@ function InspectorPanel({ selectedNode, config, snapshot, health, quality, openD
   );
 }
 
+function HumanTakeoverSettings({ config, commitConfig }: { config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void> | void }) {
+  const [minutes, setMinutes] = useState(config.humanTakeover.autoPauseMinutes);
+  useEffect(() => {
+    setMinutes(config.humanTakeover.autoPauseMinutes);
+  }, [config.humanTakeover.autoPauseMinutes]);
+  const dirty = minutes !== config.humanTakeover.autoPauseMinutes;
+  return (
+    <Card className="rounded-2xl border-border bg-card p-4 text-foreground">
+      <h2 className="text-sm font-semibold">Auto-pause AI setelah balasan human</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Saat staf membalas (dari HP atau lewat aplikasi), AI berhenti otomatis selama waktu ini lalu
+        lanjut sendiri. Timer di-reset setiap ada balasan human. Isi 0 untuk menonaktifkan.
+      </p>
+      <div className="mt-3 flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          value={minutes}
+          onChange={(e) => setMinutes(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+          className="h-9 w-24"
+        />
+        <span className="text-xs text-muted-foreground">menit</span>
+        <Button
+          size="sm"
+          className="ml-auto"
+          disabled={!dirty}
+          onClick={() => void commitConfig({ ...config, humanTakeover: { autoPauseMinutes: minutes } }, "Setelan auto-pause tersimpan")}
+        >
+          Simpan
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function SettingsPanel({ config, commitConfig, openDrawer }: { config: AiLabConfig; commitConfig: (next: AiLabConfig, msg?: string) => Promise<void>; openDrawer: (drawer: DrawerKey) => void }) {
   const updateAgent = (key: string, patch: Partial<{ enabled: boolean; autoReply: boolean }>) => {
     const next = JSON.parse(JSON.stringify(config)) as AiLabConfig;
@@ -877,7 +912,7 @@ function DrawerContent({ drawer, config, commitConfig }: { drawer: Exclude<Drawe
   if (drawer === "telegram") return <DarkDrawerBody><TelegramPage /></DarkDrawerBody>;
   if (drawer === "health") return <DarkDrawerBody><HealthPage /></DarkDrawerBody>;
   if (drawer === "routing") return <DarkDrawerBody><RoutingDebugPage /></DarkDrawerBody>;
-  if (drawer === "settings") return <DarkDrawerBody><SettingsPanel config={config} commitConfig={commitConfig} openDrawer={() => undefined} /><SmartDelaySettings /><IntentRulesView /></DarkDrawerBody>;
+  if (drawer === "settings") return <DarkDrawerBody><SettingsPanel config={config} commitConfig={commitConfig} openDrawer={() => undefined} /><HumanTakeoverSettings config={config} commitConfig={commitConfig} /><SmartDelaySettings /><IntentRulesView /></DarkDrawerBody>;
   if (drawer === "inbox") return <DarkDrawerBody><WhatsAppPage /></DarkDrawerBody>;
   if (drawer === "queue") return <DarkDrawerBody><QueueMonitoringView /></DarkDrawerBody>;
   if (drawer === "retry") return <DarkDrawerBody><RetryObservabilityView /></DarkDrawerBody>;

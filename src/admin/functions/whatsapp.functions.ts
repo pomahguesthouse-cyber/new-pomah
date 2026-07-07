@@ -13,6 +13,7 @@ import {
   resolvePropertyAiConfig,
 } from "@/services/ai-client.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
 
 export const listThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -131,13 +132,15 @@ export const sendMessage = createServerFn({ method: "POST" })
       },
     } as any);
     if (error) throw error;
+    const pauseMs = await resolveHumanTakeoverMs(context.supabase);
     await context.supabase
       .from("whatsapp_threads")
       .update({
         last_message_preview: data.body.slice(0, 120),
         last_message_at: new Date().toISOString(),
         unread_count: 0,
-      })
+        ai_paused_until: pauseMs > 0 ? new Date(Date.now() + pauseMs).toISOString() : null,
+      } as any)
       .eq("id", data.threadId);
     return { ok: true };
   });

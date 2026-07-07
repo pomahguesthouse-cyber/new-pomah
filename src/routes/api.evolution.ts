@@ -12,6 +12,7 @@ import { parseEvolutionWebhook } from "@/webhook/parser";
 import { buildDedupKey, isDuplicate, isDuplicateBody } from "@/webhook/deduplicator";
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
+import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -118,9 +119,107 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     msg: displayMessage.slice(0, 60),
   });
 
-  // Ignore our own outbound echo for now. Outbound persistence will be handled
-  // by the queue/manager send path once the Evolution sender adapter is active.
-  if (isOutgoing) return new Response("OK", { status: 200 });
+  // Outgoing (fromMe): either an echo of a reply WE sent (AI/app) OR a native
+  // human reply typed directly from the operator's WhatsApp phone. Persist the
+  // latter so it appears in the admin inbox; skip the former to avoid duplicates.
+  if (isOutgoing) {
+    try {
+      // 1) Dedup by provider message id — echo of our own API send.
+      if (wppId) {
+        const { data: existingById } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("wpp_id", wppId)
+          .maybeSingle();
+        if (existingById) return new Response("OK", { status: 200 });
+      }
+
+      // 2) Fallback body-dedup (2 min): echo of a message the app just sent.
+      const twoMinsAgo = new Date(Date.now() - 2 * 60000).toISOString();
+      const { data: existingByBody } = await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("direction", "out")
+        .eq("body", displayMessage)
+        .gte("sent_at", twoMinsAgo)
+        .limit(1)
+        .maybeSingle();
+      if (existingByBody) {
+        if (wppId) {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({ wpp_id: wppId })
+            .eq("id", existingByBody.id)
+            .is("wpp_id", null);
+        }
+        return new Response("OK", { status: 200 });
+      }
+
+      // 3) Genuine native human reply from the operator's phone — find/create
+      //    the thread, then store it as an outbound message.
+      const { data: thread } = await (supabaseAdmin as any)
+        .from("whatsapp_threads")
+        .select("id")
+        .eq("phone", customerPhone)
+        .maybeSingle();
+
+      let threadId = thread?.id;
+      if (!threadId) {
+        const { data: newThread } = await (supabaseAdmin as any)
+          .from("whatsapp_threads")
+          .insert({
+            phone: customerPhone,
+            display_name: name || customerPhone,
+            status: "open",
+            unread_count: 0,
+          })
+          .select("id")
+          .single();
+        threadId = newThread?.id;
+      }
+
+      if (threadId) {
+        await (supabaseAdmin as any).rpc("save_outbound_whatsapp", {
+          p_thread_id: threadId,
+          p_body: displayMessage,
+          p_metadata: {
+            is_native_human: true,
+            source: "whatsapp_native",
+            provider: "evolution-api",
+            attachment_url: attachmentUrl ?? null,
+            media_url: attachmentUrl ?? null,
+            file_name: attachmentName ?? null,
+            mime_type: attachmentMime ?? null,
+            media_type: messageType ?? null,
+            attachment: attachmentUrl
+              ? {
+                  url: attachmentUrl,
+                  file_name: attachmentName ?? null,
+                  mime_type: attachmentMime ?? null,
+                  type: messageType ?? null,
+                }
+              : null,
+          },
+          p_wpp_id: wppId ?? null,
+        });
+        console.log(
+          `[EvolutionWebhook] native human reply stored (thread=${String(threadId).slice(0, 8)}) | ${logCtx}`,
+        );
+
+        // Timed human-takeover: pause AI for this thread (sliding window).
+        const pauseMs = await resolveHumanTakeoverMs(supabaseAdmin);
+        if (pauseMs > 0) {
+          await (supabaseAdmin as any)
+            .from("whatsapp_threads")
+            .update({ ai_paused_until: new Date(Date.now() + pauseMs).toISOString() })
+            .eq("id", threadId);
+        }
+      }
+    } catch (err) {
+      console.error(`[EvolutionWebhook] Error handling native outgoing message: ${err} | ${logCtx}`);
+    }
+    return new Response("OK", { status: 200 });
+  }
 
   const dedupKey = buildDedupKey(wppId, customerPhone, displayMessage);
   if (isDuplicate(dedupKey) || isDuplicateBody(customerPhone, displayMessage)) {
