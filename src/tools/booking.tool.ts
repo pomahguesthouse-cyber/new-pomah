@@ -161,11 +161,10 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
 
 // ─── Rollback helpers ──────────────────────────────────────────────────────
 // create_booking writes guest → bookings → booking_rooms in three steps. We
-// don't have transactional access through PostgREST, so on failure (or on a
-// detected room-race) we best-effort delete what we did insert to avoid
-// littering the DB with orphans. Each step swallows errors and just logs —
-// missing rows on cleanup are fine, but a hard throw would mask the original
-// failure we're already reporting.
+// don't have transactional access through PostgREST, so on write failure we
+// best-effort delete what we did insert to avoid littering the DB with orphans.
+// Each step swallows errors and just logs — missing rows on cleanup are fine,
+// but a hard throw would mask the original failure we're already reporting.
 async function rollbackBooking(ctx: ToolContext, refs: { bookingId?: string; guestId?: string }): Promise<void> {
   if (refs.bookingId) {
     try {
@@ -185,45 +184,6 @@ async function rollbackBooking(ctx: ToolContext, refs: { bookingId?: string; gue
       console.warn("[create_booking] rollback guest failed:", e);
     }
   }
-}
-
-/**
- * Re-check that the rooms we just inserted into booking_rooms aren't ALSO
- * referenced by another active booking with an overlapping date range.
- *
- * After migration 20260603000000_booking_rooms_no_overlap.sql is applied,
- * Postgres enforces this directly via an EXCLUDE constraint and the insert
- * itself raises 23P01 — making this function defensive belt-and-suspenders.
- * We keep it so environments that haven't run the migration yet still get
- * race protection (just slightly weaker than the constraint).
- */
-async function detectRoomConflicts(
-  ctx: ToolContext,
-  ourBookingId: string,
-  ourRoomIds: string[],
-  checkIn: string,
-  checkOut: string,
-): Promise<string[]> {
-  if (ourRoomIds.length === 0) return [];
-  // Find active bookings overlapping our date range (excluding ourselves).
-  const { data: activeBookings, error: activeErr } = await (ctx.supabaseAdmin as any)
-    .from("bookings")
-    .select("id")
-    .in("status", ["pending", "confirmed", "checked_in"])
-    .neq("id", ourBookingId)
-    .lt("check_in", checkOut)
-    .gt("check_out", checkIn);
-  if (activeErr) throw activeErr;
-  const activeIds = ((activeBookings ?? []) as Array<{ id: string }>).map((b) => b.id);
-  if (activeIds.length === 0) return [];
-
-  const { data: occ, error: occErr } = await (ctx.supabaseAdmin as any)
-    .from("booking_rooms")
-    .select("room_id")
-    .in("booking_id", activeIds)
-    .in("room_id", ourRoomIds);
-  if (occErr) throw occErr;
-  return ((occ ?? []) as Array<{ room_id: string }>).map((r) => r.room_id);
 }
 
 // ─── Tool handler ─────────────────────────────────────────────────────────────
@@ -642,53 +602,16 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
     // don't leave a roomless booking sitting in the table.
     await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
     // 23P01 = exclusion_violation. The DB-level booking_rooms_no_overlap
-    // constraint caught a race we would have otherwise missed: another
-    // booking grabbed one of these rooms for an overlapping range between
-    // our pickAvailableRooms() and this insert. Surface as a retry hint.
+    // constraint caught a room conflict as the final source of truth.
     if ((brErr as any)?.code === "23P01") {
       return JSON.stringify({
         ok: false,
-        error:
-          "Kamar baru saja diambil booking lain di tanggal yang sama. " +
-          "Coba ulangi — tool akan memilih kamar lain yang masih kosong.",
+        error: "Kamar ini baru saja terisi untuk tanggal tersebut. Silakan pilih kamar lain.",
       });
     }
     return JSON.stringify({
       ok: false,
       error: `Gagal menyimpan detail kamar: ${brErr.message}`,
-    });
-  }
-
-  // ── Race detection — see if a concurrent caller grabbed the same room ────
-  // Window: between pickAvailableRooms() and the insert above, another tool
-  // call could have observed the same rooms as free and inserted them too.
-  // Without a DB-level exclusion constraint, we detect post-write and roll
-  // back if we lost the race.
-  let conflictRoomIds: string[];
-  try {
-    conflictRoomIds = await detectRoomConflicts(
-      ctx,
-      booking.id,
-      assignments.map((a) => a.roomId),
-      checkIn,
-      checkOut,
-    );
-  } catch (e) {
-    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
-    const msg = e instanceof Error ? e.message : String(e);
-    return JSON.stringify({
-      ok: false,
-      error: `Gagal memverifikasi konflik kamar setelah booking dibuat: ${msg}`,
-    });
-  }
-  if (conflictRoomIds.length > 0) {
-    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
-    const conflictNames = assignments.filter((a) => conflictRoomIds.includes(a.roomId)).map((a) => a.roomTypeName);
-    return JSON.stringify({
-      ok: false,
-      error:
-        `Kamar ${conflictNames.join(", ")} baru saja diambil booking lain saat ` +
-        `kita mau finalisasi. Coba ulangi — tool akan memilih kamar yang masih kosong.`,
     });
   }
 
