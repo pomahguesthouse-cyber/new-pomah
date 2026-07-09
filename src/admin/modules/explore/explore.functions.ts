@@ -2,6 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
 export const updateExploreConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
@@ -16,10 +18,25 @@ export const updateExploreConfig = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    let updateId = data.id;
+
+    // Jika frontend membawa id lama/non-UUID sementara kolom DB sudah UUID,
+    // query `.eq("id", "string")` bisa meledak di Postgres. Ambil row properti
+    // pertama yang memang sedang diedit di halaman ini, lalu update row itu.
+    if (!UUID_RE.test(updateId)) {
+      const { data: prop, error: propError } = await context.supabase
+        .from("properties")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      if (propError) throw propError;
+      updateId = String(prop?.id ?? updateId);
+    }
+
     const { error } = await context.supabase
       .from("properties")
       .update({ explore_config: data.explore_config })
-      .eq("id", data.id);
+      .eq("id", updateId);
     
     if (error) throw error;
     return { ok: true };
