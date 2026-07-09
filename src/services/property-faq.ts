@@ -49,6 +49,10 @@ export const COMPLAINT_SIGNAL_RE =
 const DATE_SIGNAL_RE =
   /\b(tgl\.?|tanggal|\d{1,2}\s*[-–/]\s*\d{1,2}|\d{1,2}\s*(?:jan(?:uari)?|feb(?:ruari)?|mar(?:et)?|apr(?:il)?|mei|jun(?:i)?|jul(?:i)?|agu(?:stus)?|ags|sep(?:tember)?|okt(?:ober)?|nov(?:ember)?|des(?:ember)?)|besok|lusa|minggu\s+depan|bulan\s+depan|malam\s+ini|nanti\s+malam|menginap(?:nya)?)\b/i;
 
+/** Pertanyaan kamar mandi harus dijawab deterministik karena ini fakta bisnis tetap. */
+const BATHROOM_TOPIC_RE =
+  /\b(kamar\s*mandi|mandi(?:nya)?|toilet|wc|bathroom|bath\s*room|private\s*bathroom)\b/i;
+
 /** Filler ekor: "kak", "min", "yaa", "dong", dst. — boleh berulang. */
 const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
 
@@ -78,6 +82,21 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   const raw = input.message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!raw || raw.length > 200) return null;
   if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
+
+  // Guard khusus: FAQ_BLOCK_RE memuat kata "kamar", jadi pertanyaan kamar mandi
+  // harus ditangani sebelum early block. Ini mencegah LLM/SOP lama menjawab
+  // keliru seperti kamar mandi terpisah untuk Single.
+  if (BATHROOM_TOPIC_RE.test(raw)) {
+    const mentionedRooms = findMentionedRooms(raw, input.rooms ?? []);
+    const hasSingle = /\bsingle\b/i.test(raw) || mentionedRooms.some((r) => /single/i.test(String(r.name ?? "")));
+    return {
+      reply: hasSingle
+        ? "Betul Kak, kamar Single juga sudah memiliki kamar mandi di dalam kamar. Semua tipe kamar Pomah Guesthouse menggunakan kamar mandi dalam."
+        : "Betul Kak, semua kamar di Pomah Guesthouse sudah memiliki kamar mandi di dalam kamar.",
+      intent: "faq_private_bathroom",
+    };
+  }
+
   if (input.mode === "early" && FAQ_BLOCK_RE.test(raw)) return null;
   // ≥2 pertanyaan dalam satu pesan ("Lokasi dimana? Ke UNNES jauh?") — branch
   // template hanya menjawab satu topik dan menelan sisanya. Serahkan ke AI.
