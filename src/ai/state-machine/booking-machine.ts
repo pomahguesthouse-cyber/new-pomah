@@ -468,16 +468,16 @@ function buildBookingSummary(
   const ratePrefix = overrides?.hasDynamicBreakdown ? "rata-rata " : "";
   const paymentLine =
     context.paymentType === "dp"
-      ? `- Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"}\n`
+      ? `• Pembayaran: DP${context.dpAmount ? ` ${fmtRp(context.dpAmount)}` : " dulu"}\n`
       : context.paymentType === "full"
-        ? `- Pembayaran: Lunas\n`
+        ? `• Pembayaran: Lunas\n`
         : "";
 
   const extraBedLine =
     extraBeds > 0
       ? hasRate
-        ? `- Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
-        : `- Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`
+        ? `• Extra bed: ${extraBeds}x @ ${fmtRp(resolvedExtraBedRate)}/malam = ${fmtRp(extraBedTotal)}\n`
+        : `• Extra bed: ${extraBeds}x (tarif perlu dikonfirmasi admin)\n`
       : "";
 
   const roomLabel = policy.roomTypeName ?? context.roomName ?? "kamar";
@@ -489,22 +489,21 @@ function buildBookingSummary(
 
   const summary =
     `Data pemesanan sudah lengkap! Berikut ringkasannya:\n\n` +
-    `- Nama: ${context.guestName ?? "—"}\n` +
-    `- Email: ${context.guestEmail ?? "(tidak diisi)"}\n` +
-    `- No. HP: ${context.guestPhone ?? "—"}\n` +
-    `- Kamar: ${roomsDisplay}\n` +
-    `- Check-in: ${checkInDisplay}\n` +
-    `- Check-out: ${checkOutDisplay}\n` +
-    `- Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
-    `- Jumlah tamu: ${guestLine}\n` +
-    `- Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
+    `• Nama: ${context.guestName ?? "—"}\n` +
+    `• Email: ${context.guestEmail ?? "(tidak diisi)"}\n` +
+    `• No. HP: ${context.guestPhone ?? "—"}\n` +
+    `• Kamar: ${roomsDisplay}\n` +
+    `• Check-in: ${checkInDisplay}\n` +
+    `• Check-out: ${checkOutDisplay}\n` +
+    `• Durasi: ${nights != null ? `${nights} malam` : "—"}\n` +
+    `• Jumlah tamu: ${guestLine}\n` +
+    `• Harga: ${pricePerNight ? `${ratePrefix}${fmtRp(pricePerNight)}/malam` : "—"}\n` +
     extraBedLine +
     paymentLine +
-    `- Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
+    `• Total: ${grandTotal ? fmtRp(grandTotal) : "—"}` +
     overCapLine +
-    `\n\nApakah data di atas sudah benar dan Kakak ingin melanjutkan ke Booking & Pembayaran? ` +
-    `Ketik "Ya" atau "Lanjut" untuk konfirmasi, atau langsung sebutkan data yang ingin dikoreksi ` +
-    `(misal: "jumlah tamu 5", "tanggal 22 Juni", "ganti Family Suite"). Ketik "Batal" untuk membatalkan.`;
+    `\n\nKalau datanya sudah sesuai, saya lanjutkan proses booking dan kirim info pembayarannya ya Kak.` +
+    `\n\nKalau ada yang ingin dikoreksi, langsung sebutkan saja ya—misalnya tanggal, jumlah tamu, tipe kamar, atau extra bed.`;
   return { handled: true, reply: summary };
 }
 
@@ -1141,8 +1140,8 @@ export async function processBookingState(
     return {
       handled: true,
       reply:
-        "Baik Kak, tidak masalah \ud83d\ude4f prosesnya saya hentikan dulu ya. Kalau nanti berubah pikiran " +
-        "atau mau tanya-tanya soal kamar dan tanggal lain, kabari saya kapan saja. Terima kasih, Kak! \ud83d\ude0a",
+        "Baik Kak, tidak masalah 🙏 prosesnya saya hentikan dulu ya. Kalau nanti berubah pikiran " +
+        "atau mau tanya-tanya soal kamar dan tanggal lain, kabari saya kapan saja. Terima kasih, Kak! 😊",
     };
   }
 
