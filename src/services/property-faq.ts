@@ -53,6 +53,13 @@ const DATE_SIGNAL_RE =
 const BATHROOM_TOPIC_RE =
   /\b(kamar\s*mandi|mandi(?:nya)?|toilet|wc|bathroom|bath\s*room|private\s*bathroom)\b/i;
 
+/**
+ * Pengunjung penjemput bukan tamu menginap. Jangan jadikan jumlah orang di
+ * pesan seperti ini sebagai guest_count / adults / children booking.
+ */
+const VISITOR_PICKUP_TOPIC_RE =
+  /\b(keluarga|teman|saudara|rombongan|orang tua|ortu).{0,80}\b(datang|dtg|jemput|menjemput|menunggu|nunggu|mampir|berkunjung)\b|\b(datang|dtg|jemput|menjemput|menunggu|nunggu|mampir|berkunjung).{0,80}\b(keluarga|teman|saudara|rombongan|orang tua|ortu)\b|\b(sebelum\s+check\s*[- ]?out|sebelum\s+checkout|make\s*up|makeup|menunggu\s+di\s+kamar)\b/i;
+
 /** Filler ekor: "kak", "min", "yaa", "dong", dst. — boleh berulang. */
 const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
 
@@ -80,8 +87,20 @@ const ONE_LINER_MAX_LEN = 80;
 
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
   const raw = input.message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!raw || raw.length > 200) return null;
+  if (!raw || raw.length > 240) return null;
   if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
+
+  // Guard khusus: keluarga/teman yang datang menjemput atau menunggu sebentar
+  // sebelum check-out adalah PENGUNJUNG, bukan penambahan tamu menginap.
+  // Jangan rekomendasikan upgrade kamar hanya karena ada angka jumlah orang.
+  if (VISITOR_PICKUP_TOPIC_RE.test(raw)) {
+    return {
+      reply:
+        "Tidak apa-apa Kak, kalau keluarga hanya datang menjemput atau menunggu sebentar sebelum check-out, itu tidak dihitung sebagai tambahan tamu menginap.\n\n" +
+        "Silakan saja, yang penting tetap menjaga kenyamanan dan tidak menginap di kamar ya Kak 🙏",
+      intent: "visitor_pickup_policy",
+    };
+  }
 
   // Guard khusus: FAQ_BLOCK_RE memuat kata "kamar", jadi pertanyaan kamar mandi
   // harus ditangani sebelum early block. Ini mencegah LLM/SOP lama menjawab
