@@ -130,6 +130,10 @@ type SelectedRoom = {
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 const isUuid = (v?: string | null) => !!v && UUID_RE.test(v.trim());
+const isRoomToken = (v?: string | null) => {
+  const s = typeof v === "string" ? v.trim() : "";
+  return s.length > 0 && !s.startsWith("_");
+};
 
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
@@ -147,12 +151,48 @@ function nightsBetween(ci: string, co: string) {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
-function findPhysicalRoomForBookingRoom(br: BookingRoom, allRooms: RoomRow[]): RoomRow | null {
+function getBookingRoomToken(br: BookingRoom): string | null {
   const candidates = [br.rooms?.id, br.room_id, br.rooms?.number]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
-    .filter(Boolean);
-  if (candidates.length === 0) return null;
-  return allRooms.find((r) => candidates.includes(r.id) || candidates.includes(r.number)) ?? null;
+    .filter(isRoomToken);
+  return candidates[0] ?? null;
+}
+
+function findRoomByToken(token: string, rooms: RoomRow[]): RoomRow | null {
+  return rooms.find((r) => r.id === token || r.number === token) ?? null;
+}
+
+function buildSyntheticRoomsFromBooking(booking: EditableBooking | null, allRooms: RoomRow[]): RoomRow[] {
+  if (!booking?.booking_rooms?.length) return [];
+  const existing = new Set<string>();
+  for (const r of allRooms) {
+    existing.add(r.id);
+    existing.add(r.number);
+  }
+
+  const synthetic: RoomRow[] = [];
+  const seen = new Set<string>();
+  for (const br of booking.booking_rooms) {
+    const token = getBookingRoomToken(br);
+    if (!token || existing.has(token) || seen.has(token)) continue;
+    const typeId = br.room_types?.id;
+    if (!typeId) continue;
+    seen.add(token);
+    synthetic.push({
+      id: token,
+      number: br.rooms?.number?.trim() || token,
+      status: "clean",
+      room_types: {
+        id: typeId,
+        name: br.room_types?.name ?? "Kamar",
+        base_rate: Number(br.nightly_rate ?? 0),
+        capacity: 1,
+        extrabed_capacity: Number(br.extra_bed_count ?? 0) > 0 ? Number(br.extra_bed_count ?? 0) : 0,
+        extrabed_rate: Number(br.extra_bed_rate ?? 0),
+      },
+    });
+  }
+  return synthetic;
 }
 
 type Props = {
@@ -172,6 +212,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     enabled: open,
   });
   const allRooms = React.useMemo(() => (roomsData?.rooms ?? []) as RoomRow[], [roomsData]);
+  const displayRooms = React.useMemo(
+    () => [...allRooms, ...buildSyntheticRoomsFromBooking(booking, allRooms)],
+    [allRooms, booking],
+  );
 
   const [guest, setGuest] = React.useState({ full_name: "", email: "", phone: "", country: "" });
   const [checkIn, setCheckIn] = React.useState("");
@@ -213,15 +257,16 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     const dedup = new Set<string>();
     const nextSelected: SelectedRoom[] = [];
     for (const br of booking.booking_rooms ?? []) {
-      const physicalRoom = findPhysicalRoomForBookingRoom(br, allRooms);
-      if (!physicalRoom || !isUuid(physicalRoom.id) || !physicalRoom.room_types?.id) continue;
-      if (dedup.has(physicalRoom.id)) continue;
-      dedup.add(physicalRoom.id);
+      const token = getBookingRoomToken(br);
+      if (!token || dedup.has(token)) continue;
+      const room = findRoomByToken(token, displayRooms);
+      const type = room?.room_types;
+      dedup.add(token);
       nextSelected.push({
-        room_id: physicalRoom.id,
-        nightly_rate: Number(br.nightly_rate || physicalRoom.room_types.base_rate || 0),
+        room_id: room?.id ?? token,
+        nightly_rate: Number(br.nightly_rate || type?.base_rate || 0),
         extra_bed_count: Number(br.extra_bed_count ?? 0),
-        extra_bed_rate: Number(br.extra_bed_rate ?? physicalRoom.room_types.extrabed_rate ?? 0),
+        extra_bed_rate: Number(br.extra_bed_rate ?? type?.extrabed_rate ?? 0),
       });
     }
     setSelectedRooms(nextSelected);
@@ -229,7 +274,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     const counts: Record<string, number> = {};
     const ebByType: Record<string, number> = {};
     for (const sr of nextSelected) {
-      const room = allRooms.find((r) => r.id === sr.room_id);
+      const room = findRoomByToken(sr.room_id, displayRooms);
       const tid = room?.room_types?.id;
       if (tid) {
         counts[tid] = (counts[tid] ?? 0) + 1;
@@ -239,7 +284,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setAutoCounts(counts);
     setExtraBedByType(ebByType);
     setAllotmentMode("manual");
-  }, [open, booking?.id, allRooms]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, booking?.id, displayRooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = nightsBetween(checkIn, checkOut);
   const isUnavailable = (r: RoomRow) => r.status === "out_of_order" || r.status === "maintenance";
@@ -256,8 +301,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         rooms: RoomRow[];
       }
     >();
-    for (const r of allRooms) {
-      if (!isUuid(r.id) || !r.room_types?.id) continue;
+    for (const r of displayRooms) {
+      if (!isRoomToken(r.id) || !r.room_types?.id) continue;
       const tid = r.room_types.id;
       if (!m.has(tid)) {
         m.set(tid, {
@@ -272,25 +317,25 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
       m.get(tid)!.rooms.push(r);
     }
     return [...m.values()];
-  }, [allRooms]);
+  }, [displayRooms]);
 
   const roomCountByType = React.useMemo(() => {
     const counts: Record<string, number> = {};
     if (allotmentMode === "auto") {
       for (const group of roomsByType) {
         const want = autoCounts[group.typeId] ?? 0;
-        const available = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id)).length;
+        const available = group.rooms.filter((r) => !isUnavailable(r) && isRoomToken(r.id)).length;
         counts[group.typeId] = Math.min(want, available);
       }
     } else {
       for (const sr of selectedRooms) {
-        const room = allRooms.find((r) => r.id === sr.room_id && isUuid(r.id));
+        const room = findRoomByToken(sr.room_id, displayRooms);
         const tid = room?.room_types?.id;
         if (tid) counts[tid] = (counts[tid] ?? 0) + 1;
       }
     }
     return counts;
-  }, [allotmentMode, autoCounts, roomsByType, selectedRooms, allRooms]);
+  }, [allotmentMode, autoCounts, roomsByType, selectedRooms, displayRooms]);
 
   const extraBedErrors = React.useMemo<Record<string, string>>(() => {
     const errs: Record<string, string> = {};
@@ -315,13 +360,13 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
     if (allotmentMode === "manual") {
       for (const sr of selectedRooms) {
-        const room = allRooms.find((r) => r.id === sr.room_id && isUuid(r.id));
-        const tid = room?.room_types?.id;
-        if (!room || !tid) continue;
+        if (!isRoomToken(sr.room_id)) continue;
+        const room = findRoomByToken(sr.room_id, displayRooms);
+        const tid = room?.room_types?.id ?? sr.room_id;
         const group = roomsByType.find((g) => g.typeId === tid);
         base.push({
-          room_id: room.id,
-          nightly_rate: sr.nightly_rate || Number(room.room_types?.base_rate ?? 0),
+          room_id: room?.id ?? sr.room_id,
+          nightly_rate: sr.nightly_rate || Number(room?.room_types?.base_rate ?? 0),
           typeId: tid,
           extraBedRate: group?.extraBedRate ?? sr.extra_bed_rate ?? 0,
         });
@@ -329,7 +374,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     } else {
       for (const group of roomsByType) {
         const want = autoCounts[group.typeId] ?? 0;
-        const available = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id));
+        const available = group.rooms.filter((r) => !isUnavailable(r) && isRoomToken(r.id));
         for (let i = 0; i < Math.min(want, available.length); i++) {
           base.push({
             room_id: available[i].id,
@@ -352,7 +397,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         extra_bed_rate: row.extraBedRate,
       };
     });
-  }, [allotmentMode, selectedRooms, roomsByType, autoCounts, extraBedByType, allRooms]);
+  }, [allotmentMode, selectedRooms, roomsByType, autoCounts, extraBedByType, displayRooms]);
 
   const invalidSelectedCount = Math.max(0, selectedRooms.length - effectiveRooms.length);
   const baseTotal = effectiveRooms.reduce(
@@ -363,14 +408,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     0,
   );
 
-  // Total booking adalah nilai kamar × malam + extra bed. Jangan pernah pakai
-  // paidAmount sebagai total; paidAmount hanyalah nominal yang sudah dibayar.
   const total = baseTotal;
   const outstanding = Math.max(0, total - paidAmount);
 
-  // Saat status Lunas, nominal dibayar harus mengikuti total terkini. Ini
-  // memperbaiki kasus 1 Grand Deluxe × 2 malam yang sebelumnya tetap memakai
-  // paidAmount lama Rp1.800.000.
   React.useEffect(() => {
     if (paymentStatus !== "paid" || effectiveRooms.length === 0 || nights < 1) return;
     const next = Math.round(baseTotal);
@@ -378,7 +418,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   }, [paymentStatus, baseTotal, effectiveRooms.length, nights]);
 
   function toggleRoom(room: RoomRow) {
-    if (!isUuid(room.id) || !room.room_types?.id) {
+    if (!isRoomToken(room.id) || !room.room_types?.id) {
       toast.error("Kamar ini belum valid. Cek data kamar di halaman Rooms.");
       return;
     }
@@ -473,12 +513,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   )}
                 </DialogDescription>
               </div>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest",
-                  paymentChip,
-                )}
-              >
+              <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest", paymentChip)}>
                 <Receipt className="h-3 w-3" />
                 {PAYMENT_STATUSES.find((p) => p.value === paymentStatus)!.label}
               </span>
@@ -561,7 +596,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               {roomsByType.length === 0 && <p className="text-xs text-muted-foreground">Belum ada kamar — tambah kamar dulu di halaman Rooms.</p>}
               <div className="space-y-3">
                 {roomsByType.map((group) => {
-                  const availableCount = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id)).length;
+                  const availableCount = group.rooms.filter((r) => !isUnavailable(r) && isRoomToken(r.id)).length;
                   const count = autoCounts[group.typeId] ?? 0;
                   return (
                     <div key={group.typeId} className="rounded-lg border border-border">
