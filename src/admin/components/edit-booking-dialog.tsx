@@ -69,7 +69,7 @@ const PAYMENT_STATUSES = [
   {
     value: "paid",
     label: "Lunas",
-    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+    chip: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
   },
 ] as const;
 
@@ -95,7 +95,7 @@ type BookingRoom = {
   extra_bed_count?: number | null;
   extra_bed_rate?: number | null;
   room_types?: { id: string; name: string } | null;
-  rooms?: { id: string; number: string } | null;
+  rooms?: { id?: string | null; number?: string | null } | null;
 };
 
 export type EditableBooking = {
@@ -145,6 +145,21 @@ function nightsBetween(ci: string, co: string) {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+function isUuid(v?: string | null) {
+  return !!v && UUID_RE.test(v.trim());
+}
+
+function findPhysicalRoomForBookingRoom(br: BookingRoom, allRooms: RoomRow[]): RoomRow | null {
+  const candidates = [br.rooms?.id, br.room_id, br.rooms?.number]
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter(Boolean);
+  if (candidates.length === 0) return null;
+  return (
+    allRooms.find((r) => candidates.includes(r.id) || candidates.includes(r.number)) ?? null
+  );
+}
+
 type Props = {
   open: boolean;
   booking: EditableBooking | null;
@@ -185,7 +200,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
-  // Hydrate from booking when opening
+  // Hydrate from booking when opening. Important: some legacy booking_rooms can
+  // contain stale/invalid room_id values even though the calendar is empty. We
+  // only keep rows that can be resolved to a real physical room in `rooms`.
   React.useEffect(() => {
     if (!open || !booking) return;
     setGuest({
@@ -204,31 +221,39 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     setPaidAmount(Number(booking.paid_amount ?? 0));
     setSpecialRequests(booking.special_requests ?? "");
     setInternalNotes(booking.internal_notes ?? "");
-    setSelectedRooms(
-      (booking.booking_rooms ?? [])
-        .filter((br): br is BookingRoom & { room_id: string } => !!br.room_id)
-        .map((br) => ({
-          room_id: br.room_id,
-          nightly_rate: Number(br.nightly_rate),
-          extra_bed_count: Number(br.extra_bed_count ?? 0),
-          extra_bed_rate: Number(br.extra_bed_rate ?? 0),
-        })),
-    );
+
+    const dedup = new Set<string>();
+    const nextSelected: SelectedRoom[] = [];
+    for (const br of booking.booking_rooms ?? []) {
+      const physicalRoom = findPhysicalRoomForBookingRoom(br, allRooms);
+      if (!physicalRoom || !isUuid(physicalRoom.id) || !physicalRoom.room_types?.id) continue;
+      if (dedup.has(physicalRoom.id)) continue;
+      dedup.add(physicalRoom.id);
+      nextSelected.push({
+        room_id: physicalRoom.id,
+        nightly_rate: Number(br.nightly_rate || physicalRoom.room_types.base_rate || 0),
+        extra_bed_count: Number(br.extra_bed_count ?? 0),
+        extra_bed_rate: Number(br.extra_bed_rate ?? physicalRoom.room_types.extrabed_rate ?? 0),
+      });
+    }
+    setSelectedRooms(nextSelected);
+
     // Pre-fill the auto-allotment counts + extra-bed counts (summed per type)
-    // from the current room set. Open in manual mode.
+    // from the current valid room set. Open in manual mode.
     const counts: Record<string, number> = {};
     const ebByType: Record<string, number> = {};
-    for (const br of booking.booking_rooms ?? []) {
-      const tid = br.room_types?.id;
+    for (const sr of nextSelected) {
+      const room = allRooms.find((r) => r.id === sr.room_id);
+      const tid = room?.room_types?.id;
       if (tid) {
         counts[tid] = (counts[tid] ?? 0) + 1;
-        ebByType[tid] = (ebByType[tid] ?? 0) + Number(br.extra_bed_count ?? 0);
+        ebByType[tid] = (ebByType[tid] ?? 0) + Number(sr.extra_bed_count ?? 0);
       }
     }
     setAutoCounts(counts);
     setExtraBedByType(ebByType);
     setAllotmentMode("manual");
-  }, [open, booking?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, booking?.id, allRooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = nightsBetween(checkIn, checkOut);
 
@@ -250,14 +275,15 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
       }
     >();
     for (const r of allRooms) {
-      const tid = r.room_types?.id ?? "_none";
+      if (!isUuid(r.id) || !r.room_types?.id) continue;
+      const tid = r.room_types.id;
       if (!m.has(tid)) {
         m.set(tid, {
           typeId: tid,
-          typeName: r.room_types?.name ?? "Tanpa Tipe",
-          baseRate: Number(r.room_types?.base_rate ?? 0),
-          extraBedRate: Number(r.room_types?.extrabed_rate ?? 0),
-          extraBedCapacityPerRoom: Number(r.room_types?.extrabed_capacity ?? 0),
+          typeName: r.room_types.name ?? "Tanpa Tipe",
+          baseRate: Number(r.room_types.base_rate ?? 0),
+          extraBedRate: Number(r.room_types.extrabed_rate ?? 0),
+          extraBedCapacityPerRoom: Number(r.room_types.extrabed_capacity ?? 0),
           rooms: [],
         });
       }
@@ -272,14 +298,14 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     if (allotmentMode === "auto") {
       for (const group of roomsByType) {
         const want = autoCounts[group.typeId] ?? 0;
-        const available = group.rooms.filter((r) => !isUnavailable(r)).length;
+        const available = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id)).length;
         counts[group.typeId] = Math.min(want, available);
       }
     } else {
       for (const sr of selectedRooms) {
-        const room = allRooms.find((r) => r.id === sr.room_id);
-        const tid = room?.room_types?.id ?? "_none";
-        counts[tid] = (counts[tid] ?? 0) + 1;
+        const room = allRooms.find((r) => r.id === sr.room_id && isUuid(r.id));
+        const tid = room?.room_types?.id;
+        if (tid) counts[tid] = (counts[tid] ?? 0) + 1;
       }
     }
     return counts;
@@ -320,12 +346,13 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     }[] = [];
     if (allotmentMode === "manual") {
       for (const sr of selectedRooms) {
-        const room = allRooms.find((r) => r.id === sr.room_id);
-        const tid = room?.room_types?.id ?? "_none";
+        const room = allRooms.find((r) => r.id === sr.room_id && isUuid(r.id));
+        const tid = room?.room_types?.id;
+        if (!room || !tid) continue;
         const group = roomsByType.find((g) => g.typeId === tid);
         base.push({
-          room_id: sr.room_id,
-          nightly_rate: sr.nightly_rate,
+          room_id: room.id,
+          nightly_rate: sr.nightly_rate || Number(room.room_types?.base_rate ?? 0),
           typeId: tid,
           extraBedRate: group?.extraBedRate ?? sr.extra_bed_rate ?? 0,
         });
@@ -333,7 +360,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     } else {
       for (const group of roomsByType) {
         const want = autoCounts[group.typeId] ?? 0;
-        const available = group.rooms.filter((r) => !isUnavailable(r));
+        const available = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id));
         for (let i = 0; i < Math.min(want, available.length); i++) {
           base.push({
             room_id: available[i].id,
@@ -359,6 +386,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allotmentMode, selectedRooms, roomsByType, autoCounts, extraBedByType, allRooms]);
 
+  const invalidSelectedCount = Math.max(0, selectedRooms.length - effectiveRooms.length);
+
   const baseTotal = effectiveRooms.reduce(
     (s, r) =>
       s +
@@ -370,6 +399,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const outstanding = Math.max(0, total - paidAmount);
 
   function toggleRoom(room: RoomRow) {
+    if (!isUuid(room.id) || !room.room_types?.id) {
+      toast.error("Kamar ini belum valid. Cek data kamar di halaman Rooms.");
+      return;
+    }
     setSelectedRooms((cur) => {
       const exists = cur.find((r) => r.room_id === room.id);
       if (exists) return cur.filter((r) => r.room_id !== room.id);
@@ -396,7 +429,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const updateMut = useMutation({
     mutationFn: () => {
       if (!booking || !booking.guests) throw new Error("Booking tidak valid");
-      if (effectiveRooms.length === 0) throw new Error("Pilih minimal 1 kamar");
+      if (effectiveRooms.length === 0) throw new Error("Pilih minimal 1 kamar fisik yang valid");
       const firstEbErr = Object.values(extraBedErrors)[0];
       if (firstEbErr) throw new Error(firstEbErr);
       return fnUpdate({
@@ -596,6 +629,12 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   : "Manual — pilih kamar tertentu satu per satu."}
               </p>
 
+              {invalidSelectedCount > 0 && (
+                <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-50 px-3 py-2 text-[11px] text-amber-700 dark:bg-amber-950/20 dark:text-amber-300">
+                  Ada {invalidSelectedCount} data kamar lama yang tidak valid dan tidak akan dikirim saat disimpan. Pilih kamar fisik yang terlihat di daftar ini.
+                </p>
+              )}
+
               {roomsByType.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   Belum ada kamar — tambah kamar dulu di halaman Rooms.
@@ -603,7 +642,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
               )}
               <div className="space-y-3">
                 {roomsByType.map((group) => {
-                  const availableCount = group.rooms.filter((r) => !isUnavailable(r)).length;
+                  const availableCount = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id)).length;
                   const count = autoCounts[group.typeId] ?? 0;
                   return (
                     <div key={group.typeId} className="rounded-lg border border-border">
