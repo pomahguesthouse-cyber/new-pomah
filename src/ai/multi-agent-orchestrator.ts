@@ -161,7 +161,7 @@ function selectRecoveryClassifierQuery(lastUserMsg: string, unansweredMessages?:
  * budget) dan multi-turn hampir selalu dipotong oleh controller luar →
  * balasan fallback "sistem sedang sibuk".
  */
-const LLM_CALL_TIMEOUT_MS = 6_500;
+const LLM_CALL_TIMEOUT_MS = 10_000;
 /** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
 const LLM_MAX_RETRIES = 1;
 
@@ -313,12 +313,8 @@ async function runAgent(
   // in a SEPARATE system message so they don't bloat the agent's base prompt
   // and are clearly labelled as guidance, not as part of the persona.
   let systemPrompt = agent.buildSystemPrompt(agentCtx);
-  if (agentCtx.chatSummary) {
-    systemPrompt +=
-      `\n\nRINGKASAN PERCAKAPAN SEBELUMNYA:\n${agentCtx.chatSummary}\n` +
-      `Gunakan ringkasan di atas sebagai konteks latar belakang obrolan. Tamu baru saja mengirimkan pesan baru untuk memulai sesi baru.`;
-  }
-  if (agentCtx.chatSummaryJson) {
+  // Use structured JSON summary as primary context; only use text summary if JSON is empty
+  if (agentCtx.chatSummaryJson && Object.keys(agentCtx.chatSummaryJson).length > 0) {
     const s = agentCtx.chatSummaryJson;
     const fmt = (v: string | number | null | undefined) =>
       v === null || v === undefined || v === "" ? "-" : String(v);
@@ -333,19 +329,18 @@ async function runAgent(
       `- Komplain aktif: ${s.complaint_active ? "ya" : "tidak"}`,
     ].join("\n");
     systemPrompt +=
-      `\n\nKONTEKS TERSTRUKTUR DARI SESI SEBELUMNYA (pakai sebagai default, JANGAN konfirmasi ulang kecuali tamu menyebut data baru):\n` +
+      `\n\nKONTEKS SESI (Default, JANGAN konfirmasi ulang):\n` +
       structuredLines +
-      `\nKalau pesan terakhir tamu menyebut tanggal / tipe kamar / jumlah tamu yang BERBEDA dengan data di atas, ABAIKAN nilai lama dan ikuti pesan terbaru.`;
+      `\nJika tamu menyebut data baru, abaikan nilai lama.`;
     // Direktif eksplisit: pertanyaan yang tercatat belum terjawab WAJIB
     // dituntaskan di turn ini — bukan sekadar konteks latar. Tanpa blok ini
     // field tersebut hanya jadi satu baris pasif yang sering diabaikan model.
     if (s.unresolved_question) {
       systemPrompt +=
-        `\n\n⚠️ PERTANYAAN TAMU YANG BELUM TERJAWAB: "${s.unresolved_question}"\n` +
-        `WAJIB kamu jawab TUNTAS di balasan turn ini juga — jangan menunggu tamu mengulanginya. ` +
-        `Kalau jawabannya butuh data yang tidak kamu punya, katakan jujur dan jelaskan langkah berikutnya. ` +
-        `Setelah menjawabnya, lanjutkan menanggapi pesan terbaru tamu.`;
+        `\n\n⚠️ JAWAB TUNTAS: "${s.unresolved_question}"`;
     }
+  } else if (agentCtx.chatSummary) {
+    systemPrompt += `\n\nRINGKASAN: ${agentCtx.chatSummary}`;
   }
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
     // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…
