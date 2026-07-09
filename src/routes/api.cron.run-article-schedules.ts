@@ -1,5 +1,5 @@
 /**
- * Cron worker: run due article schedules + expire past events + notify admin.
+ * Cron worker: run due article schedules + delete past events + notify admin.
  *
  * Hit by pg_cron every 5 minutes (see
  * supabase/migrations/20260530150000_seo_article_schedules.sql).
@@ -29,18 +29,20 @@ type DueRow = {
 };
 
 async function expireOldEvents(client: SupabaseClient) {
-  // Mark events whose end-date has passed as 'expired'
-  const today = new Date().toISOString().slice(0, 10);
+  // Owner preference: event City Guide yang sudah lewat tidak hanya disembunyikan,
+  // tetapi dihapus dari database. Pakai tanggal WIB agar tidak kehapus terlalu
+  // cepat saat UTC sudah berganti hari tetapi Indonesia belum.
+  const todayWib = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
   const { data, error } = await (client as any)
     .from("seo_generated_articles")
-    .update({ status: "expired" })
+    .delete()
     .eq("category", "event")
-    .eq("status", "active")
+    .in("status", ["active", "expired"])
     .not("event_end_date", "is", null)
-    .lt("event_end_date", today)
+    .lt("event_end_date", todayWib)
     .select("id");
   if (error) {
-    console.warn("[article-cron] expireOldEvents failed:", error.message);
+    console.warn("[article-cron] deleteOldEvents failed:", error.message);
     return 0;
   }
   return (data ?? []).length;
@@ -177,7 +179,7 @@ async function runArticleSchedules(): Promise<{
 }> {
   const client = supabaseAdmin as unknown as SupabaseClient;
 
-  // 1. Expire old events first
+  // 1. Delete old events first
   const expired = await expireOldEvents(client);
 
   // 2. Find schedules due now
@@ -223,7 +225,7 @@ async function handle(_request: Request): Promise<Response> {
     try {
       const out = await runArticleSchedules();
       console.log(
-        `[article-cron] done: expired=${out.expired} runs=${out.results.length}`,
+        `[article-cron] done: deleted_old_events=${out.expired} runs=${out.results.length}`,
       );
     } catch (e) {
       console.warn("[article-cron] background run failed:", e);
