@@ -393,10 +393,21 @@ export const createManualEvent = createServerFn({ method: "POST" })
     const { data: inserted, error } = await db(context.supabase)
       .from("seo_generated_articles")
       .insert(row)
-      .select("id")
+      .select("id, title, meta_description, event_start_date, event_end_date, event_date_label, event_location, image_url, tags")
       .single();
     if (error) throw error;
-    return { ok: true, id: (inserted as any)?.id ?? null };
+
+    const insertedRow = inserted as Record<string, unknown> | null;
+    return {
+      ok: true,
+      id: (insertedRow?.id as string | undefined) ?? null,
+      event: insertedRow
+        ? toPublicEvent({
+            ...insertedRow,
+            description: insertedRow.meta_description,
+          })
+        : null,
+    };
   });
 
 /* ─── Public getter for the city-guide event slider ───────────────────────── */
@@ -413,29 +424,106 @@ export type PublicEvent = {
   tags: string[];
 };
 
+type PublicEventSourceRow = {
+  id?: unknown;
+  title?: unknown;
+  description?: unknown;
+  meta_description?: unknown;
+  paragraphs?: unknown;
+  event_start_date?: unknown;
+  event_end_date?: unknown;
+  event_date_label?: unknown;
+  event_location?: unknown;
+  image_url?: unknown;
+  tags?: unknown;
+};
+
+function toPublicEvent(row: PublicEventSourceRow): PublicEvent {
+  const paragraphs = Array.isArray(row.paragraphs) ? row.paragraphs.map(String) : [];
+  const description =
+    typeof row.description === "string"
+      ? row.description
+      : typeof row.meta_description === "string"
+        ? row.meta_description
+        : paragraphs.length > 0
+          ? paragraphs.join("\n\n")
+          : null;
+  const event: PublicEvent = {
+    id: String(row.id ?? ""),
+    title: String(row.title ?? ""),
+    description,
+    event_start_date: typeof row.event_start_date === "string" ? row.event_start_date : null,
+    event_end_date: typeof row.event_end_date === "string" ? row.event_end_date : null,
+    event_date_label: typeof row.event_date_label === "string" ? row.event_date_label : null,
+    event_location: typeof row.event_location === "string" ? row.event_location : null,
+    image_url: typeof row.image_url === "string" ? row.image_url : null,
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+  };
+  if (!event.event_date_label || !event.event_date_label.trim()) {
+    event.event_date_label = resolveEventDateLabel({
+      event_start_date: event.event_start_date,
+      event_end_date: event.event_end_date,
+      event_date_label: event.event_date_label,
+      description: event.description,
+      paragraphs,
+    });
+  }
+  return event;
+}
+
+function sortPublicEvents(events: PublicEvent[]): PublicEvent[] {
+  const sortKey = (e: PublicEvent) => e.event_start_date ?? e.event_end_date ?? "9999-12-31";
+  return [...events].sort((a, b) => sortKey(a).localeCompare(sortKey(b)) || a.title.localeCompare(b.title));
+}
+
 /**
  * Public, no-auth getter for active (non-expired) event articles.
- * Reads the `active_public_events` view so the SELECT cannot leak
- * draft articles or other categories.
+ *
+ * IMPORTANT: Do not silently return [] just because the helper view is stale.
+ * Some deployed databases may still have an old `active_public_events` view
+ * without `event_date_label`, making the SELECT fail and causing newly-created
+ * manual events to disappear from Admin City Guide / public Explore. This
+ * function now reads the canonical table with the service-role client first
+ * and falls back to the public view only when the service role is unavailable.
  */
 export const listActivePublicEvents = createServerFn({ method: "GET" })
   .handler(async () => {
-    // Use the anon client so this works on the public homepage / explore page
-    const { supabasePublic } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin, supabasePublic } = await import("@/integrations/supabase/client.server");
+    // WIB calendar date, so an event is not expired too early around midnight UTC.
+    const todayWib = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+    try {
+      const { data, error } = await (supabaseAdmin as any)
+        .from("seo_generated_articles")
+        .select(
+          "id, title, meta_description, paragraphs, event_start_date, event_end_date, event_date_label, event_location, image_url, tags",
+        )
+        .eq("category", "event")
+        .eq("status", "active")
+        .or(`event_end_date.is.null,event_end_date.gte.${todayWib}`)
+        .limit(50);
+
+      if (!error) {
+        const events = sortPublicEvents(((data ?? []) as PublicEventSourceRow[]).map(toPublicEvent));
+        return { events: events.slice(0, 20) };
+      }
+      console.warn("[listActivePublicEvents] table read failed, fallback to view:", error);
+    } catch (e) {
+      console.warn("[listActivePublicEvents] service-role read unavailable, fallback to view:", e);
+    }
+
     const { data, error } = await (supabasePublic as any)
       .from("active_public_events")
       .select(
         "id, title, description, event_start_date, event_end_date, event_date_label, event_location, image_url, tags",
       )
-      .limit(20);
+      .limit(50);
+
     if (error) {
-      // View may not exist yet (migration not applied).
+      console.warn("[listActivePublicEvents] public view read failed:", error);
       return { events: [] as PublicEvent[] };
     }
-    // Backfill event_date_label at read-time for legacy rows.
-    const events = ((data ?? []) as PublicEvent[]).map((r) => {
-      if (r.event_date_label && r.event_date_label.trim()) return r;
-      return { ...r, event_date_label: resolveEventDateLabel(r) };
-    });
-    return { events };
+
+    const events = sortPublicEvents(((data ?? []) as PublicEventSourceRow[]).map(toPublicEvent));
+    return { events: events.slice(0, 20) };
   });
