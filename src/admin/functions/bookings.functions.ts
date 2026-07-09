@@ -262,8 +262,93 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
   });
 
 const BOOKING_STATUS = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]);
-const BOOKING_SOURCE = z.enum(["direct", "whatsapp", "walk_in", "website"]);
+const BOOKING_SOURCE = z.enum(["direct", "whatsapp", "walk_in", "website", "manager_chat"]);
 const PAYMENT_STATUS = z.enum(["unpaid", "partial", "paid"]);
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+
+const bookingRoomInputSchema = z.object({
+  room_id: z.string().trim().min(1, "Pilih kamar fisik yang valid, bukan tipe kamar."),
+  nightly_rate: z.number().min(0).max(100_000_000),
+  extra_bed_count: z.number().int().min(0).max(10).default(0),
+  extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
+});
+
+type BookingRoomInput = z.infer<typeof bookingRoomInputSchema>;
+
+/**
+ * Resolve payload room_id into a real physical rooms.id.
+ * The UI should send UUIDs, but older/buggy builds may send room numbers or
+ * placeholders. We accept room numbers as a safe fallback, and reject anything
+ * else with a clear admin-facing error instead of raw Zod UUID noise.
+ */
+async function resolveSelectedRooms(
+  supabase: SupabaseClient,
+  inputRooms: BookingRoomInput[],
+): Promise<{
+  rooms: BookingRoomInput[];
+  roomTypeById: Map<string, string>;
+  typeMetaById: Map<string, RoomCapMeta>;
+}> {
+  const rawValues = inputRooms.map((r) => String(r.room_id ?? "").trim()).filter(Boolean);
+  const uuidValues = [...new Set(rawValues.filter((v) => UUID_RE.test(v)))];
+  const numberValues = [...new Set(rawValues.filter((v) => !UUID_RE.test(v) && !v.startsWith("_")))];
+
+  const queries: Promise<{ data: unknown; error: unknown }>[] = [];
+  if (uuidValues.length) {
+    queries.push(
+      supabase
+        .from("rooms")
+        .select("id, number, room_type_id, room_types(capacity, extrabed_capacity, name)")
+        .in("id", uuidValues) as Promise<{ data: unknown; error: unknown }>,
+    );
+  }
+  if (numberValues.length) {
+    queries.push(
+      supabase
+        .from("rooms")
+        .select("id, number, room_type_id, room_types(capacity, extrabed_capacity, name)")
+        .in("number", numberValues) as Promise<{ data: unknown; error: unknown }>,
+    );
+  }
+
+  const results = queries.length ? await Promise.all(queries) : [];
+  for (const res of results) {
+    if (res.error) throw res.error as Error;
+  }
+
+  const rows = results.flatMap((res) => ((res.data ?? []) as any[]));
+  const byId = new Map<string, any>();
+  const byNumber = new Map<string, any>();
+  const roomTypeById = new Map<string, string>();
+  const typeMetaById = new Map<string, RoomCapMeta>();
+
+  for (const row of rows) {
+    byId.set(String(row.id), row);
+    byNumber.set(String(row.number), row);
+    roomTypeById.set(String(row.id), String(row.room_type_id));
+    const rt = Array.isArray(row.room_types) ? row.room_types[0] : row.room_types;
+    if (rt && row.room_type_id && !typeMetaById.has(row.room_type_id)) {
+      typeMetaById.set(row.room_type_id, {
+        capacity: Number(rt.capacity ?? 0),
+        extrabedCap: Number(rt.extrabed_capacity ?? 0),
+        name: String(rt.name ?? "Kamar"),
+      });
+    }
+  }
+
+  const normalized = inputRooms.map((room, index) => {
+    const raw = String(room.room_id ?? "").trim();
+    const resolved = byId.get(raw) ?? byNumber.get(raw);
+    if (!resolved?.id || !roomTypeById.has(String(resolved.id))) {
+      throw new Error(
+        `Kamar pada baris ${index + 1} tidak valid. Pilih kamar fisik yang valid, bukan tipe kamar.`,
+      );
+    }
+    return { ...room, room_id: String(resolved.id) };
+  });
+
+  return { rooms: normalized, roomTypeById, typeMetaById };
+}
 
 /**
  * Kebijakan usia tamu Pomah: anak SD/SMP/SMA/mahasiswa dihitung sebagai
@@ -324,17 +409,7 @@ const createMultiRoomBookingSchema = z.object({
   paid_amount: z.number().min(0),
   special_requests: z.string().max(2000).optional().nullable(),
   internal_notes: z.string().max(2000).optional().nullable(),
-  rooms: z
-    .array(
-      z.object({
-        room_id: z.string().uuid(),
-        nightly_rate: z.number().min(0).max(100_000_000),
-        extra_bed_count: z.number().int().min(0).max(10).default(0),
-        extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
-      }),
-    )
-    .min(1, "Pilih minimal 1 kamar")
-    .max(20),
+  rooms: z.array(bookingRoomInputSchema).min(1, "Pilih minimal 1 kamar").max(20),
 });
 
 
@@ -385,30 +460,14 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
         .eq("id", guestId);
     }
 
-    // Resolve room_type + capacity per selected room (single batched query)
-    const roomIds = data.rooms.map((r) => r.room_id);
-    const { data: roomRows, error: roomsErr } = await context.supabase
-      .from("rooms")
-      .select("id, room_type_id, room_types(capacity, extrabed_capacity, name)")
-      .in("id", roomIds);
-    if (roomsErr) throw roomsErr;
-    const roomTypeById = new Map<string, string>();
-    const typeMetaById = new Map<string, RoomCapMeta>();
-    for (const r of (roomRows ?? []) as any[]) {
-      roomTypeById.set(r.id, r.room_type_id);
-      const rt = Array.isArray(r.room_types) ? r.room_types[0] : r.room_types;
-      if (rt && r.room_type_id && !typeMetaById.has(r.room_type_id)) {
-        typeMetaById.set(r.room_type_id, {
-          capacity: Number(rt.capacity ?? 0),
-          extrabedCap: Number(rt.extrabed_capacity ?? 0),
-          name: String(rt.name ?? "Kamar"),
-        });
-      }
-    }
+    const { rooms: selectedRooms, roomTypeById, typeMetaById } = await resolveSelectedRooms(
+      context.supabase,
+      data.rooms,
+    );
 
     // ── Extra bed capacity guard (per tipe kamar) ────────────────────────
     const perTypeReq = new Map<string, { requested: number; rooms: number }>();
-    for (const r of data.rooms) {
+    for (const r of selectedRooms) {
       const tid = roomTypeById.get(r.room_id);
       if (!tid) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
       const cur = perTypeReq.get(tid) ?? { requested: 0, rooms: 0 };
@@ -436,13 +495,13 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       data.adults,
       data.children,
       data.children_under_5 ?? 0,
-      data.rooms,
+      selectedRooms,
       roomTypeById,
       typeMetaById,
     );
 
 
-    let grandTotal = data.rooms.reduce(
+    let grandTotal = selectedRooms.reduce(
       (sum, r) =>
         sum +
         Number(r.nightly_rate) * nights +
@@ -482,7 +541,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
     if (bookErr || !booking) throw bookErr ?? new Error("Gagal membuat booking");
 
     // One booking_rooms row per room.
-    const roomInserts = data.rooms.map((r) => {
+    const roomInserts = selectedRooms.map((r) => {
       const room_type_id = roomTypeById.get(r.room_id);
       if (!room_type_id) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
       return {
@@ -536,17 +595,7 @@ const updateBookingFullSchema = z.object({
   paid_amount: z.number().min(0),
   special_requests: z.string().max(2000).optional().nullable(),
   internal_notes: z.string().max(2000).optional().nullable(),
-  rooms: z
-    .array(
-      z.object({
-        room_id: z.string().uuid(),
-        nightly_rate: z.number().min(0).max(100_000_000),
-        extra_bed_count: z.number().int().min(0).max(10).default(0),
-        extra_bed_rate: z.number().min(0).max(100_000_000).default(0),
-      }),
-    )
-    .min(1, "Pilih minimal 1 kamar")
-    .max(20),
+  rooms: z.array(bookingRoomInputSchema).min(1, "Pilih minimal 1 kamar").max(20),
 });
 
 export const updateBookingFull = createServerFn({ method: "POST" })
@@ -565,7 +614,13 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     if (!Number.isFinite(nights) || nights < 1) {
       throw new Error("Tanggal check-out harus setelah check-in");
     }
-    let total_amount = data.rooms.reduce(
+
+    const { rooms: selectedRooms, roomTypeById, typeMetaById } = await resolveSelectedRooms(
+      context.supabase,
+      data.rooms,
+    );
+
+    let total_amount = selectedRooms.reduce(
       (s, r) =>
         s +
         Number(r.nightly_rate) * nights +
@@ -593,30 +648,9 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       .eq("id", data.guest.id);
     if (gErr) throw gErr;
 
-    // Resolve room types for the (possibly changed) room set
-    const roomIds = data.rooms.map((r) => r.room_id);
-    const { data: roomRows, error: rErr } = await context.supabase
-      .from("rooms")
-      .select("id, room_type_id, room_types(capacity, extrabed_capacity, name)")
-      .in("id", roomIds);
-    if (rErr) throw rErr;
-    const roomTypeById = new Map<string, string>();
-    const typeMetaById = new Map<string, RoomCapMeta>();
-    for (const r of (roomRows ?? []) as any[]) {
-      roomTypeById.set(r.id, r.room_type_id);
-      const rt = Array.isArray(r.room_types) ? r.room_types[0] : r.room_types;
-      if (rt && r.room_type_id && !typeMetaById.has(r.room_type_id)) {
-        typeMetaById.set(r.room_type_id, {
-          capacity: Number(rt.capacity ?? 0),
-          extrabedCap: Number(rt.extrabed_capacity ?? 0),
-          name: String(rt.name ?? "Kamar"),
-        });
-      }
-    }
-
     // ── Extra bed capacity guard ─────────────────────────────────────────
     const perTypeReq = new Map<string, { requested: number; rooms: number }>();
-    for (const r of data.rooms) {
+    for (const r of selectedRooms) {
       const tid = roomTypeById.get(r.room_id);
       if (!tid) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
       const cur = perTypeReq.get(tid) ?? { requested: 0, rooms: 0 };
@@ -644,7 +678,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       data.adults,
       data.children,
       data.children_under_5 ?? 0,
-      data.rooms,
+      selectedRooms,
       roomTypeById,
       typeMetaById,
     );
@@ -659,7 +693,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       (s: number, r: any) => s + Number(r?.extra_bed_count ?? 0),
       0,
     );
-    const afterExtraBedTotal = data.rooms.reduce(
+    const afterExtraBedTotal = selectedRooms.reduce(
       (s, r) => s + Number(r.extra_bed_count ?? 0),
       0,
     );
@@ -691,7 +725,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       .eq("booking_id", data.id);
     if (delErr) throw delErr;
 
-    const roomInserts = data.rooms.map((r) => {
+    const roomInserts = selectedRooms.map((r) => {
       const room_type_id = roomTypeById.get(r.room_id);
       if (!room_type_id) throw new Error(`Kamar ${r.room_id} tidak ditemukan`);
       return {
