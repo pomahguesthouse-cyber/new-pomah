@@ -69,6 +69,14 @@ export interface FacilityRoom {
   amenities?: unknown;
 }
 
+const PRIVATE_BATHROOM_AMENITY = "Kamar mandi dalam";
+
+const MISLEADING_BATHROOM_RE =
+  /\b(kamar\s+mandi\s+(?:terpisah|luar|bersama)|toilet\s+(?:luar|bersama)|wc\s+(?:luar|bersama)|shared\s+bathroom|bathroom\s+outside|bukan\s+di\s+dalam)\b/i;
+
+const BATHROOM_AMENITY_RE =
+  /\b(kamar\s+mandi|toilet|wc|bathroom|bath\s*room)\b/i;
+
 /** Normalisasi untuk dedup: "WI-FI", "WIfi", "wifi" → "wifi". */
 function amenityKey(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -78,14 +86,25 @@ function dedupeAmenities(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const v of raw) {
-    const s = String(v).trim();
-    if (!s) continue;
+  const pushUnique = (value: string) => {
+    const s = value.trim();
+    if (!s) return;
     const key = amenityKey(s);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return;
     seen.add(key);
     out.push(s);
+  };
+
+  for (const v of raw) {
+    const s = String(v).trim();
+    if (!s || MISLEADING_BATHROOM_RE.test(s)) continue;
+    pushUnique(BATHROOM_AMENITY_RE.test(s) ? PRIVATE_BATHROOM_AMENITY : s);
   }
+
+  // Fakta bisnis Pomah Guesthouse: semua tipe kamar punya kamar mandi di dalam.
+  // Guard ini sengaja ada di formatter agar jawaban fasilitas tetap benar
+  // meskipun data amenities di database/seed belum lengkap.
+  pushUnique(PRIVATE_BATHROOM_AMENITY);
   return out;
 }
 
