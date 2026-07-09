@@ -152,7 +152,9 @@ function nightsBetween(ci: string, co: string) {
 }
 
 function getBookingRoomToken(br: BookingRoom): string | null {
-  const candidates = [br.rooms?.id, br.room_id, br.rooms?.number]
+  // Prefer the human room number. It is the most stable token across legacy
+  // rows and the backend can resolve it back to rooms.id before writing.
+  const candidates = [br.rooms?.number, br.rooms?.id, br.room_id]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .filter(isRoomToken);
   return candidates[0] ?? null;
@@ -160,6 +162,13 @@ function getBookingRoomToken(br: BookingRoom): string | null {
 
 function findRoomByToken(token: string, rooms: RoomRow[]): RoomRow | null {
   return rooms.find((r) => r.id === token || r.number === token) ?? null;
+}
+
+function payloadRoomToken(room: RoomRow | null | undefined, fallback: string): string {
+  // Send room number instead of UUID when possible. This avoids stale UUID
+  // mismatches from legacy booking_rooms while still letting the server resolve
+  // the physical room deterministically via rooms.number.
+  return room?.number?.trim() || room?.id?.trim() || fallback;
 }
 
 function buildSyntheticRoomsFromBooking(booking: EditableBooking | null, allRooms: RoomRow[]): RoomRow[] {
@@ -365,7 +374,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         const tid = room?.room_types?.id ?? sr.room_id;
         const group = roomsByType.find((g) => g.typeId === tid);
         base.push({
-          room_id: room?.id ?? sr.room_id,
+          room_id: payloadRoomToken(room, sr.room_id),
           nightly_rate: sr.nightly_rate || Number(room?.room_types?.base_rate ?? 0),
           typeId: tid,
           extraBedRate: group?.extraBedRate ?? sr.extra_bed_rate ?? 0,
@@ -377,7 +386,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         const available = group.rooms.filter((r) => !isUnavailable(r) && isRoomToken(r.id));
         for (let i = 0; i < Math.min(want, available.length); i++) {
           base.push({
-            room_id: available[i].id,
+            room_id: payloadRoomToken(available[i], available[i].id),
             nightly_rate: group.baseRate,
             typeId: group.typeId,
             extraBedRate: group.extraBedRate,
