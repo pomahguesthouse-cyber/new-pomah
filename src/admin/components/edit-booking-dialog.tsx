@@ -87,7 +87,6 @@ type RoomRow = {
   } | null;
 };
 
-/** A room line of a booking, as returned by listBookings' booking_rooms join. */
 type BookingRoom = {
   id: string;
   room_id: string | null;
@@ -129,6 +128,9 @@ type SelectedRoom = {
   extra_bed_rate: number;
 };
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+const isUuid = (v?: string | null) => !!v && UUID_RE.test(v.trim());
+
 const formatIDR = (n: number) =>
   new Intl.NumberFormat("id-ID", {
     style: "currency",
@@ -145,19 +147,12 @@ function nightsBetween(ci: string, co: string) {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
-const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-function isUuid(v?: string | null) {
-  return !!v && UUID_RE.test(v.trim());
-}
-
 function findPhysicalRoomForBookingRoom(br: BookingRoom, allRooms: RoomRow[]): RoomRow | null {
   const candidates = [br.rooms?.id, br.room_id, br.rooms?.number]
     .map((v) => (typeof v === "string" ? v.trim() : ""))
     .filter(Boolean);
   if (candidates.length === 0) return null;
-  return (
-    allRooms.find((r) => candidates.includes(r.id) || candidates.includes(r.number)) ?? null
-  );
+  return allRooms.find((r) => candidates.includes(r.id) || candidates.includes(r.number)) ?? null;
 }
 
 type Props = {
@@ -178,12 +173,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   });
   const allRooms = React.useMemo(() => (roomsData?.rooms ?? []) as RoomRow[], [roomsData]);
 
-  const [guest, setGuest] = React.useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    country: "",
-  });
+  const [guest, setGuest] = React.useState({ full_name: "", email: "", phone: "", country: "" });
   const [checkIn, setCheckIn] = React.useState("");
   const [checkOut, setCheckOut] = React.useState("");
   const [adults, setAdults] = React.useState(2);
@@ -200,11 +190,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   const [specialRequests, setSpecialRequests] = React.useState("");
   const [internalNotes, setInternalNotes] = React.useState("");
 
-  // Hydrate from booking when opening. Important: some legacy booking_rooms can
-  // contain stale/invalid room_id values even though the calendar is empty. We
-  // only keep rows that can be resolved to a real physical room in `rooms`.
   React.useEffect(() => {
     if (!open || !booking) return;
+
     setGuest({
       full_name: booking.guests?.full_name ?? "",
       email: booking.guests?.email ?? "",
@@ -238,8 +226,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     }
     setSelectedRooms(nextSelected);
 
-    // Pre-fill the auto-allotment counts + extra-bed counts (summed per type)
-    // from the current valid room set. Open in manual mode.
     const counts: Record<string, number> = {};
     const ebByType: Record<string, number> = {};
     for (const sr of nextSelected) {
@@ -256,12 +242,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   }, [open, booking?.id, allRooms]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = nightsBetween(checkIn, checkOut);
+  const isUnavailable = (r: RoomRow) => r.status === "out_of_order" || r.status === "maintenance";
 
-  /** A room can't be booked while it's out of order or under maintenance. */
-  const isUnavailable = (r: RoomRow) =>
-    r.status === "out_of_order" || r.status === "maintenance";
-
-  // Group rooms by type for the picker
   const roomsByType = React.useMemo(() => {
     const m = new Map<
       string,
@@ -292,7 +274,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return [...m.values()];
   }, [allRooms]);
 
-  /** Total rooms per type currently in the effective set (before extra beds). */
   const roomCountByType = React.useMemo(() => {
     const counts: Record<string, number> = {};
     if (allotmentMode === "auto") {
@@ -311,11 +292,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     return counts;
   }, [allotmentMode, autoCounts, roomsByType, selectedRooms, allRooms]);
 
-  /**
-   * Per-type validation: extra bed for a type must never exceed
-   *   extrabed_capacity_per_room × room_count_of_that_type.
-   * Returns { [typeId]: "pesan error" } for the types that overflow.
-   */
   const extraBedErrors = React.useMemo<Record<string, string>>(() => {
     const errs: Record<string, string> = {};
     for (const group of roomsByType) {
@@ -334,16 +310,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   }, [roomsByType, extraBedByType, roomCountByType]);
   const hasExtraBedError = Object.keys(extraBedErrors).length > 0;
 
-  // Rooms actually sent on save. Extra beds for a type are packed onto the
-  // FIRST booking_row of that type so total_amount stays correct even when
-  // the group has multiple physical rooms.
   const effectiveRooms = React.useMemo<SelectedRoom[]>(() => {
-    const base: {
-      room_id: string;
-      nightly_rate: number;
-      typeId: string;
-      extraBedRate: number;
-    }[] = [];
+    const base: { room_id: string; nightly_rate: number; typeId: string; extraBedRate: number }[] = [];
+
     if (allotmentMode === "manual") {
       for (const sr of selectedRooms) {
         const room = allRooms.find((r) => r.id === sr.room_id && isUuid(r.id));
@@ -371,7 +340,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         }
       }
     }
-    // Distribute extra beds — all onto the first row of each type.
+
     const seenType = new Set<string>();
     return base.map((row) => {
       const first = !seenType.has(row.typeId);
@@ -383,11 +352,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         extra_bed_rate: row.extraBedRate,
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allotmentMode, selectedRooms, roomsByType, autoCounts, extraBedByType, allRooms]);
 
   const invalidSelectedCount = Math.max(0, selectedRooms.length - effectiveRooms.length);
-
   const baseTotal = effectiveRooms.reduce(
     (s, r) =>
       s +
@@ -395,8 +362,20 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
       r.extra_bed_rate * r.extra_bed_count * Math.max(nights, 1),
     0,
   );
-  const total = paymentStatus === "paid" ? paidAmount : baseTotal;
+
+  // Total booking adalah nilai kamar × malam + extra bed. Jangan pernah pakai
+  // paidAmount sebagai total; paidAmount hanyalah nominal yang sudah dibayar.
+  const total = baseTotal;
   const outstanding = Math.max(0, total - paidAmount);
+
+  // Saat status Lunas, nominal dibayar harus mengikuti total terkini. Ini
+  // memperbaiki kasus 1 Grand Deluxe × 2 malam yang sebelumnya tetap memakai
+  // paidAmount lama Rp1.800.000.
+  React.useEffect(() => {
+    if (paymentStatus !== "paid" || effectiveRooms.length === 0 || nights < 1) return;
+    const next = Math.round(baseTotal);
+    setPaidAmount((current) => (current === next ? current : next));
+  }, [paymentStatus, baseTotal, effectiveRooms.length, nights]);
 
   function toggleRoom(room: RoomRow) {
     if (!isUuid(room.id) || !room.room_types?.id) {
@@ -418,13 +397,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
     });
   }
 
-  function setAutoCount(typeId: string, n: number) {
+  const setAutoCount = (typeId: string, n: number) =>
     setAutoCounts((cur) => ({ ...cur, [typeId]: Math.max(0, n) }));
-  }
-
-  function setExtraBed(typeId: string, n: number) {
+  const setExtraBed = (typeId: string, n: number) =>
     setExtraBedByType((cur) => ({ ...cur, [typeId]: Math.max(0, n) }));
-  }
 
   const updateMut = useMutation({
     mutationFn: () => {
@@ -480,7 +456,6 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[680px] p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
-        {/* Hero header */}
         <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-6 py-5">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -488,9 +463,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                 <Pencil className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <DialogTitle className="text-xl font-semibold tracking-tight">
-                  Edit Booking
-                </DialogTitle>
+                <DialogTitle className="text-xl font-semibold tracking-tight">Edit Booking</DialogTitle>
                 <DialogDescription className="font-mono text-xs">
                   <span className="font-semibold text-foreground">
                     {booking.reference_code ?? booking.id.slice(0, 8)}
@@ -515,72 +488,36 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           <div className="space-y-5 p-6">
-            {/* Tamu */}
             <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nama Lengkap" required>
-                  <Input
-                    value={guest.full_name}
-                    onChange={(e) => setGuest((g) => ({ ...g, full_name: e.target.value }))}
-                    maxLength={120}
-                  />
+                  <Input value={guest.full_name} onChange={(e) => setGuest((g) => ({ ...g, full_name: e.target.value }))} maxLength={120} />
                 </Field>
                 <Field label="Nomor HP / WhatsApp">
-                  <Input
-                    value={guest.phone}
-                    onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))}
-                    type="tel"
-                    maxLength={40}
-                  />
+                  <Input value={guest.phone} onChange={(e) => setGuest((g) => ({ ...g, phone: e.target.value }))} type="tel" maxLength={40} />
                 </Field>
                 <Field label="Email">
-                  <Input
-                    value={guest.email}
-                    onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))}
-                    type="email"
-                    maxLength={200}
-                  />
+                  <Input value={guest.email} onChange={(e) => setGuest((g) => ({ ...g, email: e.target.value }))} type="email" maxLength={200} />
                 </Field>
                 <Field label="Negara Asal">
-                  <Input
-                    value={guest.country}
-                    onChange={(e) => setGuest((g) => ({ ...g, country: e.target.value }))}
-                    maxLength={60}
-                  />
+                  <Input value={guest.country} onChange={(e) => setGuest((g) => ({ ...g, country: e.target.value }))} maxLength={60} />
                 </Field>
               </div>
             </Section>
 
-            {/* Tanggal & Jumlah */}
             <Section icon={<CalendarRange className="h-4 w-4" />} title="Tanggal & Jumlah Tamu">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Check-In" required>
                   <DatePickerID value={checkIn} onChange={(iso) => setCheckIn(iso)} />
                 </Field>
                 <Field label="Check-Out" required>
-                  <DatePickerID
-                    value={checkOut}
-                    min={checkIn || undefined}
-                    onChange={(iso) => setCheckOut(iso)}
-                  />
+                  <DatePickerID value={checkOut} min={checkIn || undefined} onChange={(iso) => setCheckOut(iso)} />
                 </Field>
                 <Field label="Dewasa">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={adults}
-                    onChange={(e) => setAdults(Number(e.target.value) || 1)}
-                  />
+                  <Input type="number" min={1} max={20} value={adults} onChange={(e) => setAdults(Number(e.target.value) || 1)} />
                 </Field>
                 <Field label="Anak">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={20}
-                    value={children}
-                    onChange={(e) => setChildren(Number(e.target.value) || 0)}
-                  />
+                  <Input type="number" min={0} max={20} value={children} onChange={(e) => setChildren(Number(e.target.value) || 0)} />
                 </Field>
               </div>
               {nights >= 1 ? (
@@ -589,34 +526,20 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   {nights} malam
                 </p>
               ) : (
-                <p className="mt-3 text-xs text-destructive">
-                  Tanggal check-out harus setelah check-in.
-                </p>
+                <p className="mt-3 text-xs text-destructive">Tanggal check-out harus setelah check-in.</p>
               )}
             </Section>
 
-            {/* Kamar — multi-select */}
-            <Section
-              icon={<BedDouble className="h-4 w-4" />}
-              title={`Kamar${effectiveRooms.length ? ` · ${effectiveRooms.length} dipilih` : ""}`}
-            >
-              {/* Mode: auto allotment vs manual */}
+            <Section icon={<BedDouble className="h-4 w-4" />} title={`Kamar${effectiveRooms.length ? ` · ${effectiveRooms.length} dipilih` : ""}`}>
               <div className="mb-2 flex gap-0.5 rounded-lg bg-muted p-0.5">
-                {(
-                  [
-                    ["auto", "Otomatis"],
-                    ["manual", "Manual"],
-                  ] as const
-                ).map(([m, label]) => (
+                {([ ["auto", "Otomatis"], ["manual", "Manual"] ] as const).map(([m, label]) => (
                   <button
                     key={m}
                     type="button"
                     onClick={() => setAllotmentMode(m)}
                     className={cn(
                       "flex-1 rounded-md py-1.5 text-xs font-medium transition",
-                      allotmentMode === m
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
+                      allotmentMode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {label}
@@ -635,11 +558,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                 </p>
               )}
 
-              {roomsByType.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Belum ada kamar — tambah kamar dulu di halaman Rooms.
-                </p>
-              )}
+              {roomsByType.length === 0 && <p className="text-xs text-muted-foreground">Belum ada kamar — tambah kamar dulu di halaman Rooms.</p>}
               <div className="space-y-3">
                 {roomsByType.map((group) => {
                   const availableCount = group.rooms.filter((r) => !isUnavailable(r) && isUuid(r.id)).length;
@@ -648,38 +567,18 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                     <div key={group.typeId} className="rounded-lg border border-border">
                       <div className="flex items-center justify-between border-b border-border bg-muted/30 px-3 py-2">
                         <p className="text-xs font-semibold">{group.typeName}</p>
-                        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                          {formatIDR(group.baseRate)}/malam
-                        </p>
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{formatIDR(group.baseRate)}/malam</p>
                       </div>
 
                       {allotmentMode === "auto" ? (
                         <div className="flex items-center justify-between px-3 py-2.5">
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                            {availableCount} kamar tersedia
-                          </p>
+                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{availableCount} kamar tersedia</p>
                           <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={count <= 0}
-                              onClick={() => setAutoCount(group.typeId, count - 1)}
-                            >
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={count <= 0} onClick={() => setAutoCount(group.typeId, count - 1)}>
                               <Minus className="h-3.5 w-3.5" />
                             </Button>
-                            <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
-                              {Math.min(count, availableCount)}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="h-7 w-7"
-                              disabled={count >= availableCount}
-                              onClick={() => setAutoCount(group.typeId, count + 1)}
-                            >
+                            <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">{Math.min(count, availableCount)}</span>
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={count >= availableCount} onClick={() => setAutoCount(group.typeId, count + 1)}>
                               <Plus className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -694,136 +593,74 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                                 key={room.id}
                                 className={cn(
                                   "flex items-center gap-1.5 rounded px-1.5 py-1 transition-colors",
-                                  unavailable
-                                    ? "cursor-not-allowed opacity-50"
-                                    : "cursor-pointer hover:bg-muted/40",
+                                  unavailable ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted/40",
                                   sel && "bg-primary/5",
                                 )}
                               >
-                                <input
-                                  type="checkbox"
-                                  disabled={unavailable}
-                                  checked={!!sel}
-                                  onChange={() => toggleRoom(room)}
-                                  className="h-3.5 w-3.5 cursor-pointer rounded border-border accent-primary"
-                                />
-                                <span className="font-mono text-xs font-semibold">
-                                  {room.number}
-                                </span>
-                                {unavailable && (
-                                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                                    tidak tersedia
-                                  </span>
-                                )}
+                                <input type="checkbox" disabled={unavailable} checked={!!sel} onChange={() => toggleRoom(room)} className="h-3.5 w-3.5 cursor-pointer rounded border-border accent-primary" />
+                                <span className="font-mono text-xs font-semibold">{room.number}</span>
+                                {unavailable && <span className="text-[9px] uppercase tracking-wide text-muted-foreground">tidak tersedia</span>}
                               </label>
                             );
                           })}
                         </div>
                       )}
 
-                      {/* Extra bed picker per room type */}
-                      {group.extraBedCapacityPerRoom > 0 &&
-                        (roomCountByType[group.typeId] ?? 0) > 0 && (
-                          <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
-                            <div>
-                              <p className="text-[11px] font-medium">Extra Bed</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {formatIDR(group.extraBedRate)}/malam · maks{" "}
-                                {group.extraBedCapacityPerRoom *
-                                  (roomCountByType[group.typeId] ?? 0)}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={(extraBedByType[group.typeId] ?? 0) <= 0}
-                                onClick={() =>
-                                  setExtraBed(
-                                    group.typeId,
-                                    (extraBedByType[group.typeId] ?? 0) - 1,
-                                  )
-                                }
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </Button>
-                              <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">
-                                {extraBedByType[group.typeId] ?? 0}
-                              </span>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                disabled={
-                                  (extraBedByType[group.typeId] ?? 0) >=
-                                  group.extraBedCapacityPerRoom *
-                                    (roomCountByType[group.typeId] ?? 0)
-                                }
-                                onClick={() =>
-                                  setExtraBed(
-                                    group.typeId,
-                                    (extraBedByType[group.typeId] ?? 0) + 1,
-                                  )
-                                }
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                      {group.extraBedCapacityPerRoom > 0 && (roomCountByType[group.typeId] ?? 0) > 0 && (
+                        <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
+                          <div>
+                            <p className="text-[11px] font-medium">Extra Bed</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {formatIDR(group.extraBedRate)}/malam · maks {group.extraBedCapacityPerRoom * (roomCountByType[group.typeId] ?? 0)}
+                            </p>
                           </div>
-                        )}
+                          <div className="flex items-center gap-2">
+                            <Button type="button" variant="outline" size="icon" className="h-7 w-7" disabled={(extraBedByType[group.typeId] ?? 0) <= 0} onClick={() => setExtraBed(group.typeId, (extraBedByType[group.typeId] ?? 0) - 1)}>
+                              <Minus className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="w-6 text-center font-mono text-sm font-semibold tabular-nums">{extraBedByType[group.typeId] ?? 0}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={(extraBedByType[group.typeId] ?? 0) >= group.extraBedCapacityPerRoom * (roomCountByType[group.typeId] ?? 0)}
+                              onClick={() => setExtraBed(group.typeId, (extraBedByType[group.typeId] ?? 0) + 1)}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       {extraBedErrors[group.typeId] && (
-                        <p className="border-t border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[11px] font-medium text-destructive">
-                          {extraBedErrors[group.typeId]}
-                        </p>
+                        <p className="border-t border-destructive/30 bg-destructive/5 px-3 py-1.5 text-[11px] font-medium text-destructive">{extraBedErrors[group.typeId]}</p>
                       )}
                     </div>
                   );
                 })}
               </div>
               <p className="mt-2 font-mono text-[11px] text-muted-foreground">
-                Total: <span className="text-foreground">{formatIDR(total)}</span> ·{" "}
-                {effectiveRooms.length} kamar × {Math.max(nights, 1)} malam
+                Total: <span className="text-foreground">{formatIDR(total)}</span> · {effectiveRooms.length} kamar × {Math.max(nights, 1)} malam
               </p>
             </Section>
 
-            {/* Status & Sumber */}
             <Section icon={<ClipboardList className="h-4 w-4" />} title="Status">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status Booking">
                   <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Sumber">
                   <Select value={source} onValueChange={(v) => setSource(v as typeof source)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SOURCES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
               </div>
             </Section>
 
-            {/* Payment */}
             <Section icon={<CircleDollarSign className="h-4 w-4" />} title="Pembayaran">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Status Pembayaran">
@@ -835,60 +672,28 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                       if (v === "unpaid") setPaidAmount(0);
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_STATUSES.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>
-                          {p.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{PAYMENT_STATUSES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </Field>
                 <Field label="Jumlah Dibayar (Rp)">
-                  <Input
-                    type="number"
-                    min={0}
-                    step={10000}
-                    value={paidAmount}
-                    onChange={(e) => setPaidAmount(Number(e.target.value) || 0)}
-                  />
+                  <Input type="number" min={0} step={10000} value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value) || 0)} />
                 </Field>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3">
                 <SummaryStat label="Total" value={formatIDR(total)} />
-                <SummaryStat
-                  label="Dibayar"
-                  value={formatIDR(paidAmount)}
-                />
-                <SummaryStat
-                  label="Sisa"
-                  value={formatIDR(outstanding)}
-                  accent={outstanding > 0 ? "warn" : "ok"}
-                />
+                <SummaryStat label="Dibayar" value={formatIDR(paidAmount)} />
+                <SummaryStat label="Sisa" value={formatIDR(outstanding)} accent={outstanding > 0 ? "warn" : "ok"} />
               </div>
             </Section>
 
-            {/* Notes */}
             <Section icon={<ClipboardList className="h-4 w-4" />} title="Catatan">
               <div className="space-y-3">
                 <Field label="Permintaan Khusus (dari tamu)">
-                  <Textarea
-                    value={specialRequests}
-                    onChange={(e) => setSpecialRequests(e.target.value)}
-                    rows={2}
-                    maxLength={2000}
-                  />
+                  <Textarea value={specialRequests} onChange={(e) => setSpecialRequests(e.target.value)} rows={2} maxLength={2000} />
                 </Field>
                 <Field label="Catatan Internal (untuk staff)">
-                  <Textarea
-                    value={internalNotes}
-                    onChange={(e) => setInternalNotes(e.target.value)}
-                    rows={2}
-                    maxLength={2000}
-                  />
+                  <Textarea value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} rows={2} maxLength={2000} />
                 </Field>
               </div>
             </Section>
@@ -896,9 +701,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         </div>
 
         <DialogFooter className="shrink-0 border-t border-border bg-muted/30 px-6 py-3">
-          <Button variant="outline" onClick={onClose} disabled={updateMut.isPending}>
-            Batal
-          </Button>
+          <Button variant="outline" onClick={onClose} disabled={updateMut.isPending}>Batal</Button>
           <Button onClick={() => updateMut.mutate()} disabled={!canSave} className="gap-1.5">
             {updateMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {updateMut.isPending ? "Menyimpan…" : "Simpan Perubahan"}
@@ -909,21 +712,11 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
   );
 }
 
-function Section({
-  icon,
-  title,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <header className="mb-3 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
-          {icon}
-        </span>
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">{icon}</span>
         <h3 className="text-sm font-semibold">{title}</h3>
       </header>
       {children}
@@ -931,15 +724,7 @@ function Section({
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <Label className="text-[11px] font-medium text-muted-foreground">
@@ -951,20 +736,10 @@ function Field({
   );
 }
 
-function SummaryStat({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: "ok" | "warn";
-}) {
+function SummaryStat({ label, value, accent }: { label: string; value: string; accent?: "ok" | "warn" }) {
   return (
     <div className="text-center">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-        {label}
-      </p>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{label}</p>
       <p
         className={cn(
           "mt-0.5 font-mono text-xs font-semibold tabular-nums",
