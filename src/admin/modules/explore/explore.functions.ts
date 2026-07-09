@@ -7,7 +7,10 @@ export const updateExploreConfig = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        // Beberapa project lama memakai properties.id berbentuk text/slug,
+        // bukan UUID. Jangan paksa uuid di boundary UI karena ini membuat
+        // tombol "Simpan Semua Perubahan" gagal sebelum query Supabase jalan.
+        id: z.string().min(1),
         explore_config: z.any(),
       })
       .parse(d),
