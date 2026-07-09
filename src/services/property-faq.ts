@@ -60,6 +60,13 @@ const BATHROOM_TOPIC_RE =
 const VISITOR_PICKUP_TOPIC_RE =
   /\b(keluarga|teman|saudara|rombongan|orang tua|ortu).{0,80}\b(datang|dtg|jemput|menjemput|menunggu|nunggu|mampir|berkunjung)\b|\b(datang|dtg|jemput|menjemput|menunggu|nunggu|mampir|berkunjung).{0,80}\b(keluarga|teman|saudara|rombongan|orang tua|ortu)\b|\b(sebelum\s+check\s*[- ]?out|sebelum\s+checkout|make\s*up|makeup|menunggu\s+di\s+kamar)\b/i;
 
+/**
+ * Tamu berencana datang ke lokasi untuk survey/lihat kamar. Jangan dianggap
+ * sekadar "terima kasih" atau penutup; balas dengan meminta estimasi jam.
+ */
+const VISIT_SURVEY_TOPIC_RE =
+  /\b(?:nanti\s+)?(?:pagi|siang|sore|malam)?\s*(?:ini)?\s*(?:saya|kami|aku|kita)?\s*(?:akan|mau|ingin|rencana|kemungkinan)?\s*(?:ke|datang\s+ke|dtg\s+ke|menuju\s+ke)\s+(?:lokasi|penginapan|pomah|guesthouse|gh)\b|\b(?:survey|survei|lihat\s+kamar|cek\s+kamar|lihat\s+lokasi|cek\s+lokasi|mampir\s+ke\s+lokasi|datang\s+survey|datang\s+survei)\b/i;
+
 /** Filler ekor: "kak", "min", "yaa", "dong", dst. — boleh berulang. */
 const FILLER = "(?:\\s+(?:kak|kakak|ka|min|admin|pak|bu|y+a+h?|dong|banget|banyak|deh|nih|loh|lho))*";
 
@@ -87,7 +94,7 @@ const ONE_LINER_MAX_LEN = 80;
 
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
   const raw = input.message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!raw || raw.length > 240) return null;
+  if (!raw || raw.length > 260) return null;
   if (COMPLAINT_SIGNAL_RE.test(raw)) return null;
 
   // Guard khusus: keluarga/teman yang datang menjemput atau menunggu sebentar
@@ -99,6 +106,15 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
         "Tidak apa-apa Kak, kalau keluarga hanya datang menjemput atau menunggu sebentar sebelum check-out, itu tidak dihitung sebagai tambahan tamu menginap.\n\n" +
         "Silakan saja, yang penting tetap menjaga kenyamanan dan tidak menginap di kamar ya Kak 🙏",
       intent: "visitor_pickup_policy",
+    };
+  }
+
+  // Guard khusus: tamu mau datang ke lokasi/survey. Ini harus ditangani sebelum
+  // thanks/penutup karena pesan sering berisi "terima kasih" di ujung kalimat.
+  if (VISIT_SURVEY_TOPIC_RE.test(raw)) {
+    return {
+      reply: "Baik Kak, kami tunggu ya. Rencana jam berapa Kak?",
+      intent: "visit_survey_plan",
     };
   }
 
