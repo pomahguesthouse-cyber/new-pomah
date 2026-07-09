@@ -67,6 +67,8 @@ export function buildPaymentPolicyAnswer(opts: PaymentAnswerOpts = {}): string {
 export interface FacilityRoom {
   name?: unknown;
   amenities?: unknown;
+  floor_info?: unknown;
+  size_sqm?: unknown;
 }
 
 const PRIVATE_BATHROOM_AMENITY = "Kamar mandi dalam";
@@ -80,6 +82,10 @@ const BATHROOM_AMENITY_RE =
 /** Normalisasi untuk dedup: "WI-FI", "WIfi", "wifi" → "wifi". */
 function amenityKey(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function roomNameKey(v: unknown): string {
+  return String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function dedupeAmenities(raw: unknown): string[] {
@@ -106,6 +112,25 @@ function dedupeAmenities(raw: unknown): string[] {
   // meskipun data amenities di database/seed belum lengkap.
   pushUnique(PRIVATE_BATHROOM_AMENITY);
   return out;
+}
+
+function buildDeluxeGrandDeluxeComparison(mentioned: FacilityRoom[]): string | null {
+  const names = new Set(mentioned.map((r) => roomNameKey(r.name)));
+  if (!names.has("granddeluxe") || !names.has("deluxe")) return null;
+
+  const grand = mentioned.find((r) => roomNameKey(r.name) === "granddeluxe");
+  const deluxe = mentioned.find((r) => roomNameKey(r.name) === "deluxe");
+  const grandItems = dedupeAmenities(grand?.amenities);
+  const deluxeItems = dedupeAmenities(deluxe?.amenities);
+
+  return [
+    "Perbandingan fasilitasnya ya Kak:",
+    "",
+    `*Grand Deluxe*: ${grandItems.length ? grandItems.join(", ") : "AC, WI-FI, Air Panas, Kamar mandi dalam"}`,
+    `*Deluxe*: ${deluxeItems.length ? deluxeItems.join(", ") : "WIfi, AC, Shower, Dapur Bersama, View Taman, Kamar mandi dalam"}`,
+    "",
+    "Perbedaan utamanya: *Deluxe* terletak di lantai 2 punya Shower, Dapur Bersama, View Taman, sedangkan *Grand Deluxe* terletak di lantai 1, ukurannya juga lebih luas dan punya Air Panas.",
+  ].join("\n");
 }
 
 /**
@@ -141,6 +166,9 @@ export function buildFacilityReply(text: string, rooms: FacilityRoom[]): string 
   const mentioned = findMentionedRooms(text, rooms);
 
   if (mentioned.length >= 2) {
+    const lockedDeluxeComparison = buildDeluxeGrandDeluxeComparison(mentioned);
+    if (lockedDeluxeComparison) return lockedDeluxeComparison;
+
     const lines: string[] = ["Perbandingan fasilitasnya ya Kak:", ""];
     let anyData = false;
     for (const r of mentioned) {
