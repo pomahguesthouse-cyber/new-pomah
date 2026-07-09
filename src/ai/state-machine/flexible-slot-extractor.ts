@@ -6,6 +6,8 @@
  *
  * Contoh:
  *   "dewasa 5 anak 2" → { adults: 5, children: 2 }
+ *   "3 orang dewasa" → { adults: 3, children: 0 }
+ *   "kami bertiga" → { adults: 3, children: 0 }
  *   "atas nama: Cindyaz Galuh Nialifia" → { guest_name: "Cindyaz Galuh Nialifia" }
  *   "bisa dp dulu?" → { is_payment_question: true }
  *   "minta norek" → { is_bank_account_request: true }
@@ -114,7 +116,7 @@ function cleanName(raw: string): string {
     .split(/\r?\n/)[0]!
     .replace(/^saya\s+/i, "")
     .replace(HONORIFIC_RE, " ")
-    .replace(/[,.\-–—!]+$/g, " ")
+    .replace(/[,\.\-–—!]+$/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .replace(TRAILING_FILLER_RE, "")
@@ -225,6 +227,34 @@ function resolveBareDayRange(startDay: number, endDay: number, today?: string): 
   return checkOut && checkOut > checkIn ? [checkIn, checkOut] : null;
 }
 
+function indonesianWordNumber(word: string): number | null {
+  const normalized = word.toLowerCase().replace(/[^a-z]/g, "");
+  const map: Record<string, number> = {
+    satu: 1,
+    seorang: 1,
+    sendiri: 1,
+    berdua: 2,
+    dua: 2,
+    bertiga: 3,
+    tiga: 3,
+    berempat: 4,
+    empat: 4,
+    berlima: 5,
+    lima: 5,
+    berenam: 6,
+    enam: 6,
+    bertujuh: 7,
+    tujuh: 7,
+    berdelapan: 8,
+    delapan: 8,
+    bersembilan: 9,
+    sembilan: 9,
+    bersepuluh: 10,
+    sepuluh: 10,
+  };
+  return map[normalized] ?? null;
+}
+
 // ─── Main extractor ───────────────────────────────────────────────────────────
 
 /**
@@ -309,6 +339,21 @@ export function extractAllSlots(
       const n = Number(genericPeople[1]);
       if (n >= 1 && n <= 20) result.adults = n;
     }
+  }
+
+  // Fallback bahasa natural: "kami bertiga", "berdua", "untuk tiga orang".
+  if (result.adults === undefined) {
+    const wordPeople = text.match(/\b(?:kami|kita|saya|aku|untuk)?\s*(berdua|bertiga|berempat|berlima|berenam|bertujuh|berdelapan|bersembilan|bersepuluh|satu|seorang|sendiri|dua|tiga|empat|lima|enam|tujuh|delapan|sembilan|sepuluh)(?:\s+orang)?\b/i);
+    if (wordPeople) {
+      const n = indonesianWordNumber(wordPeople[1]!);
+      if (n && n >= 1 && n <= 20) result.adults = n;
+    }
+  }
+
+  // Jika tamu sudah menyebut jumlah orang/dewasa tetapi tidak menyebut anak,
+  // jangan tanya jumlah anak lagi. Anggap anak = 0 secara eksplisit.
+  if (result.adults !== undefined && result.children === undefined) {
+    result.children = 0;
   }
 
   // ── 5. Tanggal ────────────────────────────────────────────────────────────
