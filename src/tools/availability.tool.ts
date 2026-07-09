@@ -166,7 +166,7 @@ export const checkRoomAvailability: ToolHandler = async (
   const children = Math.max(0, Math.min(20, Math.floor(Number(args.children) || 0)));
   const guestCount = adults + children;
 
-  const kamar = ctx.rooms.map((r) => {
+  const kamarBase = ctx.rooms.map((r) => {
     const d       = byId.get(r.id);
     const resolved = resolveRoomNightlyRates(
       r,
@@ -185,7 +185,7 @@ export const checkRoomAvailability: ToolHandler = async (
       ? Math.max(0, guestCount - kapasitasDefault)
       : 0;
     const melewatiKapasitas = guestCount > 0 && guestCount > kapasitasMaksimal;
-    const cocokUntukJumlahTamu = guestCount > 0
+    const memenuhiKapasitasJumlahTamu = guestCount > 0
       ? !melewatiKapasitas && (availableEffective ?? 0) > 0
       : undefined;
 
@@ -218,7 +218,12 @@ export const checkRoomAvailability: ToolHandler = async (
       kapasitas_extra_bed: kapasitasExtraBed,
       tarif_extra_bed_per_malam: Number(r.extrabed_rate ?? 0) || 0,
       kapasitas_maksimal_dengan_extra_bed: kapasitasMaksimal,
-      cocok_untuk_jumlah_tamu: cocokUntukJumlahTamu,
+      memenuhi_kapasitas_jumlah_tamu: memenuhiKapasitasJumlahTamu,
+      // Field lama tetap dipakai oleh formatter/agent. Setelah ada jumlah tamu,
+      // nilainya akan dioverride menjadi tipe yang paling pas, bukan semua tipe
+      // yang sekadar muat. Ini membuat bot menyarankan Single untuk 1 tamu,
+      // Deluxe/Grand Deluxe untuk 2–3 tamu, dan Family untuk rombongan.
+      cocok_untuk_jumlah_tamu: memenuhiKapasitasJumlahTamu,
       extra_bed_dibutuhkan: guestCount > 0 ? extraBedDibutuhkan : undefined,
       melewati_kapasitas: guestCount > 0 ? melewatiKapasitas : undefined,
       tidak_tersedia:  blockedByStopSell || (baseAvailable !== null && baseAvailable <= 0),
@@ -230,6 +235,46 @@ export const checkRoomAvailability: ToolHandler = async (
     };
   });
 
+  const roomsThatFitGuestCount = guestCount > 0
+    ? kamarBase.filter((r) => r.memenuhi_kapasitas_jumlah_tamu === true)
+    : [];
+
+  const bestCapacity = roomsThatFitGuestCount.length > 0
+    ? Math.min(...roomsThatFitGuestCount.map((r) => Number(r.kapasitas_maksimal_dengan_extra_bed) || Number.MAX_SAFE_INTEGER))
+    : null;
+
+  const recommendedIds = new Set(
+    bestCapacity === null
+      ? []
+      : roomsThatFitGuestCount
+          .filter((r) => Number(r.kapasitas_maksimal_dengan_extra_bed) === bestCapacity)
+          .map((r) => String(r.room_type_id)),
+  );
+
+  const kamar = kamarBase.map((r) => ({
+    ...r,
+    cocok_untuk_jumlah_tamu: guestCount > 0
+      ? recommendedIds.has(String(r.room_type_id))
+      : undefined,
+    disarankan_untuk_jumlah_tamu: guestCount > 0
+      ? recommendedIds.has(String(r.room_type_id))
+      : undefined,
+  }));
+
+  const rekomendasiTipeKamar = guestCount > 0 && recommendedIds.size > 0
+    ? kamar
+        .filter((r) => recommendedIds.has(String(r.room_type_id)))
+        .map((r) => ({
+          room_type_id: r.room_type_id,
+          nama: r.nama,
+          alasan: `Kapasitas paling pas untuk ${guestCount} tamu dari kamar yang masih tersedia.`,
+          kamar_tersedia: r.kamar_tersedia,
+          harga_per_malam: r.harga_per_malam,
+          kapasitas_maksimal_dengan_extra_bed: r.kapasitas_maksimal_dengan_extra_bed,
+          extra_bed_dibutuhkan: r.extra_bed_dibutuhkan,
+        }))
+    : undefined;
+
   return JSON.stringify({
     check_in:  checkIn,
     check_out: checkOut,
@@ -237,6 +282,10 @@ export const checkRoomAvailability: ToolHandler = async (
     jumlah_tamu: guestCount > 0 ? { dewasa: adults, anak: children, total: guestCount } : undefined,
     tanggal:   fmtDateID(checkIn),
     periode:   `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`,
+    rekomendasi_tipe_kamar: rekomendasiTipeKamar,
+    aturan_rekomendasi_tipe_kamar: guestCount > 0
+      ? "cocok_untuk_jumlah_tamu=true berarti tipe kamar paling pas untuk jumlah tamu, bukan sekadar semua kamar yang muat."
+      : undefined,
     kamar,
   });
 };
