@@ -129,7 +129,7 @@ function buildDeluxeGrandDeluxeComparison(mentioned: FacilityRoom[]): string | n
     `*Grand Deluxe*: ${grandItems.length ? grandItems.join(", ") : "AC, WI-FI, Air Panas, Kamar mandi dalam"}`,
     `*Deluxe*: ${deluxeItems.length ? deluxeItems.join(", ") : "WIfi, AC, Shower, Dapur Bersama, View Taman, Kamar mandi dalam"}`,
     "",
-    "Perbedaan utamanya: *Deluxe* terletak di lantai 2 punya Shower, Dapur Bersama, View Taman, sedangkan *Grand Deluxe* terletak di lantai 1, ukurannya juga lebih luas dan punya Air Panas.",
+    "Perbedaan utamanya: Kamar *Deluxe* berada di Lantai 2 (View Taman & Dapur Bersama), sedangkan kamar *Grand Deluxe* berada di Lantai 1 (Area lebih luas & ada Air Panas).",
   ].join("\n");
 }
 
