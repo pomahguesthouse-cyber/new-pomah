@@ -19,6 +19,20 @@ export const updateBookingStatus: ToolHandler = async (
     return JSON.stringify({ ok: false, error: "reference_code dan status wajib diisi." });
   }
 
+  // Jangan diam-diam mengubah booking.status saat manajer sebenarnya
+  // memaksud status pembayaran (lunas/dp/belum bayar). Arahkan LLM ke
+  // tool yang benar.
+  const paymentLike = ["paid", "lunas", "partial", "dp", "unpaid", "belum", "belum bayar", "dibayar sebagian"];
+  if (paymentLike.includes(newStatus.toLowerCase())) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        `"${newStatus}" adalah status PEMBAYARAN, bukan status booking. ` +
+        `Panggil update_payment_status untuk mengubah status pembayaran. ` +
+        `update_booking_status hanya untuk: pending, confirmed, checked_in, checked_out, cancelled.`,
+    });
+  }
+
   // Allowed statuses
   const validStatuses = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"];
   if (!validStatuses.includes(newStatus)) {
