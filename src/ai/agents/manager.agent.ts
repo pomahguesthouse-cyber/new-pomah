@@ -174,10 +174,19 @@ export const managerAgent: AgentDefinition = {
         "  - get_bookings (booking terbaru, daftar/jadwal/laporan booking)\n" +
         "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
         "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
-        "  - update_booking_status, delete_booking, change_booking_room, set_extra_bed (mutasi booking)\n" +
+        "  - update_booking_status (pending/confirmed/checked_in/checked_out/cancelled — BUKAN untuk pembayaran)\n" +
+        "  - update_payment_status (lunas/dp/belum bayar — WAJIB dipakai bila manajer bilang 'tandai lunas', 'sudah DP', dsb.)\n" +
+        "  - reschedule_booking (geser/reschedule tanggal check-in/out; total otomatis dihitung ulang)\n" +
+        "  - send_invoice (dengan send_to_guest=true bila manajer minta 'kirim invoice ke tamu')\n" +
+        "  - delete_booking, change_booking_room, set_extra_bed (mutasi booking)\n" +
         "    · set_extra_bed: 'tambahkan/kurangi/set/hapus extrabed' → gunakan mode add/remove/set/clear. " +
         "'hapus extrabed' atau 'kosongkan extrabed' → mode='clear' (extra bed jadi 0 pada tipe/kamar itu).\n" +
         "  - reply_to_guest (relay ke tamu)\n" +
+        "KONFIRMASI: Sebagian tool (update_booking_status, update_payment_status, reschedule_booking, " +
+        "change_booking_room, delete_booking, reply_to_guest) memerlukan dua langkah. " +
+        "Panggilan pertama akan mengembalikan needs_confirmation berisi ringkasan aksi; " +
+        "tampilkan ringkasan itu ke manajer dan tunggu balasan. Bila manajer jawab 'ya', 'ok', 'lanjut', 'setuju', 'oke sip', " +
+        "panggil ulang tool YANG SAMA dengan argumen SAMA + confirmed=true. Bila jawaban 'tidak/batal', jangan panggil ulang.\n" +
         "Untuk perintah yang cocok dengan tool langsung di atas, panggil tool langsung. " +
         "Untuk instruksi lainnya, gunakan peta delegasi wajib.",
 
