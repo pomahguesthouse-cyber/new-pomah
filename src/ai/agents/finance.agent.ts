@@ -65,6 +65,13 @@ const FINANCE_TOOLS: ToolDefinition[] = [
               "Kode booking (mis. PMH-XXXXXX). Wajib diisi bila diketahui — lebih akurat " +
               "daripada menebak dari nomor HP.",
           },
+          send_to_guest: {
+            type: "boolean",
+            description:
+              "Set true bila manajer meminta 'kirim invoice ke tamu' — invoice langsung " +
+              "dikirim ke nomor WA tamu (via pipeline invoice-notification). " +
+              "Default false: hanya mengembalikan data invoice untuk diformat oleh agent.",
+          },
         },
       },
     },
