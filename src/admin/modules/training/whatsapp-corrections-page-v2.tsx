@@ -587,7 +587,7 @@ function MessageTimeline(props: {
   setDraftBody: (value: string) => void;
   editedBodies: Record<string, string>;
   setEditedBodies: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  saveTurnMut: ReturnType<typeof useMutation>;
+  saveTurnMut: UseMutationResult<any, any, any, any>;
 }) {
   let lastDay = "";
   return (
@@ -633,7 +633,7 @@ function ChatBubble(props: {
   setDraftBody: (value: string) => void;
   editedBodies: Record<string, string>;
   setEditedBodies: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  saveTurnMut: ReturnType<typeof useMutation>;
+  saveTurnMut: UseMutationResult<any, any, any, any>;
 }) {
   const m = props.message;
   const out = m.direction === "out";
@@ -726,7 +726,7 @@ function RightContext(props: {
   errorType: string;
   setErrorType: (value: string) => void;
   syncRuns: SyncRunRow[];
-  saveSessionMut: ReturnType<typeof useMutation>;
+  saveSessionMut: UseMutationResult<any, any, any, any>;
   trainingMessagesCount: number;
 }) {
   return (
@@ -771,7 +771,7 @@ function RightContext(props: {
   );
 }
 
-function SavedPanel({ sessions, deleteSessionMut }: { sessions: SessionRow[]; deleteSessionMut: ReturnType<typeof useMutation> }) {
+function SavedPanel({ sessions, deleteSessionMut }: { sessions: SessionRow[]; deleteSessionMut: UseMutationResult<any, any, any, any> }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4">
       <div className="mb-3">
