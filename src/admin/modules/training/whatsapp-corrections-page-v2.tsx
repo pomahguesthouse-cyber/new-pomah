@@ -737,7 +737,7 @@ function RightContext(props: {
         <Button
           className="mt-3 w-full rounded-full bg-[#008069] hover:bg-[#00695c]"
           disabled={!props.trainingMessagesCount || props.saveSessionMut.isPending}
-          onClick={() => props.saveSessionMut.mutate()}
+          onClick={() => props.saveSessionMut.mutate(undefined as never)}
         >
           {props.saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
           Simpan Percakapan Utuh
