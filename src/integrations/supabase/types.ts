@@ -3694,6 +3694,7 @@ export type Database = {
         }
         Returns: string
       }
+      delete_past_city_guide_events: { Args: never; Returns: number }
       enqueue_processing_job: {
         Args: { p_body: string; p_message_id: string; p_phone: string }
         Returns: string
