@@ -275,16 +275,96 @@ export const checkRoomAvailability: ToolHandler = async (
         }))
     : undefined;
 
+  // Guard agregat: LLM tidak boleh menyimpulkan masih ada opsi lain jika
+  // seluruh inventori sudah habis atau kapasitas gabungannya tetap tidak cukup.
+  const inventoriTersedia = kamar
+    .filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true)
+    .map((r) => {
+      const jumlahKamar = Math.max(0, Math.floor(Number(r.kamar_tersedia ?? 0)));
+      const kapasitasPerKamar = Math.max(
+        1,
+        Math.floor(Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 1)),
+      );
+      return {
+        room_type_id: r.room_type_id,
+        nama: r.nama,
+        jumlah_kamar: jumlahKamar,
+        kapasitas_per_kamar: kapasitasPerKamar,
+        kapasitas_total: jumlahKamar * kapasitasPerKamar,
+        harga_per_malam: r.harga_per_malam,
+      };
+    });
+
+  const totalKamarTersedia = inventoriTersedia.reduce(
+    (sum, r) => sum + r.jumlah_kamar,
+    0,
+  );
+  const totalKapasitasTersedia = inventoriTersedia.reduce(
+    (sum, r) => sum + r.kapasitas_total,
+    0,
+  );
+
+  const availabilityStatus = totalKamarTersedia === 0
+    ? "sold_out"
+    : guestCount > 0 && totalKapasitasTersedia < guestCount
+      ? "insufficient_capacity"
+      : "available";
+
+  const periode = `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`;
+  const terminalAvailabilityResult = availabilityStatus !== "available";
+
+  let replyToGuest: string | undefined;
+  let instructionToAgent: string | undefined;
+
+  if (availabilityStatus === "sold_out") {
+    replyToGuest =
+      `Maaf Kak, untuk tanggal ${periode} seluruh kamar kami sudah penuh. ` +
+      "Terima kasih sudah menghubungi Pomah Guesthouse 🙏";
+    instructionToAgent =
+      "HASIL FINAL SOLD_OUT. Kirim `reply_to_guest` VERBATIM. " +
+      "JANGAN menawarkan tipe kamar lain, opsi kamar lain, tanggal lain, waitlist, atau pertanyaan lanjutan. " +
+      "Tanggal alternatif hanya boleh dicek jika tamu memintanya secara eksplisit pada pesan berikutnya.";
+  } else if (availabilityStatus === "insufficient_capacity") {
+    const daftar = inventoriTersedia
+      .map(
+        (r) =>
+          `• ${r.nama}: ${r.jumlah_kamar} kamar tersedia, maksimal ${r.kapasitas_per_kamar} tamu/kamar`,
+      )
+      .join("\n");
+    replyToGuest =
+      `Maaf Kak, untuk tanggal ${periode} kamar yang tersedia belum cukup untuk menampung ${guestCount} orang.\n\n` +
+      `Yang masih tersedia:\n${daftar}\n\n` +
+      "Terima kasih sudah menghubungi Pomah Guesthouse 🙏";
+    instructionToAgent =
+      "HASIL FINAL INSUFFICIENT_CAPACITY. Seluruh inventori dan kapasitas gabungan sudah dihitung. " +
+      "Kirim `reply_to_guest` VERBATIM. JANGAN menawarkan tipe/opsi kamar lain, jangan berkata 'kalau ada', " +
+      "jangan menawarkan tanggal lain, dan jangan mengajukan pertanyaan lanjutan. " +
+      "Tanggal alternatif hanya boleh dicek jika tamu memintanya secara eksplisit pada pesan berikutnya.";
+  }
+
   return JSON.stringify({
     check_in:  checkIn,
     check_out: checkOut,
     nights,
     jumlah_tamu: guestCount > 0 ? { dewasa: adults, anak: children, total: guestCount } : undefined,
     tanggal:   fmtDateID(checkIn),
-    periode:   `${fmtDateID(checkIn)} – ${fmtDateID(checkOut)}`,
+    periode,
+    availability_status: availabilityStatus,
+    terminal_availability_result: terminalAvailabilityResult,
+    dapat_menampung_jumlah_tamu: guestCount > 0
+      ? availabilityStatus === "available"
+      : undefined,
+    total_kamar_tersedia: totalKamarTersedia,
+    total_kapasitas_tersedia: totalKapasitasTersedia,
+    inventori_tersedia: inventoriTersedia,
+    should_offer_other_room_types: terminalAvailabilityResult ? false : undefined,
+    should_offer_alternative_dates: terminalAvailabilityResult ? false : undefined,
+    relay_verbatim: replyToGuest ? true : undefined,
+    reply_to_guest: replyToGuest,
+    instruction_to_agent: instructionToAgent,
     rekomendasi_tipe_kamar: rekomendasiTipeKamar,
     aturan_rekomendasi_tipe_kamar: guestCount > 0
-      ? "cocok_untuk_jumlah_tamu=true berarti tipe kamar paling pas untuk jumlah tamu, bukan sekadar semua kamar yang muat."
+      ? "cocok_untuk_jumlah_tamu=true berarti tipe kamar paling pas untuk jumlah tamu. Gunakan availability_status dan total_kapasitas_tersedia untuk keputusan final lintas beberapa kamar."
       : undefined,
     kamar,
   });
