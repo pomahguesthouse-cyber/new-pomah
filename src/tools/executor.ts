@@ -66,6 +66,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   cc_payment_proof_to_admin:     ccPaymentProofToAdmin,
   get_bookings:                  getBookings,
   update_booking_status:         updateBookingStatus,
+  reschedule_booking:            rescheduleBooking,
   delete_booking:                deleteBooking,
   change_booking_room:           changeBookingRoom,
   set_extra_bed:                 setExtraBed,
