@@ -38,13 +38,11 @@ const listInput = z
     status: z.enum(["all", ...STATUS_VALUES]).optional().default("all"),
     phone: z.string().trim().max(40).optional(),
     limit: z.number().int().min(1).max(500).optional().default(100),
-  })
-  .optional()
-  .default(() => ({}));
+  });
 
 export const listBookingFormSendLogs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => listInput.parse(d))
+  .inputValidator((d) => listInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (context.supabase as any)
@@ -68,7 +66,7 @@ const resendInput = z.object({ logId: z.string().uuid() });
 
 export const resendBookingFormLink = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => resendInput.parse(d))
+  .inputValidator((d) => resendInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     // Otorisasi: hanya admin/manager yang boleh memicu pengiriman ulang.
     const { data: isAdmin } = await (context.supabase as unknown as {

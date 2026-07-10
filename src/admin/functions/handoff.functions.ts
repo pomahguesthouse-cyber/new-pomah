@@ -40,13 +40,11 @@ const listInput = z
   .object({
     status: z.enum(["all", ...STATUS_VALUES]).optional().default("all"),
     limit: z.number().int().min(1).max(200).optional().default(100),
-  })
-  .optional()
-  .default(() => ({}));
+  });
 
 export const listHandoffTickets = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => listInput.parse(d))
+  .inputValidator((d) => listInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const supabase = context.supabase as unknown as {
       from: (t: string) => {
@@ -78,7 +76,7 @@ const updateInput = z.object({
 
 export const updateHandoffTicket = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => updateInput.parse(d))
+  .inputValidator((d) => updateInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const update: Record<string, unknown> = {
       status: data.status,

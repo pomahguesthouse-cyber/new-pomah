@@ -38,13 +38,11 @@ const listInput = z
   .object({
     activeOnly: z.boolean().optional().default(false),
     limit: z.number().int().min(1).max(1000).optional().default(500),
-  })
-  .optional()
-  .default(() => ({}));
+  });
 
 export const listTrainingExamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => listInput.parse(d))
+  .inputValidator((d) => listInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     let q = (context.supabase as any)
       .from("chatbot_training_examples")
@@ -231,13 +229,11 @@ export const deleteTrainingExample = createServerFn({ method: "POST" })
  * `embedding IS NULL`. Dibatasi `maxRows` agar request tidak timeout.
  */
 const backfillInput = z
-  .object({ maxRows: z.number().int().min(1).max(200).default(50) })
-  .optional()
-  .default(() => ({}));
+  .object({ maxRows: z.number().int().min(1).max(200).default(50) });
 
 export const backfillCuratedEmbeddings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => backfillInput.parse(d))
+  .inputValidator((d) => backfillInput.parse(d ?? {}))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await (supabaseAdmin as any)

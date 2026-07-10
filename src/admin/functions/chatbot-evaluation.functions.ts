@@ -22,9 +22,7 @@ const evalInput = z
   .object({
     limit: z.number().int().min(1).max(100).optional().default(20),
     windowDays: z.number().int().min(1).max(30).optional().default(7),
-  })
-  .optional()
-  .default(() => ({}));
+  });
 
 function asMeta(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -103,7 +101,7 @@ function scoreReply(args: {
 
 export const evaluateRecentWhatsAppConversations = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => evalInput.parse(d))
+  .inputValidator((d) => evalInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const since = new Date(Date.now() - data.windowDays * 24 * 60 * 60 * 1000).toISOString();
     const { data: messages, error } = await (context.supabase as any)
@@ -198,7 +196,7 @@ function genId(prefix: string): string {
 
 export const promoteEvaluationToTrainingExample = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => promoteInput.parse(d))
+  .inputValidator((d) => promoteInput.parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const id = genId("tr");
     const row = {
