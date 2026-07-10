@@ -364,7 +364,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'.",
 
-    "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pusat kuliner Semarang. (2) LANDMARK TERDEKAT: Pomah Guesthouse memiliki lokasi strategis yang sangat dekat dengan beberapa landmark utama Semarang seperti Simpang Lima, Kawasan Kota Lama, dan pusat kuliner Jalan Pahlawan.",
+    "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami di Gunungpati sangat dekat dengan banyak pusat kuliner mahasiswa dan keluarga. (2) LANDMARK TERDEKAT: Pomah Guesthouse berlokasi sangat strategis di Gunungpati, hanya berjarak sekitar 1,5 km (5 menit berkendara) dari Kampus Utama UNNES Sekaran. Sangat cocok untuk tamu rombongan wisuda, kunjungan keluarga mahasiswa, atau kegiatan dinas di area Gunungpati.",
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ]
