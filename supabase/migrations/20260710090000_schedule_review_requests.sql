@@ -1,6 +1,6 @@
 -- Migration: Schedule Proactive Review Requests
--- Description: Uses pg_cron to trigger the send-review-request Edge Function 
--- every day at 13:00 WIB (after standard 12:00 checkout).
+-- Description: Menggunakan pg_cron untuk memicu Edge Function send-review-request 
+-- setiap hari pada jam 15:00 WIB (setelah waktu check-out standar jam 12:00).
 
 DO $$
 BEGIN
@@ -12,12 +12,12 @@ BEGIN
   END IF;
 
   -- 2. Schedule the request
-  -- 06:00 UTC is 13:00 WIB (Asia/Jakarta)
-  -- Note: Replace <YOUR_PROJECT_REF> with your actual Supabase project reference if not using local relative calls
-  -- For Edge Functions, we usually use net.http_post
+  -- 2. Jadwalkan permintaan ulasan
+  -- 08:00 UTC sama dengan 15:00 WIB (Asia/Jakarta)
+  -- Menggunakan pg_net (net.http_post) untuk memanggil Edge Function secara internal
   PERFORM cron.schedule(
     'proactive-google-review-request',
-    '0 6 * * *',
+    '0 8 * * *',
     $$
     SELECT
       net.http_post(
