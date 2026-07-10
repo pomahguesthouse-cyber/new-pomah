@@ -120,7 +120,31 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
     });
   }
 
-  // ── 2. Build payload ───────────────────────────────────────────────────
+  // ── 2. Optional: kirim invoice langsung ke WhatsApp tamu ────────────────
+  //     Manajer via Telegram bisa perintah "kirim invoice PMH-XXXX ke tamu";
+  //     Finance Agent set send_to_guest=true. Tool memanggil pipeline yang
+  //     sama seperti tombol "Kirim Invoice" di admin.
+  let waSent = false;
+  let waError: string | null = null;
+  if (args.send_to_guest === true) {
+    try {
+      const { generateAndSendInvoiceNotification } = await import(
+        "@/services/invoice-notification.service"
+      );
+      const res = await generateAndSendInvoiceNotification({
+        supabase:     ctx.supabaseAdmin as any,
+        bookingId:    bookingRow.id,
+        origin:       ctx.origin,
+        skipWhatsApp: false,
+      });
+      waSent = !!res.wa_sent;
+      waError = res.error ?? null;
+    } catch (e) {
+      waError = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  // ── 3. Build payload ───────────────────────────────────────────────────
   const b = bookingRow;
   const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
   const br = Array.isArray(b.booking_rooms) ? b.booking_rooms[0] : b.booking_rooms;
@@ -135,6 +159,8 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
 
   return JSON.stringify({
     ok: true,
+    wa_sent: waSent,
+    wa_error: waError,
     booking: {
       reference_code: b.reference_code,
       status: b.status,
