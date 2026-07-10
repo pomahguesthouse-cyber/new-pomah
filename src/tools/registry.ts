@@ -258,6 +258,50 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "reschedule_booking",
+      description:
+        "MANAJER ONLY. Ubah tanggal check-in / check-out sebuah booking. " +
+        "Total dan jumlah malam otomatis dihitung ulang dari nightly_rate yang tersimpan. " +
+        "Contoh perintah: 'reschedule PMH-123 ke 15 Agustus 2 malam', 'geser check-in booking Budi ke besok'. " +
+        "Panggilan pertama tanpa confirmed=true akan mengembalikan needs_confirmation berisi ringkasan lama vs baru; " +
+        "panggil ulang dengan confirmed=true setelah manajer setuju.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode booking (mis. PMH-XXXXXX)." },
+          new_check_in:   { type: "string", description: "Tanggal check-in baru YYYY-MM-DD." },
+          new_check_out:  { type: "string", description: "Tanggal check-out baru YYYY-MM-DD. Kosongkan untuk mempertahankan jumlah malam." },
+          confirmed:      { type: "boolean", description: "Wajib true di panggilan kedua." },
+        },
+        required: ["reference_code", "new_check_in"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_payment_status",
+      description:
+        "Ubah status pembayaran booking (paid/lunas, partial/DP, unpaid/belum bayar). " +
+        "Berbeda dari update_booking_status (yang mengubah booking.status seperti confirmed/cancelled). " +
+        "Panggil ini bila manajer bilang 'tandai lunas', 'sudah DP', 'balikin ke belum bayar'.",
+      parameters: {
+        type: "object",
+        properties: {
+          reference_code: { type: "string", description: "Kode booking (mis. PMH-XXXXXX)." },
+          new_status: {
+            type: "string",
+            enum: ["paid", "partial", "unpaid"],
+            description: "'paid' = lunas, 'partial' = DP/dibayar sebagian, 'unpaid' = belum bayar.",
+          },
+        },
+        required: ["reference_code", "new_status"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "delete_booking",
       description:
         "Hapus/batalkan booking (managerial only). Manajer cukup sebut kode booking atau " +
