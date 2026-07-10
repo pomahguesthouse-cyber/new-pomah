@@ -711,6 +711,7 @@ export const TOOL_LABELS: Record<string, string> = {
   cc_payment_proof_to_admin:    "Finance - CC Bukti Transfer ke Super Admin",
   get_bookings:                 "Manager - List Bookings",
   update_booking_status:        "Manager - Update Booking Status",
+  reschedule_booking:           "Manager - Reschedule Booking",
   delete_booking:               "Manager - Hapus / Batalkan Booking",
   change_booking_room:          "Manager - Change Booking Room",
   set_extra_bed:                "Manager - Set Extra Bed Booking",
