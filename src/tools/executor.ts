@@ -21,6 +21,7 @@ import { updatePaymentStatus }            from "./finance/update-payment-status.
 import { ccPaymentProofToAdmin }          from "./finance/cc-payment-proof-to-admin.tool";
 import { getBookings }                    from "./manager/get-bookings.tool";
 import { updateBookingStatus }            from "./manager/update-booking-status.tool";
+import { rescheduleBooking }               from "./manager/reschedule-booking.tool";
 import { deleteBooking }                  from "./manager/delete-booking.tool";
 import { changeBookingRoom }              from "./manager/change-booking-room.tool";
 import { setExtraBed }                    from "./manager/set-extra-bed.tool";
