@@ -40,7 +40,7 @@ const listInput = z
     limit: z.number().int().min(1).max(500).optional().default(100),
   })
   .optional()
-  .default({});
+  .default(() => ({}));
 
 export const listBookingFormSendLogs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

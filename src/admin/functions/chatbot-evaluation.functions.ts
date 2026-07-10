@@ -24,7 +24,7 @@ const evalInput = z
     windowDays: z.number().int().min(1).max(30).optional().default(7),
   })
   .optional()
-  .default({});
+  .default(() => ({}));
 
 function asMeta(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)

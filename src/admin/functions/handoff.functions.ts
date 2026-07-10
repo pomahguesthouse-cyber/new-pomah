@@ -42,7 +42,7 @@ const listInput = z
     limit: z.number().int().min(1).max(200).optional().default(100),
   })
   .optional()
-  .default({});
+  .default(() => ({}));
 
 export const listHandoffTickets = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

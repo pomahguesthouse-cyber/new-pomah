@@ -40,7 +40,7 @@ const listInput = z
     limit: z.number().int().min(1).max(1000).optional().default(500),
   })
   .optional()
-  .default({});
+  .default(() => ({}));
 
 export const listTrainingExamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -233,7 +233,7 @@ export const deleteTrainingExample = createServerFn({ method: "POST" })
 const backfillInput = z
   .object({ maxRows: z.number().int().min(1).max(200).default(50) })
   .optional()
-  .default({});
+  .default(() => ({}));
 
 export const backfillCuratedEmbeddings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
