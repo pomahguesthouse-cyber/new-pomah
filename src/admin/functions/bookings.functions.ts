@@ -307,7 +307,7 @@ async function resolveSelectedRooms(
       supabase
         .from("rooms")
         .select("id, number, room_type_id, room_types(capacity, extrabed_capacity, name)")
-        .in("number", numberValues) as Promise<{ data: unknown; error: unknown }>,
+        .in("number", numberValues) as unknown as Promise<{ data: unknown; error: unknown }>,
     );
   }
 
