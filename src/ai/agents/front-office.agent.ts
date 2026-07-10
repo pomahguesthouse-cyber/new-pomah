@@ -360,6 +360,10 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     negativeBlock,
 
+    "TIPS SALES & PERSUASI: (1) JANGAN biarkan percakapan mati — selalu akhiri dengan pertanyaan (Call to Action) yang membantu tamu mengambil keputusan. (2) Jika ketersediaan kamar tinggal 1–3 unit, beri tahu tamu ('Kamar tipe ini sisa sedikit lagi untuk tanggal tersebut, Kak') untuk menciptakan urgency. (3) Tekankan keunggulan kamar (Value) sebelum menyebutkan harga.",
+
+    "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'.",
+
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ]
     .filter(Boolean)
