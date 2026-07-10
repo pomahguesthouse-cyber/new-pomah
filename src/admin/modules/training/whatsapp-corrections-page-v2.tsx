@@ -667,7 +667,7 @@ function ChatBubble(props: {
           {props.editedBodies[m.id] && <Badge className="h-4 bg-[#e7fce3] px-1.5 text-[9px] text-[#008069] hover:bg-[#e7fce3]">edited</Badge>}
           {m.metadata?.source === "wppconnect_sync" && <Badge className="h-4 bg-sky-100 px-1.5 text-[9px] text-sky-700 hover:bg-sky-100">wpp sync</Badge>}
           {out && Boolean(m.metadata?.agent_key) && (
-            <Badge className="h-4 bg-amber-100 px-1.5 text-[9px] text-amber-700 hover:bg-amber-100">{String(m.metadata.agent_key)}</Badge>
+            <Badge className="h-4 bg-amber-100 px-1.5 text-[9px] text-amber-700 hover:bg-amber-100">{String(m.metadata?.agent_key ?? "")}</Badge>
           )}
           <span>{formatTimeID(m.sent_at)}</span>
         </div>
