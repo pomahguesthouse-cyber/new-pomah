@@ -181,4 +181,4 @@ async function run(req: Request) {
   return json({ ok: okCount > 0, checked: results.length, success: okCount, imported, updated, skipped, results });
 }
 
-export const Route = createFileRoute("/api/cron/wpp-sync")({ server: { handlers: { GET: run, POST: run } } });
+export const Route = createFileRoute("/api/cron/wpp-sync")({ server: { handlers: { GET: ({ request }) => run(request), POST: ({ request }) => run(request) } } });
