@@ -32,15 +32,24 @@ export const updatePaymentStatus: ToolHandler = async (
   ctx:  ToolContext,
 ): Promise<string> => {
   const refCode = str(args.reference_code);
-  const rawStatus = str(args.new_status).toLowerCase() as PaymentStatus;
+  const raw = str(args.new_status).toLowerCase();
+
+  // Normalisasi sinonim manajer: "lunas"→paid, "dp"/"dibayar sebagian"→partial,
+  // "belum"/"belum bayar"→unpaid.
+  const rawStatus = ((): PaymentStatus | "" => {
+    if (["paid", "lunas", "sudah lunas"].includes(raw)) return "paid";
+    if (["partial", "dp", "sudah dp", "dibayar sebagian"].includes(raw)) return "partial";
+    if (["unpaid", "belum", "belum bayar", "belum dibayar"].includes(raw)) return "unpaid";
+    return (["paid", "partial", "unpaid"].includes(raw) ? raw : "") as PaymentStatus | "";
+  })();
 
   if (!refCode) {
     return JSON.stringify({ ok: false, error: "reference_code wajib diisi." });
   }
-  if (!["paid", "partial", "unpaid"].includes(rawStatus)) {
+  if (!rawStatus) {
     return JSON.stringify({
       ok: false,
-      error: "new_status harus salah satu: paid, partial, unpaid.",
+      error: "new_status harus salah satu: paid (lunas), partial (DP), unpaid (belum bayar).",
     });
   }
 
