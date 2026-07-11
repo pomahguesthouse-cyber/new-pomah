@@ -72,6 +72,7 @@ export function PublicNav({
           </Link>
           <Link
             to="/rooms"
+            hash="rooms"
             className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
           >
             Kamar
@@ -336,6 +337,7 @@ export function PublicFooter({
           </p>
           <Link
             to="/login"
+            search={{ next: undefined }}
             className="font-mono text-[10px] uppercase tracking-widest text-teal-400/40 hover:text-teal-300/60"
           >
             Staff Login
