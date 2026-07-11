@@ -1,19 +1,3 @@
-/**
- * Unified training retrieval — gabungkan tiga sumber contoh latihan:
- *   1) `chatbot_training_examples` (curated JSONL) → bobot lebih tinggi
- *   2) `ai_conversation_logs` (rating='good' admin) → bobot normal
- *   3) `wa_correction_dataset` (koreksi dari WhatsApp asli) → bobot tinggi
- *
- * Strategi:
- *   - Bila API key embedding tersedia → query vector ke semua sumber via RPC,
- *     gabungkan, dedup, beri boost, ambil top-K.
- *   - Bila tidak ada API key → fallback keyword overlap pada
- *     `chatbot_training_examples` (legacy path).
- *
- * Output kompatibel dengan struktur `AgentContext.trainingExamples` yang sudah
- * dipakai agent prompts. Koreksi WA asli juga masuk ke negative examples agar
- * agent melihat pola jawaban yang harus dihindari.
- */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbedding } from "@/ai/embedding.service";
 import type { AiClientConfig } from "@/ai/types";
@@ -48,15 +32,15 @@ interface FindInput {
   userMessage: string;
   intent?: string | null;
   stage?: string | null;
+  /** Ringkasan singkat atau 1–3 turn terakhir. Jangan kirim seluruh transkrip. */
+  conversationContext?: string | null;
+  roomType?: string | null;
 }
 
 interface FindOptions {
   limit?: number;
-  /** Bobot tambahan untuk contoh curated (0..1). Default 0.10. */
   curatedBoost?: number;
-  /** Bobot tambahan untuk koreksi WhatsApp asli (0..1). Default 0.12. */
   correctionBoost?: number;
-  /** Threshold kemiripan minimum untuk RPC vector (0..1). */
   minSimilarity?: number;
 }
 
@@ -64,8 +48,57 @@ const DEFAULT_LIMIT = 3;
 const DEFAULT_CURATED_BOOST = 0.10;
 const DEFAULT_CORRECTION_BOOST = 0.12;
 const DEFAULT_MIN_SIM = 0.72;
+const INTENT_MATCH_BOOST = 0.12;
+const STAGE_MATCH_BOOST = 0.08;
+const INTENT_MISMATCH_PENALTY = 0.08;
+const STAGE_MISMATCH_PENALTY = 0.04;
+const MAX_CONTEXT_CHARS = 700;
 
-/** Retrieval utama. `llmConfig` opsional — bila null, pakai keyword fallback. */
+function cleanMeta(value?: string | null): string | null {
+  const cleaned = value?.trim().toLowerCase();
+  return cleaned || null;
+}
+
+function clampScore(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Pesan pendek WhatsApp seperti "kalau deluxe" tidak cukup berdiri sendiri.
+ * Query embedding diperkaya secara terbatas dengan konteks, intent, stage dan
+ * tipe kamar aktif agar retrieval memahami turn lanjutan tanpa prompt bloat.
+ */
+function buildRetrievalQuery(input: FindInput): string {
+  const parts = [`Pesan terbaru: ${(input.userMessage ?? "").trim()}`];
+  const context = input.conversationContext?.trim().slice(0, MAX_CONTEXT_CHARS);
+  if (context) parts.push(`Konteks percakapan: ${context}`);
+  if (input.intent?.trim()) parts.push(`Intent aktif: ${input.intent.trim()}`);
+  if (input.stage?.trim()) parts.push(`Tahap/topik aktif: ${input.stage.trim()}`);
+  if (input.roomType?.trim()) parts.push(`Tipe kamar aktif: ${input.roomType.trim()}`);
+  return parts.join("\n");
+}
+
+function rerankExample(
+  ex: UnifiedTrainingExample,
+  input: FindInput,
+  sourceBoost: number,
+): UnifiedTrainingExample {
+  let score = ex.similarity + sourceBoost;
+  const wantedIntent = cleanMeta(input.intent);
+  const exampleIntent = cleanMeta(ex.intent);
+  const wantedStage = cleanMeta(input.stage);
+  const exampleStage = cleanMeta(ex.stage);
+
+  if (wantedIntent && exampleIntent) {
+    score += wantedIntent === exampleIntent ? INTENT_MATCH_BOOST : -INTENT_MISMATCH_PENALTY;
+  }
+  if (wantedStage && exampleStage) {
+    score += wantedStage === exampleStage ? STAGE_MATCH_BOOST : -STAGE_MISMATCH_PENALTY;
+  }
+
+  return { ...ex, similarity: clampScore(score) };
+}
+
 export async function findTrainingContext(
   supabase: SupabaseClient,
   input: FindInput,
@@ -76,39 +109,48 @@ export async function findTrainingContext(
   const curatedBoost = options.curatedBoost ?? DEFAULT_CURATED_BOOST;
   const correctionBoost = options.correctionBoost ?? DEFAULT_CORRECTION_BOOST;
   const minSim = options.minSimilarity ?? DEFAULT_MIN_SIM;
-
   const userMsg = (input.userMessage ?? "").trim();
-  if (!userMsg) return [];
+  if (!userMsg || limit <= 0) return [];
 
-  // ── Fallback path: tanpa API key, pakai keyword overlap ke curated saja.
+  const retrievalQuery = buildRetrievalQuery(input);
+
   if (!llmConfig?.apiKey) {
-    const kw = await findRelevantTrainingExamples(supabase, input, limit);
-    return kw.map((ex) => keywordToUnified(ex, 0.5));
+    const kw = await findRelevantTrainingExamples(
+      supabase,
+      { userMessage: retrievalQuery, intent: input.intent, stage: input.stage },
+      limit,
+    );
+    return kw.map((ex) => rerankExample(keywordToUnified(ex, 0.5), input, curatedBoost));
   }
 
-  // ── Hybrid path: embed query sekali, lalu query semua RPC paralel.
-  const queryEmbedding = await generateEmbedding(llmConfig, userMsg).catch(() => null);
+  const queryEmbedding = await generateEmbedding(llmConfig, retrievalQuery).catch(() => null);
   if (!queryEmbedding) {
-    // Embedding gagal — degrade ke keyword agar bot tetap punya contoh.
-    const kw = await findRelevantTrainingExamples(supabase, input, limit);
-    return kw.map((ex) => keywordToUnified(ex, 0.5));
+    const kw = await findRelevantTrainingExamples(
+      supabase,
+      { userMessage: retrievalQuery, intent: input.intent, stage: input.stage },
+      limit,
+    );
+    return kw.map((ex) => rerankExample(keywordToUnified(ex, 0.5), input, curatedBoost));
   }
 
+  // Ambil kandidat lebih banyak sebelum reranking agar contoh intent/stage yang
+  // benar tidak tersingkir hanya karena selisih similarity yang sangat kecil.
+  const candidateCount = Math.max(limit * 4, 8);
   const [curatedRes, logRes, correctionRes] = await Promise.allSettled([
     supabase.rpc("match_chatbot_training_examples", {
       query_embedding: queryEmbedding as unknown as string,
       match_threshold: minSim,
-      match_count: limit,
+      match_count: candidateCount,
     }),
     supabase.rpc("match_training_examples", {
       query_embedding: queryEmbedding as unknown as string,
       match_threshold: minSim,
-      match_count: limit,
+      match_count: candidateCount,
     }),
     supabase.rpc("match_wa_correction_ideal_examples", {
       query_embedding: queryEmbedding as unknown as string,
       match_threshold: minSim,
-      match_count: limit,
+      match_count: candidateCount,
     }),
   ]);
 
@@ -116,33 +158,26 @@ export async function findTrainingContext(
 
   if (curatedRes.status === "fulfilled" && Array.isArray(curatedRes.value.data)) {
     for (const r of curatedRes.value.data as Array<{
-      id: string;
-      user_message: string;
-      ideal_assistant_response: string;
-      intent: string | null;
-      stage: string | null;
-      similarity: number;
+      id: string; user_message: string; ideal_assistant_response: string;
+      intent: string | null; stage: string | null; similarity: number;
     }>) {
-      merged.push({
+      merged.push(rerankExample({
         id: r.id,
         source: "curated",
         user_message: r.user_message,
         ideal_assistant_response: r.ideal_assistant_response,
         intent: r.intent,
         stage: r.stage,
-        similarity: r.similarity + curatedBoost,
-      });
+        similarity: r.similarity,
+      }, input, curatedBoost));
     }
   }
 
   if (logRes.status === "fulfilled" && Array.isArray(logRes.value.data)) {
     for (const r of logRes.value.data as Array<{
-      id: string;
-      user_message: string;
-      effective_answer: string;
-      similarity: number;
+      id: string; user_message: string; effective_answer: string; similarity: number;
     }>) {
-      merged.push({
+      merged.push(rerankExample({
         id: r.id,
         source: "log",
         user_message: r.user_message,
@@ -150,36 +185,32 @@ export async function findTrainingContext(
         intent: null,
         stage: null,
         similarity: r.similarity,
-      });
+      }, input, 0));
     }
   }
 
   if (correctionRes.status === "fulfilled" && Array.isArray(correctionRes.value.data)) {
     for (const r of correctionRes.value.data as Array<{
-      id: string;
-      user_message: string;
-      ideal_assistant_response: string;
-      intent: string | null;
-      stage: string | null;
-      similarity: number;
+      id: string; user_message: string; ideal_assistant_response: string;
+      intent: string | null; stage: string | null; similarity: number;
     }>) {
-      merged.push({
+      merged.push(rerankExample({
         id: r.id,
         source: "correction",
         user_message: r.user_message,
         ideal_assistant_response: r.ideal_assistant_response,
         intent: r.intent,
         stage: r.stage,
-        similarity: r.similarity + correctionBoost,
-      });
+        similarity: r.similarity,
+      }, input, correctionBoost));
     }
   }
 
-  // Dedup by normalized user_message — bila contoh curated/log/correction
-  // mengulang pertanyaan yang sama, simpan yang skornya lebih tinggi.
+  // Pertanyaan yang sama boleh mempunyai contoh berbeda untuk intent/stage yang
+  // berbeda. Dedup lama hanya memakai user_message dan menghapus konteks penting.
   const seen = new Map<string, UnifiedTrainingExample>();
   for (const ex of merged) {
-    const key = normalize(ex.user_message);
+    const key = [normalize(ex.user_message), cleanMeta(ex.intent) ?? "", cleanMeta(ex.stage) ?? ""].join("|");
     const prev = seen.get(key);
     if (!prev || ex.similarity > prev.similarity) seen.set(key, ex);
   }
@@ -205,25 +236,22 @@ function normalize(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-/**
- * Cari contoh "jawaban buruk" yang serupa dengan pesan tamu saat ini.
- * Sumber:
- *   - `ai_conversation_logs` dengan `rating = 'bad'`
- *   - `wa_correction_dataset` dari percakapan WhatsApp asli
- */
 export async function findNegativeExamples(
   supabase: SupabaseClient,
   userMessage: string,
   llmConfig: AiClientConfig | null,
-  options: { limit?: number; minSimilarity?: number } = {},
+  options: { limit?: number; minSimilarity?: number; conversationContext?: string | null } = {},
 ): Promise<NegativeTrainingExample[]> {
   const trimmed = (userMessage ?? "").trim();
   if (!trimmed || !llmConfig?.apiKey) return [];
   const limit = options.limit ?? 2;
   if (limit <= 0) return [];
   const minSim = options.minSimilarity ?? DEFAULT_MIN_SIM;
+  const enrichedQuery = options.conversationContext?.trim()
+    ? `${trimmed}\nKonteks percakapan: ${options.conversationContext.trim().slice(0, MAX_CONTEXT_CHARS)}`
+    : trimmed;
 
-  const queryEmbedding = await generateEmbedding(llmConfig, trimmed).catch(() => null);
+  const queryEmbedding = await generateEmbedding(llmConfig, enrichedQuery).catch(() => null);
   if (!queryEmbedding) return [];
 
   const [badLogRes, waCorrectionRes] = await Promise.allSettled([
@@ -240,16 +268,14 @@ export async function findNegativeExamples(
   ]);
 
   const merged: NegativeTrainingExample[] = [];
-
   if (badLogRes.status === "fulfilled" && Array.isArray(badLogRes.value.data)) {
     for (const r of badLogRes.value.data as Array<NegativeTrainingExample>) {
-      merged.push({ ...r, source: "log" });
+      merged.push({ ...r, source: "log", similarity: clampScore(r.similarity) });
     }
   }
-
   if (waCorrectionRes.status === "fulfilled" && Array.isArray(waCorrectionRes.value.data)) {
     for (const r of waCorrectionRes.value.data as Array<NegativeTrainingExample>) {
-      merged.push({ ...r, source: "wa_correction" });
+      merged.push({ ...r, source: "wa_correction", similarity: clampScore(r.similarity) });
     }
   }
 
@@ -259,18 +285,9 @@ export async function findNegativeExamples(
     const prev = seen.get(key);
     if (!prev || ex.similarity > prev.similarity) seen.set(key, ex);
   }
-
-  return Array.from(seen.values())
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+  return Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 }
 
-/**
- * Gabungan sinyal training (positif + negatif) yang dipakai autoreply.
- * Disatukan di satu helper supaya jalur retrieval mudah dilacak dan
- * orchestrator tidak perlu me-retrieve ulang bila `agentCtx.trainingExamples`
- * sudah terisi.
- */
 export interface TrainingSignals {
   positiveExamples: UnifiedTrainingExample[];
   negativeExamples: NegativeTrainingExample[];
@@ -280,11 +297,7 @@ export async function findTrainingSignals(
   supabase: SupabaseClient,
   input: FindInput,
   llmConfig: AiClientConfig | null,
-  options: {
-    positiveLimit?: number;
-    negativeLimit?: number;
-    minSimilarity?: number;
-  } = {},
+  options: { positiveLimit?: number; negativeLimit?: number; minSimilarity?: number } = {},
 ): Promise<TrainingSignals> {
   const [positiveExamples, negativeExamples] = await Promise.all([
     findTrainingContext(supabase, input, llmConfig, {
@@ -294,12 +307,12 @@ export async function findTrainingSignals(
     findNegativeExamples(supabase, input.userMessage, llmConfig, {
       limit: options.negativeLimit,
       minSimilarity: options.minSimilarity,
+      conversationContext: input.conversationContext,
     }),
   ]);
   return { positiveExamples, negativeExamples };
 }
 
-/** Format contoh negatif sebagai blok teks untuk system prompt. */
 export function formatNegativeExamplesBlock(examples: NegativeTrainingExample[]): string {
   if (examples.length === 0) return "";
   const lines = examples.map((ex, i) => {
@@ -314,13 +327,11 @@ export function formatNegativeExamplesBlock(examples: NegativeTrainingExample[])
       `Tamu: ${ex.user_message.trim()}`,
       `JANGAN balas seperti ini: ${ex.bad_response.trim()}`,
     ];
-    if (ex.correction && ex.correction.trim()) {
-      parts.push(`Balasan yang benar: ${ex.correction.trim()}`);
-    }
+    if (ex.correction?.trim()) parts.push(`Balasan yang benar: ${ex.correction.trim()}`);
     return parts.join("\n");
   });
   return [
-    "CONTOH JAWABAN BURUK (admin sudah menandai 'bad' atau mengoreksi WhatsApp asli — JANGAN tiru gaya, isi, atau pendekatan ini):",
+    "CONTOH JAWABAN BURUK (jangan tiru gaya, isi, atau pendekatannya):",
     ...lines,
   ].join("\n\n");
 }
