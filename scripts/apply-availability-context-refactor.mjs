@@ -34,14 +34,16 @@ const tonightEnd = source.indexOf(summaryMarker, tonightStart);
 if (tonightStart < 0 || tonightEnd < 0) throw new Error("Unable to isolate buildTonightPriceReply");
 
 const oldTonight = source.slice(tonightStart, tonightEnd);
-const rawMarker = "  const raw = await checkRoomAvailability(";
-const rawStart = oldTonight.indexOf(rawMarker);
-const rawEndMarker = "  );\n";
-const rawEnd = oldTonight.indexOf(rawEndMarker, rawStart) + rawEndMarker.length;
-if (rawStart < 0 || rawEnd <= rawStart) throw new Error("Unable to isolate availability call");
+const dataMarker = "  const data = JSON.parse(raw) as {";
+const dataStart = oldTonight.indexOf(dataMarker);
+if (dataStart < 0) throw new Error("Unable to locate tonight response formatting block");
 
-const preservedPrefix = oldTonight.slice(0, rawEnd);
-const replacement = `${preservedPrefix}\n  return formatTonightAvailabilityReply(raw, checkIn, checkOut);\n}\n`;
+const preservedPrefix = oldTonight.slice(0, dataStart).trimEnd();
+if (!preservedPrefix.includes("const raw = await checkRoomAvailability(")) {
+  throw new Error("Unable to confirm tonight availability call");
+}
+
+const replacement = `${preservedPrefix}\n\n  return formatTonightAvailabilityReply(raw, checkIn, checkOut);\n}\n`;
 source = `${source.slice(0, tonightStart)}${replacement}\n${source.slice(tonightEnd)}`;
 
 if (source.includes("function buildRecentAvailabilityNeedDatesReply(")) {
