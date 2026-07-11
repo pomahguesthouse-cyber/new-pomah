@@ -45,5 +45,8 @@ jobs:
       - name: WhatsApp session summary policy regression tests
         run: bun run test:wa-summary-policy
 
+      - name: WhatsApp session summary IO regression tests
+        run: bun run test:wa-summary-io
+
       - name: Lint
         run: bun run lint
