@@ -139,7 +139,7 @@ export function AdminTopbar({
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    navigate({ to: "/login", search: {} });
   };
 
   return (
