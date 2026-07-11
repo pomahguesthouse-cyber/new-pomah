@@ -19,6 +19,7 @@
     "test:wa-runtime-policy": "tsx scripts/test-wa-runtime-policy.ts",
     "test:wa-summary-policy": "tsx scripts/test-wa-session-summary-policy.ts",
     "test:wa-summary-io": "tsx scripts/test-wa-session-summary-io.ts",
+    "test:wa-refactor": "bun run test:message-parsers && bun run test:training && bun run test:wa-formatters && bun run test:wa-availability-context && bun run test:wa-identity && bun run test:wa-runtime-policy && bun run test:wa-summary-policy && bun run test:wa-summary-io",
     "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {
@@ -101,7 +102,7 @@
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^6.1.1",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
