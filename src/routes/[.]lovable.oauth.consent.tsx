@@ -101,8 +101,8 @@ function ConsentPage() {
             <li>Membaca profil dasar Anda</li>
             <li>Memanggil tools MCP Pomah Guesthouse atas nama Anda</li>
             {scopes
-              .filter((s) => !["openid", "email", "profile"].includes(s))
-              .map((s) => (
+              .filter((s: string) => !["openid", "email", "profile"].includes(s))
+              .map((s: string) => (
                 <li key={s}>Izin tambahan: {s}</li>
               ))}
           </ul>
