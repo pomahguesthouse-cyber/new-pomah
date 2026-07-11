@@ -29,6 +29,14 @@ import { retrieveRelevantSopContext } from "@/ai/rag.service";
 import { getBookingState } from "@/ai/state-machine/booking-machine";
 import { buildPropertyFaqReply } from "@/services/property-faq";
 import {
+  AI_TIMEOUT_MS,
+  FALLBACK_MESSAGE,
+  MANAGER_FALLBACK_MESSAGE,
+  QUICK_ACK_MESSAGE,
+  buildStateAwareFallback,
+  pickAiBudgetMs,
+} from "@/services/wa-autoreply/runtime-policy";
+import {
   generateSessionSummary,
   regenerateThreadSummary,
   SUMMARY_MIN_MESSAGES,
@@ -108,25 +116,6 @@ async function updateBookingFormSendLog(args: {
 }
 
 
-const FALLBACK_MESSAGE = "Maaf Kak, sistem sedang lambat. Data terakhir sudah saya simpan. Kakak bisa ketik 'lanjut' untuk meneruskan.";
-const MANAGER_FALLBACK_MESSAGE = "Maaf Admin, sistem AI sedang lambat dan belum berhasil memproses perintah ini. Silakan coba lagi sebentar lagi.";
-const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
-
-function buildStateAwareFallback(state?: string): string {
-  if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
-    return "Baik Kak, untuk melanjutkan booking, tanggal barunya kapan dan berapa malam?";
-  }
-  if (state === "AWAITING_NAME" || state === "CONFIRMING_NAME") {
-    return "Baik Kak, mohon ketikkan nama lengkap untuk booking ini.";
-  }
-  if (state === "AWAITING_PHONE" || state === "CONFIRMING_PHONE") {
-    return "Baik Kak, mohon ketikkan nomor WhatsApp yang bisa dihubungi.";
-  }
-  if (state === "CONFIRMING_BOOKING") {
-    return "Apakah data booking sudah sesuai? Kakak bisa balas Ya, Lanjut, atau Batal.";
-  }
-  return FALLBACK_MESSAGE;
-}
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
 const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
@@ -153,25 +142,6 @@ type FastFaqResult = {
 // booking berat dan memicu fallback "sistem sibuk". 18s masih di bawah
 // HANDLE_ONE_DEADLINE_MS dan timeout klien penggerak (pg_net 30s,
 // cron-job.org 30s).
-const AI_TIMEOUT_MS = 18_000;
-// O4 — anggaran adaptif: pesan ringan (chit-chat/FAQ tanpa kata kunci booking/
-// harga/tanggal) hampir selalu selesai 1 ronde LLM. Budget ringan tetap 14s
-// (bukan lebih kecil) karena worst case 1 ronde + retry internal = 6.5+0.5+6.5
-// = 13.5s — memotong di bawah itu berarti mengorbankan retry. Pesan berat
-// (booking/pricing/availability, atau panjang) memakai budget penuh 18s.
-const AI_TIMEOUT_LIGHT_MS = 14_000;
-const HEAVY_INTENT_RE =
-  /\b(booking|pesan|reservasi|kamar|room|harga|rate|tarif|tersedia|available|avail|kosong|tanggal|check.?in|check.?out|checkout|menginap|malam|dp|bayar|transfer|invoice|refund|extra ?bed|ganti|ubah|batal)\b/i;
-function pickAiBudgetMs(message: string): number {
-  const text = (message ?? "").trim();
-  if (text.length > 120) return AI_TIMEOUT_MS;
-  return HEAVY_INTENT_RE.test(text) ? AI_TIMEOUT_MS : AI_TIMEOUT_LIGHT_MS;
-}
-// Deadline dinding-jam untuk satu iterasi handleOne (klaim → orkestrasi →
-// persist → Wpp → queueComplete). Harus < batas wall-time worker Cloudflare
-// (≈30s) dan < timeout klien penggerak (pg_net/cron-job.org 30s). Jika
-// terlampaui, kita paksa queueFail supaya entry tidak menjadi zombie dan
-// fallback bisa dikirim di siklus cron berikutnya.
 const HANDLE_ONE_DEADLINE_MS = 26_000;
 // Retry penuh menggandakan rakit prompt/retrieval/tool orchestration di runtime
 // Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan

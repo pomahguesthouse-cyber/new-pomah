@@ -934,7 +934,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
         </Link>
         <div className="hidden items-center gap-6 md:flex">
           <Link to="/" className="text-sm text-stone-500 transition hover:text-stone-900">Beranda</Link>
-          <Link to="/rooms" className="text-sm text-stone-500 transition hover:text-stone-900">Kamar</Link>
+          <Link to="/" hash="rooms" className="text-sm text-stone-500 transition hover:text-stone-900">Kamar</Link>
           <a href={ctaUrl}
             className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
             {ctaText || "Pesan Sekarang"}
@@ -947,7 +947,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
       {open && (
         <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
           <Link to="/" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Beranda</Link>
-          <Link to="/rooms" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Kamar</Link>
+          <Link to="/" hash="rooms" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Kamar</Link>
           <a href={ctaUrl} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
             {ctaText || "Pesan Sekarang"}
           </a>

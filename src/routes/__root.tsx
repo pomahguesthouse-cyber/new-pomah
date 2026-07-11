@@ -253,7 +253,7 @@ function NotFoundComponent() {
           ← Kembali ke Beranda
         </Link>
         <Link
-          to="/rooms"
+          to="/" hash="rooms"
           className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800"
         >
           Lihat Kamar
@@ -389,7 +389,7 @@ function AuthSync() {
       // (akan memicu refetch serverFn tanpa token -> 401 blank screen).
       if (event === "SIGNED_OUT") {
         qc.clear();
-        router.navigate({ to: "/login" });
+        router.navigate({ to: "/login", search: { next: undefined } });
         return;
       }
       router.invalidate();
