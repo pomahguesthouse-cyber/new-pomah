@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   SUMMARY_MAX_CHARS,
+  SUMMARY_REGEN_COOLDOWN_MS,
   parseStructuredSummary,
   shouldForceSummary,
 } from "../src/services/wa-autoreply/session-summary-policy";
 
+assert.equal(SUMMARY_REGEN_COOLDOWN_MS, 3 * 60 * 1000);
 assert.equal(shouldForceSummary("Halo Kak"), false);
 assert.equal(shouldForceSummary("Saya mau booking deluxe tanggal 15"), true);
 assert.equal(shouldForceSummary("Ada bukti transfer"), true);
@@ -49,4 +52,21 @@ assert.ok(oversized);
 assert.equal(oversized.short_summary.length, SUMMARY_MAX_CHARS);
 assert.equal(oversized.short_summary.endsWith("…"), true);
 
-console.log("✓ WhatsApp session summary policy regressions passed");
+const serviceSource = fs.readFileSync("src/services/wa-autoreply.service.ts", "utf8");
+assert.ok(
+  serviceSource.includes('from "@/services/wa-autoreply/session-summary-policy"'),
+  "wa-autoreply.service.ts must import session-summary-policy",
+);
+for (const forbidden of [
+  "const SUMMARY_REGEN_COOLDOWN_MS =",
+  "const FORCE_SUMMARY_KEYWORDS:",
+  "function shouldForceSummary(",
+]) {
+  assert.equal(
+    serviceSource.includes(forbidden),
+    false,
+    `wa-autoreply.service.ts still duplicates summary policy: ${forbidden}`,
+  );
+}
+
+console.log("✓ WhatsApp session summary policy regressions and wiring cases passed");
