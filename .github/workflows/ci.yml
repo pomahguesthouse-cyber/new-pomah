@@ -33,5 +33,8 @@ jobs:
       - name: WhatsApp availability formatter regression tests
         run: bun run test:wa-formatters
 
+      - name: WhatsApp availability context regression tests
+        run: bun run test:wa-availability-context
+
       - name: Lint
         run: bun run lint
