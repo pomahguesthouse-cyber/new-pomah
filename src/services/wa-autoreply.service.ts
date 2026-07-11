@@ -1,5 +1,5 @@
-﻿/**
- * Reliable WhatsApp autoreply: debounce wait â†’ AI â†’ Wpp send.
+/**
+ * Reliable WhatsApp autoreply: debounce wait → AI → Wpp send.
  * Runs inside waitUntil from the webhook (not HTTP self-fetch).
  */
 import { supabasePublic, supabaseAdmin } from "@/integrations/supabase/client.server";
@@ -123,26 +123,26 @@ async function updateBookingFormSendLog(args: {
 const QUICK_ACK_AFTER_MS = 6_000;
 const QUICK_ACK_ENABLED = process.env.WA_QUICK_ACK_ENABLED !== "false";
 const FAST_FAQ_ENABLED = process.env.WA_FAST_FAQ_ENABLED !== "false";
-// (FAQ_BLOCK_RE & COMPLAINT_SIGNAL_RE pindah ke property-faq.ts â€” O3.)
+// (FAQ_BLOCK_RE & COMPLAINT_SIGNAL_RE pindah ke property-faq.ts — O3.)
 
 type FastFaqResult = {
   reply: string;
   intent: string;
-  /** Tanggal yang di-parse (untuk jalur ketersediaan) â€” dipersist ke
+  /** Tanggal yang di-parse (untuk jalur ketersediaan) — dipersist ke
    *  conversation-state agar turn berikutnya (mis. tanya harga) tidak
    *  menanyakan tanggal lagi. */
   dates?: { checkIn: string; checkOut: string };
 };
 
 /**
- * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent â†’
- * route â†’ jalankan agent â†’ tool calls â†’ balasan teks). Dibuat ketat agar
+ * Anggaran waktu untuk SATU attempt orchestrasi penuh (klasifikasi intent →
+ * route → jalankan agent → tool calls → balasan teks). Dibuat ketat agar
  * request worker tidak hidup terlalu lama dan berubah menjadi zombie. Jika AI
  * belum menghasilkan jawaban dalam batas ini, alur mengirim fallback yang jelas
  * ke tamu, bukan menunggu retry panjang tanpa sinyal.
  */
 // 18s (naik dari 14s, 3 Jul 2026): worst case realistis = classifier LLM
-// fallback ~5s + 2 ronde LLM @6.5s + tool/DB â€” 14s memotong percakapan
+// fallback ~5s + 2 ronde LLM @6.5s + tool/DB — 14s memotong percakapan
 // booking berat dan memicu fallback "sistem sibuk". 18s masih di bawah
 // HANDLE_ONE_DEADLINE_MS dan timeout klien penggerak (pg_net 30s,
 // cron-job.org 30s).
@@ -167,13 +167,13 @@ export type AutoreplyOutcome =
 /**
  * Generate reply and send via Wpp (no queue claim required).
  *
- * `onBeforeAttempt` runs right before each AI attempt â€” the drain worker uses
+ * `onBeforeAttempt` runs right before each AI attempt — the drain worker uses
  * it to send a queue heartbeat so a slow-but-alive run isn't reaped as a zombie.
  */
-// â”€â”€ Summarizer tuning knobs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Summarizer tuning knobs ─────────────────────────────────────────────────
 /**
  * Minimum interval between two summary regenerations for the same thread.
- * Dinaikkan dari 1 menit â†’ 3 menit karena summarizer kini berjalan setiap
+ * Dinaikkan dari 1 menit → 3 menit karena summarizer kini berjalan setiap
  * turn (bukan hanya di batas sesi). Cooldown ini yang menjaga biaya LLM tetap
  * terkendali: tanpa ini, percakapan cepat 20 pesan bisa memicu belasan
  * panggilan summary ekstra ke gateway. Kata kunci penting (FORCE_SUMMARY_KEYWORDS)
@@ -195,14 +195,14 @@ function shouldLoadHeavyRetrieval(message: string): boolean {
 }
 
 // (buildFastFaqReply dikonsolidasi ke buildPropertyFaqReply di
-//  src/services/property-faq.ts â€” O3, 3 Jul 2026.)
+//  src/services/property-faq.ts — O3, 3 Jul 2026.)
 
 /** Heuristik ringan: pesan tamu bernada booking_inquiry (tanya
  *  ketersediaan/harga/kamar) walau tanpa kata kunci tanggal. Dipakai untuk
  *  fast-path kontekstual yang meminjam tanggal dari state sebelumnya. */
 /**
  * PERINTAH booking eksplisit ("saya pesan kamar deluxe tanggal 9-11 dengan
- * 1 extrabed") â€” HARUS ditangani alur booking (AI + state machine), BUKAN
+ * 1 extrabed") — HARUS ditangani alur booking (AI + state machine), BUKAN
  * fast-path availability yang hanya mengirim ulang daftar kamar. Insiden
  * 4 Jul 2026: perintah tamu ditelan dua kali oleh fast-path kontekstual
  * sehingga booking tidak pernah dimulai.
@@ -214,7 +214,7 @@ async function buildDeterministicAvailabilityReply(params: {
   origin: string;
 }): Promise<FastFaqResult | null> {
   if (!shouldUseDeterministicAvailability(params.message)) return null;
-  // Perintah booking eksplisit â†’ serahkan ke alur booking, jangan balas daftar.
+  // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
   if (isExplicitBookingOrder(params.message, params.rooms ?? [])) return null;
   const today = todayWIB();
   const range = parseAvailabilityDateRange(params.message, today);
@@ -247,7 +247,7 @@ async function buildDeterministicAvailabilityReply(params: {
  * ketersediaan/harga yang TIDAK menyebut tanggal secara eksplisit, tetapi
  * tanggal check-in/check-out sudah tersimpan di booking-state atau chat
  * summary dari turn sebelumnya. Tanpa jalur ini, orkestrator agent penuh
- * (LLM + tools) yang p95-nya ~15 s ikut menghitung ketersediaan â€” beban
+ * (LLM + tools) yang p95-nya ~15 s ikut menghitung ketersediaan — beban
  * yang tak perlu dan berisiko zombie di Cloudflare Worker saat traffic
  * tinggi. Semua data dihitung dari `checkRoomAvailability` (deterministik).
  */
@@ -260,11 +260,11 @@ async function buildContextualBookingInquiryReply(params: {
   chatSummary?: { check_in?: unknown; check_out?: unknown; guest_count?: unknown } | null;
 }): Promise<FastFaqResult | null> {
   if (!looksLikeBookingInquiry(params.message)) return null;
-  // Perintah booking eksplisit â†’ serahkan ke alur booking, jangan balas daftar.
+  // Perintah booking eksplisit → serahkan ke alur booking, jangan balas daftar.
   if (isExplicitBookingOrder(params.message, params.rooms ?? [])) return null;
 
   const today = todayWIB();
-  // Prioritas: tanggal yang di-parse dari pesan â†’ slot booking aktif â†’
+  // Prioritas: tanggal yang di-parse dari pesan → slot booking aktif →
   // ringkasan chat. Kalau pesan baru menyebut tanggal, jalur deterministik
   // "biasa" (buildDeterministicAvailabilityReply) sudah lebih dulu menang;
   // di sini kita hanya menutup celah saat pesan tanpa tanggal.
@@ -278,7 +278,7 @@ async function buildContextualBookingInquiryReply(params: {
   const checkOut = explicitRange?.checkOut ?? slotCheckOut ?? summaryCheckOut;
   if (!checkIn || !checkOut) return null;
 
-  // Tolak tanggal lampau â€” biarkan agent menjelaskan supaya tidak terkesan
+  // Tolak tanggal lampau — biarkan agent menjelaskan supaya tidak terkesan
   // menutupi kesalahan slot lama yang belum dibersihkan.
   if (checkIn < today) return null;
 
@@ -324,11 +324,11 @@ async function buildContextualBookingInquiryReply(params: {
  * Fast-path deterministik untuk intent ringan yang jawabannya sudah ada di
  * profil properti (greeting, thanks, bye, alamat/lokasi, kontak, policy
  * check-in/checkout). Sebelum ini, semua intent tersebut ikut lewat
- * orchestrator LLM (p95 ~10 s). Sekarang: match regex ringan â†’ template
+ * orchestrator LLM (p95 ~10 s). Sekarang: match regex ringan → template
  * balasan langsung dari kolom `properties`. Return `null` bila tidak cocok.
  */
 // (buildDeterministicPropertyFaqReply dikonsolidasi ke buildPropertyFaqReply
-//  di src/services/property-faq.ts â€” O3, 3 Jul 2026.)
+//  di src/services/property-faq.ts — O3, 3 Jul 2026.)
 
 
 async function buildGuestCountAfterAvailabilityReply(params: {
@@ -458,7 +458,7 @@ export async function executeAutoreplyForPhone(
     ackSentAt: 0,
   };
 
-  // â”€â”€ Mode selection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Mode selection ──────────────────────────────
   let mode = "guest"; // Default
   if (manager || (isConfiguredAdminPhone(phone) && !guestModeActive)) {
     mode = "admin";
@@ -485,7 +485,7 @@ export async function executeAutoreplyForPhone(
         typeof handoffContext === "object" &&
         (handoffContext as { handoff?: unknown }).handoff === true
       ) {
-        console.info(`[Autoreply] Human handoff active â€” skipping bot reply for ${phone.slice(-6)}`);
+        console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
         // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
         // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
         // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
@@ -501,7 +501,7 @@ export async function executeAutoreplyForPhone(
             .limit(1);
           if (!recentAck || recentAck.length === 0) {
             const ackBody =
-              "Terima kasih Kak ðŸ™ Pesan Kakak sudah kami terima. " +
+              "Terima kasih Kak 🙏 Pesan Kakak sudah kami terima. " +
               "Admin manusia kami akan segera membalas ya, mohon ditunggu sebentar.";
             const ackRowId = await saveOutboundMessage(supabaseAdmin, {
               threadId: c.thread_id,
@@ -534,11 +534,11 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  // â”€â”€ Zombie rescue: kirim ulang pesan outbound yang tersangkut 'pending' â”€â”€
+  // ── Zombie rescue: kirim ulang pesan outbound yang tersangkut 'pending' ──
   // Skenario: worker sebelumnya mati setelah menyimpan pesan ke DB
   // (send_status='pending') tapi sebelum memanggil Wpp API. Pesan itu
   // tersimpan di DB tapi tidak pernah sampai ke tamu. Attempt berikutnya
-  // (ini) harus mengirim ulang pesan itu alih-alih memanggil AI lagi â€”
+  // (ini) harus mengirim ulang pesan itu alih-alih memanggil AI lagi —
   // lebih hemat dan mencegah dua balasan berbeda untuk pesan yang sama.
   try {
     const fiveMinsAgo = new Date(Date.now() - 5 * 60_000).toISOString();
@@ -557,8 +557,8 @@ export async function executeAutoreplyForPhone(
       | undefined;
 
     if (stuckMsg?.body) {
-      // Atomic claim: ubah send_status pending â†’ rescuing HANYA kalau masih
-      // pending. Kalau worker lain duluan, `claimed` kosong â†’ kita tidak
+      // Atomic claim: ubah send_status pending → rescuing HANYA kalau masih
+      // pending. Kalau worker lain duluan, `claimed` kosong → kita tidak
       // memanggil Wpp (mencegah double resend).
       const { data: claimed } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
@@ -576,13 +576,13 @@ export async function executeAutoreplyForPhone(
 
       if (!Array.isArray(claimed) || claimed.length === 0) {
         console.info(
-          `[Autoreply] Zombie rescue: msg ${stuckMsg.id.slice(0, 8)} sudah diklaim worker lain â€” skip`,
+          `[Autoreply] Zombie rescue: msg ${stuckMsg.id.slice(0, 8)} sudah diklaim worker lain — skip`,
         );
         return "ok";
       }
 
       console.warn(
-        `[Autoreply] ðŸ§Ÿ Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
+        `[Autoreply] 🧟 Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
       );
       const { ok: reSent, error: reErr } = await (
         await import("@/services/whatsapp.service")
@@ -595,7 +595,7 @@ export async function executeAutoreplyForPhone(
             metadata: { ...stuckMsg.metadata, send_status: "sent", zombie_rescued: true },
           })
           .eq("id", stuckMsg.id);
-        console.info(`[Autoreply] âœ… Zombie rescue berhasil untuk ${phone.slice(-6)}`);
+        console.info(`[Autoreply] ✅ Zombie rescue berhasil untuk ${phone.slice(-6)}`);
         return "ok";
       }
       // Resend gagal: kembalikan status ke 'failed' supaya tidak nge-block
@@ -606,7 +606,7 @@ export async function executeAutoreplyForPhone(
           metadata: { ...stuckMsg.metadata, send_status: "failed", zombie_rescue_failed: true },
         })
         .eq("id", stuckMsg.id);
-      console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} â€” lanjut proses normal`);
+      console.warn(`[Autoreply] Zombie rescue gagal: ${reErr} — lanjut proses normal`);
       // Kalau resend juga gagal (Wpp down), lanjutkan ke AI normal
       // supaya tamu tetap dapat respons dari attempt ini.
     }
@@ -639,11 +639,11 @@ export async function executeAutoreplyForPhone(
 
   // manager is already resolved at the beginning of the function
   if (manager) {
-    console.info(`[Autoreply] Managerial WA flow â€” ${manager.name} (${manager.role})`);
+    console.info(`[Autoreply] Managerial WA flow — ${manager.name} (${manager.role})`);
   }
 
   // Single source of truth for "where does the current session start?"
-  // â€” used both to trim history sent to the agent AND to decide whether
+  // — used both to trim history sent to the agent AND to decide whether
   // a fresh summary of the PREVIOUS session is warranted.
   const sessionStartIndex = findSessionStartIndex(messages);
   const previousSession = messages.slice(0, sessionStartIndex);
@@ -652,7 +652,7 @@ export async function executeAutoreplyForPhone(
   // assistant turn: fallback "sistem sibuk" dan quick-ack "sebentar Kak"
   // bukan jawaban substantif, dan kalau dibiarkan masuk history, model
   // sering mengulanginya sebagai balasan berikutnya (regresi yang muncul
-  // di log: bot membalas "Mohon maaf, sistem kami sedang sibukâ€¦").
+  // di log: bot membalas "Mohon maaf, sistem kami sedang sibuk…").
   const cleanedSession = currentSessionMessages.filter((m: { direction: string; body?: string }) => {
     if (m.direction !== "out") return true;
     const body = (m.body ?? "").trim();
@@ -708,13 +708,13 @@ export async function executeAutoreplyForPhone(
   let orchResult: any = null;
 
   const bookingActive = !!bookingState?.state && bookingState.state !== "IDLE";
-  // A (4 Jul 2026): bila ada â‰¥2 pesan tamu beruntun yang belum terjawab,
-  // fast-path satu-intent DILARANG menjawab hanya pesan terakhir â€” keluhan/
+  // A (4 Jul 2026): bila ada ≥2 pesan tamu beruntun yang belum terjawab,
+  // fast-path satu-intent DILARANG menjawab hanya pesan terakhir — keluhan/
   // persetujuan di pesan sebelumnya ikut tertelan (insiden: "Maps ga bisa
-  // dibuka" + "Boleh" + "Wifi aman?" â†’ hanya wifi terjawab). Serahkan ke AI
+  // dibuka" + "Boleh" + "Wifi aman?" → hanya wifi terjawab). Serahkan ke AI
   // yang melihat seluruh burst.
   const multiPendingInbound = countConsecutiveInbound(rollingMessages) >= 2;
-  // Opener "Halo Kak ðŸ‘‹" hanya untuk kontak pertama: skip bila bot sudah
+  // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
   // membalas di sesi berjalan atau tamu membuka dengan salam.
   const faqGreetingUsed =
     messageOpensWithGreeting(lastMessage) ||
@@ -743,8 +743,8 @@ export async function executeAutoreplyForPhone(
 
   // Jangan tanya tanggal ULANG bila tanggal sudah tersimpan dari turn
   // sebelumnya (booking-state slots / chat summary). Insiden 3 Juli 2026:
-  // tamu tanya "7-8 Agustus" â†’ dijawab penuh â†’ tamu bilang "kalo ada yg
-  // kosong kabari ya" â†’ bot balik bertanya "rencana menginap tanggal
+  // tamu tanya "7-8 Agustus" → dijawab penuh → tamu bilang "kalo ada yg
+  // kosong kabari ya" → bot balik bertanya "rencana menginap tanggal
   // berapa?" padahal tanggalnya baru saja dibahas. Dengan guard ini pesan
   // jatuh ke buildContextualBookingInquiryReply yang memakai tanggal
   // tersimpan.
@@ -851,7 +851,7 @@ export async function executeAutoreplyForPhone(
         // Persist tanggal yang ditanyakan ke conversation-state. Jalur ini
         // melewati orchestrator, jadi tanpa ini slot tanggal tak pernah
         // tersimpan dan turn berikutnya (mis. "per malam berapa?") akan
-        // menanyakan tanggal lagi. Fire-and-forget â€” tak boleh menggagalkan reply.
+        // menanyakan tanggal lagi. Fire-and-forget — tak boleh menggagalkan reply.
         if (availabilityReply.dates) {
           const { checkIn, checkOut } = availabilityReply.dates;
           void runDeferred("Autoreply.persist-availability-dates", async () => {
@@ -972,7 +972,7 @@ export async function executeAutoreplyForPhone(
   const loadHeavyRetrieval = !isQueueRetry && shouldLoadHeavyRetrieval(lastMessage);
 
   // O1: retrieval training signals dimulai DI SINI, paralel dengan SOP
-  // retrieval di bawah â€” keduanya independen (embedding + RPC masing-masing).
+  // retrieval di bawah — keduanya independen (embedding + RPC masing-masing).
   // Dulu serial: SOP selesai dulu baru training mulai, menambah ~0,3-0,8s.
   const trainingSignalsPromise =
     !reply && llmConfig && loadHeavyRetrieval
@@ -1028,9 +1028,9 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  // â”€â”€ Frustration / trust detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Frustration / trust detection ──────────────────────────────────────
   // Tamu nulis "saya pusing", "ini benar?", "penipuan", "tidak AI kan?" dll.
-  // Short-circuit sebelum AI dijalankan â€” kirim ringkasan booking + verifikasi
+  // Short-circuit sebelum AI dijalankan — kirim ringkasan booking + verifikasi
   // resmi, dan (kalau frustrasi) tandai handoff ke admin manusia.
   if (!manager && lastMessage) {
     try {
@@ -1062,7 +1062,7 @@ export async function executeAutoreplyForPhone(
                 toolName: "human-handoff",
                 repeatCount: 1,
                 lastArgs: JSON.stringify({ trigger: lastMessage.slice(0, 200), ticketId: ticket?.id }),
-                sampleOutput: "Frustration detected â€” tamu butuh admin manusia. Tiket dibuat.",
+                sampleOutput: "Frustration detected — tamu butuh admin manusia. Tiket dibuat.",
               });
             } catch (e) {
               console.warn("[Autoreply] handoff notify failed:", e);
@@ -1077,7 +1077,7 @@ export async function executeAutoreplyForPhone(
   }
 
   // Quick-ack "saya cekkan dulu ya" tidak pantas untuk pesan penutup/basa-basi
-  // ("Yahh, oke kak makasih ya") â€” tidak ada yang perlu dicek. Fast-path thanks
+  // ("Yahh, oke kak makasih ya") — tidak ada yang perlu dicek. Fast-path thanks
   // biasanya sudah menangkap ini; guard ini melindungi varian yang lolos.
   const CLOSING_CHITCHAT_RE =
     /\b(makasih|terima\s*kasih|trims?|trimakasih|thanks?|thank\s*you|thx|tq|sama\s*-?\s*sama|mantap|oke?\s*deh|ya\s*udah?|yaudah|sampai\s*(jumpa|ketemu)|see\s*you|bye)\b/i;
@@ -1104,7 +1104,7 @@ export async function executeAutoreplyForPhone(
 
           // (2) Persist-then-send + race guard: tulis baris ack 'pending'
           // dulu, lalu pastikan baris kita yang paling awal. Kalau bukan,
-          // worker lain sudah menulis duluan â†’ skip kirim Wpp.
+          // worker lain sudah menulis duluan → skip kirim Wpp.
           const ackRowId = await saveOutboundMessage(supabaseAdmin, {
             threadId: c.thread_id,
             body: QUICK_ACK_MESSAGE,
@@ -1302,7 +1302,7 @@ export async function executeAutoreplyForPhone(
         reply = orchResult.reply;
 
         // Heartbeat berbasis kemajuan: orkestrasi AI (bagian terlama pipeline)
-        // baru saja selesai â€” segarkan lock SEKARANG, jangan bergantung pada
+        // baru saja selesai — segarkan lock SEKARANG, jangan bergantung pada
         // setInterval yang tick-nya bisa di-skip Cloudflare saat CPU sibuk.
         if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
 
@@ -1350,7 +1350,7 @@ export async function executeAutoreplyForPhone(
         }
       }
 
-      // Surface bot-loop signal ke super admin (fire-and-forget) â€”
+      // Surface bot-loop signal ke super admin (fire-and-forget) —
       // berlaku baik saat ada reply maupun saat orchestrator gagal.
       if (orchResult?.loopAlert) {
         const la = orchResult.loopAlert;
@@ -1415,7 +1415,7 @@ export async function executeAutoreplyForPhone(
   const rawReply = reply ?? finalFallback;
   const isFallback = !reply;
   // Saat fallback dikirim, catat ALASAN-nya supaya dashboard/Activity Log bisa
-  // membedakan timeout vs. max-turns vs. gateway-error vs. balasan kosong â€”
+  // membedakan timeout vs. max-turns vs. gateway-error vs. balasan kosong —
   // tanpa ini kita cuma tahu "fallback terjadi" tapi tidak tahu kenapa.
   const fallbackReason = isFallback ? (orchResult?.error ?? "no_reply_after_retries") : undefined;
   let attachUrl: string | undefined;
@@ -1435,16 +1435,16 @@ export async function executeAutoreplyForPhone(
   const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
   let finalReply = cleanReplyBody(normalizedReply, pdfToStrip);
 
-  // â”€â”€ Duplicate-send guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Duplicate-send guard ────────────────────────────────────────────────
   // Worker bisa mati setelah Wpp sukses tapi sebelum sempat menyimpan
   // outbound + memanggil queueComplete (zombie_timeout). Retry berikutnya
-  // akan mencoba mengirim ulang â†’ tamu menerima pesan dobel.
+  // akan mencoba mengirim ulang → tamu menerima pesan dobel.
   // Dua lapis pengaman:
-  //   (a) metadata.queue_entry_id sama â†’ entry ini SUDAH pernah menghasilkan
+  //   (a) metadata.queue_entry_id sama → entry ini SUDAH pernah menghasilkan
   //       outbound. Cek TANPA batas waktu karena retry zombie bisa jalan
   //       beberapa menit setelah attempt pertama (lock TTL ~2 menit, dan
   //       jendela 120s ternyata kependekan sehingga retry lolos).
-  //   (b) body identik & dikirim <300 detik terakhir â†’ safety net untuk
+  //   (b) body identik & dikirim <300 detik terakhir → safety net untuk
   //       kasus queue_entry_id tidak tersimpan / berbeda tapi pesan sama.
   try {
     // (a) Cek by queue_entry_id TANPA filter waktu.
@@ -1532,10 +1532,10 @@ export async function executeAutoreplyForPhone(
     } as any,
   });
 
-  // â”€â”€ Atomic claim per queue_entry_id â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Atomic claim per queue_entry_id ────────────────────────────────────
   // Dedup-guard di atas read-then-write: dua worker konkuren bisa sama-sama
   // lolos pengecekan dan dua-duanya menulis baris 'pending' + memanggil
-  // Wpp â†’ tamu menerima pesan dobel. Setelah persist, pastikan baris
+  // Wpp → tamu menerima pesan dobel. Setelah persist, pastikan baris
   // kita adalah final-reply pertama untuk entry ini. Kalau ada baris lebih
   // awal (non-ack, non-failed/superseded) milik worker lain, tandai punya
   // kita superseded dan jangan kirim.
@@ -1565,7 +1565,7 @@ export async function executeAutoreplyForPhone(
         }
         console.warn(
           `[Autoreply] Final-reply race lost for ${phone.slice(-6)} ` +
-            `(entry=${queueEntryId.slice(0, 8)}) â€” skip Wpp`,
+            `(entry=${queueEntryId.slice(0, 8)}) — skip Wpp`,
         );
         void updateBookingFormSendLog({ body: finalReply, status: "superseded" });
         return "ok";
@@ -1592,7 +1592,7 @@ export async function executeAutoreplyForPhone(
   // If the attachment broke the send (e.g. unreachable file URL), retry with
   // the direct link appended so the guest still gets the brochure.
   if (!sent && attachUrl) {
-    console.warn(`[Autoreply] Send with attachment failed (${sendErr}) â€” retrying with link`);
+    console.warn(`[Autoreply] Send with attachment failed (${sendErr}) — retrying with link`);
     metrics.sendStartedAt = Date.now();
     ({ ok: sent, error: sendErr } = await sendWhatsAppMessage(
       c.wpp_token,
@@ -1662,9 +1662,9 @@ export async function executeAutoreplyForPhone(
     toolsUsed: orchResult?.toolsUsed ?? [],
   }).catch((e) => console.warn(e));
 
-  // â”€â”€ Conversation Monitor (fire-and-forget) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Conversation Monitor (fire-and-forget) ──────────────────────────────
   // Hitung berapa kali berturut-turut fallback dalam sesi ini.
-  // Kami perkirakan dari metadata pesan outbound terakhir â€” bukan state
+  // Kami perkirakan dari metadata pesan outbound terakhir — bukan state
   // persisten agar tidak menambah latensi ke hot-path.
   deferAfterReply("Autoreply.conversationMonitor", async () => {
     try {
@@ -1712,17 +1712,17 @@ export async function executeAutoreplyForPhone(
   // Background summarizer: run AFTER the reply is sent so it never adds
   // latency to the user-visible turn. Perilaku (per keputusan produk):
   //   - Merangkum SESI BERJALAN setiap turn (bukan menunggu batas sesi 15 mnt),
-  //     supaya panel admin terisi cepat begitu ada â‰¥3 pesan.
+  //     supaya panel admin terisi cepat begitu ada ≥3 pesan.
   //   - Butuh cukup pesan untuk layak dirangkum (SUMMARY_MIN_MESSAGES).
   //   - Cooldown (3 mnt) membatasi biaya; kata kunci penting meng-override-nya.
   //   - Saat tamu sedang mid-booking: TETAP perbarui context JSON (tipe kamar,
-  //     status booking) tapi JANGAN timpa ringkasan TEKS â€” teks "wrap-up" baru
+  //     status booking) tapi JANGAN timpa ringkasan TEKS — teks "wrap-up" baru
   //     ditulis setelah booking selesai agar tidak basi.
   // Pakai sesi yang sedang berjalan; fallback ke sesi sebelumnya bila perlu.
   const summarizableMessages =
     currentSessionMessages.length >= SUMMARY_MIN_MESSAGES ? currentSessionMessages : previousSession;
   // unresolved_question memaksa regen: begitu agent menjawabnya di turn ini,
-  // summary harus segera diperbarui agar field-nya terhapus â€” tanpa ini,
+  // summary harus segera diperbarui agar field-nya terhapus — tanpa ini,
   // cooldown 3 menit membuat "pertanyaan belum dijawab" basi menempel dan
   // terus disuntikkan ke prompt turn-turn berikutnya.
   const forced = shouldForceSummary(lastMessage) || !!chatSummaryJson?.unresolved_question;
@@ -1730,7 +1730,7 @@ export async function executeAutoreplyForPhone(
 
   // Fallback deterministik: kalau kolom `chat_summary` masih kosong (thread
   // baru, LLM belum tersedia, atau LLM path akan di-skip), tanam seed dari
-  // regex sederhana lewat waitUntil. Regex murni <5 ms â€” dan karena
+  // regex sederhana lewat waitUntil. Regex murni <5 ms — dan karena
   // dijalankan di dalam runDeferred (waitUntil di CF), TIDAK menambah
   // latency ke balasan tamu. Ini memastikan panel admin selalu punya
   // ringkasan minimal walau LLM regen gagal/di-skip.
@@ -1749,7 +1749,7 @@ export async function executeAutoreplyForPhone(
   }
 
   if (summarizableMessages.length < SUMMARY_MIN_MESSAGES) {
-    // not enough â€” silent skip (seed fallback di atas sudah menutupi)
+    // not enough — silent skip (seed fallback di atas sudah menutupi)
   } else if (!llmConfig) {
     console.info(`[SessionSummarizer] summary skipped: no LLM config (thread ${c.thread_id.slice(0, 8)})`);
   } else if (cooldownActive(chatSummaryUpdatedAt) && !forced) {
@@ -1766,7 +1766,7 @@ export async function executeAutoreplyForPhone(
         const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
         const summary = await generateSessionSummary(summarizableMessages, chatSummary, llmConfig);
         if (summary) {
-          // Saat booking aktif â†’ jsonOnly (jangan timpa teks). Selain itu â†’ full.
+          // Saat booking aktif → jsonOnly (jangan timpa teks). Selain itu → full.
           await updateThreadSummary(supabaseAdmin, c.thread_id, summary, {
             jsonOnly: bookingActive,
           });
@@ -1788,7 +1788,7 @@ export async function executeAutoreplyForPhone(
   flushDeferredAfterReply();
 
   console.log(
-    `[Autoreply] âœ“ Sent to ${phone.slice(-6)} ` +
+    `[Autoreply] ✓ Sent to ${phone.slice(-6)} ` +
       `(latency=${Date.now() - metrics.workerStartedAt}ms, ` +
       `ai=${buildLatencyMetadata().ai_latency_ms ?? "-"}ms, ` +
       `send=${buildLatencyMetadata().send_latency_ms ?? "-"}ms, ` +
@@ -1803,7 +1803,7 @@ function cooldownActive(updatedAt: string | null | undefined): boolean {
   return ageMs < SUMMARY_REGEN_COOLDOWN_MS;
 }
 
-// Outcomes that must NOT be retried â€” they are config/permanent, so retrying
+// Outcomes that must NOT be retried — they are config/permanent, so retrying
 // just burns attempts and delays the 'failed' terminal state.
 const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set(["skipped_config", "no_api_key"]);
 const FALLBACK_SENT_MARKER_RE = /\[fallback_sent(?::[^\]]+)?\]/;
@@ -1824,7 +1824,7 @@ function withFallbackSentMarker(lastError: unknown, marker: "[fallback_sent]" | 
  * Each iteration atomically claims the next ready entry (wa_queue_claim_next,
  * FOR UPDATE SKIP LOCKED), generates + sends the reply, then marks the entry
  * complete/failed under the claiming worker_id. The debounce/idle window is
- * enforced entirely by process_after in the DB â€” this worker never sleeps
+ * enforced entirely by process_after in the DB — this worker never sleeps
  * waiting for it, so it is safe to run on a short interval and across many
  * instances concurrently (each entry is claimed by exactly one worker).
  *
@@ -1850,7 +1850,7 @@ export async function drainQueue(
 
   // 2) Process claims concurrently. Each entry has its own heartbeat so a
   // slow one doesn't starve the others. If `abortSignal` fires we skip
-  // starting new work â€” claims already in-flight finish or fail normally.
+  // starting new work — claims already in-flight finish or fail normally.
   const handleOne = async (claim: (typeof claims)[number]) => {
     const logPhone = claim.phone.slice(-6);
     let outcome: AutoreplyOutcome = "fatal";
@@ -1862,8 +1862,8 @@ export async function drainQueue(
     };
 
     // Kirim heartbeat pertama SEGERA setelah klaim supaya lock langsung
-    // di-refresh (jangan menunggu tick pertama). Lalu tick tiap 7 detik â€”
-    // lebih rapat dari TTL 40s (â‰ˆ5 tick slack) supaya worker yang masih hidup
+    // di-refresh (jangan menunggu tick pertama). Lalu tick tiap 7 detik —
+    // lebih rapat dari TTL 40s (≈5 tick slack) supaya worker yang masih hidup
     // tapi sibuk (LLM + tools) tidak salah ditandai zombie oleh cron cleanup.
     void queueHeartbeat(supabaseAdmin, claim.entryId, workerId).catch(() => {});
     const heartbeatTimer = setInterval(() => {
@@ -1928,7 +1928,7 @@ export async function drainQueue(
       if (outcome === "fatal" && !queueCompleted) {
         // Deadline mungkin memicu; catat supaya jelas di log kalau ini bukan
         // fatal biasa melainkan timeout dinding-jam yang mencegah zombie.
-        console.warn(`[Drain] ${logPhone} wall-clock deadline hit â€” forcing queueFail`);
+        console.warn(`[Drain] ${logPhone} wall-clock deadline hit — forcing queueFail`);
       }
     } catch (e) {
       console.error(`[Drain] ${logPhone} error:`, e);
@@ -2072,7 +2072,7 @@ export async function recoverUnqueuedInboundMessages(options?: {
  * percobaan (status='failed', biasanya akibat zombie_timeout berulang).
  *
  * Tanpa ini, tamu tidak menerima balasan apapun ketika orchestrator gagal
- * tiga kali â€” chatbot terlihat "diam". Helper ini menjamin minimal ada
+ * tiga kali — chatbot terlihat "diam". Helper ini menjamin minimal ada
  * acknowledgement, lalu menandai entry agar tidak dikirim ulang.
  *
  * Idempotent: melewati entry yang sudah ada outbound setelah completed_at
@@ -2085,7 +2085,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
   // Grace period: jangan kirim fallback langsung setelah entry di-mark
   // failed. Worker bisa saja masih hidup memproses outbound (Wpp +
   // persistence) walau heartbeat telat. Tunggu 90 detik sejak completed_at
-  // â€” jika benar-benar mati, fallback akan tetap terkirim. Jika worker
+  // — jika benar-benar mati, fallback akan tetap terkirim. Jika worker
   // sebenarnya berhasil, pengecekan outbound di bawah akan menangkapnya
   // dan kita skip.
   const graceCutoffIso = new Date(Date.now() - 90_000).toISOString();
@@ -2114,7 +2114,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
     // atau ada queue lain yang sudah membalas thread ini.
     try {
-      // (a) outbound yang sama queue_entry_id-nya â†’ reply asli sudah terkirim.
+      // (a) outbound yang sama queue_entry_id-nya → reply asli sudah terkirim.
       const { data: sameQid } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
         .select("id")
@@ -2123,7 +2123,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .eq("metadata->>queue_entry_id", entry.id)
         .limit(1);
 
-      // (b) outbound apa pun setelah queue entry dibuat â†’ percakapan sudah dilayani
+      // (b) outbound apa pun setelah queue entry dibuat → percakapan sudah dilayani
       // (entah oleh worker yang sama sebelum zombie, queue lain, atau operator).
       const { data: anyOut } = await (supabaseAdmin as any)
         .from("whatsapp_messages")
@@ -2133,7 +2133,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gte("sent_at", entry.created_at)
         .limit(1);
 
-      // (c) queue lain yang lebih baru di thread sama â†’ guest sudah lanjut, jangan ganggu.
+      // (c) queue lain yang lebih baru di thread sama → guest sudah lanjut, jangan ganggu.
       const { data: newerQueue } = await (supabaseAdmin as any)
         .from("wa_conversation_queue")
         .select("id")
@@ -2143,7 +2143,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
       // (d) queue lock guard: ada worker yang sedang aktif memproses thread
       // ini (status processing/retrying dengan heartbeat masih segar). Kalau
-      // ada, JANGAN kirim fallback â€” worker tersebut sedang menyelesaikan
+      // ada, JANGAN kirim fallback — worker tersebut sedang menyelesaikan
       // balasan dan fallback akan jadi double-message ke tamu.
       const lockFreshSinceIso = new Date(Date.now() - 30_000).toISOString();
       const { data: activeWorker } = await (supabaseAdmin as any)
@@ -2154,7 +2154,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
         .gte("locked_at", lockFreshSinceIso)
         .limit(1);
 
-      // (e) inbound baru dari guest setelah entry ini â†’ guest sudah lanjut
+      // (e) inbound baru dari guest setelah entry ini → guest sudah lanjut
       // mengirim pesan baru. Kirim fallback hanya akan membingungkan: pesan
       // "sistem sibuk" muncul setelah guest sudah pindah topik. Biarkan
       // burst baru yang menjawab.
@@ -2174,7 +2174,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
         (newerInbound ?? []).length > 0
       ) {
         console.info(
-          `[Fallback] skip ${entry.id.slice(0, 8)} â€” worker_active=${(activeWorker ?? []).length > 0} newer_inbound=${(newerInbound ?? []).length > 0}`,
+          `[Fallback] skip ${entry.id.slice(0, 8)} — worker_active=${(activeWorker ?? []).length > 0} newer_inbound=${(newerInbound ?? []).length > 0}`,
         );
         await (supabaseAdmin as any)
           .from("wa_conversation_queue")
@@ -2212,7 +2212,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    // â”€â”€ Atomic claim: tandai entry SEBELUM kirim (idempotency key) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Atomic claim: tandai entry SEBELUM kirim (idempotency key) ─────────
     // Dua tick cron dapat melihat row 'failed' yang sama sebelum salah satu
     // menyetel marker. Tanpa claim atomik, keduanya akan memanggil Wpp
     // dan tamu menerima dua pesan "sistem sibuk". Update bersyarat ini
@@ -2231,7 +2231,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       console.warn("[Fallback] claim failed:", e);
     }
     if (!claimWon) {
-      console.info(`[Fallback] entry ${entry.id.slice(0, 8)} sudah diklaim worker lain â€” skip`);
+      console.info(`[Fallback] entry ${entry.id.slice(0, 8)} sudah diklaim worker lain — skip`);
       continue;
     }
 
@@ -2260,7 +2260,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
 
     if (!ok) {
       console.warn(`[Fallback] send failed for ${entry.phone.slice(-6)}: ${sendErr}`);
-      // Tandai final supaya tidak retry tanpa henti â€” claim sudah set,
+      // Tandai final supaya tidak retry tanpa henti — claim sudah set,
       // tapi kita pertegas dengan marker terminal khusus.
       try {
         if (outboundRowId) {
@@ -2279,7 +2279,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    // Promote pending â†’ sent.
+    // Promote pending → sent.
     if (outboundRowId) {
       try {
         await (supabaseAdmin as any)
@@ -2296,7 +2296,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
           })
           .eq("id", outboundRowId);
       } catch (e) {
-        console.warn("[Fallback] promote pendingâ†’sent failed:", e);
+        console.warn("[Fallback] promote pending→sent failed:", e);
       }
     }
 
@@ -2337,7 +2337,7 @@ export async function sendFailureFallbackToGuests(): Promise<{
     }
 
     notified++;
-    console.log(`[Fallback] âœ“ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
+    console.log(`[Fallback] ✓ Sent terminal-fail fallback to ${entry.phone.slice(-6)}`);
   }
 
 
@@ -2367,4 +2367,3 @@ function getLastNInboundMessages(messages: Array<{ direction: string; body: stri
   }
   return result;
 }
-
