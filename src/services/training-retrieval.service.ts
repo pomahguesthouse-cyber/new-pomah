@@ -58,6 +58,9 @@ const HIGH_RISK_INTENTS = new Set([
   "payment_inquiry",
   "complaint",
   "inquiry_monthly_rental",
+  "booking_cancel",
+  "booking_change",
+  "booking_status",
 ]);
 
 function cleanMeta(value?: string | null): string | null {
@@ -101,7 +104,35 @@ export function inferTrainingIntent(message: string): string {
   if (/\b(dp|bayar|pembayaran|transfer|rekening|invoice|refund|pelunasan|bukti\s+transfer)\b/i.test(text)) {
     return "payment_inquiry";
   }
-  if (/\b(tersedia|availability|available|kosong|masih\s+ada|ada\s+kamar|booking|pesan\s+kamar|reservasi)\b/i.test(text)) {
+
+  // Booking lifecycle must be resolved before availability. The generic word
+  // "booking" alone is intentionally not enough to infer availability.
+  if (
+    /\b(batal(?:kan)?|cancel|hapus)\b.{0,24}\b(booking|reservasi|pesanan)\b/i.test(text) ||
+    /\b(booking|reservasi|pesanan)\b.{0,24}\b(batal(?:kan)?|cancel|hapus)\b/i.test(text)
+  ) {
+    return "booking_cancel";
+  }
+  if (
+    /\b(ubah|ganti|pindah|reschedule|jadwal\s+ulang|revisi)\b.{0,30}\b(booking|reservasi|tanggal|kamar)\b/i.test(text) ||
+    /\b(booking|reservasi)\b.{0,30}\b(ubah|ganti|pindah|reschedule|jadwal\s+ulang|revisi)\b/i.test(text)
+  ) {
+    return "booking_change";
+  }
+  if (
+    /\b(sudah|telah)\s+(booking|reservasi|pesan)\b/i.test(text) ||
+    /\b(status|kode|konfirmasi|cek)\b.{0,24}\b(booking|reservasi|pesanan)\b/i.test(text) ||
+    /\b(booking|reservasi|pesanan)\s+(saya|kami|ku)\b/i.test(text)
+  ) {
+    return "booking_status";
+  }
+  if (
+    /\b(mau|ingin|hendak|akan|tolong|bisa)\b.{0,18}\b(booking|book|reservasi|pesan\s+kamar)\b/i.test(text) ||
+    /\b(pesan\s+kamar|reservasi\s+kamar|book\s+kamar|bookingkan)\b/i.test(text)
+  ) {
+    return "booking_request";
+  }
+  if (/\b(tersedia|availability|available|kosong|masih\s+ada|ada\s+kamar|cek\s+kamar|cek\s+ketersediaan)\b/i.test(text)) {
     return "availability_check";
   }
   if (/\b(harga|tarif|rate|berapa|promo|diskon)\b/i.test(text)) {
@@ -118,6 +149,7 @@ export function inferTrainingIntent(message: string): string {
 
 function stageFromIntent(intent: string): string {
   if (intent === "availability_check") return "availability";
+  if (["booking_request", "booking_status", "booking_change", "booking_cancel"].includes(intent)) return "booking";
   if (intent === "pricing_inquiry") return "pricing";
   if (intent === "facility_inquiry") return "facility";
   if (intent === "location_inquiry") return "location";
