@@ -17,6 +17,7 @@
     "test:wa-availability-context": "tsx scripts/test-wa-availability-context.ts",
     "test:wa-identity": "tsx scripts/test-wa-identity.ts",
     "test:wa-runtime-policy": "tsx scripts/test-wa-runtime-policy.ts",
+    "test:wa-summary-policy": "tsx scripts/test-wa-session-summary-policy.ts",
     "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {
