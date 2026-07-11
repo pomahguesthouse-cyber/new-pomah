@@ -1,6 +1,7 @@
 name: Repair WhatsApp autoreply encoding
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - fix/restore-wa-autoreply-encoding
@@ -38,31 +39,22 @@ jobs:
             shouldForceSummary,
           } from "@/services/wa-autoreply/session-summary-policy";`;
 
-          if (!source.includes(summaryImport)) {
-            throw new Error('session-summary import anchor not found');
-          }
+          if (!source.includes(summaryImport)) throw new Error('session-summary import anchor not found');
           source = source.replace(summaryImport, `${summaryImport}\n${policyImport}`);
 
           const startMarker = 'const SUMMARY_REGEN_COOLDOWN_MS = 3 * 60 * 1000;';
           const endMarker = 'function shouldLoadHeavyRetrieval(message: string): boolean {';
           const start = source.indexOf(startMarker);
           const end = source.indexOf(endMarker, start);
-          if (start < 0 || end < 0) {
-            throw new Error('local summary policy block not found');
-          }
+          if (start < 0 || end < 0) throw new Error('local summary policy block not found');
           source = source.slice(0, start) + source.slice(end);
 
-          const forbidden = [
+          for (const token of [
             'const SUMMARY_REGEN_COOLDOWN_MS =',
             'const FORCE_SUMMARY_KEYWORDS',
             'function shouldForceSummary(',
-            'â†’',
-            'â€”',
-            'ðŸ',
-            'âœ',
-            'â‰',
-          ];
-          for (const token of forbidden) {
+            'â†’', 'â€”', 'ðŸ', 'âœ', 'â‰',
+          ]) {
             if (source.includes(token)) throw new Error(`forbidden token remains: ${token}`);
           }
           if (source.charCodeAt(0) === 0xFEFF) throw new Error('UTF-8 BOM remains');
