@@ -18,6 +18,7 @@
     "test:wa-identity": "tsx scripts/test-wa-identity.ts",
     "test:wa-runtime-policy": "tsx scripts/test-wa-runtime-policy.ts",
     "test:wa-summary-policy": "tsx scripts/test-wa-session-summary-policy.ts",
+    "test:wa-summary-io": "tsx scripts/test-wa-session-summary-io.ts",
     "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {
