@@ -106,12 +106,16 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
   const trainingBlock =
     trainingExamples && trainingExamples.length > 0
       ? [
-          "CONTOH PERCAKAPAN BENAR (WAJIB diikuti gaya & isinya bila konteks mirip; jangan menyalin huruf demi huruf — sesuaikan data tamu saat ini):",
+          "REFERENSI POLA BALASAN:",
+          "Gunakan contoh berikut hanya sebagai referensi gaya dan alur ketika konteks benar-benar mirip.",
+          "HIERARKI WAJIB: hasil tool dan hard guard > state booking > SOP/data properti terbaru > konteks percakapan > contoh training.",
+          "Jangan mengambil harga, stok, kapasitas, fasilitas, nomor rekening, jarak tempuh, atau fakta dinamis dari contoh training. Jika contoh bertentangan dengan sumber yang lebih tinggi, abaikan contoh.",
           ...trainingExamples.map((ex, i) => {
             const meta = [ex.intent, ex.stage].filter(Boolean).join(" / ");
             const header = meta ? `Contoh ${i + 1} (${meta})` : `Contoh ${i + 1}`;
-            return `${header}\nTamu: ${ex.user_message.trim()}\nJawaban ideal: ${ex.ideal_assistant_response.trim()}`;
+            return `${header}\nTamu: ${ex.user_message.trim()}\nPola balasan: ${ex.ideal_assistant_response.trim()}`;
           }),
+          "Sesuaikan dengan data tamu saat ini dan jangan menyalin huruf demi huruf.",
         ].join("\n\n")
       : "";
   const negativeBlock =
