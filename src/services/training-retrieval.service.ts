@@ -69,15 +69,30 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function isExplicitLongStay(text: string): boolean {
+  if (/\b(kost|kos|bulanan|mingguan|kontrak|semester|long\s*stay)\b/i.test(text)) {
+    return true;
+  }
+
+  const durationMatch = text.match(
+    /\b(?:tinggal|menginap|sewa)\b.{0,18}\b(\d{1,3})\s*(hari|malam|minggu|bulan)\b/i,
+  );
+  if (!durationMatch) return false;
+
+  const amount = Number(durationMatch[1]);
+  const unit = durationMatch[2].toLowerCase();
+  if (!Number.isFinite(amount) || amount < 1) return false;
+
+  if (unit === "minggu" || unit === "bulan") return true;
+  return amount >= 7;
+}
+
 /** Lightweight deterministic intent inference for terse WhatsApp messages. */
 export function inferTrainingIntent(message: string): string {
   const text = (message ?? "").toLowerCase().replace(/\s+/g, " ").trim();
   if (!text) return "general";
 
-  if (
-    /\b(kost|kos|bulanan|mingguan|kontrak|semester|long\s*stay)\b/i.test(text) ||
-    /\b(tinggal|menginap|sewa)\b.{0,18}\b(\d{1,3})\s*(hari|malam|minggu|bulan)\b/i.test(text)
-  ) {
+  if (isExplicitLongStay(text)) {
     return "inquiry_monthly_rental";
   }
   if (/\b(komplain|keluhan|kecewa|marah|buruk|kotor|rusak|tidak\s+nyala|ga\s+nyala|nggak\s+nyala)\b/i.test(text)) {
