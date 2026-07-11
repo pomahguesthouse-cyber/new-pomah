@@ -1,0 +1,97 @@
+name: Repair WhatsApp autoreply encoding
+
+on:
+  push:
+    branches:
+      - fix/restore-wa-autoreply-encoding
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore clean UTF-8 source and reapply summary policy wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show d71d231694a508a63f54fd99bd9de2a5591b7d5f:src/services/wa-autoreply.service.ts > /tmp/wa-autoreply.service.ts
+          node <<'NODE'
+          const fs = require('node:fs');
+          const sourcePath = '/tmp/wa-autoreply.service.ts';
+          const targetPath = 'src/services/wa-autoreply.service.ts';
+          let source = fs.readFileSync(sourcePath, 'utf8');
+
+          const summaryImport = `import {
+            generateSessionSummary,
+            regenerateThreadSummary,
+            SUMMARY_MIN_MESSAGES,
+            updateThreadSummary,
+          } from "@/services/wa-autoreply/session-summary";`;
+          const policyImport = `import {
+            SUMMARY_REGEN_COOLDOWN_MS,
+            shouldForceSummary,
+          } from "@/services/wa-autoreply/session-summary-policy";`;
+
+          if (!source.includes(summaryImport)) {
+            throw new Error('session-summary import anchor not found');
+          }
+          source = source.replace(summaryImport, `${summaryImport}\n${policyImport}`);
+
+          const startMarker = 'const SUMMARY_REGEN_COOLDOWN_MS = 3 * 60 * 1000;';
+          const endMarker = 'function shouldLoadHeavyRetrieval(message: string): boolean {';
+          const start = source.indexOf(startMarker);
+          const end = source.indexOf(endMarker, start);
+          if (start < 0 || end < 0) {
+            throw new Error('local summary policy block not found');
+          }
+          source = source.slice(0, start) + source.slice(end);
+
+          const forbidden = [
+            'const SUMMARY_REGEN_COOLDOWN_MS =',
+            'const FORCE_SUMMARY_KEYWORDS',
+            'function shouldForceSummary(',
+            'â†’',
+            'â€”',
+            'ðŸ',
+            'âœ',
+            'â‰',
+          ];
+          for (const token of forbidden) {
+            if (source.includes(token)) throw new Error(`forbidden token remains: ${token}`);
+          }
+          if (source.charCodeAt(0) === 0xFEFF) throw new Error('UTF-8 BOM remains');
+          if (!source.includes('Terima kasih Kak 🙏 Pesan Kakak sudah kami terima.')) {
+            throw new Error('guest-facing handoff acknowledgement was not restored');
+          }
+          if (!source.includes('from "@/services/wa-autoreply/session-summary-policy"')) {
+            throw new Error('summary policy import missing');
+          }
+
+          fs.writeFileSync(targetPath, source, { encoding: 'utf8' });
+          NODE
+
+      - name: Verify TypeScript and WhatsApp regressions
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:$PATH"
+          bun install --frozen-lockfile
+          bunx tsc --noEmit
+          bun run test:wa-refactor
+
+      - name: Commit repaired source and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/repair-wa-autoreply-encoding.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(wa): restore UTF-8 encoding in autoreply service"
+          git push
