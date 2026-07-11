@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/extract-wa-availability-formatters
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
