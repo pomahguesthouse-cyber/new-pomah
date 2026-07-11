@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import {
   AI_TIMEOUT_LIGHT_MS,
   AI_TIMEOUT_MS,
@@ -38,4 +39,26 @@ assert.ok(FALLBACK_MESSAGE.includes("lanjut"));
 assert.ok(MANAGER_FALLBACK_MESSAGE.includes("Admin"));
 assert.ok(QUICK_ACK_MESSAGE.includes("cekkan"));
 
-console.log("✓ WhatsApp runtime policy regression cases passed");
+const serviceSource = fs.readFileSync("src/services/wa-autoreply.service.ts", "utf8");
+assert.ok(
+  serviceSource.includes('from "@/services/wa-autoreply/runtime-policy"'),
+  "wa-autoreply.service.ts must import runtime-policy",
+);
+for (const forbidden of [
+  "const FALLBACK_MESSAGE =",
+  "const MANAGER_FALLBACK_MESSAGE =",
+  "const QUICK_ACK_MESSAGE =",
+  "function buildStateAwareFallback(",
+  "const AI_TIMEOUT_MS =",
+  "const AI_TIMEOUT_LIGHT_MS =",
+  "const HEAVY_INTENT_RE =",
+  "function pickAiBudgetMs(",
+]) {
+  assert.equal(
+    serviceSource.includes(forbidden),
+    false,
+    `wa-autoreply.service.ts still duplicates runtime policy: ${forbidden}`,
+  );
+}
+
+console.log("✓ WhatsApp runtime policy regression and wiring cases passed");
