@@ -284,7 +284,7 @@ export function PublicFooter({
                 { to: "/connect", label: "Hubungkan AI" },
               ].map((l) => (
                 <li key={l.label}>
-                  <Link to={l.to} className="text-teal-200/80 transition hover:text-white">
+                  <Link to={l.to} hash={l.hash} className="text-teal-200/80 transition hover:text-white">
                     {l.label}
                   </Link>
                 </li>
