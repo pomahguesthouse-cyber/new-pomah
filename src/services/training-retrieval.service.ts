@@ -116,9 +116,7 @@ export function inferTrainingIntent(message: string): string {
   return "general";
 }
 
-function normalizeStage(stage: string | null | undefined, intent: string): string {
-  const raw = cleanMeta(stage);
-  if (raw && !["front-office", "front_office"].includes(raw)) return raw;
+function stageFromIntent(intent: string): string {
   if (intent === "availability_check") return "availability";
   if (intent === "pricing_inquiry") return "pricing";
   if (intent === "facility_inquiry") return "facility";
@@ -128,17 +126,34 @@ function normalizeStage(stage: string | null | undefined, intent: string): strin
   return "general";
 }
 
+function normalizeStage(
+  stage: string | null | undefined,
+  intent: string,
+  latestIntentIsSpecific: boolean,
+): string {
+  // Pesan terbaru yang jelas harus mengalahkan topik lama dari chat summary.
+  if (latestIntentIsSpecific) return stageFromIntent(intent);
+
+  const raw = cleanMeta(stage);
+  if (raw && !["front-office", "front_office"].includes(raw)) return raw;
+  return stageFromIntent(intent);
+}
+
 function inferRoomType(message: string): string | null {
   const match = (message ?? "").match(/\b(family(?:\s+room|\s+suite)?|deluxe|single)\b/i);
   return match?.[1]?.trim() ?? null;
 }
 
 function normalizeInput(input: FindInput): FindInput {
-  const inferredIntent = cleanMeta(input.intent) ?? inferTrainingIntent(input.userMessage);
+  const explicitIntent = cleanMeta(input.intent);
+  const inferredFromLatestMessage = inferTrainingIntent(input.userMessage);
+  const inferredIntent = explicitIntent ?? inferredFromLatestMessage;
+  const latestIntentIsSpecific = !explicitIntent && inferredFromLatestMessage !== "general";
+
   return {
     ...input,
     intent: inferredIntent,
-    stage: normalizeStage(input.stage, inferredIntent),
+    stage: normalizeStage(input.stage, inferredIntent, latestIntentIsSpecific),
     roomType: input.roomType?.trim() || inferRoomType(input.userMessage),
     conversationContext: input.conversationContext?.trim().slice(0, MAX_CONTEXT_CHARS) || null,
   };
