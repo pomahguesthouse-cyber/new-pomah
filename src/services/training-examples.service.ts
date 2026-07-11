@@ -1,7 +1,6 @@
 /**
- * Retrieval contoh percakapan latihan (training examples) untuk diinject
- * ke system prompt chatbot. Skor sederhana berbasis overlap kata + bobot
- * intent/stage agar tidak memerlukan embedding.
+ * Retrieval contoh percakapan latihan untuk diinject ke system prompt chatbot.
+ * Fallback ini dipakai ketika embedding tidak tersedia atau gagal.
  */
 
 export interface TrainingExample {
@@ -16,9 +15,9 @@ export interface TrainingExample {
 
 const STOPWORDS = new Set([
   "yang", "dan", "atau", "untuk", "dengan", "saya", "kak", "halo", "kakak",
-  "di", "ke", "dari", "ini", "itu", "ada", "apa", "bisa", "tolong", "mau",
-  "sudah", "belum", "ya", "tidak", "lagi", "juga", "saja", "aja", "dong",
-  "kalau", "kalo", "jadi", "biar", "agar", "sih", "deh", "nya",
+  "di", "ke", "dari", "ini", "itu", "apa", "tolong", "sudah", "belum", "ya",
+  "tidak", "lagi", "juga", "saja", "aja", "dong", "jadi", "biar", "agar",
+  "sih", "deh", "nya",
 ]);
 
 function tokenize(text: string): Set<string> {
@@ -42,28 +41,33 @@ interface Scored {
   score: number;
 }
 
+function normalized(value?: string | null): string | null {
+  const cleaned = value?.trim().toLowerCase();
+  return cleaned || null;
+}
+
 function scoreExample(ex: TrainingExample, input: ScoreInput): number {
   const userTokens = tokenize(input.userMessage);
-  if (userTokens.size === 0) return 0;
   const exTokens = tokenize(ex.user_message);
   let overlap = 0;
   for (const t of exTokens) if (userTokens.has(t)) overlap += 1;
-  const denom = Math.max(1, Math.min(userTokens.size, exTokens.size));
-  let score = overlap / denom; // 0..1
+  const denom = Math.max(1, Math.min(userTokens.size || 1, exTokens.size || 1));
+  let score = overlap / denom;
 
-  if (input.intent && ex.intent && ex.intent.toLowerCase() === input.intent.toLowerCase()) {
-    score += 0.4;
+  const wantedIntent = normalized(input.intent);
+  const exampleIntent = normalized(ex.intent);
+  if (wantedIntent && exampleIntent) {
+    score += wantedIntent === exampleIntent ? 0.4 : -0.12;
   }
-  if (input.stage && ex.stage && ex.stage.toLowerCase() === input.stage.toLowerCase()) {
-    score += 0.3;
+
+  const wantedStage = normalized(input.stage);
+  const exampleStage = normalized(ex.stage);
+  if (wantedStage && exampleStage) {
+    score += wantedStage === exampleStage ? 0.3 : -0.06;
   }
   return score;
 }
 
-/**
- * Ambil top-N contoh paling relevan untuk pesan tamu saat ini.
- * Mengembalikan array kosong bila tidak ada contoh aktif atau koneksi gagal.
- */
 export async function findRelevantTrainingExamples(
   supabase: { from: (t: string) => any },
   input: ScoreInput,
@@ -72,36 +76,36 @@ export async function findRelevantTrainingExamples(
   try {
     const { data, error } = await supabase
       .from("chatbot_training_examples")
-      .select(
-        "id, stage, state_before, user_message, intent, slot_updates, ideal_assistant_response",
-      )
+      .select("id, stage, state_before, user_message, intent, slot_updates, ideal_assistant_response")
       .eq("is_active", true)
       .limit(500);
     if (error || !Array.isArray(data) || data.length === 0) return [];
 
-    const scored: Scored[] = (data as TrainingExample[])
+    return (data as TrainingExample[])
       .map((ex) => ({ ex, score: scoreExample(ex, input) }))
-      .filter((s) => s.score > 0.15)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
-
-    return scored.map((s) => s.ex);
+      .filter((s: Scored) => s.score > 0.15)
+      .sort((a: Scored, b: Scored) => b.score - a.score)
+      .slice(0, limit)
+      .map((s: Scored) => s.ex);
   } catch {
     return [];
   }
 }
 
-/** Format contoh sebagai blok teks "CONTOH PERCAKAPAN BENAR" untuk system prompt. */
+/** Format contoh sebagai referensi pola, bukan sumber fakta operasional. */
 export function formatTrainingExamplesBlock(examples: TrainingExample[]): string {
   if (examples.length === 0) return "";
   const lines = examples.map((ex, i) => {
     const meta = [ex.intent, ex.stage].filter(Boolean).join(" / ");
     const header = meta ? `Contoh ${i + 1} (${meta})` : `Contoh ${i + 1}`;
-    return `${header}\nTamu: ${ex.user_message.trim()}\nJawaban ideal: ${ex.ideal_assistant_response.trim()}`;
+    return `${header}\nTamu: ${ex.user_message.trim()}\nPola balasan yang disarankan: ${ex.ideal_assistant_response.trim()}`;
   });
   return [
-    "CONTOH PERCAKAPAN BENAR (WAJIB diikuti gaya & isinya bila konteks mirip):",
+    "REFERENSI POLA BALASAN:",
+    "Gunakan contoh hanya sebagai referensi gaya dan alur ketika konteks benar-benar mirip.",
+    "HIERARKI WAJIB: hasil tool dan hard guard > state booking > SOP/data properti terbaru > konteks percakapan > contoh training.",
+    "Jangan mengambil harga, stok, kapasitas, fasilitas, nomor rekening, jarak tempuh, atau fakta dinamis dari contoh. Jika contoh bertentangan dengan sumber yang lebih tinggi, abaikan contoh.",
     ...lines,
-    "Jangan menyalin huruf demi huruf — sesuaikan dengan data tamu saat ini, tetapi pertahankan struktur, nada, dan informasi kuncinya.",
+    "Sesuaikan dengan data tamu saat ini dan jangan menyalin huruf demi huruf.",
   ].join("\n\n");
 }
