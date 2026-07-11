@@ -52,6 +52,19 @@ import {
   buildRecentAvailabilityNeedDatesReply,
   formatTonightAvailabilityReply,
 } from "@/services/wa-autoreply/availability-context";
+import {
+  isConfiguredAdminPhone,
+  isManagerInGuestMode,
+  normalizePhone,
+  resolveManagerByPhone,
+} from "@/services/wa-autoreply/identity";
+
+export {
+  isConfiguredAdminPhone,
+  isManagerInGuestMode,
+  normalizePhone,
+  resolveManagerByPhone,
+};
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -161,91 +174,6 @@ const HANDLE_ONE_DEADLINE_MS = 26_000;
 const AI_MAX_ATTEMPTS = 1;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/** Normalize an Indonesian phone to digits-only with 62 prefix. */
-function normalizePhone(raw: string): string {
-  let p = String(raw).replace(/\D/g, "");
-  if (p.startsWith("620")) p = "62" + p.slice(3);
-  else if (p.startsWith("0")) p = "62" + p.slice(1);
-  else if (p.startsWith("8")) p = "62" + p;
-  return p;
-}
-
-export function isConfiguredAdminPhone(phone: string): boolean {
-  const normalized = normalizePhone(phone);
-  if (!normalized) return false;
-  return (process.env.ADMIN_PHONE_NUMBERS || "")
-    .split(",")
-    .map((p) => normalizePhone(p))
-    .filter(Boolean)
-    .includes(normalized);
-}
-
-/**
- * Resolve an active property manager by their WhatsApp phone.
- * Returns the manager row, or null if the sender is a guest.
- * Tolerant to phone-format differences (with/without 62, leading 0, spaces).
- */
-export async function resolveManagerByPhone(
-  phone: string,
-): Promise<{ id: string; name: string; role: string; phone: string } | null> {
-  const needle = normalizePhone(phone);
-  if (!needle) return null;
-  // NOTE: do NOT chain `.catch()` onto the Supabase query builder. In the
-  // edge runtime it is a thenable, not a native Promise, and `.catch` is
-  // undefined → calling it throws `TypeError: ... .catch is not a function`,
-  // which bubbles up as a 500 from /api/wpp and silently kills every
-  // incoming WhatsApp message. Schema fallback (missing `is_active` column)
-  // is handled below via the standard `{ data, error }` return.
-  const { data, error } = await (supabaseAdmin as any)
-    .from("property_managers")
-    .select("id, name, role, phone, is_active");
-
-  if (error) {
-    console.error("[Autoreply] Error fetching managers:", error);
-    // If it's a column not found error, try without is_active
-    if (error.code === "PGRST106" || String(error.message).includes("is_active")) {
-      const fallback = await (supabaseAdmin as any).from("property_managers").select("id, name, role, phone");
-      if (!fallback.error && fallback.data) {
-        for (const m of fallback.data) {
-          if (m.phone && normalizePhone(m.phone) === needle) return m as any;
-        }
-      }
-    }
-  }
-
-  for (const m of (data ?? []) as any[]) {
-    // Treat as active if is_active is true or undefined (fallback)
-    const isActive = m.is_active !== false;
-    if (isActive && m.phone && normalizePhone(m.phone) === needle) {
-      return m as any;
-    }
-  }
-  return null;
-}
-
-/**
- * Cek apakah manager sedang mengaktifkan "mode tamu" untuk keperluan tes.
- * Row disimpan di tabel `manager_test_modes` (phone dinormalisasi 62xxx).
- * Bila true, alur autoreply memperlakukan nomor tersebut sebagai tamu biasa
- * sehingga booking flow (invoice, pembayaran, dsb) bisa diuji tanpa
- * ter-route ke agen manajerial.
- */
-export async function isManagerInGuestMode(phone: string): Promise<boolean> {
-  const needle = normalizePhone(phone);
-  if (!needle) return false;
-  try {
-    const { data, error } = await (supabaseAdmin as any)
-      .from("manager_test_modes")
-      .select("guest_mode")
-      .eq("phone", needle)
-      .maybeSingle();
-    if (error) return false;
-    return !!(data && data.guest_mode);
-  } catch {
-    return false;
-  }
-}
 
 export type AutoreplyOutcome =
   | "ok"
