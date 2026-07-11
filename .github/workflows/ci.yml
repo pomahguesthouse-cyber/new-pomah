@@ -39,5 +39,8 @@ jobs:
       - name: WhatsApp identity regression tests
         run: bun run test:wa-identity
 
+      - name: WhatsApp runtime policy regression tests
+        run: bun run test:wa-runtime-policy
+
       - name: Lint
         run: bun run lint
