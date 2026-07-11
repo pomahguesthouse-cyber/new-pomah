@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   apply-refactor:
-    if: ${{ !contains(github.event.head_commit.message, '[formatter-refactor-applied]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
