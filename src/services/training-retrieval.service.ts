@@ -32,7 +32,6 @@ interface FindInput {
   userMessage: string;
   intent?: string | null;
   stage?: string | null;
-  /** Ringkasan singkat atau 1–3 turn terakhir. Jangan kirim seluruh transkrip. */
   conversationContext?: string | null;
   roomType?: string | null;
 }
@@ -45,7 +44,7 @@ interface FindOptions {
 }
 
 const DEFAULT_LIMIT = 3;
-const DEFAULT_CURATED_BOOST = 0.10;
+const DEFAULT_CURATED_BOOST = 0.1;
 const DEFAULT_CORRECTION_BOOST = 0.12;
 const DEFAULT_MIN_SIM = 0.72;
 const INTENT_MATCH_BOOST = 0.12;
@@ -53,6 +52,13 @@ const STAGE_MATCH_BOOST = 0.08;
 const INTENT_MISMATCH_PENALTY = 0.08;
 const STAGE_MISMATCH_PENALTY = 0.04;
 const MAX_CONTEXT_CHARS = 700;
+
+const HIGH_RISK_INTENTS = new Set([
+  "availability_check",
+  "payment_inquiry",
+  "complaint",
+  "inquiry_monthly_rental",
+]);
 
 function cleanMeta(value?: string | null): string | null {
   const cleaned = value?.trim().toLowerCase();
@@ -63,18 +69,73 @@ function clampScore(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-/**
- * Pesan pendek WhatsApp seperti "kalau deluxe" tidak cukup berdiri sendiri.
- * Query embedding diperkaya secara terbatas dengan konteks, intent, stage dan
- * tipe kamar aktif agar retrieval memahami turn lanjutan tanpa prompt bloat.
- */
+/** Lightweight deterministic intent inference for terse WhatsApp messages. */
+export function inferTrainingIntent(message: string): string {
+  const text = (message ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return "general";
+
+  if (
+    /\b(kost|kos|bulanan|mingguan|kontrak|semester|long\s*stay)\b/i.test(text) ||
+    /\b(tinggal|menginap|sewa)\b.{0,18}\b(\d{1,3})\s*(hari|malam|minggu|bulan)\b/i.test(text)
+  ) {
+    return "inquiry_monthly_rental";
+  }
+  if (/\b(komplain|keluhan|kecewa|marah|buruk|kotor|rusak|tidak\s+nyala|ga\s+nyala|nggak\s+nyala)\b/i.test(text)) {
+    return "complaint";
+  }
+  if (/\b(dp|bayar|pembayaran|transfer|rekening|invoice|refund|pelunasan|bukti\s+transfer)\b/i.test(text)) {
+    return "payment_inquiry";
+  }
+  if (/\b(tersedia|availability|available|kosong|masih\s+ada|ada\s+kamar|booking|pesan\s+kamar|reservasi)\b/i.test(text)) {
+    return "availability_check";
+  }
+  if (/\b(harga|tarif|rate|berapa|promo|diskon)\b/i.test(text)) {
+    return "pricing_inquiry";
+  }
+  if (/\b(fasilitas|ac|tv|wifi|air\s+panas|kamar\s+mandi|parkir|sarapan|extra\s*bed|lantai)\b/i.test(text)) {
+    return "facility_inquiry";
+  }
+  if (/\b(lokasi|alamat|maps|map|dekat|jarak|unnes|undip|arah|rute)\b/i.test(text)) {
+    return "location_inquiry";
+  }
+  return "general";
+}
+
+function normalizeStage(stage: string | null | undefined, intent: string): string {
+  const raw = cleanMeta(stage);
+  if (raw && !["front-office", "front_office"].includes(raw)) return raw;
+  if (intent === "availability_check") return "availability";
+  if (intent === "pricing_inquiry") return "pricing";
+  if (intent === "facility_inquiry") return "facility";
+  if (intent === "location_inquiry") return "location";
+  if (intent === "payment_inquiry") return "payment";
+  if (intent === "complaint") return "complaint";
+  return "general";
+}
+
+function inferRoomType(message: string): string | null {
+  const match = (message ?? "").match(/\b(family(?:\s+room|\s+suite)?|deluxe|single)\b/i);
+  return match?.[1]?.trim() ?? null;
+}
+
+function normalizeInput(input: FindInput): FindInput {
+  const inferredIntent = cleanMeta(input.intent) ?? inferTrainingIntent(input.userMessage);
+  return {
+    ...input,
+    intent: inferredIntent,
+    stage: normalizeStage(input.stage, inferredIntent),
+    roomType: input.roomType?.trim() || inferRoomType(input.userMessage),
+    conversationContext: input.conversationContext?.trim().slice(0, MAX_CONTEXT_CHARS) || null,
+  };
+}
+
 function buildRetrievalQuery(input: FindInput): string {
   const parts = [`Pesan terbaru: ${(input.userMessage ?? "").trim()}`];
   const context = input.conversationContext?.trim().slice(0, MAX_CONTEXT_CHARS);
   if (context) parts.push(`Konteks percakapan: ${context}`);
-  if (input.intent?.trim()) parts.push(`Intent aktif: ${input.intent.trim()}`);
-  if (input.stage?.trim()) parts.push(`Tahap/topik aktif: ${input.stage.trim()}`);
-  if (input.roomType?.trim()) parts.push(`Tipe kamar aktif: ${input.roomType.trim()}`);
+  if (input.intent) parts.push(`Intent aktif: ${input.intent}`);
+  if (input.stage) parts.push(`Tahap/topik aktif: ${input.stage}`);
+  if (input.roomType) parts.push(`Tipe kamar aktif: ${input.roomType}`);
   return parts.join("\n");
 }
 
@@ -95,16 +156,16 @@ function rerankExample(
   if (wantedStage && exampleStage) {
     score += wantedStage === exampleStage ? STAGE_MATCH_BOOST : -STAGE_MISMATCH_PENALTY;
   }
-
   return { ...ex, similarity: clampScore(score) };
 }
 
 export async function findTrainingContext(
   supabase: SupabaseClient,
-  input: FindInput,
+  rawInput: FindInput,
   llmConfig: AiClientConfig | null,
   options: FindOptions = {},
 ): Promise<UnifiedTrainingExample[]> {
+  const input = normalizeInput(rawInput);
   const limit = options.limit ?? DEFAULT_LIMIT;
   const curatedBoost = options.curatedBoost ?? DEFAULT_CURATED_BOOST;
   const correctionBoost = options.correctionBoost ?? DEFAULT_CORRECTION_BOOST;
@@ -113,7 +174,6 @@ export async function findTrainingContext(
   if (!userMsg || limit <= 0) return [];
 
   const retrievalQuery = buildRetrievalQuery(input);
-
   if (!llmConfig?.apiKey) {
     const kw = await findRelevantTrainingExamples(
       supabase,
@@ -133,8 +193,6 @@ export async function findTrainingContext(
     return kw.map((ex) => rerankExample(keywordToUnified(ex, 0.5), input, curatedBoost));
   }
 
-  // Ambil kandidat lebih banyak sebelum reranking agar contoh intent/stage yang
-  // benar tidak tersingkir hanya karena selisih similarity yang sangat kecil.
   const candidateCount = Math.max(limit * 4, 8);
   const [curatedRes, logRes, correctionRes] = await Promise.allSettled([
     supabase.rpc("match_chatbot_training_examples", {
@@ -155,11 +213,14 @@ export async function findTrainingContext(
   ]);
 
   const merged: UnifiedTrainingExample[] = [];
-
   if (curatedRes.status === "fulfilled" && Array.isArray(curatedRes.value.data)) {
     for (const r of curatedRes.value.data as Array<{
-      id: string; user_message: string; ideal_assistant_response: string;
-      intent: string | null; stage: string | null; similarity: number;
+      id: string;
+      user_message: string;
+      ideal_assistant_response: string;
+      intent: string | null;
+      stage: string | null;
+      similarity: number;
     }>) {
       merged.push(rerankExample({
         id: r.id,
@@ -175,7 +236,10 @@ export async function findTrainingContext(
 
   if (logRes.status === "fulfilled" && Array.isArray(logRes.value.data)) {
     for (const r of logRes.value.data as Array<{
-      id: string; user_message: string; effective_answer: string; similarity: number;
+      id: string;
+      user_message: string;
+      effective_answer: string;
+      similarity: number;
     }>) {
       merged.push(rerankExample({
         id: r.id,
@@ -191,8 +255,12 @@ export async function findTrainingContext(
 
   if (correctionRes.status === "fulfilled" && Array.isArray(correctionRes.value.data)) {
     for (const r of correctionRes.value.data as Array<{
-      id: string; user_message: string; ideal_assistant_response: string;
-      intent: string | null; stage: string | null; similarity: number;
+      id: string;
+      user_message: string;
+      ideal_assistant_response: string;
+      intent: string | null;
+      stage: string | null;
+      similarity: number;
     }>) {
       merged.push(rerankExample({
         id: r.id,
@@ -206,18 +274,13 @@ export async function findTrainingContext(
     }
   }
 
-  // Pertanyaan yang sama boleh mempunyai contoh berbeda untuk intent/stage yang
-  // berbeda. Dedup lama hanya memakai user_message dan menghapus konteks penting.
   const seen = new Map<string, UnifiedTrainingExample>();
   for (const ex of merged) {
     const key = [normalize(ex.user_message), cleanMeta(ex.intent) ?? "", cleanMeta(ex.stage) ?? ""].join("|");
     const prev = seen.get(key);
     if (!prev || ex.similarity > prev.similarity) seen.set(key, ex);
   }
-
-  return Array.from(seen.values())
-    .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, limit);
+  return Array.from(seen.values()).sort((a, b) => b.similarity - a.similarity).slice(0, limit);
 }
 
 function keywordToUnified(ex: KeywordExample, fakeSim: number): UnifiedTrainingExample {
@@ -250,7 +313,6 @@ export async function findNegativeExamples(
   const enrichedQuery = options.conversationContext?.trim()
     ? `${trimmed}\nKonteks percakapan: ${options.conversationContext.trim().slice(0, MAX_CONTEXT_CHARS)}`
     : trimmed;
-
   const queryEmbedding = await generateEmbedding(llmConfig, enrichedQuery).catch(() => null);
   if (!queryEmbedding) return [];
 
@@ -295,17 +357,23 @@ export interface TrainingSignals {
 
 export async function findTrainingSignals(
   supabase: SupabaseClient,
-  input: FindInput,
+  rawInput: FindInput,
   llmConfig: AiClientConfig | null,
   options: { positiveLimit?: number; negativeLimit?: number; minSimilarity?: number } = {},
 ): Promise<TrainingSignals> {
+  const input = normalizeInput(rawInput);
+  const requestedNegativeLimit = options.negativeLimit ?? 0;
+  const negativeLimit = HIGH_RISK_INTENTS.has(input.intent ?? "")
+    ? Math.max(1, requestedNegativeLimit)
+    : 0;
+
   const [positiveExamples, negativeExamples] = await Promise.all([
     findTrainingContext(supabase, input, llmConfig, {
       limit: options.positiveLimit,
       minSimilarity: options.minSimilarity,
     }),
     findNegativeExamples(supabase, input.userMessage, llmConfig, {
-      limit: options.negativeLimit,
+      limit: negativeLimit,
       minSimilarity: options.minSimilarity,
       conversationContext: input.conversationContext,
     }),
