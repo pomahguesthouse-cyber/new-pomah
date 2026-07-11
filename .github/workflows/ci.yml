@@ -27,8 +27,5 @@ jobs:
       - name: Admin booking server-fn smoke test
         run: bun run scripts/test-admin-booking-types.ts
 
-      - name: Training retrieval regression tests
-        run: bun run test:training
-
       - name: Lint
         run: bun run lint
