@@ -5,7 +5,6 @@ let source = fs.readFileSync(path, "utf8");
 
 const importAnchor = 'import { buildPropertyFaqReply } from "@/services/property-faq";';
 const runtimePolicyImport = `import {
-  AI_TIMEOUT_LIGHT_MS,
   AI_TIMEOUT_MS,
   FALLBACK_MESSAGE,
   MANAGER_FALLBACK_MESSAGE,
@@ -17,27 +16,34 @@ const runtimePolicyImport = `import {
 if (!source.includes(importAnchor)) {
   throw new Error("Unable to find runtime policy import anchor");
 }
-if (!source.includes(runtimePolicyImport)) {
+if (!source.includes('from "@/services/wa-autoreply/runtime-policy"')) {
   source = source.replace(importAnchor, `${importAnchor}\n${runtimePolicyImport}`);
 }
 
-const fallbackStart = 'const FALLBACK_MESSAGE = "Maaf Kak, sistem sedang lambat.';
-const fallbackEnd = "const QUICK_ACK_AFTER_MS = 6_000;";
-const fallbackStartIndex = source.indexOf(fallbackStart);
-const fallbackEndIndex = source.indexOf(fallbackEnd, fallbackStartIndex);
-if (fallbackStartIndex < 0 || fallbackEndIndex < 0) {
-  throw new Error("Unable to find duplicated fallback policy block");
+function removeRange(startMarker, endMarker, label) {
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker, start);
+  if (start < 0) {
+    // Idempotent reruns are allowed when the declarations are already gone.
+    return;
+  }
+  if (end < 0) {
+    throw new Error(`Unable to find end of duplicated ${label} block`);
+  }
+  source = source.slice(0, start) + source.slice(end);
 }
-source = source.slice(0, fallbackStartIndex) + source.slice(fallbackEndIndex);
 
-const timeoutStart = "/**\n * Anggaran waktu untuk SATU attempt orchestrasi penuh";
-const timeoutEnd = "// Deadline dinding-jam untuk satu iterasi handleOne";
-const timeoutStartIndex = source.indexOf(timeoutStart);
-const timeoutEndIndex = source.indexOf(timeoutEnd, timeoutStartIndex);
-if (timeoutStartIndex < 0 || timeoutEndIndex < 0) {
-  throw new Error("Unable to find duplicated timeout policy block");
-}
-source = source.slice(0, timeoutStartIndex) + source.slice(timeoutEndIndex);
+removeRange(
+  "const FALLBACK_MESSAGE =",
+  "const QUICK_ACK_AFTER_MS = 6_000;",
+  "fallback policy",
+);
+
+removeRange(
+  "const AI_TIMEOUT_MS = 18_000;",
+  "const HANDLE_ONE_DEADLINE_MS = 26_000;",
+  "timeout policy",
+);
 
 for (const forbidden of [
   "const FALLBACK_MESSAGE =",
