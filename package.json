@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:message-parsers": "tsx scripts/test-message-parsers-regressions.ts",
     "test:training": "tsx scripts/test-training-retrieval-regressions.ts",
+    "test:wa-formatters": "tsx scripts/test-wa-availability-formatters.ts",
     "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {

@@ -42,6 +42,12 @@ import {
   shouldUseDeterministicAvailability,
   type ParsedGuestCount,
 } from "@/services/wa-autoreply/message-parsers";
+import {
+  buildAvailabilityNeedDatesReply,
+  formatAvailabilityForGuestCount,
+  formatAvailabilityReply,
+  lastBotAskedGuestCount,
+} from "@/services/wa-autoreply/availability-formatters";
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -316,25 +322,6 @@ function shouldLoadHeavyRetrieval(message: string): boolean {
 // (buildFastFaqReply dikonsolidasi ke buildPropertyFaqReply di
 //  src/services/property-faq.ts — O3, 3 Jul 2026.)
 
-function buildAvailabilityNeedDatesReply(
-  askMessage: string,
-  recentInboundMessages: string[] = [],
-): FastFaqResult {
-  const mentionsSource = [askMessage, ...recentInboundMessages].some((m) =>
-    /\b(tiktok|tik tok|instagram|ig|facebook|fb|google|maps?)\b/i.test(m),
-  );
-  const prefix = messageOpensWithGreeting(askMessage)
-    ? "Halo Kak, "
-    : mentionsSource
-      ? "Terima kasih infonya Kak. "
-      : "";
-  return {
-    intent: "deterministic_availability_need_dates",
-    reply:
-      `${prefix}Untuk cek ketersediaan kamar, boleh tahu rencana menginap tanggal berapa sampai tanggal berapa?`,
-  };
-}
-
 function buildRecentAvailabilityNeedDatesReply(
   messages: Array<{ direction: string; body?: string }>,
 ): FastFaqResult | null {
@@ -369,119 +356,6 @@ function buildRecentAvailabilityNeedDatesReply(
   }
 
   return buildAvailabilityNeedDatesReply(askBody, inboundAfterAsk);
-}
-
-function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
-  let data: any;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-
-  if (!Array.isArray(data.kamar)) return null;
-  const period = typeof data.periode === "string" ? data.periode : data.tanggal ?? "tanggal tersebut";
-  const rooms = data.kamar as Array<Record<string, unknown>>;
-  const available = rooms.filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true);
-
-  if (available.length === 0) {
-    return {
-      intent: "deterministic_availability_full",
-      reply:
-        `${greet ? "Halo Kak, mohon" : "Mohon"} maaf Kak, untuk tanggal ${period} kamar kami sudah penuh.\n\n` +
-        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
-    };
-  }
-
-  const lines = available.slice(0, 5).map((r) => {
-    const count = Number(r.kamar_tersedia ?? 0);
-    const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0);
-    const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
-    return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}`;
-  });
-
-  return {
-    intent: "deterministic_availability",
-    reply:
-      `${greet ? "Halo Kak, untuk" : "Untuk"} tanggal ${period}, masih tersedia:\n${lines.join("\n")}\n\n` +
-      "Kakak rencana untuk berapa orang?",
-  };
-}
-
-function lastBotAskedGuestCount(messages: Array<{ direction: string; body?: string }>): boolean {
-  const lastOutbound = [...messages]
-    .reverse()
-    .find((m) => m.direction === "out" && (m.body ?? "").trim());
-  const body = (lastOutbound?.body ?? "").toLowerCase();
-  return /\brencana untuk berapa orang\b|\bberapa orang\b/.test(body) && /\btersedia\b/.test(body);
-}
-
-function formatAvailabilityForGuestCount(raw: string, guests: ParsedGuestCount): FastFaqResult | null {
-  let data: any;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-
-  if (!Array.isArray(data.kamar)) return null;
-  const period = typeof data.periode === "string" ? data.periode : data.tanggal ?? "tanggal tersebut";
-  const rooms = data.kamar as Array<Record<string, unknown>>;
-  const available = rooms.filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true);
-  const suitable = available.filter((r) => r.cocok_untuk_jumlah_tamu === true);
-  const guestLabel = guests.children > 0
-    ? `${guests.adults} dewasa dan ${guests.children} anak`
-    : `${guests.total} tamu`;
-
-  if (suitable.length > 0) {
-    const lines = suitable.slice(0, 5).map((r) => {
-      const count = Number(r.kamar_tersedia ?? 0);
-      const price = Number(r.harga_per_malam ?? r.nightly_rate ?? 0);
-      const maxGuests = Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 0);
-      const extraBeds = Number(r.extra_bed_dibutuhkan ?? 0);
-      const extraBedRate = Number(r.tarif_extra_bed_per_malam ?? 0);
-      const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
-      const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
-      const extraBedText = extraBeds > 0
-        ? extraBedRate > 0
-          ? `, butuh ${extraBeds} extra bed @ Rp${extraBedRate.toLocaleString("id-ID")}/malam`
-          : `, butuh ${extraBeds} extra bed`
-        : "";
-      return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}${extraBedText}`;
-    });
-
-    return {
-      intent: "deterministic_availability_guest_count",
-      reply:
-        `Untuk ${period} dengan ${guestLabel}, pilihan yang tersedia dan cukup kapasitas:\n` +
-        `${lines.join("\n")}\n\n` +
-        "Kakak mau pilih tipe kamar yang mana?",
-    };
-  }
-
-  if (available.length === 0) {
-    return {
-      intent: "deterministic_availability_full",
-      reply:
-        `Mohon maaf Kak, untuk ${period} kamar kami sudah penuh.\n\n` +
-        "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
-    };
-  }
-
-  const lines = available.slice(0, 5).map((r) => {
-    const count = Number(r.kamar_tersedia ?? 0);
-    const maxGuests = Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 0);
-    const capacityText = maxGuests > 0 ? `maks ${maxGuests} tamu/kamar` : "kapasitas belum terdata";
-    return `- ${String(r.nama ?? "Kamar")}: ${count} kamar tersedia, ${capacityText}`;
-  });
-
-  return {
-    intent: "deterministic_availability_over_capacity",
-    reply:
-      `Maaf Kak, untuk ${period} belum ada tipe kamar tersedia yang cukup untuk ${guestLabel}.\n\n` +
-      `Yang masih tersedia:\n${lines.join("\n")}\n\n` +
-      "Kakak mau coba tanggal lain, atau saya bantu cek opsi kamar lain kalau ada?",
-  };
 }
 
 /** Heuristik ringan: pesan tamu bernada booking_inquiry (tanya
