@@ -48,6 +48,10 @@ import {
   formatAvailabilityReply,
   lastBotAskedGuestCount,
 } from "@/services/wa-autoreply/availability-formatters";
+import {
+  buildRecentAvailabilityNeedDatesReply,
+  formatTonightAvailabilityReply,
+} from "@/services/wa-autoreply/availability-context";
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -322,42 +326,6 @@ function shouldLoadHeavyRetrieval(message: string): boolean {
 // (buildFastFaqReply dikonsolidasi ke buildPropertyFaqReply di
 //  src/services/property-faq.ts — O3, 3 Jul 2026.)
 
-function buildRecentAvailabilityNeedDatesReply(
-  messages: Array<{ direction: string; body?: string }>,
-): FastFaqResult | null {
-  const today = todayWIB();
-  const recent = messages.slice(-8);
-  let askBody = "";
-  let askIndex = -1;
-
-  for (let i = recent.length - 1; i >= 0; i--) {
-    const row = recent[i];
-    if (row.direction === "out") break;
-    if (row.direction !== "in") continue;
-
-    const body = (row.body ?? "").trim();
-    if (isAvailabilityNeedDatesQuestion(body, today)) {
-      askBody = body;
-      askIndex = i;
-      break;
-    }
-  }
-
-  if (!askBody || askIndex < 0) return null;
-
-  const inboundAfterAsk = recent
-    .slice(askIndex)
-    .filter((m) => m.direction === "in")
-    .map((m) => (m.body ?? "").trim())
-    .filter(Boolean);
-  const latestInbound = inboundAfterAsk[inboundAfterAsk.length - 1] ?? askBody;
-  if (latestInbound !== askBody && !isAvailabilitySourceContext(latestInbound)) {
-    return null;
-  }
-
-  return buildAvailabilityNeedDatesReply(askBody, inboundAfterAsk);
-}
-
 /** Heuristik ringan: pesan tamu bernada booking_inquiry (tanya
  *  ketersediaan/harga/kamar) walau tanpa kata kunci tanggal. Dipakai untuk
  *  fast-path kontekstual yang meminjam tanggal dari state sebelumnya. */
@@ -553,43 +521,9 @@ async function buildTonightPriceReply(params: {
     } as any,
   );
 
-  const data = JSON.parse(raw) as {
-    kamar?: Array<{
-      nama?: string;
-      harga_per_malam?: number;
-      kamar_tersedia?: number | null;
-      tidak_tersedia?: boolean;
-      alasan?: string;
-    }>;
-  };
-
-  const available = (data.kamar ?? [])
-    .filter((r) => !r.tidak_tersedia && (r.kamar_tersedia ?? 0) > 0)
-    .sort((a, b) => Number(a.harga_per_malam ?? 0) - Number(b.harga_per_malam ?? 0));
-
-  if (available.length === 0) {
-    return {
-      intent: "deterministic_tonight_availability",
-      reply:
-        `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), ` +
-        `sementara kamar yang tersedia belum ada di sistem. Saya bantu teruskan ke admin ya Kak.`,
-    };
-  }
-
-  const lines = available.slice(0, 6).map((r) => {
-    const price = Number(r.harga_per_malam ?? 0).toLocaleString("id-ID");
-    const stock = r.kamar_tersedia == null ? "" : ` (${r.kamar_tersedia} kamar tersedia)`;
-    return `- ${r.nama}: Rp${price}/malam${stock}`;
-  });
-
-  return {
-    intent: "deterministic_tonight_price",
-    reply:
-      `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), pilihan yang tersedia:\n` +
-      `${lines.join("\n")}\n\n` +
-      `Mau saya bantu pilihkan kamar yang paling sesuai, Kak?`,
-  };
+  return formatTonightAvailabilityReply(raw, checkIn, checkOut);
 }
+
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 const SUMMARY_MAX_CHARS = 800;
 /** Below this many messages, summarizing is pointless — skip. */
