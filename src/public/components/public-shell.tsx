@@ -278,7 +278,7 @@ export function PublicFooter({
             <ul className="space-y-2 text-sm">
               {[
                 { to: "/", label: "Beranda" },
-                { to: "/rooms", label: "Kamar" },
+                { to: "/", hash: "rooms", label: "Kamar" },
                 { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
                 { to: "/connect", label: "Hubungkan AI" },
