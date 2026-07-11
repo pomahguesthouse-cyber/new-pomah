@@ -41,6 +41,16 @@ interface FindOptions {
   curatedBoost?: number;
   correctionBoost?: number;
   minSimilarity?: number;
+  retrievalQuery?: string;
+  queryEmbedding?: number[] | null;
+}
+
+interface NegativeFindOptions {
+  limit?: number;
+  minSimilarity?: number;
+  conversationContext?: string | null;
+  retrievalQuery?: string;
+  queryEmbedding?: number[] | null;
 }
 
 const DEFAULT_LIMIT = 3;
@@ -163,7 +173,6 @@ function normalizeStage(
   intent: string,
   latestIntentIsSpecific: boolean,
 ): string {
-  // Pesan terbaru yang jelas harus mengalahkan topik lama dari chat summary.
   if (latestIntentIsSpecific) return stageFromIntent(intent);
 
   const raw = cleanMeta(stage);
@@ -235,7 +244,7 @@ export async function findTrainingContext(
   const userMsg = (input.userMessage ?? "").trim();
   if (!userMsg || limit <= 0) return [];
 
-  const retrievalQuery = buildRetrievalQuery(input);
+  const retrievalQuery = options.retrievalQuery ?? buildRetrievalQuery(input);
   if (!llmConfig?.apiKey) {
     const kw = await findRelevantTrainingExamples(
       supabase,
@@ -245,7 +254,9 @@ export async function findTrainingContext(
     return kw.map((ex) => rerankExample(keywordToUnified(ex, 0.5), input, curatedBoost));
   }
 
-  const queryEmbedding = await generateEmbedding(llmConfig, retrievalQuery).catch(() => null);
+  const queryEmbedding = options.queryEmbedding !== undefined
+    ? options.queryEmbedding
+    : await generateEmbedding(llmConfig, retrievalQuery).catch(() => null);
   if (!queryEmbedding) {
     const kw = await findRelevantTrainingExamples(
       supabase,
@@ -365,17 +376,21 @@ export async function findNegativeExamples(
   supabase: SupabaseClient,
   userMessage: string,
   llmConfig: AiClientConfig | null,
-  options: { limit?: number; minSimilarity?: number; conversationContext?: string | null } = {},
+  options: NegativeFindOptions = {},
 ): Promise<NegativeTrainingExample[]> {
   const trimmed = (userMessage ?? "").trim();
   if (!trimmed || !llmConfig?.apiKey) return [];
   const limit = options.limit ?? 2;
   if (limit <= 0) return [];
   const minSim = options.minSimilarity ?? DEFAULT_MIN_SIM;
-  const enrichedQuery = options.conversationContext?.trim()
-    ? `${trimmed}\nKonteks percakapan: ${options.conversationContext.trim().slice(0, MAX_CONTEXT_CHARS)}`
-    : trimmed;
-  const queryEmbedding = await generateEmbedding(llmConfig, enrichedQuery).catch(() => null);
+  const retrievalQuery = options.retrievalQuery ?? (
+    options.conversationContext?.trim()
+      ? `${trimmed}\nKonteks percakapan: ${options.conversationContext.trim().slice(0, MAX_CONTEXT_CHARS)}`
+      : trimmed
+  );
+  const queryEmbedding = options.queryEmbedding !== undefined
+    ? options.queryEmbedding
+    : await generateEmbedding(llmConfig, retrievalQuery).catch(() => null);
   if (!queryEmbedding) return [];
 
   const [badLogRes, waCorrectionRes] = await Promise.allSettled([
@@ -428,16 +443,24 @@ export async function findTrainingSignals(
   const negativeLimit = HIGH_RISK_INTENTS.has(input.intent ?? "")
     ? Math.max(1, requestedNegativeLimit)
     : 0;
+  const retrievalQuery = buildRetrievalQuery(input);
+  const queryEmbedding = llmConfig?.apiKey && input.userMessage.trim()
+    ? await generateEmbedding(llmConfig, retrievalQuery).catch(() => null)
+    : null;
 
   const [positiveExamples, negativeExamples] = await Promise.all([
     findTrainingContext(supabase, input, llmConfig, {
       limit: options.positiveLimit,
       minSimilarity: options.minSimilarity,
+      retrievalQuery,
+      queryEmbedding,
     }),
     findNegativeExamples(supabase, input.userMessage, llmConfig, {
       limit: negativeLimit,
       minSimilarity: options.minSimilarity,
       conversationContext: input.conversationContext,
+      retrievalQuery,
+      queryEmbedding,
     }),
   ]);
   return { positiveExamples, negativeExamples };
