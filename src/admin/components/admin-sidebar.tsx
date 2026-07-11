@@ -61,8 +61,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-// ─── Default nav structure (source of truth for icons + paths) ────────────────
-
 type NavItem = {
   to: string;
   label: string;
@@ -119,88 +117,104 @@ const DEFAULT_GROUPS: NavGroup[] = [
   },
 ];
 
-const SIDEBAR_STORAGE_KEYS = [
-  "admin-sidebar:order:v1",
-  "admin-sidebar:order:v2",
-  "admin-sidebar:order:v3",
-];
+const SIDEBAR_STORAGE_KEY = "admin-sidebar:order:v3";
+const LEGACY_STORAGE_KEYS = ["admin-sidebar:order:v1", "admin-sidebar:order:v2"];
 
-// ─── Persistence ──────────────────────────────────────────────────────────────
-
-/** Persisted shape: just the path list per group label. Tiny, forward-compatible. */
 type PersistedOrder = { groups: Array<{ label: string; paths: string[] }> };
+
+function isPersistedOrder(value: unknown): value is PersistedOrder {
+  if (!value || typeof value !== "object") return false;
+  const groups = (value as { groups?: unknown }).groups;
+  return (
+    Array.isArray(groups) &&
+    groups.every(
+      (group) =>
+        group &&
+        typeof group === "object" &&
+        typeof (group as { label?: unknown }).label === "string" &&
+        Array.isArray((group as { paths?: unknown }).paths) &&
+        (group as { paths: unknown[] }).paths.every((path) => typeof path === "string"),
+    )
+  );
+}
 
 function readStored(): PersistedOrder | null {
   if (typeof window === "undefined") return null;
+
   try {
-    for (const key of SIDEBAR_STORAGE_KEYS) window.localStorage.removeItem(key);
+    const keys = [SIDEBAR_STORAGE_KEY, ...LEGACY_STORAGE_KEYS];
+
+    for (const key of keys) {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+
+      const parsed: unknown = JSON.parse(raw);
+      if (!isPersistedOrder(parsed)) {
+        window.localStorage.removeItem(key);
+        continue;
+      }
+
+      if (key !== SIDEBAR_STORAGE_KEY) {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(parsed));
+        window.localStorage.removeItem(key);
+      }
+
+      return parsed;
+    }
   } catch {
-    /* localStorage may be unavailable. Default nav still renders. */
+    // localStorage can be blocked or contain malformed JSON.
   }
+
   return null;
 }
 
 function writeStored(order: PersistedOrder): void {
-  void order;
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(order));
+    for (const key of LEGACY_STORAGE_KEYS) window.localStorage.removeItem(key);
+  } catch {
+    // Reordering still works for the current session when storage is unavailable.
+  }
 }
 
 function getDefaultGroupByPath(defaults: NavGroup[]): Map<string, string> {
   const groupByPath = new Map<string, string>();
-  for (const g of defaults) {
-    for (const item of g.items) groupByPath.set(item.to, g.label);
+  for (const group of defaults) {
+    for (const item of group.items) groupByPath.set(item.to, group.label);
   }
   return groupByPath;
 }
 
-/**
- * Merge stored order with the default nav so:
- *  • Items removed from the code are pruned from saved state.
- *  • Items NEW in the code (added in a deploy) appear in their default
- *    section at the end, instead of vanishing because they weren't in
- *    the user's saved order.
- *  • Group labels and order follow the code (sections are not user-reorderable).
- * Persisted browser order is intentionally ignored. The admin sidebar is a
- * canonical operational menu; old localStorage state once moved AI Lab routes
- * into other admin sections and made restored pages look unchanged.
- */
-function mergeWithDefaults(
-  stored: PersistedOrder | null,
-  defaults: NavGroup[],
-): NavGroup[] {
+function mergeWithDefaults(stored: PersistedOrder | null, defaults: NavGroup[]): NavGroup[] {
   const itemByPath = new Map<string, NavItem>();
-  for (const g of defaults) {
-    for (const it of g.items) itemByPath.set(it.to, it);
+  for (const group of defaults) {
+    for (const item of group.items) itemByPath.set(item.to, item);
   }
-  const defaultGroupByPath = getDefaultGroupByPath(defaults);
 
-  // Track which paths the stored order has already placed somewhere.
+  const defaultGroupByPath = getDefaultGroupByPath(defaults);
   const placed = new Set<string>();
   const storedByLabel = new Map<string, string[]>(
-    (stored?.groups ?? []).map((g) => [g.label, g.paths]),
+    (stored?.groups ?? []).map((group) => [group.label, group.paths]),
   );
 
-  // First pass: honour stored order for each group, filtering out paths
-  // that no longer exist in the code.
-  const result: NavGroup[] = defaults.map((g) => {
-    const storedPaths = storedByLabel.get(g.label) ?? [];
+  const result: NavGroup[] = defaults.map((group) => {
     const orderedItems: NavItem[] = [];
-    for (const p of storedPaths) {
-      const item = itemByPath.get(p);
-      if (item && !placed.has(p) && defaultGroupByPath.get(p) === g.label) {
+    for (const path of storedByLabel.get(group.label) ?? []) {
+      const item = itemByPath.get(path);
+      if (item && !placed.has(path) && defaultGroupByPath.get(path) === group.label) {
         orderedItems.push(item);
-        placed.add(p);
+        placed.add(path);
       }
     }
-    return { label: g.label, items: orderedItems };
+    return { label: group.label, items: orderedItems };
   });
 
-  // Second pass: drop any default items that weren't placed by the stored
-  // order at the end of their default group. New code-introduced items
-  // appear here.
-  for (let i = 0; i < defaults.length; i++) {
-    for (const item of defaults[i].items) {
+  for (let index = 0; index < defaults.length; index++) {
+    for (const item of defaults[index].items) {
       if (!placed.has(item.to)) {
-        result[i].items.push(item);
+        result[index].items.push(item);
         placed.add(item.to);
       }
     }
@@ -211,18 +225,25 @@ function mergeWithDefaults(
 
 function toPersisted(groups: NavGroup[]): PersistedOrder {
   return {
-    groups: groups.map((g) => ({ label: g.label, paths: g.items.map((it) => it.to) })),
+    groups: groups.map((group) => ({
+      label: group.label,
+      paths: group.items.map((item) => item.to),
+    })),
   };
 }
 
-// ─── Sortable row ─────────────────────────────────────────────────────────────
-
 function SortableNavRow({
-  item, active, collapsed,
-}: { item: NavItem; active: boolean; collapsed: boolean }) {
-  const {
-    attributes, listeners, setNodeRef, transform, transition, isDragging,
-  } = useSortable({ id: item.to });
+  item,
+  active,
+  collapsed,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.to,
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -244,17 +265,15 @@ function SortableNavRow({
           )}
           <item.icon className="h-4 w-4" />
           <span className="flex-1 truncate">{item.label}</span>
-          {/* Drag handle: only visible on hover when sidebar is expanded.
-              Sensor activation distance (5px) keeps single clicks navigating. */}
           {!collapsed && (
             <span
               {...attributes}
               {...listeners}
               role="button"
-              tabIndex={-1}
+              tabIndex={0}
               aria-label={`Pindahkan ${item.label}`}
-              onClick={(e) => e.preventDefault()}
-              className="ml-auto inline-flex h-5 w-5 cursor-grab items-center justify-center text-sidebar-foreground/40 opacity-0 transition-opacity hover:text-sidebar-foreground/80 group-hover/item:opacity-100 active:cursor-grabbing"
+              onClick={(event) => event.preventDefault()}
+              className="ml-auto inline-flex h-5 w-5 cursor-grab items-center justify-center text-sidebar-foreground/40 opacity-0 transition-opacity hover:text-sidebar-foreground/80 focus:opacity-100 group-hover/item:opacity-100 active:cursor-grabbing"
             >
               <GripVertical className="h-3.5 w-3.5" />
             </span>
@@ -266,7 +285,7 @@ function SortableNavRow({
 }
 
 export function AdminSidebar({ propertyName }: { propertyName?: string | null }) {
-  const path = useRouterState({ select: (s) => s.location.pathname });
+  const path = useRouterState({ select: (state) => state.location.pathname });
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
@@ -277,95 +296,76 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
   });
   const logoUrl = branding?.logo_url ?? null;
 
-  // Hydrate nav arrangement from localStorage synchronously.
   const [groups, setGroups] = useState<NavGroup[]>(() =>
     mergeWithDefaults(readStored(), DEFAULT_GROUPS),
   );
 
-  // Re-merge when DEFAULT_GROUPS changes between deploys (handled by
-  // mergeWithDefaults's "new items go to default group end" rule). Cheap
-  // to run on every mount; nothing happens unless something differs.
   useEffect(() => {
-    setGroups((prev) => {
-      const merged = mergeWithDefaults(toPersisted(prev), DEFAULT_GROUPS);
-      // Persist only if the merge actually changed anything so we don't
-      // write on every mount.
-      const before = JSON.stringify(prev);
-      const after  = JSON.stringify(merged);
-      if (before !== after) writeStored(toPersisted(merged));
+    setGroups((previous) => {
+      const merged = mergeWithDefaults(toPersisted(previous), DEFAULT_GROUPS);
+      writeStored(toPersisted(merged));
       return merged;
     });
   }, []);
 
-  // Lookup: which group does a given path live in right now?
   const findItemLocation = (id: string): { groupIdx: number; itemIdx: number } | null => {
-    for (let gi = 0; gi < groups.length; gi++) {
-      const ii = groups[gi].items.findIndex((it) => it.to === id);
-      if (ii !== -1) return { groupIdx: gi, itemIdx: ii };
+    for (let groupIdx = 0; groupIdx < groups.length; groupIdx++) {
+      const itemIdx = groups[groupIdx].items.findIndex((item) => item.to === id);
+      if (itemIdx !== -1) return { groupIdx, itemIdx };
     }
     return null;
   };
 
   const sensors = useSensors(
-    // 5px activation distance so plain clicks on the Link still navigate.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
 
     const from = findItemLocation(String(active.id));
     if (!from) return;
 
-    // `over.id` is either another item path (drop on a row) or a group
-    // sentinel "group:<label>".
+    const overId = String(over.id);
     let targetGroupIdx: number;
     let targetItemIdx: number;
-    const overId = String(over.id);
 
     if (overId.startsWith("group:")) {
       const label = overId.slice(6);
-      targetGroupIdx = groups.findIndex((g) => g.label === label);
+      targetGroupIdx = groups.findIndex((group) => group.label === label);
       if (targetGroupIdx === -1) return;
-      targetItemIdx = groups[targetGroupIdx].items.length; // append
+      targetItemIdx = groups[targetGroupIdx].items.length - 1;
     } else {
-      const to = findItemLocation(overId);
-      if (!to) return;
-      targetGroupIdx = to.groupIdx;
-      targetItemIdx  = to.itemIdx;
+      const target = findItemLocation(overId);
+      if (!target) return;
+      targetGroupIdx = target.groupIdx;
+      targetItemIdx = target.itemIdx;
     }
 
-    // Keep admin sections canonical. Users may reorder inside a section, but
-    // cross-section drops are ignored so the sidebar cannot drift away from
-    // DEFAULT_GROUPS and confuse non-AI Lab pages.
+    // Menu can be reordered inside its existing section only.
     if (from.groupIdx !== targetGroupIdx) return;
 
-    setGroups((prev) => {
-      // Clone arrays we touch; leave the rest by reference.
-      const next = prev.map((g) => ({ ...g, items: [...g.items] }));
-      const [moved] = next[from.groupIdx].items.splice(from.itemIdx, 1);
-      // Same-group reorder uses arrayMove semantics so dragging down past
-      // the original spot lands correctly.
-      const restored = next[from.groupIdx].items;
-      restored.splice(from.itemIdx, 0, moved); // undo splice for arrayMove
-      next[from.groupIdx].items = arrayMove(restored, from.itemIdx, targetItemIdx);
+    setGroups((previous) => {
+      const next = previous.map((group) => ({ ...group, items: [...group.items] }));
+      next[from.groupIdx].items = arrayMove(
+        next[from.groupIdx].items,
+        from.itemIdx,
+        Math.max(0, targetItemIdx),
+      );
       writeStored(toPersisted(next));
       return next;
     });
   };
 
   const isActive = (item: NavItem) =>
-    item.exact ? path === item.to : path === item.to || path.startsWith(item.to + "/");
+    item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`);
 
-  // All sortable IDs across the sidebar, plus per-group sentinels so empty
-  // sections still accept drops.
   const allIds = useMemo(() => {
     const ids: string[] = [];
-    for (const g of groups) {
-      for (const it of g.items) ids.push(it.to);
-      ids.push(`group:${g.label}`);
+    for (const group of groups) {
+      for (const item of group.items) ids.push(item.to);
+      ids.push(`group:${group.label}`);
     }
     return ids;
   }, [groups]);
@@ -383,7 +383,9 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
               src={logoUrl}
               alt={propertyName ?? "Logo"}
               className={
-                collapsed ? "h-8 w-8 object-contain" : "h-10 w-auto max-w-[170px] object-contain"
+                collapsed
+                  ? "h-8 w-8 object-contain"
+                  : "h-10 w-auto max-w-[170px] object-contain"
               }
             />
           ) : (
@@ -395,20 +397,16 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
       </SidebarHeader>
 
       <SidebarContent>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={allIds} strategy={verticalListSortingStrategy}>
-            {groups.map((g) => (
-              <SidebarGroup key={g.label}>
+            {groups.map((group) => (
+              <SidebarGroup key={group.label}>
                 <SidebarGroupLabel className="font-mono text-[10px] uppercase tracking-[0.18em]">
-                  {g.label}
+                  {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {g.items.map((item) => (
+                    {group.items.map((item) => (
                       <SortableNavRow
                         key={item.to}
                         item={item}
@@ -416,9 +414,7 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
                         collapsed={collapsed}
                       />
                     ))}
-                    {/* Hidden drop sentinel so an empty section is still a valid
-                        drop target (height 0 — invisible but pickable by closestCenter). */}
-                    <GroupDropZone label={g.label} empty={g.items.length === 0} />
+                    <GroupDropZone label={group.label} empty={group.items.length === 0} />
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -447,13 +443,9 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
   );
 }
 
-/**
- * Invisible drop zone at the bottom of each group. When the group is non-empty
- * it occupies 0 height (just a sortable hook for cross-group drops at end).
- * When empty it gives the user a tangible "drop here" affordance.
- */
 function GroupDropZone({ label, empty }: { label: string; empty: boolean }) {
   const { setNodeRef, isOver } = useSortable({ id: `group:${label}` });
+
   return (
     <li
       ref={setNodeRef}
