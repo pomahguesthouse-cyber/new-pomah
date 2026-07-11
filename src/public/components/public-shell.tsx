@@ -278,13 +278,13 @@ export function PublicFooter({
             <ul className="space-y-2 text-sm">
               {[
                 { to: "/", label: "Beranda" },
-                { to: "/rooms", label: "Kamar" },
+                { to: "/", hash: "rooms", label: "Kamar" },
                 { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
                 { to: "/connect", label: "Hubungkan AI" },
               ].map((l) => (
                 <li key={l.label}>
-                  <Link to={l.to} className="text-teal-200/80 transition hover:text-white">
+                  <Link to={l.to} hash={l.hash} className="text-teal-200/80 transition hover:text-white">
                     {l.label}
                   </Link>
                 </li>
