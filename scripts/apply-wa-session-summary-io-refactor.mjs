@@ -4,7 +4,7 @@ const path = "src/services/wa-autoreply.service.ts";
 let source = fs.readFileSync(path, "utf8");
 
 const importAnchor = 'import { buildPropertyFaqReply } from "@/services/property-faq";';
-const ioImport = `import {\n  generateSessionSummary,\n  regenerateThreadSummary,\n  updateThreadSummary,\n} from "@/services/wa-autoreply/session-summary";`;
+const ioImport = `import {\n  generateSessionSummary,\n  regenerateThreadSummary,\n  SUMMARY_MIN_MESSAGES,\n  updateThreadSummary,\n} from "@/services/wa-autoreply/session-summary";`;
 
 if (!source.includes(importAnchor)) throw new Error("Unable to find import anchor");
 if (!source.includes(ioImport)) {
