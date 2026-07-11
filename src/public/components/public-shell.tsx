@@ -601,7 +601,7 @@ export function PomahFooter({ name, property }: { name: string; property?: Socia
               </Link>
             </li>
             <li>
-              <Link to="/rooms" className="transition hover:text-white">
+              <Link to="/" hash="rooms" className="transition hover:text-white">
                 Rooms
               </Link>
             </li>

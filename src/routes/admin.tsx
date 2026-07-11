@@ -11,7 +11,7 @@ export const Route = createFileRoute("/admin")({
     // Jangan skip SSR — biarkan redirect terjadi sebelum komponen render & memanggil server fn.
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) {
-      throw redirect({ to: "/login" });
+      throw redirect({ to: "/login", search: { next: undefined } });
     }
   },
   component: AdminLayout,

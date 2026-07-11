@@ -58,7 +58,8 @@ export const Route = createFileRoute("/rooms/$slug")({
   loader: async ({ params }) => {
     if (params.slug === "deluxe-ocean-view") {
       throw redirect({
-        to: "/rooms",
+        to: "/",
+        hash: "rooms",
         statusCode: 301,
       });
     }
@@ -307,7 +308,7 @@ function RoomBookingPage() {
             Home
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
-          <Link to="/rooms" className="hover:text-amber-700">
+          <Link to="/" hash="rooms" className="hover:text-amber-700">
             Rooms
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
@@ -1121,7 +1122,8 @@ function RoomNotFoundPage({ property }: { property?: Record<string, unknown> | n
             Kembali ke Beranda
           </Link>
           <Link
-            to="/rooms"
+            to="/"
+            hash="rooms"
             className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800"
           >
             <BedDouble className="h-4 w-4" />
