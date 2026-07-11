@@ -71,6 +71,7 @@ import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.pro
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
@@ -391,6 +392,11 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -459,6 +465,7 @@ export interface FileRoutesByFullPath {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -525,6 +532,7 @@ export interface FileRoutesByTo {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -593,6 +601,7 @@ export interface FileRoutesById {
   '/rooms/$slug': typeof RoomsSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
@@ -662,6 +671,7 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -728,6 +738,7 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin'
     | '/book'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -795,6 +806,7 @@ export interface FileRouteTypes {
     | '/rooms/$slug'
     | '/admin/'
     | '/book/'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
@@ -836,6 +848,7 @@ export interface RootRouteChildren {
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   BookIndexRoute: typeof BookIndexRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
@@ -1286,6 +1299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/confirmation/$id/chat': {
       id: '/book/confirmation/$id/chat'
       path: '/chat'
@@ -1431,6 +1451,7 @@ const rootRouteChildren: RootRouteChildren = {
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   BookIndexRoute: BookIndexRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,

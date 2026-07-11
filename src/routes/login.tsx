@@ -11,11 +11,23 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [{ title: "Staff sign in — Pomah Guesthouse" }, { name: "robots", content: "noindex" }],
   }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   component: LoginPage,
 });
 
+// Hanya izinkan redirect ke path same-origin (harus diawali "/" dan bukan "//").
+function safeNext(next: string | undefined): string | null {
+  if (!next) return null;
+  if (!next.startsWith("/") || next.startsWith("//")) return null;
+  return next;
+}
+
 function LoginPage() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
+  const nextPath = safeNext(search.next);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,10 +41,14 @@ function LoginPage() {
   }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * After a successful login, redirect staff to the admin dashboard
-   * at /admin (single-domain app).
+   * Setelah login sukses, hormati `next` (mis. alur consent OAuth) —
+   * fallback ke /admin bila tidak ada.
    */
   function redirectAfterLogin() {
+    if (nextPath) {
+      window.location.assign(nextPath);
+      return;
+    }
     navigate({ to: "/admin" });
   }
 
@@ -45,7 +61,7 @@ function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + "/",
+            emailRedirectTo: window.location.origin + (nextPath ?? "/"),
             data: { full_name: name },
           },
         });
@@ -65,7 +81,7 @@ function LoginPage() {
 
   const onGoogle = async () => {
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/",
+      redirect_uri: window.location.origin + (nextPath ?? "/"),
       extraParams: { prompt: "select_account" },
     });
     if (result.error) toast.error(result.error.message);
