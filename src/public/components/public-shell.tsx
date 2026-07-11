@@ -71,11 +71,15 @@ export function PublicNav({
             Beranda
           </Link>
           <Link
-            to="/rooms"
+            to="/"
             hash="rooms"
-            className={`text-sm transition-colors font-medium ${transparent ? "text-stone-200 hover:text-white" : "text-stone-600 hover:text-stone-900"}`}
-          >
-            Kamar
+            className={`text-sm transition-colors font-medium ${
+            transparent
+            ? "text-stone-200 hover:text-white"
+            : "text-stone-600 hover:text-stone-900"
+             }`}
+              >
+           Kamar
           </Link>
           <Link
             to="/explore"
