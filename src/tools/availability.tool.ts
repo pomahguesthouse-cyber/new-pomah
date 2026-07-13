@@ -332,9 +332,10 @@ export const checkRoomAvailability: ToolHandler = async (
       )
       .join("\n");
     replyToGuest =
-      `Maaf Kak, untuk tanggal ${periode} kamar yang tersedia belum cukup untuk menampung ${guestCount} orang.\n\n` +
+      `Maaf Kak, untuk tanggal ${periode} kamar yang tersedia belum cukup untuk menampung ${guestCount} orang.\n` +
+      `Total kapasitas yang masih tersedia saat ini baru ${totalKapasitasTersedia} orang.\n\n` +
       `Yang masih tersedia:\n${daftar}\n\n` +
-      "Terima kasih sudah menghubungi Pomah Guesthouse 🙏";
+      "Kalau tanggalnya tidak bisa diubah, saat ini belum ada opsi kamar lain yang cukup di sistem.";
     instructionToAgent =
       "HASIL FINAL INSUFFICIENT_CAPACITY. Seluruh inventori dan kapasitas gabungan sudah dihitung. " +
       "Kirim `reply_to_guest` VERBATIM. JANGAN menawarkan tipe/opsi kamar lain, jangan berkata 'kalau ada', " +

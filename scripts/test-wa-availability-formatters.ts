@@ -112,7 +112,69 @@ const overCapacity = formatAvailabilityForGuestCount(overCapacityRaw, {
 });
 assert.ok(overCapacity);
 assert.equal(overCapacity.intent, "deterministic_availability_over_capacity");
-assert.match(overCapacity.reply, /belum ada tipe kamar tersedia yang cukup untuk 3 tamu/);
+assert.match(overCapacity.reply, /stok kamar yang tersedia belum cukup untuk 3 tamu/);
+assert.doesNotMatch(overCapacity.reply, /kalau ada/i);
+
+const multiRoomRaw = JSON.stringify({
+  periode: "7 Agustus 2026 – 8 Agustus 2026",
+  availability_status: "available",
+  total_kapasitas_tersedia: 6,
+  inventori_tersedia: [
+    {
+      nama: "Deluxe",
+      jumlah_kamar: 2,
+      kapasitas_per_kamar: 3,
+      harga_per_malam: 400000,
+    },
+  ],
+  kamar: [
+    {
+      nama: "Deluxe",
+      kamar_tersedia: 2,
+      harga_per_malam: 400000,
+      tidak_tersedia: false,
+      cocok_untuk_jumlah_tamu: false,
+      kapasitas_maksimal_dengan_extra_bed: 3,
+    },
+  ],
+});
+const multiRoom = formatAvailabilityForGuestCount(multiRoomRaw, {
+  adults: 5,
+  children: 1,
+  total: 6,
+});
+assert.ok(multiRoom);
+assert.equal(multiRoom.intent, "deterministic_availability_multi_room_combination");
+assert.match(multiRoom.reply, /2 kamar Deluxe/);
+assert.match(multiRoom.reply, /total Rp800\.000\/malam/);
+
+const terminalCapacityRaw = JSON.stringify({
+  periode: "7 Agustus 2026 – 8 Agustus 2026",
+  availability_status: "insufficient_capacity",
+  relay_verbatim: true,
+  reply_to_guest:
+    "Maaf Kak, untuk tanggal 7 Agustus 2026 – 8 Agustus 2026 kamar yang tersedia belum cukup untuk menampung 6 orang.",
+  kamar: [
+    {
+      nama: "Deluxe",
+      kamar_tersedia: 1,
+      tidak_tersedia: false,
+      cocok_untuk_jumlah_tamu: false,
+      kapasitas_maksimal_dengan_extra_bed: 3,
+    },
+  ],
+});
+const terminalCapacity = formatAvailabilityForGuestCount(terminalCapacityRaw, {
+  adults: 5,
+  children: 1,
+  total: 6,
+});
+assert.ok(terminalCapacity);
+assert.equal(terminalCapacity.intent, "deterministic_availability_over_capacity");
+assert.equal(
+  terminalCapacity.reply,
+  "Maaf Kak, untuk tanggal 7 Agustus 2026 – 8 Agustus 2026 kamar yang tersedia belum cukup untuk menampung 6 orang.",
+);
 
 const fullForGuests = formatAvailabilityForGuestCount(fullRaw, {
   adults: 2,
