@@ -20,6 +20,24 @@ type RoomCombinationPick = RoomCombinationOption & {
   quantity: number;
 };
 
+type ToolCombinationRoom = {
+  nama?: unknown;
+  jumlah_kamar?: unknown;
+  kapasitas_maksimal?: unknown;
+  extra_bed?: unknown;
+  tarif_extra_bed_per_malam?: unknown;
+  subtotal_per_malam?: unknown;
+};
+
+type ToolCombination = {
+  label?: unknown;
+  total_kamar?: unknown;
+  total_kapasitas_maksimal?: unknown;
+  total_extra_bed?: unknown;
+  total_per_malam?: unknown;
+  kamar?: unknown;
+};
+
 function formatRp(value: number): string {
   return `Rp${value.toLocaleString("id-ID")}`;
 }
@@ -113,6 +131,43 @@ function findBestCombination(
 
   visit(0, 0, 0, 0);
   return best;
+}
+
+function formatToolCombinationRecommendations(
+  data: Record<string, unknown>,
+): string | null {
+  const raw = Array.isArray(data.rekomendasi_kombinasi_kamar)
+    ? (data.rekomendasi_kombinasi_kamar as ToolCombination[])
+    : [];
+  if (raw.length === 0) return null;
+
+  const blocks = raw.slice(0, 2).map((combo, index) => {
+    const label = String(combo.label ?? (index === 0 ? "Saran saya" : "Alternatif"));
+    const rooms = Array.isArray(combo.kamar) ? (combo.kamar as ToolCombinationRoom[]) : [];
+    const roomLines = rooms.map((room) => {
+      const quantity = Math.max(0, Math.floor(Number(room.jumlah_kamar ?? 0)));
+      const name = String(room.nama ?? "Kamar");
+      const capacity = Math.max(0, Math.floor(Number(room.kapasitas_maksimal ?? 0)));
+      const extraBeds = Math.max(0, Math.floor(Number(room.extra_bed ?? 0)));
+      const extraRate = Math.max(0, Number(room.tarif_extra_bed_per_malam ?? 0));
+      const subtotal = Math.max(0, Number(room.subtotal_per_malam ?? 0));
+      const extraText =
+        extraBeds > 0
+          ? extraRate > 0
+            ? ` + ${extraBeds} extra bed @ ${formatRp(extraRate)}`
+            : ` + ${extraBeds} extra bed`
+          : "";
+      const subtotalText = subtotal > 0 ? ` (${formatRp(subtotal)}/malam)` : "";
+      return `- ${quantity} kamar ${name}${extraText}: kapasitas sampai ${capacity} tamu${subtotalText}`;
+    });
+    const total = Math.max(0, Number(combo.total_per_malam ?? 0));
+    const totalText = total > 0 ? `Total ${formatRp(total)}/malam.` : "";
+    const capacity = Math.max(0, Math.floor(Number(combo.total_kapasitas_maksimal ?? 0)));
+    const capacityText = capacity > 0 ? `Kapasitas sampai ${capacity} tamu.` : "";
+    return [`${label}:`, ...roomLines, [totalText, capacityText].filter(Boolean).join(" ")].filter(Boolean).join("\n");
+  });
+
+  return blocks.join("\n\n");
 }
 
 export function buildAvailabilityNeedDatesReply(
@@ -212,6 +267,7 @@ export function formatAvailabilityForGuestCount(
     guests.children > 0
       ? `${guests.adults} dewasa dan ${guests.children} anak`
       : `${guests.total} tamu`;
+  const toolCombinationText = formatToolCombinationRecommendations(data);
 
   if (suitable.length > 0) {
     const lines = suitable.slice(0, 5).map((room) => {
@@ -248,6 +304,16 @@ export function formatAvailabilityForGuestCount(
       reply:
         `Mohon maaf Kak, untuk ${period} kamar kami sudah penuh.\n\n` +
         "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
+    };
+  }
+
+  if (toolCombinationText) {
+    return {
+      intent: "deterministic_availability_multi_room_combination",
+      reply:
+        `Untuk ${period} dengan ${guestLabel}, tidak ada satu kamar yang cukup sendiri. Saran saya pakai kombinasi kamar berikut:\n\n` +
+        `${toolCombinationText}\n\n` +
+        "Mau saya bantu proses opsi ini, Kak?",
     };
   }
 

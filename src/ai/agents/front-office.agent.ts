@@ -263,7 +263,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "Pertama periksa `availability_status`: jika `sold_out` atau `insufficient_capacity`, ikuti HARD GUARD dan kirim `reply_to_guest` VERBATIM. " +
       "Hanya bila `availability_status=available`, tawarkan kamar dengan `kamar_tersedia>0`, `tidak_tersedia=false`, " +
       "dan `cocok_untuk_jumlah_tamu=true`. Jika tidak ada satu kamar yang muat tetapi `total_kapasitas_tersedia` " +
-      "masih cukup, tawarkan kombinasi beberapa kamar bertipe lebih kecil sesuai stok nyata. Syarat kombinasi valid: " +
+      "masih cukup, WAJIB pakai field `rekomendasi_kombinasi_kamar` dari tool bila tersedia. " +
+      "Tampilkan maksimal 2 opsi: awali dengan 'Saran saya:' untuk opsi pertama, lalu 'Alternatif:' bila ada. " +
+      "Sebutkan jumlah kamar, extra bed bila ada, kapasitas total, dan total per malam dari field tool. " +
+      "JANGAN membuat kombinasi sendiri, JANGAN menambahkan tarif extra bed di luar field tool, dan JANGAN memakai Markdown/bold. " +
+      "Jika `rekomendasi_kombinasi_kamar` kosong, baru boleh menyusun kombinasi dari `inventori_tersedia` dengan syarat " +
       "(jumlah kamar × kapasitas maks per kamar) >= total tamu dan stok mencukupi. Jangan pernah mengarang kombinasi " +
       "jika `dapat_menampung_jumlah_tamu=false`.",
 
@@ -383,7 +387,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berlokasi sekitar 8 km (kurang lebih 10–15 menit berkendara) dari Kampus UNNES. Lokasi kami sangat tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas di area Semarang. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut.",
 
-    "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
+    "FORMAT PESAN: WhatsApp — teks polos. DILARANG memakai Markdown apa pun: jangan pakai tanda * untuk bold, _ untuk italic, # untuk heading, atau tabel.",
   ]
     .filter(Boolean)
     .join("\n\n");

@@ -33,6 +33,39 @@ interface AvailabilityRow {
   available:    number;
 }
 
+type CombinationRoomOption = {
+  room_type_id: string;
+  nama: string;
+  jumlah_kamar_tersedia: number;
+  kapasitas_tamu: number;
+  kapasitas_extra_bed: number;
+  tarif_extra_bed_per_malam: number;
+  harga_per_malam: number;
+};
+
+type CombinationRoomPick = {
+  room_type_id: string;
+  nama: string;
+  jumlah_kamar: number;
+  kapasitas_standar: number;
+  kapasitas_maksimal: number;
+  harga_kamar_per_malam: number;
+  extra_bed: number;
+  tarif_extra_bed_per_malam: number;
+  subtotal_per_malam: number;
+};
+
+type RoomCombinationRecommendation = {
+  label: string;
+  alasan: string;
+  total_kamar: number;
+  total_kapasitas_standar: number;
+  total_kapasitas_maksimal: number;
+  total_extra_bed: number;
+  total_per_malam: number;
+  kamar: CombinationRoomPick[];
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRpc = (name: string, params: Record<string, unknown>) => Promise<{ data: unknown }>;
 
@@ -97,6 +130,135 @@ function coerceDate(v: unknown, today: string): string | null {
   }
 
   return null;
+}
+
+function allocateExtraBeds(
+  picks: Array<{ option: CombinationRoomOption; quantity: number }>,
+  needed: number,
+): { extraBedsById: Map<string, number>; extraBedTotal: number; ok: boolean } {
+  const extraBedsById = new Map<string, number>();
+  let remaining = needed;
+  let extraBedTotal = 0;
+  const candidates = picks
+    .filter((pick) => pick.quantity > 0 && pick.option.kapasitas_extra_bed > 0)
+    .sort((a, b) => a.option.tarif_extra_bed_per_malam - b.option.tarif_extra_bed_per_malam);
+
+  for (const pick of candidates) {
+    if (remaining <= 0) break;
+    const maxForType = pick.quantity * pick.option.kapasitas_extra_bed;
+    const count = Math.min(remaining, maxForType);
+    if (count <= 0) continue;
+    extraBedsById.set(pick.option.room_type_id, count);
+    extraBedTotal += count * pick.option.tarif_extra_bed_per_malam;
+    remaining -= count;
+  }
+
+  return { extraBedsById, extraBedTotal, ok: remaining <= 0 };
+}
+
+function buildRoomCombinationRecommendations(
+  options: CombinationRoomOption[],
+  guestCount: number,
+): RoomCombinationRecommendation[] {
+  if (guestCount <= 0 || options.length === 0) return [];
+
+  const counts = new Array(options.length).fill(0);
+  const candidates: RoomCombinationRecommendation[] = [];
+
+  const visit = (index: number) => {
+    if (index === options.length) {
+      const selected = options
+        .map((option, i) => ({ option, quantity: counts[i] }))
+        .filter((pick) => pick.quantity > 0);
+      if (selected.length === 0) return;
+
+      const totalKamar = selected.reduce((sum, pick) => sum + pick.quantity, 0);
+      const totalKapasitasStandar = selected.reduce(
+        (sum, pick) => sum + pick.quantity * pick.option.kapasitas_tamu,
+        0,
+      );
+      const totalKapasitasMaksimal = selected.reduce(
+        (sum, pick) =>
+          sum + pick.quantity * (pick.option.kapasitas_tamu + pick.option.kapasitas_extra_bed),
+        0,
+      );
+      if (totalKapasitasMaksimal < guestCount) return;
+
+      const extraBedNeeded = Math.max(0, guestCount - totalKapasitasStandar);
+      const allocation = allocateExtraBeds(selected, extraBedNeeded);
+      if (!allocation.ok) return;
+
+      const kamar = selected.map((pick) => {
+        const extraBed = allocation.extraBedsById.get(pick.option.room_type_id) ?? 0;
+        const hargaKamar = pick.quantity * pick.option.harga_per_malam;
+        const hargaExtraBed = extraBed * pick.option.tarif_extra_bed_per_malam;
+        return {
+          room_type_id: pick.option.room_type_id,
+          nama: pick.option.nama,
+          jumlah_kamar: pick.quantity,
+          kapasitas_standar: pick.quantity * pick.option.kapasitas_tamu,
+          kapasitas_maksimal:
+            pick.quantity * (pick.option.kapasitas_tamu + pick.option.kapasitas_extra_bed),
+          harga_kamar_per_malam: hargaKamar,
+          extra_bed: extraBed,
+          tarif_extra_bed_per_malam: pick.option.tarif_extra_bed_per_malam,
+          subtotal_per_malam: hargaKamar + hargaExtraBed,
+        };
+      });
+      const roomTotal = kamar.reduce((sum, pick) => sum + pick.harga_kamar_per_malam, 0);
+      const totalPerMalam = roomTotal + allocation.extraBedTotal;
+
+      candidates.push({
+        label: "",
+        alasan: "",
+        total_kamar: totalKamar,
+        total_kapasitas_standar: totalKapasitasStandar,
+        total_kapasitas_maksimal: totalKapasitasMaksimal,
+        total_extra_bed: extraBedNeeded,
+        total_per_malam: totalPerMalam,
+        kamar,
+      });
+      return;
+    }
+
+    const option = options[index];
+    for (let quantity = 0; quantity <= option.jumlah_kamar_tersedia; quantity += 1) {
+      counts[index] = quantity;
+      visit(index + 1);
+    }
+    counts[index] = 0;
+  };
+
+  visit(0);
+
+  const sorted = candidates.sort((a, b) => {
+    if (a.total_per_malam !== b.total_per_malam) return a.total_per_malam - b.total_per_malam;
+    if (a.total_kamar !== b.total_kamar) return a.total_kamar - b.total_kamar;
+    if (a.total_extra_bed !== b.total_extra_bed) return a.total_extra_bed - b.total_extra_bed;
+    return a.total_kapasitas_maksimal - b.total_kapasitas_maksimal;
+  });
+
+  const unique: RoomCombinationRecommendation[] = [];
+  const seen = new Set<string>();
+  for (const item of sorted) {
+    const key = item.kamar
+      .map((room) => `${room.room_type_id}:${room.jumlah_kamar}:${room.extra_bed}`)
+      .sort()
+      .join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({
+      ...item,
+      label: unique.length === 0 ? "Rekomendasi hemat" : "Alternatif",
+      alasan:
+        unique.length === 0
+          ? "Total harga per malam paling hemat dari stok yang tersedia."
+          : "Alternatif bila Kakak ingin mengurangi penggunaan extra bed atau memilih susunan kamar lain.",
+    });
+    if (unique.length >= 2) break;
+  }
+
+  return unique;
 }
 
 export const checkRoomAvailability: ToolHandler = async (
@@ -295,6 +457,21 @@ export const checkRoomAvailability: ToolHandler = async (
       };
     });
 
+  const kombinasiKamar = buildRoomCombinationRecommendations(
+    kamar
+      .filter((r) => Number(r.kamar_tersedia ?? 0) > 0 && r.tidak_tersedia !== true)
+      .map((r) => ({
+        room_type_id: String(r.room_type_id),
+        nama: String(r.nama),
+        jumlah_kamar_tersedia: Math.max(0, Math.floor(Number(r.kamar_tersedia ?? 0))),
+        kapasitas_tamu: Math.max(1, Math.floor(Number(r.kapasitas_tamu ?? 1))),
+        kapasitas_extra_bed: Math.max(0, Math.floor(Number(r.kapasitas_extra_bed ?? 0))),
+        tarif_extra_bed_per_malam: Math.max(0, Number(r.tarif_extra_bed_per_malam ?? 0)),
+        harga_per_malam: Math.max(0, Number(r.harga_per_malam ?? 0)),
+      })),
+    guestCount,
+  );
+
   const totalKamarTersedia = inventoriTersedia.reduce(
     (sum, r) => sum + r.jumlah_kamar,
     0,
@@ -364,6 +541,11 @@ export const checkRoomAvailability: ToolHandler = async (
     reply_to_guest: replyToGuest,
     instruction_to_agent: instructionToAgent,
     rekomendasi_tipe_kamar: rekomendasiTipeKamar,
+    rekomendasi_kombinasi_kamar: kombinasiKamar.length > 0 ? kombinasiKamar : undefined,
+    aturan_rekomendasi_kombinasi_kamar:
+      guestCount > 0 && kombinasiKamar.length > 0
+        ? "Jika tidak ada satu tipe kamar yang cukup, gunakan rekomendasi_kombinasi_kamar ini. Jangan membuat kombinasi sendiri. Tampilkan maksimal 2 opsi, awali dari label Rekomendasi hemat, dan jangan pakai Markdown."
+        : undefined,
     aturan_rekomendasi_tipe_kamar: guestCount > 0
       ? "cocok_untuk_jumlah_tamu=true berarti tipe kamar paling pas untuk jumlah tamu. Gunakan availability_status dan total_kapasitas_tersedia untuk keputusan final lintas beberapa kamar."
       : undefined,

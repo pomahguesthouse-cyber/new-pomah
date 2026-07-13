@@ -119,6 +119,24 @@ const multiRoomRaw = JSON.stringify({
   periode: "7 Agustus 2026 – 8 Agustus 2026",
   availability_status: "available",
   total_kapasitas_tersedia: 6,
+  rekomendasi_kombinasi_kamar: [
+    {
+      label: "Saran saya",
+      total_kamar: 2,
+      total_kapasitas_maksimal: 6,
+      total_extra_bed: 0,
+      total_per_malam: 800000,
+      kamar: [
+        {
+          nama: "Deluxe",
+          jumlah_kamar: 2,
+          kapasitas_maksimal: 6,
+          extra_bed: 0,
+          subtotal_per_malam: 800000,
+        },
+      ],
+    },
+  ],
   inventori_tersedia: [
     {
       nama: "Deluxe",
@@ -145,8 +163,62 @@ const multiRoom = formatAvailabilityForGuestCount(multiRoomRaw, {
 });
 assert.ok(multiRoom);
 assert.equal(multiRoom.intent, "deterministic_availability_multi_room_combination");
+assert.match(multiRoom.reply, /Saran saya:/);
 assert.match(multiRoom.reply, /2 kamar Deluxe/);
-assert.match(multiRoom.reply, /total Rp800\.000\/malam/);
+assert.match(multiRoom.reply, /Total Rp800\.000\/malam/);
+assert.doesNotMatch(multiRoom.reply, /\*/);
+
+const multiRoomWithExtraBedRaw = JSON.stringify({
+  periode: "18 September 2026 – 19 September 2026",
+  availability_status: "available",
+  rekomendasi_kombinasi_kamar: [
+    {
+      label: "Saran saya",
+      total_kamar: 2,
+      total_kapasitas_maksimal: 10,
+      total_extra_bed: 2,
+      total_per_malam: 1200000,
+      kamar: [
+        {
+          nama: "Family Room 222",
+          jumlah_kamar: 1,
+          kapasitas_maksimal: 5,
+          extra_bed: 1,
+          tarif_extra_bed_per_malam: 100000,
+          subtotal_per_malam: 600000,
+        },
+        {
+          nama: "Family Suite 100",
+          jumlah_kamar: 1,
+          kapasitas_maksimal: 5,
+          extra_bed: 1,
+          tarif_extra_bed_per_malam: 100000,
+          subtotal_per_malam: 600000,
+        },
+      ],
+    },
+  ],
+  kamar: [
+    {
+      nama: "Family Room 222",
+      kamar_tersedia: 1,
+      harga_per_malam: 500000,
+      tidak_tersedia: false,
+      cocok_untuk_jumlah_tamu: false,
+      kapasitas_maksimal_dengan_extra_bed: 5,
+    },
+  ],
+});
+const multiRoomWithExtraBed = formatAvailabilityForGuestCount(multiRoomWithExtraBedRaw, {
+  adults: 10,
+  children: 0,
+  total: 10,
+});
+assert.ok(multiRoomWithExtraBed);
+assert.match(multiRoomWithExtraBed.reply, /Saran saya:/);
+assert.match(multiRoomWithExtraBed.reply, /Family Room 222 \+ 1 extra bed @ Rp100\.000/);
+assert.match(multiRoomWithExtraBed.reply, /Total Rp1\.200\.000\/malam/);
+assert.doesNotMatch(multiRoomWithExtraBed.reply, /\*/);
 
 const terminalCapacityRaw = JSON.stringify({
   periode: "7 Agustus 2026 – 8 Agustus 2026",
