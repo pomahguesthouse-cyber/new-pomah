@@ -136,6 +136,17 @@ export function looksLikeAvailabilityQuestion(message: string): boolean {
   );
 }
 
+export function isPerRoomRentalClarification(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || text.length > 180) return false;
+  if (!/\b(kamar|room)\b/i.test(text) || !/\brumah\b/i.test(text)) return false;
+  return (
+    /\b(bukan|bkn|tidak)\s+(?:satu\s+)?rumah\b/i.test(text) ||
+    /\bper\s+(kamar|room)\b/i.test(text) ||
+    /\b(h?itungannya|sistemnya|berarti)\b/i.test(text)
+  );
+}
+
 export function isAvailabilityNeedDatesQuestion(message: string, today: string): boolean {
   return looksLikeAvailabilityQuestion(message) && !parseAvailabilityDateRange(message, today);
 }
@@ -209,6 +220,7 @@ export function isExplicitBookingOrder(message: string, rooms: Array<{ name?: un
 export function looksLikeBookingInquiry(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text || text.length > 240) return false;
+  if (isPerRoomRentalClarification(text)) return false;
   if (
     /\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(
       text,

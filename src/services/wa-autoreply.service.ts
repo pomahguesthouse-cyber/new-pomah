@@ -51,6 +51,7 @@ import {
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
   isExplicitBookingOrder,
+  isPerRoomRentalClarification,
   isTonightReply,
   looksLikeBookingInquiry,
   messageOpensWithGreeting,
@@ -151,6 +152,7 @@ const HANDLE_ONE_DEADLINE_MS = 26_000;
 // Cloudflare yang CPU-nya ketat. Biarkan retry terjadi di level queue, bukan
 // mengulang orchestration berat dalam satu request worker.
 const AI_MAX_ATTEMPTS = 1;
+const PER_ROOM_RENTAL_REPLY = "Betul Kak, kita sistemnya sewa per kamar harian.";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -739,6 +741,19 @@ export async function executeAutoreplyForPhone(
       };
       console.info(`[Autoreply] Fast-path FAQ (${fastFaq.intent}) for ${phone.slice(-6)}`);
     }
+  }
+
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && isPerRoomRentalClarification(lastMessage)) {
+    reply = PER_ROOM_RENTAL_REPLY;
+    orchResult = {
+      agentKey: "front-office",
+      intent: "per_room_rental_clarification",
+      routingConfidence: 1,
+      escalated: false,
+      toolsUsed: ["deterministic-per-room-policy"],
+      fastPath: true,
+    };
+    console.info(`[Autoreply] Deterministic per-room rental clarification for ${phone.slice(-6)}`);
   }
 
   // Jangan tanya tanggal ULANG bila tanggal sudah tersimpan dari turn

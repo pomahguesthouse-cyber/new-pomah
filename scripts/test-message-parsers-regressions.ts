@@ -4,6 +4,7 @@ import {
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
   isExplicitBookingOrder,
+  isPerRoomRentalClarification,
   isTonightReply,
   looksLikeBookingInquiry,
   messageOpensWithGreeting,
@@ -22,6 +23,8 @@ assert.equal(isExplicitBookingOrder("Tolong booking dengan extra bed", rooms), t
 assert.equal(looksLikeBookingInquiry("Masih ada kamar?"), true);
 assert.equal(looksLikeBookingInquiry("Single ukuran kasurnya berapa?"), false);
 assert.equal(looksLikeBookingInquiry("Harga per malam berapa?"), true);
+assert.equal(isPerRoomRentalClarification("itungannya kamar ya kak berarti bukan rumah?"), true);
+assert.equal(looksLikeBookingInquiry("itungannya kamar ya kak berarti bukan rumah?"), false);
 
 assert.equal(isTonightReply("Ada kamar malam ini?"), true);
 assert.equal(isTonightReply("Ada kamar besok?"), false);
