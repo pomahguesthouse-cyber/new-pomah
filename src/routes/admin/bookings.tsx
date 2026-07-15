@@ -35,26 +35,20 @@ const SOURCE_OPTIONS = [
   { value: "manager_chat", label: "Manager Chat" },
 ];
 const PAGE_SIZE = 20;
-/** Shared grid template for the bookings column header + each card row (lg+). */
 const BOOKING_GRID = "104px 1.4fr 1.1fr 72px 1.05fr 1.3fr 118px 108px 128px 40px";
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
 function statusPillClass(status: BookingStatus) {
   switch (status) {
-    case "confirmed":
-      return "bg-primary text-primary-foreground";
-    case "pending":
-      return "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300";
-    case "cancelled":
-      return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
-    case "checked_in":
-      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300";
-    case "checked_out":
-      return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
-    default:
-      return "bg-muted text-muted-foreground";
+    case "confirmed": return "bg-primary text-primary-foreground";
+    case "pending": return "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300";
+    case "cancelled": return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
+    case "checked_in": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300";
+    case "checked_out": return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
+    default: return "bg-muted text-muted-foreground";
   }
 }
+
 const FULL_SELECT = "id, reference_code, check_in, check_out, created_at, status, source, total_amount, adults, children, payment_status, paid_amount, internal_notes, special_requests, guests(id, full_name, email, phone, country), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 const BASE_SELECT = "id, check_in, check_out, created_at, status, source, total_amount, adults, children, special_requests, guests(id, full_name, email, phone), booking_rooms(id, room_id, nightly_rate, extra_bed_count, extra_bed_rate, room_types(id, name), rooms(id, number))";
 
@@ -111,14 +105,7 @@ async function getGuestIds(search: string) {
   const { data } = await supabase.from("guests").select("id").ilike("full_name", `%${search}%`).limit(500);
   return (data ?? []).map((g: any) => g.id as string);
 }
-function applyFilters(
-  q: any,
-  status?: string,
-  source?: string,
-  search?: string,
-  guestIds: string[] = [],
-  includeRef = true,
-) {
+function applyFilters(q: any, status?: string, source?: string, search?: string, guestIds: string[] = [], includeRef = true) {
   if (status && status !== "all") q = q.eq("status", status);
   if (source && source !== "all") q = q.eq("source", source as never);
   if (search) {
@@ -139,14 +126,11 @@ async function fetchBookings(args: { page: number; pageSize: number; status?: st
   const to = from + args.pageSize - 1;
   const search = sanitizeSearch(args.search);
   const guestIds = await getGuestIds(search);
-
   let q = supabase.from("bookings").select(FULL_SELECT, { count: "exact" });
   q = applyFilters(q, args.status, args.source, search, guestIds, true);
   const full = await applySort(q, args.sortBy, args.sortDir).range(from, to);
   if (!full.error) return { bookings: (full.data ?? []) as any, total: full.count ?? 0, page: args.page, pageSize: args.pageSize, degraded: false };
-
   if ((full.error as any).code !== "42703") throw full.error;
-
   let qb = supabase.from("bookings").select(BASE_SELECT, { count: "exact" });
   qb = applyFilters(qb, args.status, args.source, search, guestIds, false);
   const base = await applySort(qb, args.sortBy, args.sortDir).range(from, to);
@@ -168,26 +152,11 @@ function flattenExportRows(rows: any[]): ExportRow[] {
     const paid = Number(b.paid_amount ?? 0);
     const nightlyRates = brs.map((br) => Number(br?.nightly_rate ?? 0));
     return {
-      reference_code: b.reference_code ?? "",
-      guest_name: b.guests?.full_name ?? "",
-      guest_email: b.guests?.email ?? "",
-      guest_phone: b.guests?.phone ?? "",
-      check_in: checkIn ?? "",
-      check_out: checkOut ?? "",
-      nights,
-      rooms: roomLabels.join("; "),
-      room_count: brs.length,
-      adults: Number(b.adults ?? 0),
-      children: Number(b.children ?? 0),
-      status: b.status,
-      source: b.source ?? "",
-      payment_status: b.payment_status ?? "",
-      total_amount: total,
-      paid_amount: paid,
-      outstanding: Math.max(0, total - paid),
-      nightly_rate_min: nightlyRates.length ? Math.min(...nightlyRates) : 0,
-      nightly_rate_max: nightlyRates.length ? Math.max(...nightlyRates) : 0,
-      created_at: b.created_at ?? "",
+      reference_code: b.reference_code ?? "", guest_name: b.guests?.full_name ?? "", guest_email: b.guests?.email ?? "", guest_phone: b.guests?.phone ?? "",
+      check_in: checkIn ?? "", check_out: checkOut ?? "", nights, rooms: roomLabels.join("; "), room_count: brs.length,
+      adults: Number(b.adults ?? 0), children: Number(b.children ?? 0), status: b.status, source: b.source ?? "", payment_status: b.payment_status ?? "",
+      total_amount: total, paid_amount: paid, outstanding: Math.max(0, total - paid), nightly_rate_min: nightlyRates.length ? Math.min(...nightlyRates) : 0,
+      nightly_rate_max: nightlyRates.length ? Math.max(...nightlyRates) : 0, created_at: b.created_at ?? "",
     } as ExportRow;
   });
 }
@@ -287,10 +256,7 @@ function BookingsPage() {
   const setSort = (key: SortKey) => {
     setPage(1);
     setSortBy((current) => {
-      if (current === key) {
-        setSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
-        return current;
-      }
+      if (current === key) { setSortDir((dir) => (dir === "desc" ? "asc" : "desc")); return current; }
       setSortDir("desc");
       return key;
     });
@@ -301,7 +267,7 @@ function BookingsPage() {
     <div className="space-y-6 p-4 md:p-8 lg:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1></div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => runExport("csv")} disabled={exporting !== null} className="gap-2">{exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}Export CSV</Button>
           <Button variant="outline" onClick={() => runExport("pdf")} disabled={exporting !== null} className="gap-2">{exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}Cetak / PDF</Button>
           <Button onClick={() => setNewOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Booking Baru</Button>
@@ -318,7 +284,6 @@ function BookingsPage() {
         {filtersActive && <Button variant="ghost" size="sm" className="h-9 gap-1.5" onClick={resetFilters}><X className="h-3.5 w-3.5" />Reset</Button>}
       </div>
 
-      {/* Column header — mirrors the card grid on large screens */}
       <div className="hidden items-center gap-4 px-5 lg:grid" style={{ gridTemplateColumns: BOOKING_GRID }}>
         <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Kode Booking</span>
         <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Nama Tamu</span>
@@ -337,28 +302,20 @@ function BookingsPage() {
         {!isLoading && !error && bookings.length === 0 && <div className="rounded-xl border border-border bg-card px-4 py-12 text-center text-sm text-muted-foreground">{filtersActive ? "Tidak ada booking yang cocok dengan filter ini." : "Belum ada booking."}</div>}
 
         {bookings.map((b) => (
-          <div
-            key={b.id}
-            onClick={() => setEditCtx(b as unknown as EditableBooking)}
-            className="flex cursor-pointer flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5"
-            style={{ gridTemplateColumns: BOOKING_GRID }}
-          >
-            <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
-            <div><p className="font-medium">{b.guests?.full_name}</p>{b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-primary hover:underline tabular-nums">{b.guests.phone}</a> : <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>}</div>
-            <div><RoomSummary rooms={b.booking_rooms} /></div>
-            <div className="font-mono tabular-nums lg:text-center">{b.booking_rooms?.length ?? 0}</div>
-            <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-On</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
-            <div><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} /></div>
-            <div onClick={(e) => e.stopPropagation()}>
-              <Select value={b.status} onValueChange={(v) => mut.mutate({ id: b.id, status: v as BookingStatus })}>
-                <SelectTrigger className={`h-7 w-fit gap-1 rounded-full border-0 px-3 text-xs font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger>
-                <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><span className="inline-block rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{b.source}</span></div>
-            <div className="font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</div>
-            <div className="lg:text-right" onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Hapus booking" onClick={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}><Trash2 className="h-4 w-4" /></Button></div>
-          </div>
+          <React.Fragment key={b.id}>
+            <MobileBookingCard
+              booking={b}
+              onEdit={() => setEditCtx(b as unknown as EditableBooking)}
+              onStatusChange={(status) => mut.mutate({ id: b.id, status })}
+              onDelete={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}
+            />
+            <DesktopBookingRow
+              booking={b}
+              onEdit={() => setEditCtx(b as unknown as EditableBooking)}
+              onStatusChange={(status) => mut.mutate({ id: b.id, status })}
+              onDelete={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}
+            />
+          </React.Fragment>
         ))}
 
         {!error && total > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"><p className="text-xs text-muted-foreground">Menampilkan <span className="font-medium text-foreground">{rangeFrom}</span>–<span className="font-medium text-foreground">{rangeTo}</span> dari <span className="font-medium text-foreground">{total}</span> booking{isFetching && <span className="ml-2 italic opacity-70">memuat…</span>}</p><div className="flex items-center gap-2"><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page <= 1 || isFetching} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-3.5 w-3.5" />Sebelumnya</Button><span className="px-1 font-mono text-xs text-muted-foreground tabular-nums">{page} / {totalPages}</span><Button variant="outline" size="sm" className="h-8 gap-1" disabled={page >= totalPages || isFetching} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Berikutnya<ChevronRight className="h-3.5 w-3.5" /></Button></div></div>}
@@ -371,7 +328,68 @@ function BookingsPage() {
   );
 }
 
-function RoomSummary({ rooms }: { rooms: BookingListRow["booking_rooms"] }) {
+function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void }) {
+  const nights = nightsBetween(b.check_in, b.check_out);
+  return (
+    <article onClick={onEdit} className="relative cursor-pointer overflow-hidden rounded-[28px] border border-border/80 bg-card p-5 shadow-sm transition hover:border-primary/35 hover:shadow-md lg:hidden">
+      <div className="flex items-start justify-between gap-3">
+        <span className="inline-flex rounded-xl bg-secondary px-3 py-2 font-mono text-xs font-semibold tracking-wide text-secondary-foreground">{b.reference_code ?? "—"}</span>
+        <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-[11px] capitalize text-muted-foreground">{b.source}</span>
+      </div>
+
+      <div className="mt-6">
+        <h2 className="text-xl font-semibold tracking-tight">{b.guests?.full_name || "Tanpa nama"}</h2>
+        {b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 inline-block font-mono text-sm text-primary hover:underline">{b.guests.phone}</a> : <p className="mt-1 font-mono text-sm text-muted-foreground">—</p>}
+      </div>
+
+      <div className="mt-6">
+        <RoomSummary rooms={b.booking_rooms} prominent />
+        <p className="mt-4 font-mono text-3xl tabular-nums">{b.booking_rooms?.length ?? 0}</p>
+        <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Jumlah kamar</p>
+      </div>
+
+      <div className="mt-6 grid grid-cols-[1fr_1fr_auto] items-end gap-3 border-t border-border/70 pt-5">
+        <div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Check-in</p><p className="mt-1 font-mono text-sm font-semibold tabular-nums">{formatDateID(b.check_in)}</p></div>
+        <div><p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Check-out</p><p className="mt-1 font-mono text-sm font-semibold tabular-nums">{formatDateID(b.check_out)}</p></div>
+        <p className="pb-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{nights} malam</p>
+      </div>
+
+      <div className="mt-6 rounded-2xl bg-muted/35 p-4"><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} roomy /></div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
+        <Select value={b.status} onValueChange={(v) => onStatusChange(v as BookingStatus)}>
+          <SelectTrigger className={`h-11 w-fit min-w-36 gap-2 rounded-full border-0 px-4 text-sm font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger>
+          <SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+        </Select>
+        <a href={b.guests?.phone ? getWhatsAppLink(b.guests.phone) : undefined} target="_blank" rel="noreferrer" aria-disabled={!b.guests?.phone} className="inline-flex h-11 items-center rounded-full border border-border px-4 text-sm text-muted-foreground transition hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50">WhatsApp</a>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between border-t border-border/70 pt-4">
+        <p className="font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</p>
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground hover:text-destructive" title="Hapus booking" onClick={(e) => { e.stopPropagation(); onDelete(); }}><Trash2 className="h-5 w-5" /></Button>
+      </div>
+    </article>
+  );
+}
+
+function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void }) {
+  return (
+    <div onClick={onEdit} className="hidden cursor-pointer gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5" style={{ gridTemplateColumns: BOOKING_GRID }}>
+      <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
+      <div><p className="font-medium">{b.guests?.full_name}</p>{b.guests?.phone ? <a href={getWhatsAppLink(b.guests.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="font-mono text-xs text-primary hover:underline tabular-nums">{b.guests.phone}</a> : <p className="font-mono text-xs text-muted-foreground tabular-nums">—</p>}</div>
+      <div><RoomSummary rooms={b.booking_rooms} /></div>
+      <div className="text-center font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</div>
+      <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-In</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
+      <div><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} /></div>
+      <div onClick={(e) => e.stopPropagation()}><Select value={b.status} onValueChange={(v) => onStatusChange(v as BookingStatus)}><SelectTrigger className={`h-7 w-fit gap-1 rounded-full border-0 px-3 text-xs font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent></Select></div>
+      <div><span className="inline-block rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{b.source}</span></div>
+      <div className="font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</div>
+      <div className="text-right" onClick={(e) => e.stopPropagation()}><Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Hapus booking" onClick={onDelete}><Trash2 className="h-4 w-4" /></Button></div>
+    </div>
+  );
+}
+
+function RoomSummary({ rooms, prominent = false }: { rooms: BookingListRow["booking_rooms"]; prominent?: boolean }) {
   const groups = new Map<string, string[]>();
   for (const br of rooms ?? []) {
     const name = br.room_types?.name ?? "—";
@@ -380,18 +398,18 @@ function RoomSummary({ rooms }: { rooms: BookingListRow["booking_rooms"] }) {
     groups.get(name)!.push(num);
   }
   if (groups.size === 0) return <p className="text-muted-foreground">—</p>;
-  return <div className="space-y-1.5">{[...groups].map(([name, nums]) => <div key={name} className="leading-tight"><p className="font-medium">{name}</p><p className="font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p></div>)}</div>;
+  return <div className="space-y-2">{[...groups].map(([name, nums]) => <div key={name} className="leading-tight"><p className={prominent ? "text-xl font-semibold" : "font-medium"}>{name}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p></div>)}</div>;
 }
 
-function PaymentCell({ total, paid, status, booking }: { total: number; paid: number; status?: "unpaid" | "partial" | "paid" | null; booking: BookingListRow }) {
+function PaymentCell({ total, paid, status, booking, roomy = false }: { total: number; paid: number; status?: "unpaid" | "partial" | "paid" | null; booking: BookingListRow; roomy?: boolean }) {
   const invoiceRef = booking.reference_code || booking.id;
   return (
-    <div className="space-y-0.5 font-mono text-xs tabular-nums">
+    <div className={`${roomy ? "space-y-1 text-sm" : "space-y-0.5 text-xs"} font-mono tabular-nums`}>
       <div className="flex justify-between gap-4"><span className="text-muted-foreground">Total</span><span className="font-semibold text-foreground">{formatIDR(total)}</span></div>
-      {status === "partial" && <><div className="flex justify-between gap-4 text-muted-foreground"><span>DP</span><span>{formatIDR(paid)}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Sisa</span><span className="text-amber-700 dark:text-amber-400">{formatIDR(Math.max(0, total - paid))}</span></div></>}
+      {status === "partial" && <><div className="flex justify-between gap-4 text-muted-foreground"><span>DP</span><span>{formatIDR(paid)}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Sisa</span><span className="font-semibold text-amber-600 dark:text-amber-400">{formatIDR(Math.max(0, total - paid))}</span></div></>}
       {status === "paid" && <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Lunas</p>}
       {(!status || status === "unpaid") && <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-destructive">Belum bayar</p>}
-      <a href={`/book/confirmation/${encodeURIComponent(invoiceRef)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 inline-flex items-center gap-1 font-sans text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"><Receipt className="h-3.5 w-3.5" />Invoice</a>
+      <a href={`/book/confirmation/${encodeURIComponent(invoiceRef)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-2 inline-flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"><Receipt className="h-4 w-4" />Invoice</a>
     </div>
   );
 }
