@@ -195,6 +195,35 @@ export function parseGuestCountFollowup(message: string): ParsedGuestCount | nul
   return { adults, children, total };
 }
 
+/** Ambil jumlah kamar eksplisit dari pesan, tanpa menganggapnya sebagai jumlah tamu. */
+export function parseRequestedRoomCount(message: string): number | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const match =
+    text.match(/\b(\d{1,2})\s*(?:kamar|rooms?)\b/i) ??
+    text.match(/\b(?:kamar|rooms?)\s*(?::?\s*)?(\d{1,2})\b/i);
+  if (!match) return null;
+  const count = Number(match[1]);
+  if (!Number.isInteger(count) || count < 1 || count > 20) return null;
+  return count;
+}
+
+/**
+ * Permintaan kuantitas kamar seperti "mau 3 kamar" adalah kebutuhan booking,
+ * bukan pertanyaan availability biasa. Pesan ini harus diteruskan ke agent agar
+ * agent membandingkan kebutuhan dengan stok dan menawarkan kombinasi/alternatif,
+ * alih-alih fast-path mengulang daftar lalu menanyakan jumlah tamu lagi.
+ */
+export function isExplicitRoomCountRequirement(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || text.length > 180 || parseRequestedRoomCount(text) === null) return false;
+  if (/\b(hanya|cuma|tinggal|tersedia|available|ada)\b/i.test(text)) return false;
+  return (
+    /\b(mau|ingin|butuh|perlu|memerlukan|cari|ambil|pesan|booking|book|reserve)\b/i.test(text) ||
+    /^\d{1,2}\s*(?:kamar|rooms?)\b/i.test(text)
+  );
+}
+
 /** True bila pesan tamu DIBUKA dengan sapaan — agar bot membalas sapaan
  *  hanya saat tepat (turn pembuka), tidak mengulang di tengah percakapan. */
 export function messageOpensWithGreeting(message: string): boolean {
@@ -221,6 +250,7 @@ export function looksLikeBookingInquiry(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text || text.length > 240) return false;
   if (isPerRoomRentalClarification(text)) return false;
+  if (isExplicitRoomCountRequirement(text)) return false;
   if (
     /\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(
       text,
