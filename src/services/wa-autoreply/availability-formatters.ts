@@ -289,12 +289,32 @@ export function formatAvailabilityForGuestCount(
       return `- ${String(room.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}${extraBedText}`;
     });
 
+    // Sebutkan juga tipe lain yang stoknya masih ada supaya tamu tahu
+    // ada alternatif (mis. saat butuh > 1 kamar atau ingin tipe berbeda).
+    const suitableIds = new Set(suitable.map((r) => String(r.room_type_id)));
+    const others = available.filter((r) => !suitableIds.has(String(r.room_type_id)));
+    const otherLines = others.slice(0, 5).map((room) => {
+      const count = Number(room.kamar_tersedia ?? 0);
+      const price = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
+      const maxGuests = Number(
+        room.kapasitas_maksimal_dengan_extra_bed ?? room.kapasitas_tamu ?? 0,
+      );
+      const priceText = price > 0 ? `, Rp${price.toLocaleString("id-ID")}/malam` : "";
+      const capacityText = maxGuests > 0 ? `, maks ${maxGuests} tamu/kamar` : "";
+      return `- ${String(room.nama ?? "Kamar")}: ${count} kamar tersedia${priceText}${capacityText}`;
+    });
+
+    const alternativesBlock =
+      otherLines.length > 0
+        ? `\n\nTipe lain yang juga tersedia:\n${otherLines.join("\n")}`
+        : "";
+
     return {
       intent: "deterministic_availability_guest_count",
       reply:
         `Untuk ${period} dengan ${guestLabel}, pilihan yang tersedia dan cukup kapasitas:\n` +
-        `${lines.join("\n")}\n\n` +
-        "Kakak mau pilih tipe kamar yang mana?",
+        `${lines.join("\n")}${alternativesBlock}\n\n` +
+        "Kakak mau pilih tipe kamar yang mana, atau butuh lebih dari 1 kamar?",
     };
   }
 
