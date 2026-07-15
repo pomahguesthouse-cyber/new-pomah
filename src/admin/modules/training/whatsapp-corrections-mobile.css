@@ -1,0 +1,27 @@
+/*
+ * WA Correction uses Tailwind responsive display classes for desktop.
+ * Some Android browsers/tablets report a CSS viewport wider than 768px,
+ * causing md:flex to override the mobile panel state. Keep one active panel
+ * until a true desktop width is available.
+ */
+@media (max-width: 1199px) {
+  .wa-correction-mobile-shell > div > aside.hidden,
+  .wa-correction-mobile-shell > div > section.hidden {
+    display: none !important;
+  }
+
+  .wa-correction-mobile-shell > div > aside.flex,
+  .wa-correction-mobile-shell > div > section.flex {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: 1 1 100% !important;
+  }
+
+  .wa-correction-mobile-shell > div {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+}
