@@ -19,7 +19,8 @@
     "test:wa-runtime-policy": "tsx scripts/test-wa-runtime-policy.ts",
     "test:wa-summary-policy": "tsx scripts/test-wa-session-summary-policy.ts",
     "test:wa-summary-io": "tsx scripts/test-wa-session-summary-io.ts",
-    "test:wa-refactor": "bun run test:message-parsers && bun run test:training && bun run test:wa-formatters && bun run test:wa-availability-context && bun run test:wa-identity && bun run test:wa-runtime-policy && bun run test:wa-summary-policy && bun run test:wa-summary-io",
+    "test:guest-role-disclosure": "tsx scripts/test-guest-role-disclosure.ts",
+    "test:wa-refactor": "bun run test:message-parsers && bun run test:training && bun run test:wa-formatters && bun run test:wa-availability-context && bun run test:wa-identity && bun run test:wa-runtime-policy && bun run test:wa-summary-policy && bun run test:wa-summary-io && bun run test:guest-role-disclosure",
     "check:evolution-env": "node scripts/check-evolution-env.js"
   },
   "dependencies": {
@@ -88,7 +89,7 @@
     "tailwindcss": "^4.2.1",
     "tw-animate-css": "^1.3.4",
     "vaul": "^1.1.2",
-    "vite-tsconfig-paths": "^6.0.2",
+    "vite": "^7.3.1",
     "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },
@@ -102,13 +103,12 @@
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
-    "eslint-plugin-react-hooks": "^6.1.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "prettier": "^3.7.3",
     "tsx": "^4.22.4",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.56.1",
-    "vite": "^7.3.1"
+    "typescript-eslint": "^8.56.1"
   }
 }
