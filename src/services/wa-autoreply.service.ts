@@ -284,9 +284,12 @@ async function buildContextualBookingInquiryReply(params: {
   // menutupi kesalahan slot lama yang belum dibersihkan.
   if (checkIn < today) return null;
 
+  // Hanya pakai jumlah tamu bila tamu MENYEBUTKANNYA pada pesan saat ini.
+  // Sebelumnya kita ikut mengambil guest_count dari ringkasan sesi lama,
+  // sehingga daftar tipe kamar difilter kapasitas prematur (mis. hanya
+  // Deluxe untuk 2 tamu) dan tamu tidak diberi tahu tipe lain yang ada.
   const guests = parseGuestCountFollowup(params.message);
-  const summaryGuests = Number(params.chatSummary?.guest_count ?? 0);
-  const adults = guests?.adults ?? (summaryGuests > 0 ? summaryGuests : undefined);
+  const adults = guests?.adults;
   const children = guests?.children ?? 0;
 
   let raw: string;
