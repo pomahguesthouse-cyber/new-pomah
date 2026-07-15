@@ -4,12 +4,14 @@ import {
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
   isExplicitBookingOrder,
+  isExplicitRoomCountRequirement,
   isPerRoomRentalClarification,
   isTonightReply,
   looksLikeBookingInquiry,
   messageOpensWithGreeting,
   parseAvailabilityDateRange,
   parseGuestCountFollowup,
+  parseRequestedRoomCount,
   shouldUseDeterministicAvailability,
 } from "../src/services/wa-autoreply/message-parsers";
 
@@ -25,6 +27,18 @@ assert.equal(looksLikeBookingInquiry("Single ukuran kasurnya berapa?"), false);
 assert.equal(looksLikeBookingInquiry("Harga per malam berapa?"), true);
 assert.equal(isPerRoomRentalClarification("itungannya kamar ya kak berarti bukan rumah?"), true);
 assert.equal(looksLikeBookingInquiry("itungannya kamar ya kak berarti bukan rumah?"), false);
+
+// Permintaan jumlah kamar bukan jumlah tamu dan tidak boleh ditelan oleh
+// contextual availability fast-path yang hanya mengulang stok.
+assert.equal(parseRequestedRoomCount("mau 3 kamar kakk"), 3);
+assert.equal(parseRequestedRoomCount("butuh kamar 2"), 2);
+assert.equal(parseRequestedRoomCount("untuk 3 orang"), null);
+assert.equal(isExplicitRoomCountRequirement("mau 3 kamar kakk"), true);
+assert.equal(isExplicitRoomCountRequirement("3 kamar ya kak"), true);
+assert.equal(isExplicitRoomCountRequirement("hanya 1 kamar ya kak?"), false);
+assert.equal(looksLikeBookingInquiry("mau 3 kamar kakk"), false);
+assert.equal(looksLikeBookingInquiry("hanya 1 kamar ya kak?"), true);
+assert.equal(parseGuestCountFollowup("mau 3 kamar kakk"), null);
 
 assert.equal(isTonightReply("Ada kamar malam ini?"), true);
 assert.equal(isTonightReply("Ada kamar besok?"), false);
