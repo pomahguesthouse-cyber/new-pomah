@@ -1,3 +1,5 @@
+import { sanitizeGuestFacingRoleDisclosure } from "@/services/wa-autoreply/guest-role-disclosure";
+
 /**
  * Reply post-processing utilities — shared between the WhatsApp autoreply
  * worker and the AI Lab simulator so they produce identical output.
@@ -224,12 +226,14 @@ export function sanitizeForbiddenPhrases(reply: string): string {
  *   - Remove the PDF URL we just turned into an attachment (if any).
  *   - Strip bare image URLs so WA doesn't render a photo unexpectedly.
  *   - Strip/replace forbidden phrases (e.g. "Selamat siang").
+ *   - Strip internal agent role disclosures from guest-facing replies.
  *   - Collapse trailing-whitespace lines and triple+ newlines.
  */
 export function cleanReplyBody(reply: string, attachedPdfUrl?: string): string {
   let out = reply;
   if (attachedPdfUrl) out = out.replace(attachedPdfUrl, "");
   out = sanitizeForbiddenPhrases(out);
+  out = sanitizeGuestFacingRoleDisclosure(out);
   return out
     .replace(/https?:\/\/\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?/gi, "")
     .replace(/[ \t]+\n/g, "\n")
