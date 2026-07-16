@@ -1808,6 +1808,7 @@ export async function processBookingState(
       if (changed) {
         if (patch.adults) context.adults = patch.adults;
         if (patch.children !== undefined) context.children = patch.children;
+        if (patch.extraBeds !== undefined) context.extraBeds = patch.extraBeds;
         if (patch.roomName) {
           context.roomName = patch.roomName;
           if (patch.roomId) {
