@@ -454,11 +454,11 @@ Terima kasih.`;
     if (sent) {
       try {
         const threadId = await resolveOrCreateNotificationThread({
-        supabase,
-        phone: cleanedPhone,
-        displayName: guest.full_name,
-        guestId: guest.id,
-      });
+          supabase,
+          phone: cleanedPhone,
+          displayName: guest.full_name,
+          guestId: guest.id,
+        });
         if (threadId) {
           await supabase.from("whatsapp_messages").insert({
             thread_id: threadId,
