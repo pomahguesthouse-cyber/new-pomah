@@ -624,7 +624,7 @@ export async function executeAutoreplyForPhone(
     (supabasePublic as any)
       .from("room_types")
       .select(
-        "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate",
+        "id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate, hero_image_url, images",
       )
       .order("base_rate"),
   ]);
