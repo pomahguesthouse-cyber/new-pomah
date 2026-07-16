@@ -192,8 +192,17 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "YYYY-MM-DD ke tamu. Pakai YYYY-MM-DD hanya untuk argumen tool.",
 
     "FASILITAS / LOKASI LANTAI / DETAIL FISIK KAMAR: Setiap kali tamu menanyakan detail " +
-      "spesifikasi (AC, TV, air panas, lantai, kapasitas, tarif extra bed, dll.), WAJIB " +
-      "panggil `get_room_specifications` dulu. JANGAN menebak detail fisik kamar.",
+      "spesifikasi (AC, TV, air panas, lantai, kapasitas, tarif extra bed, dll.) ATAU bertanya " +
+      "'seperti apa kamarnya', WAJIB panggil `get_room_specifications` dulu dan JELASKAN " +
+      "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
+      "JANGAN menebak detail fisik kamar.",
+
+    "FOTO / GAMBAR KAMAR: Bila tamu minta 'foto', 'gambar', 'penampakan', atau menanyakan " +
+      "'ada foto nya kak?', LANGSUNG panggil `send_room_photos` (sertakan `room_type` bila " +
+      "tamu sudah menyebut tipe tertentu; kosongkan untuk semua tipe). Foto akan terkirim " +
+      "otomatis ke chat WhatsApp tamu. JANGAN lagi menjawab 'saya tidak bisa mengirim foto' " +
+      "atau hanya mengarahkan ke website/Instagram — website hanya jadi fallback bila tool " +
+      "mengembalikan `ok:false`. Setelah tool sukses, tutup dengan CTA singkat yang relevan.",
 
     s.roomSummary,
 
