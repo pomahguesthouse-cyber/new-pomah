@@ -23,6 +23,7 @@ const pickTools = (toolNames: readonly string[]) =>
 const FRONT_OFFICE_GUEST_TOOLS = pickTools([
   "check_room_availability",
   "get_room_specifications",
+  "send_room_photos",
   "update_booking_slots",
   "offer_alternative_rooms",
   "start_booking_details",
