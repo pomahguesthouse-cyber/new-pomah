@@ -255,7 +255,7 @@ async function runManagerTurn(args: HandlerArgs & {
   const p = (prop ?? {}) as any;
   const { data: rooms } = await (supabasePublic as any)
     .from("room_types")
-    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate")
+    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate, hero_image_url, images")
     .order("base_rate");
 
   const explicitKey = p.ai_api_key?.trim();
@@ -475,7 +475,7 @@ async function handleAgentChannelMessage(args: HandlerArgs & {
   const p = (prop ?? {}) as any;
   const { data: rooms } = await (supabasePublic as any)
     .from("room_types")
-    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate")
+    .select("id, name, base_rate, capacity, bed_type, floor_info, description, amenities, extrabed_capacity, extrabed_rate, hero_image_url, images")
     .order("base_rate");
 
   const explicitKey = p.ai_api_key?.trim();

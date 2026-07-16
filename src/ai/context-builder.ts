@@ -22,6 +22,8 @@ export interface RoomTypeRow {
   amenities?:  string[] | null;
   extrabed_capacity?: number | null;
   extrabed_rate?:     number | null;
+  hero_image_url?: string | null;
+  images?:         string[] | null;
 }
 
 export interface PropertyRow {
