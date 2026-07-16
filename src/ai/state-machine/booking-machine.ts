@@ -8,6 +8,7 @@ import type { ToolContext } from "@/tools/types";
 import { extractAllSlots, getMissingSlots, formatPartialBookingSummary, TRAILING_FILLER_RE } from "./flexible-slot-extractor";
 import { buildPaymentPolicyAnswer } from "./booking-inline-answers";
 import { todayWIB } from "@/lib/date";
+import { extractRequestedExtraBeds } from "./extra-bed-parser";
 
 export type BookingState =
   | "IDLE"
@@ -1018,6 +1019,12 @@ function parseSlotCorrection(
     }
   }
 
+  const requestedExtraBeds = extractRequestedExtraBeds(input);
+  if (requestedExtraBeds !== undefined) {
+    patch.extraBeds = requestedExtraBeds;
+    changed = true;
+  }
+
   return { patch, changed };
 }
 
@@ -1561,7 +1568,8 @@ export async function processBookingState(
     if (extracted.email) context.guestEmail = extracted.email;
     if (extracted.phone) context.guestPhone = extracted.phone;
     if (extracted.adults) context.adults = extracted.adults;
-    if (extracted.children) context.children = extracted.children;
+    if (extracted.children !== undefined) context.children = extracted.children;
+    if (extracted.extra_beds !== undefined) context.extraBeds = extracted.extra_beds;
 
     // Additional slots
     if (extracted.is_invoice_request) {
@@ -1656,7 +1664,20 @@ export async function processBookingState(
       const recomputePolicy = resolveRoomExtraBedPolicy(context, roomsList);
       if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
       const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
-      context.extraBeds = eb.extraBeds;
+      const maxExtraBeds = recomputePolicy.extrabedCapacity * totalRoomsCount;
+      const requestedExtraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
+      context.extraBeds = requestedExtraBeds;
+
+      if (requestedExtraBeds > maxExtraBeds) {
+        const roomLabel = recomputePolicy.roomTypeName ?? context.roomName ?? "kamar";
+        await updateBookingState(supabase, phone, "COLLECTING_DATA", context);
+        return {
+          handled: true,
+          reply:
+            `${inlineAnswerPrefix}Maksimal extra bed untuk ${totalRoomsCount} kamar ${roomLabel} adalah ${maxExtraBeds} unit. ` +
+            `Mohon kurangi jumlah extra bed atau pilih tipe/jumlah kamar lain ya, Kak.`,
+        };
+      }
 
       if (eb.overCapacity) {
         const roomLabel = recomputePolicy.roomTypeName ?? context.roomName ?? "kamar";
@@ -1803,7 +1824,17 @@ export async function processBookingState(
         const recomputePolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
         if (recomputePolicy.extrabedRate > 0) context.extraBedRate = recomputePolicy.extrabedRate;
         const eb = computeExtraBeds(recomputePolicy, totalRoomsCount, getTotalGuests(context));
-        context.extraBeds = eb.extraBeds;
+        const maxExtraBeds = recomputePolicy.extrabedCapacity * totalRoomsCount;
+        context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
+        if (context.extraBeds > maxExtraBeds) {
+          await updateBookingState(supabase, phone, "CONFIRMING_BOOKING", context);
+          return {
+            handled: true,
+            reply:
+              `Maksimal extra bed untuk ${totalRoomsCount} kamar ${recomputePolicy.roomTypeName ?? context.roomName ?? "ini"} ` +
+              `adalah ${maxExtraBeds} unit. Mohon koreksi jumlah extra bed ya, Kak.`,
+          };
+        }
 
         // Recompute total
         if (context.checkIn && context.checkOut && context.pricePerNight) {
@@ -1862,9 +1893,14 @@ export async function processBookingState(
       const confirmPolicy = resolveRoomExtraBedPolicy(context, ctx.rooms);
       const eb = computeExtraBeds(confirmPolicy, totalRoomsCount, getTotalGuests(context));
       if (eb.overCapacity) missing.push("kapasitas (jumlah tamu melebihi maksimal)");
-      if (eb.extraBeds > 0) {
-        context.extraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
-        if (confirmPolicy.extrabedRate > 0) context.extraBedRate = confirmPolicy.extrabedRate;
+      const maxExtraBeds = confirmPolicy.extrabedCapacity * totalRoomsCount;
+      const requestedExtraBeds = Math.max(context.extraBeds ?? 0, eb.extraBeds);
+      if (requestedExtraBeds > maxExtraBeds) {
+        missing.push(`extra bed (maksimal ${maxExtraBeds} unit)`);
+      }
+      context.extraBeds = requestedExtraBeds;
+      if (requestedExtraBeds > 0 && confirmPolicy.extrabedRate > 0) {
+        context.extraBedRate = confirmPolicy.extrabedRate;
       }
       if (missing.length > 0) {
         return {
