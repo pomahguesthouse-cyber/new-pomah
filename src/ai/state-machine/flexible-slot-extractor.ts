@@ -20,6 +20,7 @@ import {
   normalizeRoomName,
 } from "./booking-machine";
 import { todayWIB, fmtDateID } from "@/lib/date";
+import { extractRequestedExtraBeds } from "./extra-bed-parser";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,7 @@ export interface ExtractedSlots {
   room_type?: string;  // matched room type name
   room_type_id?: string;
   room_quantity?: number;
+  extra_beds?: number;
   special_notes?: string;
   // Signal fields — bukan data slot, tapi sinyal perilaku
   is_payment_question?: boolean;
@@ -470,6 +472,13 @@ export function extractAllSlots(
   if (qtyMatch) {
     const qty = Number(qtyMatch[1]);
     if (qty >= 1 && qty <= 10) result.room_quantity = qty;
+  }
+
+  // Extra bed eksplisit: simpan sebagai slot booking, bukan sekadar catatan.
+  // Pertanyaan harga/ketersediaan sengaja menghasilkan undefined.
+  const requestedExtraBeds = extractRequestedExtraBeds(text);
+  if (requestedExtraBeds !== undefined) {
+    result.extra_beds = requestedExtraBeds;
   }
 
   // ── 7. Signal detection ───────────────────────────────────────────────────
