@@ -431,6 +431,33 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "send_room_photos",
+      description:
+        "Kirim foto kamar (dari galeri properti) langsung ke chat WhatsApp tamu. " +
+        "Panggil ketika tamu minta 'foto', 'gambar', 'penampakan', atau bertanya " +
+        "'seperti apa kamarnya' — JANGAN cukup arahkan ke website. Sertakan `room_type` " +
+        "bila tamu sudah menyebut tipe tertentu (mis. 'Deluxe'); kosongkan untuk mengirim " +
+        "1 foto perwakilan per tipe. Setelah tool sukses, TUTUP dengan CTA singkat " +
+        "(mis. 'Mau saya bantu cek ketersediaan untuk tanggal berapa, Kak?'). " +
+        "Bila tool gagal, baru arahkan ke pomahguesthouse.com.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: {
+            type: "string",
+            description: "Nama tipe kamar (mis. 'Deluxe', 'Family Suite 100'). Kosongkan untuk semua tipe.",
+          },
+          max_photos: {
+            type: "number",
+            description: "Jumlah maksimum foto per tipe kamar (default 3, maks 5).",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "check_keyword_ranking",
       description:
         "Cek posisi domain Pomah di Google SERP untuk satu keyword via Serper. Simpan hasilnya ke " +
