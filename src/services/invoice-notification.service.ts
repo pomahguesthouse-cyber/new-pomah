@@ -1,6 +1,50 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { sendWhatsAppMessage } from "./whatsapp.service";
 import { fmtDateID } from "@/lib/date";
+import { findNotificationThreadId } from "./notification-thread-resolver";
+
+async function resolveOrCreateNotificationThread({
+  supabase,
+  phone,
+  displayName,
+  guestId,
+}: {
+  supabase: SupabaseClient;
+  phone: string;
+  displayName: string;
+  guestId?: string | null;
+}): Promise<string | null> {
+  const existingId = await findNotificationThreadId(supabase, phone);
+  if (existingId) {
+    await (supabase as any)
+      .from("whatsapp_threads")
+      .update({
+        display_name: displayName,
+        ...(guestId ? { guest_id: guestId } : {}),
+      })
+      .eq("id", existingId);
+    return existingId;
+  }
+
+  const { data: newThread, error } = await (supabase as any)
+    .from("whatsapp_threads")
+    .insert({
+      phone,
+      canonical_phone: phone,
+      display_name: displayName,
+      ...(guestId ? { guest_id: guestId } : {}),
+      status: "open",
+      unread_count: 0,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.warn("[InvoiceNotification] create thread failed:", error.message);
+    return null;
+  }
+  return newThread?.id ?? null;
+}
 
 export interface InvoiceResult {
   ok: boolean;
@@ -244,27 +288,12 @@ Terima kasih.`;
       // wa_sent_at sudah di-set saat claim — tidak perlu update lagi.
 
       // Log to WhatsApp thread
-      const { data: thread } = await supabase
-        .from("whatsapp_threads")
-        .select("id")
-        .eq("phone", cleanedPhone)
-        .maybeSingle();
-
-      let threadId = thread?.id;
-      if (!threadId) {
-        const { data: newThread } = await supabase
-          .from("whatsapp_threads")
-          .insert({
-            phone: cleanedPhone,
-            display_name: guest.full_name,
-            guest_id: guest.id,
-            status: "open",
-            unread_count: 0,
-          })
-          .select("id")
-          .single();
-        threadId = newThread?.id;
-      }
+      const threadId = await resolveOrCreateNotificationThread({
+        supabase,
+        phone: cleanedPhone,
+        displayName: guest.full_name,
+        guestId: guest.id,
+      });
 
       if (threadId) {
         await supabase.from("whatsapp_messages").insert({
@@ -424,26 +453,12 @@ Terima kasih.`;
 
     if (sent) {
       try {
-        const { data: thread } = await supabase
-          .from("whatsapp_threads")
-          .select("id")
-          .eq("phone", cleanedPhone)
-          .maybeSingle();
-        let threadId = thread?.id;
-        if (!threadId) {
-          const { data: newThread } = await supabase
-            .from("whatsapp_threads")
-            .insert({
-              phone: cleanedPhone,
-              display_name: guest.full_name,
-              guest_id: guest.id,
-              status: "open",
-              unread_count: 0,
-            })
-            .select("id")
-            .single();
-          threadId = newThread?.id;
-        }
+        const threadId = await resolveOrCreateNotificationThread({
+        supabase,
+        phone: cleanedPhone,
+        displayName: guest.full_name,
+        guestId: guest.id,
+      });
         if (threadId) {
           await supabase.from("whatsapp_messages").insert({
             thread_id: threadId,
