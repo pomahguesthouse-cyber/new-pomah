@@ -92,6 +92,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   get_daily_room_rates:          getDailyRoomRates,
   delete_daily_room_rate:        deleteDailyRoomRate,
   get_room_specifications:       getRoomSpecifications,
+  send_room_photos:              sendRoomPhotos,
   generate_booking_form:         generateBookingForm,
   get_booking_form_submission:   getBookingFormSubmission,
 };
