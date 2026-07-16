@@ -758,6 +758,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_daily_room_rates:         "Pricing - Lihat Harga Harian (Manajer)",
   delete_daily_room_rate:       "Pricing - Hapus Override Harga Harian (Manajer)",
   get_room_specifications:      "Room Specifications",
+  send_room_photos:             "Room - Kirim Foto ke WA Tamu",
   check_keyword_ranking:        "Content - SEO Cek Posisi Google",
   list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
   audit_page_seo:               "Content - SEO Audit Halaman",
