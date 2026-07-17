@@ -38,7 +38,9 @@ async function handle(id: string, request: Request): Promise<Response> {
       bookingId,
       origin: new URL(request.url).origin,
       skipWhatsApp: false,
+      force: true,
     });
+
 
     return Response.json(result, { status: result.ok ? 200 : 400 });
   } catch (error: any) {
