@@ -27,6 +27,7 @@ import {
   Route as RouteIcon,
   Activity,
   GripVertical,
+  Users,
 } from "lucide-react";
 import {
   DndContext,
