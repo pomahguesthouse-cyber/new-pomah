@@ -136,6 +136,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
         bookingId:    bookingRow.id,
         origin:       ctx.origin,
         skipWhatsApp: false,
+        force:        true,
       });
       waSent = !!res.wa_sent;
       waError = res.error ?? null;
@@ -143,6 +144,7 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
       waError = e instanceof Error ? e.message : String(e);
     }
   }
+
 
   // ── 3. Build payload ───────────────────────────────────────────────────
   const b = bookingRow;

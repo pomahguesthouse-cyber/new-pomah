@@ -76,13 +76,17 @@ export async function generateAndSendInvoiceNotification({
   bookingId,
   origin,
   skipWhatsApp = false,
+  force = false,
 }: {
   supabase: SupabaseClient;
   bookingId: string;
   origin?: string;
   /** Set true to refresh the invoice record without re-sending WhatsApp. */
   skipWhatsApp?: boolean;
+  /** Set true to bypass the "sudah pernah dikirim" idempotency guard (manager explicit resend). */
+  force?: boolean;
 }): Promise<InvoiceResult> {
+
   try {
     // ── 1. Fetch booking, guest, and property ───────────────────────────
     const { data: booking, error: bErr } = await supabase
@@ -265,20 +269,34 @@ Terima kasih.`;
     // dari payment-webhook retry, manual resend, atau cron yang tumpang
     // tindih.
     const claimAt = new Date().toISOString();
-    const { data: claimed, error: claimErr } = await (supabase as any)
-      .from("invoices")
-      .update({ wa_sent_at: claimAt })
-      .eq("booking_id", bookingId)
-      .is("wa_sent_at", null)
-      .select("id");
-    if (claimErr) {
-      console.warn(`[InvoiceNotification] Atomic claim failed: ${claimErr.message}`);
+    let claimWon = false;
+    if (force) {
+      // Manager explicit resend — bypass idempotency, always send.
+      const { error: forceErr } = await (supabase as any)
+        .from("invoices")
+        .update({ wa_sent_at: claimAt })
+        .eq("booking_id", bookingId);
+      if (forceErr) {
+        console.warn(`[InvoiceNotification] Force claim failed: ${forceErr.message}`);
+      }
+      claimWon = true;
+    } else {
+      const { data: claimed, error: claimErr } = await (supabase as any)
+        .from("invoices")
+        .update({ wa_sent_at: claimAt })
+        .eq("booking_id", bookingId)
+        .is("wa_sent_at", null)
+        .select("id");
+      if (claimErr) {
+        console.warn(`[InvoiceNotification] Atomic claim failed: ${claimErr.message}`);
+      }
+      claimWon = Array.isArray(claimed) && claimed.length > 0;
     }
-    const claimWon = Array.isArray(claimed) && claimed.length > 0;
     if (!claimWon) {
       console.info(`[InvoiceNotification] Skip — invoice WA sudah dikirim untuk booking ${bookingId.slice(0, 8)}`);
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
     }
+
 
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
     const { ok: sent, error: sendErr } = await sendWhatsAppMessage(wpp_token, cleanedPhone, messageBody);
