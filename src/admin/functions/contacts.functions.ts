@@ -84,14 +84,14 @@ export const getContactDetail = createServerFn({ method: "POST" })
       .order("last_message_at", { ascending: false })
       .limit(20);
 
-    let memory: Record<string, unknown> | null = null;
+    let memory: any = null;
     if (contact.phone_normalized) {
       const { data: mem } = await client
         .from("guest_structured_memory")
         .select("*")
         .eq("phone", contact.phone_normalized)
         .maybeSingle();
-      memory = (mem as Record<string, unknown> | null) ?? null;
+      memory = mem ?? null;
     }
 
     return { contact, bookings: bookings ?? [], threads: threads ?? [], memory };
