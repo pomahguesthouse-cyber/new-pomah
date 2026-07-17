@@ -1235,6 +1235,18 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // Booking-aware context: kalau tamu punya booking aktif (±7 hari dari
+  // check-in), inject sebagai fakta wajib supaya bot tidak tanya ulang.
+  let activeBookingContext: string | undefined;
+  try {
+    const { resolveActiveBookingContext } = await import("@/ai/active-booking-context");
+    const res = await resolveActiveBookingContext(supabaseAdmin as any, phone);
+    if (res) activeBookingContext = res.block;
+  } catch (e) {
+    console.warn("[Autoreply] resolveActiveBookingContext failed (non-fatal):", e);
+  }
+
+
   for (let attempt = 1; attempt <= AI_MAX_ATTEMPTS && !reply; attempt++) {
     if (attempt > 1) await sleep(Math.min(1000 * attempt, 3000));
     // Extend the worker lock before each (potentially slow) AI attempt.
