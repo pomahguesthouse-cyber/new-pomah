@@ -49,6 +49,7 @@ import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
 import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
+import { Route as AdminContactsRouteImport } from './routes/admin/contacts'
 import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
 import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/competitor-prices'
 import { Route as AdminChatbotTrainingRouteImport } from './routes/admin/chatbot-training'
@@ -277,6 +278,11 @@ const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
   path: '/content-manager',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminContactsRoute = AdminContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminComplaintsRoute = AdminComplaintsRouteImport.update({
   id: '/complaints',
   path: '/complaints',
@@ -435,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/handoff': typeof AdminHandoffRoute
@@ -502,6 +509,7 @@ export interface FileRoutesByTo {
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/handoff': typeof AdminHandoffRoute
@@ -571,6 +579,7 @@ export interface FileRoutesById {
   '/admin/chatbot-training': typeof AdminChatbotTrainingRoute
   '/admin/competitor-prices': typeof AdminCompetitorPricesRoute
   '/admin/complaints': typeof AdminComplaintsRoute
+  '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
   '/admin/handoff': typeof AdminHandoffRoute
@@ -641,6 +650,7 @@ export interface FileRouteTypes {
     | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/handoff'
@@ -708,6 +718,7 @@ export interface FileRouteTypes {
     | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/handoff'
@@ -776,6 +787,7 @@ export interface FileRouteTypes {
     | '/admin/chatbot-training'
     | '/admin/competitor-prices'
     | '/admin/complaints'
+    | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
     | '/admin/handoff'
@@ -1145,6 +1157,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminContentManagerRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/contacts': {
+      id: '/admin/contacts'
+      path: '/contacts'
+      fullPath: '/admin/contacts'
+      preLoaderRoute: typeof AdminContactsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/complaints': {
       id: '/admin/complaints'
       path: '/complaints'
@@ -1339,6 +1358,7 @@ interface AdminRouteChildren {
   AdminChatbotTrainingRoute: typeof AdminChatbotTrainingRoute
   AdminCompetitorPricesRoute: typeof AdminCompetitorPricesRoute
   AdminComplaintsRoute: typeof AdminComplaintsRoute
+  AdminContactsRoute: typeof AdminContactsRoute
   AdminContentManagerRoute: typeof AdminContentManagerRoute
   AdminExploreRoute: typeof AdminExploreRoute
   AdminHandoffRoute: typeof AdminHandoffRoute
@@ -1369,6 +1389,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminChatbotTrainingRoute: AdminChatbotTrainingRoute,
   AdminCompetitorPricesRoute: AdminCompetitorPricesRoute,
   AdminComplaintsRoute: AdminComplaintsRoute,
+  AdminContactsRoute: AdminContactsRoute,
   AdminContentManagerRoute: AdminContentManagerRoute,
   AdminExploreRoute: AdminExploreRoute,
   AdminHandoffRoute: AdminHandoffRoute,
