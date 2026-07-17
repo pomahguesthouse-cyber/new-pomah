@@ -787,7 +787,9 @@ export const resendInvoice = createServerFn({ method: "POST" })
       supabase: context.supabase,
       bookingId: data.bookingId,
       skipWhatsApp: false,
+      force: true,
     });
+
     if (!result.ok) throw new Error(result.error ?? "Gagal generate invoice");
     return { ok: true, pdf_url: result.pdf_url, wa_sent: result.wa_sent };
   });
