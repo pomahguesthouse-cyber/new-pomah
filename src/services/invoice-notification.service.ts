@@ -76,13 +76,17 @@ export async function generateAndSendInvoiceNotification({
   bookingId,
   origin,
   skipWhatsApp = false,
+  force = false,
 }: {
   supabase: SupabaseClient;
   bookingId: string;
   origin?: string;
   /** Set true to refresh the invoice record without re-sending WhatsApp. */
   skipWhatsApp?: boolean;
+  /** Set true to bypass the "sudah pernah dikirim" idempotency guard (manager explicit resend). */
+  force?: boolean;
 }): Promise<InvoiceResult> {
+
   try {
     // ── 1. Fetch booking, guest, and property ───────────────────────────
     const { data: booking, error: bErr } = await supabase
