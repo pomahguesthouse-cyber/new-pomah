@@ -27,6 +27,7 @@ import {
   Route as RouteIcon,
   Activity,
   GripVertical,
+  Users,
 } from "lucide-react";
 import {
   DndContext,
@@ -89,6 +90,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
   {
     label: "Guests & Comms",
     items: [
+      { to: "/admin/contacts", label: "Contacts", icon: Users },
       { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { to: "/admin/webchat", label: "Web Chat", icon: MessageCircle },
       { to: "/admin/telegram", label: "Telegram", icon: Send },

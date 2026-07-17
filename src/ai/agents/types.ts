@@ -128,6 +128,12 @@ export interface AgentContext {
   unansweredMessages?: string[];
   /** List of missing booking slots for context during interrupts */
   pendingBookingSlots?: string[];
+  /**
+   * Ringkasan booking aktif tamu (±7 hari dari check-in) yang wajib
+   * diketahui agent. Diinject ke system prompt sebagai fakta tetap agar
+   * bot tidak menanyakan ulang tanggal/kamar/nama yang sudah ada di DB.
+   */
+  activeBookingContext?: string;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────

@@ -915,39 +915,80 @@ export type Database = {
       }
       guests: {
         Row: {
+          avatar_url: string | null
           country: string | null
           created_at: string
+          display_name: string | null
           email: string | null
+          first_seen_at: string | null
           full_name: string
           id: string
+          last_seen_at: string | null
+          merged_into: string | null
           notes: string | null
           phone: string | null
+          phone_normalized: string | null
+          real_name: string | null
+          source: string | null
+          tags: string[] | null
+          total_bookings: number
+          total_spent: number
           updated_at: string
           whatsapp_id: string | null
         }
         Insert: {
+          avatar_url?: string | null
           country?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
+          first_seen_at?: string | null
           full_name: string
           id?: string
+          last_seen_at?: string | null
+          merged_into?: string | null
           notes?: string | null
           phone?: string | null
+          phone_normalized?: string | null
+          real_name?: string | null
+          source?: string | null
+          tags?: string[] | null
+          total_bookings?: number
+          total_spent?: number
           updated_at?: string
           whatsapp_id?: string | null
         }
         Update: {
+          avatar_url?: string | null
           country?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
+          first_seen_at?: string | null
           full_name?: string
           id?: string
+          last_seen_at?: string | null
+          merged_into?: string | null
           notes?: string | null
           phone?: string | null
+          phone_normalized?: string | null
+          real_name?: string | null
+          source?: string | null
+          tags?: string[] | null
+          total_bookings?: number
+          total_spent?: number
           updated_at?: string
           whatsapp_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "guests_merged_into_fkey"
+            columns: ["merged_into"]
+            isOneToOne: false
+            referencedRelation: "guests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       handoff_tickets: {
         Row: {
@@ -3875,6 +3916,7 @@ export type Database = {
         Args: { p_value: string }
         Returns: string
       }
+      normalize_phone_id: { Args: { p_raw: string }; Returns: string }
       normalize_wa_identity: { Args: { p_raw: string }; Returns: string }
       receive_whatsapp_message:
         | {

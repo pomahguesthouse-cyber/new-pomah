@@ -342,6 +342,10 @@ async function runAgent(
   } else if (agentCtx.chatSummary) {
     systemPrompt += `\n\nRINGKASAN: ${agentCtx.chatSummary}`;
   }
+
+  if (agentCtx.activeBookingContext) {
+    systemPrompt += `\n\n${agentCtx.activeBookingContext}`;
+  }
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
     // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…
     // JANGAN reset" membuat Gemini menyimpulkan percakapan sudah selesai
