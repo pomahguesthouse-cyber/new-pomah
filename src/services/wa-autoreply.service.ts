@@ -1280,6 +1280,7 @@ export async function executeAutoreplyForPhone(
           mode: isManager ? "managerial" : undefined,
           recoveryMode,
           unansweredMessages,
+          activeBookingContext,
           trainingExamples: trainingExamples.map((ex) => ({
             id: ex.id,
             intent: ex.intent,
