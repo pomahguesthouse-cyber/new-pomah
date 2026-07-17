@@ -85,8 +85,8 @@ export async function resolveActiveBookingContext(
 
   const lines = rows.map((b) => {
     const roomName = b.room_type_id ? (roomTypeMap.get(b.room_type_id) ?? "kamar") : "kamar";
-    const ci = fmtDateID(new Date(b.check_in));
-    const co = fmtDateID(new Date(b.check_out));
+    const ci = fmtDateID(b.check_in);
+    const co = fmtDateID(b.check_out);
     const total = Number(b.total_amount ?? 0);
     const paid = Number(b.paid_amount ?? 0);
     const outstanding = Math.max(0, total - paid);
