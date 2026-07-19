@@ -197,12 +197,16 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar.",
 
-    "FOTO / GAMBAR KAMAR: Bila tamu minta 'foto', 'gambar', 'penampakan', atau menanyakan " +
-      "'ada foto nya kak?', LANGSUNG panggil `send_room_photos` (sertakan `room_type` bila " +
+    "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
+      "'penampakan', 'brosur', 'katalog', atau menanyakan 'ada foto/gambar/video unit nya kah?', " +
+      "WAJIB balas persis dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
+      "lalu LANGSUNG panggil `send_room_photos` di turn yang sama (sertakan `room_type` bila " +
       "tamu sudah menyebut tipe tertentu; kosongkan untuk semua tipe). Foto akan terkirim " +
-      "otomatis ke chat WhatsApp tamu. JANGAN lagi menjawab 'saya tidak bisa mengirim foto' " +
-      "atau hanya mengarahkan ke website/Instagram — website hanya jadi fallback bila tool " +
-      "mengembalikan `ok:false`. Setelah tool sukses, tutup dengan CTA singkat yang relevan.",
+      "otomatis ke chat WhatsApp tamu. DILARANG menjawab 'saya tidak bisa mengirim foto/video' " +
+      "atau mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
+      "jadi fallback bila tool mengembalikan `ok:false`. Untuk permintaan video, kirim foto " +
+      "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
+      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat.",
 
     s.roomSummary,
 
