@@ -220,18 +220,27 @@ assert.match(multiRoomWithExtraBed.reply, /Family Room 222 \+ 1 extra bed @ Rp10
 assert.match(multiRoomWithExtraBed.reply, /Total Rp1\.200\.000\/malam/);
 assert.doesNotMatch(multiRoomWithExtraBed.reply, /\*/);
 
+const terminalCapacityReply =
+  "Maaf Kak, untuk tanggal 7 Agustus 2026 – 8 Agustus 2026 kamar yang tersedia belum cukup untuk menampung 6 orang.\n" +
+  "Stok saat ini hanya dapat menampung maksimal 3 orang, termasuk extra bed.\n\n" +
+  "Rinciannya:\n" +
+  "• Deluxe: 1 kamar — 2 tamu standar/kamar, maksimal 3 tamu dengan 1 extra bed/kamar\n\n" +
+  "Saran saya, cek tanggal alternatif agar tersedia kamar Family atau jumlah kamar yang lebih banyak. " +
+  "Kalau tanggalnya fleksibel, kirim 1–2 pilihan tanggal dan saya cek langsung.";
 const terminalCapacityRaw = JSON.stringify({
   periode: "7 Agustus 2026 – 8 Agustus 2026",
   availability_status: "insufficient_capacity",
   relay_verbatim: true,
-  reply_to_guest:
-    "Maaf Kak, untuk tanggal 7 Agustus 2026 – 8 Agustus 2026 kamar yang tersedia belum cukup untuk menampung 6 orang.",
+  should_offer_alternative_dates: true,
+  reply_to_guest: terminalCapacityReply,
   kamar: [
     {
       nama: "Deluxe",
       kamar_tersedia: 1,
       tidak_tersedia: false,
       cocok_untuk_jumlah_tamu: false,
+      kapasitas_tamu: 2,
+      kapasitas_extra_bed: 1,
       kapasitas_maksimal_dengan_extra_bed: 3,
     },
   ],
@@ -243,10 +252,11 @@ const terminalCapacity = formatAvailabilityForGuestCount(terminalCapacityRaw, {
 });
 assert.ok(terminalCapacity);
 assert.equal(terminalCapacity.intent, "deterministic_availability_over_capacity");
-assert.equal(
-  terminalCapacity.reply,
-  "Maaf Kak, untuk tanggal 7 Agustus 2026 – 8 Agustus 2026 kamar yang tersedia belum cukup untuk menampung 6 orang.",
-);
+assert.equal(terminalCapacity.reply, terminalCapacityReply);
+assert.match(terminalCapacity.reply, /2 tamu standar\/kamar/);
+assert.match(terminalCapacity.reply, /maksimal 3 tamu dengan 1 extra bed\/kamar/);
+assert.match(terminalCapacity.reply, /1–2 pilihan tanggal/);
+assert.doesNotMatch(terminalCapacity.reply, /tanggalnya tidak bisa diubah/i);
 
 const fullForGuests = formatAvailabilityForGuestCount(fullRaw, {
   adults: 2,
