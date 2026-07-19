@@ -319,6 +319,7 @@ async function runAgent(
     const fmt = (v: string | number | null | undefined) =>
       v === null || v === undefined || v === "" ? "-" : String(v);
     const structuredLines = [
+      `- Nama tamu: ${fmt(s.guest_name)}`,
       `- Tipe kamar terakhir: ${fmt(s.room_type)}`,
       `- Topik terakhir: ${fmt(s.last_topic)}`,
       `- Status booking: ${fmt(s.booking_status)}`,
@@ -327,6 +328,8 @@ async function runAgent(
       `- Jumlah tamu: ${fmt(s.guest_count)}`,
       `- Pertanyaan belum dijawab: ${fmt(s.unresolved_question)}`,
       `- Komplain aktif: ${s.complaint_active ? "ya" : "tidak"}`,
+      `- Permintaan khusus: ${fmt(s.special_requests)}`,
+      `- Preferensi tamu: ${fmt(s.preference_notes)}`,
     ].join("\n");
     systemPrompt +=
       `\n\nKONTEKS SESI (Default, JANGAN konfirmasi ulang):\n` +
@@ -346,6 +349,30 @@ async function runAgent(
   if (agentCtx.activeBookingContext) {
     systemPrompt += `\n\n${agentCtx.activeBookingContext}`;
   }
+
+  if (agentCtx.guestProfile && Number(agentCtx.guestProfile.total_bookings ?? 0) > 0) {
+    const gp = agentCtx.guestProfile;
+    const verifiedName = typeof gp.full_name === "string" ? gp.full_name.trim() : "";
+    const bookingLines = (Array.isArray(gp.bookings) ? gp.bookings : [])
+      .slice(0, 5)
+      .map((booking) => {
+        const ref = booking.reference_code ?? booking.id?.slice(0, 8) ?? "-";
+        const dates = [booking.check_in, booking.check_out].filter(Boolean).join(" → ");
+        const room = booking.room_type ?? "kamar";
+        const phase = booking.is_upcoming ? "mendatang/aktif" : "riwayat";
+        return `- ${phase}: ${ref}, ${room}, ${dates || "tanggal tidak tersedia"}, status ${booking.status ?? "-"}, pembayaran ${booking.payment_status ?? "-"}`;
+      });
+    systemPrompt +=
+      `\n\nPROFIL TAMU TERVERIFIKASI DARI DATABASE:\n` +
+      `- Nama: ${verifiedName || "-"}\n` +
+      `- Tamu lama: ya (${Number(gp.total_bookings ?? 0)} booking tercatat)\n` +
+      (bookingLines.length ? `- Booking terkait:\n${bookingLines.join("\n")}\n` : "") +
+      `Gunakan nama depan secara natural maksimal sekali pada pembuka bila sesuai. ` +
+      `Jangan menyebut jumlah transaksi, total belanja, tag internal, atau mengatakan sistem melacak tamu. ` +
+      `Jika tamu membuat booking untuk dirinya sendiri, gunakan nama tersimpan sebagai default dan jangan minta ulang. ` +
+      `Jika tamu menyatakan booking untuk orang lain atau memberi nama baru, gunakan data baru tersebut.`;
+  }
+
   if (agentCtx.agreedDates?.checkIn && agentCtx.agreedDates?.checkOut) {
     // NOTE: softer wording. Sebelumnya kalimat "TANGGAL SUDAH DISEPAKATI…
     // JANGAN reset" membuat Gemini menyimpulkan percakapan sudah selesai

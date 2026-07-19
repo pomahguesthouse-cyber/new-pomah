@@ -32,6 +32,8 @@ export interface PropertyFaqInput {
   /** true → jangan tambahkan opener "Halo Kak 👋 " (tamu sudah disapa / bot
    *  sudah membalas di sesi berjalan). */
   greetingUsed?: boolean;
+  /** Nama tamu lama terverifikasi dari tabel guests (bukan display name mentah). */
+  guestName?: string;
   mode: "early" | "late";
 }
 
@@ -149,6 +151,12 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   const checkInTime = (str(p.check_in_time) || str(p.checkin_time) || "14:00").slice(0, 5);
   const checkOutTime = (str(p.check_out_time) || str(p.checkout_time) || "12:00").slice(0, 5);
   const opener = input.greetingUsed ? "" : "Halo Kak 👋 ";
+  const verifiedFirstName = (() => {
+    const value = String(input.guestName ?? "").trim();
+    if (!value || /^\\d+$/.test(value)) return "";
+    const first = value.split(/\\s+/)[0]?.replace(/[^\\p{L}'-]/gu, "") ?? "";
+    return first.length >= 2 ? first : "";
+  })();
   const rooms = input.rooms ?? [];
 
   const core = raw.replace(LEAD_INTERJECTION_RE, "");
@@ -157,7 +165,7 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   if (GREET_RE.test(core) || GREET_RE.test(raw)) {
     return {
       reply:
-        `Halo Kak, terima kasih sudah menghubungi ${propertyName} 🙏\n` +
+        `Halo Kak${verifiedFirstName ? ` ${verifiedFirstName}` : ""}, terima kasih sudah menghubungi ${propertyName} 🙏\n` +
         `Ada yang bisa kami bantu — mau cek ketersediaan kamar, harga, atau info fasilitas?`,
       intent: "greeting",
     };

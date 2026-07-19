@@ -640,6 +640,20 @@ export async function executeAutoreplyForPhone(
       ? (rawSummaryJson as ChatSummaryStructured)
       : undefined;
   const chatSummaryUpdatedAt = c.chat_summary_updated_at as string | null | undefined;
+  const rawGuestProfile = c.guest_profile;
+  const guestProfile =
+    rawGuestProfile &&
+    typeof rawGuestProfile === "object" &&
+    !Array.isArray(rawGuestProfile) &&
+    Object.keys(rawGuestProfile).length > 0
+      ? rawGuestProfile
+      : undefined;
+  // Sapaan bernama hanya untuk tamu yang benar-benar sudah punya booking.
+  // Display name WhatsApp mentah tidak cukup kuat untuk personalisasi.
+  const returningGuestName =
+    Number(guestProfile?.total_bookings ?? 0) > 0 && typeof guestProfile?.full_name === "string"
+      ? guestProfile.full_name
+      : undefined;
   const messages = c.messages ?? [];
 
   // manager is already resolved at the beginning of the function
@@ -730,6 +744,7 @@ export async function executeAutoreplyForPhone(
       property: p as Record<string, unknown>,
       rooms: (rooms ?? []) as any[],
       greetingUsed: faqGreetingUsed,
+      guestName: returningGuestName,
       mode: "early",
     });
     if (fastFaq) {
@@ -944,6 +959,7 @@ export async function executeAutoreplyForPhone(
         property: p as Record<string, unknown>,
         rooms: (rooms ?? []) as any[],
         greetingUsed: faqGreetingUsed,
+        guestName: returningGuestName,
         mode: "late",
       });
       if (propertyFaq) {
@@ -1281,6 +1297,8 @@ export async function executeAutoreplyForPhone(
           recoveryMode,
           unansweredMessages,
           activeBookingContext,
+          guestProfile,
+          chatPhone: phone,
           trainingExamples: trainingExamples.map((ex) => ({
             id: ex.id,
             intent: ex.intent,
