@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
+import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 
 /** Untyped client view — for columns absent from the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -432,33 +433,17 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       .single();
     if (propErr || !property) throw new Error("Property belum dikonfigurasi");
 
-    // Resolve / create guest
-    let guestId = data.guest.id ?? null;
-    if (!guestId) {
-      const { data: g, error: gErr } = await context.supabase
-        .from("guests")
-        .insert({
-          full_name: data.guest.full_name,
-          email: data.guest.email || null,
-          phone: data.guest.phone || null,
-          country: data.guest.country || null,
-        })
-        .select("id")
-        .single();
-      if (gErr || !g) throw gErr ?? new Error("Gagal menyimpan data tamu");
-      guestId = g.id;
-    } else {
-      // Update existing guest's contact info if provided
-      await context.supabase
-        .from("guests")
-        .update({
-          full_name: data.guest.full_name,
-          email: data.guest.email || null,
-          phone: data.guest.phone || null,
-          country: data.guest.country || null,
-        })
-        .eq("id", guestId);
-    }
+    // Resolve one canonical guest per normalized phone. The booking dialog
+    // may omit guest.id even when this phone already exists in Contacts.
+    const resolvedGuest = await resolveOrCreateGuest(context.supabase, {
+      preferredGuestId: data.guest.id,
+      fullName: data.guest.full_name,
+      email: data.guest.email,
+      phone: data.guest.phone,
+      country: data.guest.country,
+      source: "booking",
+    });
+    const guestId = resolvedGuest.id;
 
     const { rooms: selectedRooms, roomTypeById, typeMetaById } = await resolveSelectedRooms(
       context.supabase,

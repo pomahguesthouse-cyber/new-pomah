@@ -10,6 +10,7 @@ import {
   getDailyRatesForRange,
   resolveRoomNightlyRates,
 } from "@/services/pricing/daily-rate.service";
+import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -340,16 +341,12 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
     // Writes use the service-role client — the anon role can INSERT but
     // has no SELECT policy on guests/bookings, so `.select()` after an
     // anon insert returns nothing.
-    const { data: guest, error: gerr } = await supabaseAdmin
-      .from("guests")
-      .insert({
-        full_name: data.fullName,
-        email: data.email,
-        phone: data.phone || null,
-      })
-      .select("id")
-      .single();
-    if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
+    const guest = await resolveOrCreateGuest(supabaseAdmin as any, {
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      source: "booking",
+    });
 
     const roomsCount = data.rooms ?? 1;
     const extrabedCount = data.extrabed ?? 0;
@@ -524,16 +521,12 @@ export const submitCartBooking = createServerFn({ method: "POST" })
       ? `(Add-ons: ${extraBedNotes.join(", ")})\n${data.specialRequests || ""}`.trim()
       : data.specialRequests || null;
 
-    const { data: guest, error: gerr } = await supabaseAdmin
-      .from("guests")
-      .insert({
-        full_name: data.fullName,
-        email: data.email,
-        phone: data.phone || null,
-      })
-      .select("id")
-      .single();
-    if (gerr || !guest) throw gerr ?? new Error("Could not create guest");
+    const guest = await resolveOrCreateGuest(supabaseAdmin as any, {
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone,
+      source: "booking",
+    });
 
     const { data: booking, error: berr } = await db(supabaseAdmin)
       .from("bookings")
@@ -1278,16 +1271,20 @@ export const chatWithAI = createServerFn({ method: "POST" })
       // Writes use the service-role client: booking creation is a
       // trusted server-side action and the anon role cannot read back
       // the inserted rows (no SELECT policy on guests/bookings).
-      const { data: guest, error: gerr } = await supabaseAdmin
-        .from("guests")
-        .insert({ full_name: fullName, email, phone })
-        .select("id")
-        .single();
-      if (gerr || !guest)
+      let guest: { id: string; created: boolean };
+      try {
+        guest = await resolveOrCreateGuest(supabaseAdmin as any, {
+          fullName,
+          email,
+          phone,
+          source: "booking",
+        });
+      } catch (error) {
         return JSON.stringify({
           ok: false,
-          error: `Gagal menyimpan data tamu: ${gerr?.message ?? "tidak diketahui"}`,
+          error: `Gagal menyimpan data tamu: ${error instanceof Error ? error.message : "tidak diketahui"}`,
         });
+      }
 
       const { data: booking, error: berr } = await supabaseAdmin
         .from("bookings")
