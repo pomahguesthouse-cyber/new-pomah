@@ -47,6 +47,35 @@ export type IntentCategory =
   | "send_to_manager"    // admin: forward info ke owner
   | "general";           // pertanyaan umum, info hotel, lokasi
 
+// ─── Returning guest profile ─────────────────────────────────────────────────
+
+export interface ReturningGuestBooking {
+  id?: string;
+  reference_code?: string | null;
+  check_in?: string | null;
+  check_out?: string | null;
+  status?: string | null;
+  payment_status?: string | null;
+  adults?: number | null;
+  children?: number | null;
+  room_type?: string | null;
+  special_requests?: string | null;
+  is_upcoming?: boolean;
+}
+
+export interface ReturningGuestProfile {
+  guest_id?: string;
+  full_name?: string | null;
+  display_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  source?: string | null;
+  total_bookings?: number;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
+  bookings?: ReturningGuestBooking[];
+}
+
 // ─── Context injected into every agent's prompt builder ──────────────────────
 
 export interface AgentContext {
@@ -134,6 +163,8 @@ export interface AgentContext {
    * bot tidak menanyakan ulang tanggal/kamar/nama yang sudah ada di DB.
    */
   activeBookingContext?: string;
+  /** Profil tamu kanonis + riwayat booking ringkas dari database. */
+  guestProfile?: ReturningGuestProfile;
 }
 
 // ─── Agent definition interface ───────────────────────────────────────────────
