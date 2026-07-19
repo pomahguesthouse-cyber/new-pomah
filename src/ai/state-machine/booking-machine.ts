@@ -930,6 +930,11 @@ function isExpectedAnswer(state: BookingState, message: string): boolean {
     case "CONFIRMING_NAME":
       return USE_THIS_PATTERN.test(message) || USE_OTHER_PATTERN.test(message);
     case "CONFIRMING_BOOKING":
+      // Pesan berupa pertanyaan (mis. "boleh ubah bookingan kah?") BUKAN
+      // konfirmasi/pembatalan — walaupun mengandung kata "ubah"/"ganti".
+      // Biarkan guard interupsi meneruskannya ke LLM agar dijawab, bukan
+      // dijadikan trigger ulang ringkasan booking.
+      if (QUESTION_PATTERN.test(message)) return false;
       return CONFIRM_PATTERN.test(message) || CANCEL_PATTERN.test(message);
     case "AWAITING_NAME":
     default:
