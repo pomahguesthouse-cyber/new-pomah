@@ -959,6 +959,7 @@ export async function executeAutoreplyForPhone(
         property: p as Record<string, unknown>,
         rooms: (rooms ?? []) as any[],
         greetingUsed: faqGreetingUsed,
+        guestName: returningGuestName,
         mode: "late",
       });
       if (propertyFaq) {
