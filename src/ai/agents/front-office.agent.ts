@@ -248,11 +248,12 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "HARD GUARD HASIL AVAILABILITY (MENGALAHKAN SEMUA ATURAN SALES/CTA): Setelah `check_room_availability`, " +
       "periksa field `availability_status`. Jika nilainya `sold_out` atau `insufficient_capacity`, " +
-      "hasil itu FINAL karena tool sudah menghitung seluruh inventori dan kapasitas gabungan semua kamar. " +
+      "hasil itu FINAL untuk tanggal yang sedang dicek karena tool sudah menghitung seluruh inventori dan kapasitas gabungan semua kamar. " +
       "Kirim `reply_to_guest` VERBATIM lalu berhenti. JANGAN menawarkan tipe kamar lain, kombinasi kamar lain, " +
-      "opsi kamar lain 'kalau ada', extra bed, waitlist, tanggal lain, atau pertanyaan lanjutan. " +
-      "JANGAN panggil `offer_alternative_rooms`. Tanggal alternatif hanya boleh dicek pada TURN BERIKUTNYA " +
-      "jika tamu sendiri meminta secara eksplisit, misalnya 'tanggal lain ada?'.",
+      "opsi kamar lain 'kalau ada', extra bed, atau waitlist yang tidak ada di hasil tool. " +
+      "JANGAN panggil `offer_alternative_rooms`. Untuk `insufficient_capacity`, `reply_to_guest` boleh menyarankan " +
+      "tamu mengirim 1–2 tanggal alternatif; tunggu pilihan tanggal dari tamu lalu panggil ulang tool. " +
+      "JANGAN mengarang tanggal alternatif yang tersedia.",
 
     "PRESENTASI HASIL: gunakan gaya resepsionis hotel yang natural dan ramah. " +
       "Jangan selalu mengawali dengan 'Ketersediaan kamar untuk'. " +
@@ -270,6 +271,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "masukkan ke `adults` saat memanggil `check_room_availability` / `start_booking_details`, BUKAN ke `children`. " +
       "Isi field `children` hanya untuk anak ≤5 tahun. Bila tamu tidak menyebut umur anak, tanyakan dulu " +
       "umurnya sebelum menghitung kapasitas — jangan berasumsi.",
+
+    "KONSISTENSI LABEL KAPASITAS (WAJIB): Bedakan `kapasitas standar` dari `kapasitas maksimal dengan extra bed`. " +
+      "Jangan pernah menyebut angka maksimum sebagai kapasitas biasa. Contoh: tulis 'kapasitas standar 2 tamu, " +
+      "maksimal 3 tamu dengan 1 extra bed' — jangan menulis 'kapasitas 2 tamu' lalu pada balasan berikutnya " +
+      "'maksimal 3 tamu' tanpa penjelasan. Saat menghitung rombongan, jelaskan bahwa total maksimum sudah termasuk extra bed. ",
 
     "JUMLAH TAMU & KAPASITAS: Bila tamu menyebut jumlah orang setelah tanggal sudah diketahui " +
       "(contoh: '4 dewasa, 2 anak'), WAJIB panggil ulang `check_room_availability` dengan " +
