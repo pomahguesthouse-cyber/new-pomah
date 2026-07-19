@@ -8,6 +8,7 @@
 
 import { isDateString, fmtDateID } from "@/lib/date";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
+import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import type { ToolContext, ToolHandler } from "./types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -504,18 +505,21 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       : "",
   ].filter(Boolean).join("\n");
 
-  const { data: guest, error: gErr } = await (ctx.supabaseAdmin as any)
-    .from("guests")
-    .insert({ full_name: fullName, email, phone })
-    .select("id")
-    .single();
-
-  if (gErr || !guest) {
+  let guestResolution: { id: string; created: boolean };
+  try {
+    guestResolution = await resolveOrCreateGuest(ctx.supabaseAdmin as any, {
+      fullName,
+      email,
+      phone,
+      source: managerialDirect ? "manager_chat" : "whatsapp",
+    });
+  } catch (error) {
     return JSON.stringify({
       ok: false,
-      error: `Gagal menyimpan data tamu: ${gErr?.message ?? "tidak diketahui"}`,
+      error: `Gagal menyimpan data tamu: ${error instanceof Error ? error.message : "tidak diketahui"}`,
     });
   }
+  const guest = { id: guestResolution.id };
 
   // ── Create booking ─────────────────────────────────────────────────────────
   // Source attribution: managerial direct entry vs guest WA chat. Web/walk-in
@@ -576,12 +580,12 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       if (existing) {
         // Clean up the orphan guest we just inserted — the winning replay
         // already has its own guest row.
-        await rollbackBooking(ctx, { guestId: guest.id });
+        await rollbackBooking(ctx, { guestId: guestResolution.created ? guest.id : undefined });
         return existing;
       }
     }
     // Hard failure: roll back the guest we inserted so it doesn't sit orphaned.
-    await rollbackBooking(ctx, { guestId: guest.id });
+    await rollbackBooking(ctx, { guestId: guestResolution.created ? guest.id : undefined });
     return JSON.stringify({
       ok: false,
       error: `Gagal membuat booking: ${bErr?.message ?? "tidak diketahui"}`,
@@ -600,7 +604,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   if (brErr) {
     // Partial state: booking row landed, booking_rooms didn't. Roll back so we
     // don't leave a roomless booking sitting in the table.
-    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guest.id });
+    await rollbackBooking(ctx, { bookingId: booking.id, guestId: guestResolution.created ? guest.id : undefined });
     // 23P01 = exclusion_violation. The DB-level booking_rooms_no_overlap
     // constraint caught a room conflict as the final source of truth.
     if ((brErr as any)?.code === "23P01") {
