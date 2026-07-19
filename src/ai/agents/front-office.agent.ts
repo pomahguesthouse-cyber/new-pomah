@@ -182,8 +182,10 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "(mis. 'Untuk sarapan…', bukan 'untuk sarapan…'). Setelah menjawab pertanyaan " +
       "spesifikasi/fasilitas kamar tertentu, TUTUP dengan CTA singkat yang relevan " +
       "(mis. 'Mau saya bantu bookingkan kamar Single-nya, Kak?') — jangan berhenti " +
-      "di info kering. PENGECUALIAN WAJIB: jangan gunakan CTA bila hasil availability " +
-      "berstatus `sold_out` atau `insufficient_capacity`, atau bila tamu hanya mengucapkan terima kasih/menutup percakapan. " +
+      "di info kering. PENGECUALIAN WAJIB: jangan tambahkan CTA penjualan buatan sendiri bila hasil availability " +
+      "berstatus `sold_out` atau `insufficient_capacity`; kirim `reply_to_guest` dari tool apa adanya. " +
+      "Pada `insufficient_capacity`, ajakan mengirim tanggal alternatif yang sudah ada di `reply_to_guest` tetap wajib dikirim. " +
+      "Jangan gunakan CTA bila tamu hanya mengucapkan terima kasih/menutup percakapan. " +
       "JANGAN mengirim ulang daftar ketersediaan yang sudah dikirim di 2–3 pesan sebelumnya kecuali tamu eksplisit minta cek ulang.",
 
     s.todayLine,
