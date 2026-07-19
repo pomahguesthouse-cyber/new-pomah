@@ -542,6 +542,29 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
           await queueCleanupZombies(supabaseAdmin);
           const queuePhone = c.canonical_phone || c.thread_phone || event.externalChatId || customerPhone;
 
+          // Guard tambahan (durable) untuk race dua-isolate: bila entri queue
+          // dengan messageId yang sama sudah ada dalam 10 menit terakhir,
+          // JANGAN enqueue lagi — jika tidak, tamu menerima balasan ganda.
+          // In-memory dedup (isDuplicate) tidak lintas isolate Worker, dan RPC
+          // receive_whatsapp_message ON CONFLICT mengembalikan id yang sama
+          // sehingga tidak menandai duplikat via jalur early-return.
+          if (messageId) {
+            const cutoff = new Date(Date.now() - 10 * 60_000).toISOString();
+            const { data: existingQueue } = await (supabaseAdmin as any)
+              .from("wa_conversation_queue")
+              .select("id, status")
+              .eq("last_message_id", messageId)
+              .gte("created_at", cutoff)
+              .limit(1)
+              .maybeSingle();
+            if (existingQueue?.id) {
+              console.log(
+                `[Webhook] queue dedup by messageId — skip enqueue (entry=${String(existingQueue.id).slice(0, 8)} status=${existingQueue.status}) | ${logCtx}`,
+              );
+              return new Response("OK", { status: 200 });
+            }
+          }
+
           const entry = await queueUpsert(supabaseAdmin, {
             phone: queuePhone,
             threadId: c.thread_id,
@@ -550,6 +573,7 @@ export const wppWebhookPost = async ({ request }: { request: Request }): Promise
             delayMs,
             maxWaitMs,
           });
+
 
           console.log(
             `[Webhook] Enqueued (entry=${entry?.entryId?.slice(0, 8) ?? "none"} delay=${delayMs}ms) | ${logCtx}`,
