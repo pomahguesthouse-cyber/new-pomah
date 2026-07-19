@@ -447,12 +447,27 @@ export const checkRoomAvailability: ToolHandler = async (
         1,
         Math.floor(Number(r.kapasitas_maksimal_dengan_extra_bed ?? r.kapasitas_tamu ?? 1)),
       );
+      const kapasitasStandarPerKamar = Math.max(
+        1,
+        Math.floor(Number(r.kapasitas_tamu ?? 1)),
+      );
+      const kapasitasExtraBedPerKamar = Math.max(
+        0,
+        Math.floor(Number(r.kapasitas_extra_bed ?? 0)),
+      );
       return {
         room_type_id: r.room_type_id,
         nama: r.nama,
         jumlah_kamar: jumlahKamar,
+        // Alias lama tetap merepresentasikan kapasitas maksimum agar guard
+        // lintas-kamar tetap backward compatible.
         kapasitas_per_kamar: kapasitasPerKamar,
+        kapasitas_standar_per_kamar: kapasitasStandarPerKamar,
+        kapasitas_extra_bed_per_kamar: kapasitasExtraBedPerKamar,
+        kapasitas_maksimal_per_kamar: kapasitasPerKamar,
+        kapasitas_standar_total: jumlahKamar * kapasitasStandarPerKamar,
         kapasitas_total: jumlahKamar * kapasitasPerKamar,
+        tarif_extra_bed_per_malam: Number(r.tarif_extra_bed_per_malam ?? 0),
         harga_per_malam: r.harga_per_malam,
       };
     });
@@ -503,21 +518,27 @@ export const checkRoomAvailability: ToolHandler = async (
       "Tanggal alternatif hanya boleh dicek jika tamu memintanya secara eksplisit pada pesan berikutnya.";
   } else if (availabilityStatus === "insufficient_capacity") {
     const daftar = inventoriTersedia
-      .map(
-        (r) =>
-          `• ${r.nama}: ${r.jumlah_kamar} kamar tersedia, maksimal ${r.kapasitas_per_kamar} tamu/kamar`,
-      )
+      .map((r) => {
+        const extraBedText = r.kapasitas_extra_bed_per_kamar > 0
+          ? `, maksimal ${r.kapasitas_maksimal_per_kamar} tamu dengan ${r.kapasitas_extra_bed_per_kamar} extra bed/kamar`
+          : `, maksimal ${r.kapasitas_maksimal_per_kamar} tamu/kamar`;
+        return (
+          `• ${r.nama}: ${r.jumlah_kamar} kamar — ` +
+          `${r.kapasitas_standar_per_kamar} tamu standar/kamar${extraBedText}`
+        );
+      })
       .join("\n");
     replyToGuest =
       `Maaf Kak, untuk tanggal ${periode} kamar yang tersedia belum cukup untuk menampung ${guestCount} orang.\n` +
-      `Total kapasitas yang masih tersedia saat ini baru ${totalKapasitasTersedia} orang.\n\n` +
-      `Yang masih tersedia:\n${daftar}\n\n` +
-      "Kalau tanggalnya tidak bisa diubah, saat ini belum ada opsi kamar lain yang cukup di sistem.";
+      `Stok saat ini hanya dapat menampung maksimal ${totalKapasitasTersedia} orang, termasuk extra bed.\n\n` +
+      `Rinciannya:\n${daftar}\n\n` +
+      "Saran saya, cek tanggal alternatif agar tersedia kamar Family atau jumlah kamar yang lebih banyak. " +
+      "Kalau tanggalnya fleksibel, kirim 1–2 pilihan tanggal dan saya cek langsung.";
     instructionToAgent =
-      "HASIL FINAL INSUFFICIENT_CAPACITY. Seluruh inventori dan kapasitas gabungan sudah dihitung. " +
-      "Kirim `reply_to_guest` VERBATIM. JANGAN menawarkan tipe/opsi kamar lain, jangan berkata 'kalau ada', " +
-      "jangan menawarkan tanggal lain, dan jangan mengajukan pertanyaan lanjutan. " +
-      "Tanggal alternatif hanya boleh dicek jika tamu memintanya secara eksplisit pada pesan berikutnya.";
+      "HASIL FINAL INSUFFICIENT_CAPACITY UNTUK TANGGAL SAAT INI. Seluruh inventori dan kapasitas gabungan sudah dihitung. " +
+      "Kirim `reply_to_guest` VERBATIM. Jangan menawarkan tipe, kombinasi, atau extra bed yang tidak ada di hasil tool. " +
+      "Balasan ini boleh mengajak tamu mengirim tanggal alternatif, tetapi JANGAN mengarang tanggal yang tersedia. " +
+      "Jika tamu mengirim tanggal baru pada turn berikutnya, panggil ulang check_room_availability.";
   }
 
   return JSON.stringify({
@@ -536,7 +557,12 @@ export const checkRoomAvailability: ToolHandler = async (
     total_kapasitas_tersedia: totalKapasitasTersedia,
     inventori_tersedia: inventoriTersedia,
     should_offer_other_room_types: terminalAvailabilityResult ? false : undefined,
-    should_offer_alternative_dates: terminalAvailabilityResult ? false : undefined,
+    should_offer_alternative_dates:
+      availabilityStatus === "insufficient_capacity"
+        ? true
+        : terminalAvailabilityResult
+          ? false
+          : undefined,
     relay_verbatim: replyToGuest ? true : undefined,
     reply_to_guest: replyToGuest,
     instruction_to_agent: instructionToAgent,
