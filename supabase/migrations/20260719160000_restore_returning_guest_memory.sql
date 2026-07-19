@@ -55,7 +55,13 @@ BEGIN
       'first_seen_at', g.first_seen_at,
       'last_seen_at', g.last_seen_at,
       'bookings', COALESCE((
-        SELECT jsonb_agg(to_jsonb(bx) ORDER BY bx.is_upcoming DESC, bx.check_in ASC)
+        SELECT jsonb_agg(
+          to_jsonb(bx)
+          ORDER BY
+            bx.is_upcoming DESC,
+            CASE WHEN bx.is_upcoming THEN bx.check_in END ASC,
+            bx.check_in DESC
+        )
         FROM (
           SELECT
             b.id,
@@ -376,7 +382,7 @@ GRANT EXECUTE ON FUNCTION public.get_autoreply_context(text) TO anon, authentica
 -- booking column through the trigger would be noisy, so call the trigger logic
 -- with the latest booking row per guest by performing a no-op update.
 UPDATE public.bookings
-SET updated_at = updated_at
+SET guest_id = guest_id
 WHERE id IN (
   SELECT DISTINCT ON (guest_id) id
   FROM public.bookings
