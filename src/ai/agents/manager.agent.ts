@@ -174,7 +174,7 @@ export const managerAgent: AgentDefinition = {
         "  - get_bookings (booking terbaru, daftar/jadwal/laporan booking)\n" +
         "  - check_room_availability (harga + ketersediaan tanggal tertentu)\n" +
         "  - get_room_specifications (fasilitas/kapasitas/extrabed)\n" +
-        "  - update_booking_status (pending/confirmed/checked_in/checked_out/cancelled — BUKAN untuk pembayaran)\n" +
+        "  - update_booking_status (pending/confirmed/checked_in/checked_out/cancelled/expired — BUKAN untuk pembayaran)\n" +
         "  - update_payment_status (lunas/dp/belum bayar — WAJIB dipakai bila manajer bilang 'tandai lunas', 'sudah DP', dsb.)\n" +
         "  - reschedule_booking (geser/reschedule tanggal check-in/out; total otomatis dihitung ulang)\n" +
         "  - send_invoice (dengan send_to_guest=true bila manajer minta 'kirim invoice ke tamu')\n" +

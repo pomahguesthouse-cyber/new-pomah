@@ -48,6 +48,7 @@ const STATUSES = [
   { value: "checked_in", label: "Checked-In" },
   { value: "checked_out", label: "Checked-Out" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "expired", label: "Expired" },
 ] as const;
 
 const SOURCES = [

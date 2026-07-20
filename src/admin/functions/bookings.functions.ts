@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generateAndSendInvoiceNotification } from "@/services/invoice-notification.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
+import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 
 /** Untyped client view — for columns absent from the generated types. */
 function db(client: unknown): SupabaseClient {
@@ -13,13 +14,13 @@ function db(client: unknown): SupabaseClient {
 const listBookingsSchema = z.object({
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(100).default(20),
-  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]).optional(),
+  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]).optional(),
   source: z.enum(["direct", "whatsapp", "walk_in", "website", "manager_chat"]).optional(),
   search: z.string().trim().max(120).optional(),
 });
 
 const exportBookingsSchema = z.object({
-  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]).optional(),
+  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]).optional(),
   source: z.enum(["direct", "whatsapp", "walk_in", "website", "manager_chat"]).optional(),
   search: z.string().trim().max(120).optional(),
   // Optional date-range filter on check_in.
@@ -205,7 +206,7 @@ export const updateBookingStatus = createServerFn({ method: "POST" })
     z
       .object({
         id: z.string().uuid(),
-        status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]),
+        status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]),
       })
       .parse(d),
   )
@@ -262,7 +263,7 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const BOOKING_STATUS = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]);
+const BOOKING_STATUS = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]);
 const BOOKING_SOURCE = z.enum(["direct", "whatsapp", "walk_in", "website", "manager_chat"]);
 const PAYMENT_STATUS = z.enum(["unpaid", "partial", "paid"]);
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
@@ -520,6 +521,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
         paid_amount: finalPaidAmount,
         special_requests: data.special_requests || null,
         internal_notes: data.internal_notes || null,
+        expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")
       .single();

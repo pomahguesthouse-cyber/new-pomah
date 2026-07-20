@@ -69,6 +69,7 @@ import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.w
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
+import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
@@ -381,6 +382,11 @@ const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
   path: '/api/cron/process-wa-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
+  id: '/api/cron/expire-bookings',
+  path: '/api/cron/expire-bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronBookingStuckMonitorRoute =
   ApiCronBookingStuckMonitorRouteImport.update({
     id: '/api/cron/booking-stuck-monitor',
@@ -476,6 +482,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -544,6 +551,7 @@ export interface FileRoutesByTo {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -614,6 +622,7 @@ export interface FileRoutesById {
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
@@ -685,6 +694,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -822,6 +833,7 @@ export interface FileRouteTypes {
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
@@ -864,6 +876,7 @@ export interface RootRouteChildren {
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
+  ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
@@ -1297,6 +1310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/expire-bookings': {
+      id: '/api/cron/expire-bookings'
+      path: '/api/cron/expire-bookings'
+      fullPath: '/api/cron/expire-bookings'
+      preLoaderRoute: typeof ApiCronExpireBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/booking-stuck-monitor': {
       id: '/api/cron/booking-stuck-monitor'
       path: '/api/cron/booking-stuck-monitor'
@@ -1476,6 +1496,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
+  ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
