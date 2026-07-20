@@ -1518,7 +1518,13 @@ export async function executeAutoreplyForPhone(
       }
     }
 
-    // (b) Cek body identik dalam 300 detik terakhir.
+    // (b) Cek body identik / prefix mirip dalam 300 detik terakhir.
+    // Normalisasi: lowercase + collapse whitespace supaya perbedaan spasi/newline
+    // tidak lolos dedup. Prefix 140 char menangkap availability list yang sama
+    // pembukanya walau bagian akhir (mis. total) sedikit berbeda karena race.
+    const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+    const finalNorm = norm(finalReply);
+    const finalPrefix = finalNorm.slice(0, 140);
     const sinceIso = new Date(Date.now() - 300_000).toISOString();
     const { data: recentOut } = await (supabaseAdmin as any)
       .from("whatsapp_messages")
@@ -1530,15 +1536,23 @@ export async function executeAutoreplyForPhone(
       .limit(5);
     const dup = (recentOut ?? []).find((m: any) => {
       const meta = (m.metadata ?? {}) as Record<string, unknown>;
-      return meta.is_ack !== true && meta.send_status !== "failed" && (m.body ?? "").trim() === finalReply.trim();
+      if (meta.is_ack === true || meta.send_status === "failed") return false;
+      const otherNorm = norm(String(m.body ?? ""));
+      if (!otherNorm) return false;
+      if (otherNorm === finalNorm) return true;
+      // Prefix match hanya untuk balasan yang cukup panjang supaya sapaan
+      // singkat ('Halo Kak, ada yang bisa saya bantu?') tidak salah-blokir.
+      if (finalPrefix.length >= 60 && otherNorm.startsWith(finalPrefix)) return true;
+      return false;
     });
     if (dup) {
       console.warn(
         `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
-          `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, match=body)`,
+          `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, match=body/prefix)`,
       );
       return "ok";
     }
+
   } catch (e) {
     console.warn("[Autoreply] Dedup check failed (continuing):", e);
   }
