@@ -6,7 +6,7 @@ import { generateAndSendInvoiceNotification } from "@/services/invoice-notificat
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus dalam format YYYY-MM-DD");
-const bookingStatusSchema = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]);
+const bookingStatusSchema = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]);
 
 const createBookingFromAdminSchema = z.object({
   guestName: z.string().trim().min(2, "Nama tamu wajib diisi").max(120),

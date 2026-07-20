@@ -15,7 +15,7 @@ import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit
 
 export const Route = createFileRoute("/admin/bookings")({ component: BookingsPage });
 
-const STATUSES = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"] as const;
+const STATUSES = ["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"] as const;
 type BookingStatus = (typeof STATUSES)[number];
 
 const STATUS_OPTIONS = [
@@ -25,6 +25,7 @@ const STATUS_OPTIONS = [
   { value: "checked_in", label: "Checked-in" },
   { value: "checked_out", label: "Checked-out" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "expired", label: "Expired" },
 ];
 const SOURCE_OPTIONS = [
   { value: "all", label: "Semua sumber" },
@@ -45,6 +46,7 @@ function statusPillClass(status: BookingStatus) {
     case "cancelled": return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
     case "checked_in": return "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300";
     case "checked_out": return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
+    case "expired": return "bg-zinc-200 text-zinc-600 dark:bg-zinc-700/40 dark:text-zinc-400";
     default: return "bg-muted text-muted-foreground";
   }
 }

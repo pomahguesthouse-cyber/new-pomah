@@ -100,6 +100,7 @@ export async function generateAndSendInvoiceNotification({
         total_amount,
         payment_status,
         paid_amount,
+        expires_at,
         guests (
           id,
           full_name,
@@ -242,7 +243,17 @@ export async function generateAndSendInvoiceNotification({
     } else if (paymentStatus === "paid") {
       paymentLines = `• Status Pembayaran: LUNAS ✅`;
     } else {
-      paymentLines = `• Status Pembayaran: Menunggu pembayaran ⏳` + bankDetails;
+      const expiresAt = (booking as any).expires_at as string | null | undefined;
+      const deadlineText = expiresAt
+        ? `\n⏰ Batas waktu pembayaran: 1 jam sejak booking dibuat (${new Date(expiresAt).toLocaleString("id-ID", {
+            timeZone: "Asia/Jakarta",
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })} WIB). Booking otomatis dibatalkan jika belum dibayar.`
+        : "";
+      paymentLines = `• Status Pembayaran: Menunggu pembayaran ⏳` + deadlineText + bankDetails;
     }
 
     const messageBody = `Halo ${guest.full_name},

@@ -7,6 +7,7 @@
  */
 
 import { isDateString, fmtDateID } from "@/lib/date";
+import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import type { ToolContext, ToolHandler } from "./types";
@@ -555,6 +556,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
         status: "pending",
         special_requests: finalSpecialRequests || null,
         idempotency_key: idemKey ?? null,
+        expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")
       .single();

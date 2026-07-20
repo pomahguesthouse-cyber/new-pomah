@@ -29,12 +29,12 @@ export const updateBookingStatus: ToolHandler = async (
       error:
         `"${newStatus}" adalah status PEMBAYARAN, bukan status booking. ` +
         `Panggil update_payment_status untuk mengubah status pembayaran. ` +
-        `update_booking_status hanya untuk: pending, confirmed, checked_in, checked_out, cancelled.`,
+        `update_booking_status hanya untuk: pending, confirmed, checked_in, checked_out, cancelled, expired.`,
     });
   }
 
   // Allowed statuses
-  const validStatuses = ["pending", "confirmed", "checked_in", "checked_out", "cancelled"];
+  const validStatuses = ["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"];
   if (!validStatuses.includes(newStatus)) {
     return JSON.stringify({ ok: false, error: `Status tidak valid. Harus salah satu dari: ${validStatuses.join(", ")}` });
   }

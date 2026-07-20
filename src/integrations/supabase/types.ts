@@ -418,6 +418,7 @@ export type Database = {
           check_out_time: string | null
           children: number
           created_at: string
+          expires_at: string | null
           guest_id: string
           id: string
           idempotency_key: string | null
@@ -445,6 +446,7 @@ export type Database = {
           check_out_time?: string | null
           children?: number
           created_at?: string
+          expires_at?: string | null
           guest_id: string
           id?: string
           idempotency_key?: string | null
@@ -472,6 +474,7 @@ export type Database = {
           check_out_time?: string | null
           children?: number
           created_at?: string
+          expires_at?: string | null
           guest_id?: string
           id?: string
           idempotency_key?: string | null
@@ -4088,6 +4091,7 @@ export type Database = {
         | "checked_in"
         | "checked_out"
         | "cancelled"
+        | "expired"
       handoff_ticket_status:
         | "open"
         | "approved"
@@ -4240,6 +4244,7 @@ export const Constants = {
         "checked_in",
         "checked_out",
         "cancelled",
+        "expired",
       ],
       handoff_ticket_status: [
         "open",

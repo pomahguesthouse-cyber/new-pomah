@@ -11,6 +11,7 @@ import {
   resolveRoomNightlyRates,
 } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
+import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -382,6 +383,7 @@ export const submitPublicBooking = createServerFn({ method: "POST" })
         check_in_time: data.checkInTime || null,
         check_out_time: data.checkOutTime || null,
         payment_method: data.paymentMethod || null,
+        expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")
       .single();
@@ -545,6 +547,7 @@ export const submitCartBooking = createServerFn({ method: "POST" })
         check_in_time: data.checkInTime || null,
         check_out_time: data.checkOutTime || null,
         payment_method: data.paymentMethod || null,
+        expires_at: computeBookingExpiryIso(),
       })
       .select("id, reference_code")
       .single();
@@ -1299,6 +1302,7 @@ export const chatWithAI = createServerFn({ method: "POST" })
           total_amount: total,
           source: "direct",
           status: "pending",
+          expires_at: computeBookingExpiryIso(),
         })
         .select("id, reference_code")
         .single();

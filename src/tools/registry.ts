@@ -210,7 +210,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       parameters: {
         type: "object",
         properties: {
-          status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
+          status: { type: "string", description: "Status booking, misal 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'expired'" },
           payment_status: {
             description:
               "Status pembayaran. 'unpaid' = belum bayar sama sekali, 'partial' = sudah DP / bayar " +
@@ -249,7 +249,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: "object",
         properties: {
           reference_code: { type: "string", description: "Kode referensi booking (contoh: REF-1234)" },
-          status: { type: "string", description: "Status baru: 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled'" },
+          status: { type: "string", description: "Status baru: 'pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'expired' ('expired' = booking dibatalkan otomatis karena tidak dibayar dalam 1 jam; jarang di-set manual)" },
         },
         required: ["reference_code", "status"],
       },
