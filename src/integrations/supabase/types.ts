@@ -3714,6 +3714,17 @@ export type Database = {
         }
         Returns: string
       }
+      create_admin_booking_with_lock: {
+        Args: {
+          p_check_in: string
+          p_check_out: string
+          p_guest_name: string
+          p_nightly_rate: number
+          p_room_id: string
+          p_status?: string
+        }
+        Returns: string
+      }
       create_wa_correction_from_messages: {
         Args: {
           p_correct_agent?: string
@@ -3924,7 +3935,10 @@ export type Database = {
       receive_whatsapp_message:
         | {
             Args: { p_body: string; p_name: string; p_phone: string }
-            Returns: string
+            Returns: {
+              is_duplicate: boolean
+              message_id: string
+            }[]
           }
         | {
             Args: {
@@ -3933,7 +3947,10 @@ export type Database = {
               p_phone: string
               p_wpp_id?: string
             }
-            Returns: string
+            Returns: {
+              is_duplicate: boolean
+              message_id: string
+            }[]
           }
         | {
             Args: {
@@ -3979,6 +3996,15 @@ export type Database = {
         Returns: string
       }
       test_context_summary: { Args: never; Returns: string }
+      update_booking_room_with_lock: {
+        Args: {
+          p_booking_id: string
+          p_booking_room_id: string
+          p_room_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
       update_booking_state: {
         Args: { p_context: Json; p_phone: string; p_state: string }
         Returns: undefined
