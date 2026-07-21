@@ -72,26 +72,51 @@ export function parseAvailabilityDateRange(
     return { checkIn, checkOut: nextDay(checkIn) };
   }
 
+  // Hari(-hari) diikuti nama bulan, mis. "18-19 September" atau "5 Oktober".
   let m = text.match(
     /\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i,
   );
   if (m) {
     const [, d1Raw, d2Raw, monthName, yearRaw] = m;
     const month = ID_MONTHS[monthName];
-    if (!month) return null;
-    const year = resolveYear(month, yearRaw, today);
-    const checkIn = makeIsoDate(Number(d1Raw), month, year);
-    const checkOut = makeIsoDate(Number(d2Raw), month, year);
-    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+    if (month) {
+      const year = resolveYear(month, yearRaw, today);
+      const checkIn = makeIsoDate(Number(d1Raw), month, year);
+      const checkOut = makeIsoDate(Number(d2Raw), month, year);
+      if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
+    }
+  }
+
+  // Nama bulan diikuti hari(-hari), mis. "september tanggal 18-19" atau
+  // "bulan september tangga 18-19" (termasuk typo "tangga" tanpa 'l').
+  m = text.match(
+    /\b([a-z]+)\s+(?:tanggal|tangga|tgl\.?)?\s*(\d{1,2})\s*(?:(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2}))?\b/i,
+  );
+  if (m) {
+    const [, monthName, d1Raw, d2Raw] = m;
+    const month = ID_MONTHS[monthName];
+    if (month) {
+      const year = resolveYear(month, undefined, today);
+      const checkIn = makeIsoDate(Number(d1Raw), month, year);
+      if (checkIn) {
+        if (d2Raw) {
+          const checkOut = makeIsoDate(Number(d2Raw), month, year);
+          if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
+        } else {
+          return { checkIn, checkOut: nextDay(checkIn) };
+        }
+      }
+    }
   }
 
   m = text.match(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
   if (m) {
     const [, dayRaw, monthName, yearRaw] = m;
     const month = ID_MONTHS[monthName];
-    if (!month) return null;
-    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+    if (month) {
+      const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+      if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
+    }
   }
 
   m = text.match(/\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/i);

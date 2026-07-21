@@ -81,6 +81,29 @@ assert.deepEqual(parseAvailabilityDateRange("31/12/26", today), {
 });
 assert.equal(parseAvailabilityDateRange("31 Februari 2027", today), null);
 
+// Regresi: "bulan <nama_bulan> tanggal N-M" (nama bulan sebelum tanggal),
+// termasuk typo "tangga" tanpa 'l' — dulu gagal dan bot minta tanggal ulang
+// meski tamu sudah menyebutkannya (lihat isAvailabilityNeedDatesQuestion di bawah).
+assert.deepEqual(
+  parseAvailabilityDateRange("bulan september tangga 18-19 apakah masi kosong kak", today),
+  { checkIn: "2026-09-18", checkOut: "2026-09-19" },
+);
+assert.deepEqual(parseAvailabilityDateRange("september tanggal 18-19", today), {
+  checkIn: "2026-09-18",
+  checkOut: "2026-09-19",
+});
+assert.deepEqual(parseAvailabilityDateRange("september 5", today), {
+  checkIn: "2026-09-05",
+  checkOut: "2026-09-06",
+});
+assert.equal(
+  isAvailabilityNeedDatesQuestion(
+    "untuk penginapan di pomah guest house bulan september tangga 18-19 apakah masi kosong kak",
+    today,
+  ),
+  false,
+);
+
 assert.equal(shouldUseDeterministicAvailability("Ada kamar besok?"), true);
 assert.equal(shouldUseDeterministicAvailability("Ada kamar?"), false);
 assert.equal(isAvailabilityNeedDatesQuestion("Ada kamar kosong?", today), true);

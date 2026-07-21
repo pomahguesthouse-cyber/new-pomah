@@ -24,10 +24,32 @@ export interface SaveInboundResult {
 // ─── Inbound ──────────────────────────────────────────────────────────────────
 
 /**
+ * The RPC returns TABLE(message_id, is_duplicate) so callers can skip
+ * re-enqueueing/re-notifying on a detected duplicate (see
+ * 20260721080000_atomic_inbound_message_dedup.sql). Parsed defensively:
+ * `data` is an array of rows for the table-returning function, but stays a
+ * plain uuid string if this runs against a DB where that migration hasn't
+ * been applied yet (code can deploy ahead of a manually-run SQL migration).
+ */
+function parseReceiveResult(data: unknown): { messageId: string | null; isDuplicate: boolean } {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (row && typeof row === "object" && "message_id" in (row as object)) {
+    const r = row as { message_id?: string | null; is_duplicate?: boolean };
+    return { messageId: r.message_id ?? null, isDuplicate: !!r.is_duplicate };
+  }
+  return { messageId: (row as string | null) ?? null, isDuplicate: false };
+}
+
+/**
  * Persists an incoming WhatsApp message via the `receive_whatsapp_message`
- * RPC, which upserts the thread and inserts the message atomically.
+ * RPC, which upserts the thread and inserts the message atomically —
+ * including dedup (by wpp_id, or by recent identical body when no wpp_id is
+ * available) under a transaction-scoped advisory lock keyed on the phone.
+ * This closes the double-reply race that used to exist when the dedup check
+ * and the insert were two separate round-trips from application code (see
+ * 20260721080000_atomic_inbound_message_dedup.sql for the incident history).
  *
- * Returns the new message UUID.
+ * Returns the message UUID (new or pre-existing duplicate).
  */
 export async function saveInboundMessage(
   client: AnyClient,
@@ -48,50 +70,6 @@ export async function saveInboundMessage(
       ? { ...(withWppId ?? { ...rpcParams, p_wpp_id: null }), p_external_chat_id: externalChatId }
       : null;
 
-  if (withWppId) {
-    const existing = await (client as any)
-      .from("whatsapp_messages")
-      .select("id")
-      .eq("wpp_id", withWppId.p_wpp_id)
-      .limit(1)
-      .maybeSingle();
-
-    if (!existing.error && existing.data?.id) {
-      return { messageId: existing.data.id as string, duplicate: true, error: null };
-    }
-  } else {
-    // Dedup durable TANPA wpp_id (webchat/simulator, atau provider yang
-    // tidak mengirim ID): pesan identik dari nomor sama dalam 20 detik
-    // dianggap duplikat. Insiden 4 Jul 2026: simulator menembak webhook 2×
-    // berselisih 360ms → dedup in-memory kalah (isolate Worker berbeda) →
-    // dua entry antrian → tamu menerima dua balasan AI untuk satu pesan.
-    try {
-      const { data: thread } = await (client as any)
-        .from("whatsapp_threads")
-        .select("id")
-        .eq("phone", params.phone)
-        .maybeSingle();
-      if (thread?.id) {
-        const cutoff = new Date(Date.now() - 20_000).toISOString();
-        const { data: recent } = await (client as any)
-          .from("whatsapp_messages")
-          .select("id")
-          .eq("thread_id", thread.id)
-          .eq("direction", "in")
-          .eq("body", params.body)
-          .gte("created_at", cutoff)
-          .limit(1)
-          .maybeSingle();
-        if (recent?.id) {
-          return { messageId: recent.id as string, duplicate: true, error: null };
-        }
-      }
-    } catch (e) {
-      // Non-fatal — bila cek dedup gagal, lanjut simpan seperti biasa.
-      console.warn("[MessageRepo] durable body-dedup check failed (continuing):", e);
-    }
-  }
-
   const { data, error } = withExternalChatId
     ? await (client as any).rpc("receive_whatsapp_message", withExternalChatId)
     : withWppId
@@ -103,12 +81,14 @@ export async function saveInboundMessage(
     const fallbackParams = withExternalChatId && withWppId ? withWppId : rpcParams;
     const fallback = await (client as any).rpc("receive_whatsapp_message", fallbackParams);
     if (!fallback.error) {
-      return { messageId: fallback.data as string | null, error: null };
+      const { messageId, isDuplicate } = parseReceiveResult(fallback.data);
+      return { messageId, duplicate: isDuplicate, error: null };
     }
     if (fallbackParams !== rpcParams && ((fallback.error as any).code === "PGRST202" || String((fallback.error as any).message).includes("function"))) {
       const legacy = await (client as any).rpc("receive_whatsapp_message", rpcParams);
       if (!legacy.error) {
-        return { messageId: legacy.data as string | null, error: null };
+        const { messageId, isDuplicate } = parseReceiveResult(legacy.data);
+        return { messageId, duplicate: isDuplicate, error: null };
       }
       void reportRpcFailure(client, "receive_whatsapp_message", legacy.error, {
         phone: params.phone,
@@ -142,7 +122,8 @@ export async function saveInboundMessage(
     };
   }
 
-  return { messageId: data as string | null, error: null };
+  const { messageId, isDuplicate } = parseReceiveResult(data);
+  return { messageId, duplicate: isDuplicate, error: null };
 }
 
 /** Helper internal: laporkan kegagalan RPC ke super_admin tanpa memblokir. */
