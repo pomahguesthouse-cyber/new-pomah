@@ -289,11 +289,27 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
 
     for (const number of candidates) {
       const hasMedia = !!input.fileUrl;
+      // Deteksi tipe media supaya WhatsApp merender preview (image/video) alih-alih
+      // mengirim sebagai dokumen mentah — brosur foto kamar wajib "image".
+      const guessMediatype = (): "image" | "video" | "audio" | "document" => {
+        const src = `${input.fileUrl ?? ""} ${input.filename ?? ""}`.toLowerCase();
+        if (/\.(jpe?g|png|webp|gif|heic|heif|bmp)(\?|$)/.test(src)) return "image";
+        if (/\.(mp4|mov|3gp|mkv|webm)(\?|$)/.test(src)) return "video";
+        if (/\.(mp3|ogg|opus|wav|m4a|aac)(\?|$)/.test(src)) return "audio";
+        return "document";
+      };
+      const mediatype = hasMedia ? guessMediatype() : "document";
       const url = evolutionEndpoint(hasMedia ? "message/sendMedia" : "message/sendText");
       const payload = hasMedia
         ? {
             number,
-            mediatype: "document",
+            mediatype,
+            mimetype:
+              mediatype === "image"
+                ? "image/jpeg"
+                : mediatype === "video"
+                  ? "video/mp4"
+                  : undefined,
             media: input.fileUrl,
             fileName: input.filename ?? "file",
             caption: input.message ?? "",
@@ -302,6 +318,7 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
             number,
             text: input.message,
           };
+
 
       const res = await fetch(url, {
         method: "POST",
