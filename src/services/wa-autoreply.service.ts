@@ -1125,7 +1125,10 @@ export async function executeAutoreplyForPhone(
     quickAckTimer = setTimeout(() => {
       void (async () => {
         try {
-          // (1) Cek existing ack untuk entry ini.
+          // (1) Cek existing ack untuk entry ini ATAU ack terkirim <60s ke
+          // thread ini (dedup issue #1: filler "cekkan dulu" bocor berulang
+          // saat tamu kirim beberapa pesan cepat berturut-turut, masing-
+          // masing memicu queue entry baru dengan timer 6s sendiri).
           const { data: existingAck } = await (supabaseAdmin as any)
             .from("whatsapp_messages")
             .select("id")
@@ -1135,6 +1138,18 @@ export async function executeAutoreplyForPhone(
             .filter("metadata->>is_ack", "eq", "true")
             .limit(1);
           if ((existingAck ?? []).length > 0) return;
+
+          const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
+          const { data: recentAck } = await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .select("id")
+            .eq("thread_id", c.thread_id)
+            .eq("direction", "out")
+            .filter("metadata->>is_ack", "eq", "true")
+            .gte("sent_at", sixtySecAgo)
+            .limit(1);
+          if ((recentAck ?? []).length > 0) return;
+
 
           // (2) Persist-then-send + race guard: tulis baris ack 'pending'
           // dulu, lalu pastikan baris kita yang paling awal. Kalau bukan,

@@ -909,11 +909,25 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
 
   // Tanggal: kalau tamu menyebut check-in & check-out baru di pesan ini, pakai
   // itu; kalau tidak, pertahankan agreedDates yang sudah ada.
-  const mergedCheckIn = liveSlots.check_in ?? input.agentCtx.agreedDates?.checkIn;
-  const mergedCheckOut = liveSlots.check_out ?? input.agentCtx.agreedDates?.checkOut;
+  //
+  // GUARD (issue #5, insiden 22-23 Sep): flexible-slot-extractor kadang menarik
+  // tanggal dari frase pendek tak-eksplisit ("kalau yg ini apakah type kamar…")
+  // sehingga menimpa tanggal booking aktif tamu. Bila tamu punya
+  // activeBookingContext DAN pesan terakhir tidak mengandung sinyal tanggal
+  // eksplisit, TOLAK liveSlots.check_in agar agreedDates tidak drift.
+  const hasExplicitDateSignal = /\b(hari ini|malam ini|nanti malam|besok|lusa|minggu depan|akhir minggu|weekend|jan(uari)?|feb(ruari)?|mar(et)?|apr(il)?|mei|jun[i]?|jul[i]?|agu(stus)?|sep(t(ember)?)?|okt(ober)?|nov(ember)?|des(ember)?|\d{1,2}[\/.\-]\d{1,2}|tanggal\s+\d{1,2})\b/i.test(
+    lastUserMsg,
+  );
+  const shouldAcceptLiveDates =
+    hasExplicitDateSignal || !input.agentCtx.activeBookingContext;
+  const mergedCheckIn =
+    (shouldAcceptLiveDates ? liveSlots.check_in : undefined) ?? input.agentCtx.agreedDates?.checkIn;
+  const mergedCheckOut =
+    (shouldAcceptLiveDates ? liveSlots.check_out : undefined) ?? input.agentCtx.agreedDates?.checkOut;
   if (mergedCheckIn && mergedCheckOut) {
     input.agentCtx.agreedDates = { checkIn: mergedCheckIn, checkOut: mergedCheckOut };
   }
+
 
   // Tipe kamar / jumlah tamu: merge live extraction di atas nilai prior.
   const mergedRoomType = liveSlots.room_type ?? input.agentCtx.partialBooking?.roomType;
