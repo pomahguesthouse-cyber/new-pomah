@@ -329,6 +329,18 @@ export function WalkthroughBuilderView() {
     }
   }
 
+  // Persist a dragged hotspot's new position. Optimistic local update — the
+  // viewer already moved it live and its rebuild key ignores pitch/yaw, so no
+  // camera reset. No full reload needed.
+  async function moveHotspot(id: string, pitch: number, yaw: number) {
+    setHotspots((prev) => prev.map((h) => (h.id === id ? { ...h, pitch, yaw } : h)));
+    const { error } = await sb.from("walkthrough_hotspots").update({ pitch, yaw }).eq("id", id);
+    if (error) {
+      toast.error("Gagal menyimpan posisi hotspot");
+      void reload(roomTypeId);
+    }
+  }
+
   async function togglePublish(next: boolean) {
     if (!tour) return;
     if (next && scenes.length === 0) {
@@ -548,10 +560,11 @@ export function WalkthroughBuilderView() {
                     editable
                     onPick={(c) => setPick(c)}
                     onSceneChange={(id) => setSelectedSceneId(id)}
+                    onHotspotDragEnd={moveHotspot}
                   />
                   <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/60 px-2 py-1 text-[10px] text-white">
                     <MapPin className="mr-1 inline h-3 w-3" />
-                    Klik panorama untuk menaruh hotspot
+                    Klik untuk menaruh hotspot · seret hotspot untuk memindahkan
                   </div>
                 </div>
 

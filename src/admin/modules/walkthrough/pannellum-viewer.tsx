@@ -35,6 +35,8 @@ type Props = {
   onPick?: (coords: { pitch: number; yaw: number }) => void;
   /** Fired when the viewer switches scene (e.g. user clicks a scene hotspot). */
   onSceneChange?: (sceneId: string) => void;
+  /** Fired after dragging an existing hotspot to a new position (editable mode). */
+  onHotspotDragEnd?: (hotspotId: string, pitch: number, yaw: number) => void;
   className?: string;
 };
 
@@ -89,6 +91,7 @@ export function Pannellum360Viewer({
   editable = false,
   onPick,
   onSceneChange,
+  onHotspotDragEnd,
   className,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -96,15 +99,22 @@ export function Pannellum360Viewer({
   // Keep latest callbacks without forcing a viewer rebuild.
   const onPickRef = useRef(onPick);
   const onSceneChangeRef = useRef(onSceneChange);
+  const onHotspotDragEndRef = useRef(onHotspotDragEnd);
   onPickRef.current = onPick;
   onSceneChangeRef.current = onSceneChange;
+  onHotspotDragEndRef.current = onHotspotDragEnd;
+  // Timestamp of the last hotspot drag so we can suppress the click that would
+  // otherwise be interpreted as "place a new hotspot".
+  const lastDragEndRef = useRef(0);
 
-  // Rebuild only when the scene graph or starting scene actually changes.
+  // Rebuild only when the scene graph structurally changes. NOTE: hotspot
+  // pitch/yaw are intentionally excluded so dragging a hotspot (which Pannellum
+  // already moves live) doesn't force a full rebuild that resets the camera.
   const graphKey = JSON.stringify(
     scenes.map((s) => ({
       i: s.id,
       u: s.imageUrl,
-      h: s.hotspots.map((h) => ({ p: h.pitch, y: h.yaw, t: h.type, g: h.targetSceneId, l: h.label })),
+      h: s.hotspots.map((h) => ({ i: h.id, t: h.type, g: h.targetSceneId, l: h.label })),
     })),
   );
 
@@ -131,6 +141,24 @@ export function Pannellum360Viewer({
       const first =
         (firstSceneId && scenes.find((s) => s.id === firstSceneId)?.id) || scenes[0].id;
 
+      // Drag handler shared by all hotspots in editable mode. Pannellum calls
+      // this on mousedown/move/up during a drag; on release we read the new
+      // pointer position and persist it. `args` carries the hotspot id.
+      const dragHandler = (e: MouseEvent | TouchEvent, args: any) => {
+        const type = (e as Event).type;
+        if (type === "mouseup" || type === "touchend") {
+          lastDragEndRef.current = Date.now();
+          try {
+            const coords = viewerRef.current?.mouseEventToCoords(e);
+            if (Array.isArray(coords) && coords.length >= 2 && args?.id) {
+              onHotspotDragEndRef.current?.(args.id, coords[0], coords[1]);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+
       const sceneConfig: Record<string, any> = {};
       for (const s of scenes) {
         sceneConfig[s.id] = {
@@ -138,16 +166,22 @@ export function Pannellum360Viewer({
           panorama: s.imageUrl,
           title: s.title ?? undefined,
           hotSpots: s.hotspots.map((h) => {
-            if (h.type === "scene" && h.targetSceneId) {
-              return {
-                pitch: h.pitch,
-                yaw: h.yaw,
-                type: "scene",
-                text: h.label || scenes.find((x) => x.id === h.targetSceneId)?.title || "Pindah ruangan",
-                sceneId: h.targetSceneId,
-              };
+            const base: any =
+              h.type === "scene" && h.targetSceneId
+                ? {
+                    pitch: h.pitch,
+                    yaw: h.yaw,
+                    type: "scene",
+                    text: h.label || scenes.find((x) => x.id === h.targetSceneId)?.title || "Pindah ruangan",
+                    sceneId: h.targetSceneId,
+                  }
+                : { pitch: h.pitch, yaw: h.yaw, type: "info", text: h.label || "Info" };
+            if (editable && h.id) {
+              base.draggable = true;
+              base.dragHandlerFunc = dragHandler;
+              base.dragHandlerArgs = { id: h.id };
             }
-            return { pitch: h.pitch, yaw: h.yaw, type: "info", text: h.label || "Info" };
+            return base;
           }),
         };
       }
@@ -172,6 +206,8 @@ export function Pannellum360Viewer({
         // Click to capture pitch/yaw for placing a hotspot.
         const el = containerRef.current;
         const handler = (ev: MouseEvent) => {
+          // Ignore the click that ends a hotspot drag.
+          if (Date.now() - lastDragEndRef.current < 300) return;
           try {
             const coords = viewer.mouseEventToCoords(ev);
             if (Array.isArray(coords) && coords.length >= 2) {
