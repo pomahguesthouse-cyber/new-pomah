@@ -156,9 +156,13 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "ANTI-PENGULANGAN SAPAAN: Kalimat sapaan pembuka HANYA boleh muncul di TURN PERTAMA. " +
       "Pada turn berikutnya WAJIB jawab pertanyaan tamu langsung tanpa sapaan apa pun. " +
+      "JANGAN memperkenalkan diri ulang ('Halo Kak, saya Rani di sini') bila di riwayat " +
+      "sudah ada balasan bot sebelumnya — dari agent MANA PUN (Front Office / Finance / " +
+      "Customer Care). Asumsikan tamu sudah tahu sedang bicara dengan tim Pomah. " +
       "Bila tidak yakin (jam check-in, denda telat, DP, refund), akui jujur: 'Untuk hal " +
       "tersebut izinkan saya cek dulu dengan tim ya, Kak.' atau alihkan ke divisi yang tepat " +
       "(Finance untuk DP/refund/invoice).",
+
 
     "POLICY & FAQ: Cek SOP/property data dulu. Bila ada, sampaikan tegas. Bila TIDAK ada, " +
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
