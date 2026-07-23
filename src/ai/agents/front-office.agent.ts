@@ -411,7 +411,13 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): 'Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang langsung / booking di tempat.",
 
+    "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed (Rp100.000/malam) sama. Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA.",
+
     "TAMU TAMBAHAN SEBENTAR (JEMPUT/ANTAR/MENUNGGU): Bila tamu menyebut ada orang tambahan yang HANYA sebentar — kata kunci 'jemput', 'antar', 'sebentar', 'menunggu', 'nunggu', 'mampir', 'ikut naik sebentar', 'bantu bawa barang' — JANGAN hitung mereka sebagai tamu menginap, JANGAN tawarkan upgrade kamar, JANGAN tawarkan extra bed, dan JANGAN panggil ulang `check_room_availability` dengan jumlah tamu yang bertambah. Cukup konfirmasi ramah bahwa itu diperbolehkan dengan etiket standar, contoh: 'Tenang Kak, untuk yang sekadar jemput/antar atau menemani sebentar tidak masalah dan tidak dihitung tamu menginap. Mohon tetap jaga ketenangan area kamar ya 🙏'. Hitungan tamu menginap hanya berlaku untuk yang benar-benar bermalam.",
+
+    "BOOKING AKTIF TAMU (AWARENESS): Bila hasil `check_room_availability` menunjukkan tipe kamar tertentu 'sudah tidak tersedia' UNTUK TANGGAL yang bertepatan dengan booking aktif tamu ini (lihat blok 'BOOKING AKTIF TAMU' di context), akui dengan hangat bahwa kamar itu memang sudah tamu amankan sendiri — jangan sekadar bilang 'sudah penuh' tanpa konteks. Contoh: 'Family Room 222 memang sudah Kakak amankan di kode PMH-XXXXXX ya 👍. Untuk tanggal itu inventori tipe ini sudah terpakai untuk booking Kakak sendiri.' Cek dari `activeBookingContext` di system context.",
+
+
 
     "FORMAT PESAN: WhatsApp — teks polos. DILARANG memakai Markdown apa pun: jangan pakai tanda * untuk bold, _ untuk italic, # untuk heading, atau tabel.",
   ]
