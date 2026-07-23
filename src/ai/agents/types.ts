@@ -101,6 +101,22 @@ export interface AgentContext {
    * dari `wa_booking_states.slots`.
    */
   partialBooking?: { roomType?: string; adults?: number; children?: number };
+  /**
+   * An existing (pending/confirmed) booking already on file for this guest's
+   * phone number, with the rates locked in at booking time. Injected so the
+   * agent references the agreed price instead of re-quoting a fresh (possibly
+   * higher, dynamically-priced) rate for a stay the guest already reserved.
+   */
+  activeBooking?: {
+    referenceCode: string;
+    checkIn: string;
+    checkOut: string;
+    status: string;
+    paymentStatus?: string | null;
+    totalAmount: number;
+    paidAmount?: number | null;
+    rooms: Array<{ name: string; nightlyRate: number }>;
+  };
   /** The WhatsApp number the guest is chatting from (raw, e.g. "628123..."). */
   chatPhone?: string;
   /**

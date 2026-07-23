@@ -7,6 +7,8 @@ import { saveOutboundMessage, updateThreadAutoReplyMeta } from "@/repositories/m
 import { sendWhatsAppMessage, markWppSeen, setWppTyping } from "@/services/whatsapp.service";
 import { runMultiAgentOrchestration, deriveAgentLabelFromKey } from "@/ai/multi-agent-orchestrator";
 import { fmtDateID, nextDay, todayWIB } from "@/lib/date";
+import { phoneVariants } from "@/lib/phone";
+import type { AgentContext } from "@/ai/agents/types";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
 import {
   findSessionStartIndex,
@@ -83,6 +85,67 @@ export {
   normalizePhone,
   resolveManagerByPhone,
 };
+
+/**
+ * Load the guest's most recent active (pending/confirmed) booking for their
+ * phone number, with the per-room rates locked in at booking time. Injected
+ * into the agent context so price questions about an already-reserved stay are
+ * answered from the agreed price rather than a fresh dynamic quote. Best-effort
+ * and lightweight (indexed lookups); never throws — returns null on any issue.
+ */
+async function loadActiveBookingContext(
+  phone: string,
+  rooms: Array<{ id: string; name?: string | null }>,
+): Promise<AgentContext["activeBooking"] | null> {
+  try {
+    const variants = phoneVariants(phone);
+    if (variants.length === 0) return null;
+    const { data: guestRows } = await (supabaseAdmin as any)
+      .from("guests")
+      .select("id")
+      .in("phone", variants)
+      .limit(20);
+    const guestIds = ((guestRows ?? []) as Array<{ id: string }>).map((g) => g.id);
+    if (guestIds.length === 0) return null;
+
+    const { data: booking } = await (supabaseAdmin as any)
+      .from("bookings")
+      .select("id, reference_code, check_in, check_out, status, payment_status, total_amount, paid_amount")
+      .in("guest_id", guestIds)
+      .in("status", ["pending", "confirmed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!booking?.reference_code) return null;
+
+    const { data: brRows } = await (supabaseAdmin as any)
+      .from("booking_rooms")
+      .select("room_type_id, nightly_rate")
+      .eq("booking_id", booking.id);
+
+    const nameById = new Map<string, string>(
+      (rooms ?? []).map((r) => [r.id, String(r.name ?? "Kamar")]),
+    );
+    const bookedRooms = ((brRows ?? []) as Array<{ room_type_id: string; nightly_rate: number }>).map((r) => ({
+      name: nameById.get(r.room_type_id) ?? "Kamar",
+      nightlyRate: Number(r.nightly_rate ?? 0),
+    }));
+
+    return {
+      referenceCode: String(booking.reference_code),
+      checkIn: String(booking.check_in),
+      checkOut: String(booking.check_out),
+      status: String(booking.status),
+      paymentStatus: booking.payment_status ?? null,
+      totalAmount: Number(booking.total_amount ?? 0),
+      paidAmount: booking.paid_amount != null ? Number(booking.paid_amount) : null,
+      rooms: bookedRooms,
+    };
+  } catch (e) {
+    console.warn("[Autoreply] loadActiveBookingContext failed (non-fatal):", e);
+    return null;
+  }
+}
 
 /**
  * Pasangkan hasil pengiriman WA dengan log upaya kirim form booking.
@@ -1294,6 +1357,13 @@ export async function executeAutoreplyForPhone(
         ? getLastNInboundMessages(rollingMessages, consecutiveInbound)
         : undefined;
 
+      // Surface any existing booking (with locked-in prices) so the agent
+      // honours the agreed rate instead of re-quoting a fresh dynamic price
+      // for a stay the guest already reserved. Best-effort, never blocks.
+      const activeBooking = isManager
+        ? null
+        : await loadActiveBookingContext(phone, (rooms || []) as Array<{ id: string; name?: string | null }>);
+
       orchResult = await runMultiAgentOrchestration({
         phone,
         isManager,
@@ -1307,6 +1377,7 @@ export async function executeAutoreplyForPhone(
           lastMessage,
           chatSummary,
           chatSummaryJson,
+          activeBooking: activeBooking ?? undefined,
           managerName: manager?.name ?? (isManager ? "Admin" : undefined),
           mode: isManager ? "managerial" : undefined,
           recoveryMode,

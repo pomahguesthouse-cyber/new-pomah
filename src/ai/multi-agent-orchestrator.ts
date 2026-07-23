@@ -388,6 +388,27 @@ async function runAgent(
       `Kalau tamu memulai topik baru atau menyebut tanggal lain, abaikan default ini.`;
   }
 
+  if (agentCtx.activeBooking?.referenceCode) {
+    const ab = agentCtx.activeBooking;
+    const idr = (n: number) => `Rp${Math.round(n).toLocaleString("id-ID")}`;
+    const roomLines = ab.rooms
+      .map((r) => `  - ${r.name}: ${idr(r.nightlyRate)}/malam (harga terkunci)`)
+      .join("\n");
+    systemPrompt +=
+      `\n\n[BOOKING TAMU YANG SUDAH ADA — SUMBER KEBENARAN HARGA]\n` +
+      `Tamu ini SUDAH punya booking aktif atas nomornya:\n` +
+      `• Kode booking: ${ab.referenceCode}\n` +
+      `• Menginap: ${ab.checkIn} → ${ab.checkOut}\n` +
+      `• Status: ${ab.status}${ab.paymentStatus ? ` / pembayaran: ${ab.paymentStatus}` : ""}\n` +
+      (roomLines ? `• Kamar & harga yang sudah disepakati:\n${roomLines}\n` : "") +
+      `• Total: ${idr(ab.totalAmount)}` +
+      (ab.paidAmount && ab.paidAmount > 0 ? `, sudah dibayar ${idr(ab.paidAmount)}` : "") +
+      `\nATURAN: Jika tamu bertanya soal harga/kamar untuk booking yang SAMA ini, ` +
+      `pakai HARGA TERKUNCI di atas — JANGAN meng-quote ulang harga dinamis terbaru ` +
+      `yang bisa berbeda. Jangan menaikkan harga yang sudah disepakati. Kalau tamu ` +
+      `minta tanggal/kamar BARU di luar booking ini, barulah cek harga terkini seperti biasa.`;
+  }
+
   if (agentCtx.bookingInProgress) {
     systemPrompt += `\n\n[INFO BOOKING INTERRUPT]`;
     systemPrompt += `\nSaat ini tamu sedang berada di tengah-tengah proses booking (fase pengumpulan data).`;
