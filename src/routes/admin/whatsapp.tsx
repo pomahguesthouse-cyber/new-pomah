@@ -189,6 +189,53 @@ function conversationNameLabel(thread: { phone?: string | null; display_name?: s
   return name;
 }
 
+/** True when display_name is a genuine human/business name (not a phone, LID, or session id). */
+function hasRealName(thread: { phone?: string | null; display_name?: string | null }): boolean {
+  const name = String(thread.display_name ?? "").trim();
+  if (!name || looksLikeSession(name) || looksLikePhone(name)) return false;
+  const phoneDigits = digitsOnly(thread.phone);
+  const nameDigits = digitsOnly(name);
+  if (phoneDigits && nameDigits && phoneDigits === nameDigits) return false;
+  // A very long all-digit string is a WhatsApp LID, not a name.
+  if (/^\d{16,}$/.test(name.replace(/\s/g, ""))) return false;
+  return true;
+}
+
+/**
+ * Canonical Indonesian phone form used to detect the same contact appearing as
+ * multiple threads (08xxx vs 62xxx vs bare 8xxx). WhatsApp LIDs (very long
+ * numeric ids) are returned as-is — they only merge with a real number when
+ * both threads share a guest_id.
+ */
+function canonicalPhone(raw?: string | null): string {
+  let n = digitsOnly(raw);
+  if (!n) return "";
+  if (n.startsWith("620")) n = "62" + n.slice(3);
+  else if (n.startsWith("0")) n = "62" + n.slice(1);
+  else if (/^8\d{7,13}$/.test(n)) n = "62" + n;
+  return n;
+}
+
+/** Human-friendly "+62…" for a real phone; null for LIDs/invalid. */
+function prettyPhone(raw?: string | null): string | null {
+  const n = canonicalPhone(raw);
+  if (n.length < 9 || n.length > 15) return null;
+  return "+" + n;
+}
+
+/** Best label to show for a contact row: real name → pretty phone → generic. */
+function contactDisplay(thread: { phone?: string | null; display_name?: string | null }): string {
+  if (hasRealName(thread)) return String(thread.display_name).trim();
+  return prettyPhone(thread.phone) ?? "Tamu WA";
+}
+
+/** Avatar initials: from a real name, else last 2 phone digits, else "WA". */
+function contactInitials(thread: { phone?: string | null; display_name?: string | null }): string {
+  if (hasRealName(thread)) return initials(String(thread.display_name).trim());
+  const d = digitsOnly(thread.phone);
+  return d ? d.slice(-2) : "WA";
+}
+
 export function WhatsAppPage() {
   const listFn = useServerFn(listThreads);
   const getFn = useServerFn(getThread);
@@ -239,8 +286,41 @@ export function WhatsAppPage() {
   const [manualAlertNote, setManualAlertNote] = useState("");
   const [rightOpen, setRightOpen] = useState(true);
 
+  // Collapse duplicate threads for the same contact (08xxx/62xxx variants, or
+  // a WhatsApp LID + real number linked to the same guest) into a single row.
+  // Keep the most recent thread as representative, sum unread, keep pinned.
+  const dedupedThreads = useMemo(() => {
+    const groups = new Map<string, typeof threads>();
+    for (const t of threads) {
+      const key = t.guest_id ? `g:${t.guest_id}` : `p:${canonicalPhone(t.phone) || t.id}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(t);
+      else groups.set(key, [t]);
+    }
+    const merged = Array.from(groups.values()).map((group) => {
+      if (group.length === 1) return group[0];
+      const newest = group.reduce((a, b) => (b.last_message_at > a.last_message_at ? b : a));
+      const unread = group.reduce((s, t) => s + (t.unread_count ?? 0), 0);
+      const pinned = group.some((t) => t.pinned);
+      // Prefer a representative that actually has a real contact name.
+      const named = group.find((t) => hasRealName(t));
+      return {
+        ...newest,
+        display_name: named?.display_name ?? newest.display_name,
+        unread_count: unread,
+        pinned,
+        _mergedCount: group.length,
+      } as (typeof threads)[number] & { _mergedCount?: number };
+    });
+    // Stable order: pinned first, then most recent activity.
+    return merged.sort((a, b) => {
+      if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      return a.last_message_at > b.last_message_at ? -1 : a.last_message_at < b.last_message_at ? 1 : 0;
+    });
+  }, [threads]);
+
   const filteredThreads = useMemo(() => {
-    return threads.filter((t) => {
+    return dedupedThreads.filter((t) => {
       const matchSearch =
         !search ||
         (t.display_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -254,7 +334,7 @@ export function WhatsAppPage() {
             : t.status === filter;
       return matchSearch && matchFilter;
     });
-  }, [threads, search, filter]);
+  }, [dedupedThreads, search, filter]);
 
   const current = activeId ?? filteredThreads[0]?.id ?? null;
 
@@ -512,7 +592,7 @@ export function WhatsAppPage() {
                     <div className="flex items-start gap-3">
                       <Avatar className="h-9 w-9 shrink-0">
                         <AvatarFallback className="text-[11px] font-semibold">
-                          {initials(t.display_name, t.phone)}
+                          {contactInitials(t)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
@@ -520,8 +600,17 @@ export function WhatsAppPage() {
                           <div className="flex min-w-0 items-center gap-1.5">
                             {t.pinned && <Pin className="h-3 w-3 shrink-0 text-amber-500" />}
                             <p className="truncate text-sm font-semibold">
-                              {t.display_name ?? t.phone}
+                              {contactDisplay(t)}
                             </p>
+                            {((t as any)._mergedCount ?? 0) > 1 && (
+                              <span
+                                title={`${(t as any)._mergedCount} percakapan digabung`}
+                                className="flex items-center gap-0.5 shrink-0 rounded-full border border-border px-1 text-[9px] text-muted-foreground"
+                              >
+                                <GitMerge className="h-2.5 w-2.5" />
+                                {(t as any)._mergedCount}
+                              </span>
+                            )}
                           </div>
                           <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
                             {timeAgo(t.last_message_at)}
@@ -538,12 +627,14 @@ export function WhatsAppPage() {
                           {t.last_message_preview}
                         </p>
                         <div className="mt-1.5 flex items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}
-                          >
-                            {intent.label}
-                          </Badge>
+                          {t.intent && t.intent !== "other" && (
+                            <Badge
+                              variant="outline"
+                              className={cn("h-4 px-1.5 text-[9px] font-medium", intent.className)}
+                            >
+                              {intent.label}
+                            </Badge>
+                          )}
                           {(t as any).ai_auto === false ? (
                             <Badge
                               variant="outline"
