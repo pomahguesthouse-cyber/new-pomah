@@ -93,10 +93,12 @@ function injectHotspotStyles() {
   const style = document.createElement("style");
   style.id = "walk-hotspot-styles";
   style.textContent = `
-.walk-hotspot-always{width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:pointer;}
-.walk-hotspot-always.walk-info{background:#f59e0b;}
-.walk-hotspot-always .walk-hotspot-label{position:absolute;left:50%;bottom:150%;transform:translateX(-50%);white-space:nowrap;background:rgba(17,17,17,.82);color:#fff;padding:3px 8px;border-radius:8px;font:500 11px/1.2 system-ui,-apple-system,sans-serif;pointer-events:none;}
-.walk-hotspot-always .walk-hotspot-label::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(17,17,17,.82);}
+.walk-hotspot{position:absolute;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.35),0 1px 5px rgba(0,0,0,.45);cursor:pointer;transition:transform .1s ease;}
+.walk-hotspot:hover{transform:scale(1.18);}
+.walk-hotspot.walk-info{background:#f59e0b;}
+.walk-hotspot .walk-hotspot-label{position:absolute;left:50%;bottom:150%;transform:translateX(-50%);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;background:rgba(17,17,17,.85);color:#fff;padding:3px 9px;border-radius:8px;font:500 12px/1.2 system-ui,-apple-system,sans-serif;pointer-events:none;opacity:0;transition:opacity .12s ease;}
+.walk-hotspot .walk-hotspot-label::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(17,17,17,.85);}
+.walk-hotspot:hover .walk-hotspot-label,.walk-hotspot.walk-always .walk-hotspot-label{opacity:1;}
 `;
   document.head.appendChild(style);
 }
@@ -191,18 +193,20 @@ export function Pannellum360Viewer({
               h.type === "scene" && h.targetSceneId
                 ? { pitch: h.pitch, yaw: h.yaw, type: "scene", text, sceneId: h.targetSceneId }
                 : { pitch: h.pitch, yaw: h.yaw, type: "info", text };
-            // Always-visible label: replace the default hover tooltip with a
-            // custom marker that renders the label permanently.
-            if (h.labelMode === "always") {
-              base.cssClass = `walk-hotspot-always${h.type === "info" ? " walk-info" : ""}`;
-              base.createTooltipFunc = (div: HTMLElement, args: any) => {
-                const span = document.createElement("span");
-                span.className = "walk-hotspot-label";
-                span.textContent = args.text;
-                div.appendChild(span);
-              };
-              base.createTooltipArgs = { text };
-            }
+            // Always render our own marker + label (don't rely on Pannellum's
+            // default sprite icon / tooltip, which often fail to show). The
+            // label is revealed on hover, or kept visible when labelMode is
+            // "always" (via the .walk-always CSS class).
+            base.cssClass =
+              `walk-hotspot ${h.type === "info" ? "walk-info" : "walk-scene"}` +
+              (h.labelMode === "always" ? " walk-always" : "");
+            base.createTooltipFunc = (div: HTMLElement, args: any) => {
+              const span = document.createElement("span");
+              span.className = "walk-hotspot-label";
+              span.textContent = args.text;
+              div.appendChild(span);
+            };
+            base.createTooltipArgs = { text };
             if (editable && h.id) {
               base.draggable = true;
               base.dragHandlerFunc = dragHandler;
