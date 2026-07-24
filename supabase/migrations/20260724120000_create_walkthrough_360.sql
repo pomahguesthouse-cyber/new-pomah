@@ -61,6 +61,8 @@ create table if not exists public.walkthrough_hotspots (
   target_scene_id uuid references public.walkthrough_scenes(id) on delete cascade,
   type            text not null default 'scene' check (type in ('scene', 'info')),
   label           text,
+  -- 'hover' = show label only on hover (default), 'always' = label always visible.
+  label_mode      text not null default 'hover' check (label_mode in ('hover', 'always')),
   pitch           numeric not null default 0,
   yaw             numeric not null default 0,
   created_at      timestamptz not null default now()

@@ -54,7 +54,7 @@ async function loadTour(slug: string): Promise<TourData> {
   const { data: hsRows } = ids.length
     ? await sb
         .from("walkthrough_hotspots")
-        .select("id, scene_id, target_scene_id, type, label, pitch, yaw")
+        .select("id, scene_id, target_scene_id, type, label, label_mode, pitch, yaw")
         .in("scene_id", ids)
     : { data: [] };
   const hotspots = (hsRows ?? []) as Array<{
@@ -62,6 +62,7 @@ async function loadTour(slug: string): Promise<TourData> {
     target_scene_id: string | null;
     type: "scene" | "info";
     label: string | null;
+    label_mode: "hover" | "always";
     pitch: number;
     yaw: number;
   }>;
@@ -77,6 +78,7 @@ async function loadTour(slug: string): Promise<TourData> {
         yaw: Number(h.yaw),
         type: h.type,
         label: h.label,
+        labelMode: h.label_mode,
         targetSceneId: h.target_scene_id,
       })),
   }));

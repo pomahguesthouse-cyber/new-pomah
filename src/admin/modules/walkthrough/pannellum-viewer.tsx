@@ -17,6 +17,8 @@ export type WalkHotspot = {
   yaw: number;
   type: "scene" | "info";
   label?: string | null;
+  /** "hover" (default) shows the label on hover; "always" keeps it visible. */
+  labelMode?: "hover" | "always";
   targetSceneId?: string | null;
 };
 
@@ -85,6 +87,20 @@ function loadPannellum(): Promise<void> {
   return loaderPromise;
 }
 
+/** Inject styles for always-visible hotspot labels once. */
+function injectHotspotStyles() {
+  if (typeof document === "undefined" || document.getElementById("walk-hotspot-styles")) return;
+  const style = document.createElement("style");
+  style.id = "walk-hotspot-styles";
+  style.textContent = `
+.walk-hotspot-always{width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.35);cursor:pointer;}
+.walk-hotspot-always.walk-info{background:#f59e0b;}
+.walk-hotspot-always .walk-hotspot-label{position:absolute;left:50%;bottom:150%;transform:translateX(-50%);white-space:nowrap;background:rgba(17,17,17,.82);color:#fff;padding:3px 8px;border-radius:8px;font:500 11px/1.2 system-ui,-apple-system,sans-serif;pointer-events:none;}
+.walk-hotspot-always .walk-hotspot-label::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(17,17,17,.82);}
+`;
+  document.head.appendChild(style);
+}
+
 export function Pannellum360Viewer({
   scenes,
   firstSceneId,
@@ -114,7 +130,7 @@ export function Pannellum360Viewer({
     scenes.map((s) => ({
       i: s.id,
       u: s.imageUrl,
-      h: s.hotspots.map((h) => ({ i: h.id, t: h.type, g: h.targetSceneId, l: h.label })),
+      h: s.hotspots.map((h) => ({ i: h.id, t: h.type, g: h.targetSceneId, l: h.label, m: h.labelMode })),
     })),
   );
 
@@ -124,6 +140,7 @@ export function Pannellum360Viewer({
     async function build() {
       await loadPannellum();
       if (cancelled || !containerRef.current || !window.pannellum) return;
+      injectHotspotStyles();
 
       // Tear down any previous instance before creating a new one.
       if (viewerRef.current) {
@@ -166,16 +183,26 @@ export function Pannellum360Viewer({
           panorama: s.imageUrl,
           title: s.title ?? undefined,
           hotSpots: s.hotspots.map((h) => {
+            const text =
+              h.type === "scene" && h.targetSceneId
+                ? h.label || scenes.find((x) => x.id === h.targetSceneId)?.title || "Pindah ruangan"
+                : h.label || "Info";
             const base: any =
               h.type === "scene" && h.targetSceneId
-                ? {
-                    pitch: h.pitch,
-                    yaw: h.yaw,
-                    type: "scene",
-                    text: h.label || scenes.find((x) => x.id === h.targetSceneId)?.title || "Pindah ruangan",
-                    sceneId: h.targetSceneId,
-                  }
-                : { pitch: h.pitch, yaw: h.yaw, type: "info", text: h.label || "Info" };
+                ? { pitch: h.pitch, yaw: h.yaw, type: "scene", text, sceneId: h.targetSceneId }
+                : { pitch: h.pitch, yaw: h.yaw, type: "info", text };
+            // Always-visible label: replace the default hover tooltip with a
+            // custom marker that renders the label permanently.
+            if (h.labelMode === "always") {
+              base.cssClass = `walk-hotspot-always${h.type === "info" ? " walk-info" : ""}`;
+              base.createTooltipFunc = (div: HTMLElement, args: any) => {
+                const span = document.createElement("span");
+                span.className = "walk-hotspot-label";
+                span.textContent = args.text;
+                div.appendChild(span);
+              };
+              base.createTooltipArgs = { text };
+            }
             if (editable && h.id) {
               base.draggable = true;
               base.dragHandlerFunc = dragHandler;

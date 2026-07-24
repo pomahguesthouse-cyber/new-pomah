@@ -21,6 +21,8 @@ import {
   Link2,
   Info,
   Globe,
+  Eye,
+  EyeOff,
   Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -64,6 +66,7 @@ type HotspotRow = {
   target_scene_id: string | null;
   type: "scene" | "info";
   label: string | null;
+  label_mode: "hover" | "always";
   pitch: number;
   yaw: number;
 };
@@ -92,6 +95,7 @@ export function WalkthroughBuilderView() {
   const [pickType, setPickType] = useState<"scene" | "info">("scene");
   const [pickTarget, setPickTarget] = useState<string>("");
   const [pickLabel, setPickLabel] = useState<string>("");
+  const [pickLabelMode, setPickLabelMode] = useState<"hover" | "always">("hover");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -140,7 +144,7 @@ export function WalkthroughBuilderView() {
       if (ids.length > 0) {
         const { data: hsRows } = await sb
           .from("walkthrough_hotspots")
-          .select("id, scene_id, target_scene_id, type, label, pitch, yaw")
+          .select("id, scene_id, target_scene_id, type, label, label_mode, pitch, yaw")
           .in("scene_id", ids);
         setHotspots((hsRows ?? []) as HotspotRow[]);
       } else {
@@ -174,6 +178,7 @@ export function WalkthroughBuilderView() {
             yaw: Number(h.yaw),
             type: h.type,
             label: h.label,
+            labelMode: h.label_mode,
             targetSceneId: h.target_scene_id,
           })),
       })),
@@ -303,6 +308,7 @@ export function WalkthroughBuilderView() {
         type: pickType,
         target_scene_id: pickType === "scene" ? pickTarget : null,
         label: pickLabel.trim() || null,
+        label_mode: pickLabelMode,
         pitch: pick.pitch,
         yaw: pick.yaw,
       });
@@ -310,6 +316,7 @@ export function WalkthroughBuilderView() {
       setPick(null);
       setPickLabel("");
       setPickTarget("");
+      setPickLabelMode("hover");
       toast.success("Hotspot ditambahkan");
       await reload(roomTypeId);
     } catch (e) {
@@ -337,6 +344,19 @@ export function WalkthroughBuilderView() {
     const { error } = await sb.from("walkthrough_hotspots").update({ pitch, yaw }).eq("id", id);
     if (error) {
       toast.error("Gagal menyimpan posisi hotspot");
+      void reload(roomTypeId);
+    }
+  }
+
+  async function toggleHotspotLabelMode(h: HotspotRow) {
+    const next = h.label_mode === "always" ? "hover" : "always";
+    setHotspots((prev) => prev.map((x) => (x.id === h.id ? { ...x, label_mode: next } : x)));
+    const { error } = await sb
+      .from("walkthrough_hotspots")
+      .update({ label_mode: next })
+      .eq("id", h.id);
+    if (error) {
+      toast.error("Gagal mengubah mode label");
       void reload(roomTypeId);
     }
   }
@@ -614,6 +634,21 @@ export function WalkthroughBuilderView() {
                           placeholder={pickType === "scene" ? "mis. Ke kamar mandi" : "mis. Smart TV 43\""}
                         />
                       </div>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-[10px]">Tampilan label</Label>
+                        <Select
+                          value={pickLabelMode}
+                          onValueChange={(v) => setPickLabelMode(v as "hover" | "always")}
+                        >
+                          <SelectTrigger className="h-8 w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hover">Saat hover</SelectItem>
+                            <SelectItem value="always">Selalu tampil</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <Button size="sm" onClick={addHotspot} disabled={busy}>
                         Tambah
                       </Button>
@@ -650,6 +685,23 @@ export function WalkthroughBuilderView() {
                               : h.label || "Info"}
                             {h.label && h.type === "scene" ? ` · ${h.label}` : ""}
                           </span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={cn("h-6 w-6", h.label_mode === "always" && "text-primary")}
+                            title={
+                              h.label_mode === "always"
+                                ? "Label selalu tampil — klik untuk hanya saat hover"
+                                : "Label saat hover — klik untuk selalu tampil"
+                            }
+                            onClick={() => toggleHotspotLabelMode(h)}
+                          >
+                            {h.label_mode === "always" ? (
+                              <Eye className="h-3.5 w-3.5" />
+                            ) : (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
                           <Button
                             size="icon"
                             variant="ghost"
