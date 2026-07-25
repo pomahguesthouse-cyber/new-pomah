@@ -49,6 +49,7 @@ type Tour = {
   id: string;
   room_type_id: string;
   title: string | null;
+  slug: string | null;
   is_published: boolean;
   default_scene_id: string | null;
 };
@@ -76,6 +77,31 @@ function ext(name: string): string {
   return m ? m[1].toLowerCase() : "jpg";
 }
 
+/** Normalize free text into a URL-safe slug. */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/** Extract a human message from an Error or a Supabase PostgrestError object. */
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const o = e as Record<string, unknown>;
+    return (
+      (o.message as string) ||
+      (o.details as string) ||
+      (o.hint as string) ||
+      JSON.stringify(o)
+    );
+  }
+  return String(e ?? "unknown");
+}
+
 export function WalkthroughBuilderView() {
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [propertyId, setPropertyId] = useState<string | null>(null);
@@ -89,6 +115,7 @@ export function WalkthroughBuilderView() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [slugInput, setSlugInput] = useState("");
 
   // Pending hotspot placement (after clicking the panorama in edit mode).
   const [pick, setPick] = useState<{ pitch: number; yaw: number } | null>(null);
@@ -119,7 +146,7 @@ export function WalkthroughBuilderView() {
     try {
       const { data: tourRow } = await sb
         .from("walkthrough_tours")
-        .select("id, room_type_id, title, is_published, default_scene_id")
+        .select("id, room_type_id, title, slug, is_published, default_scene_id")
         .eq("room_type_id", rtId)
         .maybeSingle();
 
@@ -163,6 +190,11 @@ export function WalkthroughBuilderView() {
     if (roomTypeId) void reload(roomTypeId);
   }, [roomTypeId, reload]);
 
+  // Keep the slug input in sync with the loaded tour.
+  useEffect(() => {
+    setSlugInput(tour?.slug ?? "");
+  }, [tour?.id, tour?.slug]);
+
   // ── Derived: scenes shaped for the viewer ──────────────────────────────────
   const viewerScenes: WalkScene[] = useMemo(
     () =>
@@ -188,23 +220,26 @@ export function WalkthroughBuilderView() {
   const selectedScene = scenes.find((s) => s.id === selectedSceneId) ?? null;
   const sceneHotspots = hotspots.filter((h) => h.scene_id === selectedSceneId);
   const publicSlug = roomTypes.find((r) => r.id === roomTypeId)?.slug ?? "";
+  const effectiveSlug = tour?.slug || publicSlug;
 
   // ── Actions ────────────────────────────────────────────────────────────────
   async function createTour() {
     if (!roomTypeId) return;
     setBusy(true);
     try {
-      const title = roomTypes.find((r) => r.id === roomTypeId)?.name ?? "Virtual Tour";
+      const rt = roomTypes.find((r) => r.id === roomTypeId);
+      const title = rt?.name ?? "Virtual Tour";
+      const defaultSlug = rt?.slug ? slugify(rt.slug) : slugify(title);
       const { data, error } = await sb
         .from("walkthrough_tours")
-        .insert({ room_type_id: roomTypeId, property_id: propertyId, title })
-        .select("id, room_type_id, title, is_published, default_scene_id")
+        .insert({ room_type_id: roomTypeId, property_id: propertyId, title, slug: defaultSlug || null })
+        .select("id, room_type_id, title, slug, is_published, default_scene_id")
         .single();
       if (error) throw error;
       setTour(data as Tour);
       toast.success("Tour dibuat. Upload foto 360 untuk memulai.");
     } catch (e) {
-      toast.error(`Gagal membuat tour: ${e instanceof Error ? e.message : "unknown"}`);
+      toast.error(`Gagal membuat tour: ${errMsg(e)}`);
     } finally {
       setBusy(false);
     }
@@ -258,7 +293,7 @@ export function WalkthroughBuilderView() {
       toast.success("Scene dihapus");
       await reload(roomTypeId);
     } catch (e) {
-      toast.error(`Gagal hapus: ${e instanceof Error ? e.message : "unknown"}`);
+      toast.error(`Gagal hapus: ${errMsg(e)}`);
     } finally {
       setBusy(false);
     }
@@ -320,7 +355,7 @@ export function WalkthroughBuilderView() {
       toast.success("Hotspot ditambahkan");
       await reload(roomTypeId);
     } catch (e) {
-      toast.error(`Gagal tambah hotspot: ${e instanceof Error ? e.message : "unknown"}`);
+      toast.error(`Gagal tambah hotspot: ${errMsg(e)}`);
     } finally {
       setBusy(false);
     }
@@ -377,6 +412,35 @@ export function WalkthroughBuilderView() {
     }
     setTour({ ...tour, is_published: next });
     toast.success(next ? "Tour dipublish" : "Tour disembunyikan");
+  }
+
+  async function saveSlug() {
+    if (!tour) return;
+    const clean = slugify(slugInput);
+    if (!clean) {
+      toast.error("Slug tidak boleh kosong");
+      setSlugInput(tour.slug ?? "");
+      return;
+    }
+    if (clean === tour.slug) return;
+    setBusy(true);
+    try {
+      const { error } = await sb
+        .from("walkthrough_tours")
+        .update({ slug: clean, updated_at: new Date().toISOString() })
+        .eq("id", tour.id);
+      if (error) {
+        // 23505 = unique violation → slug already used by another tour.
+        const dup = (error as { code?: string })?.code === "23505";
+        toast.error(dup ? `Slug "${clean}" sudah dipakai tour lain` : `Gagal simpan slug: ${errMsg(error)}`);
+        return;
+      }
+      setTour({ ...tour, slug: clean });
+      setSlugInput(clean);
+      toast.success("Slug diperbarui");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -437,14 +501,43 @@ export function WalkthroughBuilderView() {
               </div>
             </div>
 
-            {tour.is_published && publicSlug && (
+            {/* Editable public slug for /tour/<slug> */}
+            <div className="rounded-lg border p-3">
+              <Label className="text-xs text-muted-foreground">Slug halaman publik</Label>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span className="shrink-0 text-xs text-muted-foreground">/tour/</span>
+                <Input
+                  className="h-8"
+                  value={slugInput}
+                  onChange={(e) => setSlugInput(e.target.value)}
+                  onBlur={(e) => setSlugInput(slugify(e.target.value))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void saveSlug();
+                  }}
+                  placeholder={publicSlug || "deluxe-360"}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy || !slugInput.trim() || slugify(slugInput) === (tour.slug ?? "")}
+                  onClick={saveSlug}
+                >
+                  Simpan
+                </Button>
+              </div>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Alamat: /tour/{slugify(slugInput) || effectiveSlug || "…"}
+              </p>
+            </div>
+
+            {tour.is_published && effectiveSlug && (
               <a
-                href={`/tour/${publicSlug}`}
+                href={`/tour/${effectiveSlug}`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs text-primary hover:bg-accent/10"
               >
-                <Link2 className="h-3.5 w-3.5" /> /tour/{publicSlug}
+                <Link2 className="h-3.5 w-3.5" /> /tour/{effectiveSlug}
               </a>
             )}
 

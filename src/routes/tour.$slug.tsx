@@ -28,20 +28,42 @@ type TourData = {
 } | null;
 
 async function loadTour(slug: string): Promise<TourData> {
-  const { data: rt } = await sb
-    .from("room_types")
-    .select("id, name, slug")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (!rt) return null;
-
-  const { data: tour } = await sb
+  // 1) Try a tour whose own editable slug matches.
+  let tour: any = null;
+  let roomTypeName = "";
+  const { data: bySlug } = await sb
     .from("walkthrough_tours")
-    .select("id, title, default_scene_id, is_published")
-    .eq("room_type_id", rt.id)
+    .select("id, title, default_scene_id, is_published, room_type_id")
+    .eq("slug", slug)
     .eq("is_published", true)
     .maybeSingle();
-  if (!tour) return { roomTypeName: rt.name, title: null, firstSceneId: null, scenes: [] };
+  if (bySlug) {
+    tour = bySlug;
+    const { data: rt } = await sb
+      .from("room_types")
+      .select("name")
+      .eq("id", bySlug.room_type_id)
+      .maybeSingle();
+    roomTypeName = rt?.name ?? "";
+  } else {
+    // 2) Fall back to resolving by the room type's own slug.
+    const { data: rt } = await sb
+      .from("room_types")
+      .select("id, name, slug")
+      .eq("slug", slug)
+      .maybeSingle();
+    if (!rt) return null;
+    roomTypeName = rt.name;
+    const { data: byRoom } = await sb
+      .from("walkthrough_tours")
+      .select("id, title, default_scene_id, is_published")
+      .eq("room_type_id", rt.id)
+      .eq("is_published", true)
+      .maybeSingle();
+    tour = byRoom;
+  }
+
+  if (!tour) return { roomTypeName, title: null, firstSceneId: null, scenes: [] };
 
   const { data: sceneRows } = await sb
     .from("walkthrough_scenes")
@@ -84,7 +106,7 @@ async function loadTour(slug: string): Promise<TourData> {
   }));
 
   return {
-    roomTypeName: rt.name,
+    roomTypeName,
     title: tour.title ?? null,
     firstSceneId: (tour.default_scene_id as string | null) ?? scenes[0]?.id ?? null,
     scenes: walkScenes,
