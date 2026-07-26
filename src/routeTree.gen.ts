@@ -21,6 +21,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BookIndexRouteImport } from './routes/book.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as TourSlugRouteImport } from './routes/tour.$slug'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
 import { Route as ApiWppRouteImport } from './routes/api.wpp'
@@ -35,6 +36,7 @@ import { Route as AdminWppDiagnosticsRouteImport } from './routes/admin/wpp-diag
 import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
+import { Route as AdminWalkthroughRouteImport } from './routes/admin/walkthrough'
 import { Route as AdminTrainingRouteImport } from './routes/admin/training'
 import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
@@ -138,6 +140,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const TourSlugRoute = TourSlugRouteImport.update({
+  id: '/tour/$slug',
+  path: '/tour/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RoomsSlugRoute = RoomsSlugRouteImport.update({
   id: '/rooms/$slug',
   path: '/rooms/$slug',
@@ -207,6 +214,11 @@ const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
 const AdminWebchatRoute = AdminWebchatRouteImport.update({
   id: '/webchat',
   path: '/webchat',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWalkthroughRoute = AdminWalkthroughRouteImport.update({
+  id: '/walkthrough',
+  path: '/walkthrough',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTrainingRoute = AdminTrainingRouteImport.update({
@@ -462,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
@@ -476,6 +489,7 @@ export interface FileRoutesByFullPath {
   '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
+  '/tour/$slug': typeof TourSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -531,6 +545,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
@@ -545,6 +560,7 @@ export interface FileRoutesByTo {
   '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
+  '/tour/$slug': typeof TourSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -602,6 +618,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/telegram': typeof AdminTelegramRoute
   '/admin/training': typeof AdminTrainingRoute
+  '/admin/walkthrough': typeof AdminWalkthroughRoute
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
@@ -616,6 +633,7 @@ export interface FileRoutesById {
   '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
+  '/tour/$slug': typeof TourSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
@@ -674,6 +692,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
@@ -688,6 +707,7 @@ export interface FileRouteTypes {
     | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
+    | '/tour/$slug'
     | '/admin/'
     | '/book/'
     | '/.lovable/oauth/consent'
@@ -743,6 +763,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
@@ -757,6 +778,7 @@ export interface FileRouteTypes {
     | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
+    | '/tour/$slug'
     | '/admin'
     | '/book'
     | '/.lovable/oauth/consent'
@@ -813,6 +835,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/telegram'
     | '/admin/training'
+    | '/admin/walkthrough'
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
@@ -827,6 +850,7 @@ export interface FileRouteTypes {
     | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
+    | '/tour/$slug'
     | '/admin/'
     | '/book/'
     | '/.lovable/oauth/consent'
@@ -871,6 +895,7 @@ export interface RootRouteChildren {
   ApiWppRoute: typeof ApiWppRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
+  TourSlugRoute: typeof TourSlugRoute
   BookIndexRoute: typeof BookIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -974,6 +999,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/tour/$slug': {
+      id: '/tour/$slug'
+      path: '/tour/$slug'
+      fullPath: '/tour/$slug'
+      preLoaderRoute: typeof TourSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rooms/$slug': {
       id: '/rooms/$slug'
       path: '/rooms/$slug'
@@ -1070,6 +1102,13 @@ declare module '@tanstack/react-router' {
       path: '/webchat'
       fullPath: '/admin/webchat'
       preLoaderRoute: typeof AdminWebchatRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/walkthrough': {
+      id: '/admin/walkthrough'
+      path: '/walkthrough'
+      fullPath: '/admin/walkthrough'
+      preLoaderRoute: typeof AdminWalkthroughRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/training': {
@@ -1393,6 +1432,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTelegramRoute: typeof AdminTelegramRoute
   AdminTrainingRoute: typeof AdminTrainingRoute
+  AdminWalkthroughRoute: typeof AdminWalkthroughRoute
   AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminWhatsappCorrectionsRoute: typeof AdminWhatsappCorrectionsRoute
@@ -1424,6 +1464,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTelegramRoute: AdminTelegramRoute,
   AdminTrainingRoute: AdminTrainingRoute,
+  AdminWalkthroughRoute: AdminWalkthroughRoute,
   AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminWhatsappCorrectionsRoute: AdminWhatsappCorrectionsRoute,
@@ -1491,6 +1532,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiWppRoute: ApiWppRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
+  TourSlugRoute: TourSlugRoute,
   BookIndexRoute: BookIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
