@@ -237,6 +237,21 @@ function PropertyTab() {
   if (isLoading) return <p className="text-sm text-muted-foreground">Memuat…</p>;
   const id = data?.id ?? null;
 
+  const isUuid = (v: unknown): v is string =>
+    typeof v === "string" &&
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v);
+
+  // Guard every save: if the property row hasn't loaded (id missing/invalid),
+  // show a friendly message instead of firing a request that fails server-side
+  // validation with a raw "Invalid input (uuid)" dump.
+  const saveProperty = (patch: Record<string, string | null>) => {
+    if (!isUuid(id)) {
+      toast.error("Data properti belum termuat. Muat ulang halaman lalu coba lagi.");
+      return;
+    }
+    mutation.mutate({ id, ...patch });
+  };
+
   const fields = [
     { key: "name", label: "Name", type: "text" },
     { key: "tagline", label: "Tagline", type: "text" },
@@ -264,7 +279,7 @@ function PropertyTab() {
             label={f.label}
             value={(data as any)?.[f.key] ?? null}
             disabled={!id || mutation.isPending}
-            onSave={(v) => id && mutation.mutate({ id, [f.key]: v })}
+            onSave={(v) => saveProperty({ [f.key]: v })}
           />
         ))}
       </Card>
@@ -278,7 +293,7 @@ function PropertyTab() {
           value={(data as any)?.hotel_policy ?? null}
           multiline
           disabled={!id || mutation.isPending}
-          onSave={(v) => id && mutation.mutate({ id, hotel_policy: v })}
+          onSave={(v) => saveProperty({ hotel_policy: v })}
         />
       </div>
     </div>
