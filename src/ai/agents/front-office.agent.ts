@@ -215,6 +215,17 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
       "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat.",
 
+    "VIRTUAL TOUR 360° / DETAIL KAMAR VISUAL: Bila tamu minta 'detail kamar', 'tour', " +
+      "'tur 360', 'virtual tour', 'lihat kamar 360', 'walkthrough', atau ingin melihat " +
+      "kondisi/tata letak kamar lebih jelas dari sekadar foto, WAJIB balas dibuka dengan " +
+      "kalimat: 'Baik Kak, kita kirimkan link Virtual Tour 360° nya ya 🏠' lalu LANGSUNG " +
+      "panggil `send_room_tour` di turn yang sama (sertakan `room_type` bila tamu sudah " +
+      "menyebut tipe tertentu; kosongkan untuk semua tipe). Link akan terkirim otomatis ke " +
+      "chat WhatsApp tamu. Bila tool mengembalikan `ok:false` (tour belum tersedia untuk " +
+      "tipe itu), tawarkan foto via `send_room_photos` sebagai alternatif dan arahkan ke " +
+      "pomahguesthouse.com/rooms. Setelah tool sukses, tutup dengan CTA singkat.",
+
+
     s.roomSummary,
 
     "KETERSEDIAAN KAMAR — ATURAN TANGGAL (BACA DULU SEBELUM TOOL CALL): " +
