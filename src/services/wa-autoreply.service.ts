@@ -796,12 +796,20 @@ export async function executeAutoreplyForPhone(
   // dibuka" + "Boleh" + "Wifi aman?" → hanya wifi terjawab). Serahkan ke AI
   // yang melihat seluruh burst.
   const multiPendingInbound = countConsecutiveInbound(rollingMessages) >= 2;
+  // If the guest also asks for photos/brochure/catalog/video, deterministic
+  // availability/FAQ fast-paths must NOT swallow the turn — only the LLM agent
+  // can both answer availability AND call `send_room_photos` in the same turn.
+  // (Incident: "minta pricelist beserta gambar kamarnya" → bot sent only the
+  // pricelist, no brochure.)
+  const wantsMedia = /\b(foto|gambar|brosur|brochure|katalog|catalog|penampakan|video)\b/i.test(
+    lastMessage ?? "",
+  );
   // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
   // membalas di sesi berjalan atau tamu membuka dengan salam.
   const faqGreetingUsed =
     messageOpensWithGreeting(lastMessage) ||
     currentSessionMessages.some((m: { direction: string }) => m.direction === "out");
-  if (FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
+  if (FAST_FAQ_ENABLED && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
     const fastFaq = buildPropertyFaqReply({
       message: lastMessage,
       property: p as Record<string, unknown>,
@@ -849,7 +857,7 @@ export async function executeAutoreplyForPhone(
     (storedAvailabilitySlots.checkIn ?? chatSummaryJson?.check_in) &&
     (storedAvailabilitySlots.checkOut ?? chatSummaryJson?.check_out)
   );
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage && !hasStoredAvailabilityDates) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
       reply = needDatesReply.reply;
@@ -868,7 +876,7 @@ export async function executeAutoreplyForPhone(
   // Guard "malam ini": tamu yang bertanya JAM ("bisa check-in hari ini jam 8
   // malam?") sedang bertanya kebijakan waktu, bukan harga malam ini.
   const asksTimeNotPrice = /\b(jam|pukul|check\s*[- ]?in|checkin|check\s*[- ]?out|checkout)\b/i.test(lastMessage ?? "");
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && isTonightReply(lastMessage) && !asksTimeNotPrice && hasRecentPriceContext(rollingMessages)) {
     try {
       const tonightReply = await buildTonightPriceReply({
         rooms: rooms ?? [],
@@ -892,7 +900,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const activeSlots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
       const availabilitySlots = {
@@ -924,7 +932,7 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const availabilityReply = await buildDeterministicAvailabilityReply({
         message: lastMessage,
@@ -971,7 +979,7 @@ export async function executeAutoreplyForPhone(
   // Jalur ini WAJIB dijalankan sebelum LLM supaya beban tinggi tidak
   // memaksa orkestrator agent (p95 ~15 s) untuk pekerjaan yang bisa
   // dihitung deterministik dari `checkRoomAvailability`.
-  if (!reply && !isManager && !bookingActive && !multiPendingInbound && lastMessage) {
+  if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage) {
     try {
       const contextualReply = await buildContextualBookingInquiryReply({
         message: lastMessage,
