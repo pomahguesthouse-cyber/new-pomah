@@ -224,6 +224,7 @@ function PropertyTab() {
       whatsapp_number?: string | null;
       currency?: string | null;
       timezone?: string | null;
+      hotel_policy?: string | null;
     }) => updateFn({ data: v }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["property-settings"] });
@@ -267,6 +268,19 @@ function PropertyTab() {
           />
         ))}
       </Card>
+
+      <div className="max-w-2xl">
+        <TextSettingCard
+          icon={<FileText className="h-4 w-4" />}
+          label="Kebijakan Penginapan"
+          description="Ditampilkan di halaman detail kamar & dialog konfirmasi pemesanan, dan dipakai chatbot untuk menjawab aturan. Satu poin kebijakan per baris."
+          placeholder={"Tidak boleh merokok di dalam kamar\nTidak diperbolehkan membawa durian\n…"}
+          value={(data as any)?.hotel_policy ?? null}
+          multiline
+          disabled={!id || mutation.isPending}
+          onSave={(v) => id && mutation.mutate({ id, hotel_policy: v })}
+        />
+      </div>
     </div>
   );
 }
@@ -919,16 +933,6 @@ function IntegrationTab() {
         value={data?.payment_account_holder ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, payment_account_holder: v })}
-      />
-      <TextSettingCard
-        icon={<FileText className="h-4 w-4" />}
-        label="Kebijakan Hotel"
-        description="Ditampilkan di dialog konfirmasi pemesanan. Satu poin kebijakan per baris."
-        placeholder={"Tidak boleh merokok di dalam kamar\nTidak diperbolehkan membawa durian\n…"}
-        value={data?.hotel_policy ?? null}
-        multiline
-        disabled={disabled}
-        onSave={(v) => id && mutation.mutate({ id, hotel_policy: v })}
       />
     </div>
   );

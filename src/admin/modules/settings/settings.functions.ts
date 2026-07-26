@@ -39,6 +39,7 @@ const PROPERTY_CORE_FIELDS = [
   "currency",
   "timezone",
   "public_domain",
+  "hotel_policy",
 ] as const;
 
 export const getPropertySettings = createServerFn({ method: "GET" })
@@ -63,6 +64,7 @@ export const getPropertySettings = createServerFn({ method: "GET" })
       currency: (row.currency as string | null) ?? null,
       timezone: (row.timezone as string | null) ?? null,
       public_domain: (row.public_domain as string | null) ?? null,
+      hotel_policy: (row.hotel_policy as string | null) ?? null,
     };
   });
 
@@ -82,6 +84,7 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
         whatsapp_number: z.string().max(50).nullable().optional(),
         currency: z.string().max(10).nullable().optional(),
         timezone: z.string().max(100).nullable().optional(),
+        hotel_policy: z.string().max(4000).nullable().optional(),
       })
       .parse(d),
   )
