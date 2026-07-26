@@ -19,6 +19,7 @@ import {
   Users,
   BedDouble,
   Maximize,
+  View,
   CheckCircle2,
   Loader2,
   CalendarDays,
@@ -35,6 +36,8 @@ import {
   submitPublicBooking,
 } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { Pannellum360Viewer } from "@/admin/modules/walkthrough/pannellum-viewer";
+import { loadPublishedTourByRoomTypeId } from "@/admin/modules/walkthrough/public-tour";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -206,6 +209,14 @@ function RoomBookingPage() {
   const gallery = useMemo(() => (room ? galleryOf(room) : []), [room]);
   const [active, setActive] = useState(0);
 
+  // Published 360° virtual tour for this room type (if any).
+  const { data: tour } = useQuery({
+    queryKey: ["room-tour", room?.id],
+    queryFn: () => loadPublishedTourByRoomTypeId(room!.id),
+    enabled: !!room?.id,
+  });
+  const tourSlug = tour?.slug || room?.slug || "";
+
   // Defaults: today → +1 night, unless the homepage date picker passed dates.
   const today = todayISO();
   const [checkIn, setCheckIn] = useState(search.checkIn || today);
@@ -352,6 +363,33 @@ function RoomBookingPage() {
             <h1 className="mt-8 text-3xl font-bold tracking-tight">{room.name}</h1>
             {room.description && (
               <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">{room.description}</p>
+            )}
+
+            {tour && tour.scenes.length > 0 && (
+              <section className="mt-8">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-lg font-bold">
+                    <View className="h-5 w-5 text-amber-600" />
+                    360° Virtual Tour
+                  </h2>
+                  {tourSlug && (
+                    <a
+                      href={`/tour/${tourSlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 rounded-full border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 transition hover:bg-stone-100"
+                    >
+                      <Maximize className="h-3.5 w-3.5" /> Buka layar penuh
+                    </a>
+                  )}
+                </div>
+                <div className="relative mt-3 h-[420px] overflow-hidden rounded-2xl border border-stone-200 bg-black">
+                  <Pannellum360Viewer scenes={tour.scenes} firstSceneId={tour.firstSceneId} />
+                </div>
+                <p className="mt-2 text-xs text-stone-400">
+                  Seret untuk melihat sekeliling · klik titik hijau untuk berpindah ruangan.
+                </p>
+              </section>
             )}
 
             {room.amenities && room.amenities.length > 0 && (
