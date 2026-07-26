@@ -2394,6 +2394,16 @@ function RoomCarousel({
                       </button>
                     );
                   })()}
+                  {rt.slug && (
+                    <Link
+                      to="/rooms/$slug"
+                      params={{ slug: rt.slug }}
+                      className={`mt-2 flex items-center justify-center gap-1 font-medium text-stone-500 transition hover:text-amber-700 ${cartOpen ? "text-[11px]" : "text-xs"}`}
+                    >
+                      Lihat detail
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                 </div>
               </article>
             </div>
