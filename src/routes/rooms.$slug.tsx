@@ -27,7 +27,6 @@ import {
   AlertCircle,
   FileText,
   CreditCard,
-  Building2,
   MapPin,
 } from "lucide-react";
 import {
@@ -615,7 +614,7 @@ export function BookingDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [agreed, setAgreed] = useState(false);
-  const [payment, setPayment] = useState<"transfer" | "onsite">("transfer");
+  const [payment, setPayment] = useState<"transfer">("transfer");
   const [pending, setPending] = useState(false);
 
   const nights = nightsBetween(checkIn, checkOut);
@@ -879,13 +878,6 @@ export function BookingDialog({
                 icon={<CreditCard className="h-4 w-4" />}
                 title="Transfer Bank"
                 desc="Bayar via transfer bank sebelum check-in. Detail rekening dikirim setelah konfirmasi."
-              />
-              <PaymentOption
-                active={payment === "onsite"}
-                onClick={() => setPayment("onsite")}
-                icon={<Building2 className="h-4 w-4" />}
-                title="Bayar di Tempat"
-                desc="Bayar tunai/transfer saat check-in. Reservasi dikonfirmasi admin via WhatsApp lebih dulu."
               />
             </div>
           </div>
