@@ -458,6 +458,29 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "send_room_tour",
+      description:
+        "Kirim link Virtual Tour 360° kamar ke chat WhatsApp tamu. Panggil ketika tamu " +
+        "meminta 'detail kamar', 'tour', 'tur 360', 'virtual tour', 'lihat kamar 360', " +
+        "'walkthrough', atau ingin melihat kondisi/tata letak kamar lebih jelas. " +
+        "Sertakan `room_type` bila tamu sudah menyebut tipe tertentu (mis. 'Deluxe'); " +
+        "kosongkan untuk mengirim seluruh tour yang tersedia. Setelah tool sukses, TUTUP " +
+        "dengan CTA singkat (mis. 'Mau saya bantu cek ketersediaan untuk tanggal berapa, Kak?'). " +
+        "Bila tool mengembalikan `ok:false`, arahkan tamu ke pomahguesthouse.com/rooms.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: {
+            type: "string",
+            description: "Nama tipe kamar (mis. 'Deluxe', 'Family Suite 100'). Kosongkan untuk semua tipe.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "check_keyword_ranking",
       description:
         "Cek posisi domain Pomah di Google SERP untuk satu keyword via Serper. Simpan hasilnya ke " +
@@ -759,6 +782,7 @@ export const TOOL_LABELS: Record<string, string> = {
   delete_daily_room_rate:       "Pricing - Hapus Override Harga Harian (Manajer)",
   get_room_specifications:      "Room Specifications",
   send_room_photos:             "Room - Kirim Foto ke WA Tamu",
+  send_room_tour:               "Room - Kirim Link Virtual Tour 360°",
   check_keyword_ranking:        "Content - SEO Cek Posisi Google",
   list_tracked_keywords:        "Content - SEO List Keyword Terpantau",
   audit_page_seo:               "Content - SEO Audit Halaman",
