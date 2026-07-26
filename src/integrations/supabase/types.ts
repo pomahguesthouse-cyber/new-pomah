@@ -3257,6 +3257,153 @@ export type Database = {
           },
         ]
       }
+      walkthrough_hotspots: {
+        Row: {
+          created_at: string
+          id: string
+          label: string | null
+          label_mode: string
+          pitch: number
+          scene_id: string
+          target_scene_id: string | null
+          type: string
+          yaw: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          label_mode?: string
+          pitch?: number
+          scene_id: string
+          target_scene_id?: string | null
+          type?: string
+          yaw?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string | null
+          label_mode?: string
+          pitch?: number
+          scene_id?: string
+          target_scene_id?: string | null
+          type?: string
+          yaw?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walkthrough_hotspots_scene_id_fkey"
+            columns: ["scene_id"]
+            isOneToOne: false
+            referencedRelation: "walkthrough_scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walkthrough_hotspots_target_scene_id_fkey"
+            columns: ["target_scene_id"]
+            isOneToOne: false
+            referencedRelation: "walkthrough_scenes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      walkthrough_scenes: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string
+          image_url: string
+          order_index: number
+          title: string | null
+          tour_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path: string
+          image_url: string
+          order_index?: number
+          title?: string | null
+          tour_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string
+          image_url?: string
+          order_index?: number
+          title?: string | null
+          tour_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walkthrough_scenes_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "walkthrough_tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      walkthrough_tours: {
+        Row: {
+          created_at: string
+          default_scene_id: string | null
+          id: string
+          is_published: boolean
+          property_id: string | null
+          room_type_id: string
+          slug: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_scene_id?: string | null
+          id?: string
+          is_published?: boolean
+          property_id?: string | null
+          room_type_id: string
+          slug?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_scene_id?: string | null
+          id?: string
+          is_published?: boolean
+          property_id?: string | null
+          room_type_id?: string
+          slug?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "walkthrough_tours_default_scene_fk"
+            columns: ["default_scene_id"]
+            isOneToOne: false
+            referencedRelation: "walkthrough_scenes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walkthrough_tours_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "walkthrough_tours_room_type_id_fkey"
+            columns: ["room_type_id"]
+            isOneToOne: true
+            referencedRelation: "room_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webchat_messages: {
         Row: {
           attachment_type: string | null
