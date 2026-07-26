@@ -205,7 +205,7 @@ export const updateBookingStatus = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
         status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]),
       })
       .parse(d),
@@ -221,7 +221,7 @@ export const updateBookingStatus = createServerFn({ method: "POST" })
 
 export const deleteBooking = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("bookings").delete().eq("id", data.id);
     if (error) {
@@ -249,7 +249,7 @@ export const updateRoomStatus = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
         status: z.enum(["clean", "dirty", "maintenance", "out_of_order"]),
       })
       .parse(d),
@@ -394,7 +394,7 @@ function assertGuestCapacity(
 
 const createMultiRoomBookingSchema = z.object({
   guest: z.object({
-    id: z.string().uuid().optional().nullable(),
+    id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/).optional().nullable(),
     full_name: z.string().trim().min(1).max(120),
     email: z.string().trim().max(200).optional().nullable(),
     phone: z.string().trim().max(40).optional().nullable(),
@@ -563,9 +563,9 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
   });
 
 const updateBookingFullSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
   guest: z.object({
-    id: z.string().uuid(),
+    id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
     full_name: z.string().trim().min(1).max(120),
     email: z.string().trim().max(200).optional().nullable(),
     phone: z.string().trim().max(40).optional().nullable(),
@@ -768,7 +768,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
  */
 export const resendInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ bookingId: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ bookingId: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const result = await generateAndSendInvoiceNotification({
       supabase: context.supabase,
@@ -797,7 +797,7 @@ export const listRoomTypes = createServerFn({ method: "GET" })
 const ROOM_STATUS = z.enum(["clean", "dirty", "maintenance", "out_of_order"]);
 
 const roomInputSchema = z.object({
-  room_type_id: z.string().uuid(),
+  room_type_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
   number: z.string().trim().min(1, "Nomor kamar wajib diisi").max(20),
   status: ROOM_STATUS,
   notes: z.string().max(500).optional().nullable(),
@@ -829,7 +829,7 @@ export const createRoom = createServerFn({ method: "POST" })
 
 export const updateRoom = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => roomInputSchema.extend({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => roomInputSchema.extend({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("rooms")
@@ -920,7 +920,7 @@ export const createRoomType = createServerFn({ method: "POST" })
 
 export const updateRoomType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => roomTypeFieldsSchema.extend({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => roomTypeFieldsSchema.extend({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const { id, ...fields } = data;
     const { error } = await db(context.supabase)
@@ -939,7 +939,7 @@ export const updateRoomType = createServerFn({ method: "POST" })
 /** List the room numbers belonging to a room type. */
 export const listRoomNumbers = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ room_type_id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ room_type_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("rooms")
@@ -959,7 +959,7 @@ export const setRoomNumbers = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        room_type_id: z.string().uuid(),
+        room_type_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/),
         numbers: z.array(z.string().trim().min(1).max(20)).max(200),
       })
       .parse(d),
@@ -1012,7 +1012,7 @@ export const setRoomNumbers = createServerFn({ method: "POST" })
 
 export const deleteRoomType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     // Refuse if any room still uses this type (the FK cascades, so a
     // silent delete would wipe those rooms — guard explicitly instead).
@@ -1049,7 +1049,7 @@ export const deleteRoomType = createServerFn({ method: "POST" })
 
 export const deleteRoom = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) => z.object({ id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/) }).parse(d))
   .handler(async ({ data, context }) => {
     // Cek apakah masih ada booking (non-cancelled) di kamar ini
     const { count, error: countErr } = await context.supabase
