@@ -213,7 +213,7 @@ function PropertyTab() {
 
   const mutation = useMutation({
     mutationFn: (v: {
-      id: string;
+      id?: string;
       name?: string | null;
       tagline?: string | null;
       address?: string | null;
@@ -241,15 +241,12 @@ function PropertyTab() {
     typeof v === "string" &&
     /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(v);
 
-  // Guard every save: if the property row hasn't loaded (id missing/invalid),
-  // show a friendly message instead of firing a request that fails server-side
-  // validation with a raw "Invalid input (uuid)" dump.
+  // The property id is only a hint — updatePropertySettings resolves the row
+  // server-side. Send the id only when it's a valid uuid; otherwise omit it and
+  // let the server fall back to the single property row. This prevents the raw
+  // "Invalid input (uuid)" failure when the client id is stale/empty.
   const saveProperty = (patch: Record<string, string | null>) => {
-    if (!isUuid(id)) {
-      toast.error("Data properti belum termuat. Muat ulang halaman lalu coba lagi.");
-      return;
-    }
-    mutation.mutate({ id, ...patch });
+    mutation.mutate({ id: isUuid(id) ? id : undefined, ...patch });
   };
 
   const fields = [

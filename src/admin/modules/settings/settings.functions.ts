@@ -73,7 +73,10 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        // Single-property app: the id is resolved server-side, so a missing or
+        // malformed client id must NOT hard-fail. `.catch` turns an invalid
+        // uuid into undefined instead of throwing "Invalid input (uuid)".
+        id: z.string().uuid().optional().catch(undefined),
         name: z.string().max(100).nullable().optional(),
         tagline: z.string().max(250).nullable().optional(),
         address: z.string().max(500).nullable().optional(),
@@ -89,6 +92,20 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    // Resolve the target property id server-side. The client id is only a hint;
+    // if it's missing/invalid we fall back to the single property row so saves
+    // never break on a stale/empty client id.
+    let targetId = data.id as string | undefined;
+    if (!targetId) {
+      const { data: prop } = await db(context.supabase)
+        .from("properties")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      targetId = (prop?.id as string | undefined) ?? undefined;
+    }
+    if (!targetId) throw new Error("Property belum dikonfigurasi.");
+
     const patch: Record<string, unknown> = {};
     const d = data as Record<string, unknown>;
     for (const k of PROPERTY_CORE_FIELDS) {
@@ -97,7 +114,7 @@ export const updatePropertySettings = createServerFn({ method: "POST" })
         else patch[k] = d[k];
       }
     }
-    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", data.id);
+    const { error } = await db(context.supabase).from("properties").update(patch).eq("id", targetId);
     if (error) throw error;
     return { ok: true };
   });
