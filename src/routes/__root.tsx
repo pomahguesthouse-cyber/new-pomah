@@ -29,8 +29,18 @@ const pomahStructuredData = {
       name: "Pomah Guesthouse",
       url: "https://pomahguesthouse.com",
       logo: "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
+      image:
+        "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
       email: "info@pomahguesthouse.com",
       telephone: "+6281227271799",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "Jl. Dewi Sartika IV No. 71 Sampangan",
+        addressLocality: "Semarang",
+        addressRegion: "Jawa Tengah",
+        postalCode: "50232",
+        addressCountry: "ID",
+      },
     },
     {
       "@type": "WebSite",
