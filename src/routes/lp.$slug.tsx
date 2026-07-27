@@ -54,7 +54,7 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
-    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/lp/${p.slug || ""}`;
     return {
       meta: [

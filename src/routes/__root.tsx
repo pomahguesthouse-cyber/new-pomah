@@ -52,7 +52,7 @@ const pomahStructuredData = {
         "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
       telephone: "+6281227271799",
       email: "info@pomahguesthouse.com",
-      priceRange: "IDR 180000 - 500000",
+      priceRange: "IDR 200000 - 500000",
       checkinTime: "14:00",
       checkoutTime: "12:00",
       address: {
@@ -64,6 +64,13 @@ const pomahStructuredData = {
         addressCountry: "ID",
       },
       hasMap: "https://maps.google.com/maps?q=Pomah+Guesthouse+Semarang",
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.8",
+        reviewCount: 76,
+        bestRating: "5",
+        worstRating: "1",
+      },
       amenityFeature: [
         { "@type": "LocationFeatureSpecification", name: "WiFi Gratis", value: true },
         { "@type": "LocationFeatureSpecification", name: "AC", value: true },
@@ -94,7 +101,7 @@ const pomahStructuredData = {
       ],
       offers: {
         "@type": "Offer",
-        price: 180000,
+        price: 200000,
         priceCurrency: "IDR",
         availability: "https://schema.org/InStock",
         url: "https://pomahguesthouse.com",
@@ -116,7 +123,7 @@ const pomahStructuredData = {
       ],
       offers: {
         "@type": "Offer",
-        price: 250000,
+        price: 300000,
         priceCurrency: "IDR",
         availability: "https://schema.org/InStock",
         url: "https://pomahguesthouse.com",
@@ -341,11 +348,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "twitter:image",
         content: "https://pomahguesthouse.com/og-home.jpg",
       },
-      { name: "description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
-      { property: "og:description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
-      { name: "twitter:description", content: "- Pomah Guesthouse is an AI-powered hospitality operating system for guesthouse management." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/5Qu1z4UKkvcNIYafDWtJ5fj5CEg2/social-images/social-1781137954731-og-picture.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/5Qu1z4UKkvcNIYafDWtJ5fj5CEg2/social-images/social-1781137954731-og-picture.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

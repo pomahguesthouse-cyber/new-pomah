@@ -37,7 +37,7 @@ export const Route = createFileRoute("/explore")({
     return getPublicSiteData();
   },
   head: ({ loaderData }: any) => {
-    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/explore`;
     return {
       meta: [

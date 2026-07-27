@@ -84,7 +84,7 @@ export const Route = createFileRoute("/rooms/$slug")({
     }
     const name = room.name ?? "Kamar";
     const desc = room.description ?? "Kamar di Pomah Guesthouse Semarang";
-    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room.slug || ""}`;
     return {
       meta: [

@@ -89,7 +89,7 @@ export const Route = createFileRoute("/")({
     const heroImageSrcSet = heroImageRaw
       ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
       : undefined;
-    const domain = loaderData?.property?.public_domain || "pomahliving.com";
+    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
     return {
       meta: [
