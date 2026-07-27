@@ -797,21 +797,23 @@ export function BookingDialog({
             onChange={setFullName}
             placeholder="Budi"
           />
-          <Input2
-            label="Email"
-            required
-            type="email"
-            value={email}
-            onChange={setEmail}
-            placeholder="email@contoh.com"
-          />
-          <Input2
-            label="Nomor Telepon"
-            required
-            value={phone}
-            onChange={setPhone}
-            placeholder="+62 812 3456 7890"
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input2
+              label="Email"
+              required
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="email@contoh.com"
+            />
+            <Input2
+              label="Nomor Telepon"
+              required
+              value={phone}
+              onChange={setPhone}
+              placeholder="+62 812 3456 7890"
+            />
+          </div>
 
           {/* Price breakdown */}
           <div className="rounded-lg bg-stone-100 p-4 text-sm">
