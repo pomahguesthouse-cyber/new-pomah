@@ -1081,7 +1081,28 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   }
 
   // 5. Route to agent
-  const routing = routeToAgent(classified);
+  let routing = routeToAgent(classified);
+
+  // Payment-proof override: a guest who sends a transfer screenshot with NO
+  // caption arrives as the attachment marker "[Lampiran image]", which carries
+  // no payment keywords and would misroute to Front Office — so the OCR →
+  // update_payment_status (mark invoice LUNAS) flow never runs. During the
+  // post-booking PAYMENT_PENDING window an incoming image is overwhelmingly a
+  // payment proof, so force it to the Finance Agent.
+  const isAttachmentMarker = /\[\s*lampiran\b/i.test(lastUserMsg);
+  if (
+    isAttachmentMarker &&
+    stateRecord.state === "PAYMENT_PENDING" &&
+    routing.agentKey !== "finance"
+  ) {
+    routing = {
+      agentKey: "finance",
+      confidence: Math.max(classified.confidence, 0.9),
+      reason: "Payment-proof image during PAYMENT_PENDING → Finance Agent",
+      escalated: false,
+    };
+  }
+
   console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
 
   // 6. Load agent
