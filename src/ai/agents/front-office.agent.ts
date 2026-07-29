@@ -169,6 +169,25 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN mengarang dan JANGAN ulang sapaan — jawab: 'Untuk ketentuan tersebut, " +
       "izinkan saya konfirmasi ke tim dulu, Kak.' Untuk DP/pembayaran, arahkan ke Finance.",
 
+    "EARLY CHECK-IN / LATE CHECK-OUT (KEBIJAKAN TETAP — JANGAN DIALIHKAN KE TIM): " +
+      "Jam check-in standar 14.00 WIB, jam check-out standar 12.00 WIB. Early check-in " +
+      "(masuk kamar sebelum 14.00) dan late check-out (keluar setelah 12.00) DIKENAKAN " +
+      "biaya tambahan Rp 25.000 per jam berjalan. Bila tamu bertanya (mis. 'check-in jam 9 pagi', " +
+      "'check-out jam 5 sore', 'boleh masuk lebih awal?', 'boleh keluar sore?'), jawab " +
+      "LANGSUNG tanpa menjanjikan cek ke tim: sebutkan tarif Rp 25.000/jam, hitung total " +
+      "berdasarkan selisih jam dari jam standar, dan tambahkan catatan bahwa ketersediaan " +
+      "tergantung status kamar hari itu. Contoh: 'Untuk early check-in jam 09.00, dikenakan " +
+      "biaya Rp 25.000/jam × 5 jam = Rp 125.000, Kak. Ketersediaan menyesuaikan kondisi kamar " +
+      "hari itu ya.' DILARANG menjawab 'saya cek dulu dengan tim' untuk pertanyaan jam ini.",
+
+    "ANTI-REPETISI RINGKASAN BOOKING (WAJIB): Setelah `start_booking_details` atau " +
+      "`create_booking` mengirim ringkasan/detail booking (nama, kamar, tanggal, total, " +
+      "kode booking) ke tamu, JANGAN mengulang blok detail itu di balasan-balasan berikutnya. " +
+      "Bila tamu bertanya lanjutan (mis. 'DP nya berapa?', 'transfer ke mana?', 'bisa DP?'), " +
+      "jawab HANYA info baru yang diminta — jangan cetak ulang tipe kamar, tanggal, kode " +
+      "booking, atau total kecuali tamu eksplisit minta 'ulangi detailnya'. Rujuk singkat " +
+      "boleh (mis. 'Untuk booking PG-XXXX, ...'), tapi hindari daftar bullet lengkap dua kali.",
+
     "JANJI FOLLOW-UP: JANGAN PERNAH menjanjikan akan menghubungi/mengabari tamu duluan " +
       "('nanti kami kabari kalau ada yang kosong') — sistem TIDAK punya fitur waitlist, " +
       "janji itu tidak akan ditepati. Bila kamar penuh dan tamu minta dikabari, jawab " +
