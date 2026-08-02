@@ -209,6 +209,7 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
 interface SendOptions {
   eventType:
     | "new_booking"
+    | "booking_expired"
     | "booking_updated"
     | "payment_proof"
     | "complaint"
@@ -546,6 +547,74 @@ export async function notifyNewBooking(db: Db, bookingId: string): Promise<void>
     console.error("[ManagerNotifier] notifyNewBooking error:", e);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* 1a. Booking Expired                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Notifikasi ke manajemen ketika booking kedaluwarsa (batas bayar 1 jam
+ * terlewat). Dipanggil fire-and-forget oleh cron `expire-bookings`.
+ * Dedupe per booking id sehingga satu booking hanya memicu satu notif.
+ */
+export async function notifyBookingExpired(db: Db, bookingId: string): Promise<void> {
+  try {
+    const { data: booking, error } = await db
+      .from("bookings")
+      .select(
+        "id, reference_code, check_in, check_out, nights, total_amount, source, guests(full_name, phone), booking_rooms(room_type_id, room_types(name))",
+      )
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (error || !booking) {
+      console.warn("[ManagerNotifier] booking expired tidak ditemukan:", bookingId, error?.message);
+      return;
+    }
+
+    const b = booking as any;
+    const guestName = b.guests?.full_name ?? "Tamu";
+    const guestPhone = b.guests?.phone ? ` (${b.guests.phone})` : "";
+    const roomName = summarizeBookingRooms(b.booking_rooms);
+    const message =
+      "⌛ BOOKING EXPIRED\n\n" +
+      `Tamu: ${guestName}${guestPhone}\n` +
+      `Kamar: ${roomName}\n` +
+      `Check-in: ${fmtDateID(b.check_in)}\n` +
+      `Check-out: ${fmtDateID(b.check_out)}\n` +
+      `Total: ${formatRupiah(b.total_amount)}\n` +
+      `Sumber: ${sourceLabel(b.source)}\n\n` +
+      `Kode Booking:\n${b.reference_code ?? b.id}\n\n` +
+      "Batas waktu pembayaran (1 jam) terlewat tanpa pembayaran. Kamar otomatis kembali tersedia. " +
+      "Follow up tamu bila masih berminat.";
+
+    const { wppToken } = await getPropertyTokens(db);
+    const allManagers = await getActiveManagers(db);
+    const managers = allManagers.filter((m) => !!m.phone || !!m.telegram_chat_id);
+
+    await Promise.all([
+      managers.length > 0
+        ? fanOut(db, wppToken, managers, {
+            eventType: "booking_expired",
+            message,
+            relatedId: b.id,
+            dedupeKeyFor: (m) => `booking_expired:${b.id}:${m.id}`,
+          })
+        : Promise.resolve(),
+      // Expired booking relevan untuk Front Office (follow up) & Manager.
+      fanOutToAgentChannels(db, ["front-office", "manager"], {
+        eventType: "booking_expired",
+        message,
+        relatedId: b.id,
+        dedupeKeyFor: (agent, chat) => `booking_expired:${b.id}:agent:${agent}:${chat}`,
+      }),
+    ]);
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyBookingExpired error (non-fatal):", e);
+  }
+}
+
+
 
 /* ------------------------------------------------------------------ */
 /* 1b. Booking Updated                                                */
