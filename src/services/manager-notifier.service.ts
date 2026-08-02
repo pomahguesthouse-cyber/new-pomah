@@ -209,6 +209,7 @@ async function getActiveManagers(db: Db, role?: string): Promise<ManagerContact[
 interface SendOptions {
   eventType:
     | "new_booking"
+    | "booking_expired"
     | "booking_updated"
     | "payment_proof"
     | "complaint"
