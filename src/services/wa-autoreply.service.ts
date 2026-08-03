@@ -1647,6 +1647,35 @@ export async function executeAutoreplyForPhone(
       return "ok";
     }
 
+    // (c) Baris pembuka canned yang terulang (mis. "Baik Kak, kita kirimkan
+    // link Virtual Tour 360° nya ya 🏠") lolos dedup body/prefix karena bagian
+    // setelahnya berbeda. Di sini kita hanya membuang baris pembukanya supaya
+    // isi baru tetap terkirim tanpa terasa mengulang.
+    const lines = finalReply.split("\n");
+    const firstIdx = lines.findIndex((l) => l.trim().length > 0);
+    const firstLineNorm = firstIdx >= 0 ? norm(lines[firstIdx]) : "";
+    if (firstLineNorm.length >= 15) {
+      const openingRepeated = (recentOut ?? []).some((m: any) => {
+        const meta = (m.metadata ?? {}) as Record<string, unknown>;
+        if (meta.is_ack === true || meta.send_status === "failed") return false;
+        const otherLines = String(m.body ?? "").split("\n");
+        const otherFirst = otherLines.find((l) => l.trim().length > 0) ?? "";
+        return norm(otherFirst) === firstLineNorm;
+      });
+      if (openingRepeated) {
+        const stripped = lines.filter((_, i) => i !== firstIdx).join("\n").trim();
+        if (!stripped) {
+          console.warn(
+            `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} (match=opening-line)`,
+          );
+          return "ok";
+        }
+        console.warn(`[Autoreply] Repeated opening line stripped for ${phone.slice(-6)}`);
+        finalReply = stripped;
+      }
+    }
+
+
   } catch (e) {
     console.warn("[Autoreply] Dedup check failed (continuing):", e);
   }
