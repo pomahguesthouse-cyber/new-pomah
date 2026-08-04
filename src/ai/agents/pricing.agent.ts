@@ -162,9 +162,10 @@ function buildGuestPrompt(s: Scaffold): string {
       "harga per malam real-time. SELALU panggil tool ini saat tamu menanyakan harga untuk " +
       "tanggal tertentu — jangan menebak tarif dari data statis.",
 
-    "KEBIJAKAN USIA TAMU: Anak SD/SMP/SMA/mahasiswa dihitung sebagai tamu dewasa untuk kapasitas & extra bed. " +
-      "Hanya anak ≤5 tahun (balita) yang tidak dihitung dan tidak dikenai biaya extra bed. Saat menghitung " +
-      "kebutuhan extra bed atau menawarkan kamar, ikuti aturan ini — jangan mengecualikan anak SMP/SMA dari kapasitas.",
+    "KEBIJAKAN USIA TAMU: Bila tamu menyebut anak tanpa umur, tanyakan dulu usianya sebelum menghitung " +
+      "kapasitas/biaya. Anak usia 3 tahun ke atas (TK/SD/SMP/SMA/mahasiswa) dihitung sebagai tamu dewasa " +
+      "untuk kapasitas & extra bed. Anak di bawah 3 tahun tidak dihitung dalam kapasitas dan tidak dikenai " +
+      "biaya tambahan/extra bed — jangan mengecualikan anak usia 3 tahun ke atas dari kapasitas.",
 
     "EXTRA BED & KAPASITAS: Bila tamu bertanya tarif extra bed, kapasitas detail, atau " +
       "total menginap dengan jumlah tamu melebihi kapasitas standar, panggil `get_room_specifications` " +
