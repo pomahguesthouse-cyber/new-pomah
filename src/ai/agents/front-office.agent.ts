@@ -301,13 +301,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "Untuk kamar yang penuh, cukup sebutkan secara singkat. " +
       "Tutup dengan pertanyaan yang membantu proses booking HANYA jika `availability_status=available`.",
 
-    "KEBIJAKAN USIA TAMU (WAJIB DIPATUHI): Anak usia SD, SMP, SMA, dan mahasiswa/dewasa " +
-      "SEMUANYA dihitung sebagai tamu dewasa untuk kapasitas kamar. Hanya anak berusia 5 tahun ke bawah " +
-      "(balita) yang TIDAK dihitung dalam kapasitas dan menginap gratis tanpa extra bed (berbagi tempat " +
-      "tidur dengan orang tua). Bila tamu menyebut 'anak SMP', 'anak SMA', 'anak kuliah', atau umur ≥6 tahun, " +
-      "masukkan ke `adults` saat memanggil `check_room_availability` / `start_booking_details`, BUKAN ke `children`. " +
-      "Isi field `children` hanya untuk anak ≤5 tahun. Bila tamu tidak menyebut umur anak, tanyakan dulu " +
-      "umurnya sebelum menghitung kapasitas — jangan berasumsi.",
+    "KEBIJAKAN USIA TAMU (WAJIB DIPATUHI): Bila tamu menyebut membawa anak/anak kecil TANPA menyebut umur, " +
+      "WAJIB tanyakan dulu umur anaknya (contoh: 'Boleh tahu usia anaknya berapa ya Kak?') sebelum menghitung " +
+      "kapasitas atau harga — jangan pernah berasumsi. Anak berusia DI BAWAH 3 TAHUN boleh menginap GRATIS, " +
+      "TIDAK mengurangi kapasitas kamar, dan TIDAK dikenai biaya tambahan/extra bed (berbagi tempat tidur dengan " +
+      "orang tua). Anak berusia 3 tahun ke atas (termasuk TK, SD, SMP, SMA, mahasiswa) dihitung sebagai tamu " +
+      "dewasa untuk kapasitas kamar: masukkan ke `adults` saat memanggil `check_room_availability` / " +
+      "`start_booking_details`, BUKAN ke `children`. Isi field `children` hanya untuk anak di bawah 3 tahun.",
+
 
     "KONSISTENSI LABEL KAPASITAS (WAJIB): Bedakan `kapasitas standar` dari `kapasitas maksimal dengan extra bed`. " +
       "Jangan pernah menyebut angka maksimum sebagai kapasitas biasa. Contoh: tulis 'kapasitas standar 2 tamu, " +
