@@ -370,6 +370,45 @@ function evolutionMessageId(data: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * Event non-pesan dari Evolution/Baileys yang TIDAK boleh diperlakukan sebagai
+ * pesan tamu baru: reaction emoji (🙏/👍 ke pesan bot), protocol message
+ * (hapus/edit/ephemeral), poll update, dan status broadcast. Dulu event ini
+ * lolos ke queue sehingga bot membalas "Sebentar Kak..." tanpa ada pertanyaan.
+ */
+function nonContentEvolutionReason(
+  data: Record<string, unknown>,
+  remoteJid: string | undefined,
+): string | null {
+  const message = objectAt(data.message);
+  const type = firstString(data.messageType, data.type, data.message_type)?.toLowerCase() ?? "";
+
+  if (message?.reactionMessage || type.includes("reaction")) return "reactionMessage";
+  if (message?.protocolMessage || type.includes("protocol")) return "protocolMessage";
+  if (message?.pollUpdateMessage || type.includes("pollupdate")) return "pollUpdateMessage";
+  if (message?.pollCreationMessage) return "pollCreationMessage";
+  if (message?.ephemeralMessage && !objectAt(message?.ephemeralMessage)?.message) {
+    return "ephemeralSettingMessage";
+  }
+  if ((remoteJid ?? "").toLowerCase().startsWith("status@broadcast")) return "statusBroadcast";
+
+  return null;
+}
+
+/** Media inbound yang tetap wajib diproses (mis. bukti transfer). */
+function hasEvolutionContentMedia(data: Record<string, unknown>): boolean {
+  const message = objectAt(data.message);
+  return !!(
+    message?.imageMessage ||
+    message?.documentMessage ||
+    message?.documentWithCaptionMessage ||
+    message?.audioMessage ||
+    message?.videoMessage ||
+    message?.stickerMessage
+  );
+}
+
+
+/**
  * Parse Evolution API v2 webhook payloads into the same domain event used by
  * WPPConnect. The important LID rule: when `remoteJid` is `...@lid` and
  * `remoteJidAlt` is a public WhatsApp JID, store the public phone as
@@ -407,6 +446,13 @@ export async function parseEvolutionWebhook(
   const participantAlt = firstString(key?.participantAlt, data.participantAlt);
   const fromMe = boolish(key?.fromMe) || boolish(data.fromMe);
 
+  // Guard event non-pesan SEBELUM apa pun masuk ke queue/orchestrator.
+  const nonContentReason = nonContentEvolutionReason(data, remoteJid);
+  if (nonContentReason) {
+    console.log(`⏭️ [EvolutionParser] Skipping ${nonContentReason} event`);
+    return null;
+  }
+
   const senderIdentity = pickBestWaIdentity(
     remoteJidAlt,
     participantAlt,
@@ -430,9 +476,21 @@ export async function parseEvolutionWebhook(
   const customerPhone = customerIdentity.phone;
   const message = textFromEvolutionMessage(data);
   const attachment = evolutionAttachment(data);
-  const hasMedia = !!attachment.url || !!attachment.mime || (!!attachment.type && !/conversation|text/i.test(attachment.type));
+  const hasContentMedia = hasEvolutionContentMedia(data);
+  const hasMedia =
+    hasContentMedia ||
+    !!attachment.url ||
+    !!attachment.mime ||
+    (!!attachment.type && !/conversation|text/i.test(attachment.type));
 
-  if (!customerPhone || (!message && !hasMedia)) return null;
+  // Payload tanpa teks dan tanpa media (messageContextInfo-only, status update).
+  if (!message.trim() && !hasMedia) {
+    console.log("⏭️ [EvolutionParser] Skipping empty/non-content event");
+    return null;
+  }
+
+  if (!customerPhone) return null;
+
 
   const publicExternal = looksLikePublicWaPhone(customerPhone) ? `${customerPhone}@s.whatsapp.net` : undefined;
   const externalChatId =
