@@ -280,9 +280,15 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
     return { ok: false, error: "Evolution API key kosong (set EVOLUTION_API_KEY atau token properti)" };
   }
 
+  // Upload media (unduh dari URL lalu kirim) jauh lebih lama dari teks biasa.
+  // Timeout 12s bikin fetch di-abort padahal Evolution sudah mengirim fotonya —
+  // itulah sumber "false negative" yang memicu pesan kendala teknis.
+  const hasMediaInput = !!input.fileUrl;
+  const timeoutMs = hasMediaInput ? MEDIA_SEND_TIMEOUT_MS : SEND_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const candidates = evolutionNumberCandidates(input.phone);
+
 
   try {
     let lastResult: SendResult | null = null;
