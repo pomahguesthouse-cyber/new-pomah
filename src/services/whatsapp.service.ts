@@ -350,8 +350,30 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
 
       if (!res.ok) {
         const body = responseText || "(no body)";
-        console.error(`[WhatsApp] Evolution send error (${number}):`, res.status, body.slice(0, 500));
+        console.error(
+          `[WhatsApp] Evolution send error (${number}):`,
+          res.status,
+          body.slice(0, 500),
+        );
         lastResult = { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
+        continue;
+      }
+
+      // Evolution API sukses -> HTTP 2xx + body { key: { id }, status: "PENDING" }.
+      // Format lama (Fonnte) memakai `status: true`; keduanya diterima agar
+      // helper ini tetap kompatibel bila dipakai transport lain.
+      const hasEvolutionKey = !!responseJson?.key?.id;
+      const hasLegacyOk = responseJson?.status === true;
+      const bodyLooksEmpty = !responseJson;
+      const success = hasEvolutionKey || hasLegacyOk || bodyLooksEmpty;
+
+      if (!success) {
+        console.error(
+          `[WhatsApp] Evolution send unexpected body (${number}):`,
+          res.status,
+          JSON.stringify(responseJson).slice(0, 500),
+        );
+        lastResult = { ok: false, status: res.status, error: "Respons Evolution tanpa key.id", raw };
         continue;
       }
 
@@ -362,8 +384,9 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
   } catch (e) {
     const isAbort = (e as { name?: string })?.name === "AbortError";
     const msg = isAbort
-      ? `Evolution API timeout setelah ${SEND_TIMEOUT_MS}ms`
+      ? `Evolution API timeout setelah ${timeoutMs}ms`
       : e instanceof Error ? e.message : String(e);
+
     console.error("[WhatsApp] Evolution fetch exception:", msg);
     return { ok: false, error: msg };
   } finally {
