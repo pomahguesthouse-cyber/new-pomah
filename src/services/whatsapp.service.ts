@@ -39,7 +39,7 @@ export interface SendWhatsAppMessageInput {
 }
 
 const SEND_TIMEOUT_MS = 12_000;
-/// Kirim media butuh unduh + upload di gateway, jadi diberi jendela lebih lega.
+// Kirim media butuh unduh + upload di gateway, jadi diberi jendela lebih lega.
 const MEDIA_SEND_TIMEOUT_MS = 45_000;
 
 /**
