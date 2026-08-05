@@ -446,6 +446,13 @@ export async function parseEvolutionWebhook(
   const participantAlt = firstString(key?.participantAlt, data.participantAlt);
   const fromMe = boolish(key?.fromMe) || boolish(data.fromMe);
 
+  // Guard event non-pesan SEBELUM apa pun masuk ke queue/orchestrator.
+  const nonContentReason = nonContentEvolutionReason(data, remoteJid);
+  if (nonContentReason) {
+    console.log(`⏭️ [EvolutionParser] Skipping ${nonContentReason} event`);
+    return null;
+  }
+
   const senderIdentity = pickBestWaIdentity(
     remoteJidAlt,
     participantAlt,
@@ -469,9 +476,21 @@ export async function parseEvolutionWebhook(
   const customerPhone = customerIdentity.phone;
   const message = textFromEvolutionMessage(data);
   const attachment = evolutionAttachment(data);
-  const hasMedia = !!attachment.url || !!attachment.mime || (!!attachment.type && !/conversation|text/i.test(attachment.type));
+  const hasContentMedia = hasEvolutionContentMedia(data);
+  const hasMedia =
+    hasContentMedia ||
+    !!attachment.url ||
+    !!attachment.mime ||
+    (!!attachment.type && !/conversation|text/i.test(attachment.type));
 
-  if (!customerPhone || (!message && !hasMedia)) return null;
+  // Payload tanpa teks dan tanpa media (messageContextInfo-only, status update).
+  if (!message.trim() && !hasMedia) {
+    console.log("⏭️ [EvolutionParser] Skipping empty/non-content event");
+    return null;
+  }
+
+  if (!customerPhone) return null;
+
 
   const publicExternal = looksLikePublicWaPhone(customerPhone) ? `${customerPhone}@s.whatsapp.net` : undefined;
   const externalChatId =
