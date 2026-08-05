@@ -39,6 +39,8 @@ export interface SendWhatsAppMessageInput {
 }
 
 const SEND_TIMEOUT_MS = 12_000;
+// Kirim media butuh unduh + upload di gateway, jadi diberi jendela lebih lega.
+const MEDIA_SEND_TIMEOUT_MS = 45_000;
 
 /**
  * WPPConnect normally wants MSISDN digits (628xxx). Since WhatsApp/WPPConnect
@@ -280,9 +282,15 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
     return { ok: false, error: "Evolution API key kosong (set EVOLUTION_API_KEY atau token properti)" };
   }
 
+  // Upload media (unduh dari URL lalu kirim) jauh lebih lama dari teks biasa.
+  // Timeout 12s bikin fetch di-abort padahal Evolution sudah mengirim fotonya —
+  // itulah sumber "false negative" yang memicu pesan kendala teknis.
+  const hasMediaInput = !!input.fileUrl;
+  const timeoutMs = hasMediaInput ? MEDIA_SEND_TIMEOUT_MS : SEND_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const candidates = evolutionNumberCandidates(input.phone);
+
 
   try {
     let lastResult: SendResult | null = null;
@@ -342,8 +350,30 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
 
       if (!res.ok) {
         const body = responseText || "(no body)";
-        console.error(`[WhatsApp] Evolution send error (${number}):`, res.status, body.slice(0, 500));
+        console.error(
+          `[WhatsApp] Evolution send error (${number}):`,
+          res.status,
+          body.slice(0, 500),
+        );
         lastResult = { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
+        continue;
+      }
+
+      // Evolution API sukses -> HTTP 2xx + body { key: { id }, status: "PENDING" }.
+      // Format lama (Fonnte) memakai `status: true`; keduanya diterima agar
+      // helper ini tetap kompatibel bila dipakai transport lain.
+      const hasEvolutionKey = !!responseJson?.key?.id;
+      const hasLegacyOk = responseJson?.status === true;
+      const bodyLooksEmpty = !responseJson;
+      const success = hasEvolutionKey || hasLegacyOk || bodyLooksEmpty;
+
+      if (!success) {
+        console.error(
+          `[WhatsApp] Evolution send unexpected body (${number}):`,
+          res.status,
+          JSON.stringify(responseJson).slice(0, 500),
+        );
+        lastResult = { ok: false, status: res.status, error: "Respons Evolution tanpa key.id", raw };
         continue;
       }
 
@@ -354,8 +384,9 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
   } catch (e) {
     const isAbort = (e as { name?: string })?.name === "AbortError";
     const msg = isAbort
-      ? `Evolution API timeout setelah ${SEND_TIMEOUT_MS}ms`
+      ? `Evolution API timeout setelah ${timeoutMs}ms`
       : e instanceof Error ? e.message : String(e);
+
     console.error("[WhatsApp] Evolution fetch exception:", msg);
     return { ok: false, error: msg };
   } finally {
