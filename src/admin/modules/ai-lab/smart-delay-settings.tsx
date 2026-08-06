@@ -370,7 +370,7 @@ export function SmartDelaySettings() {
           <p className="text-sm font-semibold">Cara Kerja</p>
         </div>
         <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-          <li>Webhook Wpp masuk → pesan disimpan ke database.</li>
+          <li>Webhook WhatsApp gateway masuk → pesan disimpan ke database.</li>
           <li>Engine menghitung jeda berdasarkan panjang & isi pesan.</li>
           <li>Entry baru ditandai sebagai "winner" — entry lama untuk nomor yang sama otomatis dibatalkan.</li>
           <li>Server tidur selama jeda yang dihitung (maks 30 detik wall-clock).</li>

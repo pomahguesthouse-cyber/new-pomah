@@ -1,24 +1,18 @@
 /**
- * WhatsApp messaging service (WPPConnect gateway).
+ * WhatsApp messaging service (Evolution API gateway).
  *
- * Single responsibility: send a message via a self-hosted WPPConnect server.
- * All callers receive a typed result — never raw fetch responses.
+ * Single responsibility: send a message via the self-hosted Evolution API
+ * instance. All callers receive a typed result — never raw fetch responses.
  *
- * Migration note (Wpp -> WPPConnect):
- *   The public signature is unchanged, so all 13 call sites keep working:
- *     sendWhatsAppMessage(token, phone, message, fileUrl?, filename?)
- *   - `token`   -> the WPPConnect session Bearer token (stored, as before, in
- *                 properties.wpp_token). "Bearer " prefix is added here.
- *   - base URL + session name come from env:
- *       WPP_BASE_URL  e.g. "http://IP_VPS:21465" or "https://wa.domain.com"
- *       WPP_SESSION   e.g. "pomah"
- *   Text  -> POST {base}/api/{session}/send-message      { phone, message }
- *   Media -> POST {base}/api/{session}/send-file-base64  { phone, base64, filename, message }
+ * Env yang dipakai:
+ *   EVOLUTION_BASE_URL  mis. "https://wa.pomahguesthouse.com"
+ *   EVOLUTION_INSTANCE  mis. "pomah"
+ *   EVOLUTION_API_KEY   apikey instance (fallback: token dari properties)
+ *
+ *   Teks  -> POST {base}/message/sendText/{instance}   { number, text }
+ *   Media -> POST {base}/message/sendMedia/{instance}  { number, media, ... }
  */
 
-const WPP_BASE_URL = (process.env.WPP_BASE_URL ?? "").replace(/\/+$/, "");
-const WPP_SESSION = process.env.WPP_SESSION ?? "";
-const WHATSAPP_PROVIDER = (process.env.WHATSAPP_PROVIDER ?? "").trim().toLowerCase();
 const EVOLUTION_BASE_URL = (process.env.EVOLUTION_BASE_URL ?? "").replace(/\/+$/, "");
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE ?? "";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY ?? "";
@@ -43,12 +37,12 @@ const SEND_TIMEOUT_MS = 12_000;
 const MEDIA_SEND_TIMEOUT_MS = 45_000;
 
 /**
- * WPPConnect normally wants MSISDN digits (628xxx). Since WhatsApp/WPPConnect
- * can now surface LID-only identities, keep/restore the @lid chat id when the
- * value is clearly not an Indonesian public phone. This lets the queue attempt
- * a reply instead of going silent while the LID->phone alias is still unknown.
+ * Gateway WhatsApp umumnya mau MSISDN digits (628xxx). Karena WhatsApp bisa
+ * memunculkan identitas LID-only, kita pertahankan/kembalikan chat id @lid
+ * ketika nilainya jelas bukan nomor publik Indonesia. Dengan begitu queue
+ * tetap mencoba membalas alih-alih diam saat alias LID->phone belum diketahui.
  */
-function normalizeWppPhone(phone: string): string {
+function normalizeWaTarget(phone: string): string {
   const raw = String(phone ?? "").trim().replace(/\s+/g, "");
   if (!raw) return "";
 
@@ -71,69 +65,10 @@ function unique(values: Array<string | null | undefined>): string[] {
   return Array.from(new Set(values.filter((v): v is string => !!v && !!v.trim())));
 }
 
-function wppPhoneCandidates(phone: string): string[] {
-  const raw = String(phone ?? "").trim().replace(/\s+/g, "");
-  const normalized = normalizeWppPhone(raw);
-  const digits = raw
-    .replace(/@(?:lid|c\.us|s\.whatsapp\.net)$/i, "")
-    .replace(/[^\d]/g, "");
-
-  if (/^62\d{8,14}$/.test(normalized)) {
-    return unique([normalized, `${normalized}@c.us`]);
-  }
-
-  if (/@lid$/i.test(raw) || (digits && !/^62\d{8,14}$/.test(digits))) {
-    return unique([normalized, raw.toLowerCase(), digits ? `${digits}@lid` : null, digits]);
-  }
-
-  return unique([normalized, raw]);
-}
-
-function bearer(token: string): string {
-  const t = String(token ?? "").trim();
-  return /^bearer\s+/i.test(t) ? t : `Bearer ${t}`;
-}
-
-function endpoint(path: string): string {
-  return `${WPP_BASE_URL}/api/${encodeURIComponent(WPP_SESSION)}/${path}`;
-}
-
 /**
- * WPPConnect returns HTTP 200/201 with a JSON body. Success bodies carry
- * `status: "success"`; logical failures carry `status: "error"` / an `error`
- * field even on HTTP 2xx.
- */
-function parseWppLogicalError(data: any): string | null {
-  if (!data || typeof data !== "object") return null;
-  const status = String(data.status ?? "").toLowerCase();
-  if (status === "error") {
-    return data.message || data.response || JSON.stringify(data);
-  }
-  if (data.error) {
-    return typeof data.error === "string" ? data.error : JSON.stringify(data.error);
-  }
-  return null;
-}
-
-/** Fetch a remote file and turn it into a `data:` URI for send-file-base64. */
-async function toDataUri(fileUrl: string, signal: AbortSignal): Promise<{ dataUri: string; mime: string }> {
-  const res = await fetch(fileUrl, { signal });
-  if (!res.ok) throw new Error(`fetch attachment HTTP ${res.status}`);
-  const mime = res.headers.get("content-type")?.split(";")[0]?.trim() || "application/octet-stream";
-  const buf = new Uint8Array(await res.arrayBuffer());
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < buf.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + chunk)));
-  }
-  const b64 = btoa(binary);
-  return { dataUri: `data:${mime};base64,${b64}`, mime };
-}
-
-/**
- * Send a WhatsApp message via WPPConnect.
+ * Send a WhatsApp message via Evolution API.
  *
- * @param token   WPPConnect session token (stored in properties.wpp_token)
+ * @param token   Fallback apikey bila EVOLUTION_API_KEY belum diset
  * @param phone   Recipient phone in international format, e.g. "628123456789"
  * @param message Text to send (plain text; WhatsApp formatting supported)
  * @param fileUrl Optional public URL of a file/image to attach
@@ -146,106 +81,7 @@ export async function sendWhatsAppMessage(
   fileUrl?: string,
   filename?: string,
 ): Promise<SendResult> {
-  return sendWhatsAppMessageWithOptions({ token, phone, message, fileUrl, filename });
-}
-
-async function sendWhatsAppMessageWithOptions(
-  input: SendWhatsAppMessageInput,
-): Promise<SendResult> {
-  if (WHATSAPP_PROVIDER === "evolution" || (!!EVOLUTION_BASE_URL && !!EVOLUTION_INSTANCE)) {
-    return sendEvolutionMessage(input);
-  }
-
-  if (!WPP_BASE_URL || !WPP_SESSION) {
-    const msg = "WPPConnect not configured: set WPP_BASE_URL and WPP_SESSION";
-    console.error("[WhatsApp]", msg);
-    return { ok: false, error: msg };
-  }
-  if (!input.token) {
-    return { ok: false, error: "WPPConnect token kosong (properties.wpp_token belum diisi)" };
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SEND_TIMEOUT_MS);
-  const phoneCandidates = wppPhoneCandidates(input.phone);
-
-  try {
-    let lastResult: SendResult | null = null;
-    const fileData = input.fileUrl ? await toDataUri(input.fileUrl, controller.signal) : null;
-
-    for (const phone of phoneCandidates) {
-      let url: string;
-      let payload: Record<string, unknown>;
-      const isLid = /@lid$/i.test(phone);
-
-      // WPPConnect's controller iterates `for (const contato of phone)`, so the
-      // API expects `phone` as an ARRAY. Passing a string makes some versions
-      // iterate character-by-character. Always send [phone].
-      if (fileData) {
-        url = endpoint("send-file-base64");
-        payload = {
-          phone: [phone],
-          isGroup: false,
-          isLid,
-          base64: fileData.dataUri,
-          filename: input.filename ?? "file",
-          // In WPPConnect send-file, `message`/`caption` is the caption.
-          message: input.message ?? "",
-          caption: input.message ?? "",
-        };
-      } else {
-        url = endpoint("send-message");
-        payload = { phone: [phone], isGroup: false, isLid, message: input.message };
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: bearer(input.token),
-          "Content-Type": "application/json; charset=utf-8",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      const responseText = await res.text().catch(() => "");
-      let responseJson: any = null;
-      try {
-        responseJson = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        // WPPConnect normally returns JSON; keep non-JSON body for diagnostics.
-      }
-      const raw = responseJson ?? responseText;
-
-      if (!res.ok) {
-        const body = responseText || "(no body)";
-        console.error(`[WhatsApp] WPPConnect send error (${phone}):`, res.status, body);
-        lastResult = { ok: false, status: res.status, error: `HTTP ${res.status}: ${body}`, raw };
-        continue;
-      }
-
-      const logicalError = parseWppLogicalError(responseJson);
-      if (logicalError) {
-        console.error(`[WhatsApp] WPPConnect API logic error (${phone}):`, logicalError);
-        lastResult = { ok: false, status: res.status, error: `WPPConnect API Error: ${logicalError}`, raw };
-        continue;
-      }
-
-      return { ok: true, status: res.status, error: null, raw };
-    }
-
-    return lastResult ?? { ok: false, error: "Tidak ada target WPPConnect valid" };
-  } catch (e) {
-    const isAbort = (e as { name?: string })?.name === "AbortError";
-    const msg = isAbort
-      ? `WPPConnect timeout setelah ${SEND_TIMEOUT_MS}ms`
-      : e instanceof Error ? e.message : String(e);
-    console.error("[WhatsApp] WPPConnect fetch exception:", msg);
-    return { ok: false, error: msg };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return sendEvolutionMessage({ token, phone, message, fileUrl, filename });
 }
 
 function evolutionApiKey(fallbackToken: string): string {
@@ -258,7 +94,7 @@ function evolutionEndpoint(path: string): string {
 
 function evolutionNumberCandidates(phone: string): string[] {
   const raw = String(phone ?? "").trim().replace(/\s+/g, "");
-  const normalized = normalizeWppPhone(raw);
+  const normalized = normalizeWaTarget(raw);
   const digits = raw
     .replace(/@(?:lid|c\.us|s\.whatsapp\.net)$/i, "")
     .replace(/[^\d]/g, "");
@@ -290,7 +126,6 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const candidates = evolutionNumberCandidates(input.phone);
-
 
   try {
     let lastResult: SendResult | null = null;
@@ -327,7 +162,6 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
             text: input.message,
           };
 
-
       const res = await fetch(url, {
         method: "POST",
         headers: {
@@ -360,8 +194,7 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
       }
 
       // Evolution API sukses -> HTTP 2xx + body { key: { id }, status: "PENDING" }.
-      // Format lama (Fonnte) memakai `status: true`; keduanya diterima agar
-      // helper ini tetap kompatibel bila dipakai transport lain.
+      // Format legacy `status: true` tetap diterima untuk kompatibilitas.
       const hasEvolutionKey = !!responseJson?.key?.id;
       const hasLegacyOk = responseJson?.status === true;
       const bodyLooksEmpty = !responseJson;
@@ -395,118 +228,58 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
 }
 
 // ─── Presence helpers (best-effort, non-throwing) ─────────────────────────────
-// Digunakan untuk memberi "rasa manusiawi": tandai pesan dibaca dan tampilkan
+// Digunakan untuk memberi "rasa manusiawi": tandai chat dibaca dan tampilkan
 // indikator sedang mengetik saat bot memproses balasan. Kegagalan tidak boleh
 // menghentikan alur autoreply — cukup console.warn.
 
 const PRESENCE_TIMEOUT_MS = 5_000;
 
-async function callWppPresence(
+async function sendEvolutionPresence(
   token: string,
   phone: string,
-  path: string,
-  extra: Record<string, unknown>,
+  presence: "available" | "composing" | "paused",
 ): Promise<void> {
-  if (!WPP_BASE_URL || !WPP_SESSION) {
-    console.warn(`[WhatsApp] ${path} skipped: WPPConnect belum terkonfigurasi`);
+  if (!EVOLUTION_BASE_URL || !EVOLUTION_INSTANCE) {
+    console.warn("[WhatsApp] presence skipped: Evolution API belum terkonfigurasi");
     return;
   }
-  if (!token) {
-    console.warn(`[WhatsApp] ${path} skipped: token kosong`);
+  const apiKey = evolutionApiKey(token);
+  if (!apiKey) {
+    console.warn("[WhatsApp] presence skipped: apikey kosong");
     return;
   }
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PRESENCE_TIMEOUT_MS);
   try {
-    const normalized = normalizeWppPhone(phone);
-    const res = await fetch(endpoint(path), {
+    const number = normalizeWaTarget(phone);
+    const res = await fetch(evolutionEndpoint("chat/sendPresence"), {
       method: "POST",
       headers: {
-        Authorization: bearer(token),
+        apikey: apiKey,
         "Content-Type": "application/json; charset=utf-8",
         Accept: "application/json",
       },
-      body: JSON.stringify({ phone: normalized, isGroup: false, ...extra }),
+      body: JSON.stringify({ number, presence, delay: 1_200 }),
       signal: controller.signal,
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.warn(`[WhatsApp] ${path} HTTP ${res.status}: ${body.slice(0, 200)}`);
+      console.warn(`[WhatsApp] sendPresence(${presence}) HTTP ${res.status}: ${body.slice(0, 200)}`);
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.warn(`[WhatsApp] ${path} gagal:`, msg);
+    console.warn(`[WhatsApp] sendPresence(${presence}) gagal:`, msg);
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-/** Tandai chat sebagai sudah dibaca (best-effort). */
-export async function markWppSeen(token: string, phone: string): Promise<void> {
-  await callWppPresence(token, phone, "send-seen", {});
+/** Tandai kehadiran online (mendekati "dibaca"), best-effort. */
+export async function markWaSeen(token: string, phone: string): Promise<void> {
+  await sendEvolutionPresence(token, phone, "available");
 }
 
 /** Nyalakan/matikan indikator "sedang mengetik" (best-effort). */
-export async function setWppTyping(token: string, phone: string, value: boolean): Promise<void> {
-  await callWppPresence(token, phone, "typing", { value });
-}
-
-// ─── Media download (get-media-by-message) ────────────────────────────────────
-// WPPConnect tidak memberi URL publik untuk lampiran WhatsApp. Untuk OCR bukti
-// transfer kita harus menarik base64-nya lewat endpoint get-media-by-message,
-// lalu bungkus jadi data URI supaya Vision LLM bisa memakainya sebagai
-// image_url.url tanpa perubahan pada payment-proof service.
-
-const MEDIA_FETCH_TIMEOUT_MS = 20_000;
-
-/**
- * Tarik media WhatsApp via WPPConnect dan kembalikan sebagai data URI.
- * Best-effort — return `null` (bukan throw) bila gagal, HTTP non-2xx,
- * atau base64 kosong.
- */
-export async function fetchWppMediaDataUri(
-  token: string,
-  messageId: string,
-): Promise<string | null> {
-  if (!WPP_BASE_URL || !WPP_SESSION) {
-    console.warn("[WhatsApp] fetchWppMediaDataUri skipped: WPPConnect belum terkonfigurasi");
-    return null;
-  }
-  if (!token || !messageId) {
-    console.warn("[WhatsApp] fetchWppMediaDataUri skipped: token/messageId kosong");
-    return null;
-  }
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
-  try {
-    const url = endpoint(`get-media-by-message/${encodeURIComponent(messageId)}`);
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: bearer(token),
-        Accept: "application/json",
-      },
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.warn(`[WhatsApp] get-media-by-message HTTP ${res.status}: ${body.slice(0, 200)}`);
-      return null;
-    }
-    const data: any = await res.json().catch(() => null);
-    const base64 = data?.base64 ?? data?.data ?? null;
-    const mimetype = data?.mimetype ?? data?.mime ?? "application/octet-stream";
-    if (!base64 || typeof base64 !== "string") {
-      console.warn("[WhatsApp] get-media-by-message: base64 kosong");
-      return null;
-    }
-    const cleaned = base64.replace(/^data:[^;]+;base64,/, "");
-    return `data:${mimetype};base64,${cleaned}`;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.warn("[WhatsApp] fetchWppMediaDataUri gagal:", msg);
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+export async function setWaTyping(token: string, phone: string, value: boolean): Promise<void> {
+  await sendEvolutionPresence(token, phone, value ? "composing" : "paused");
 }

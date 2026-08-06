@@ -1,7 +1,7 @@
 /**
  * Tool: send_room_photos
  *
- * Kirim foto kamar via WhatsApp (WPPConnect) langsung ke tamu yang sedang
+ * Kirim foto kamar via WhatsApp (Evolution API) langsung ke tamu yang sedang
  * chat. Dipakai ketika tamu minta "foto", "gambar", atau "penampakan" kamar.
  *
  * Best-effort — kegagalan pengiriman satu foto tidak menghentikan sisanya.

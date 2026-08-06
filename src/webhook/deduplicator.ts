@@ -1,7 +1,7 @@
 /**
  * In-memory message deduplication (Layer 1).
  *
- * Uses a time-bucketed Map keyed on the Wpp message ID when available,
+ * Uses a time-bucketed Map keyed on the WhatsApp gateway message ID when available,
  * or a content-derived key as fallback. 
  * 
  * Optimized: Uses individual timers for cleanup instead of iterating
@@ -52,7 +52,7 @@ export function isDuplicateBody(sender: string, message: string): boolean {
 
 /**
  * Build a stable dedup key.
- * Prefer the Wpp message ID; fall back to
+ * Prefer the WhatsApp gateway message ID; fall back to
  * "sender::body_prefix::timestamp_bucket"
  */
 const DEDUP_BUCKET_MS = 10_000;
