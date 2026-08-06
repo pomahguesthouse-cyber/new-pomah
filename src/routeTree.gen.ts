@@ -24,7 +24,6 @@ import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as TourSlugRouteImport } from './routes/tour.$slug'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
-import { Route as ApiWppRouteImport } from './routes/api.wpp'
 import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
@@ -32,7 +31,6 @@ import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
 import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
 import { Route as ApiEvolutionRouteImport } from './routes/api.evolution'
 import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
-import { Route as AdminWppDiagnosticsRouteImport } from './routes/admin/wpp-diagnostics'
 import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
 import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
 import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
@@ -66,7 +64,6 @@ import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$tok
 import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
-import { Route as ApiCronWppSyncRouteImport } from './routes/api.cron.wpp-sync'
 import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
@@ -155,11 +152,6 @@ const LpSlugRoute = LpSlugRouteImport.update({
   path: '/lp/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiWppRoute = ApiWppRouteImport.update({
-  id: '/api/wpp',
-  path: '/api/wpp',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiTelegramRoute = ApiTelegramRouteImport.update({
   id: '/api/telegram',
   path: '/api/telegram',
@@ -194,11 +186,6 @@ const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
   id: '/api/debug-db',
   path: '/api/debug-db',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AdminWppDiagnosticsRoute = AdminWppDiagnosticsRouteImport.update({
-  id: '/wpp-diagnostics',
-  path: '/wpp-diagnostics',
-  getParentRoute: () => AdminRoute,
 } as any)
 const AdminWhatsappCorrectionsRoute =
   AdminWhatsappCorrectionsRouteImport.update({
@@ -368,11 +355,6 @@ const ApiPublicHealthCheckRoute = ApiPublicHealthCheckRouteImport.update({
   path: '/api/public/health-check',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronWppSyncRoute = ApiCronWppSyncRouteImport.update({
-  id: '/api/cron/wpp-sync',
-  path: '/api/cron/wpp-sync',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
   id: '/api/cron/wa-summary-refresh',
   path: '/api/cron/wa-summary-refresh',
@@ -478,7 +460,6 @@ export interface FileRoutesByFullPath {
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
-  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -486,7 +467,6 @@ export interface FileRoutesByFullPath {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
-  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
@@ -501,7 +481,6 @@ export interface FileRoutesByFullPath {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
-  '/api/cron/wpp-sync': typeof ApiCronWppSyncRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -549,7 +528,6 @@ export interface FileRoutesByTo {
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
-  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -557,7 +535,6 @@ export interface FileRoutesByTo {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
-  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
@@ -572,7 +549,6 @@ export interface FileRoutesByTo {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
-  '/api/cron/wpp-sync': typeof ApiCronWppSyncRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -622,7 +598,6 @@ export interface FileRoutesById {
   '/admin/webchat': typeof AdminWebchatRoute
   '/admin/whatsapp': typeof AdminWhatsappRoute
   '/admin/whatsapp-corrections': typeof AdminWhatsappCorrectionsRoute
-  '/admin/wpp-diagnostics': typeof AdminWppDiagnosticsRoute
   '/api/debug-db': typeof ApiDebugDbRoute
   '/api/evolution': typeof ApiEvolutionRoute
   '/api/place-photo': typeof ApiPlacePhotoRoute
@@ -630,7 +605,6 @@ export interface FileRoutesById {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
-  '/api/wpp': typeof ApiWppRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
@@ -645,7 +619,6 @@ export interface FileRoutesById {
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
-  '/api/cron/wpp-sync': typeof ApiCronWppSyncRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
   '/book/confirmation/$id': typeof BookConfirmationIdRouteWithChildren
@@ -696,7 +669,6 @@ export interface FileRouteTypes {
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
-    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/evolution'
     | '/api/place-photo'
@@ -704,7 +676,6 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
-    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
@@ -719,7 +690,6 @@ export interface FileRouteTypes {
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-summary-refresh'
-    | '/api/cron/wpp-sync'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -767,7 +737,6 @@ export interface FileRouteTypes {
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
-    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/evolution'
     | '/api/place-photo'
@@ -775,7 +744,6 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
-    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
@@ -790,7 +758,6 @@ export interface FileRouteTypes {
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-summary-refresh'
-    | '/api/cron/wpp-sync'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -839,7 +806,6 @@ export interface FileRouteTypes {
     | '/admin/webchat'
     | '/admin/whatsapp'
     | '/admin/whatsapp-corrections'
-    | '/admin/wpp-diagnostics'
     | '/api/debug-db'
     | '/api/evolution'
     | '/api/place-photo'
@@ -847,7 +813,6 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
-    | '/api/wpp'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
@@ -862,7 +827,6 @@ export interface FileRouteTypes {
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
     | '/api/cron/wa-summary-refresh'
-    | '/api/cron/wpp-sync'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
     | '/book/confirmation/$id'
@@ -892,7 +856,6 @@ export interface RootRouteChildren {
   ApiPublicSiteDataRoute: typeof ApiPublicSiteDataRoute
   ApiQueueWorkerRoute: typeof ApiQueueWorkerRoute
   ApiTelegramRoute: typeof ApiTelegramRouteWithChildren
-  ApiWppRoute: typeof ApiWppRoute
   LpSlugRoute: typeof LpSlugRoute
   RoomsSlugRoute: typeof RoomsSlugRoute
   TourSlugRoute: typeof TourSlugRoute
@@ -906,7 +869,6 @@ export interface RootRouteChildren {
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
   ApiCronWaSummaryRefreshRoute: typeof ApiCronWaSummaryRefreshRoute
-  ApiCronWppSyncRoute: typeof ApiCronWppSyncRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
   BookingFormTokenRoute: typeof BookingFormTokenRoute
@@ -1020,13 +982,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LpSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/wpp': {
-      id: '/api/wpp'
-      path: '/api/wpp'
-      fullPath: '/api/wpp'
-      preLoaderRoute: typeof ApiWppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/telegram': {
       id: '/api/telegram'
       path: '/api/telegram'
@@ -1075,13 +1030,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/debug-db'
       preLoaderRoute: typeof ApiDebugDbRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/admin/wpp-diagnostics': {
-      id: '/admin/wpp-diagnostics'
-      path: '/wpp-diagnostics'
-      fullPath: '/admin/wpp-diagnostics'
-      preLoaderRoute: typeof AdminWppDiagnosticsRouteImport
-      parentRoute: typeof AdminRoute
     }
     '/admin/whatsapp-corrections': {
       id: '/admin/whatsapp-corrections'
@@ -1314,13 +1262,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHealthCheckRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/wpp-sync': {
-      id: '/api/cron/wpp-sync'
-      path: '/api/cron/wpp-sync'
-      fullPath: '/api/cron/wpp-sync'
-      preLoaderRoute: typeof ApiCronWppSyncRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/cron/wa-summary-refresh': {
       id: '/api/cron/wa-summary-refresh'
       path: '/api/cron/wa-summary-refresh'
@@ -1436,7 +1377,6 @@ interface AdminRouteChildren {
   AdminWebchatRoute: typeof AdminWebchatRoute
   AdminWhatsappRoute: typeof AdminWhatsappRoute
   AdminWhatsappCorrectionsRoute: typeof AdminWhatsappCorrectionsRoute
-  AdminWppDiagnosticsRoute: typeof AdminWppDiagnosticsRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -1468,7 +1408,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminWebchatRoute: AdminWebchatRoute,
   AdminWhatsappRoute: AdminWhatsappRoute,
   AdminWhatsappCorrectionsRoute: AdminWhatsappCorrectionsRoute,
-  AdminWppDiagnosticsRoute: AdminWppDiagnosticsRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 
@@ -1529,7 +1468,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicSiteDataRoute: ApiPublicSiteDataRoute,
   ApiQueueWorkerRoute: ApiQueueWorkerRoute,
   ApiTelegramRoute: ApiTelegramRouteWithChildren,
-  ApiWppRoute: ApiWppRoute,
   LpSlugRoute: LpSlugRoute,
   RoomsSlugRoute: RoomsSlugRoute,
   TourSlugRoute: TourSlugRoute,
@@ -1543,7 +1481,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
   ApiCronWaSummaryRefreshRoute: ApiCronWaSummaryRefreshRoute,
-  ApiCronWppSyncRoute: ApiCronWppSyncRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
   BookingFormTokenRoute: BookingFormTokenRoute,

@@ -139,7 +139,7 @@ export const getPaymentProofResult: ToolHandler = async (
         return JSON.stringify(shape(meta.ocr_result, meta.ocr_match));
       }
 
-      // Detect a proof image still being OCR'd. Note: WPPConnect sometimes
+      // Detect a proof image still being OCR'd. Note: Evolution API sometimes
       // delivers media without a public URL, so also trust the intent/pipeline
       // tags the webhook writes for payment-proof images.
       if (rows.some((m) => hasProofSignal(m.metadata))) {

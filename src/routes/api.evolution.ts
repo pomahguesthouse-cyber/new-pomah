@@ -1,7 +1,7 @@
 /**
  * /api/evolution - Evolution API webhook endpoint.
  *
- * This mirrors the WPPConnect webhook path, but normalizes Evolution/Baileys
+ * This mirrors the Evolution API webhook path, but normalizes Evolution/Baileys
  * payloads where a chat can arrive as `remoteJid=@lid` with the public WhatsApp
  * number in `remoteJidAlt`. Supabase remains the primary conversation DB.
  */
@@ -371,7 +371,7 @@ export const evolutionWebhookGet = async ({ request }: { request: Request }): Pr
       queue_token_set: !!expectedQueueToken(),
       supabase_url_set: !!process.env.SUPABASE_URL,
       supabase_service_key_set: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-      provider: process.env.WHATSAPP_PROVIDER ?? "wppconnect",
+      provider: process.env.WHATSAPP_PROVIDER ?? "evolution",
       evolution_base_url_set: !!process.env.EVOLUTION_BASE_URL,
       evolution_instance_set: !!process.env.EVOLUTION_INSTANCE,
       evolution_api_key_set: !!process.env.EVOLUTION_API_KEY,

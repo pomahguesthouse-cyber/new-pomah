@@ -1,7 +1,7 @@
 /**
  * Webchat Backup — server functions.
  *
- * Kanal cadangan resmi saat WhatsApp/Wpp error. Endpoint publik tanpa
+ * Kanal cadangan resmi saat WhatsApp/WhatsApp gateway error. Endpoint publik tanpa
  * auth — gunakan validasi Zod ketat dan jangan bocorkan kolom sensitif.
  */
 import { createServerFn } from "@tanstack/react-start";

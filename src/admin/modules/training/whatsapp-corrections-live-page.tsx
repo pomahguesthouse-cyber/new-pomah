@@ -21,7 +21,7 @@ import { cn, formatDateID, formatRelativeDateID, formatTimeID } from "@/lib/util
 import { listWhatsappCorrectionSessions } from "@/admin/modules/training/wa-correction.functions";
 import { createWhatsappCorrectionLiveSession } from "@/admin/modules/training/wa-correction-live-session.functions";
 import { deleteWhatsappCorrectionSession } from "@/admin/modules/training/wa-correction-session.functions";
-import { listWppLiveChats, listWppLiveMessages } from "@/admin/modules/training/wpp-live.functions";
+import { listWaLiveChats, listWaLiveMessages } from "@/admin/modules/training/wa-live.functions";
 import { mapWhatsappLidToPhone } from "@/admin/modules/training/wa-identity-map.functions";
 
 type ThreadRow = {
@@ -80,7 +80,7 @@ function messageDay(iso: string) { return new Date(iso).toDateString(); }
 function buildContext(thread: ThreadRow | null, messages: MessageRow[]) {
   const lines: string[] = [];
   if (thread) lines.push(`Tamu: ${displayName(thread)} (${formatWaPhone(primaryPhone(thread))})`);
-  if (thread?.external_chat_id) lines.push(`WPP chatId: ${thread.external_chat_id}`);
+  if (thread?.external_chat_id) lines.push(`Chat ID gateway: ${thread.external_chat_id}`);
   if (thread?.sync_error) lines.push(`Catatan: ${thread.sync_error}`);
   const recent = messages.slice(-10).map((m) => `${m.direction === "in" ? "Tamu" : "Bot/Admin"}: ${m.body}`);
   if (recent.length) lines.push(`\nKonteks pesan terakhir:\n${recent.join("\n")}`);
@@ -90,8 +90,8 @@ function buildContext(thread: ThreadRow | null, messages: MessageRow[]) {
 export function WhatsappCorrectionsPage() {
   const qc = useQueryClient();
   const latestRef = useRef<HTMLDivElement | null>(null);
-  const listChatsFn = useServerFn(listWppLiveChats);
-  const listMessagesFn = useServerFn(listWppLiveMessages);
+  const listChatsFn = useServerFn(listWaLiveChats);
+  const listMessagesFn = useServerFn(listWaLiveMessages);
   const createLiveSessionFn = useServerFn(createWhatsappCorrectionLiveSession);
   const sessionsFn = useServerFn(listWhatsappCorrectionSessions);
   const deleteSessionFn = useServerFn(deleteWhatsappCorrectionSession);
@@ -214,7 +214,7 @@ function ChatBubble(props: { message: MessageRow; latestRef: RefObject<HTMLDivEl
 
 function RightContext(props: { summary: string; setSummary: (value: string) => void; saveSessionMut: SimpleMutation; trainingMessagesCount: number; selectedThread: ThreadRow | null; mapPhone: string; setMapPhone: (value: string) => void; mapIdentityMut: SimpleMutation }) {
   const lid = lidDigits(props.selectedThread);
-  return <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4"><section className="rounded-lg border bg-white p-3 shadow-sm"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-[#667781]">Pesan dibaca dari Supabase conversation DB; WPPConnect tetap dipakai untuk engine/session WhatsApp.</p><Textarea rows={10} className="mt-3 min-h-44 text-xs" value={props.summary} onChange={(e) => props.setSummary(e.target.value)} /><Button className="mt-3 h-11 w-full rounded-full bg-[#008069] hover:bg-[#00695c]" disabled={!props.trainingMessagesCount || props.saveSessionMut.isPending} onClick={() => props.saveSessionMut.mutate()}>{props.saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}Simpan Percakapan</Button></section><section className="rounded-lg border bg-white p-3 text-xs text-[#667781]"><h2 className="text-sm font-semibold text-[#111b21]">Identitas</h2><p className="mt-2 break-all">Nomor: {formatWaPhone(primaryPhone(props.selectedThread))}</p><p className="break-all">ChatId: {props.selectedThread?.external_chat_id || "-"}</p><p>Source: {props.selectedThread?.source || "supabase_mirror"}</p>{lid && !isPublicPhone(primaryPhone(props.selectedThread)) && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="font-semibold text-amber-800">Map LID ke Nomor WA</p><p className="mt-1 break-all text-[11px] text-amber-700">LID: {lid}</p><Input className="mt-2 h-10 bg-white text-xs" inputMode="numeric" placeholder="6281234567890" value={props.mapPhone} onChange={(e) => props.setMapPhone(e.target.value)} /><Button size="sm" className="mt-2 h-10 w-full rounded-full bg-[#008069] text-xs hover:bg-[#00695c]" disabled={props.mapIdentityMut.isPending || !props.mapPhone.trim()} onClick={() => props.mapIdentityMut.mutate()}>{props.mapIdentityMut.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Simpan Mapping</Button></div>}</section></div>;
+  return <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4"><section className="rounded-lg border bg-white p-3 shadow-sm"><h2 className="text-sm font-semibold">Training Context</h2><p className="mt-1 text-xs text-[#667781]">Pesan dibaca dari Supabase conversation DB; Evolution API tetap dipakai untuk engine/session WhatsApp.</p><Textarea rows={10} className="mt-3 min-h-44 text-xs" value={props.summary} onChange={(e) => props.setSummary(e.target.value)} /><Button className="mt-3 h-11 w-full rounded-full bg-[#008069] hover:bg-[#00695c]" disabled={!props.trainingMessagesCount || props.saveSessionMut.isPending} onClick={() => props.saveSessionMut.mutate()}>{props.saveSessionMut.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}Simpan Percakapan</Button></section><section className="rounded-lg border bg-white p-3 text-xs text-[#667781]"><h2 className="text-sm font-semibold text-[#111b21]">Identitas</h2><p className="mt-2 break-all">Nomor: {formatWaPhone(primaryPhone(props.selectedThread))}</p><p className="break-all">ChatId: {props.selectedThread?.external_chat_id || "-"}</p><p>Source: {props.selectedThread?.source || "supabase_mirror"}</p>{lid && !isPublicPhone(primaryPhone(props.selectedThread)) && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="font-semibold text-amber-800">Map LID ke Nomor WA</p><p className="mt-1 break-all text-[11px] text-amber-700">LID: {lid}</p><Input className="mt-2 h-10 bg-white text-xs" inputMode="numeric" placeholder="6281234567890" value={props.mapPhone} onChange={(e) => props.setMapPhone(e.target.value)} /><Button size="sm" className="mt-2 h-10 w-full rounded-full bg-[#008069] text-xs hover:bg-[#00695c]" disabled={props.mapIdentityMut.isPending || !props.mapPhone.trim()} onClick={() => props.mapIdentityMut.mutate()}>{props.mapIdentityMut.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}Simpan Mapping</Button></div>}</section></div>;
 }
 
 function SavedPanel({ sessions, deleteSessionMut }: { sessions: SessionRow[]; deleteSessionMut: SimpleMutation }) {

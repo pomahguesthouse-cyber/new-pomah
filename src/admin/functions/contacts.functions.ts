@@ -177,7 +177,7 @@ export const sendPreArrivalReminder = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
     const token = (prop as { wpp_token?: string } | null)?.wpp_token;
-    if (!token) throw new Error("WPP token belum diset di property");
+    if (!token) throw new Error("Token WhatsApp gateway belum diset di property");
 
     const name = guest?.full_name ?? "Kak";
     const defaultMsg =

@@ -16,7 +16,7 @@ type AnyClient = SupabaseClient<any>;
 export interface SaveInboundResult {
   /** UUID of the newly created whatsapp_messages row */
   messageId: string | null;
-  /** True when a durable Wpp ID already existed, so callers should not enqueue. */
+  /** True when a durable WhatsApp gateway ID already existed, so callers should not enqueue. */
   duplicate?: boolean;
   error:     Error   | null;
 }

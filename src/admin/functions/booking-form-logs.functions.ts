@@ -59,7 +59,7 @@ export const listBookingFormSendLogs = createServerFn({ method: "GET" })
 
 /**
  * Kirim ulang tautan form booking untuk log yang gagal/superseded.
- * Membuat token baru (TTL fresh 30 menit), mengirim pesan WA via Wpp
+ * Membuat token baru (TTL fresh 30 menit), mengirim pesan WA via WhatsApp gateway
  * memakai kredensial properti, lalu mencatat log baru status `sent`/`failed`.
  */
 const resendInput = z.object({ logId: z.string().uuid() });
@@ -87,8 +87,8 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       .maybeSingle();
     if (logErr || !log) throw new Error("Log tidak ditemukan.");
 
-    // Resolusi kredensial Wpp + base URL dari properti terkait.
-    let wppToken: string | null = null;
+    // Resolusi kredensial WhatsApp gateway + base URL dari properti terkait.
+    let waToken: string | null = null;
     let baseUrl = "https://pomahguesthouse.com";
     let propertyName = "Pomah Guesthouse";
     if (log.property_id) {
@@ -98,14 +98,14 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
         .eq("id", log.property_id)
         .maybeSingle();
       if (prop) {
-        wppToken = (prop.wpp_token as string | null) ?? null;
+        waToken = (prop.wpp_token as string | null) ?? null;
         propertyName = (prop.name as string | undefined) ?? propertyName;
         const domain = prop.public_domain as string | undefined;
         if (domain) baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
       }
     }
-    if (!wppToken) {
-      throw new Error("Properti belum mempunyai token Wpp aktif.");
+    if (!waToken) {
+      throw new Error("Properti belum mempunyai token WhatsApp gateway aktif.");
     }
 
     // Buat token baru memakai prefill yang sama dengan log lama.
@@ -164,7 +164,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
     if (insErr) throw new Error(`Gagal mencatat log baru: ${insErr.message}`);
 
     const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
-    const result = await sendWhatsAppMessage(wppToken, log.phone, message);
+    const result = await sendWhatsAppMessage(waToken, log.phone, message);
 
     const patch: Record<string, unknown> = {
       status: result.ok ? "sent" : "failed",
