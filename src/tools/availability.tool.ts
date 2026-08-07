@@ -19,7 +19,7 @@
  * dst.) dipertahankan agar prompt agen yang sudah ada tetap bekerja.
  */
 
-import { isDateString, nextDay, fmtDateID } from "@/lib/date";
+import { isDateString, nextDay, fmtDateID, todayWIB } from "@/lib/date";
 import {
   getDailyRatesForRange,
   resolveRoomNightlyRates,
@@ -265,7 +265,9 @@ export const checkRoomAvailability: ToolHandler = async (
   args: Record<string, unknown>,
   ctx:  ToolContext,
 ): Promise<string> => {
-  const today = (ctx as { today?: string }).today ?? new Date().toISOString().slice(0, 10);
+  // Fallback ke tanggal WIB (bukan UTC) supaya tool & prompt front-office
+  // selalu sepakat soal "hari ini" — mencegah selisih 1 hari di sekitar tengah malam.
+  const today = (ctx as { today?: string }).today ?? todayWIB();
   const coercedIn  = coerceDate(args.check_in, today);
   const coercedOut = coerceDate(args.check_out, today);
 

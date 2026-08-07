@@ -9,6 +9,11 @@ import { z } from "zod";
 
 import { WEBCHAT_FALLBACK_PROMPT } from "@/ai/agents/webchat-fallback.prompt";
 import { chatCompletionText, resolvePropertyAiConfig } from "@/services/ai-client.service";
+import {
+  messageOpensWithGreeting,
+  parseAvailabilityDateRange,
+  shouldUseDeterministicAvailability,
+} from "@/services/wa-autoreply/message-parsers";
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -34,112 +39,14 @@ function fmtDateID(d: string | null | undefined): string {
   } catch { return String(d); }
 }
 
-function nextIsoDay(d: string): string {
-  return new Date(new Date(`${d}T00:00:00Z`).getTime() + 86400000)
-    .toISOString()
-    .slice(0, 10);
-}
-
 function todayWibIso(): string {
   return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-const ID_MONTHS: Record<string, number> = {
-  jan: 1, januari: 1,
-  feb: 2, februari: 2, pebruari: 2,
-  mar: 3, maret: 3,
-  apr: 4, april: 4,
-  mei: 5,
-  jun: 6, juni: 6,
-  jul: 7, juli: 7,
-  agu: 8, agt: 8, agustus: 8,
-  sep: 9, sept: 9, september: 9,
-  okt: 10, oktober: 10,
-  nov: 11, november: 11,
-  des: 12, desember: 12,
-};
-
-function makeIsoDate(day: number, month: number, year: number): string | null {
-  if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
-  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return null;
-  const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const date = new Date(`${iso}T00:00:00Z`);
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) return null;
-  return iso;
-}
-
-function resolveYear(month: number, explicitYear: string | undefined, today: string): number {
-  if (explicitYear) return Number(explicitYear.length === 2 ? `20${explicitYear}` : explicitYear);
-  const currentYear = Number(today.slice(0, 4));
-  const currentMonth = Number(today.slice(5, 7));
-  return month < currentMonth ? currentYear + 1 : currentYear;
-}
-
-function parseAvailabilityDateRange(message: string, today: string): { checkIn: string; checkOut: string } | null {
-  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
-  if (!text) return null;
-
-  if (/\b(malam ini|nanti malam|hari ini|today)\b/i.test(text)) {
-    return { checkIn: today, checkOut: nextIsoDay(today) };
-  }
-  if (/\b(besok|tomorrow)\b/i.test(text)) {
-    const checkIn = nextIsoDay(today);
-    return { checkIn, checkOut: nextIsoDay(checkIn) };
-  }
-  if (/\blusa\b/i.test(text)) {
-    const checkIn = nextIsoDay(nextIsoDay(today));
-    return { checkIn, checkOut: nextIsoDay(checkIn) };
-  }
-
-  let m = text.match(/\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
-  if (m) {
-    const [, d1Raw, d2Raw, monthName, yearRaw] = m;
-    const month = ID_MONTHS[monthName];
-    if (!month) return null;
-    const year = resolveYear(month, yearRaw, today);
-    const checkIn = makeIsoDate(Number(d1Raw), month, year);
-    const checkOut = makeIsoDate(Number(d2Raw), month, year);
-    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
-  }
-
-  m = text.match(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
-  if (m) {
-    const [, dayRaw, monthName, yearRaw] = m;
-    const month = ID_MONTHS[monthName];
-    if (!month) return null;
-    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-    if (checkIn) return { checkIn, checkOut: nextIsoDay(checkIn) };
-  }
-
-  m = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?\b/i);
-  if (m) {
-    const [, dayRaw, monthRaw, yearRaw] = m;
-    const month = Number(monthRaw);
-    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-    if (checkIn) return { checkIn, checkOut: nextIsoDay(checkIn) };
-  }
-
-  return null;
-}
-
-function shouldUseDeterministicAvailability(message: string): boolean {
-  const text = message.toLowerCase();
-  const asksAvailability =
-    /\b(ready|tersedia|available|avail|kosong|ada kamar|ada yg|ada yang|ada untuk|kamar.*ada|cek.*kamar|booking|pesan kamar|menginap)\b/i.test(text);
-  const hasDateSignal =
-    /\b(hari ini|malam ini|besok|lusa|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/i.test(text) ||
-    /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text) ||
-    /\b\d{1,2}[\/.]\d{1,2}\b/i.test(text);
-  return asksAvailability && hasDateSignal;
-}
-
-/** True bila pesan tamu DIBUKA dengan sapaan — agar bot membalas sapaan
- *  hanya saat tepat (turn pembuka), tidak mengulang di tengah percakapan. */
-function messageOpensWithGreeting(message: string): boolean {
-  return /^\s*(halo|hai|hi|hei|hey|hello|assalam|selamat\s+(pagi|siang|sore|malam)|pagi|siang|sore|malam)\b/i.test(
-    message,
-  );
-}
+/* Parser tanggal & deteksi availability dipakai bersama dengan kanal
+ * WhatsApp — sumber tunggal di services/wa-autoreply/message-parsers.ts
+ * agar perbaikan parser (mis. "1 kamar ... tanggal 8 Agustus") berlaku di
+ * kedua kanal. Duplikat lokal dihapus 7 Agu 2026. */
 
 function formatAvailabilityReply(
   raw: {

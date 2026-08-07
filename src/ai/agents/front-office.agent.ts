@@ -335,6 +335,30 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "JANGAN kirim teks penundaan ('Mohon tunggu', 'akan proses') — langsung panggil tool. " +
       "PENTING: di mode tamu, Front Office TIDAK memiliki tool `create_booking`. Booking final hanya boleh dibuat oleh state machine setelah tamu eksplisit konfirmasi ringkasan.",
 
+    "TAMU OTW / DATANG LANGSUNG (WAJIB — JANGAN MENOLAK): Bila tamu bilang 'saya otw', " +
+      "'sudah di jalan', 'baru sampai dari luar kota', 'mau langsung datang', atau 'mau check-in " +
+      "sekarang', itu adalah SINYAL PALING SIAP untuk booking — bukan alasan menolak. " +
+      "DILARANG KERAS menjawab bahwa 'sistem tidak mendukung check-in tanpa reservasi' atau " +
+      "'harus booking dulu tidak bisa langsung' — TIDAK ADA kebijakan seperti itu dan itu " +
+      "mengarang. Yang benar: amankan kamarnya dulu. Konfirmasi tipe kamar + tanggal menginap " +
+      "(check-in hari ini), lalu LANGSUNG lanjut ke `start_booking_details`. Booking via chat ini " +
+      "JUSTRU adalah cara Kakak mengamankan kamar sebelum tiba.",
+
+    "PERMINTAAN ISTIRAHAT SINGKAT / DAY-USE (FRAMING POSITIF): Bila tamu ingin 'istirahat sampai " +
+      "siang saja', 'check-out sore ini', atau menginap di hari yang sama, sistem memang hanya " +
+      "melayani menginap MINIMAL 1 malam (tidak ada sewa per jam / day-use). TAPI JANGAN jawab " +
+      "sekadar 'tidak bisa'. Tawarkan solusi sebagai 'BISA': 'Bisa Kak, Kakak check-in sekarang " +
+      "dan check-out standar besok jam 12 siang — jadi Kakak tetap bisa istirahat sampai siang.' " +
+      "Baru bila tamu tetap menolak menginap semalam, akui batasannya dengan sopan. Jangan mengulang " +
+      "penolakan yang sama berkali-kali.",
+
+    "TUTUP BOOKING SAAT TAMU SUDAH SETUJU (ANTI-LOOP): Bila tamu sudah menyetujui tipe kamar DAN " +
+      "tanggal (mis. 'yg single aja', 'tanpa extra bed aja', 'iya bookingkan'), ANGGAP itu " +
+      "persetujuan — LANGSUNG panggil `start_booking_details`. JANGAN menawarkan ulang tipe kamar, " +
+      "JANGAN mengulang upsell extra bed / Deluxe yang sudah ditolak tamu, dan JANGAN bertanya " +
+      "'mau saya bookingkan?' lagi bila tamu sudah bilang mau. Upsell maksimal 1 kali; setelah " +
+      "tamu menolak, hormati pilihannya dan lanjutkan proses booking dengan pilihan tamu.",
+
     "FORM BOOKING SEKALI PAKAI (opsional, lebih ringan): Bila percakapan terlihat panjang/" +
       "tamu tampak sibuk atau tamu meminta cara mengisi data lebih cepat, kamu boleh memilih " +
       "`generate_booking_form` SEBAGAI PENGGANTI `start_booking_details`. Tool ini menghasilkan " +

@@ -50,6 +50,10 @@ export async function generateSessionSummary(
     `Ekstrak status percakapan ke JSON dengan schema:\n${schemaHint}\n\n` +
     `ATURAN PENTING:\n` +
     `- Jangan mengarang. Field yang TIDAK pernah disebut tamu/bot di transkrip → null (atau false untuk boolean).\n` +
+    `- check_in/check_out: ambil dari tanggal TERAKHIR yang disebut TAMU, bukan dari pesan bot.\n` +
+    `  Bila bot menyebut tanggal yang berbeda dari tanggal terakhir yang diminta tamu, IKUTI TAMU\n` +
+    `  (bot bisa saja salah baca tanggal — jangan diabadikan ke ringkasan). Tanggal lama yang sudah\n` +
+    `  digantikan permintaan baru → buang. Tamu belum pernah menyebut tanggal → null.\n` +
     `- short_summary: 1-3 kalimat fokus konteks aktif (tipe kamar, status booking, pertanyaan belum dijawab).\n` +
     `- last_topic: pilih topik terakhir yang dibahas tamu.\n` +
     `- Jawab HANYA JSON valid, tanpa code fence, tanpa kata pengantar.`;

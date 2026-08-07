@@ -35,6 +35,56 @@ const ID_MONTHS: Record<string, number> = {
   desember: 12,
 };
 
+/** Nama bulan lengkap — dipakai untuk toleransi typo (mis. "sepember"). */
+const ID_MONTH_FULL_NAMES = Object.keys(ID_MONTHS).filter((name) => name.length >= 5);
+
+/**
+ * Kata yang lazim muncul sebagai "<angka> <kata>" tetapi BUKAN nama bulan
+ * (mis. "1 kamar", "2 orang", "3 malam"). Tanpa daftar ini, kandidat pertama
+ * seperti "1 kamar" bisa menutup kandidat tanggal asli di belakangnya.
+ */
+const NON_MONTH_WORDS =
+  /^(kamar|kamarnya|room|rooms|orang|dewasa|anak|bocil|bocah|balita|pax|tamu|malam|hari|minggu|bulan|tahun|jam|unit|buah|ribu|rb|juta|jt|k)$/i;
+
+function editDistance(a: string, b: string): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  let prev = Array.from({ length: cols }, (_, i) => i);
+  for (let i = 1; i < rows; i += 1) {
+    const curr = [i, ...new Array(cols - 1).fill(0)];
+    for (let j = 1; j < cols; j += 1) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    prev = curr;
+  }
+  return prev[cols - 1];
+}
+
+/**
+ * Ubah sebuah kata menjadi nomor bulan. Exact-match dulu, lalu toleransi typo
+ * ringan terhadap nama bulan lengkap (insiden 2 Agu 2026: "tgl 18 sepember"
+ * gagal di-parse sehingga bot memakai tanggal sesi lama).
+ * Return `null` bila kata jelas bukan bulan.
+ */
+export function resolveMonthName(raw: string): number | null {
+  const name = raw.toLowerCase().replace(/[^a-z]/g, "");
+  if (!name) return null;
+  const exact = ID_MONTHS[name];
+  if (exact) return exact;
+  if (name.length < 4 || NON_MONTH_WORDS.test(name)) return null;
+
+  for (const candidate of ID_MONTH_FULL_NAMES) {
+    if (Math.abs(candidate.length - name.length) > 1) continue;
+    const maxDistance = candidate.length >= 7 ? 2 : 1;
+    if (editDistance(name, candidate) <= maxDistance) return ID_MONTHS[candidate];
+  }
+  return null;
+}
+
 function makeIsoDate(day: number, month: number, year: number): string | null {
   if (!Number.isInteger(day) || !Number.isInteger(month) || !Number.isInteger(year)) return null;
   if (day < 1 || day > 31 || month < 1 || month > 12 || year < 2000 || year > 2100) return null;
@@ -72,55 +122,54 @@ export function parseAvailabilityDateRange(
     return { checkIn, checkOut: nextDay(checkIn) };
   }
 
+  // CATATAN: semua pola di bawah memakai `matchAll` (global) dan `continue`,
+  // BUKAN `match` + bail-out. Insiden 7 Agu 2026: "masih ada 1 kamar untuk
+  // tanggal 8 Agustus 2026" gagal di-parse karena kandidat pertama "1 kamar"
+  // bukan bulan lalu parser langsung menyerah — bot akhirnya memakai tanggal
+  // sesi lama (18–19 September) dan menjawab tanggal yang salah.
+
   // Hari(-hari) diikuti nama bulan, mis. "18-19 September" atau "5 Oktober".
-  let m = text.match(
-    /\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i,
-  );
-  if (m) {
+  for (const m of text.matchAll(
+    /\b(\d{1,2})\s*(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi,
+  )) {
     const [, d1Raw, d2Raw, monthName, yearRaw] = m;
-    const month = ID_MONTHS[monthName];
-    if (month) {
-      const year = resolveYear(month, yearRaw, today);
-      const checkIn = makeIsoDate(Number(d1Raw), month, year);
-      const checkOut = makeIsoDate(Number(d2Raw), month, year);
-      if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
-    }
+    const month = resolveMonthName(monthName);
+    if (!month) continue;
+    const year = resolveYear(month, yearRaw, today);
+    const checkIn = makeIsoDate(Number(d1Raw), month, year);
+    const checkOut = makeIsoDate(Number(d2Raw), month, year);
+    if (checkIn && checkOut && checkOut > checkIn) return { checkIn, checkOut };
   }
 
   // Nama bulan diikuti hari(-hari), mis. "september tanggal 18-19" atau
   // "bulan september tangga 18-19" (termasuk typo "tangga" tanpa 'l').
-  m = text.match(
-    /\b([a-z]+)\s+(?:tanggal|tangga|tgl\.?)?\s*(\d{1,2})\s*(?:(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2}))?\b/i,
-  );
-  if (m) {
+  for (const m of text.matchAll(
+    /\b([a-z]+)\s+(?:tanggal|tangga|tgl\.?)?\s*(\d{1,2})\s*(?:(?:-|–|—|sampai|sd|s\/d|to)\s*(\d{1,2}))?\b/gi,
+  )) {
     const [, monthName, d1Raw, d2Raw] = m;
-    const month = ID_MONTHS[monthName];
-    if (month) {
-      const year = resolveYear(month, undefined, today);
-      const checkIn = makeIsoDate(Number(d1Raw), month, year);
-      if (checkIn) {
-        if (d2Raw) {
-          const checkOut = makeIsoDate(Number(d2Raw), month, year);
-          if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
-        } else {
-          return { checkIn, checkOut: nextDay(checkIn) };
-        }
-      }
+    const month = resolveMonthName(monthName);
+    if (!month) continue;
+    const year = resolveYear(month, undefined, today);
+    const checkIn = makeIsoDate(Number(d1Raw), month, year);
+    if (!checkIn) continue;
+    if (d2Raw) {
+      const checkOut = makeIsoDate(Number(d2Raw), month, year);
+      if (checkOut && checkOut > checkIn) return { checkIn, checkOut };
+      continue;
     }
+    return { checkIn, checkOut: nextDay(checkIn) };
   }
 
-  m = text.match(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/i);
-  if (m) {
+  // Hari diikuti nama bulan, mis. "8 Agustus 2026".
+  for (const m of text.matchAll(/\b(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?\b/gi)) {
     const [, dayRaw, monthName, yearRaw] = m;
-    const month = ID_MONTHS[monthName];
-    if (month) {
-      const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
-      if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
-    }
+    const month = resolveMonthName(monthName);
+    if (!month) continue;
+    const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
+    if (checkIn) return { checkIn, checkOut: nextDay(checkIn) };
   }
 
-  m = text.match(/\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/i);
-  if (m) {
+  for (const m of text.matchAll(/\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/gi)) {
     const [, dayRaw, monthRaw, yearRaw] = m;
     const month = Number(monthRaw);
     const checkIn = makeIsoDate(Number(dayRaw), month, resolveYear(month, yearRaw, today));
@@ -130,18 +179,30 @@ export function parseAvailabilityDateRange(
   return null;
 }
 
+/**
+ * True bila pesan MENYEBUT tanggal secara eksplisit (nama bulan, "tgl 18",
+ * "8/9", atau kata relatif). Dipakai sebagai rem: bila sinyal ini ada tetapi
+ * `parseAvailabilityDateRange` gagal, fast-path TIDAK boleh meminjam tanggal
+ * dari sesi lama — tanggal lama hampir pasti bukan yang dimaksud tamu.
+ */
+export function mentionsExplicitDateSignal(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/\b(hari ini|malam ini|nanti malam|besok|tomorrow|lusa|today)\b/i.test(text)) return true;
+  if (/\b(?:tanggal|tangga|tgl)\.?\s*\d{1,2}\b/i.test(text)) return true;
+  if (/\b\d{1,2}\s*[/.]\s*\d{1,2}\b/i.test(text)) return true;
+  return (text.match(/[a-z]{4,}/gi) ?? []).some((token) => resolveMonthName(token) !== null);
+}
+
 export function shouldUseDeterministicAvailability(message: string): boolean {
   const text = message.toLowerCase();
   const asksAvailability =
-    /\b(ready|tersedia|available|avail|kosong|ada kamar|ada yg|ada yang|ada untuk|kamar.*ada|cek.*kamar|booking|pesan kamar|menginap)\b/i.test(
+    /\b(ready|tersedia|available|avail|kosong|ada kamar|ada yg|ada yang|ada untuk|masih ada|sisa kamar|kamar.*ada|ada\s+\d{1,2}\s*kamar|cek.*kamar|booking|pesan kamar|menginap)\b/i.test(
       text,
     );
   const hasDateSignal =
-    /\b(hari ini|malam ini|besok|lusa|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/i.test(
-      text,
-    ) ||
-    /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text) ||
-    /\b\d{1,2}[/.]\d{1,2}\b/i.test(text);
+    mentionsExplicitDateSignal(text) ||
+    /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text);
   return asksAvailability && hasDateSignal;
 }
 

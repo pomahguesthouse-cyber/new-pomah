@@ -56,6 +56,7 @@ import {
   isPerRoomRentalClarification,
   isTonightReply,
   looksLikeBookingInquiry,
+  mentionsExplicitDateSignal,
   messageOpensWithGreeting,
   parseAvailabilityDateRange,
   parseGuestCountFollowup,
@@ -334,6 +335,12 @@ async function buildContextualBookingInquiryReply(params: {
   // "biasa" (buildDeterministicAvailabilityReply) sudah lebih dulu menang;
   // di sini kita hanya menutup celah saat pesan tanpa tanggal.
   const explicitRange = parseAvailabilityDateRange(params.message, today);
+  // Rem keselamatan (insiden 7 Agu 2026): tamu menyebut "tanggal 8 Agustus 2026"
+  // tetapi parser gagal, lalu jalur ini memakai tanggal sesi lama (18–19 Sep)
+  // dan bot menjawab ketersediaan untuk tanggal yang salah. Bila pesan JELAS
+  // menyebut tanggal namun tidak bisa di-parse, serahkan ke agent penuh supaya
+  // ia mengonfirmasi tanggal — jangan menebak dengan tanggal basi.
+  if (!explicitRange && mentionsExplicitDateSignal(params.message)) return null;
   const slotCheckIn = typeof params.bookingSlots?.checkIn === "string" ? params.bookingSlots?.checkIn as string : null;
   const slotCheckOut = typeof params.bookingSlots?.checkOut === "string" ? params.bookingSlots?.checkOut as string : null;
   const summaryCheckIn = typeof params.chatSummary?.check_in === "string" ? params.chatSummary?.check_in as string : null;

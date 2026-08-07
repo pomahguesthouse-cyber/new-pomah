@@ -8,6 +8,7 @@ import {
   isPerRoomRentalClarification,
   isTonightReply,
   looksLikeBookingInquiry,
+  mentionsExplicitDateSignal,
   messageOpensWithGreeting,
   parseAvailabilityDateRange,
   parseGuestCountFollowup,
@@ -110,5 +111,57 @@ assert.equal(isAvailabilityNeedDatesQuestion("Ada kamar kosong?", today), true);
 assert.equal(isAvailabilityNeedDatesQuestion("Ada kamar kosong besok?", today), false);
 assert.equal(isAvailabilitySourceContext("Saya lihat dari TikTok"), true);
 assert.equal(isAvailabilitySourceContext("Saya ingin booking"), false);
+
+// ---------------------------------------------------------------------------
+// Regresi insiden 7 Agu 2026 (thread +62 882-0082-77936):
+// "Halo kak, masih ada 1 kamar untuk tanggal 8 Agustus 2026" gagal di-parse
+// karena kandidat pertama "1 kamar" bukan nama bulan lalu parser menyerah.
+// Akibatnya fast-path kontekstual meminjam tanggal sesi lama (18-19 September)
+// dan bot menjawab ketersediaan untuk tanggal yang SALAH.
+// ---------------------------------------------------------------------------
+assert.deepEqual(
+  parseAvailabilityDateRange("Halo kak, masih ada 1 kamar untuk tanggal 8 Agustus 2026", today),
+  { checkIn: "2026-08-08", checkOut: "2026-08-09" },
+);
+assert.deepEqual(parseAvailabilityDateRange("ada 2 kamar tanggal 10 September?", today), {
+  checkIn: "2026-09-10",
+  checkOut: "2026-09-11",
+});
+assert.deepEqual(parseAvailabilityDateRange("untuk 3 orang tgl 12 Juli", today), {
+  checkIn: "2026-07-12",
+  checkOut: "2026-07-13",
+});
+assert.deepEqual(parseAvailabilityDateRange("3 malam mulai 20-22 Desember", today), {
+  checkIn: "2026-12-20",
+  checkOut: "2026-12-22",
+});
+assert.equal(
+  shouldUseDeterministicAvailability("Halo kak, masih ada 1 kamar untuk tanggal 8 Agustus 2026"),
+  true,
+);
+
+// Toleransi typo nama bulan ("sepember", "agusutus", "septmber").
+assert.deepEqual(parseAvailabilityDateRange("tgl 18 sepember masih ada kak?", today), {
+  checkIn: "2026-09-18",
+  checkOut: "2026-09-19",
+});
+assert.deepEqual(parseAvailabilityDateRange("8 agusutus 2026", today), {
+  checkIn: "2026-08-08",
+  checkOut: "2026-08-09",
+});
+// Kata non-bulan tidak boleh dianggap bulan lewat fuzzy match.
+assert.equal(parseAvailabilityDateRange("mau 3 kamar dong", today), null);
+assert.equal(parseAvailabilityDateRange("untuk 2 orang ya", today), null);
+assert.equal(parseAvailabilityDateRange("nginep 2 malam", today), null);
+assert.equal(parseAvailabilityDateRange("kami 4 dewasa", today), null);
+
+// Sinyal tanggal eksplisit — rem agar fast-path tidak memakai tanggal sesi lama.
+assert.equal(mentionsExplicitDateSignal("masih ada 1 kamar untuk tanggal 8 Agustus 2026"), true);
+assert.equal(mentionsExplicitDateSignal("tgl 18 sepember ada kamar?"), true);
+assert.equal(mentionsExplicitDateSignal("besok masih ada kamar?"), true);
+assert.equal(mentionsExplicitDateSignal("cek 12/07 ya"), true);
+assert.equal(mentionsExplicitDateSignal("masih ada kamar kak?"), false);
+assert.equal(mentionsExplicitDateSignal("harga per malam berapa?"), false);
+assert.equal(mentionsExplicitDateSignal("mau 3 kamar untuk 4 orang"), false);
 
 console.log("✓ WhatsApp message parser regression cases passed");
