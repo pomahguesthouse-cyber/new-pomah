@@ -10,10 +10,12 @@
 
 import assert from "node:assert/strict";
 
+import { bookingBelongsToPhone, normalizeBookingCode } from "../src/lib/booking-code";
 import {
   formatAvailabilityForGuestCount,
   formatAvailabilityReply,
 } from "../src/services/wa-autoreply/availability-formatters";
+import { sendInvoice } from "../src/tools/finance/send-invoice.tool";
 import { updatePaymentStatus } from "../src/tools/finance/update-payment-status.tool";
 import type { ToolContext } from "../src/tools/types";
 
@@ -204,4 +206,88 @@ const baseCtx = (over: Partial<ToolContext>): ToolContext =>
   assert.match(String(out.error), /tidak ditemukan/i);
 }
 
-console.log("✓ Security hardening regressions (S1, S2, B1, S4) passed");
+// ── S3: helper kode booking dipakai semua lookup reference_code ──────────────
+{
+  // Bentuk valid dinormalisasi ke huruf besar.
+  assert.equal(normalizeBookingCode("PG-9J6Y2"), "PG-9J6Y2");
+  assert.equal(normalizeBookingCode(" pg-9j6y2 "), "PG-9J6Y2");
+  // Wildcard & bentuk aneh ditolak sebelum menyentuh DB.
+  for (const bad of ["PG-%", "%", "_____", "PG_9J6Y2 ", "PG 9J6Y2", "", "PG-9J6Y2'; drop", null, 42]) {
+    assert.equal(normalizeBookingCode(bad as unknown), null, `harus ditolak: ${String(bad)}`);
+  }
+  assert.equal(normalizeBookingCode("PG_9J6Y2"), null, "underscore adalah wildcard ILIKE");
+
+  // Kepemilikan: booking milik nomor lain tidak boleh lolos.
+  const ownerDb = stubDb({ bookings: () => ({ data: [{ id: "b1" }], error: null }) });
+  assert.equal(await bookingBelongsToPhone(ownerDb as any, "PG-9J6Y2", "6281234567890"), true);
+
+  const strangerDb = stubDb({ bookings: () => ({ data: [], error: null }) });
+  assert.equal(await bookingBelongsToPhone(strangerDb as any, "PG-9J6Y2", "6281234567890"), false);
+
+  // Kode/nomor tidak valid → false, tanpa menyentuh DB.
+  assert.equal(await bookingBelongsToPhone(ownerDb as any, "PG-%", "6281234567890"), false);
+  assert.equal(await bookingBelongsToPhone(ownerDb as any, "PG-9J6Y2", ""), false);
+
+  // Kegagalan teknis → null (pemanggil harus menolak, bukan mengasumsikan boleh).
+  const brokenDb = stubDb({ bookings: () => ({ data: null, error: { message: "boom" } }) });
+  assert.equal(await bookingBelongsToPhone(brokenDb as any, "PG-9J6Y2", "6281234567890"), null);
+}
+
+// send_invoice: tamu meminta kode booking orang lain → ditolak.
+{
+  const db = stubDb({ bookings: () => ({ data: [], error: null }) });
+  const out = JSON.parse(
+    await sendInvoice(
+      { reference_code: "PG-ZZZZZ" },
+      baseCtx({ supabaseAdmin: db as any, phone: "6281234567890", isManager: false }),
+    ),
+  );
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /tidak terdaftar atas nomor ini/i);
+}
+
+// send_invoice: wildcard ditolak dengan pesan format.
+{
+  const out = JSON.parse(
+    await sendInvoice(
+      { reference_code: "PG-%" },
+      baseCtx({ phone: "6281234567890", isManager: false }),
+    ),
+  );
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /tidak valid/i);
+}
+
+// ── B3: timeout per panggilan LLM dihitung dari sisa anggaran ────────────────
+// Replika resolveCallTimeoutMs di src/ai/multi-agent-orchestrator.ts.
+{
+  const MAX = 10_000;
+  const MIN = 3_500;
+  const RESERVE = 1_500;
+  const resolve = (remainingMs: number | null): number | null => {
+    if (remainingMs === null) return MAX;
+    const remaining = remainingMs - RESERVE;
+    if (remaining < MIN) return null;
+    return Math.min(MAX, remaining);
+  };
+
+  assert.equal(resolve(null), MAX, "tanpa deadline → pakai batas atas");
+  assert.equal(resolve(22_000), MAX, "anggaran longgar → batas atas");
+  assert.equal(resolve(8_000), 6_500, "anggaran sempit → timeout ikut mengecil");
+  assert.equal(resolve(4_500), null, "sisa terlalu tipis → jangan panggil sama sekali");
+  assert.equal(resolve(0), null);
+
+  // Invariant utama yang dulu dilanggar: satu turn worst-case (panggilan +
+  // backoff + retry) harus muat dalam anggaran.
+  const AI_TIMEOUT_MS = 22_000;
+  const BACKOFF = 500;
+  const firstCall = resolve(AI_TIMEOUT_MS)!;
+  const afterFirst = AI_TIMEOUT_MS - firstCall - BACKOFF;
+  const retryCall = resolve(afterFirst);
+  assert.ok(
+    retryCall === null || firstCall + BACKOFF + retryCall <= AI_TIMEOUT_MS,
+    "retry tidak boleh melewati anggaran",
+  );
+}
+
+console.log("✓ Security hardening regressions (S1, S2, S3, B1, B3, S4) passed");

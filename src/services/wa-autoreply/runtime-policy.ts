@@ -22,11 +22,21 @@ export function buildStateAwareFallback(state?: string): string {
   return FALLBACK_MESSAGE;
 }
 
-/** Full budget for booking, pricing, availability, long, or otherwise heavy messages. */
-export const AI_TIMEOUT_MS = 18_000;
+/**
+ * Anggaran penuh untuk pesan berat (booking, harga, ketersediaan, pesan panjang).
+ *
+ * Audit 7 Agu 2026 (B3): nilai lama 18 s lebih kecil daripada worst-case SATU
+ * turn LLM di orchestrator (10 s timeout + 0,5 s backoff + 10 s retry = 20,5 s),
+ * sehingga percakapan tool-calling normal (2 turn) kerap dipotong AbortController
+ * luar dan tamu menerima "sistem sedang lambat". Sekarang 22 s — masih aman di
+ * bawah `HANDLE_ONE_DEADLINE_MS` (26 s) setelah dikurangi waktu persist + kirim
+ * WhatsApp (~2 s). Orchestrator juga sekarang menerima deadline ini dan
+ * memperkecil timeout per-panggilan agar muat (lihat `deadlineAt`).
+ */
+export const AI_TIMEOUT_MS = 22_000;
 
 /** Reduced budget for lightweight conversation and FAQ messages. */
-export const AI_TIMEOUT_LIGHT_MS = 14_000;
+export const AI_TIMEOUT_LIGHT_MS = 16_000;
 
 export const HEAVY_INTENT_RE =
   /\b(booking|pesan|reservasi|kamar|room|harga|rate|tarif|tersedia|available|avail|kosong|tanggal|check.?in|check.?out|checkout|menginap|malam|dp|bayar|transfer|invoice|refund|extra ?bed|ganti|ubah|batal)\b/i;

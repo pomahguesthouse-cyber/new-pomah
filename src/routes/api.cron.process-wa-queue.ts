@@ -1,23 +1,58 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import {
-  drainQueue,
-  recoverUnqueuedInboundMessages,
-  sendFailureFallbackToGuests,
-} from "@/services/wa-autoreply.service";
+import { drainQueue } from "@/services/wa-autoreply.service";
 import { getWaitUntil, runDeferred } from "@/lib/cf-context";
 
 /**
  * Cron-driven queue drain.
  *
- * Invoked every 2s by the pg_cron job `drain-wa-queue` (see migration
- * 20260528120100_wa_queue_pg_cron_poll.sql). pg_cron's net.http_post cannot
- * easily carry a secret without vault setup, and this endpoint only drains
- * entries already validated and persisted in the DB queue via atomic claim
- * (FOR UPDATE SKIP LOCKED) — there is no inbound message vector here. Mirrors
- * the access posture of /api/queue-worker (hotfix 54a3274).
+ * Dipanggil tiap 2 detik oleh pg_cron job `drain-wa-queue` (migrasi
+ * 20260528120100_wa_queue_pg_cron_poll.sql). pg_cron tidak mudah membawa
+ * secret tanpa setup Vault, dan endpoint ini hanya men-drain entry yang sudah
+ * tervalidasi dan tersimpan di antrian DB lewat atomic claim (FOR UPDATE SKIP
+ * LOCKED) — tidak ada vektor pesan masuk di sini.
+ *
+ * GERBANG MURAH (audit 7 Agu 2026 — P1). Sebelumnya setiap tick menjalankan
+ * cleanup zombie + scan recovery 20 pesan + claim + fallback-sender, TANPA
+ * memeriksa apakah ada pekerjaan. Dengan cadence 2 detik itu berarti ±43.000
+ * invokasi/hari dan ratusan query/menit meski antrian kosong. Sekarang tick
+ * dimulai dengan satu query super-ringan; kalau tidak ada entry yang siap,
+ * handler langsung keluar. Pekerjaan safety-net (recovery pesan yang tidak
+ * ter-enqueue + fallback untuk entry gagal) dipindah ke
+ * /api/cron/wa-queue-safety-net yang jalan tiap menit.
  */
+
+/** Status yang berarti "masih ada pekerjaan di antrian". */
+const ACTIVE_QUEUE_STATUSES = ["pending", "waiting", "processing", "retrying"];
+
+async function hasQueueWork(): Promise<boolean> {
+  try {
+    const { data, error } = await (supabaseAdmin as any)
+      .from("wa_conversation_queue")
+      .select("id")
+      .in("status", ACTIVE_QUEUE_STATUSES)
+      .limit(1);
+    if (error) {
+      // Jangan diam saat query gerbang gagal — lebih baik lanjut bekerja
+      // (perilaku lama) daripada antrian berhenti diproses tanpa jejak.
+      console.warn("[Cron.drain] queue gate query failed, continuing:", error.message);
+      return true;
+    }
+    return (data ?? []).length > 0;
+  } catch (e) {
+    console.warn("[Cron.drain] queue gate threw, continuing:", e);
+    return true;
+  }
+}
+
 async function handle(request: Request): Promise<Response> {
+  if (!(await hasQueueWork())) {
+    return new Response(JSON.stringify({ accepted: true, idle: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const cleanupStartedAt = new Date(Date.now() - 5_000).toISOString();
   const { data: zombieCount } = await (supabaseAdmin as any).rpc(
     "wa_queue_cleanup_zombies",
@@ -54,12 +89,6 @@ async function handle(request: Request): Promise<Response> {
     });
   }
 
-  try {
-    await recoverUnqueuedInboundMessages({ lookbackMinutes: 30, limit: 20 });
-  } catch (e) {
-    console.warn("[Cron] recoverUnqueuedInboundMessages failed:", e);
-  }
-
   const origin = new URL(request.url).origin;
   // Process 1 entry per request. Multi-agent orchestration is CPU-heavy in
   // Cloudflare Workers; running 2 in one invocation caused worker eviction and
@@ -68,10 +97,6 @@ async function handle(request: Request): Promise<Response> {
   const runDrainWork = async () => {
     try {
       await drainQueue(origin, 1);
-
-      // Kirim fallback ke tamu untuk entry yang habis semua percobaan.
-      // Tanpa ini tamu tidak mendapat respons apapun saat orchestrator gagal 3x.
-      await sendFailureFallbackToGuests();
     } catch (e) {
       console.warn("[Cron] background drain failed:", e);
     }

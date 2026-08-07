@@ -8,6 +8,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { WEBCHAT_FALLBACK_PROMPT } from "@/ai/agents/webchat-fallback.prompt";
+import { bookingBelongsToPhone, normalizeBookingCode } from "@/lib/booking-code";
 import { chatCompletionText, resolvePropertyAiConfig } from "@/services/ai-client.service";
 import {
   messageOpensWithGreeting,
@@ -194,14 +195,25 @@ export const startWebchatSession = createServerFn({ method: "POST" })
       .maybeSingle();
 
     // 2. Resolve booking kalau ada code.
+    // Audit 7 Agu 2026 (S3): pencocokan persis + verifikasi booking memang
+    // milik nomor yang dipakai memulai sesi. Dulu `.ilike()` menerima wildcard
+    // sehingga "PG-%" menempelkan booking tamu lain ke sesi webchat ini.
     let booking: { id: string; reference_code: string | null } | null = null;
     if (data.bookingCode) {
-      const { data: b } = await (supabaseAdmin as any)
-        .from("bookings")
-        .select("id, reference_code")
-        .ilike("reference_code", data.bookingCode.trim())
-        .maybeSingle();
-      if (b) booking = b;
+      const code = normalizeBookingCode(data.bookingCode);
+      if (code) {
+        const owned = await bookingBelongsToPhone(supabaseAdmin as any, code, phone);
+        if (owned === true) {
+          const { data: b } = await (supabaseAdmin as any)
+            .from("bookings")
+            .select("id, reference_code")
+            .eq("reference_code", code)
+            .maybeSingle();
+          if (b) booking = b;
+        } else {
+          console.warn(`[Webchat] kode booking ${code} tidak cocok dengan nomor ${phone.slice(-6)}`);
+        }
+      }
     }
 
     // 3. Cari thread webchat aktif untuk phone yang sama.

@@ -7,8 +7,9 @@ Setiap temuan disertai lokasi `file:baris`, dampak nyata, dan usulan perbaikan. 
 
 ---
 
-> **Status perbaikan (7 Agu 2026).** S1, S2, B1, dan S4 sudah dikerjakan — lihat
-> bagian [Log perbaikan](#6-log-perbaikan) di akhir dokumen. Temuan lain masih terbuka.
+> **Status perbaikan (7 Agu 2026).** S1, S2, S3, S4, B1, B3, P1, dan P3 sudah dikerjakan —
+> lihat bagian [Log perbaikan](#6-log-perbaikan) di akhir dokumen. Yang masih terbuka:
+> S5, B2, B4, B5, B6, B7, P2, P4, P5, P6.
 
 ## Ringkasan eksekutif
 
@@ -325,6 +326,22 @@ Jalur balasan melakukan read-then-write berlapis: cek ack (2 SELECT), cek dedup 
 **Test.** `scripts/test-security-hardening.ts` (baru, terdaftar di `bun run test:security` dan rantai `test:wa-refactor`) menutup: payload wildcard ditolak, fail-closed 503/403/200, status tak diketahui tidak pernah berbunyi "penuh" sementara stok 0 asli tetap dilaporkan penuh, dan tamu tanpa bukti OCR tidak bisa menandai lunas (tanpa satu pun `UPDATE` ke `bookings`). Seluruh suite lain tetap hijau kecuali `test-returning-guest-memory.ts` yang **sudah merah sebelum perubahan ini** (sapaan tamu lama, tidak berkaitan).
 
 **Yang perlu dipastikan saat deploy.** S4 membuat webhook menolak semua request bila `EVOLUTION_WEBHOOK_TOKEN` (atau `WPP_WEBHOOK_TOKEN`) tidak ada di environment produksi. Pastikan variabel itu benar-benar terset di Lovable/Cloudflare sebelum rilis, dan URL webhook di manager Evolution masih membawa `?token=…` yang sama.
+
+### 7 Agustus 2026 (lanjutan) — S3, B3, P3, P1 selesai
+
+| Temuan | Perubahan |
+|--------|-----------|
+| **S3** | Helper baru `src/lib/booking-code.ts`: `normalizeBookingCode()` (validasi bentuk + huruf besar), `invalidBookingCodeError()`, dan `bookingBelongsToPhone()` (cek kepemilikan lewat `guests!inner(phone)` + `phoneVariants`). Dipakai di `send-invoice`, `get-payment-info`, `update-payment-status`, `telegram-callbacks`, dan `startWebchatSession` — semuanya kini `.eq()` bukan `.ilike()`. Tool jalur tamu (`send_invoice`, `get_payment_info`) menolak kode yang bukan milik nomor penelepon; manajer dikecualikan. Bonus: `get_payment_info` tidak lagi mempercayai argumen `guest_phone` dari LLM di kanal tamu — nomor percakapan yang berlaku, sehingga tamu tidak bisa mengintip booking nomor lain. |
+| **B3** | `AI_TIMEOUT_MS` 18 s → 22 s, `AI_TIMEOUT_LIGHT_MS` 14 s → 16 s. Anggaran juga dipangkas dinamis agar tidak menabrak `HANDLE_ONE_DEADLINE_MS`: `min(budget, 26s − elapsed − 3s cadangan kirim)`. `MultiAgentInput` menerima `deadlineAt`; `resolveCallTimeoutMs()` menghitung timeout tiap panggilan LLM dari sisa anggaran (batas atas 10 s, lantai 3,5 s, cadangan 1,5 s), dan retry internal dilewati bila sisa waktu tidak cukup untuk satu panggilan penuh. AbortController luar sekarang jadi jaring pengaman, bukan pemutus rutin. |
+| **P3** | `scheduleQueueNudge` dihapus dari webhook (hemat 1 subrequest + hingga 15 detik `waitUntil` per pesan). Migrasi `20260807093000_drop_dead_queue_worker_triggers.sql` menghapus trigger `t_process_wa_queue`, `t_process_wa_queue_update`, dan fungsi `trigger_process_wa_queue()` yang mem-POST ke endpoint ber-status `disabled`. |
+| **P1** | `/api/cron/process-wa-queue` dibuka dengan gerbang murah: satu `SELECT id … WHERE status IN (pending,waiting,processing,retrying) LIMIT 1` (memakai partial index `idx_wa_cq_phone_active`); bila kosong → langsung `{idle:true}` tanpa cleanup/scan/claim. Pekerjaan safety-net dipindah ke route baru `/api/cron/wa-queue-safety-net` + migrasi `20260807094000_wa_queue_safety_net_cron.sql` (pg_cron tiap 1 menit). Drain tetap 2 detik untuk menjaga latency balasan. |
+
+**Test.** `scripts/test-security-hardening.ts` diperluas: normalisasi/penolakan kode booking (termasuk `PG-%`, `PG_9J6Y2`, non-string), tiga hasil `bookingBelongsToPhone` (true/false/null saat error), `send_invoice` menolak kode milik tamu lain dan menolak wildcard, serta invariant anggaran B3 (timeout mengecil mengikuti sisa waktu; retry tidak pernah melewati anggaran). Seluruh suite hijau kecuali `test-returning-guest-memory.ts` yang sudah merah sebelumnya.
+
+**Catatan deploy tambahan.**
+- Route baru sudah didaftarkan manual di `src/routeTree.gen.ts` mengikuti pola generator, jadi `bun run typecheck` bersih; `vite build` akan meregenerasi file itu seperti biasa.
+- Dua migrasi baru perlu dijalankan. Setelah itu verifikasi: `SELECT jobname, schedule FROM cron.job WHERE jobname IN ('drain-wa-queue','wa-queue-safety-net');` dan pastikan trigger `t_process_wa_queue*` sudah tidak ada.
+- Kalau kode booking legacy ada yang tersimpan huruf kecil, `bookingBelongsToPhone` dan lookup `.eq()` di tool memakai huruf besar — cek dengan `SELECT count(*) FROM bookings WHERE reference_code <> upper(reference_code);` sebelum rilis.
 
 ---
 

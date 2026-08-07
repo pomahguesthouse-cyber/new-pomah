@@ -1361,7 +1361,23 @@ export async function executeAutoreplyForPhone(
     // Extend the worker lock before each (potentially slow) AI attempt.
     if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
     const controller = new AbortController();
-    const aiBudgetMs = pickAiBudgetMs(lastMessage ?? "");
+    // Anggaran AI tidak boleh menabrak deadline dinding-jam per klaim antrian:
+    // sisakan waktu untuk persist outbound + kirim WhatsApp, dan kurangi waktu
+    // yang sudah terpakai untuk memuat konteks/fast-path.
+    const SEND_RESERVE_MS = 3_000;
+    const elapsedMs = Date.now() - metrics.workerStartedAt;
+    const aiBudgetMs = Math.max(
+      6_000,
+      Math.min(
+        pickAiBudgetMs(lastMessage ?? ""),
+        HANDLE_ONE_DEADLINE_MS - elapsedMs - SEND_RESERVE_MS,
+      ),
+    );
+    // Deadline dinding-jam yang sama diteruskan ke orchestrator supaya timeout
+    // tiap panggilan LLM dihitung dari SISA anggaran, bukan nilai statis yang
+    // bisa melebihi anggaran ini (audit 7 Agu 2026 — B3). AbortController di
+    // bawah tinggal jadi jaring pengaman terakhir, bukan pemutus rutin.
+    const aiDeadlineAt = Date.now() + aiBudgetMs;
     const aiTimeout = setTimeout(() => controller.abort(), aiBudgetMs);
     if (!metrics.aiStartedAt) metrics.aiStartedAt = Date.now();
     const tStart = Date.now();
@@ -1426,6 +1442,7 @@ export async function executeAutoreplyForPhone(
         },
         llmConfig: llmConfig!,
         signal: controller.signal,
+        deadlineAt: aiDeadlineAt,
       });
 
       // Log any retry attempts that happened inside this run

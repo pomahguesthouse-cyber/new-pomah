@@ -14,8 +14,6 @@ import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
     status,
@@ -77,29 +75,18 @@ async function getWaitUntilRunner(): Promise<(task: Promise<void>) => void> {
   };
 }
 
-function scheduleQueueNudge(
-  runBackground: (task: Promise<void>) => void,
-  origin: string,
-  waitMs: number,
-  logCtx: string,
-) {
-  const nudgeDelayMs = Math.max(500, Math.min(waitMs + 500, 15_000));
-  runBackground((async () => {
-    await sleep(nudgeDelayMs);
-    try {
-      const queueToken = expectedQueueToken();
-      const res = await fetch(`${origin}/api/queue-worker`, {
-        method: "POST",
-        headers: queueToken ? { "x-queue-token": queueToken } : undefined,
-      });
-      if (!res.ok) {
-        console.warn(`[EvolutionWebhook] queue nudge failed status=${res.status} | ${logCtx}`);
-      }
-    } catch (e) {
-      console.warn(`[EvolutionWebhook] queue nudge failed: ${e} | ${logCtx}`);
-    }
-  })());
-}
+/*
+ * `scheduleQueueNudge` dihapus 7 Agu 2026 (audit — P3).
+ *
+ * Fungsi itu tidur hingga 15 detik di dalam `waitUntil` lalu mem-POST
+ * /api/queue-worker untuk setiap pesan masuk. Endpoint tersebut sejak refactor
+ * antrian SELALU membalas 202 {disabled:true} untuk panggilan non-manual, jadi
+ * seluruh rangkaian itu tidak melakukan apa pun — hanya membakar satu
+ * subrequest Worker dan memperpanjang masa hidup `waitUntil`. Karena 202
+ * dihitung `res.ok`, tidak ada satu pun warning yang muncul di log.
+ *
+ * Drain produksi ditangani pg_cron → /api/cron/process-wa-queue.
+ */
 
 export const evolutionWebhookPost = async ({ request }: { request: Request }): Promise<Response> => {
   const workerId = `evo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -367,14 +354,6 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
       `[EvolutionWebhook] Enqueued (entry=${entry?.entryId?.slice(0, 8) ?? "none"} delay=${delayMs}ms) | ${logCtx}`,
     );
 
-    if (entry?.entryId) {
-      scheduleQueueNudge(
-        runBackground,
-        new URL(request.url).origin,
-        entry.sleepMs ?? delayMs,
-        logCtx,
-      );
-    }
   } catch (e) {
     console.error(`[EvolutionWebhook] enqueue error: ${e} | ${logCtx}`);
   }

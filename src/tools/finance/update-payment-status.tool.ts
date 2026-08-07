@@ -18,7 +18,7 @@
  *      nomor penelepon.
  */
 
-import { phoneVariants } from "@/lib/phone";
+import { bookingBelongsToPhone, invalidBookingCodeError, normalizeBookingCode } from "@/lib/booking-code";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
 type PaymentStatus = "unpaid" | "partial" | "paid";
@@ -91,14 +91,9 @@ async function guestProofRejectionReason(
   }
 
   // Pertahanan berlapis: pastikan booking-nya memang milik nomor ini.
-  const { data: owned } = await db
-    .from("bookings")
-    .select("id, guests!inner(phone)")
-    .eq("reference_code", refCode.toUpperCase())
-    .in("guests.phone", phoneVariants(ctx.phone))
-    .limit(1);
-  if (!owned || owned.length === 0) {
-    return `Booking ${refCode} tidak terdaftar atas nomor ini.`;
+  const owned = await bookingBelongsToPhone(db, refCode, ctx.phone);
+  if (owned !== true) {
+    return `Booking ${refCode.toUpperCase()} tidak terdaftar atas nomor ini.`;
   }
 
   return null;
@@ -139,18 +134,19 @@ export const updatePaymentStatus: ToolHandler = async (
   }
   // Kode booking harus berbentuk wajar — mencegah wildcard `%`/`_` yang dulu
   // membuat lookup mencocokkan booking milik tamu lain.
-  if (!/^[A-Za-z0-9-]{3,20}$/.test(refCode)) {
-    return JSON.stringify({ ok: false, error: `Format kode booking "${refCode}" tidak valid.` });
+  const code = normalizeBookingCode(refCode);
+  if (!code) {
+    return JSON.stringify({ ok: false, error: invalidBookingCodeError(refCode) });
   }
 
   // ── Otorisasi ──────────────────────────────────────────────────────────
   if (ctx.isManager !== true) {
     try {
-      const rejection = await guestProofRejectionReason(ctx, refCode);
+      const rejection = await guestProofRejectionReason(ctx, code);
       if (rejection) {
         console.warn(
           `[update_payment_status] BLOCKED non-manager call ` +
-            `(phone=${(ctx.phone ?? "-").slice(-6)}, ref=${refCode}): ${rejection}`,
+            `(phone=${(ctx.phone ?? "-").slice(-6)}, ref=${code}): ${rejection}`,
         );
         return JSON.stringify({ ok: false, error: rejection });
       }
@@ -167,7 +163,7 @@ export const updatePaymentStatus: ToolHandler = async (
     const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
       .from("bookings")
       .select("id, reference_code")
-      .eq("reference_code", refCode.toUpperCase())
+      .eq("reference_code", code)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

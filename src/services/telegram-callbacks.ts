@@ -14,6 +14,7 @@
  * close the callback with a toast.
  */
 
+import { invalidBookingCodeError, normalizeBookingCode } from "@/lib/booking-code";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   answerCallbackQuery,
@@ -51,10 +52,19 @@ async function markPaid(d: DispatchArgs): Promise<void> {
     return;
   }
 
+  // Pencocokan persis — `ilike` memperlakukan `%`/`_` sebagai wildcard
+  // (audit 7 Agu 2026, S3). Callback Telegram memang datang dari admin, tapi
+  // payload-nya tetap input eksternal yang tidak boleh membentuk pola.
+  const code = normalizeBookingCode(refCode);
+  if (!code) {
+    await answerCallbackQuery(d.botToken, d.callback.id, invalidBookingCodeError(refCode), true);
+    return;
+  }
+
   const { data: booking } = await (supabaseAdmin as any)
     .from("bookings")
     .select("id, reference_code")
-    .ilike("reference_code", refCode)
+    .eq("reference_code", code)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

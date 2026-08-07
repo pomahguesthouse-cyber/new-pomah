@@ -146,24 +146,39 @@ function selectRecoveryClassifierQuery(lastUserMsg: string, unansweredMessages?:
 // ─── LLM gateway call ─────────────────────────────────────────────────────────
 
 /**
- * Hard timeout per panggilan LLM agar tidak pernah menggantung worker.
+ * Batas atas timeout per panggilan LLM agar tidak pernah menggantung worker.
  *
- * PENTING: nilai ini harus memenuhi invariant terhadap anggaran luar
- * AI_TIMEOUT_MS = 18s (wa-autoreply.service.ts, dinaikkan dari 14s pada
- * 3 Jul 2026 agar classifier LLM fallback ~5s ikut muat):
+ * Audit 7 Agu 2026 (B3): dulu nilai ini statis dan invariant
+ * `LLM_CALL_TIMEOUT_MS × (LLM_MAX_RETRIES + 1) + backoff < AI_TIMEOUT_MS`
+ * TIDAK terpenuhi (10 + 0,5 + 10 = 20,5s > 18s) — satu turn saja sudah bisa
+ * melewati anggaran, sehingga percakapan tool-calling normal rutin dipotong
+ * AbortController luar dan berakhir dengan fallback "sistem sedang lambat".
  *
- *   LLM_CALL_TIMEOUT_MS × (LLM_MAX_RETRIES + 1) + backoff < AI_TIMEOUT_MS
- *
- * Dengan 6.5s per panggilan + 1 retry + 0.5s backoff → worst case satu ronde
- * ~13.5s + classifier fallback 5s ≈ 18.5s — pas di batas 18s. Happy path dua
- * ronde (tool-call + balasan teks, tanpa retry) ~13s — muat longgar. Nilai
- * lama 12s membuat retry internal mustahil selesai (12+0.5+12 = 24.5s >
- * budget) dan multi-turn hampir selalu dipotong oleh controller luar →
- * balasan fallback "sistem sedang sibuk".
+ * Sekarang timeout dihitung dinamis dari SISA anggaran (`deadlineAt`):
+ *   - Tidak pernah melebihi LLM_CALL_TIMEOUT_MAX_MS.
+ *   - Tidak pernah melebihi sisa waktu dikurangi cadangan untuk memproses
+ *     hasil + mengirim WhatsApp.
+ *   - Retry hanya dijalankan bila sisa waktu memang cukup untuk satu
+ *     panggilan penuh lagi (lihat `callLlm`).
  */
-const LLM_CALL_TIMEOUT_MS = 10_000;
+const LLM_CALL_TIMEOUT_MAX_MS = 10_000;
+/** Lantai timeout — di bawah ini panggilan hampir pasti sia-sia. */
+const LLM_CALL_TIMEOUT_MIN_MS = 3_500;
+/** Cadangan waktu untuk parsing hasil, eksekusi tool, dan pengiriman balasan. */
+const LLM_BUDGET_RESERVE_MS = 1_500;
 /** Berapa kali mencoba ulang saat timeout/HTTP 5xx sebelum menyerah. */
 const LLM_MAX_RETRIES = 1;
+
+/**
+ * Timeout efektif untuk satu panggilan LLM berdasarkan sisa anggaran.
+ * `null` berarti sisa waktu sudah tidak cukup untuk memanggil sama sekali.
+ */
+function resolveCallTimeoutMs(deadlineAt?: number): number | null {
+  if (!deadlineAt) return LLM_CALL_TIMEOUT_MAX_MS;
+  const remaining = deadlineAt - Date.now() - LLM_BUDGET_RESERVE_MS;
+  if (remaining < LLM_CALL_TIMEOUT_MIN_MS) return null;
+  return Math.min(LLM_CALL_TIMEOUT_MAX_MS, remaining);
+}
 
 async function callLlmOnce(
   config: AiClientConfig,
@@ -171,10 +186,11 @@ async function callLlmOnce(
   agent: AgentDefinition,
   tools: AgentDefinition["tools"],
   signal?: AbortSignal,
+  timeoutMs: number = LLM_CALL_TIMEOUT_MAX_MS,
 ): Promise<{ ok: true; data: LlmResponse } | { ok: false; retriable: boolean; reason: string }> {
   // Gabungkan signal pemanggil dengan timeout internal kita.
   const timeoutCtrl = new AbortController();
-  const timeoutId = setTimeout(() => timeoutCtrl.abort(), LLM_CALL_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
   const onAbort = () => timeoutCtrl.abort();
   signal?.addEventListener("abort", onAbort);
 
@@ -229,24 +245,38 @@ async function callLlm(
   agent: AgentDefinition,
   tools: AgentDefinition["tools"],
   signal?: AbortSignal,
+  deadlineAt?: number,
 ): Promise<{ response: LlmResponse | null; retries: Array<{ attempt: number; reason: string; latency_ms: number }> }> {
   const retries: Array<{ attempt: number; reason: string; latency_ms: number }> = [];
   for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    const timeoutMs = resolveCallTimeoutMs(deadlineAt);
+    if (timeoutMs === null) {
+      // Sisa anggaran tidak cukup. Berhenti rapi supaya pemanggil bisa memakai
+      // draft dari tool (kalau ada) alih-alih dipotong paksa di tengah fetch.
+      console.warn(`[MultiAgent][${agent.key}] anggaran waktu habis — berhenti sebelum panggilan LLM`);
+      retries.push({ attempt, reason: "budget_exhausted", latency_ms: 0 });
+      return { response: null, retries };
+    }
+
     const t0 = Date.now();
-    const r = await callLlmOnce(config, messages, agent, tools, signal);
+    const r = await callLlmOnce(config, messages, agent, tools, signal, timeoutMs);
     if (r.ok) return { response: r.data, retries };
     const latency_ms = Date.now() - t0;
+    retries.push({ attempt, reason: r.reason, latency_ms });
     if (!r.retriable) {
-      retries.push({ attempt, reason: r.reason, latency_ms });
       return { response: null, retries };
     }
     if (attempt < LLM_MAX_RETRIES) {
-      retries.push({ attempt, reason: r.reason, latency_ms });
+      // Retry hanya masuk akal bila sisa waktu cukup untuk satu panggilan
+      // penuh lagi SETELAH backoff — kalau tidak, kita hanya membakar sisa
+      // anggaran lalu tetap gagal.
+      const BACKOFF_MS = 500;
+      if (resolveCallTimeoutMs(deadlineAt ? deadlineAt - BACKOFF_MS : undefined) === null) {
+        console.warn(`[MultiAgent][${agent.key}] lewati retry LLM — sisa anggaran tidak cukup`);
+        return { response: null, retries };
+      }
       console.warn(`[MultiAgent][${agent.key}] retry LLM (attempt ${attempt + 1}) — reason: ${r.reason}`);
-      // Backoff singkat sebelum coba ulang.
-      await new Promise((res) => setTimeout(res, 500));
-    } else {
-      retries.push({ attempt, reason: r.reason, latency_ms });
+      await new Promise((res) => setTimeout(res, BACKOFF_MS));
     }
   }
   return { response: null, retries };
@@ -279,6 +309,12 @@ async function runAgent(
   signal?: AbortSignal,
   /** Blok few-shot dari training simulator (opsional, sudah diformat) */
   trainingExamplesBlock?: string,
+  /**
+   * Batas waktu dinding-jam (epoch ms) untuk seluruh orkestrasi. Dipakai
+   * menghitung timeout per panggilan LLM supaya tidak pernah melampaui
+   * anggaran luar (audit 7 Agu 2026 — B3).
+   */
+  deadlineAt?: number,
 ): Promise<{
   reply: string | null;
   toolsUsed: string[];
@@ -451,7 +487,14 @@ async function runAgent(
 
 
   for (let turn = 0; turn < maxTurns; turn++) {
-    const { response: json, retries } = await callLlm(llmConfig, messages, agent, agentTools, signal);
+    const { response: json, retries } = await callLlm(
+      llmConfig,
+      messages,
+      agent,
+      agentTools,
+      signal,
+      deadlineAt,
+    );
     if (retries.length) allRetries.push(...retries);
 
     if (!json) {
@@ -655,6 +698,13 @@ export interface MultiAgentInput {
   maxTurns?: number;
   /** Optional abort signal to cancel LLM API requests */
   signal?: AbortSignal;
+  /**
+   * Batas waktu dinding-jam (epoch ms) untuk seluruh orkestrasi. Timeout tiap
+   * panggilan LLM dihitung dari sisa waktu ini, dan retry internal dilewati
+   * bila sisanya tidak cukup — mencegah AbortController luar memotong di
+   * tengah jalan dan memaksa fallback (audit 7 Agu 2026 — B3).
+   */
+  deadlineAt?: number;
 }
 
 /**
@@ -731,6 +781,8 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
         Math.max(3, maxTurns - 1),
         undefined,
         input.signal,
+        undefined,
+        input.deadlineAt,
       );
       return result.reply
         ? JSON.stringify({ ok: true, response: result.reply })
@@ -749,6 +801,8 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       maxTurns,
       onAskAgent,
       input.signal,
+      undefined,
+      input.deadlineAt,
     );
 
     return {
@@ -816,6 +870,8 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
           Math.max(2, (input.maxTurns ?? DEFAULT_MAX_TURNS) - 1),
           undefined,
           input.signal,
+          undefined,
+          input.deadlineAt,
         );
         if (financeResult.reply) {
           combinedReply = `${stateResult.reply}\n\n${financeResult.reply}`;
@@ -1138,6 +1194,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
           undefined, // no nested delegation
           input.signal,
           trainingBlock,
+          input.deadlineAt,
         );
 
         if (result.retries) {
@@ -1164,6 +1221,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     onAskAgent,
     input.signal,
     trainingBlock,
+    input.deadlineAt,
   );
 
   // Persist topic/entity/slots so the NEXT turn can resolve short follow-ups.
@@ -1223,6 +1281,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       undefined,
       input.signal,
       trainingBlock,
+      input.deadlineAt,
     );
 
     return {

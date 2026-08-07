@@ -15,6 +15,11 @@
  * delivers through WhatsApp gateway).
  */
 
+import {
+  bookingBelongsToPhone,
+  invalidBookingCodeError,
+  normalizeBookingCode,
+} from "@/lib/booking-code";
 import { fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
@@ -61,13 +66,37 @@ export const sendInvoice: ToolHandler = async (args: Record<string, unknown>, ct
   const refCode = str(args.reference_code);
 
   // ── 1. Locate the booking ──────────────────────────────────────────────
+  // Audit 7 Agu 2026 (S3): dulu `.ilike("reference_code", refCode)` — kode
+  // "PG-%" mencocokkan booking siapa pun, sehingga invoice tamu lain (nama,
+  // total, tanggal) bisa dikirim ke penanya. Sekarang: bentuk kode divalidasi,
+  // pencocokan persis, dan di kanal tamu kepemilikan booking diverifikasi.
   let bookingRow: any = null;
   try {
     if (refCode) {
+      const code = normalizeBookingCode(refCode);
+      if (!code) {
+        return JSON.stringify({ ok: false, error: invalidBookingCodeError(refCode) });
+      }
+
+      if (ctx.isManager !== true) {
+        const owned = await bookingBelongsToPhone(ctx.supabaseAdmin as any, code, ctx.phone);
+        if (owned !== true) {
+          console.warn(
+            `[send_invoice] BLOCKED cross-guest lookup (phone=${(ctx.phone ?? "-").slice(-6)}, ref=${code})`,
+          );
+          return JSON.stringify({
+            ok: false,
+            error:
+              `Booking ${code} tidak terdaftar atas nomor ini. ` +
+              `Mohon konfirmasi kode booking-nya, atau saya bantu carikan lewat nomor WhatsApp Kakak.`,
+          });
+        }
+      }
+
       const { data, error } = await (ctx.supabaseAdmin as any)
         .from("bookings")
         .select(BOOKING_SELECT)
-        .ilike("reference_code", refCode)
+        .eq("reference_code", code)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

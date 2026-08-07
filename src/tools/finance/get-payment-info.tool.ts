@@ -6,6 +6,11 @@
  * Used by Finance Agent to answer payment-related questions.
  */
 
+import {
+  bookingBelongsToPhone,
+  invalidBookingCodeError,
+  normalizeBookingCode,
+} from "@/lib/booking-code";
 import { fmtDateID } from "@/lib/date";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
@@ -18,7 +23,11 @@ export const getPaymentInfo: ToolHandler = async (
   ctx:  ToolContext,
 ): Promise<string> => {
   const referenceCode = str(args.reference_code);
-  const guestPhone    = str(args.guest_phone);
+  // Audit 7 Agu 2026 (S3): di kanal tamu, `guest_phone` dari argumen LLM tidak
+  // boleh dipercaya — tamu bisa menyebut nomor orang lain untuk mengintip
+  // booking mereka. Nomor percakapan yang berlaku, bukan yang diketik.
+  const guestPhone =
+    ctx.isManager === true ? str(args.guest_phone) : (ctx.phone ?? str(args.guest_phone));
 
   const prop = ctx.property as Record<string, unknown>;
 
@@ -50,7 +59,25 @@ export const getPaymentInfo: ToolHandler = async (
       .limit(1);
 
     if (referenceCode) {
-      query = query.ilike("reference_code", referenceCode);
+      const code = normalizeBookingCode(referenceCode);
+      if (!code) {
+        return JSON.stringify({ ok: false, error: invalidBookingCodeError(referenceCode) });
+      }
+      if (ctx.isManager !== true) {
+        const owned = await bookingBelongsToPhone(ctx.supabaseAdmin as any, code, ctx.phone);
+        if (owned !== true) {
+          console.warn(
+            `[get_payment_info] BLOCKED cross-guest lookup (phone=${(ctx.phone ?? "-").slice(-6)}, ref=${code})`,
+          );
+          return JSON.stringify({
+            ok: false,
+            booking: null,
+            payment_account: paymentAccount,
+            error: `Booking ${code} tidak terdaftar atas nomor ini. Mohon konfirmasi ulang kode booking-nya.`,
+          });
+        }
+      }
+      query = query.eq("reference_code", code);
     } else {
       // Join via guests table
       const { data: guests } = await (ctx.supabaseAdmin as any)
