@@ -53,6 +53,10 @@ assert.ok(
   "rooms should be sorted from cheapest to most expensive",
 );
 
+// Insiden 7 Agu 2026 (WA +62 877-0504-9842): tamu tanya "ada kamar kosong buat
+// malam ini?" saat kamar memang PENUH, tetapi bot menjawab "kamar yang tersedia
+// belum ada di sistem, saya bantu teruskan ke admin" — istilah internal bocor
+// ke tamu dan peluang menawarkan tanggal alternatif hilang.
 const tonightFull = formatTonightAvailabilityReply(
   JSON.stringify({
     kamar: [
@@ -68,8 +72,37 @@ const tonightFull = formatTonightAvailabilityReply(
   "2026-07-12",
 );
 assert.ok(tonightFull);
-assert.equal(tonightFull.intent, "deterministic_tonight_availability");
-assert.match(tonightFull.reply, /belum ada di sistem/);
+assert.equal(tonightFull.intent, "deterministic_tonight_availability_full");
+assert.match(tonightFull.reply, /sudah penuh/i);
+assert.match(tonightFull.reply, /tanggal lain/i, "harus menawarkan tanggal alternatif");
+assert.doesNotMatch(tonightFull.reply, /belum ada di sistem|sistem|admin/i,
+  "jangan bocorkan istilah internal ke tamu");
+
+// Stok 0 tanpa flag tidak_tersedia → tetap penuh.
+const tonightZeroStock = formatTonightAvailabilityReply(
+  JSON.stringify({ kamar: [{ nama: "Deluxe", harga_per_malam: 250000, kamar_tersedia: 0 }] }),
+  "2026-07-11",
+  "2026-07-12",
+);
+assert.equal(tonightZeroStock!.intent, "deterministic_tonight_availability_full");
+assert.match(tonightZeroStock!.reply, /sudah penuh/i);
+
+// Status TIDAK diketahui (RPC gagal / semua tipe tanpa angka) → jangan klaim penuh.
+const tonightUnknown = formatTonightAvailabilityReply(
+  JSON.stringify({ kamar: [{ nama: "Deluxe", harga_per_malam: 250000, kamar_tersedia: null }] }),
+  "2026-07-11",
+  "2026-07-12",
+);
+assert.equal(tonightUnknown!.intent, "deterministic_tonight_availability_unknown");
+assert.doesNotMatch(tonightUnknown!.reply, /penuh/i);
+
+const tonightRpcError = formatTonightAvailabilityReply(
+  JSON.stringify({ availability_unknown: true, kamar: [] }),
+  "2026-07-11",
+  "2026-07-12",
+);
+assert.equal(tonightRpcError!.intent, "deterministic_tonight_availability_unknown");
+assert.doesNotMatch(tonightRpcError!.reply, /penuh/i);
 
 assert.equal(formatTonightAvailabilityReply("invalid json", "2026-07-11", "2026-07-12"), null);
 

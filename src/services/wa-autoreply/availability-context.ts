@@ -67,7 +67,8 @@ export function formatTonightAvailabilityReply(
     return null;
   }
 
-  const available = (data.kamar ?? [])
+  const rooms = data.kamar ?? [];
+  const available = rooms
     .filter((room) => !room.tidak_tersedia && (room.kamar_tersedia ?? 0) > 0)
     .sort(
       (first, second) =>
@@ -75,11 +76,36 @@ export function formatTonightAvailabilityReply(
     );
 
   if (available.length === 0) {
+    // Insiden 7 Agu 2026 (WA +62 877-0504-9842): tamu tanya "ada kamar kosong
+    // buat malam ini?" saat kamar memang PENUH, dan bot menjawab "kamar yang
+    // tersedia belum ada di sistem, saya bantu teruskan ke admin". Itu bocoran
+    // istilah internal, membuat properti terkesan tidak terurus, dan menutup
+    // peluang menawarkan tanggal alternatif.
+    //
+    // Bedakan dua kondisi:
+    //   a. RPC gagal / semua tipe kamar tanpa angka  → status TIDAK diketahui,
+    //      jangan mengklaim penuh (lihat B1 di docs/audit-chatbot-2026-08-07.md).
+    //   b. Angka ada dan semuanya 0                  → memang penuh, katakan penuh.
+    const availabilityUnknown =
+      (data as { availability_unknown?: boolean }).availability_unknown === true ||
+      (rooms.length > 0 &&
+        rooms.every((room) => room.kamar_tersedia === null || room.kamar_tersedia === undefined));
+
+    if (availabilityUnknown) {
+      return {
+        intent: "deterministic_tonight_availability_unknown",
+        reply:
+          "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
+          "Boleh saya cek ulang dalam beberapa saat ya? 🙏",
+      };
+    }
+
     return {
-      intent: "deterministic_tonight_availability",
+      intent: "deterministic_tonight_availability_full",
       reply:
-        `Untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}), ` +
-        "sementara kamar yang tersedia belum ada di sistem. Saya bantu teruskan ke admin ya Kak.",
+        `Mohon maaf Kak, untuk malam ini (${fmtDateID(checkIn)} - ${fmtDateID(checkOut)}) ` +
+        "seluruh kamar kami sudah penuh.\n\n" +
+        "Kalau Kakak berkenan menginap di tanggal lain, kirim tanggalnya ya — nanti saya cek ketersediaannya.",
     };
   }
 

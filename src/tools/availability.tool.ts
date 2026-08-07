@@ -401,14 +401,32 @@ export const checkRoomAvailability: ToolHandler = async (
       cocok_untuk_jumlah_tamu: memenuhiKapasitasJumlahTamu,
       extra_bed_dibutuhkan: guestCount > 0 ? extraBedDibutuhkan : undefined,
       melewati_kapasitas: guestCount > 0 ? melewatiKapasitas : undefined,
-      tidak_tersedia:  blockedByStopSell || (baseAvailable !== null && baseAvailable <= 0),
+      // Tipe kamar tanpa baris inventaris (tidak ada kamar fisik terdaftar)
+      // TIDAK bisa dijual — perlakukan sebagai tidak tersedia, bukan sebagai
+      // "belum diatur" yang lalu dikutip mentah ke tamu. Insiden 7 Agu 2026:
+      // tamu menerima "kamar yang tersedia belum ada di sistem, saya bantu
+      // teruskan ke admin" padahal jawaban yang benar adalah "penuh".
+      tidak_tersedia:  blockedByStopSell || baseAvailable === null || baseAvailable <= 0,
       stop_sell_dates: blockedByStopSell ? resolved.stop_sell_dates : undefined,
       alasan: blockedByStopSell
         ? `Kamar ini tidak dijual untuk tanggal ${resolved.stop_sell_dates.map(fmtDateID).join(", ")}.`
-        : (d ? undefined : "jumlah kamar belum diatur di sistem"),
-      catatan: d ? undefined : "jumlah kamar belum diatur di sistem",
+        : undefined,
+      // Catatan operasional untuk admin — BUKAN untuk dikutip ke tamu.
+      catatan_internal: d ? undefined : "inventaris kamar fisik belum diatur di sistem",
     };
   });
+
+  // Tipe kamar tanpa baris inventaris adalah masalah KONFIGURASI, bukan
+  // "penuh" biasa — dan sebelumnya senyap. Bunyikan di log supaya admin tahu
+  // sebelum tamu yang memberi tahu (insiden 7 Agu 2026).
+  const withoutInventory = kamarBase.filter((r) => r.catatan_internal);
+  if (withoutInventory.length > 0) {
+    console.warn(
+      `[availability.tool] ${withoutInventory.length} tipe kamar tanpa kamar fisik terdaftar ` +
+        `(${withoutInventory.map((r) => r.nama).join(", ")}) — periksa tabel rooms. ` +
+        `Tipe ini dilaporkan tidak tersedia untuk ${checkIn}..${checkOut}.`,
+    );
+  }
 
   const roomsThatFitGuestCount = guestCount > 0
     ? kamarBase.filter((r) => r.memenuhi_kapasitas_jumlah_tamu === true)
