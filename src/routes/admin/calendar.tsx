@@ -645,15 +645,24 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
             onClick={async () => {
               if (saving) return;
               setSaving(true);
-              onClose();
               try {
                 await createFn({
-                  data: { ...form, roomId: ctx.roomId, adults: 2, children: 0, status: "confirmed" },
+                  data: { ...form, roomId: ctx.roomId, status: "confirmed" },
                 });
                 toast.success("BOOKING BERHASIL!");
                 onSaved();
+                onClose();
               } catch (e) {
-                toast.error("Gagal menyimpan booking.");
+                // Dulu: `toast.error("Gagal menyimpan booking.")` — pesan asli
+                // dari server (mis. "Kamar sudah terpakai pada 7 Agu sampai
+                // 8 Agu") ikut terbuang, sehingga admin tidak tahu apa yang
+                // harus diperbaiki dan masalahnya mustahil didiagnosis.
+                const message =
+                  e instanceof Error && e.message.trim()
+                    ? e.message
+                    : "Gagal menyimpan booking. Cek console untuk detail.";
+                console.error("[CreateBookingDialog] gagal menyimpan booking:", e);
+                toast.error(message, { duration: 8000 });
               } finally {
                 setSaving(false);
               }

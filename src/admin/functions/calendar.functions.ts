@@ -8,6 +8,46 @@ import { generateAndSendInvoiceNotification } from "@/services/invoice-notificat
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus dalam format YYYY-MM-DD");
 const bookingStatusSchema = z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"]);
 
+/**
+ * Ubah error Postgres/PostgREST menjadi pesan yang bisa ditindaklanjuti admin.
+ *
+ * Sebelumnya error dilempar mentah dan UI hanya menampilkan "Gagal menyimpan
+ * booking." — admin tidak tahu apakah kamarnya bentrok, migrasinya belum
+ * dijalankan, atau izinnya kurang. Pesan RPC sendiri sudah berbahasa Indonesia
+ * dan informatif, jadi untuk error yang kita raise sendiri cukup diteruskan.
+ */
+function describeBookingRpcError(error: unknown): string {
+  const err = (error ?? {}) as { code?: string; message?: string; details?: string; hint?: string };
+  const raw = (err.message ?? "").trim();
+
+  switch (err.code) {
+    case "23P01": // exclusion_violation — kamar bentrok (di-raise RPC atau constraint)
+      return raw || "Kamar sudah terpakai pada rentang tanggal itu. Pilih kamar atau tanggal lain.";
+    case "22023": // invalid_parameter_value — validasi di dalam RPC
+    case "P0002": // no_data_found — kamar/property tidak ketemu
+      return raw || "Data booking tidak valid. Periksa kamar dan tanggalnya.";
+    case "42883":
+      return (
+        "Fungsi database `create_admin_booking_with_lock` tidak ditemukan. " +
+        "Migrasi Supabase kemungkinan belum dijalankan di environment ini."
+      );
+    case "42501":
+      return (
+        "Akun ini tidak punya izin menjalankan pembuatan booking. " +
+        "Periksa GRANT EXECUTE pada fungsi `create_admin_booking_with_lock`."
+      );
+    case "23502": // not_null_violation
+      return `Ada kolom wajib yang kosong saat menyimpan booking${err.details ? ` (${err.details})` : ""}.`;
+    case "23503": // foreign_key_violation
+      return "Kamar atau properti yang dipilih tidak ditemukan di database.";
+    default:
+      break;
+  }
+
+  if (raw) return raw;
+  return "Gagal menyimpan booking — database tidak memberikan detail error.";
+}
+
 const createBookingFromAdminSchema = z.object({
   guestName: z.string().trim().min(2, "Nama tamu wajib diisi").max(120),
   roomId: z.string().uuid("Room ID tidak valid"),
@@ -135,7 +175,16 @@ export const createBookingFromAdmin = createServerFn({ method: "POST" })
       p_status: data.status,
     })) as { data: string | null; error: any };
 
-    if (error) throw error;
+    if (error) {
+      console.error("[createBookingFromAdmin] RPC gagal:", {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        payload: { roomId: data.roomId, checkIn: data.checkIn, checkOut: data.checkOut },
+      });
+      throw new Error(describeBookingRpcError(error));
+    }
     if (!bookingId) throw new Error("Booking gagal dibuat. Database tidak mengembalikan booking ID.");
 
     // Kirim invoice + link konfirmasi ke tamu via WhatsApp secara otomatis
