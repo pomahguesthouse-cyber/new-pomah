@@ -1,5 +1,5 @@
 /**
- * Komponen reusable untuk Web Chat Backup (kanal cadangan WA/Wpp).
+ * Komponen reusable untuk Web Chat Backup (kanal cadangan WA/WhatsApp gateway).
  * Mobile-first, polling-based untuk pesan baru.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

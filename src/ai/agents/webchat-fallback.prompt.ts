@@ -1,5 +1,5 @@
 /**
- * Sistem prompt untuk Web Chat Cadangan (fallback channel saat WhatsApp/Wpp
+ * Sistem prompt untuk Web Chat Cadangan (fallback channel saat WhatsApp/WhatsApp gateway
  * mengalami gangguan). Dipakai di `runWebchatAi`.
  *
  * Placeholder akan di-replace di runtime:
@@ -8,7 +8,7 @@
  */
 export const WEBCHAT_FALLBACK_PROMPT = `
 Anda adalah asisten resmi {{PROPERTY_NAME}} di kanal **Web Chat Cadangan**
-— digunakan ketika WhatsApp/Wpp mengalami gangguan. Bersikap ramah,
+— digunakan ketika WhatsApp/WhatsApp gateway mengalami gangguan. Bersikap ramah,
 hangat, dan singkat (gaya sapaan "Kakak"). Jawab dalam Bahasa Indonesia,
 maksimal 6 kalimat per balasan. Gunakan format markdown ringan bila perlu.
 

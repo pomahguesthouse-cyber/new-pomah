@@ -1,14 +1,12 @@
 /**
- * Wpp webhook body parser.
+ * Parser body webhook WhatsApp (Evolution API).
  *
- * Wpp may send either JSON or application/x-www-form-urlencoded.
- * This parser handles both and returns a normalised event or null if
- * the payload is missing required fields (sender / message).
+ * Mengubah payload mentah gateway menjadi event domain yang ternormalisasi,
+ * atau null bila payload tidak mengandung pesan tamu yang valid.
  */
 
 import type {
   EvolutionWebhookPayload,
-  WppWebhookPayload,
   ParsedWebhookEvent,
   WaIdentityResolution,
   WaIdentityType,
@@ -76,7 +74,7 @@ export function extractPublicPhoneCandidate(value: unknown): string | undefined 
 export function looksLikePublicWaPhone(value: unknown): boolean {
   const p = normalizeWaPhone(rawString(value));
   // Pomah uses Indonesian numbers. Do not treat arbitrary long non-62 digits as
-  // public phone because WPPConnect LID values look exactly like that.
+  // public phone because LID values look exactly like that.
   return !!p && /^62\d{8,14}$/.test(p);
 }
 
@@ -146,138 +144,6 @@ function samePhone(a: string | undefined, b: string | undefined): boolean {
   const left = normalizeWaPhone(a);
   const right = normalizeWaPhone(b);
   return !!left && !!right && left === right;
-}
-
-export async function parseWppWebhook(
-  request: Request,
-): Promise<ParsedWebhookEvent | null> {
-  let rawText: string;
-  try {
-    rawText = await request.text();
-  } catch {
-    return null;
-  }
-
-  if (!rawText.trim()) return null;
-
-  let body: WppWebhookPayload;
-  try {
-    body = JSON.parse(rawText) as WppWebhookPayload;
-  } catch {
-    const params = new URLSearchParams(rawText);
-    body = Object.fromEntries(params.entries()) as unknown as WppWebhookPayload;
-  }
-
-  const eventName = firstString((body as any).event)?.toLowerCase();
-  if (eventName && !/message/.test(eventName)) return null;
-
-  const rawId = (body as any).id;
-  const idValue =
-    rawId && typeof rawId === "object"
-      ? firstString((rawId as any)._serialized, (rawId as any).id)
-      : firstString(rawId);
-
-  const senderObj = (body as any).sender && typeof (body as any).sender === "object"
-    ? ((body as any).sender as Record<string, unknown>)
-    : null;
-
-  const senderIdentity = pickBestWaIdentity(
-    senderObj?.phone,
-    senderObj?.number,
-    body.number,
-    body.phone,
-    body.pengirim,
-    senderObj?.id,
-    senderObj?._serialized,
-    body.sender,
-    body.from,
-    (body as any).chatId,
-    (body as any).remoteJid,
-    (body as any).remote_jid,
-    (body as any).author,
-    idValue,
-  );
-  const sender = senderIdentity.phone;
-
-  const messageType = firstString(body.type, (body as any).message_type, (body as any).msg_type);
-  const typeLower = (messageType ?? "").toLowerCase();
-  const isMediaType = typeLower !== "" && typeLower !== "chat" && typeLower !== "text";
-
-  const caption = firstString((body as any).caption, (body as any).text);
-  const textBody = firstString(body.message, body.pesan, isMediaType ? undefined : (body as any).body);
-  const message = (isMediaType ? caption : (textBody ?? caption)) ?? "";
-
-  const name = firstString(body.name, body.pushname, (body as any).notifyName, senderObj?.pushname, sender) ?? "";
-  const wppId = firstString(idValue, body.message_id, (body as any).messageId, (body as any).key_id);
-
-  const deviceIdentity = pickBestWaIdentity(
-    body.device,
-    (body as any).device_number,
-    (body as any).deviceNumber,
-    body.to,
-    (body as any).chatId,
-  );
-  const device = deviceIdentity.phone;
-
-  const attachmentUrl = firstString(
-    body.url,
-    body.filepath,
-    body.file,
-    (body as any).media_url,
-    (body as any).mediaUrl,
-    (body as any).deprecatedMms3Url,
-  );
-  const attachmentName = firstString(body.filename, (body as any).file_name, (body as any).media_name);
-  const attachmentMime = firstString(body.mimetype, body.mime_type, body.media_type, (body as any).content_type);
-
-  const hasMedia = !!attachmentUrl || isMediaType || !!attachmentMime;
-  if (!sender || (!message && !hasMedia)) return null;
-
-  const targetIdentity = pickBestWaIdentity(
-    body.target,
-    body.receiver,
-    body.penerima,
-    body.to,
-    body.recipient,
-    body.destination,
-    body.tujuan,
-    (body as any).remoteJid,
-    (body as any).remote_jid,
-  );
-  const target = targetIdentity.phone;
-
-  const explicitOutgoing =
-    boolish(body.fromMe) ||
-    boolish(body.from_me) ||
-    boolish(body.isFromMe) ||
-    /^(out|outgoing|sent|send)$/i.test(firstString((body as any).direction, (body as any).event) ?? "");
-  const isOutgoing = explicitOutgoing || (!!device && samePhone(sender, device));
-
-  const customerIdentity =
-    isOutgoing
-      ? (target && !samePhone(target, device) ? targetIdentity : !samePhone(sender, device) ? senderIdentity : targetIdentity.phone ? targetIdentity : senderIdentity)
-      : senderIdentity;
-  const customerPhone = customerIdentity.phone ?? sender;
-  const externalChatId = externalChatIdOf(customerIdentity);
-
-  return {
-    sender,
-    message: message ?? "",
-    name: name ?? sender,
-    wppId,
-    device,
-    isOutgoing,
-    customerPhone,
-    attachmentUrl: attachmentUrl || undefined,
-    attachmentName: attachmentName || undefined,
-    attachmentMime: attachmentMime || undefined,
-    messageType: messageType || undefined,
-    senderIdentity,
-    customerIdentity,
-    deviceIdentity,
-    externalChatId,
-    rawBody: body,
-  };
 }
 
 function objectAt(value: unknown): Record<string, unknown> | null {
@@ -370,8 +236,47 @@ function evolutionMessageId(data: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Parse Evolution API v2 webhook payloads into the same domain event used by
- * WPPConnect. The important LID rule: when `remoteJid` is `...@lid` and
+ * Event non-pesan dari Evolution/Baileys yang TIDAK boleh diperlakukan sebagai
+ * pesan tamu baru: reaction emoji (🙏/👍 ke pesan bot), protocol message
+ * (hapus/edit/ephemeral), poll update, dan status broadcast. Dulu event ini
+ * lolos ke queue sehingga bot membalas "Sebentar Kak..." tanpa ada pertanyaan.
+ */
+function nonContentEvolutionReason(
+  data: Record<string, unknown>,
+  remoteJid: string | undefined,
+): string | null {
+  const message = objectAt(data.message);
+  const type = firstString(data.messageType, data.type, data.message_type)?.toLowerCase() ?? "";
+
+  if (message?.reactionMessage || type.includes("reaction")) return "reactionMessage";
+  if (message?.protocolMessage || type.includes("protocol")) return "protocolMessage";
+  if (message?.pollUpdateMessage || type.includes("pollupdate")) return "pollUpdateMessage";
+  if (message?.pollCreationMessage) return "pollCreationMessage";
+  if (message?.ephemeralMessage && !objectAt(message?.ephemeralMessage)?.message) {
+    return "ephemeralSettingMessage";
+  }
+  if ((remoteJid ?? "").toLowerCase().startsWith("status@broadcast")) return "statusBroadcast";
+
+  return null;
+}
+
+/** Media inbound yang tetap wajib diproses (mis. bukti transfer). */
+function hasEvolutionContentMedia(data: Record<string, unknown>): boolean {
+  const message = objectAt(data.message);
+  return !!(
+    message?.imageMessage ||
+    message?.documentMessage ||
+    message?.documentWithCaptionMessage ||
+    message?.audioMessage ||
+    message?.videoMessage ||
+    message?.stickerMessage
+  );
+}
+
+
+/**
+ * Parse Evolution API v2 webhook payloads into the domain event.
+ * The important LID rule: when `remoteJid` is `...@lid` and
  * `remoteJidAlt` is a public WhatsApp JID, store the public phone as
  * customerPhone while preserving the LID in externalChatId/metadata.
  */
@@ -407,6 +312,13 @@ export async function parseEvolutionWebhook(
   const participantAlt = firstString(key?.participantAlt, data.participantAlt);
   const fromMe = boolish(key?.fromMe) || boolish(data.fromMe);
 
+  // Guard event non-pesan SEBELUM apa pun masuk ke queue/orchestrator.
+  const nonContentReason = nonContentEvolutionReason(data, remoteJid);
+  if (nonContentReason) {
+    console.log(`⏭️ [EvolutionParser] Skipping ${nonContentReason} event`);
+    return null;
+  }
+
   const senderIdentity = pickBestWaIdentity(
     remoteJidAlt,
     participantAlt,
@@ -430,9 +342,21 @@ export async function parseEvolutionWebhook(
   const customerPhone = customerIdentity.phone;
   const message = textFromEvolutionMessage(data);
   const attachment = evolutionAttachment(data);
-  const hasMedia = !!attachment.url || !!attachment.mime || (!!attachment.type && !/conversation|text/i.test(attachment.type));
+  const hasContentMedia = hasEvolutionContentMedia(data);
+  const hasMedia =
+    hasContentMedia ||
+    !!attachment.url ||
+    !!attachment.mime ||
+    (!!attachment.type && !/conversation|text/i.test(attachment.type));
 
-  if (!customerPhone || (!message && !hasMedia)) return null;
+  // Payload tanpa teks dan tanpa media (messageContextInfo-only, status update).
+  if (!message.trim() && !hasMedia) {
+    console.log("⏭️ [EvolutionParser] Skipping empty/non-content event");
+    return null;
+  }
+
+  if (!customerPhone) return null;
+
 
   const publicExternal = looksLikePublicWaPhone(customerPhone) ? `${customerPhone}@s.whatsapp.net` : undefined;
   const externalChatId =

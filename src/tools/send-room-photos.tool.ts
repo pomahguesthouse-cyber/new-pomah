@@ -1,7 +1,7 @@
 /**
  * Tool: send_room_photos
  *
- * Kirim foto kamar via WhatsApp (WPPConnect) langsung ke tamu yang sedang
+ * Kirim foto kamar via WhatsApp (Evolution API) langsung ke tamu yang sedang
  * chat. Dipakai ketika tamu minta "foto", "gambar", atau "penampakan" kamar.
  *
  * Best-effort — kegagalan pengiriman satu foto tidak menghentikan sisanya.
@@ -92,9 +92,13 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
       try {
         const r = await sendWhatsAppMessage(token, phone, caption, photos[i], filename);
         if (r.ok) sent++;
-        else failed++;
-      } catch {
+        else {
+          failed++;
+          console.error("❌ sendMedia failed", room.name, r.status ?? "-", r.error);
+        }
+      } catch (e) {
         failed++;
+        console.error("❌ sendMedia exception", room.name, e instanceof Error ? e.message : String(e));
       }
     }
     results.push({ room: room.name, sent, failed });
@@ -107,7 +111,10 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
     results,
     note:
       totalSent > 0
-        ? "Foto sudah terkirim ke chat tamu. Tutup dengan CTA singkat, mis. tanyakan tanggal menginap atau tawarkan booking."
-        : "Tidak ada foto yang berhasil dikirim; arahkan tamu ke pomahguesthouse.com.",
+        ? "BERHASIL: foto sudah terkirim ke chat tamu. JANGAN kirim permintaan maaf, " +
+          "pesan 'kendala teknis', atau fallback ke website. Cukup tutup dengan CTA singkat, " +
+          "mis. tanyakan tanggal menginap atau tawarkan booking."
+        : "Semua percobaan kirim foto gagal; sampaikan kendala teknis singkat dan arahkan tamu ke pomahguesthouse.com.",
   });
 };
+

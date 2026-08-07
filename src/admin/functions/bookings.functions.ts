@@ -354,10 +354,10 @@ async function resolveSelectedRooms(
 
 /**
  * Kebijakan usia tamu Pomah: anak SD/SMP/SMA/mahasiswa dihitung sebagai
- * dewasa untuk kapasitas & extra bed. Hanya balita ≤5 thn yang TIDAK
+ * dewasa untuk kapasitas & extra bed. Hanya anak di bawah 3 thn yang TIDAK
  * dihitung. Field `children_under_5` bersifat opsional & backward-compatible
  * (default 0), sehingga request lama tetap valid tetapi tidak bisa
- * memanipulasi kapasitas dengan mengaku semua "children" berumur ≤5.
+ * memanipulasi kapasitas dengan mengaku semua "children" berumur di bawah 3 thn.
  */
 type RoomCapMeta = { capacity: number; extrabedCap: number; name: string };
 
@@ -385,7 +385,7 @@ function assertGuestCapacity(
   const totalCapacity = baseCapacity + extraBedTotal;
   if (countedGuests > totalCapacity) {
     throw new Error(
-      `Jumlah tamu (${countedGuests} orang; balita ≤5 thn tidak dihitung) ` +
+      `Jumlah tamu (${countedGuests} orang; anak di bawah 3 thn tidak dihitung) ` +
         `melebihi kapasitas kamar (${totalCapacity} = ${baseCapacity} dasar + ${extraBedTotal} extra bed). ` +
         `Tambah kamar/extra bed atau kurangi jumlah tamu.`,
     );
@@ -476,7 +476,7 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       }
     }
 
-    // ── Guest capacity guard (usia policy: balita ≤5 thn tidak dihitung) ─
+    // ── Guest capacity guard (usia policy: anak di bawah 3 thn tidak dihitung) ─
     assertGuestCapacity(
       data.adults,
       data.children,
@@ -660,7 +660,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       }
     }
 
-    // ── Guest capacity guard (usia policy: balita ≤5 thn tidak dihitung) ─
+    // ── Guest capacity guard (usia policy: anak di bawah 3 thn tidak dihitung) ─
     assertGuestCapacity(
       data.adults,
       data.children,

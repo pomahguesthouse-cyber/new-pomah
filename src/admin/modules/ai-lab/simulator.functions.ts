@@ -4,7 +4,7 @@
  * Runs the SAME multi-agent orchestration pipeline used in production
  * (classifier → router → agent → tools → booking state machine) against a
  * sandbox/test phone number, so admins can exercise the WhatsApp bot from the
- * AI Lab without going through Wpp.
+ * AI Lab without going through WhatsApp gateway.
  *
  * NOTE: this is end-to-end. The booking state machine writes to
  * `wa_booking_states` and `create_booking` creates real booking/guest records

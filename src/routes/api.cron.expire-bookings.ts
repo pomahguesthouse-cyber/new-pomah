@@ -20,9 +20,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
  * room_type_availability_detail) semuanya memfilter
  * status IN ('pending','confirmed','checked_in') — 'expired' tidak termasuk.
  *
- * Tidak ada notifikasi manager di sini (beda dengan booking-stuck-monitor):
- * booking expired adalah hasil normal dari tamu yang tidak membayar tepat
- * waktu, bukan anomali yang perlu alert.
+ *   4. Kirim notifikasi WhatsApp/Telegram ke manajemen untuk setiap booking
+ *      yang baru saja expired (fire-and-forget, dedupe per booking id).
  *
  * Akses: tidak ada secret — sama dengan endpoint cron lain di project ini
  * yang hanya menjalankan pekerjaan internal berdasarkan data DB.
@@ -58,6 +57,14 @@ async function handle(): Promise<Response> {
   if (updateErr) {
     console.error("[expire-bookings] update failed:", updateErr.message);
     return Response.json({ ok: false, error: updateErr.message }, { status: 500 });
+  }
+
+  // Notifikasi manajemen — non-blocking, kegagalan tidak membatalkan expiry.
+  try {
+    const { notifyBookingExpired } = await import("@/services/manager-notifier.service");
+    await Promise.all(ids.map((id) => notifyBookingExpired(supabaseAdmin as any, id)));
+  } catch (e) {
+    console.warn("[expire-bookings] notifikasi manajemen gagal (non-fatal):", e);
   }
 
   console.info(

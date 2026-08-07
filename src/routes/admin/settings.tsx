@@ -701,7 +701,7 @@ function LogoUploadCard({
 }
 
 /* ------------------------------------------------------------------ */
-/* Kredensial tab — Wpp WhatsApp & AI Chatbot Keys                  */
+/* Kredensial tab — WhatsApp gateway WhatsApp & AI Chatbot Keys                  */
 /* ------------------------------------------------------------------ */
 
 function CredentialTab() {
@@ -743,20 +743,20 @@ function CredentialTab() {
       )}
       <TextSettingCard
         icon={<MessageCircle className="h-4 w-4" />}
-        label="WhatsApp Token — WPPConnect"
-        description="Token sesi WPPConnect untuk menghubungkan WhatsApp gateway dengan aplikasi ini."
-        placeholder="Token WPPConnect"
+        label="WhatsApp Token — Evolution API"
+        description="Token sesi Evolution API untuk menghubungkan WhatsApp gateway dengan aplikasi ini."
+        placeholder="Token Evolution API"
         secret
         value={(data as any)?.wpp_token ?? null}
         disabled={disabled}
         onSave={(v) => id && mutation.mutate({ id, wpp_token: v })}
       />
       <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-        <strong>Webhook WPPConnect (wajib):</strong>{" "}
+        <strong>Webhook Evolution API (wajib):</strong>{" "}
         <code className="break-all">
           {typeof window !== "undefined"
-            ? `${window.location.origin}/api/wpp`
-            : "https://pomahguesthouse.com/api/wpp"}
+            ? `${window.location.origin}/api/evolution`
+            : "https://pomahguesthouse.com/api/evolution"}
         </code>
         <br />
         Jangan pakai Supabase Edge Function (<code>…/functions/v1/whatsapp-webhook</code>) — itu

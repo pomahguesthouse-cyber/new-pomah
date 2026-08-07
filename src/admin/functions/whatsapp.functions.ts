@@ -108,7 +108,7 @@ export const sendMessage = createServerFn({ method: "POST" })
     if (prop?.wpp_token) {
       const sendResult = await sendWhatsAppMessage(prop.wpp_token, thread.phone, data.body);
       if (!sendResult.ok) {
-        console.error("[Admin WhatsApp] Wpp send failed:", sendResult.error);
+        console.error("[Admin WhatsApp] WhatsApp gateway send failed:", sendResult.error);
       }
       const raw = sendResult.raw as any;
       wppId =
