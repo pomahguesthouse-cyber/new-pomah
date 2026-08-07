@@ -7,9 +7,9 @@ Setiap temuan disertai lokasi `file:baris`, dampak nyata, dan usulan perbaikan. 
 
 ---
 
-> **Status perbaikan (7 Agu 2026).** S1, S2, S3, S4, B1, B3, P1, dan P3 sudah dikerjakan —
-> lihat bagian [Log perbaikan](#6-log-perbaikan) di akhir dokumen. Yang masih terbuka:
-> S5, B2, B4, B5, B6, B7, P2, P4, P5, P6.
+> **Status perbaikan (7 Agu 2026).** S1, S2, S3, S4, B1, B2, B3, B6, P1, dan P3 sudah
+> dikerjakan — lihat bagian [Log perbaikan](#6-log-perbaikan) di akhir dokumen.
+> Yang masih terbuka: S5, B4, B5, B7, P2, P4, P5, P6.
 
 ## Ringkasan eksekutif
 
@@ -342,6 +342,21 @@ Jalur balasan melakukan read-then-write berlapis: cek ack (2 SELECT), cek dedup 
 - Route baru sudah didaftarkan manual di `src/routeTree.gen.ts` mengikuti pola generator, jadi `bun run typecheck` bersih; `vite build` akan meregenerasi file itu seperti biasa.
 - Dua migrasi baru perlu dijalankan. Setelah itu verifikasi: `SELECT jobname, schedule FROM cron.job WHERE jobname IN ('drain-wa-queue','wa-queue-safety-net');` dan pastikan trigger `t_process_wa_queue*` sudah tidak ada.
 - Kalau kode booking legacy ada yang tersimpan huruf kecil, `bookingBelongsToPhone` dan lookup `.eq()` di tool memakai huruf besar — cek dengan `SELECT count(*) FROM bookings WHERE reference_code <> upper(reference_code);` sebelum rilis.
+
+### 7 Agustus 2026 (lanjutan) — B6 selesai, B2 ikut tertutup
+
+Modul kanonik baru **`src/lib/id-date.ts`** menampung seluruh primitif tanggal Bahasa Indonesia: `ID_MONTHS`, `resolveMonthName()` (dengan toleransi typo + daftar kata non-bulan), `makeIsoDate()`, `resolveYear()`, `resolveIdDate()`, dan `mentionsExplicitDateSignal()`. Keempat implementasi lama sekarang menunjuk ke sana:
+
+| Jalur | Sebelum | Sesudah |
+|-------|---------|---------|
+| `services/wa-autoreply/message-parsers.ts` | definisi lokal (paling lengkap) | impor dari lib, lalu re-export `resolveMonthName` + `mentionsExplicitDateSignal` supaya pemanggil lama tidak berubah |
+| `tools/availability.tool.ts` | `ID_MONTHS` + `coerceDate` sendiri | `resolveIdDate()` / `makeIsoDate()` |
+| `ai/state-machine/flexible-slot-extractor.ts` | `BULAN_MAP` + alternation bulan di regex | `resolveIdDate()`; regex tinggal `(\d{1,2})\s+([a-z]{3,})` dan keputusan "ini bulan atau bukan" diserahkan ke lib |
+| `ai/multi-agent-orchestrator.ts` | regex `hasExplicitDateSignal` versi sendiri | `mentionsExplicitDateSignal()` (+ tetap mengenali "minggu depan/weekend") |
+
+**B2 ikut tertutup.** Karena `coerceDate` dan `parseIndonesianDate` sekarang memakai `resolveYear()`, "3 Januari" yang diucapkan bulan Agustus menghasilkan **2027**-01-03, bukan tanggal lampau di tahun berjalan. Keduanya juga lewat `makeIsoDate()`, jadi "31 Februari" ditolak alih-alih dikirim mentah sebagai string `2026-02-31` ke Postgres.
+
+**Test.** `scripts/test-date-parsing-consistency.ts` (baru, `bun run test:date-consistency`) menjalankan input yang sama melalui keempat jalur dan menuntut hasil identik — termasuk kalimat insiden asli, typo "sepember", rollover Januari, dan penolakan pola kuantitas ("2 malam", "3 kamar", "4 dewasa") di semua jalur. Sweep tambahan atas 60+ kata Indonesia yang lazim muncul setelah angka (termasuk seluruh nama hari) memastikan fuzzy-match tidak menghasilkan bulan palsu.
 
 ---
 

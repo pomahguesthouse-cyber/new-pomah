@@ -20,6 +20,7 @@ import {
   normalizeRoomName,
 } from "./booking-machine";
 import { todayWIB, fmtDateID } from "@/lib/date";
+import { resolveIdDate } from "@/lib/id-date";
 import { extractRequestedExtraBeds } from "./extra-bed-parser";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -84,12 +85,11 @@ const PHONE_RE = /(?:\+62|62|0)[2-9][0-9]{7,11}/;
 const PHONE_WITH_SEPARATORS_RE = /(?:\+62|62|0)[\s\-().]*[2-9](?:[\s\-().]*[0-9]){7,11}/g;
 
 /** Bulan Indonesia → index (0-based) */
-const BULAN_MAP: Record<string, number> = {
-  januari: 0, februari: 1, maret: 2, april: 3, mei: 4, juni: 5,
-  juli: 6, agustus: 7, september: 8, oktober: 9, november: 10, desember: 11,
-  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, agu: 7, ags: 7,
-  sep: 8, okt: 9, nov: 10, des: 11,
-};
+/*
+ * BULAN_MAP lokal dihapus 7 Agu 2026 (audit — B6). Pemetaan nama bulan,
+ * toleransi typo, rollover tahun, dan validasi tanggal nyata sekarang hidup
+ * di @/lib/id-date bersama jalur WhatsApp dan availability tool.
+ */
 
 // ─── Signal patterns ──────────────────────────────────────────────────────────
 
@@ -143,29 +143,23 @@ function isValidName(candidate: string): boolean {
   return tokens.some((w) => /^[A-Za-zÀ-ÿ.'\-]{2,}$/.test(w));
 }
 
-/** Parse tanggal Indonesia "25 Juni" atau "25 Juni 2026" ke YYYY-MM-DD. */
+/**
+ * Parse tanggal Indonesia "25 Juni" / "25 Juni 2026" ke YYYY-MM-DD.
+ *
+ * Delegasi ke @/lib/id-date (audit 7 Agu 2026 — B6). Versi lama di sini:
+ *   - selalu memakai tahun berjalan bila tamu tidak menyebut tahun, sehingga
+ *     "3 Januari" yang diucapkan bulan Agustus jadi tanggal LAMPAU;
+ *   - tidak memvalidasi tanggal nyata, sehingga "31 Februari" lolos sebagai
+ *     string "2026-02-31";
+ *   - tidak menoleransi typo nama bulan yang lazim ("sepember").
+ */
 function parseIndonesianDate(
   day: number,
   monthStr: string,
   yearStr?: string,
   today?: string,
 ): string | null {
-  const monthKey = monthStr.toLowerCase().replace(/[^a-z]/g, "");
-  const monthIdx = BULAN_MAP[monthKey];
-  if (monthIdx === undefined) return null;
-
-  let year: number;
-  if (yearStr) {
-    year = Number(yearStr);
-    if (year < 100) year += 2000;
-  } else {
-    year = Number((today ?? todayWIB()).slice(0, 4));
-  }
-
-  if (day < 1 || day > 31) return null;
-  const m = String(monthIdx + 1).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return `${year}-${m}-${d}`;
+  return resolveIdDate(day, monthStr, yearStr, today ?? todayWIB());
 }
 
 /** Tambah N hari ke tanggal YYYY-MM-DD. */
@@ -377,8 +371,11 @@ export function extractAllSlots(
   }
 
   // Pattern: "25 Juni 2026" atau "25 Juni"
-  const idDateRe =
-    /(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|agu|ags|sep|okt|nov|des)\w*(?:\s+(\d{4}|\d{2}))?/gi;
+  // Nama bulan tidak lagi di-hardcode di sini: tangkap kata apa pun setelah
+  // angka, lalu biarkan `parseIndonesianDate` (→ resolveMonthName) yang
+  // memutuskan apakah itu bulan. Ini yang membuat typo "8 sepember" dan pola
+  // kuantitas "2 malam" ditangani konsisten dengan jalur WhatsApp (B6).
+  const idDateRe = /(\d{1,2})\s+([a-z]{3,})\.?(?:\s+(\d{4}|\d{2}))?/gi;
   let idMatch;
   while ((idMatch = idDateRe.exec(text)) !== null) {
     const d = parseIndonesianDate(

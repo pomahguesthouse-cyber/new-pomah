@@ -20,6 +20,12 @@
  */
 
 import { isDateString, nextDay, fmtDateID, todayWIB } from "@/lib/date";
+// Parser tanggal Indonesia dipakai bersama dengan jalur WhatsApp & state
+// machine (audit 7 Agu 2026 — B6). Sebelumnya file ini punya ID_MONTHS +
+// coerceDate sendiri yang TIDAK menaikkan tahun untuk bulan yang sudah lewat
+// ("3 Januari" → 3 Jan tahun ini = tanggal lampau, B2) dan tidak memvalidasi
+// tanggal nyata ("31 Februari" diteruskan mentah ke Postgres).
+import { makeIsoDate, resolveIdDate } from "@/lib/id-date";
 import {
   getDailyRatesForRange,
   resolveRoomNightlyRates,
@@ -72,21 +78,6 @@ type AnyRpc = (
   params: Record<string, unknown>,
 ) => Promise<{ data: unknown; error?: { message?: string } | null }>;
 
-const ID_MONTHS: Record<string, number> = {
-  jan: 1, januari: 1,
-  feb: 2, februari: 2, pebruari: 2,
-  mar: 3, maret: 3,
-  apr: 4, april: 4,
-  mei: 5,
-  jun: 6, juni: 6,
-  jul: 7, juli: 7,
-  agu: 8, agt: 8, agustus: 8,
-  sep: 9, sept: 9, september: 9,
-  okt: 10, oktober: 10,
-  nov: 11, november: 11,
-  des: 12, desember: 12,
-};
-
 /**
  * Best-effort coerce a date input from the LLM into YYYY-MM-DD.
  * Handles:
@@ -108,28 +99,22 @@ function coerceDate(v: unknown, today: string): string | null {
   let m = s.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/);
   if (m) {
     const [, y, mo, d] = m;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    return makeIsoDate(Number(d), Number(mo), Number(y));
   }
 
   // DD/MM/YYYY or DD-MM-YYYY
   m = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
   if (m) {
-    let [, d, mo, y] = m;
-    if (y.length === 2) y = `20${y}`;
-    return `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    const [, d, mo, yRaw] = m;
+    const year = yRaw.length === 2 ? Number(`20${yRaw}`) : Number(yRaw);
+    return makeIsoDate(Number(d), Number(mo), year);
   }
 
-  // "8 juni 2026" / "8 jun"
-  m = s.match(/^(\d{1,2})\s+([a-z]+)\s*(\d{2,4})?$/);
+  // "8 juni 2026" / "8 jun" / "8 sepember" (typo ditoleransi resolveIdDate)
+  m = s.match(/^(\d{1,2})\s+([a-z]+)\.?\s*(\d{2,4})?$/);
   if (m) {
     const [, d, monthName, yRaw] = m;
-    const mo = ID_MONTHS[monthName];
-    if (mo) {
-      const year = yRaw
-        ? (yRaw.length === 2 ? `20${yRaw}` : yRaw)
-        : today.slice(0, 4);
-      return `${year}-${String(mo).padStart(2, "0")}-${d.padStart(2, "0")}`;
-    }
+    return resolveIdDate(Number(d), monthName, yRaw, today);
   }
 
   return null;

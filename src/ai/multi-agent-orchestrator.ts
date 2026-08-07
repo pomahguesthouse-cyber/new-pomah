@@ -17,6 +17,7 @@
 
 import type { AiMessage, LlmResponse, AiClientConfig } from "./types";
 import type { MultiAgentResult, AgentDefinition, AgentContext, AgentKey } from "./agents/types";
+import { mentionsExplicitDateSignal } from "@/lib/id-date";
 import { classifyIntent } from "./router/intent-classifier";
 import { routeToAgent } from "./router/agent-router";
 import { getAgent } from "./agents/registry";
@@ -992,9 +993,13 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // sehingga menimpa tanggal booking aktif tamu. Bila tamu punya
   // activeBookingContext DAN pesan terakhir tidak mengandung sinyal tanggal
   // eksplisit, TOLAK liveSlots.check_in agar agreedDates tidak drift.
-  const hasExplicitDateSignal = /\b(hari ini|malam ini|nanti malam|besok|lusa|minggu depan|akhir minggu|weekend|jan(uari)?|feb(ruari)?|mar(et)?|apr(il)?|mei|jun[i]?|jul[i]?|agu(stus)?|sep(t(ember)?)?|okt(ober)?|nov(ember)?|des(ember)?|\d{1,2}[\/.\-]\d{1,2}|tanggal\s+\d{1,2})\b/i.test(
-    lastUserMsg,
-  );
+  // Deteksi sinyal tanggal memakai helper kanonik di @/lib/id-date — dulu regex
+  // keempat yang berdiri sendiri di file ini (audit 7 Agu 2026 — B6), sehingga
+  // "8 sepember" (typo) atau "tgl 18" bisa dianggap bukan sinyal tanggal di
+  // sini padahal jalur WhatsApp menganggapnya sinyal. Versi bersama juga
+  // menoleransi typo nama bulan dan mengabaikan pola kuantitas ("2 malam").
+  const hasExplicitDateSignal =
+    mentionsExplicitDateSignal(lastUserMsg) || /\bminggu depan|akhir minggu|weekend\b/i.test(lastUserMsg);
   const shouldAcceptLiveDates =
     hasExplicitDateSignal || !input.agentCtx.activeBookingContext;
   const mergedCheckIn =
