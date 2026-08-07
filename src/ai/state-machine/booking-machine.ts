@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { classifyIntent } from "@/ai/router/intent-classifier";
+import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
 import { createBooking } from "@/tools/booking.tool";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
 import { getSubmittedBookingForm, type BookingFormSubmission } from "@/services/booking-form.service";
@@ -652,7 +653,15 @@ function bookingFormSubmissionToContext(
 ): BookingContext {
   const room = roomsCatalog.find((r) => r.id === submission.roomTypeId) ?? roomsCatalog[0];
   const quantity = Math.max(1, Math.min(10, Number(submission.rooms) || 1));
-  const adults = Math.max(1, Math.min(20, Number(submission.guestCount) || 1));
+  // Form biasanya mewajibkan jumlah tamu; kalau kosong, biarkan undefined agar
+  // default kapasitas kamar yang berlaku saat booking dibuat.
+  const adults = guestCountWasStated(submission.guestCount)
+    ? Math.max(1, Math.min(20, Math.floor(Number(submission.guestCount))))
+    : resolveAdultsForBooking(
+        undefined,
+        [{ roomTypeId: room?.id ?? submission.roomTypeId, quantity }],
+        roomsCatalog,
+      );
   const context: BookingContext = {
     ...previous,
     checkIn: submission.checkIn,
@@ -1927,7 +1936,10 @@ export async function processBookingState(
           phone: context.guestPhone,
           check_in: context.checkIn,
           check_out: context.checkOut,
-          adults: context.adults ?? 1,
+          // Sengaja diteruskan apa adanya: bila jumlah tamu tidak pernah
+          // disebut, `create_booking` yang menentukan default dari kapasitas
+          // kamar (Deluxe 2, Family Room 4) — bukan dipaksa 1 di sini.
+          adults: context.adults,
           children: context.children ?? 0,
           payment_type: context.paymentType ?? "full",
           dp_amount: context.dpAmount ?? 0,

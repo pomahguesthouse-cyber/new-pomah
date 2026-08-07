@@ -78,7 +78,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           phone:      { type: "string", description: "HP/WhatsApp tamu. WAJIB di mode tamu, opsional di mode manajerial." },
           check_in:   { type: "string", description: "Tanggal check-in YYYY-MM-DD." },
           check_out:  { type: "string", description: "Tanggal check-out YYYY-MM-DD. Kosongkan untuk default 1 malam." },
-          adults:     { type: "number", description: "Jumlah dewasa. Default 1." },
+          adults:     {
+            type: "number",
+            description:
+              "Jumlah dewasa. KOSONGKAN bila tamu/manajer tidak menyebutkan jumlah orang — " +
+              "sistem otomatis memakai kapasitas kamar yang dipesan (mis. Deluxe 2, Family Room 4). " +
+              "Isi HANYA bila jumlah tamu benar-benar disebutkan.",
+          },
           children:   { type: "number", description: "Jumlah anak. Default 0." },
         },
         required: ["full_name", "check_in"],

@@ -6,6 +6,7 @@
  * invalid data by passing incomplete arguments.
  */
 
+import { guestCountWasStated, resolveAdultsForBooking } from "@/lib/guest-count";
 import { isDateString, fmtDateID } from "@/lib/date";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { getDailyRatesForRange, resolveRoomNightlyRates } from "@/services/pricing/daily-rate.service";
@@ -211,7 +212,10 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   if (!checkOut && checkIn) {
     checkOut = new Date(new Date(checkIn).getTime() + 86_400_000).toISOString().slice(0, 10);
   }
-  const adults = Math.max(1, Math.min(8, Number(args.adults) || 1));
+  // Jumlah tamu diselesaikan SETELAH kamar dialokasikan — bila tamu/staf tidak
+  // menyebut jumlah orang, defaultnya mengikuti kapasitas kamar yang dipesan
+  // (Deluxe 2, Family Room 4), bukan 1. Lihat `resolveAdultsForBooking`.
+  const statedAdults = args.adults;
   const children = Math.max(0, Math.min(8, Number(args.children) || 0));
   const requestedExtraBeds = Math.max(0, Math.min(20, Number(args.extra_beds) || 0));
   const specialRequests = str(args.special_requests).slice(0, 1800);
@@ -438,6 +442,22 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   if (!propId) return JSON.stringify({ ok: false, error: "Properti belum dikonfigurasi." });
 
   const nights = Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000);
+
+  // Default jumlah tamu = total kapasitas standar kamar yang dipesan (tanpa
+  // extra bed). Hanya berlaku bila jumlah tamu TIDAK disebutkan; angka yang
+  // disebut tamu/staf selalu menang, termasuk bila lebih kecil dari kapasitas.
+  const adults = resolveAdultsForBooking(
+    statedAdults,
+    assignments.map((a) => ({ roomTypeId: a.roomTypeId, quantity: 1 })),
+    ctx.rooms,
+    children,
+  );
+  if (!guestCountWasStated(statedAdults)) {
+    console.info(
+      `[createBooking] jumlah tamu tidak disebut — default dari kapasitas kamar: ${adults} tamu ` +
+        `(${assignments.map((a) => a.roomTypeName).join(", ")})`,
+    );
+  }
 
   // ── Resolve dynamic daily rates ───────────────────────────────────────────
   // Bookings yang sudah ada di DB tidak disentuh (sesuai keputusan
