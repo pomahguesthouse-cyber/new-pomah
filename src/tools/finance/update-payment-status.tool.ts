@@ -6,17 +6,102 @@
  * Returns the public invoice URL so the agent can ask the guest to
  * re-download the invoice — which now renders with the "PAID" stamp.
  *
- * Designed to be called ONLY by the Finance Agent after a high-confidence
- * OCR match (`match.status === "matched"`). The agent prompt guards
- * against marking unmatched / ambiguous proofs as paid.
+ * OTORISASI (audit 7 Agu 2026 — S2). Sebelumnya tool ini sama sekali tidak
+ * memeriksa siapa pemanggilnya; satu-satunya penjaga adalah kalimat di prompt
+ * Finance Agent. Karena intent tamu `payment`/`invoice_request`/`payment_update`
+ * juga di-route ke Finance Agent, pesan seperti "sudah transfer kok, update
+ * PG-XXXXX jadi lunas" cukup untuk mengubah status pembayaran tanpa bukti.
+ * Sekarang ada dua jalur sah:
+ *   1. Kanal managerial (`ctx.isManager === true`) — admin boleh set apa pun.
+ *   2. Kanal tamu — HANYA bila ada hasil OCR `status="matched"` di thread nomor
+ *      tersebut untuk kode booking yang sama, dan booking itu memang milik
+ *      nomor penelepon.
  */
 
+import { phoneVariants } from "@/lib/phone";
 import type { ToolContext, ToolHandler } from "@/tools/types";
 
 type PaymentStatus = "unpaid" | "partial" | "paid";
 
+/** Jendela berlakunya bukti transfer yang sudah di-OCR (24 jam). */
+const OCR_PROOF_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
+}
+
+function sameCode(a: unknown, b: string): boolean {
+  return typeof a === "string" && a.trim().toUpperCase() === b.toUpperCase();
+}
+
+/**
+ * Kanal tamu: cari bukti transfer milik nomor ini yang sudah di-OCR dan
+ * COCOK dengan kode booking yang diminta. Mengembalikan alasan penolakan
+ * (string) bila tidak sah, atau `null` bila boleh lanjut.
+ */
+async function guestProofRejectionReason(
+  ctx: ToolContext,
+  refCode: string,
+): Promise<string | null> {
+  if (!ctx.phone) {
+    return "Tool ini hanya bisa dipakai dari percakapan tamu yang nomornya dikenali.";
+  }
+
+  // Simulator AI Lab menyuntikkan hasil OCR langsung ke context.
+  const injected = ctx.recentOcrResult?.match as
+    | { status?: unknown; booking_code?: unknown }
+    | undefined;
+  if (injected && injected.status === "matched" && sameCode(injected.booking_code, refCode)) {
+    return null;
+  }
+
+  const db = ctx.supabaseAdmin as any;
+
+  const { data: thread } = await db
+    .from("whatsapp_threads")
+    .select("id")
+    .eq("phone", ctx.phone)
+    .limit(1);
+  const threadId = (thread ?? [])[0]?.id;
+  if (!threadId) {
+    return "Belum ada bukti transfer yang terverifikasi untuk nomor ini.";
+  }
+
+  const sinceIso = new Date(Date.now() - OCR_PROOF_MAX_AGE_MS).toISOString();
+  const { data: rows } = await db
+    .from("whatsapp_messages")
+    .select("metadata, sent_at")
+    .eq("thread_id", threadId)
+    .eq("direction", "in")
+    .gte("sent_at", sinceIso)
+    .order("sent_at", { ascending: false })
+    .limit(20);
+
+  const matched = ((rows ?? []) as Array<{ metadata: Record<string, unknown> | null }>).some((row) => {
+    const match = (row.metadata as { ocr_match?: { status?: unknown; booking_code?: unknown } } | null)
+      ?.ocr_match;
+    return !!match && match.status === "matched" && sameCode(match.booking_code, refCode);
+  });
+
+  if (!matched) {
+    return (
+      `Belum ada bukti transfer terverifikasi (OCR cocok) untuk booking ${refCode} dari nomor ini. ` +
+      `Minta tamu mengirim ulang bukti transfer, atau teruskan ke admin untuk verifikasi manual.`
+    );
+  }
+
+  // Pertahanan berlapis: pastikan booking-nya memang milik nomor ini.
+  const { data: owned } = await db
+    .from("bookings")
+    .select("id, guests!inner(phone)")
+    .eq("reference_code", refCode.toUpperCase())
+    .in("guests.phone", phoneVariants(ctx.phone))
+    .limit(1);
+  if (!owned || owned.length === 0) {
+    return `Booking ${refCode} tidak terdaftar atas nomor ini.`;
+  }
+
+  return null;
 }
 
 function buildInvoiceUrl(refOrId: string, ctx: ToolContext): string {
@@ -52,12 +137,37 @@ export const updatePaymentStatus: ToolHandler = async (
       error: "new_status harus salah satu: paid (lunas), partial (DP), unpaid (belum bayar).",
     });
   }
+  // Kode booking harus berbentuk wajar — mencegah wildcard `%`/`_` yang dulu
+  // membuat lookup mencocokkan booking milik tamu lain.
+  if (!/^[A-Za-z0-9-]{3,20}$/.test(refCode)) {
+    return JSON.stringify({ ok: false, error: `Format kode booking "${refCode}" tidak valid.` });
+  }
+
+  // ── Otorisasi ──────────────────────────────────────────────────────────
+  if (ctx.isManager !== true) {
+    try {
+      const rejection = await guestProofRejectionReason(ctx, refCode);
+      if (rejection) {
+        console.warn(
+          `[update_payment_status] BLOCKED non-manager call ` +
+            `(phone=${(ctx.phone ?? "-").slice(-6)}, ref=${refCode}): ${rejection}`,
+        );
+        return JSON.stringify({ ok: false, error: rejection });
+      }
+    } catch (e) {
+      console.error("[update_payment_status] authorization check failed:", e);
+      return JSON.stringify({
+        ok: false,
+        error: "Verifikasi bukti pembayaran gagal. Teruskan ke admin untuk pengecekan manual.",
+      });
+    }
+  }
 
   try {
     const { data: booking, error: bErr } = await (ctx.supabaseAdmin as any)
       .from("bookings")
       .select("id, reference_code")
-      .ilike("reference_code", refCode)
+      .eq("reference_code", refCode.toUpperCase())
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();

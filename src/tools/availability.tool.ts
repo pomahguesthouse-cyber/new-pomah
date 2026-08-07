@@ -67,7 +67,10 @@ type RoomCombinationRecommendation = {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyRpc = (name: string, params: Record<string, unknown>) => Promise<{ data: unknown }>;
+type AnyRpc = (
+  name: string,
+  params: Record<string, unknown>,
+) => Promise<{ data: unknown; error?: { message?: string } | null }>;
 
 const ID_MONTHS: Record<string, number> = {
   jan: 1, januari: 1,
@@ -300,10 +303,33 @@ export const checkRoomAvailability: ToolHandler = async (
   // "Cannot read properties of undefined (reading 'rest')", which the LLM
   // then surfaces to guests as a "kendala teknis" apology.
   const client = ctx.supabasePublic as unknown as { rpc: AnyRpc };
-  const { data: rows } = await client.rpc("room_type_availability_detail", {
+  const { data: rows, error: availErr } = await client.rpc("room_type_availability_detail", {
     p_check_in:  checkIn,
     p_check_out: checkOut,
   });
+
+  // JANGAN pernah melanjutkan dengan data ketersediaan yang gagal diambil.
+  // Audit 7 Agu 2026 (B1): `error` dulu diabaikan, sehingga saat RPC gagal
+  // semua tipe kamar kehilangan angka ketersediaan dan formatter menyimpulkan
+  // "kamar kami sudah penuh" — tamu ditolak untuk tanggal yang sebenarnya
+  // kosong, tanpa log dan tanpa alert.
+  if (availErr) {
+    console.error(
+      `[availability.tool] room_type_availability_detail gagal (${checkIn}..${checkOut}):`,
+      availErr,
+    );
+    return JSON.stringify({
+      ok: false,
+      availability_unknown: true,
+      error: `Gagal mengecek ketersediaan kamar: ${(availErr as { message?: string })?.message ?? availErr}`,
+      reply_to_guest:
+        "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
+        "Boleh saya cek ulang dalam beberapa saat? 🙏",
+      instruction_to_agent:
+        "Pengecekan ketersediaan GAGAL secara teknis — status kamar TIDAK diketahui. " +
+        "JANGAN menyimpulkan kamar penuh atau tersedia. Kirim `reply_to_guest` apa adanya.",
+    });
+  }
 
   const byId = new Map<string, AvailabilityRow>(
     ((rows ?? []) as AvailabilityRow[]).map((r) => [r.room_type_id, r]),

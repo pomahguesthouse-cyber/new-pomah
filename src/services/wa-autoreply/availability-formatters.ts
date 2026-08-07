@@ -190,6 +190,31 @@ export function buildAvailabilityNeedDatesReply(
   };
 }
 
+/**
+ * Balasan saat status ketersediaan TIDAK diketahui (RPC gagal, atau tidak ada
+ * satu pun tipe kamar yang punya angka ketersediaan). Audit 7 Agu 2026 (B1):
+ * dulu kondisi ini diperlakukan sama dengan "penuh", sehingga gangguan teknis
+ * berubah jadi penolakan tamu untuk tanggal yang sebenarnya kosong.
+ */
+function unknownAvailabilityReply(data: any): FastFaqResult | null {
+  const explicit = data?.availability_unknown === true;
+  const rooms = Array.isArray(data?.kamar) ? (data.kamar as Array<Record<string, unknown>>) : [];
+  const allUnknown =
+    rooms.length > 0 &&
+    rooms.every((room) => room.kamar_tersedia === null || room.kamar_tersedia === undefined);
+
+  if (!explicit && !allUnknown) return null;
+
+  const reply =
+    typeof data?.reply_to_guest === "string" && data.reply_to_guest.trim()
+      ? data.reply_to_guest.trim()
+      : "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
+        "Boleh saya cek ulang dalam beberapa saat ya? 🙏";
+
+  console.warn("[availability-formatters] status ketersediaan tidak diketahui — tidak mengklaim penuh");
+  return { intent: "deterministic_availability_unknown", reply };
+}
+
 export function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
   let data: any;
   try {
@@ -197,6 +222,9 @@ export function formatAvailabilityReply(raw: string, greet = false): FastFaqResu
   } catch {
     return null;
   }
+
+  const unknown = unknownAvailabilityReply(data);
+  if (unknown) return unknown;
 
   if (!Array.isArray(data.kamar)) return null;
   const terminalReply = topLevelReply(data, "deterministic_availability_over_capacity");
@@ -252,6 +280,9 @@ export function formatAvailabilityForGuestCount(
   } catch {
     return null;
   }
+
+  const unknown = unknownAvailabilityReply(data);
+  if (unknown) return unknown;
 
   if (!Array.isArray(data.kamar)) return null;
   const terminalReply = topLevelReply(data, "deterministic_availability_over_capacity");

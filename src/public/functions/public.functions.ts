@@ -646,9 +646,28 @@ export type BookingInvoice = {
   };
 };
 
+/**
+ * Bentuk identifier booking yang boleh masuk ke lookup publik: UUID atau kode
+ * booking (huruf/angka/strip). Wildcard `%`/`_`, spasi, dan karakter lain
+ * ditolak di sini — audit 7 Agu 2026 (S1): `ilike("reference_code", "%")`
+ * mengembalikan invoice tamu acak lengkap dengan email + nomor HP.
+ */
+const BOOKING_LOOKUP_ID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9-]{3,20})$/i;
+
 /** Full invoice detail for a booking — used by the public confirmation page. */
 export const getBookingInvoice = createServerFn({ method: "GET" })
-  .inputValidator((d) => z.object({ id: z.string().min(1) }).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z
+          .string()
+          .min(1)
+          .max(64)
+          .transform((v) => v.trim())
+          .refine((v) => BOOKING_LOOKUP_ID_RE.test(v), "Format kode booking tidak valid"),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     try {
       // Reads via the service-role client if available (bypasses RLS).
@@ -686,12 +705,22 @@ export const getBookingInvoice = createServerFn({ method: "GET" })
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
       let bookingId = rawId;
       if (!isUuid) {
-        const { data: byCode, error: codeErr } = await sb
-          .from("bookings")
-          .select("id")
-          .ilike("reference_code", rawId)
-          .maybeSingle();
-        if (codeErr) {
+        // Pencocokan persis (case-insensitive lewat normalisasi ke huruf
+        // besar), BUKAN `ilike` — pola akan memperlakukan `%`/`_` sebagai
+        // wildcard dan membocorkan booking milik tamu lain.
+        const upper = rawId.toUpperCase();
+        const candidates = upper === rawId ? [upper] : [upper, rawId];
+        let byCode: { id: string } | null = null;
+        let codeErr: unknown = null;
+        for (const candidate of candidates) {
+          const res = await sb.from("bookings").select("id").eq("reference_code", candidate).maybeSingle();
+          if (res.error) codeErr = res.error;
+          if (res.data) {
+            byCode = res.data as { id: string };
+            break;
+          }
+        }
+        if (codeErr && !byCode) {
           console.error("[getBookingInvoice] Error resolving booking reference code:", codeErr);
         }
         if (!byCode) {

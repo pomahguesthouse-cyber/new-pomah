@@ -80,10 +80,17 @@ async function buildDeterministicAvailabilityReply(
   const range = parseAvailabilityDateRange(message, today);
   if (!range) return null;
 
-  const { data: rows } = await supabase.rpc("room_type_availability_detail", {
+  const { data: rows, error: availErr } = await supabase.rpc("room_type_availability_detail", {
     p_check_in: range.checkIn,
     p_check_out: range.checkOut,
   });
+  // Audit 7 Agu 2026 (B1): tanpa cek ini, kegagalan RPC membuat semua kamar
+  // ber-nilai null dan formatter menjawab "kamar sudah penuh" — padahal status
+  // sebenarnya tidak diketahui. Serahkan ke jalur AI, jangan mengarang.
+  if (availErr) {
+    console.error("[Webchat] room_type_availability_detail gagal:", availErr);
+    return null;
+  }
   const byId = new Map(((rows ?? []) as any[]).map((r) => [r.room_type_id, r]));
   const kamar = rooms.map((r) => {
     const d = byId.get(r.id);

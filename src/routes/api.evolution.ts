@@ -37,18 +37,36 @@ function expectedQueueToken(): string | undefined {
   return process.env.QUEUE_WORKER_TOKEN || process.env.EVOLUTION_WEBHOOK_TOKEN || process.env.WPP_WEBHOOK_TOKEN;
 }
 
-function isAuthorized(request: Request): boolean {
+type AuthResult = { ok: true } | { ok: false; status: 403 | 503; reason: string };
+
+/**
+ * Fail-CLOSED (audit 7 Agu 2026 — S4). Versi lama mengembalikan `true` bila
+ * env token kosong, sehingga hilangnya `EVOLUTION_WEBHOOK_TOKEN` (salah deploy,
+ * rotasi env, clone project) membuka endpoint ini untuk siapa saja: pesan tamu
+ * palsu tersimpan, antrian terisi, LLM jalan, dan WhatsApp mengirim balasan ke
+ * nomor pilihan penyerang. Endpoint yang membelanjakan uang tidak boleh
+ * terbuka karena konfigurasi yang hilang.
+ */
+function authorize(request: Request): AuthResult {
   const expected = expectedWebhookToken();
-  if (!expected) return true;
+  if (!expected) {
+    return {
+      ok: false,
+      status: 503,
+      reason:
+        "EVOLUTION_WEBHOOK_TOKEN / WPP_WEBHOOK_TOKEN belum diset — webhook menolak semua request.",
+    };
+  }
 
   const url = new URL(request.url);
   const authHeader = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   const apikeyHeader = request.headers.get("apikey");
-  return (
+  const provided =
     url.searchParams.get("token") === expected ||
     authHeader === expected ||
-    apikeyHeader === expected
-  );
+    apikeyHeader === expected;
+
+  return provided ? { ok: true } : { ok: false, status: 403, reason: "token mismatch" };
 }
 
 async function getWaitUntilRunner(): Promise<(task: Promise<void>) => void> {
@@ -86,9 +104,13 @@ function scheduleQueueNudge(
 export const evolutionWebhookPost = async ({ request }: { request: Request }): Promise<Response> => {
   const workerId = `evo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  if (!isAuthorized(request)) {
-    console.warn("[EvolutionWebhook] token mismatch");
-    return json({ error: "Unauthorized" }, 403);
+  const auth = authorize(request);
+  if (!auth.ok) {
+    console.error(`[EvolutionWebhook] REJECTED: ${auth.reason}`);
+    return json(
+      { error: auth.status === 503 ? "Webhook not configured" : "Unauthorized" },
+      auth.status,
+    );
   }
 
   const event = await parseEvolutionWebhook(request);
@@ -363,7 +385,11 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
 export const evolutionWebhookGet = async ({ request }: { request: Request }): Promise<Response> => {
   const url = new URL(request.url);
   if (url.searchParams.get("debug") === "1") {
-    if (!isAuthorized(request)) return json({ error: "Unauthorized" }, 403);
+    const auth = authorize(request);
+    if (!auth.ok) {
+      console.warn(`[EvolutionWebhook] debug rejected: ${auth.reason}`);
+      return json({ error: auth.status === 503 ? "Webhook not configured" : "Unauthorized" }, auth.status);
+    }
     return json({
       ok: true,
       route: "/api/evolution",
