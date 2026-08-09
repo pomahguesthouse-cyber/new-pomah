@@ -65,12 +65,13 @@ import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmati
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
 import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
+import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
-import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
+import { Route as ApiCronBookingFormFollowupRouteImport } from './routes/api.cron.booking-form-followup'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
@@ -361,6 +362,11 @@ const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
   path: '/api/cron/wa-summary-refresh',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
+  id: '/api/cron/wa-queue-safety-net',
+  path: '/api/cron/wa-queue-safety-net',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   id: '/api/cron/sync-explore',
   path: '/api/cron/sync-explore',
@@ -377,11 +383,6 @@ const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
   path: '/api/cron/process-wa-queue',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
-  id: '/api/cron/wa-queue-safety-net',
-  path: '/api/cron/wa-queue-safety-net',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
   id: '/api/cron/expire-bookings',
   path: '/api/cron/expire-bookings',
@@ -391,6 +392,12 @@ const ApiCronBookingStuckMonitorRoute =
   ApiCronBookingStuckMonitorRouteImport.update({
     id: '/api/cron/booking-stuck-monitor',
     path: '/api/cron/booking-stuck-monitor',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronBookingFormFollowupRoute =
+  ApiCronBookingFormFollowupRouteImport.update({
+    id: '/api/cron/booking-form-followup',
+    path: '/api/cron/booking-form-followup',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
@@ -481,12 +488,13 @@ export interface FileRoutesByFullPath {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -550,12 +558,13 @@ export interface FileRoutesByTo {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -621,12 +630,13 @@ export interface FileRoutesById {
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
+  '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -693,12 +703,13 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -762,12 +773,13 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -832,12 +844,13 @@ export interface FileRouteTypes {
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
+    | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -875,12 +888,13 @@ export interface RootRouteChildren {
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
+  ApiCronBookingFormFollowupRoute: typeof ApiCronBookingFormFollowupRoute
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
-  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
+  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronWaSummaryRefreshRoute: typeof ApiCronWaSummaryRefreshRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
@@ -1282,6 +1296,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronWaSummaryRefreshRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/wa-queue-safety-net': {
+      id: '/api/cron/wa-queue-safety-net'
+      path: '/api/cron/wa-queue-safety-net'
+      fullPath: '/api/cron/wa-queue-safety-net'
+      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/sync-explore': {
       id: '/api/cron/sync-explore'
       path: '/api/cron/sync-explore'
@@ -1303,13 +1324,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/wa-queue-safety-net': {
-      id: '/api/cron/wa-queue-safety-net'
-      path: '/api/cron/wa-queue-safety-net'
-      fullPath: '/api/cron/wa-queue-safety-net'
-      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/cron/expire-bookings': {
       id: '/api/cron/expire-bookings'
       path: '/api/cron/expire-bookings'
@@ -1322,6 +1336,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/booking-stuck-monitor'
       fullPath: '/api/cron/booking-stuck-monitor'
       preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/booking-form-followup': {
+      id: '/api/cron/booking-form-followup'
+      path: '/api/cron/booking-form-followup'
+      fullPath: '/api/cron/booking-form-followup'
+      preLoaderRoute: typeof ApiCronBookingFormFollowupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/booking-invoice/$id': {
@@ -1495,12 +1516,13 @@ const rootRouteChildren: RootRouteChildren = {
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
+  ApiCronBookingFormFollowupRoute: ApiCronBookingFormFollowupRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
-  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
+  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronWaSummaryRefreshRoute: ApiCronWaSummaryRefreshRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
@@ -1510,13 +1532,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

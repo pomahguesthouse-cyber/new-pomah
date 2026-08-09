@@ -1257,14 +1257,10 @@ export async function processBookingState(
       // Token expired — reset ke COLLECTING_DATA agar tamu bisa lanjut via chat
       const { formToken: _ft, ...restContext } = context as any;
       await updateBookingState(supabase, phone, "COLLECTING_DATA", restContext);
-      return {
-        handled: true,
-        reply:
-          "Mohon maaf Kak, link formulir booking tadi sudah kedaluwarsa (berlaku 30 menit). " +
-          "Tidak apa-apa — saya bantu lanjutkan pengisian langsung di chat ini ya. " +
-          "Data yang sudah ada (kamar & tanggal) masih tersimpan. " +
-          "Mohon ketikkan nama lengkap Kakak untuk melanjutkan:",
-      };
+      // Kalimat dipakai bersama cron `booking-form-followup` (jalur proaktif)
+      // agar tamu tidak pernah melihat dua versi berbeda untuk situasi sama.
+      const { FORM_EXPIRY_MESSAGE } = await import("@/services/booking-form-followup.service");
+      return { handled: true, reply: FORM_EXPIRY_MESSAGE };
     }
 
     return {
