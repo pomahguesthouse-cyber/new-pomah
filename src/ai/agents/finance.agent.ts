@@ -23,6 +23,7 @@ import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import { normalizeAssistantName } from "./persona";
+import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 const FINANCE_TOOLS: ToolDefinition[] = [
   ...TOOL_DEFINITIONS.filter((t) => t.function.name === "get_bookings"),
@@ -251,6 +252,8 @@ function buildGuestPrompt(s: Scaffold): string {
 
     "Jangan pernah mengkonfirmasi penerimaan pembayaran secara manual — selalu " +
       "arahkan tamu mengirim bukti transfer untuk diverifikasi.",
+
+    CAPABILITY_HONESTY_BLOCK,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");

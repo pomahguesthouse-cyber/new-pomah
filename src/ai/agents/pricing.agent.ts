@@ -17,6 +17,7 @@ import { TOOL_DEFINITIONS } from "@/tools/registry";
 import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { normalizeAssistantName } from "./persona";
+import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 // Pricing agent tools — split by mode.
 // Guest only sees availability/rate lookup; rate updates and competitor
@@ -215,6 +216,8 @@ function buildGuestPrompt(s: Scaffold): string {
       "hotel lain, lalu kembali ke value + alternatif kamar kami. Jangan pernah memanggil " +
       "tool `update_room_rate` atau `scrape_competitor_prices` dalam mode tamu.",
 
+
+    CAPABILITY_HONESTY_BLOCK,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");

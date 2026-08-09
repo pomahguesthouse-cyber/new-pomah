@@ -14,6 +14,7 @@ import type { AgentDefinition, AgentContext } from "./types";
 import type { ToolDefinition } from "@/ai/types";
 import { TOOL_DEFINITIONS } from "@/tools/registry";
 import { normalizeAssistantName } from "./persona";
+import { CAPABILITY_HONESTY_BLOCK } from "./capability-guard";
 
 const CUSTOMER_CARE_TOOLS: ToolDefinition[] = [
   // reply_to_guest is shared from the registry — the same tool the Manager
@@ -155,6 +156,8 @@ function buildGuestPrompt(s: Scaffold): string {
 
     "JANGAN bilang tidak bisa membantu — selalu catat dan eskalasi ke staf bila di luar " +
       "kapasitas sistem.",
+
+    CAPABILITY_HONESTY_BLOCK,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
   ].filter(Boolean).join("\n\n");

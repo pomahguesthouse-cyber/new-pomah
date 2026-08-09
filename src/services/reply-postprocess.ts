@@ -94,6 +94,69 @@ function deniesBrochure(reply: string): boolean {
   return BROCHURE_DENIAL_PATTERNS.some((p) => p.test(reply));
 }
 
+// ─── Media-capability denial guard ───────────────────────────────────────────
+
+/**
+ * Kalimat yang menyangkal kemampuan mengirim foto/gambar/video kamar.
+ *
+ * Pomah Guesthouse SELALU bisa mengirim foto kamar (`send_room_photos`) dan
+ * link Virtual Tour (`send_room_tour`); yang berbeda hanyalah agent mana yang
+ * memegang tool-nya. Jadi kalimat semacam ini SELALU tidak benar, dari agent
+ * mana pun ia datang.
+ *
+ * Insiden 9 Agu 2026 (transcript 6281210853153): dalam satu burst tamu
+ * menerima "Baik Kak, kita kirimkan brosur ya Kak 📸" dari Front Office DAN
+ * "Mohon maaf Kak, untuk saat ini kami belum bisa menampilkan gambar kamar
+ * secara langsung" dari Pricing Agent. Guard ini membuang kalimat penyangkalan
+ * itu di semua jalur kirim (worker WhatsApp + simulator AI Lab).
+ */
+const MEDIA_DENIAL_PATTERNS: RegExp[] = [
+  /\b(?:belum|tidak|nggak|ga|gak)\s+(?:bisa|dapat|memungkinkan)\s+(?:untuk\s+)?(?:menampilkan|mengirim(?:kan)?|kirim|share|membagikan|memberikan)\s+(?:\w+\s+){0,3}?(?:foto|gambar|video|visual|brosur)\w*/i,
+  /\b(?:foto|gambar|video)\w*\s+(?:kamar\w*\s+)?(?:belum|tidak|nggak)\s+(?:bisa|dapat)\s+(?:kami\s+)?(?:dikirim|ditampilkan|kirim|tampilkan)/i,
+  /\b(?:sistem|kami|chat)\s+(?:ini\s+)?(?:belum|tidak)\s+mendukung\s+(?:pengiriman\s+)?(?:foto|gambar|video|media)/i,
+  /\b(?:maaf|mohon maaf)[^.\n]{0,40}\b(?:belum|tidak)\s+(?:bisa|dapat)\s+(?:menampilkan|mengirim(?:kan)?)\s+(?:\w+\s+){0,3}?(?:foto|gambar|video)/i,
+];
+
+/** True bila balasan mengandung penyangkalan kemampuan media. */
+export function deniesMediaCapability(reply: string): boolean {
+  return MEDIA_DENIAL_PATTERNS.some((p) => p.test(reply));
+}
+
+/**
+ * Buang kalimat-kalimat yang menyangkal kemampuan mengirim media, sambil
+ * membiarkan sisa balasan (harga, kapasitas, ketersediaan) utuh — bagian itu
+ * biasanya benar dan berguna.
+ *
+ * Pemotongan dilakukan per-kalimat, bukan per-paragraf, supaya informasi yang
+ * menempel di paragraf yang sama tidak ikut hilang.
+ */
+export function stripMediaCapabilityDenial(reply: string): { text: string; stripped: boolean } {
+  if (!deniesMediaCapability(reply)) return { text: reply, stripped: false };
+
+  let stripped = false;
+  const lines = reply.split("\n").map((line) => {
+    if (!deniesMediaCapability(line)) return line;
+    // Pecah jadi kalimat, buang hanya kalimat yang menyangkal.
+    const sentences = line.match(/[^.!?]+[.!?]*/g) ?? [line];
+    const kept = sentences.filter((s) => {
+      if (deniesMediaCapability(s)) {
+        stripped = true;
+        return false;
+      }
+      return true;
+    });
+    return kept.join("").trim();
+  });
+
+  const text = lines
+    .join("\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { text, stripped };
+}
+
 export interface BrosurFile {
   name: string;
   url: string;
@@ -232,6 +295,7 @@ export function sanitizeForbiddenPhrases(reply: string): string {
 export function cleanReplyBody(reply: string, attachedPdfUrl?: string): string {
   let out = reply;
   if (attachedPdfUrl) out = out.replace(attachedPdfUrl, "");
+  out = stripMediaCapabilityDenial(out).text;
   out = sanitizeForbiddenPhrases(out);
   out = sanitizeGuestFacingRoleDisclosure(out);
   return out

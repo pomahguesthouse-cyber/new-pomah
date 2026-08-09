@@ -38,6 +38,7 @@ export type IntentCategory =
   | "bank_account_request"       // "minta norek", "nomor rekening"
   | "invoice_request"            // "minta invoice", "kirim invoice"
   | "room_detail_question"       // "ada wifi?", "fasilitas apa aja?"
+  | "media_request"              // "ada fotonya?", "minta brosur", "video kamar", "virtual tour"
   | "checkin_policy_question"    // "jam check-in?", "early check-in?"
   | "early_arrival_guest_question" // "datang lebih awal", "titip koper"
   | "list_bookings"      // admin: lihat daftar booking
@@ -101,6 +102,14 @@ export interface AgentContext {
    * dari `wa_booking_states.slots`.
    */
   partialBooking?: { roomType?: string; adults?: number; children?: number };
+  /**
+   * Tamu memakai kata tunjuk ("yang ini bisa berapa orang ya") tanpa pernah
+   * menyebut tipe kamar. Bila diisi, agent WAJIB mengkonfirmasi tipe kamar yang
+   * dimaksud alih-alih memakai tebakan warisan sesi. `candidate` adalah tipe
+   * yang diwarisi state — boleh disebut sebagai dugaan, tidak boleh dipakai
+   * sebagai fakta.
+   */
+  ambiguousRoomReference?: { candidate?: string; offeredRooms?: string[] };
   /**
    * An existing (pending/confirmed) booking already on file for this guest's
    * phone number, with the rates locked in at booking time. Injected so the

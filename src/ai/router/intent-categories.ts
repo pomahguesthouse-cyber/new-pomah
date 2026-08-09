@@ -41,6 +41,9 @@ export const INTENT_CATEGORIES: IntentCategoryMeta[] = [
   { key: "maintenance",    label: "Maintenance (Kerusakan)",     defaultWeight: 8 },
   { key: "customer-care",  label: "Customer Care (Layanan Kamar)", defaultWeight: 8 },
 
+  // ── Permintaan media (hanya Front Office yang punya tool foto/tour)
+  { key: "media_request",  label: "Media Request (Foto/Brosur/Video/Tour)", defaultWeight: 8 },
+
   // ── Finance
   { key: "payment",                 label: "Payment (Pembayaran)",                  defaultWeight: 7 },
   { key: "payment_policy_question", label: "Payment Policy (Kebijakan Bayar/DP)",   defaultWeight: 7 },

@@ -35,7 +35,11 @@ assert.equal(pickAiBudgetMs("saya mau booking tanggal 15 juli"), AI_TIMEOUT_MS);
 assert.equal(pickAiBudgetMs("x".repeat(121)), AI_TIMEOUT_MS);
 assert.equal(pickAiBudgetMs(""), AI_TIMEOUT_LIGHT_MS);
 
-assert.ok(FALLBACK_MESSAGE.includes("lanjut"));
+// Fallback tidak boleh menyuruh tamu mengetik 'lanjut' (insiden 9 Agu 2026):
+// tidak ada handler untuk kata itu, dan bot tetap mengirim jawaban aslinya
+// beberapa detik kemudian — tamu melihat sistem menyerah lalu menjawab sendiri.
+assert.ok(!/\blanjut\b/i.test(FALLBACK_MESSAGE));
+assert.ok(/maaf/i.test(FALLBACK_MESSAGE));
 assert.ok(MANAGER_FALLBACK_MESSAGE.includes("Admin"));
 assert.ok(QUICK_ACK_MESSAGE.includes("cekkan"));
 

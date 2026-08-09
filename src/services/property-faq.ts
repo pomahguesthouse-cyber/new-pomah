@@ -152,9 +152,15 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
   const checkOutTime = (str(p.check_out_time) || str(p.checkout_time) || "12:00").slice(0, 5);
   const opener = input.greetingUsed ? "" : "Halo Kak 👋 ";
   const verifiedFirstName = (() => {
+    // CATATAN: backslash di sini HARUS tunggal. Versi sebelumnya menulis
+    // `/^\\d+$/`, `/\\s+/`, dan `/[^\\p{L}'-]/gu` — di dalam literal regex,
+    // `\\d` berarti "backslash lalu huruf d", bukan digit. Akibatnya nomor HP
+    // lolos filter, nama tidak pernah terpecah per kata, dan filter karakter
+    // membuang SELURUH huruf sehingga `verifiedFirstName` selalu kosong —
+    // sapaan personal untuk tamu lama tidak pernah muncul.
     const value = String(input.guestName ?? "").trim();
-    if (!value || /^\\d+$/.test(value)) return "";
-    const first = value.split(/\\s+/)[0]?.replace(/[^\\p{L}'-]/gu, "") ?? "";
+    if (!value || /^\d+$/.test(value)) return "";
+    const first = value.split(/\s+/)[0]?.replace(/[^\p{L}'-]/gu, "") ?? "";
     return first.length >= 2 ? first : "";
   })();
   const rooms = input.rooms ?? [];

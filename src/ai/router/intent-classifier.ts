@@ -119,6 +119,28 @@ export const RULES: IntentRule[] = [
     ],
   },
 
+  // ── Media request (foto / gambar / video / brosur / virtual tour)
+  //
+  // Bobot 8 — HARUS mengalahkan pricing_inquiry (6) dan availability_check (6).
+  // Alasan (insiden 9 Agu 2026): "apakah ada gambarnya kak?" tidak cocok dengan
+  // kategori mana pun, lalu pesan lanjutan "harganya berapa ya ka" menang
+  // sebagai pricing_inquiry → dirutekan ke Pricing Agent yang TIDAK punya tool
+  // `send_room_photos`, sehingga ia mengarang "kami belum bisa menampilkan
+  // gambar kamar" — bertentangan dengan balasan Front Office di menit yang sama.
+  // Hanya Front Office yang punya `send_room_photos` / `send_room_tour`, jadi
+  // setiap permintaan media wajib mendarat di sana.
+  {
+    category: "media_request",
+    weight:   8,
+    patterns: [
+      /\b(foto|photo|fotonya|gambar|gambarnya|pict?ure|pic|image)\b/i,
+      /\b(brosur|brochure|katalog|catalog|pricelist|price list|daftar harga bergambar)\b/i,
+      /\b(video|videonya|reels?|penampakan|nampakan|visual)\b/i,
+      /\b(virtual tour|tour 360|tur 360|360|walkthrough|walk through|lihat kamar(?:nya)? langsung)\b/i,
+      /\b(liat|lihat|minta|ada|punya|boleh)\b.{0,20}\b(foto|gambar|video|brosur|katalog)\b/i,
+    ],
+  },
+
   // ── Pricing inquiry
   {
     category: "pricing_inquiry",

@@ -416,6 +416,23 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
         "Tanggal hanya berubah bila tamu eksplisit menyebut tanggal baru."
       : "",
 
+    ctx.ambiguousRoomReference
+      ? "RUJUKAN KAMAR AMBIGU (WAJIB KONFIRMASI): Tamu memakai kata tunjuk " +
+        "('yang ini', 'kamar itu', 'yang tadi') TANPA pernah menyebut tipe kamarnya. " +
+        "DILARANG menebak tipe kamar dan menjawab kapasitas/harga seolah tamu sudah memilih — " +
+        "tebakan yang terdengar percaya diri adalah kesalahan paling merugikan di sini. " +
+        "Yang benar: tanyakan tipe mana yang dimaksud sambil menyebut ulang pilihan yang " +
+        "TERSEDIA dari hasil availability terakhir, singkat saja. Contoh: 'Boleh dipastikan " +
+        "dulu Kak, yang dimaksud tipe yang mana ya — " +
+        ((ctx.ambiguousRoomReference.offeredRooms ?? []).slice(0, 3).join(", ") || "Single, Deluxe, atau Grand Deluxe") +
+        "? Biar saya info kapasitas dan harganya tepat.' " +
+        (ctx.ambiguousRoomReference.candidate
+          ? `Dugaan dari percakapan sebelumnya adalah "${ctx.ambiguousRoomReference.candidate}" — ` +
+            "boleh disebut sebagai dugaan ('kalau yang Kakak maksud X, ...'), TIDAK boleh " +
+            "dipakai sebagai fakta yang sudah disepakati."
+          : "")
+      : "",
+
     ctx.partialBooking
       ? "INFO YANG SUDAH DISIMPAN DARI PERCAKAPAN SEBELUMNYA: " +
         [
@@ -527,7 +544,7 @@ export const frontOfficeAgent: AgentDefinition = {
   key: "front-office",
   name: "Front Office Agent",
   description: "Greetings + room inquiries + booking flow (guest), operational queries (managerial).",
-  handles: ["greeting", "booking_inquiry", "availability_check", "general"],
+  handles: ["greeting", "booking_inquiry", "availability_check", "media_request", "general"],
   tools: FRONT_OFFICE_GUEST_TOOLS,
 
   getTools(ctx: AgentContext) {

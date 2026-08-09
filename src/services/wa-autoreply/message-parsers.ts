@@ -252,6 +252,43 @@ export function looksLikeBookingInquiry(message: string): boolean {
   return /\b(kamar|room|guesthouse|guest house|penginapan)\b/i.test(text);
 }
 
+/**
+ * Satu sumber kebenaran untuk "tamu minta media" (foto / gambar / video /
+ * brosur / katalog / virtual tour).
+ *
+ * Dipakai bersama oleh:
+ *   - wa-autoreply.service  → mematikan fast-path deterministik supaya turn
+ *     ini sampai ke agent yang bisa memanggil `send_room_photos`.
+ *   - multi-agent-orchestrator → memaksa routing ke Front Office, satu-satunya
+ *     agent yang memegang tool media.
+ *
+ * Insiden 9 Agu 2026: definisi ini sebelumnya hanya hidup sebagai regex lokal
+ * di service dan tidak dikenal router, sehingga permintaan foto bisa mendarat
+ * di Pricing Agent dan dijawab "kami belum bisa menampilkan gambar kamar".
+ */
+const MEDIA_REQUEST_RE =
+  /\b(foto|photo|fotonya|gambar|gambarnya|pic|pics|picture|image|brosur|brochure|katalog|catalog|video|videonya|reels?|penampakan|nampakan|virtual tour|tour 360|tur 360|walkthrough)\b/i;
+
+export function isMediaRequest(message: string): boolean {
+  return MEDIA_REQUEST_RE.test(message ?? "");
+}
+
+/**
+ * Versi burst: benar bila SALAH SATU pesan tamu yang belum terjawab meminta
+ * media. Memakai hanya pesan terakhir tidak cukup — pada insiden 9 Agu 2026
+ * tamu menulis "apakah ada gambarnya kak?" lalu "harganya berapa ya ka",
+ * sehingga pemeriksaan pesan-terakhir kehilangan permintaan fotonya dan turn
+ * itu dirutekan sebagai pertanyaan harga.
+ */
+export function burstWantsMedia(messages: Array<{ direction: string; body?: string }>): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.direction !== "in") break;
+    if (isMediaRequest(m.body ?? "")) return true;
+  }
+  return false;
+}
+
 export function isTonightReply(message: string): boolean {
   return /\b(malam ini|nanti malam|hari ini|today)\b/i.test(message);
 }

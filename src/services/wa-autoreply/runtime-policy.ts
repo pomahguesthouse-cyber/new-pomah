@@ -1,5 +1,15 @@
+/**
+ * Fallback terakhir untuk tamu.
+ *
+ * Teks lama: "…Kakak bisa ketik 'lanjut' untuk meneruskan." — menyesatkan pada
+ * dua sisi (insiden 9 Agu 2026): (1) tidak ada handler khusus untuk kata
+ * 'lanjut', jadi tamu diberi instruksi yang tak berarti; (2) beberapa detik
+ * kemudian bot TETAP mengirim jawaban aslinya, sehingga tamu melihat sistem
+ * yang menyerah lalu menjawab sendiri. Sekarang: minta tamu menunggu, tanpa
+ * membebani tamu dengan aksi, dan tanpa mengklaim datanya hilang.
+ */
 export const FALLBACK_MESSAGE =
-  "Maaf Kak, sistem sedang lambat. Data terakhir sudah saya simpan. Kakak bisa ketik 'lanjut' untuk meneruskan.";
+  "Mohon maaf Kak, balasannya sedikit lebih lama dari biasanya. Pertanyaan Kakak sudah kami terima dan sedang kami siapkan jawabannya ya 🙏";
 
 export const MANAGER_FALLBACK_MESSAGE =
   "Maaf Admin, sistem AI sedang lambat dan belum berhasil memproses perintah ini. Silakan coba lagi sebentar lagi.";

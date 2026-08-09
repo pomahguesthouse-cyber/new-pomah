@@ -36,6 +36,7 @@ import {
 } from "./training-rag.service";
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
+import { burstWantsMedia, isMediaRequest } from "@/services/wa-autoreply/message-parsers";
 
 // Dulu 6 — tidak realistis: anggaran luar (AI_TIMEOUT_MS di
 // wa-autoreply.service.ts) hanya 14s, jadi maksimal ~2 ronde LLM yang benar-
@@ -1023,6 +1024,19 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     };
   }
 
+  // Rujukan kamar yang ambigu ("yang ini bisa berapa orang ya") — beri tahu
+  // agent supaya mengkonfirmasi, bukan menjawab tipe kamar hasil tebakan.
+  if (resolved.entityAmbiguous) {
+    input.agentCtx.ambiguousRoomReference = {
+      candidate: resolved.entity?.label,
+      offeredRooms: (input.toolCtx.rooms ?? []).map((r) => String(r.name)).filter(Boolean),
+    };
+    console.info(
+      `[MultiAgent] Ambiguous room reference — candidate "${resolved.entity?.label ?? "-"}" ` +
+        `will be confirmed, not assumed`,
+    );
+  }
+
   const rewrite = rewriteQuery(lastUserMsg, resolved);
   if (rewrite.rewritten_applied) {
     console.info(
@@ -1160,6 +1174,29 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
       agentKey: "finance",
       confidence: Math.max(classified.confidence, 0.9),
       reason: "Payment-proof image during PAYMENT_PENDING → Finance Agent",
+      escalated: false,
+    };
+  }
+
+  // ── Capability override: permintaan media selalu ke Front Office ─────────
+  // `send_room_photos` / `send_room_tour` HANYA dimiliki Front Office. Bila
+  // burst tamu mengandung permintaan foto/brosur/video/tour tetapi klasifikasi
+  // memenangkan intent lain (mis. pricing_inquiry karena pesan penutup burst
+  // menanyakan harga), agent tujuan tidak punya cara memenuhi permintaan itu
+  // dan cenderung mengarang keterbatasan ("kami belum bisa menampilkan gambar
+  // kamar") — bertentangan dengan balasan Front Office di burst yang sama.
+  // Insiden 9 Agu 2026, transcript 6281210853153.
+  const mediaWantedInBurst =
+    !isAttachmentMarker &&
+    (burstWantsMedia(
+      (input.messages ?? []).map((m) => ({ direction: m.direction, body: m.body })),
+    ) ||
+      isMediaRequest(lastUserMsg));
+  if (mediaWantedInBurst && routing.agentKey !== "front-office" && !input.isManager) {
+    routing = {
+      agentKey: "front-office",
+      confidence: Math.max(classified.confidence, 0.9),
+      reason: `Media request in burst (was ${routing.agentKey}) → Front Office (owns send_room_photos)`,
       escalated: false,
     };
   }

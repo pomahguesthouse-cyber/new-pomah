@@ -54,6 +54,18 @@ export interface ResolvedContext {
   slots: PartialSlots;
   topicInherited: boolean;
   entityInherited: boolean;
+  /**
+   * Tamu memakai kata tunjuk ("yang ini", "kamar itu", "yang tadi") sementara
+   * tipe kamar yang dirujuk TIDAK pernah ia sebut sendiri — entity satu-satunya
+   * berasal dari warisan state/ringkasan sesi.
+   *
+   * Insiden 9 Agu 2026: setelah bot menampilkan 3 tipe kamar, tamu bertanya
+   * "yang ini bisa berapa orang ya". Resolver mewarisi entity "Grand Deluxe"
+   * dari ringkasan sesi dan bot menjawab kapasitas Grand Deluxe seolah tamu
+   * sudah memilihnya — padahal tamu belum menyebut tipe apa pun. Flag ini
+   * memberi tahu agent untuk MENGKONFIRMASI, bukan menebak.
+   */
+  entityAmbiguous: boolean;
   reasons: string[];
 }
 
@@ -71,6 +83,14 @@ const TOPIC_KEYWORDS: Array<[TopicKind, RegExp]> = [
 
 const FOLLOW_UP_PATTERN = /^\s*(kalau|kalo|terus|lalu|trus|gimana|bagaimana( dengan)?|kalau yang|yang)\b/i;
 const POSITIONAL_ROOM = /\byang\s+(bawah|atas|lantai\s*\d|murah|mahal|paling\s+\w+)\b/i;
+
+/**
+ * Kata tunjuk tanpa antecedent yang jelas — "yang ini", "kamar itu", "yg tadi".
+ * Sengaja TIDAK memasukkan bentuk yang sudah spesifik seperti "yang murah" atau
+ * "yang lantai 2" (ditangani POSITIONAL_ROOM) karena itu benar-benar menunjuk.
+ */
+const DEMONSTRATIVE_REF =
+  /\b(yang|yg)\s+(ini|itu|tadi|tsb|tersebut)\b|\bkamar\s+(ini|itu|tersebut)\b|^\s*(ini|itu)\b/i;
 
 function normalizeRoomName(value: unknown): string {
   return String(value ?? "")
@@ -198,6 +218,7 @@ export function resolveContext(
       slots: messageSlots,
       topicInherited: false,
       entityInherited: false,
+      entityAmbiguous: false,
       reasons,
     };
   }
@@ -215,15 +236,32 @@ export function resolveContext(
     reasons.push("topic:room_specs default for bare room mention");
   }
 
+  // Kata tunjuk terdeteksi SEBELUM warisan diterapkan: pertanyaannya adalah
+  // apakah tamu menyebut tipe kamar SENDIRI di pesan ini.
+  const usesDemonstrative = DEMONSTRATIVE_REF.test(text) && !POSITIONAL_ROOM.test(text);
+  const namedRoomInMessage = !!entity;
+
   if (!entity && state.lastEntity) {
     entity = state.lastEntity as unknown as EntityRef;
     entityInherited = true;
     reasons.push(`entity inherited: ${entity?.label}`);
   }
 
+  // Ambigu bila: tamu menunjuk ("yang ini") + tidak menyebut nama tipe kamar +
+  // satu-satunya kandidat berasal dari warisan state/ringkasan. Menebak di sini
+  // menghasilkan jawaban yang terdengar percaya diri tapi salah kamar.
+  const entityAmbiguous = usesDemonstrative && !namedRoomInMessage && entityInherited;
+  if (entityAmbiguous) {
+    reasons.push(
+      `entity AMBIGUOUS: demonstratif tanpa nama tipe kamar; kandidat warisan "${entity?.label ?? "-"}" tidak boleh diasumsikan`,
+    );
+  }
+
   const priorSlots = (state.slots ?? {}) as PartialSlots;
   const slots: PartialSlots = { ...priorSlots, ...messageSlots };
-  if (entity?.kind === "room" && entity.label) slots.roomLabel = entity.label;
+  // Jangan kunci roomLabel dari entity yang ambigu — nilai itu akan dipersist
+  // ke conversation-state dan menular ke turn-turn berikutnya.
+  if (entity?.kind === "room" && entity.label && !entityAmbiguous) slots.roomLabel = entity.label;
 
-  return { topic, entity, slots, topicInherited, entityInherited, reasons };
+  return { topic, entity, slots, topicInherited, entityInherited, entityAmbiguous, reasons };
 }

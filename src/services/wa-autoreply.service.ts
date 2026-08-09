@@ -16,6 +16,7 @@ import {
   pickAttachment,
   normalizeBrochureReply,
   cleanReplyBody,
+  deniesMediaCapability,
 } from "@/services/reply-postprocess";
 import { checkConversation } from "@/services/conversation-monitor.service";
 import {
@@ -49,6 +50,7 @@ import {
   shouldForceSummary,
 } from "@/services/wa-autoreply/session-summary-policy";
 import {
+  burstWantsMedia,
   hasRecentPriceContext,
   isAvailabilityNeedDatesQuestion,
   isAvailabilitySourceContext,
@@ -228,7 +230,17 @@ export type AutoreplyOutcome =
   | "send_failed"
   | "already_done"
   | "not_claimed"
+  /** AI tidak menghasilkan balasan, tapi antrian masih punya sisa percobaan —
+   *  entry dijadwalkan ulang, TIDAK ada pesan menyerah yang dikirim ke tamu. */
+  | "ai_no_reply"
   | "fatal";
+
+/**
+ * Cermin dari `wa_conversation_queue.max_attempts` (DEFAULT 3, migrasi
+ * 20260520100000_conversation_queue_v2.sql). Dipakai untuk memutuskan apakah
+ * masih ada percobaan tersisa sebelum menyerah ke tamu.
+ */
+const QUEUE_MAX_ATTEMPTS = 3;
 
 /**
  * Generate reply and send via WhatsApp gateway (no queue claim required).
@@ -808,9 +820,11 @@ export async function executeAutoreplyForPhone(
   // can both answer availability AND call `send_room_photos` in the same turn.
   // (Incident: "minta pricelist beserta gambar kamarnya" → bot sent only the
   // pricelist, no brochure.)
-  const wantsMedia = /\b(foto|gambar|brosur|brochure|katalog|catalog|penampakan|video)\b/i.test(
-    lastMessage ?? "",
-  );
+  //
+  // Diperiksa atas SELURUH burst pesan tamu yang belum terjawab, bukan hanya
+  // pesan terakhir (insiden 9 Agu 2026 — "apakah ada gambarnya kak?" disusul
+  // "harganya berapa ya ka" membuat permintaan foto tak terlihat).
+  const wantsMedia = burstWantsMedia(rollingMessages);
   // Opener "Halo Kak 👋" hanya untuk kontak pertama: skip bila bot sudah
   // membalas di sesi berjalan atau tamu membuka dengan salam.
   const faqGreetingUsed =
@@ -1579,6 +1593,32 @@ export async function executeAutoreplyForPhone(
     }
   }
 
+  // ── Jangan menyerah pada percobaan pertama ───────────────────────────────
+  // Sebelumnya, satu attempt AI yang timeout langsung mengirim pesan "sistem
+  // sedang lambat" ke tamu DAN menandai entry selesai. Beberapa detik kemudian
+  // pesan tamu berikutnya memicu entry baru yang berhasil, sehingga tamu
+  // melihat bot menyerah lalu menjawab sendiri — persis insiden 9 Agu 2026.
+  //
+  // Sekarang: bila fallback yang akan dikirim hanyalah pesan generik "sistem
+  // lambat" DAN antrian masih punya sisa percobaan, jangan kirim apa-apa.
+  // Kembalikan outcome retryable supaya `wa_queue_fail` menjadwalkan ulang
+  // dengan backoff. Fallback ke tamu tetap dijamin oleh
+  // `sendFailureFallbackToGuests()` setelah SELURUH percobaan habis.
+  //
+  // Fallback state-aware (mis. "mohon ketikkan nama lengkap") TIDAK ditunda —
+  // itu balasan yang benar-benar berguna, bukan pengakuan kegagalan.
+  const isGenericFallback = finalFallback === FALLBACK_MESSAGE || finalFallback === MANAGER_FALLBACK_MESSAGE;
+  if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
+    if (quickAckTimer) clearTimeout(quickAckTimer);
+    try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
+    console.warn(
+      `[Autoreply] AI produced no reply for ${phone.slice(-6)} ` +
+        `(attempt ${queueAttempt}/${QUEUE_MAX_ATTEMPTS}) — deferring to queue retry instead of ` +
+        `sending a dead-end fallback`,
+    );
+    return "ai_no_reply";
+  }
+
   const rawReply = reply ?? finalFallback;
   const isFallback = !reply;
   // Saat fallback dikirim, catat ALASAN-nya supaya dashboard/Activity Log bisa
@@ -1594,6 +1634,19 @@ export async function executeAutoreplyForPhone(
     attachName = picked.name;
     if (picked.url) {
       console.info(`[Autoreply] Attachment selected: ${picked.name}`);
+    }
+
+    // Balasan menyangkal bisa mengirim foto (klaim yang selalu salah — properti
+    // punya `send_room_photos`). `cleanReplyBody` akan membuang kalimatnya;
+    // supaya tamu tidak berakhir tanpa apa-apa, lampirkan brosur bila ada.
+    if (!attachUrl && brosurFiles.length > 0 && wantsMedia && deniesMediaCapability(rawReply)) {
+      const brosur = brosurFiles.find((f) => /\.pdf(\?|$)/i.test(f.url)) ?? brosurFiles[0];
+      attachUrl = brosur.url;
+      attachName = brosur.name;
+      console.warn(
+        `[Autoreply] Media-denial detected for ${phone.slice(-6)} — stripping claim and ` +
+          `force-attaching brochure "${brosur.name}"`,
+      );
     }
   }
 

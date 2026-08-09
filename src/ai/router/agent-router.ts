@@ -36,6 +36,9 @@ export const ROUTING_MAP: Record<IntentCategory, AgentKey> = {
   bank_account_request:         "finance",
   invoice_request:              "finance",
   room_detail_question:         "front-office",
+  // Media (foto/brosur/video/tour) HANYA bisa dikirim Front Office — dialah
+  // satu-satunya agent yang memegang `send_room_photos` & `send_room_tour`.
+  media_request:                "front-office",
   checkin_policy_question:      "front-office",
   early_arrival_guest_question: "front-office",
   // ── Admin intents ────────────────────────────────────────────────────────
