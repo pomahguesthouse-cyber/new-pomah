@@ -3915,6 +3915,7 @@ export type Database = {
         }[]
       }
       get_guest_structured_memory: { Args: { p_phone: string }; Returns: Json }
+      get_public_booking_invoice: { Args: { p_id: string }; Returns: Json }
       get_public_property: { Args: never; Returns: Json }
       has_role: {
         Args: {
