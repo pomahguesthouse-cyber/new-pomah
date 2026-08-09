@@ -65,10 +65,10 @@ import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmati
 import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
 import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
 import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
+import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
 import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
-import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
@@ -361,6 +361,11 @@ const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
   path: '/api/cron/wa-summary-refresh',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
+  id: '/api/cron/wa-queue-safety-net',
+  path: '/api/cron/wa-queue-safety-net',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
   id: '/api/cron/sync-explore',
   path: '/api/cron/sync-explore',
@@ -375,11 +380,6 @@ const ApiCronRunArticleSchedulesRoute =
 const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
   id: '/api/cron/process-wa-queue',
   path: '/api/cron/process-wa-queue',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
-  id: '/api/cron/wa-queue-safety-net',
-  path: '/api/cron/wa-queue-safety-net',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
@@ -484,9 +484,9 @@ export interface FileRoutesByFullPath {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -553,9 +553,9 @@ export interface FileRoutesByTo {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -624,9 +624,9 @@ export interface FileRoutesById {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -696,9 +696,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -765,9 +765,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -835,9 +835,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -878,9 +878,9 @@ export interface RootRouteChildren {
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
-  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
+  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronWaSummaryRefreshRoute: typeof ApiCronWaSummaryRefreshRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
@@ -1282,6 +1282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronWaSummaryRefreshRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/wa-queue-safety-net': {
+      id: '/api/cron/wa-queue-safety-net'
+      path: '/api/cron/wa-queue-safety-net'
+      fullPath: '/api/cron/wa-queue-safety-net'
+      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/sync-explore': {
       id: '/api/cron/sync-explore'
       path: '/api/cron/sync-explore'
@@ -1301,13 +1308,6 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/process-wa-queue'
       fullPath: '/api/cron/process-wa-queue'
       preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/cron/wa-queue-safety-net': {
-      id: '/api/cron/wa-queue-safety-net'
-      path: '/api/cron/wa-queue-safety-net'
-      fullPath: '/api/cron/wa-queue-safety-net'
-      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/expire-bookings': {
@@ -1498,9 +1498,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
-  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
+  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronWaSummaryRefreshRoute: ApiCronWaSummaryRefreshRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
