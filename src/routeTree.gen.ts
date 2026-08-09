@@ -9,113 +9,78 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
-import { Route as McpRouteImport } from './routes/mcp'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
-import { Route as ExploreRouteImport } from './routes/explore'
-import { Route as ConnectRouteImport } from './routes/connect'
-import { Route as ChatRouteImport } from './routes/chat'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as BookIndexRouteImport } from './routes/book.index'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as TourSlugRouteImport } from './routes/tour.$slug'
-import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
-import { Route as LpSlugRouteImport } from './routes/lp.$slug'
-import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
-import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
-import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
-import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
-import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
-import { Route as ApiEvolutionRouteImport } from './routes/api.evolution'
-import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
-import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
-import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
-import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
-import { Route as AdminWalkthroughRouteImport } from './routes/admin/walkthrough'
-import { Route as AdminTrainingRouteImport } from './routes/admin/training'
-import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
-import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
-import { Route as AdminSeoRouteImport } from './routes/admin/seo'
-import { Route as AdminRoutingDebugRouteImport } from './routes/admin/routing-debug'
-import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
-import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing-calendar'
-import { Route as AdminPagesRouteImport } from './routes/admin/pages'
-import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
-import { Route as AdminMediaRouteImport } from './routes/admin/media'
-import { Route as AdminHealthRouteImport } from './routes/admin/health'
-import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
-import { Route as AdminExploreRouteImport } from './routes/admin/explore'
-import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
-import { Route as AdminContactsRouteImport } from './routes/admin/contacts'
-import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
-import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/competitor-prices'
-import { Route as AdminChatbotTrainingRouteImport } from './routes/admin/chatbot-training'
-import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
-import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
-import { Route as AdminBookingFormLogsRouteImport } from './routes/admin/booking-form-logs'
-import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
-import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as ConnectRouteImport } from './routes/connect'
+import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as McpRouteImport } from './routes/mcp'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
-import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
-import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
-import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
-import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
-import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
-import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
-import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
-import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
-import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
-import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
-import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAiLabRouteImport } from './routes/admin/ai-lab'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin/analytics'
+import { Route as AdminBookingFormLogsRouteImport } from './routes/admin/booking-form-logs'
+import { Route as AdminBookingsRouteImport } from './routes/admin/bookings'
+import { Route as AdminCalendarRouteImport } from './routes/admin/calendar'
+import { Route as AdminChatbotTrainingRouteImport } from './routes/admin/chatbot-training'
+import { Route as AdminCompetitorPricesRouteImport } from './routes/admin/competitor-prices'
+import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
+import { Route as AdminContactsRouteImport } from './routes/admin/contacts'
+import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
+import { Route as AdminExploreRouteImport } from './routes/admin/explore'
+import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
+import { Route as AdminHealthRouteImport } from './routes/admin/health'
+import { Route as AdminMediaRouteImport } from './routes/admin/media'
+import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
+import { Route as AdminPagesRouteImport } from './routes/admin/pages'
+import { Route as AdminPricingCalendarRouteImport } from './routes/admin/pricing-calendar'
+import { Route as AdminRoomsRouteImport } from './routes/admin/rooms'
+import { Route as AdminRoutingDebugRouteImport } from './routes/admin/routing-debug'
+import { Route as AdminSeoRouteImport } from './routes/admin/seo'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminTelegramRouteImport } from './routes/admin/telegram'
+import { Route as AdminTrainingRouteImport } from './routes/admin/training'
+import { Route as AdminWalkthroughRouteImport } from './routes/admin/walkthrough'
+import { Route as AdminWebchatRouteImport } from './routes/admin/webchat'
+import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp'
+import { Route as AdminWhatsappCorrectionsRouteImport } from './routes/admin/whatsapp-corrections'
+import { Route as ApiDebugDbRouteImport } from './routes/api.debug-db'
+import { Route as ApiEvolutionRouteImport } from './routes/api.evolution'
+import { Route as ApiPlacePhotoRouteImport } from './routes/api.place-photo'
+import { Route as ApiPublicSiteRouteImport } from './routes/api.public-site'
+import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-data'
+import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
+import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
+import { Route as BookIndexRouteImport } from './routes/book.index'
+import { Route as LpSlugRouteImport } from './routes/lp.$slug'
+import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
+import { Route as TourSlugRouteImport } from './routes/tour.$slug'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
-import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
-import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
+import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
+import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
+import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
+import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
+import { Route as ApiCronSyncExploreRouteImport } from './routes/api.cron.sync-explore'
+import { Route as ApiCronWaQueueSafetyNetRouteImport } from './routes/api.cron.wa-queue-safety-net'
+import { Route as ApiCronWaSummaryRefreshRouteImport } from './routes/api.cron.wa-summary-refresh'
+import { Route as ApiPublicHealthCheckRouteImport } from './routes/api.public.health-check'
+import { Route as ApiTelegramAgentKeyRouteImport } from './routes/api.telegram.$agentKey'
+import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmation/$id'
+import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
+import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
+import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
-  id: '/robots.txt',
-  path: '/robots.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
-  id: '/llms.txt',
-  path: '/llms.txt',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ExploreRoute = ExploreRouteImport.update({
-  id: '/explore',
-  path: '/explore',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConnectRoute = ConnectRouteImport.update({
-  id: '/connect',
-  path: '/connect',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -123,200 +88,61 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookIndexRoute = BookIndexRouteImport.update({
-  id: '/book/',
-  path: '/book/',
+const ConnectRoute = ConnectRouteImport.update({
+  id: '/connect',
+  path: '/connect',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExploreRoute = ExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AdminRoute,
-} as any)
-const TourSlugRoute = TourSlugRouteImport.update({
-  id: '/tour/$slug',
-  path: '/tour/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoomsSlugRoute = RoomsSlugRouteImport.update({
-  id: '/rooms/$slug',
-  path: '/rooms/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LpSlugRoute = LpSlugRouteImport.update({
-  id: '/lp/$slug',
-  path: '/lp/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiTelegramRoute = ApiTelegramRouteImport.update({
-  id: '/api/telegram',
-  path: '/api/telegram',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
-  id: '/api/queue-worker',
-  path: '/api/queue-worker',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicSiteDataRoute = ApiPublicSiteDataRouteImport.update({
-  id: '/api/public-site-data',
-  path: '/api/public-site-data',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
-  id: '/api/public-site',
-  path: '/api/public-site',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
-  id: '/api/place-photo',
-  path: '/api/place-photo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiEvolutionRoute = ApiEvolutionRouteImport.update({
-  id: '/api/evolution',
-  path: '/api/evolution',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
-  id: '/api/debug-db',
-  path: '/api/debug-db',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminWhatsappCorrectionsRoute =
-  AdminWhatsappCorrectionsRouteImport.update({
-    id: '/whatsapp-corrections',
-    path: '/whatsapp-corrections',
-    getParentRoute: () => AdminRoute,
-  } as any)
-const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminWebchatRoute = AdminWebchatRouteImport.update({
-  id: '/webchat',
-  path: '/webchat',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminWalkthroughRoute = AdminWalkthroughRouteImport.update({
-  id: '/walkthrough',
-  path: '/walkthrough',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminTrainingRoute = AdminTrainingRouteImport.update({
-  id: '/training',
-  path: '/training',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminTelegramRoute = AdminTelegramRouteImport.update({
-  id: '/telegram',
-  path: '/telegram',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminSettingsRoute = AdminSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminSeoRoute = AdminSeoRouteImport.update({
-  id: '/seo',
-  path: '/seo',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminRoutingDebugRoute = AdminRoutingDebugRouteImport.update({
-  id: '/routing-debug',
-  path: '/routing-debug',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminRoomsRoute = AdminRoomsRouteImport.update({
-  id: '/rooms',
-  path: '/rooms',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminPricingCalendarRoute = AdminPricingCalendarRouteImport.update({
-  id: '/pricing-calendar',
-  path: '/pricing-calendar',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminPagesRoute = AdminPagesRouteImport.update({
-  id: '/pages',
-  path: '/pages',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
-  id: '/notifications',
-  path: '/notifications',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminMediaRoute = AdminMediaRouteImport.update({
-  id: '/media',
-  path: '/media',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminHealthRoute = AdminHealthRouteImport.update({
-  id: '/health',
-  path: '/health',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminHandoffRoute = AdminHandoffRouteImport.update({
-  id: '/handoff',
-  path: '/handoff',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminExploreRoute = AdminExploreRouteImport.update({
-  id: '/explore',
-  path: '/explore',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
-  id: '/content-manager',
-  path: '/content-manager',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminContactsRoute = AdminContactsRouteImport.update({
-  id: '/contacts',
-  path: '/contacts',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminComplaintsRoute = AdminComplaintsRouteImport.update({
-  id: '/complaints',
-  path: '/complaints',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminCompetitorPricesRoute = AdminCompetitorPricesRouteImport.update({
-  id: '/competitor-prices',
-  path: '/competitor-prices',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminChatbotTrainingRoute = AdminChatbotTrainingRouteImport.update({
-  id: '/chatbot-training',
-  path: '/chatbot-training',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminCalendarRoute = AdminCalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminBookingsRoute = AdminBookingsRouteImport.update({
-  id: '/bookings',
-  path: '/bookings',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminBookingFormLogsRoute = AdminBookingFormLogsRouteImport.update({
-  id: '/booking-form-logs',
-  path: '/booking-form-logs',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAiLabRoute = AdminAiLabRouteImport.update({
@@ -324,78 +150,195 @@ const AdminAiLabRoute = AdminAiLabRouteImport.update({
   path: '/ai-lab',
   getParentRoute: () => AdminRoute,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBookingFormLogsRoute = AdminBookingFormLogsRouteImport.update({
+  id: '/booking-form-logs',
+  path: '/booking-form-logs',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBookingsRoute = AdminBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCalendarRoute = AdminCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminChatbotTrainingRoute = AdminChatbotTrainingRouteImport.update({
+  id: '/chatbot-training',
+  path: '/chatbot-training',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCompetitorPricesRoute = AdminCompetitorPricesRouteImport.update({
+  id: '/competitor-prices',
+  path: '/competitor-prices',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminComplaintsRoute = AdminComplaintsRouteImport.update({
+  id: '/complaints',
+  path: '/complaints',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminContactsRoute = AdminContactsRouteImport.update({
+  id: '/contacts',
+  path: '/contacts',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
+  id: '/content-manager',
+  path: '/content-manager',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminExploreRoute = AdminExploreRouteImport.update({
+  id: '/explore',
+  path: '/explore',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHandoffRoute = AdminHandoffRouteImport.update({
+  id: '/handoff',
+  path: '/handoff',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminHealthRoute = AdminHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminMediaRoute = AdminMediaRouteImport.update({
+  id: '/media',
+  path: '/media',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPagesRoute = AdminPagesRouteImport.update({
+  id: '/pages',
+  path: '/pages',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPricingCalendarRoute = AdminPricingCalendarRouteImport.update({
+  id: '/pricing-calendar',
+  path: '/pricing-calendar',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoomsRoute = AdminRoomsRouteImport.update({
+  id: '/rooms',
+  path: '/rooms',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoutingDebugRoute = AdminRoutingDebugRouteImport.update({
+  id: '/routing-debug',
+  path: '/routing-debug',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSeoRoute = AdminSeoRouteImport.update({
+  id: '/seo',
+  path: '/seo',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTelegramRoute = AdminTelegramRouteImport.update({
+  id: '/telegram',
+  path: '/telegram',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTrainingRoute = AdminTrainingRouteImport.update({
+  id: '/training',
+  path: '/training',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWalkthroughRoute = AdminWalkthroughRouteImport.update({
+  id: '/walkthrough',
+  path: '/walkthrough',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWebchatRoute = AdminWebchatRouteImport.update({
+  id: '/webchat',
+  path: '/webchat',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
+  id: '/whatsapp',
+  path: '/whatsapp',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWhatsappCorrectionsRoute =
+  AdminWhatsappCorrectionsRouteImport.update({
+    id: '/whatsapp-corrections',
+    path: '/whatsapp-corrections',
+    getParentRoute: () => AdminRoute,
   } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const BookingFormTokenRoute = BookingFormTokenRouteImport.update({
-  id: '/booking/form/$token',
-  path: '/booking/form/$token',
+const ApiDebugDbRoute = ApiDebugDbRouteImport.update({
+  id: '/api/debug-db',
+  path: '/api/debug-db',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
-  id: '/book/confirmation/$id',
-  path: '/book/confirmation/$id',
+const ApiEvolutionRoute = ApiEvolutionRouteImport.update({
+  id: '/api/evolution',
+  path: '/api/evolution',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiTelegramAgentKeyRoute = ApiTelegramAgentKeyRouteImport.update({
-  id: '/$agentKey',
-  path: '/$agentKey',
-  getParentRoute: () => ApiTelegramRoute,
-} as any)
-const ApiPublicHealthCheckRoute = ApiPublicHealthCheckRouteImport.update({
-  id: '/api/public/health-check',
-  path: '/api/public/health-check',
+const ApiPlacePhotoRoute = ApiPlacePhotoRouteImport.update({
+  id: '/api/place-photo',
+  path: '/api/place-photo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
-  id: '/api/cron/wa-summary-refresh',
-  path: '/api/cron/wa-summary-refresh',
+const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
+  id: '/api/public-site',
+  path: '/api/public-site',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
-  id: '/api/cron/sync-explore',
-  path: '/api/cron/sync-explore',
+const ApiPublicSiteDataRoute = ApiPublicSiteDataRouteImport.update({
+  id: '/api/public-site-data',
+  path: '/api/public-site-data',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronRunArticleSchedulesRoute =
-  ApiCronRunArticleSchedulesRouteImport.update({
-    id: '/api/cron/run-article-schedules',
-    path: '/api/cron/run-article-schedules',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
-  id: '/api/cron/process-wa-queue',
-  path: '/api/cron/process-wa-queue',
+const ApiQueueWorkerRoute = ApiQueueWorkerRouteImport.update({
+  id: '/api/queue-worker',
+  path: '/api/queue-worker',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
-  id: '/api/cron/wa-queue-safety-net',
-  path: '/api/cron/wa-queue-safety-net',
+const ApiTelegramRoute = ApiTelegramRouteImport.update({
+  id: '/api/telegram',
+  path: '/api/telegram',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
-  id: '/api/cron/expire-bookings',
-  path: '/api/cron/expire-bookings',
+const BookIndexRoute = BookIndexRouteImport.update({
+  id: '/book/',
+  path: '/book/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronBookingStuckMonitorRoute =
-  ApiCronBookingStuckMonitorRouteImport.update({
-    id: '/api/cron/booking-stuck-monitor',
-    path: '/api/cron/booking-stuck-monitor',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
-  id: '/api/booking-invoice/$id',
-  path: '/api/booking-invoice/$id',
+const LpSlugRoute = LpSlugRouteImport.update({
+  id: '/lp/$slug',
+  path: '/lp/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoomsSlugRoute = RoomsSlugRouteImport.update({
+  id: '/rooms/$slug',
+  path: '/rooms/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TourSlugRoute = TourSlugRouteImport.update({
+  id: '/tour/$slug',
+  path: '/tour/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
@@ -404,15 +347,72 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
+const ApiBookingInvoiceIdRoute = ApiBookingInvoiceIdRouteImport.update({
+  id: '/api/booking-invoice/$id',
+  path: '/api/booking-invoice/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => BookConfirmationIdRoute,
+const ApiCronBookingStuckMonitorRoute =
+  ApiCronBookingStuckMonitorRouteImport.update({
+    id: '/api/cron/booking-stuck-monitor',
+    path: '/api/cron/booking-stuck-monitor',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
+  id: '/api/cron/expire-bookings',
+  path: '/api/cron/expire-bookings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronProcessWaQueueRoute = ApiCronProcessWaQueueRouteImport.update({
+  id: '/api/cron/process-wa-queue',
+  path: '/api/cron/process-wa-queue',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronRunArticleSchedulesRoute =
+  ApiCronRunArticleSchedulesRouteImport.update({
+    id: '/api/cron/run-article-schedules',
+    path: '/api/cron/run-article-schedules',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronSyncExploreRoute = ApiCronSyncExploreRouteImport.update({
+  id: '/api/cron/sync-explore',
+  path: '/api/cron/sync-explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronWaQueueSafetyNetRoute = ApiCronWaQueueSafetyNetRouteImport.update({
+  id: '/api/cron/wa-queue-safety-net',
+  path: '/api/cron/wa-queue-safety-net',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronWaSummaryRefreshRoute = ApiCronWaSummaryRefreshRouteImport.update({
+  id: '/api/cron/wa-summary-refresh',
+  path: '/api/cron/wa-summary-refresh',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicHealthCheckRoute = ApiPublicHealthCheckRouteImport.update({
+  id: '/api/public/health-check',
+  path: '/api/public/health-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTelegramAgentKeyRoute = ApiTelegramAgentKeyRouteImport.update({
+  id: '/$agentKey',
+  path: '/$agentKey',
+  getParentRoute: () => ApiTelegramRoute,
+} as any)
+const BookConfirmationIdRoute = BookConfirmationIdRouteImport.update({
+  id: '/book/confirmation/$id',
+  path: '/book/confirmation/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookingFormTokenRoute = BookingFormTokenRouteImport.update({
+  id: '/booking/form/$token',
+  path: '/booking/form/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiBookingInvoiceIdSendRoute = ApiBookingInvoiceIdSendRouteImport.update({
+  id: '/send',
+  path: '/send',
+  getParentRoute: () => ApiBookingInvoiceIdRoute,
 } as any)
 const ApiPublicBookingFormTokenRoute =
   ApiPublicBookingFormTokenRouteImport.update({
@@ -420,10 +420,10 @@ const ApiPublicBookingFormTokenRoute =
     path: '/api/public/booking-form/$token',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiBookingInvoiceIdSendRoute = ApiBookingInvoiceIdSendRouteImport.update({
-  id: '/send',
-  path: '/send',
-  getParentRoute: () => ApiBookingInvoiceIdRoute,
+const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => BookConfirmationIdRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -484,9 +484,9 @@ export interface FileRoutesByFullPath {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -553,9 +553,9 @@ export interface FileRoutesByTo {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -624,9 +624,9 @@ export interface FileRoutesById {
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
-  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
   '/api/cron/sync-explore': typeof ApiCronSyncExploreRoute
+  '/api/cron/wa-queue-safety-net': typeof ApiCronWaQueueSafetyNetRoute
   '/api/cron/wa-summary-refresh': typeof ApiCronWaSummaryRefreshRoute
   '/api/public/health-check': typeof ApiPublicHealthCheckRoute
   '/api/telegram/$agentKey': typeof ApiTelegramAgentKeyRoute
@@ -696,9 +696,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -765,9 +765,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -835,9 +835,9 @@ export interface FileRouteTypes {
     | '/api/cron/booking-stuck-monitor'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
-    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/run-article-schedules'
     | '/api/cron/sync-explore'
+    | '/api/cron/wa-queue-safety-net'
     | '/api/cron/wa-summary-refresh'
     | '/api/public/health-check'
     | '/api/telegram/$agentKey'
@@ -878,9 +878,9 @@ export interface RootRouteChildren {
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
-  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
   ApiCronSyncExploreRoute: typeof ApiCronSyncExploreRoute
+  ApiCronWaQueueSafetyNetRoute: typeof ApiCronWaQueueSafetyNetRoute
   ApiCronWaSummaryRefreshRoute: typeof ApiCronWaSummaryRefreshRoute
   ApiPublicHealthCheckRoute: typeof ApiPublicHealthCheckRoute
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
@@ -890,60 +890,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/robots.txt': {
-      id: '/robots.txt'
-      path: '/robots.txt'
-      fullPath: '/robots.txt'
-      preLoaderRoute: typeof RobotsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/llms.txt': {
-      id: '/llms.txt'
-      path: '/llms.txt'
-      fullPath: '/llms.txt'
-      preLoaderRoute: typeof LlmsDottxtRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/explore': {
-      id: '/explore'
-      path: '/explore'
-      fullPath: '/explore'
-      preLoaderRoute: typeof ExploreRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/connect': {
-      id: '/connect'
-      path: '/connect'
-      fullPath: '/connect'
-      preLoaderRoute: typeof ConnectRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -953,291 +904,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/book/': {
-      id: '/book/'
-      path: '/book'
-      fullPath: '/book/'
-      preLoaderRoute: typeof BookIndexRouteImport
+    '/connect': {
+      id: '/connect'
+      path: '/connect'
+      fullPath: '/connect'
+      preLoaderRoute: typeof ConnectRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/': {
-      id: '/admin/'
-      path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/tour/$slug': {
-      id: '/tour/$slug'
-      path: '/tour/$slug'
-      fullPath: '/tour/$slug'
-      preLoaderRoute: typeof TourSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rooms/$slug': {
-      id: '/rooms/$slug'
-      path: '/rooms/$slug'
-      fullPath: '/rooms/$slug'
-      preLoaderRoute: typeof RoomsSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lp/$slug': {
-      id: '/lp/$slug'
-      path: '/lp/$slug'
-      fullPath: '/lp/$slug'
-      preLoaderRoute: typeof LpSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/telegram': {
-      id: '/api/telegram'
-      path: '/api/telegram'
-      fullPath: '/api/telegram'
-      preLoaderRoute: typeof ApiTelegramRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/queue-worker': {
-      id: '/api/queue-worker'
-      path: '/api/queue-worker'
-      fullPath: '/api/queue-worker'
-      preLoaderRoute: typeof ApiQueueWorkerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public-site-data': {
-      id: '/api/public-site-data'
-      path: '/api/public-site-data'
-      fullPath: '/api/public-site-data'
-      preLoaderRoute: typeof ApiPublicSiteDataRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public-site': {
-      id: '/api/public-site'
-      path: '/api/public-site'
-      fullPath: '/api/public-site'
-      preLoaderRoute: typeof ApiPublicSiteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/place-photo': {
-      id: '/api/place-photo'
-      path: '/api/place-photo'
-      fullPath: '/api/place-photo'
-      preLoaderRoute: typeof ApiPlacePhotoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/evolution': {
-      id: '/api/evolution'
-      path: '/api/evolution'
-      fullPath: '/api/evolution'
-      preLoaderRoute: typeof ApiEvolutionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/debug-db': {
-      id: '/api/debug-db'
-      path: '/api/debug-db'
-      fullPath: '/api/debug-db'
-      preLoaderRoute: typeof ApiDebugDbRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/whatsapp-corrections': {
-      id: '/admin/whatsapp-corrections'
-      path: '/whatsapp-corrections'
-      fullPath: '/admin/whatsapp-corrections'
-      preLoaderRoute: typeof AdminWhatsappCorrectionsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/whatsapp': {
-      id: '/admin/whatsapp'
-      path: '/whatsapp'
-      fullPath: '/admin/whatsapp'
-      preLoaderRoute: typeof AdminWhatsappRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/webchat': {
-      id: '/admin/webchat'
-      path: '/webchat'
-      fullPath: '/admin/webchat'
-      preLoaderRoute: typeof AdminWebchatRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/walkthrough': {
-      id: '/admin/walkthrough'
-      path: '/walkthrough'
-      fullPath: '/admin/walkthrough'
-      preLoaderRoute: typeof AdminWalkthroughRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/training': {
-      id: '/admin/training'
-      path: '/training'
-      fullPath: '/admin/training'
-      preLoaderRoute: typeof AdminTrainingRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/telegram': {
-      id: '/admin/telegram'
-      path: '/telegram'
-      fullPath: '/admin/telegram'
-      preLoaderRoute: typeof AdminTelegramRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/settings': {
-      id: '/admin/settings'
-      path: '/settings'
-      fullPath: '/admin/settings'
-      preLoaderRoute: typeof AdminSettingsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/seo': {
-      id: '/admin/seo'
-      path: '/seo'
-      fullPath: '/admin/seo'
-      preLoaderRoute: typeof AdminSeoRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/routing-debug': {
-      id: '/admin/routing-debug'
-      path: '/routing-debug'
-      fullPath: '/admin/routing-debug'
-      preLoaderRoute: typeof AdminRoutingDebugRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/rooms': {
-      id: '/admin/rooms'
-      path: '/rooms'
-      fullPath: '/admin/rooms'
-      preLoaderRoute: typeof AdminRoomsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/pricing-calendar': {
-      id: '/admin/pricing-calendar'
-      path: '/pricing-calendar'
-      fullPath: '/admin/pricing-calendar'
-      preLoaderRoute: typeof AdminPricingCalendarRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/pages': {
-      id: '/admin/pages'
-      path: '/pages'
-      fullPath: '/admin/pages'
-      preLoaderRoute: typeof AdminPagesRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/notifications': {
-      id: '/admin/notifications'
-      path: '/notifications'
-      fullPath: '/admin/notifications'
-      preLoaderRoute: typeof AdminNotificationsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/media': {
-      id: '/admin/media'
-      path: '/media'
-      fullPath: '/admin/media'
-      preLoaderRoute: typeof AdminMediaRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/health': {
-      id: '/admin/health'
-      path: '/health'
-      fullPath: '/admin/health'
-      preLoaderRoute: typeof AdminHealthRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/handoff': {
-      id: '/admin/handoff'
-      path: '/handoff'
-      fullPath: '/admin/handoff'
-      preLoaderRoute: typeof AdminHandoffRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/explore': {
-      id: '/admin/explore'
+    '/explore': {
+      id: '/explore'
       path: '/explore'
-      fullPath: '/admin/explore'
-      preLoaderRoute: typeof AdminExploreRouteImport
-      parentRoute: typeof AdminRoute
+      fullPath: '/explore'
+      preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/content-manager': {
-      id: '/admin/content-manager'
-      path: '/content-manager'
-      fullPath: '/admin/content-manager'
-      preLoaderRoute: typeof AdminContentManagerRouteImport
-      parentRoute: typeof AdminRoute
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/contacts': {
-      id: '/admin/contacts'
-      path: '/contacts'
-      fullPath: '/admin/contacts'
-      preLoaderRoute: typeof AdminContactsRouteImport
-      parentRoute: typeof AdminRoute
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/complaints': {
-      id: '/admin/complaints'
-      path: '/complaints'
-      fullPath: '/admin/complaints'
-      preLoaderRoute: typeof AdminComplaintsRouteImport
-      parentRoute: typeof AdminRoute
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/competitor-prices': {
-      id: '/admin/competitor-prices'
-      path: '/competitor-prices'
-      fullPath: '/admin/competitor-prices'
-      preLoaderRoute: typeof AdminCompetitorPricesRouteImport
-      parentRoute: typeof AdminRoute
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/admin/chatbot-training': {
-      id: '/admin/chatbot-training'
-      path: '/chatbot-training'
-      fullPath: '/admin/chatbot-training'
-      preLoaderRoute: typeof AdminChatbotTrainingRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/calendar': {
-      id: '/admin/calendar'
-      path: '/calendar'
-      fullPath: '/admin/calendar'
-      preLoaderRoute: typeof AdminCalendarRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/bookings': {
-      id: '/admin/bookings'
-      path: '/bookings'
-      fullPath: '/admin/bookings'
-      preLoaderRoute: typeof AdminBookingsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/booking-form-logs': {
-      id: '/admin/booking-form-logs'
-      path: '/booking-form-logs'
-      fullPath: '/admin/booking-form-logs'
-      preLoaderRoute: typeof AdminBookingFormLogsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/analytics': {
-      id: '/admin/analytics'
-      path: '/analytics'
-      fullPath: '/admin/analytics'
-      preLoaderRoute: typeof AdminAnalyticsRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/ai-lab': {
-      id: '/admin/ai-lab'
-      path: '/ai-lab'
-      fullPath: '/admin/ai-lab'
-      preLoaderRoute: typeof AdminAiLabRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.mcp/list-tools': {
@@ -1247,95 +967,284 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/booking/form/$token': {
-      id: '/booking/form/$token'
-      path: '/booking/form/$token'
-      fullPath: '/booking/form/$token'
-      preLoaderRoute: typeof BookingFormTokenRouteImport
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/book/confirmation/$id': {
-      id: '/book/confirmation/$id'
-      path: '/book/confirmation/$id'
-      fullPath: '/book/confirmation/$id'
-      preLoaderRoute: typeof BookConfirmationIdRouteImport
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ai-lab': {
+      id: '/admin/ai-lab'
+      path: '/ai-lab'
+      fullPath: '/admin/ai-lab'
+      preLoaderRoute: typeof AdminAiLabRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/booking-form-logs': {
+      id: '/admin/booking-form-logs'
+      path: '/booking-form-logs'
+      fullPath: '/admin/booking-form-logs'
+      preLoaderRoute: typeof AdminBookingFormLogsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/bookings': {
+      id: '/admin/bookings'
+      path: '/bookings'
+      fullPath: '/admin/bookings'
+      preLoaderRoute: typeof AdminBookingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/calendar': {
+      id: '/admin/calendar'
+      path: '/calendar'
+      fullPath: '/admin/calendar'
+      preLoaderRoute: typeof AdminCalendarRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/chatbot-training': {
+      id: '/admin/chatbot-training'
+      path: '/chatbot-training'
+      fullPath: '/admin/chatbot-training'
+      preLoaderRoute: typeof AdminChatbotTrainingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/competitor-prices': {
+      id: '/admin/competitor-prices'
+      path: '/competitor-prices'
+      fullPath: '/admin/competitor-prices'
+      preLoaderRoute: typeof AdminCompetitorPricesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/complaints': {
+      id: '/admin/complaints'
+      path: '/complaints'
+      fullPath: '/admin/complaints'
+      preLoaderRoute: typeof AdminComplaintsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/contacts': {
+      id: '/admin/contacts'
+      path: '/contacts'
+      fullPath: '/admin/contacts'
+      preLoaderRoute: typeof AdminContactsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/content-manager': {
+      id: '/admin/content-manager'
+      path: '/content-manager'
+      fullPath: '/admin/content-manager'
+      preLoaderRoute: typeof AdminContentManagerRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/explore': {
+      id: '/admin/explore'
+      path: '/explore'
+      fullPath: '/admin/explore'
+      preLoaderRoute: typeof AdminExploreRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/handoff': {
+      id: '/admin/handoff'
+      path: '/handoff'
+      fullPath: '/admin/handoff'
+      preLoaderRoute: typeof AdminHandoffRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/health': {
+      id: '/admin/health'
+      path: '/health'
+      fullPath: '/admin/health'
+      preLoaderRoute: typeof AdminHealthRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/media': {
+      id: '/admin/media'
+      path: '/media'
+      fullPath: '/admin/media'
+      preLoaderRoute: typeof AdminMediaRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/notifications': {
+      id: '/admin/notifications'
+      path: '/notifications'
+      fullPath: '/admin/notifications'
+      preLoaderRoute: typeof AdminNotificationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pages': {
+      id: '/admin/pages'
+      path: '/pages'
+      fullPath: '/admin/pages'
+      preLoaderRoute: typeof AdminPagesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/pricing-calendar': {
+      id: '/admin/pricing-calendar'
+      path: '/pricing-calendar'
+      fullPath: '/admin/pricing-calendar'
+      preLoaderRoute: typeof AdminPricingCalendarRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/rooms': {
+      id: '/admin/rooms'
+      path: '/rooms'
+      fullPath: '/admin/rooms'
+      preLoaderRoute: typeof AdminRoomsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/routing-debug': {
+      id: '/admin/routing-debug'
+      path: '/routing-debug'
+      fullPath: '/admin/routing-debug'
+      preLoaderRoute: typeof AdminRoutingDebugRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/seo': {
+      id: '/admin/seo'
+      path: '/seo'
+      fullPath: '/admin/seo'
+      preLoaderRoute: typeof AdminSeoRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/telegram': {
+      id: '/admin/telegram'
+      path: '/telegram'
+      fullPath: '/admin/telegram'
+      preLoaderRoute: typeof AdminTelegramRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/training': {
+      id: '/admin/training'
+      path: '/training'
+      fullPath: '/admin/training'
+      preLoaderRoute: typeof AdminTrainingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/walkthrough': {
+      id: '/admin/walkthrough'
+      path: '/walkthrough'
+      fullPath: '/admin/walkthrough'
+      preLoaderRoute: typeof AdminWalkthroughRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/webchat': {
+      id: '/admin/webchat'
+      path: '/webchat'
+      fullPath: '/admin/webchat'
+      preLoaderRoute: typeof AdminWebchatRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/whatsapp': {
+      id: '/admin/whatsapp'
+      path: '/whatsapp'
+      fullPath: '/admin/whatsapp'
+      preLoaderRoute: typeof AdminWhatsappRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/whatsapp-corrections': {
+      id: '/admin/whatsapp-corrections'
+      path: '/whatsapp-corrections'
+      fullPath: '/admin/whatsapp-corrections'
+      preLoaderRoute: typeof AdminWhatsappCorrectionsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/api/debug-db': {
+      id: '/api/debug-db'
+      path: '/api/debug-db'
+      fullPath: '/api/debug-db'
+      preLoaderRoute: typeof ApiDebugDbRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/telegram/$agentKey': {
-      id: '/api/telegram/$agentKey'
-      path: '/$agentKey'
-      fullPath: '/api/telegram/$agentKey'
-      preLoaderRoute: typeof ApiTelegramAgentKeyRouteImport
-      parentRoute: typeof ApiTelegramRoute
-    }
-    '/api/public/health-check': {
-      id: '/api/public/health-check'
-      path: '/api/public/health-check'
-      fullPath: '/api/public/health-check'
-      preLoaderRoute: typeof ApiPublicHealthCheckRouteImport
+    '/api/evolution': {
+      id: '/api/evolution'
+      path: '/api/evolution'
+      fullPath: '/api/evolution'
+      preLoaderRoute: typeof ApiEvolutionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/wa-summary-refresh': {
-      id: '/api/cron/wa-summary-refresh'
-      path: '/api/cron/wa-summary-refresh'
-      fullPath: '/api/cron/wa-summary-refresh'
-      preLoaderRoute: typeof ApiCronWaSummaryRefreshRouteImport
+    '/api/place-photo': {
+      id: '/api/place-photo'
+      path: '/api/place-photo'
+      fullPath: '/api/place-photo'
+      preLoaderRoute: typeof ApiPlacePhotoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/sync-explore': {
-      id: '/api/cron/sync-explore'
-      path: '/api/cron/sync-explore'
-      fullPath: '/api/cron/sync-explore'
-      preLoaderRoute: typeof ApiCronSyncExploreRouteImport
+    '/api/public-site': {
+      id: '/api/public-site'
+      path: '/api/public-site'
+      fullPath: '/api/public-site'
+      preLoaderRoute: typeof ApiPublicSiteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/run-article-schedules': {
-      id: '/api/cron/run-article-schedules'
-      path: '/api/cron/run-article-schedules'
-      fullPath: '/api/cron/run-article-schedules'
-      preLoaderRoute: typeof ApiCronRunArticleSchedulesRouteImport
+    '/api/public-site-data': {
+      id: '/api/public-site-data'
+      path: '/api/public-site-data'
+      fullPath: '/api/public-site-data'
+      preLoaderRoute: typeof ApiPublicSiteDataRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/process-wa-queue': {
-      id: '/api/cron/process-wa-queue'
-      path: '/api/cron/process-wa-queue'
-      fullPath: '/api/cron/process-wa-queue'
-      preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
+    '/api/queue-worker': {
+      id: '/api/queue-worker'
+      path: '/api/queue-worker'
+      fullPath: '/api/queue-worker'
+      preLoaderRoute: typeof ApiQueueWorkerRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/wa-queue-safety-net': {
-      id: '/api/cron/wa-queue-safety-net'
-      path: '/api/cron/wa-queue-safety-net'
-      fullPath: '/api/cron/wa-queue-safety-net'
-      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
+    '/api/telegram': {
+      id: '/api/telegram'
+      path: '/api/telegram'
+      fullPath: '/api/telegram'
+      preLoaderRoute: typeof ApiTelegramRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/expire-bookings': {
-      id: '/api/cron/expire-bookings'
-      path: '/api/cron/expire-bookings'
-      fullPath: '/api/cron/expire-bookings'
-      preLoaderRoute: typeof ApiCronExpireBookingsRouteImport
+    '/book/': {
+      id: '/book/'
+      path: '/book'
+      fullPath: '/book/'
+      preLoaderRoute: typeof BookIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron/booking-stuck-monitor': {
-      id: '/api/cron/booking-stuck-monitor'
-      path: '/api/cron/booking-stuck-monitor'
-      fullPath: '/api/cron/booking-stuck-monitor'
-      preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
+    '/lp/$slug': {
+      id: '/lp/$slug'
+      path: '/lp/$slug'
+      fullPath: '/lp/$slug'
+      preLoaderRoute: typeof LpSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/booking-invoice/$id': {
-      id: '/api/booking-invoice/$id'
-      path: '/api/booking-invoice/$id'
-      fullPath: '/api/booking-invoice/$id'
-      preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
+    '/rooms/$slug': {
+      id: '/rooms/$slug'
+      path: '/rooms/$slug'
+      fullPath: '/rooms/$slug'
+      preLoaderRoute: typeof RoomsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+    '/tour/$slug': {
+      id: '/tour/$slug'
+      path: '/tour/$slug'
+      fullPath: '/tour/$slug'
+      preLoaderRoute: typeof TourSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.lovable/oauth/consent': {
@@ -1345,18 +1254,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/book/confirmation/$id/chat': {
-      id: '/book/confirmation/$id/chat'
-      path: '/chat'
-      fullPath: '/book/confirmation/$id/chat'
-      preLoaderRoute: typeof BookConfirmationIdChatRouteImport
-      parentRoute: typeof BookConfirmationIdRoute
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/api/public/booking-form/$token': {
-      id: '/api/public/booking-form/$token'
-      path: '/api/public/booking-form/$token'
-      fullPath: '/api/public/booking-form/$token'
-      preLoaderRoute: typeof ApiPublicBookingFormTokenRouteImport
+    '/api/booking-invoice/$id': {
+      id: '/api/booking-invoice/$id'
+      path: '/api/booking-invoice/$id'
+      fullPath: '/api/booking-invoice/$id'
+      preLoaderRoute: typeof ApiBookingInvoiceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/booking-stuck-monitor': {
+      id: '/api/cron/booking-stuck-monitor'
+      path: '/api/cron/booking-stuck-monitor'
+      fullPath: '/api/cron/booking-stuck-monitor'
+      preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/expire-bookings': {
+      id: '/api/cron/expire-bookings'
+      path: '/api/cron/expire-bookings'
+      fullPath: '/api/cron/expire-bookings'
+      preLoaderRoute: typeof ApiCronExpireBookingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/process-wa-queue': {
+      id: '/api/cron/process-wa-queue'
+      path: '/api/cron/process-wa-queue'
+      fullPath: '/api/cron/process-wa-queue'
+      preLoaderRoute: typeof ApiCronProcessWaQueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/run-article-schedules': {
+      id: '/api/cron/run-article-schedules'
+      path: '/api/cron/run-article-schedules'
+      fullPath: '/api/cron/run-article-schedules'
+      preLoaderRoute: typeof ApiCronRunArticleSchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/sync-explore': {
+      id: '/api/cron/sync-explore'
+      path: '/api/cron/sync-explore'
+      fullPath: '/api/cron/sync-explore'
+      preLoaderRoute: typeof ApiCronSyncExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/wa-queue-safety-net': {
+      id: '/api/cron/wa-queue-safety-net'
+      path: '/api/cron/wa-queue-safety-net'
+      fullPath: '/api/cron/wa-queue-safety-net'
+      preLoaderRoute: typeof ApiCronWaQueueSafetyNetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/wa-summary-refresh': {
+      id: '/api/cron/wa-summary-refresh'
+      path: '/api/cron/wa-summary-refresh'
+      fullPath: '/api/cron/wa-summary-refresh'
+      preLoaderRoute: typeof ApiCronWaSummaryRefreshRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/health-check': {
+      id: '/api/public/health-check'
+      path: '/api/public/health-check'
+      fullPath: '/api/public/health-check'
+      preLoaderRoute: typeof ApiPublicHealthCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/telegram/$agentKey': {
+      id: '/api/telegram/$agentKey'
+      path: '/$agentKey'
+      fullPath: '/api/telegram/$agentKey'
+      preLoaderRoute: typeof ApiTelegramAgentKeyRouteImport
+      parentRoute: typeof ApiTelegramRoute
+    }
+    '/book/confirmation/$id': {
+      id: '/book/confirmation/$id'
+      path: '/book/confirmation/$id'
+      fullPath: '/book/confirmation/$id'
+      preLoaderRoute: typeof BookConfirmationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/booking/form/$token': {
+      id: '/booking/form/$token'
+      path: '/booking/form/$token'
+      fullPath: '/booking/form/$token'
+      preLoaderRoute: typeof BookingFormTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/booking-invoice/$id/send': {
@@ -1365,6 +1351,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/booking-invoice/$id/send'
       preLoaderRoute: typeof ApiBookingInvoiceIdSendRouteImport
       parentRoute: typeof ApiBookingInvoiceIdRoute
+    }
+    '/api/public/booking-form/$token': {
+      id: '/api/public/booking-form/$token'
+      path: '/api/public/booking-form/$token'
+      fullPath: '/api/public/booking-form/$token'
+      preLoaderRoute: typeof ApiPublicBookingFormTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book/confirmation/$id/chat': {
+      id: '/book/confirmation/$id/chat'
+      path: '/chat'
+      fullPath: '/book/confirmation/$id/chat'
+      preLoaderRoute: typeof BookConfirmationIdChatRouteImport
+      parentRoute: typeof BookConfirmationIdRoute
     }
   }
 }
@@ -1498,9 +1498,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
-  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,
   ApiCronSyncExploreRoute: ApiCronSyncExploreRoute,
+  ApiCronWaQueueSafetyNetRoute: ApiCronWaQueueSafetyNetRoute,
   ApiCronWaSummaryRefreshRoute: ApiCronWaSummaryRefreshRoute,
   ApiPublicHealthCheckRoute: ApiPublicHealthCheckRoute,
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
