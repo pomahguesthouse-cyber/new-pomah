@@ -251,6 +251,48 @@ function indonesianWordNumber(word: string): number | null {
   return map[normalized] ?? null;
 }
 
+// ─── Frasa pendamping ─────────────────────────────────────────────────────────
+
+/**
+ * Kata benda pendamping TUNGGAL. "bawa pacar" / "sama istri" / "ajak tunangan"
+ * secara implisit berarti tamu + 1 orang = 2 dewasa.
+ *
+ * Catatan: sengaja TIDAK memuat "anak" / "bayi" / "balita" — jumlah anak punya
+ * jalur ekstraksi sendiri dan kebijakan usia (di bawah 3 tahun gratis) membuat
+ * asumsi "anak = +1 dewasa" berbahaya.
+ */
+const COMPANION_NOUN_RE_SRC =
+  "pacar|doi|gebetan|tunangan|calon(?:\\s+(?:istri|suami))?|istri|suami|pasangan|partner|teman|temen|kawan|sahabat|adik|kakak|saudara";
+
+/** "bawa pacar", "sama istri", "bareng temen", "+ pasangan" */
+const COMPANION_RE = new RegExp(
+  String.raw`(?:\b(?:bawa|bawak|ajak|ngajak|sama|ama|bareng|bersama|dengan|nginep\s+sama|berdua\s+sama)\s+|\+\s*)(?:${COMPANION_NOUN_RE_SRC})\b`,
+  "i",
+);
+
+/**
+ * Penanda jamak / tidak tentu. Bila muncul, jumlah tamu TIDAK boleh ditebak —
+ * "bawa teman-teman" bisa 3 orang, bisa 10.
+ */
+const COMPANION_PLURAL_RE =
+  /\b(?:teman[-\s]?teman|temen[-\s]?temen|teman2|temen2|kawan[-\s]?kawan|sahabat[-\s]?sahabat|saudara[-\s]?saudara|rombongan|keluarga|geng|grup|group|beberapa|banyak|para)\b/i;
+
+/**
+ * Deteksi "tamu + 1 pendamping" dari bahasa natural tanpa angka.
+ *
+ * Ini menutup celah transcript 10 Agu 2026: tamu menjawab "Ato bawa pacar"
+ * saat ditanya jumlah tamu, bot tidak menangkapnya sebagai 2 orang lalu
+ * mengulang pertanyaan "berapa orang total" untuk ketiga kalinya.
+ *
+ * @returns 2 bila frasa pendamping tunggal terdeteksi, selain itu undefined.
+ */
+export function extractCompanionAdults(message: string): number | undefined {
+  const text = message.trim();
+  if (!text) return undefined;
+  if (COMPANION_PLURAL_RE.test(text)) return undefined;
+  return COMPANION_RE.test(text) ? 2 : undefined;
+}
+
 // ─── Main extractor ───────────────────────────────────────────────────────────
 
 /**
@@ -344,6 +386,12 @@ export function extractAllSlots(
       const n = indonesianWordNumber(wordPeople[1]!);
       if (n && n >= 1 && n <= 20) result.adults = n;
     }
+  }
+
+  // Fallback terakhir: frasa pendamping tanpa angka ("bawa pacar", "sama istri").
+  if (result.adults === undefined) {
+    const companion = extractCompanionAdults(text);
+    if (companion !== undefined) result.adults = companion;
   }
 
   // Jika tamu sudah menyebut jumlah orang/dewasa tetapi tidak menyebut anak,
