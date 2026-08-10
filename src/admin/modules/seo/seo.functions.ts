@@ -643,7 +643,7 @@ export const getSearchConsoleData = createServerFn({ method: "GET" })
     // Fetch keywords from database to calculate real-time GSC estimations
     const { data: keywords } = await client.from("seo_keywords").select("*");
 
-    let connected = false;
+    const connected = false;
     let clicks = 0;
     let impressions = 0;
     let ctr = 0;

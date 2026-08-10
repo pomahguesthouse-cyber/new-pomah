@@ -18,35 +18,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate route tree
-        run: node scratch/generate_routes.js
-
+      # src/routeTree.gen.ts is committed; the typecheck below is what validates
+      # it (a corrupt/stale tree surfaces as unassignable createFileRoute paths).
       - name: Typecheck (catches admin booking RPC / update payload mismatches)
         run: bunx tsc --noEmit
 
-      - name: Admin booking server-fn smoke test
-        run: bun run scripts/test-admin-booking-types.ts
-
-      - name: WhatsApp message parser regression tests
-        run: bun run test:message-parsers
-
-      - name: WhatsApp availability formatter regression tests
-        run: bun run test:wa-formatters
-
-      - name: WhatsApp availability context regression tests
-        run: bun run test:wa-availability-context
-
-      - name: WhatsApp identity regression tests
-        run: bun run test:wa-identity
-
-      - name: WhatsApp runtime policy regression tests
-        run: bun run test:wa-runtime-policy
-
-      - name: WhatsApp session summary policy regression tests
-        run: bun run test:wa-summary-policy
-
-      - name: WhatsApp session summary IO regression tests
-        run: bun run test:wa-summary-io
+      # Aggregate script in package.json — covers all 18 regression suites,
+      # including the WhatsApp ones previously listed individually here.
+      - name: Regression tests
+        run: bun run test:wa-refactor
 
       - name: Lint
         run: bun run lint

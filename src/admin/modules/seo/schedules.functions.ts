@@ -158,7 +158,7 @@ export function computeNextRunUTC(args: {
   if (args.frequency === "weekly") {
     const target = args.day_of_week ?? 0;
     const wibDow = wibNow.getUTCDay(); // 0..6 in WIB
-    let delta = (target - wibDow + 7) % 7;
+    const delta = (target - wibDow + 7) % 7;
     let cand = makeWibCandidate(yy, mo, dd + delta, args.hour, args.minute);
     if (cand <= from) cand = makeWibCandidate(yy, mo, dd + delta + 7, args.hour, args.minute);
     return cand;

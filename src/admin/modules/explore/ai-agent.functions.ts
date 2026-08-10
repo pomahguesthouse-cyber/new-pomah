@@ -32,7 +32,7 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
       throw new Error("Gemini API Key belum diatur. Silakan atur di bagian atas halaman Jelajahi Semarang.");
     }
     const parser = new Parser();
-    let feedItems: any[] = [];
+    const feedItems: any[] = [];
     
     // Fetch from Detik Jateng
     try {

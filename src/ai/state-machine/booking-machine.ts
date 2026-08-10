@@ -1097,7 +1097,9 @@ export async function processBookingState(
   },
 ): Promise<StateMachineResult> {
   const supabase = ctx.supabaseAdmin;
-  let { state, context } = currentStateRecord;
+  const { state } = currentStateRecord;
+  // `context` is reassigned below on booking-form submission; `state` is not.
+  let { context } = currentStateRecord;
 
   const formSubmittedMatch = message.match(FORM_SUBMITTED_PATTERN);
   if (formSubmittedMatch) {

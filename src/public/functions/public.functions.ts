@@ -285,7 +285,7 @@ export const getMediaAssetByName = createServerFn({ method: "GET" })
       return r ?? null;
     };
 
-    let row =
+    const row =
       (await tryFetch(data.name, true)) ||
       (await tryFetch(`%${data.name.replace(/\.[^.]+$/, "")}%`, true)) ||
       (await tryFetch(data.name, false)) ||

@@ -122,8 +122,10 @@ export const updateRoomRate: ToolHandler = async (
     if (exact.length === 1) {
       candidates = exact;
     } else {
+      // NOTE: this is a template literal, so \s must be escaped as \\s — a bare
+      // \s collapses to a literal "s" and the guard silently matches nothing.
       const wordRe = new RegExp(
-        `(?:^|\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\s|$)`,
+        `(?:^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`,
         "i",
       );
       const wordHits = ctx.rooms.filter((r) => wordRe.test(r.name));

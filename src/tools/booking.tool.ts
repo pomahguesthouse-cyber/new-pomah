@@ -243,7 +243,7 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   const phone = phoneRaw || null;
 
   // ── Check if multiple rooms are requested ──────────────────────────────────
-  let roomsToBook: Array<{ roomTypeId: string; roomTypeName: string; quantity: number; pricePerNight: number }> = [];
+  const roomsToBook: Array<{ roomTypeId: string; roomTypeName: string; quantity: number; pricePerNight: number }> = [];
   let rawRooms: any[] = [];
   if (Array.isArray(args.rooms)) {
     rawRooms = args.rooms;

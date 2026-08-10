@@ -17,7 +17,10 @@ import { getMe, setWebhook, getWebhookInfo, deleteWebhook, sendMessage } from "@
 
 function randomHex(byteLen: number): string {
   const arr = new Uint8Array(byteLen);
-  (globalThis.crypto ?? require("crypto").webcrypto).getRandomValues(arr);
+  // `globalThis.crypto` is standard on Workers and on Node >= 19, which covers
+  // every runtime this ships to. The old `require("crypto").webcrypto` fallback
+  // was unreachable there and broke ESM bundling.
+  globalThis.crypto.getRandomValues(arr);
   return Array.from(arr).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

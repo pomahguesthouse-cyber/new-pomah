@@ -49,7 +49,10 @@ async function resolveCanonical(...identities: unknown[]) {
       const { data } = await (supabaseAdmin as any).rpc("resolve_wa_canonical_phone", { p_identity: raw });
       const phone = normalizePhone(data);
       if (isPublicPhone(phone)) return phone;
-    } catch {}
+    } catch (err) {
+      // Non-fatal: this identity just doesn't resolve, try the next one.
+      console.warn("[wa-live] resolve_wa_canonical_phone failed", err);
+    }
   }
   return null;
 }
