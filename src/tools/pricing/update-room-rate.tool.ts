@@ -31,24 +31,17 @@
  */
 
 import type { ToolContext, ToolHandler } from "@/tools/types";
+import { parseIDRAmount } from "@/lib/idr";
+import { resolveRoomType } from "./_resolve-room-type";
 
 const MIN_RATE = 10_000;          // catches fat-finger "300" meaning 300000
 const MAX_RATE = 50_000_000;      // sanity ceiling
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string") {
-    // accept "350000", "350.000", "350,000", "350rb", "Rp 350.000"
-    const cleaned = v
-      .replace(/rp/i, "")
-      .replace(/\s+/g, "")
-      .replace(/[._,](?=\d{3}\b)/g, "")          // thousand separators
-      .replace(/rb$/i, "000")
-      .replace(/(\d+)k$/i, "$1000")
-      .replace(/jt$/i, "000000");
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? n : null;
-  }
+  // "350000", "350.000", "350 rb", "1.2jt", "Rp 350.000" — parser bersama,
+  // sama persis dengan yang dipakai parser perintah Telegram.
+  if (typeof v === "string") return parseIDRAmount(v);
   return null;
 }
 
@@ -105,55 +98,16 @@ export const updateRoomRate: ToolHandler = async (
   }
 
   // ── 3. Resolve room type ──────────────────────────────────────────
-  const needle = roomNameOrId.toLowerCase().trim();
-  const isUuid = /^[0-9a-f-]{32,}$/i.test(roomNameOrId);
-
-  // Match precedence (so "Deluxe" doesn't ambiguously match "Grand Deluxe"):
-  //   1. UUID exact match.
-  //   2. Case-insensitive exact name match.
-  //   3. Word-boundary match — needle is a standalone word in the room name
-  //      (handles "single", "deluxe" without grabbing "grand deluxe").
-  //   4. Substring fallback (multi-hit → disambiguation error).
-  let candidates: Array<typeof ctx.rooms[number]>;
-  if (isUuid) {
-    candidates = ctx.rooms.filter((r) => (r as any).id === roomNameOrId);
-  } else {
-    const exact = ctx.rooms.filter((r) => r.name.toLowerCase().trim() === needle);
-    if (exact.length === 1) {
-      candidates = exact;
-    } else {
-      // NOTE: this is a template literal, so \s must be escaped as \\s — a bare
-      // \s collapses to a literal "s" and the guard silently matches nothing.
-      const wordRe = new RegExp(
-        `(?:^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`,
-        "i",
-      );
-      const wordHits = ctx.rooms.filter((r) => wordRe.test(r.name));
-      candidates = wordHits.length > 0
-        ? wordHits
-        : ctx.rooms.filter((r) => r.name.toLowerCase().includes(needle));
-    }
+  // Dulu logika pencocokan disalin utuh di sini dan sempat menyimpang dari
+  // `_resolve-room-type.ts` (audit 10 Agu 2026): resolver bersama sudah
+  // membuang kata pengisi seperti "kamar … menjadi", salinan lokal belum,
+  // sehingga argumen dari LLM ditolak "tidak ditemukan". Sekarang satu sumber.
+  const resolved = resolveRoomType(roomNameOrId, ctx.rooms as any);
+  if (!resolved.ok) {
+    return JSON.stringify({ ok: false, error: resolved.error });
   }
 
-  if (candidates.length === 0) {
-    return JSON.stringify({
-      ok: false,
-      error:
-        `Tipe kamar "${roomNameOrId}" tidak ditemukan. Pilihan tersedia: ` +
-        ctx.rooms.map((r) => r.name).join(", ") + ".",
-    });
-  }
-  if (candidates.length > 1) {
-    return JSON.stringify({
-      ok: false,
-      error:
-        `Tipe "${roomNameOrId}" cocok ke beberapa kamar: ` +
-        candidates.map((r) => r.name).join(", ") +
-        ". Sebutkan nama yang lebih spesifik.",
-    });
-  }
-
-  const target = candidates[0] as any;
+  const target = resolved.room as any;
   const oldBase     = Number(target.base_rate     ?? 0);
   const oldExtrabed = Number(target.extrabed_rate ?? 0);
 

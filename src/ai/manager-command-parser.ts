@@ -1,4 +1,6 @@
 import { fmtDateID } from "@/lib/date";
+import { parseIDRAmount } from "@/lib/idr";
+import { stripRoomNoise } from "@/lib/room-name";
 
 export type ManagerCommandToolName =
   | "get_bookings"
@@ -60,36 +62,61 @@ function parseLimit(text: string): number | undefined {
 
 // ─── IDR price parser (mirrors num() in pricing tools) ──────────────────────
 
-/**
- * Parse Indonesian currency strings into a number.
- * Accepts: "350000", "350.000", "350rb", "1.2jt", "Rp 350.000", "350k"
- * Returns null when the input cannot be parsed to a finite number.
- */
-export function parseIDRAmount(v: string): number | null {
-  const cleaned = v
-    .replace(/rp/i, "")
-    .replace(/\s+/g, "")
-    .replace(/[._,](?=\d{3}\b)/g, "") // thousand separators
-    .replace(/rb$/i, "000")
-    .replace(/(\d+)k$/i, "$1000")
-    .replace(/jt$/i, "000000");
-  const n = Number(cleaned);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+// Implementasi tinggal di @/lib/idr supaya tool pricing memakai parser yang SAMA.
+export { parseIDRAmount } from "@/lib/idr";
 
 // ─── Price-command regex patterns ───────────────────────────────────────────
+//
+// Dibangun dari fragmen bersama supaya semua varian perintah harga menerima
+// kosakata manajer yang sama. Insiden 10 Agu 2026: "rubah harga single 250 rb"
+// tidak tertangkap (verba "rubah" tak terdaftar, dan harga bersepasi "250 rb"
+// tak cocok), jatuh ke jalur LLM → delegasi ask_agent → balasan "kendala
+// teknis". Pola di bawah dibuat toleran terhadap:
+//   • verba: set/setel/atur/ubah/rubah/robah/ganti/update/perbarui/revisi
+//   • prefix: "kamar ", "tipe kamar ", "room "
+//   • konektor: "menjadi" / "jadi" / "ke" / "=" / ":"
+//   • harga bersepasi: "250 rb", "Rp 250 ribu", "1.2 jt"
+//   • urutan terbalik: "kamar deluxe saja ganti harga menjadi 250rb"
 
-// "set harga deluxe 350rb", "ubah tarif deluxe 350000", "ganti harga family 1.2jt"
-const RE_SET_BASE_RATE = /^(?:set|ubah|ganti)\s+(?:harga|tarif)\s+(.+?)\s+([\d.,]+(?:rb|ribu|jt|juta|k)?|rp\s*[\d.,]+(?:rb|ribu|jt|juta|k)?)\s*$/i;
+/** Verba perubahan yang bersifat ABSOLUT (bukan delta seperti "naikkan 50rb"). */
+const VERB = "set|setel|atur|ubah|rubah|robah|ganti|gantikan|update|perbarui|revisi";
+/** Konektor opsional antara nama kamar dan nominal. */
+const CONNECTOR = "(?:\\s+(?:menjadi|jadi|ke|=|:))?";
+/** Prefix opsional sebelum nama kamar. */
+const ROOM_PREFIX = "(?:kamar|tipe\\s+kamar|tipe|room)\\s+";
+/** Nominal rupiah — unit boleh dipisah spasi ("250 rb"). */
+const PRICE = "(?:rp\\s*)?[\\d.,]+\\s*(?:rb|ribu|jt|juta|k)?";
 
-// "set extrabed deluxe 100rb", "ubah extrabed family 150000"
-const RE_SET_EXTRABED = /^(?:set|ubah|ganti)\s+extrabed\s+(.+?)\s+([\d.,]+(?:rb|ribu|jt|juta|k)?|rp\s*[\d.,]+(?:rb|ribu|jt|juta|k)?)\s*$/i;
+// "set harga deluxe 350rb", "rubah harga single 250 rb", "ganti tarif family jadi 1.2jt"
+const RE_SET_BASE_RATE = new RegExp(
+  `^(?:${VERB})\\s+(?:harga|tarif)(?:nya)?\\s+(?:${ROOM_PREFIX})?(.+?)${CONNECTOR}\\s+(${PRICE})\\s*$`,
+  "i",
+);
 
-// "harga harian deluxe 2025-06-15 400rb", "set harga harian family 15/06/2025 350rb"
-const RE_SET_DAILY_RATE = /^(?:(?:set|ubah|ganti)\s+)?harga\s+harian\s+(.+?)\s+(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4})\s+([\d.,]+(?:rb|ribu|jt|juta|k)?|rp\s*[\d.,]+(?:rb|ribu|jt|juta|k)?)\s*$/i;
+// Urutan terbalik: "kamar deluxe saja ganti harga menjadi 250 rb", "single ubah tarifnya jadi 300rb"
+const RE_SET_BASE_RATE_ROOM_FIRST = new RegExp(
+  `^(?:${ROOM_PREFIX})?(.+?)\\s+(?:saja\\s+)?(?:${VERB})\\s+(?:harga|tarif)(?:nya)?${CONNECTOR}\\s+(${PRICE})\\s*$`,
+  "i",
+);
+
+// "set extrabed deluxe 100rb", "ubah extra bed family jadi 150000"
+const RE_SET_EXTRABED = new RegExp(
+  `^(?:${VERB})\\s+(?:harga\\s+|tarif\\s+)?extra\\s?bed\\s+(?:${ROOM_PREFIX})?(.+?)${CONNECTOR}\\s+(${PRICE})\\s*$`,
+  "i",
+);
+
+// "harga harian deluxe 2025-06-15 400rb", "set harga harian family 15/06/2025 350 rb"
+const RE_SET_DAILY_RATE = new RegExp(
+  `^(?:(?:${VERB})\\s+)?harga\\s+harian\\s+(?:${ROOM_PREFIX})?(.+?)\\s+(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}\\/\\d{1,2}\\/\\d{2,4})${CONNECTOR}\\s+(${PRICE})\\s*$`,
+  "i",
+);
 
 // "lihat harga", "daftar harga", "cek tarif", "list harga"
 const RE_VIEW_RATES = /^(?:lihat|daftar|cek|list)\s+(?:harga|tarif)\s*$/i;
+
+// `stripRoomNoise` tinggal di @/lib/room-name supaya resolver tool pricing bisa
+// memakai definisi yang SAMA tanpa tools/ mengimpor ai/.
+export { stripRoomNoise } from "@/lib/room-name";
 
 /**
  * Convert DD/MM/YYYY or DD/MM/YY to YYYY-MM-DD.
@@ -205,7 +232,7 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
   // 2. "set extrabed <room> <price>" (check before generic set harga)
   const extrabedMatch = trimmed.match(RE_SET_EXTRABED);
   if (extrabedMatch) {
-    const roomName = extrabedMatch[1].trim();
+    const roomName = stripRoomNoise(extrabedMatch[1]);
     const price = parseIDRAmount(extrabedMatch[2]);
     if (roomName && price != null) {
       return {
@@ -223,7 +250,7 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
   // 3. "harga harian <room> <date> <price>" (daily override)
   const dailyMatch = trimmed.match(RE_SET_DAILY_RATE);
   if (dailyMatch) {
-    const roomName = dailyMatch[1].trim();
+    const roomName = stripRoomNoise(dailyMatch[1]);
     const dateStr = normalizeDateArg(dailyMatch[2]);
     const price = parseIDRAmount(dailyMatch[3]);
     if (roomName && dateStr && price != null) {
@@ -239,10 +266,16 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
     }
   }
 
-  // 4. "set harga <room> <price>" (base rate — most generic, check last)
-  const baseMatch = trimmed.match(RE_SET_BASE_RATE);
-  if (baseMatch) {
-    const roomName = baseMatch[1].trim();
+  // 4. "set harga <room> <price>" (base rate — most generic, check last).
+  //    Dua bentuk: verba di depan, atau nama kamar di depan
+  //    ("kamar deluxe saja ganti harga menjadi 250 rb").
+  for (const [re, label] of [
+    [RE_SET_BASE_RATE, "manager_command:set_harga"],
+    [RE_SET_BASE_RATE_ROOM_FIRST, "manager_command:set_harga_room_first"],
+  ] as const) {
+    const baseMatch = trimmed.match(re);
+    if (!baseMatch) continue;
+    const roomName = stripRoomNoise(baseMatch[1]);
     const price = parseIDRAmount(baseMatch[2]);
     if (roomName && price != null) {
       return {
@@ -252,7 +285,7 @@ export function parseManagerCommand(message: string): ParsedManagerCommand | nul
           base_rate: price,
           confirmed: true,
         }),
-        label: "manager_command:set_harga",
+        label,
       };
     }
   }

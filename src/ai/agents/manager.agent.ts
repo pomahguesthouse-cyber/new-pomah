@@ -74,6 +74,17 @@ const MANAGER_TOOLS: ToolDefinition[] = [
       "get_room_specifications",
       "block_room",
       "send_to_manager",
+      // Pricing langsung — TANPA hop `ask_agent`. Insiden 10 Agu 2026:
+      // "rubah harga single 250 rb" harus melewati manager → ask_agent →
+      // sub-agent pricing → LLM kedua. Setiap kegagalan di hop kedua muncul
+      // ke manajer sebagai "kendala teknis saat berkomunikasi dengan agen
+      // pricing" — tanpa penyebab, tanpa jalan keluar. Perubahan tarif adalah
+      // perintah manajer yang paling sering dipakai; ia tidak boleh bergantung
+      // pada rantai dua LLM.
+      "update_room_rate",
+      "set_daily_room_rate",
+      "get_daily_room_rates",
+      "delete_daily_room_rate",
     ].includes(t.function.name)
   ),
 ];
@@ -141,6 +152,30 @@ export const managerAgent: AgentDefinition = {
         "   💰 Total Rp<total format Indonesia>\n" +
         "JANGAN berikan link invoice atau instruksi transfer ke manajer.",
 
+      "UBAH HARGA KAMAR: Panggil `update_room_rate` LANGSUNG — JANGAN delegasikan ke pricing " +
+        "lewat `ask_agent`.\n" +
+        "1. Ambil NAMA KAMAR BERSIH dari pesan manajer. Buang kata pengisi: 'rubah harga kamar " +
+        "Single menjadi 250 rb' → room_type: 'Single'. JANGAN pernah mengirim 'kamar Single " +
+        "menjadi' atau potongan kalimat lain sebagai room_type.\n" +
+        "2. Konversi nominal ke rupiah penuh: '250 rb' / '250rb' / '250k' = 250000, '1.2jt' = 1200000.\n" +
+        "3. Perintah ABSOLUT ('jadi 250rb', 'menjadi Rp250.000') → langsung panggil tool. " +
+        "Perintah DELTA yang ambigu ('naikkan 50rb' — naik sebesar 50.000 atau menjadi 50.000?) → " +
+        "tanya manajer dulu, jangan menebak.\n" +
+        "4. Tool balas needs_confirmation berisi ringkasan sebelum → sesudah. Tampilkan ringkasan " +
+        "itu; setelah manajer setuju, panggil ULANG dengan argumen SAMA + confirmed=true.\n" +
+        "5. Bila tool balas nama kamar tidak ditemukan, tool SUDAH menyertakan daftar tipe kamar " +
+        "yang valid. Tampilkan daftar itu dan minta manajer memilih — jangan mengulang tool call " +
+        "dengan argumen yang sama.\n" +
+        "6. Untuk harga yang hanya berlaku pada TANGGAL tertentu, pakai `set_daily_room_rate`.",
+
+      "JANGAN MELAPOR 'KENDALA TEKNIS' TANPA ISI: Bila sebuah tool gagal, sampaikan ALASAN " +
+        "konkret dari field `error` tool tersebut plus langkah lanjutan yang bisa manajer ambil " +
+        "(mis. 'Tipe kamar tidak dikenali. Yang tersedia: Single, Grand Deluxe, Deluxe…'). " +
+        "Dilarang membalas dengan kalimat kosong seperti 'saya mengalami kendala teknis saat " +
+        "berkomunikasi dengan agen lain' — manajer tidak perlu tahu arsitektur internal dan " +
+        "kalimat itu tidak bisa ditindaklanjuti. Jangan pula mengulang permintaan maaf yang sama " +
+        "di dua balasan berturut-turut; ganti pendekatan atau tanyakan hal spesifik yang kurang.",
+
       "MERELAY BALASAN KE TAMU: Bila manajer minta 'balas tamu 0812...', 'kirim pesan ke " +
         "tamu', atau sejenisnya, panggil `reply_to_guest` dengan guest_phone + message. " +
         "Konfirmasi balik ke manajer setelah berhasil ('Sudah dikirim ke 6281...').",
@@ -162,7 +197,8 @@ export const managerAgent: AgentDefinition = {
         "Untuk urusan di luar tool langsung, wajib delegasikan ke agent yang tepat.\n" +
         "PETA DELEGASI WAJIB:\n" +
         "  - front-office: availability, fasilitas kamar, spesifikasi kamar, lokasi, jadwal check-in/check-out, buat booking operasional bila datanya lengkap.\n" +
-        "  - pricing: harga kamar, diskon, paket, dynamic pricing, ubah tarif kamar, scrape/analisa harga kompetitor.\n" +
+        "  - pricing: analisa/scrape harga KOMPETITOR, strategi dynamic pricing, kebijakan diskon & paket. " +
+        "CATATAN: mengubah tarif kamar TIDAK didelegasikan — Anda punya tool-nya sendiri (lihat AKSES LANGSUNG).\n" +
         "  - finance: pembayaran, invoice, DP, pelunasan, piutang, refund, validasi/OCR bukti transfer, payment_status.\n" +
         "  - customer-care: housekeeping, permintaan handuk/linen/extra pillow, AC/lampu/air rusak, keluhan tamu, tindakan perbaikan operasional.\n" +
         "  - content: SEO, artikel, city guide, event Semarang, Google review, audit halaman, keyword ranking, konten website.\n" +
@@ -182,8 +218,10 @@ export const managerAgent: AgentDefinition = {
         "    · set_extra_bed: 'tambahkan/kurangi/set/hapus extrabed' → gunakan mode add/remove/set/clear. " +
         "'hapus extrabed' atau 'kosongkan extrabed' → mode='clear' (extra bed jadi 0 pada tipe/kamar itu).\n" +
         "  - reply_to_guest (relay ke tamu)\n" +
+        "  - update_room_rate (ubah harga dasar / extrabed sebuah tipe kamar, berlaku terus-menerus)\n" +
+        "  - set_daily_room_rate, get_daily_room_rates, delete_daily_room_rate (harga khusus per tanggal)\n" +
         "KONFIRMASI: Sebagian tool (update_booking_status, update_payment_status, reschedule_booking, " +
-        "change_booking_room, delete_booking, reply_to_guest) memerlukan dua langkah. " +
+        "change_booking_room, delete_booking, reply_to_guest, update_room_rate) memerlukan dua langkah. " +
         "Panggilan pertama akan mengembalikan needs_confirmation berisi ringkasan aksi; " +
         "tampilkan ringkasan itu ke manajer dan tunggu balasan. Bila manajer jawab 'ya', 'ok', 'lanjut', 'setuju', 'oke sip', " +
         "panggil ulang tool YANG SAMA dengan argumen SAMA + confirmed=true. Bila jawaban 'tidak/batal', jangan panggil ulang.\n" +
