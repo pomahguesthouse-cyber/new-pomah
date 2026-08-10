@@ -612,27 +612,8 @@ export function PomahHomeView({
                 </Link>
               )}
               <div className={stuck ? "md:min-w-0 md:flex-1" : ""}>
-              {cfg.datePicker.heading && (
-                <p
-                  className={`mb-3 hidden text-center md:block ${
-                    cfg.datePicker.fontFamily === "mono"
-                      ? "font-mono"
-                      : cfg.datePicker.fontFamily === "sans"
-                        ? "font-sans"
-                        : cfg.datePicker.fontFamily === "brother-signature"
-                          ? "font-brother-signature"
-                          : "font-serif"
-                  }`}
-                  style={{
-                    fontSize: cfg.datePicker.fontSize,
-                    fontStyle: cfg.datePicker.fontStyle === "italic" ? "italic" : "normal",
-                    fontWeight: cfg.datePicker.fontStyle === "bold" ? 700 : 400,
-                    color: cfg.datePicker.color || "#7c4a21",
-                  }}
-                >
-                  {cfg.datePicker.heading}
-                </p>
-              )}
+              {/* Judul "Pilih tanggal menginap" dihapus agar box date picker lebih ringkas */}
+
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
                 <Field label="Tanggal Menginap" className="flex-1 min-w-0">
                   <DateRangePickerID
