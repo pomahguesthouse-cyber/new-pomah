@@ -127,7 +127,7 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
   const displayMessage =
     message ||
     (isImageAttachment
-      ? "[Tamu mengirim gambar, kemungkinan bukti transfer pembayaran]"
+      ? "[Tamu mengirim lampiran bukti transfer pembayaran]"
       : attachmentUrl || attachmentMime || messageType
         ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]`
         : "");
