@@ -21,10 +21,14 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function evolutionDataKey(rawBody: unknown): unknown {
+function evolutionDataObject(rawBody: unknown): Record<string, unknown> | null {
   const data = (rawBody as any)?.data;
-  if (Array.isArray(data)) return data[0]?.key ?? null;
-  return data?.key ?? null;
+  const obj = Array.isArray(data) ? data[0] : data;
+  return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+}
+
+function evolutionDataKey(rawBody: unknown): unknown {
+  return evolutionDataObject(rawBody)?.key ?? null;
 }
 
 function expectedWebhookToken(): string | undefined {
@@ -115,9 +119,18 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     messageType,
   } = event;
 
+  // Gambar tanpa caption: jangan pakai "[Lampiran imageMessage]" — string teknis
+  // itu membuat LLM menjawab "saya tidak bisa memproses gambar". Beri petunjuk
+  // eksplisit dalam bahasa Indonesia supaya router mengarahkan ke Finance dan
+  // agent memakai tool OCR bukti transfer.
+  const isImageAttachment = /image/i.test(messageType ?? "") || /^image\//i.test(attachmentMime ?? "");
   const displayMessage =
     message ||
-    (attachmentUrl || attachmentMime || messageType ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
+    (isImageAttachment
+      ? "[Tamu mengirim lampiran bukti transfer pembayaran]"
+      : attachmentUrl || attachmentMime || messageType
+        ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]`
+        : "");
   const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
 
   console.log("[EvolutionWebhook]", {
@@ -286,6 +299,37 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
         : null,
     },
   }).catch((e) => console.warn("[EvolutionWebhook] metadata save failed:", e)));
+
+  // OCR bukti transfer: URL media WhatsApp terenkripsi, jadi media diunduh &
+  // didekripsi lewat Evolution (base64 → data URI) sebelum dikirim ke Vision LLM.
+  // Fire-and-forget; tool `get_payment_proof_result` menunggu hasilnya (polling).
+  if (isImageAttachment) {
+    runBackground((async () => {
+      try {
+        const { fetchWaMediaDataUri } = await import("@/services/whatsapp.service");
+        const { analyzePaymentProof } = await import("@/services/payment-proof.service");
+
+        const rawData = evolutionDataObject(event.rawBody);
+        let imageSource: string | null = null;
+        if (rawData) {
+          imageSource = await fetchWaMediaDataUri("", rawData);
+        }
+        // Fallback: sebagian provider mengirim URL media yang benar-benar publik.
+        if (!imageSource && attachmentUrl && !/mmg\.whatsapp\.net/i.test(attachmentUrl)) {
+          imageSource = attachmentUrl;
+        }
+        if (!imageSource) {
+          console.warn(`[EvolutionWebhook] OCR dilewati: media tidak bisa diunduh | ${logCtx}`);
+          return;
+        }
+
+        await analyzePaymentProof(supabaseAdmin as any, imageSource, customerPhone, messageId);
+      } catch (e) {
+        console.warn("[EvolutionWebhook] OCR bukti transfer gagal (non-fatal):", e);
+      }
+    })());
+  }
+
 
   runBackground((async () => {
     try {
