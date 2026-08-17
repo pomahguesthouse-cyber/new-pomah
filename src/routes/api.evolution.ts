@@ -296,6 +296,37 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     },
   }).catch((e) => console.warn("[EvolutionWebhook] metadata save failed:", e)));
 
+  // OCR bukti transfer: URL media WhatsApp terenkripsi, jadi media diunduh &
+  // didekripsi lewat Evolution (base64 → data URI) sebelum dikirim ke Vision LLM.
+  // Fire-and-forget; tool `get_payment_proof_result` menunggu hasilnya (polling).
+  if (isImageAttachment) {
+    runBackground((async () => {
+      try {
+        const { fetchWaMediaDataUri } = await import("@/services/whatsapp.service");
+        const { analyzePaymentProof } = await import("@/services/payment-proof.service");
+
+        const rawData = evolutionDataObject(event.rawBody);
+        let imageSource: string | null = null;
+        if (rawData) {
+          imageSource = await fetchWaMediaDataUri("", rawData);
+        }
+        // Fallback: sebagian provider mengirim URL media yang benar-benar publik.
+        if (!imageSource && attachmentUrl && !/mmg\.whatsapp\.net/i.test(attachmentUrl)) {
+          imageSource = attachmentUrl;
+        }
+        if (!imageSource) {
+          console.warn(`[EvolutionWebhook] OCR dilewati: media tidak bisa diunduh | ${logCtx}`);
+          return;
+        }
+
+        await analyzePaymentProof(supabaseAdmin as any, imageSource, customerPhone, messageId);
+      } catch (e) {
+        console.warn("[EvolutionWebhook] OCR bukti transfer gagal (non-fatal):", e);
+      }
+    })());
+  }
+
+
   runBackground((async () => {
     try {
       const { notifyIncomingMessage } = await import("@/services/manager-notifier.service");
