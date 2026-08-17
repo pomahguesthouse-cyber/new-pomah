@@ -234,6 +234,14 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
       "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat.",
 
+    "TAMU MENGIRIM GAMBAR: Bila pesan tamu berisi '[Tamu mengirim gambar...]' atau lampiran " +
+      "gambar, DILARANG menjawab 'saya tidak bisa memproses gambar' / 'kirim dalam bentuk teks'. " +
+      "Gambar dari tamu hampir selalu bukti transfer. Serahkan ke Finance (escalate/handoff " +
+      "internal) supaya hasil OCR bukti transfer dibaca. Bila memang harus membalas sendiri, " +
+      "cukup: 'Baik Kak, bukti transfernya kami terima, sedang kami cek dulu ya 🙏' tanpa " +
+      "mengklaim pembayaran sudah terverifikasi.",
+
+
     "VIRTUAL TOUR 360° / DETAIL KAMAR VISUAL: Bila tamu minta 'detail kamar', 'tour', " +
       "'tur 360', 'virtual tour', 'lihat kamar 360', 'walkthrough', atau ingin melihat " +
       "kondisi/tata letak kamar lebih jelas dari sekadar foto, WAJIB balas dibuka dengan " +
