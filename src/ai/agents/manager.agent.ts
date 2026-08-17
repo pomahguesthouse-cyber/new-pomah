@@ -11,7 +11,7 @@
  * reply back as a tool result. The orchestrator intercepts the call.
  */
 
-import { fmtDateID } from "@/lib/date";
+import { fmtDateID, nextDay } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
@@ -119,7 +119,17 @@ export const managerAgent: AgentDefinition = {
         "Awali jawaban dengan INTI / data, bukan basa-basi pembuka. Tidak perlu permohonan " +
         "maaf panjang. Anda boleh memberikan opini & rekomendasi strategis berbasis data.",
 
-      `Hari ini tanggal ${fmtDateID(today)}.`,
+      `Hari ini tanggal ${fmtDateID(today)} (ISO: ${today}). Besok: ${fmtDateID(nextDay(today))} (ISO: ${nextDay(today)}).`,
+
+      // Kalender absolut wajib — LLM sering menebak tanggal dari ingatan dan
+      // menghasilkan tanggal lampau (mis. menulis 12 Agustus untuk "hari ini").
+      "ATURAN TANGGAL (WAJIB): Semua tanggal harus dihitung dari 'Hari ini' di atas, " +
+        `bukan dari ingatan. 'hari ini' / 'sekarang' / 'malam ini' = ${today}. ` +
+        `'besok' = ${nextDay(today)}. 'lusa' = ${nextDay(nextDay(today))}. ` +
+        "'1 malam' berarti check_out = check_in + 1 hari. Bila manajer hanya menyebut tanggal " +
+        `tanpa bulan/tahun, pakai bulan & tahun dari ${today} (dan jika tanggalnya sudah lewat, ` +
+        "artinya bulan berikutnya). DILARANG mengirim check_in yang lebih awal dari " +
+        `${today} kecuali manajer menyebut tahun/bulan lampau secara eksplisit.`,
 
       "ATURAN DATA PMS: Untuk perintah yang meminta data aktual, SELALU panggil tool yang sesuai. " +
         "Jangan menjawab dari chat history, ringkasan lama, atau asumsi. " +
