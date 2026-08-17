@@ -238,6 +238,19 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
   if (!checkIn || !checkOut || checkOut <= checkIn) {
     return JSON.stringify({ ok: false, error: "Tanggal check-in/check-out tidak valid." });
   }
+  // Guard tanggal lampau: LLM kadang menebak tanggal dari ingatan (mis. menulis
+  // 12 Agustus untuk "hari ini"). Tolak dan beri tanggal hari ini yang benar
+  // supaya agen bisa mengulang tool call dengan tanggal yang tepat.
+  const todayIso = ctx.today;
+  if (isDateString(todayIso) && checkIn < todayIso) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        `check_in (${checkIn}) sudah lewat. Hari ini ${todayIso}. ` +
+        `Hitung ulang tanggal dari hari ini — 'hari ini' = ${todayIso}, lalu panggil ulang create_booking.`,
+      today: todayIso,
+    });
+  }
 
   const email = emailRaw || null;
   const phone = phoneRaw || null;
