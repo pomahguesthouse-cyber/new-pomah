@@ -283,3 +283,74 @@ export async function markWaSeen(token: string, phone: string): Promise<void> {
 export async function setWaTyping(token: string, phone: string, value: boolean): Promise<void> {
   await sendEvolutionPresence(token, phone, value ? "composing" : "paused");
 }
+
+// ─── Media inbound (bukti transfer) ───────────────────────────────────────────
+// URL media WhatsApp (mmg.whatsapp.net/...) TERENKRIPSI, jadi Vision LLM tidak
+// bisa membacanya langsung. Evolution API menyediakan endpoint untuk mendekripsi
+// media dan mengembalikan base64 — hasilnya kita bungkus jadi data URI.
+
+const MEDIA_FETCH_TIMEOUT_MS = 20_000;
+
+/**
+ * Ambil media inbound sebagai data URI (`data:image/jpeg;base64,...`).
+ * `rawMessage` adalah objek `data` mentah dari webhook Evolution (berisi `key`
+ * dan `message`). Mengembalikan null bila gagal — pemanggil harus fail-soft.
+ */
+export async function fetchWaMediaDataUri(
+  token: string,
+  rawMessage: Record<string, unknown>,
+): Promise<string | null> {
+  if (!EVOLUTION_BASE_URL || !EVOLUTION_INSTANCE) {
+    console.warn("[WhatsApp] getBase64 skipped: Evolution API belum terkonfigurasi");
+    return null;
+  }
+  const apiKey = evolutionApiKey(token);
+  if (!apiKey) {
+    console.warn("[WhatsApp] getBase64 skipped: apikey kosong");
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MEDIA_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(evolutionEndpoint("chat/getBase64FromMediaMessage"), {
+      method: "POST",
+      headers: {
+        apikey: apiKey,
+        "Content-Type": "application/json; charset=utf-8",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ message: rawMessage, convertToMp4: false }),
+      signal: controller.signal,
+    });
+
+    const text = await res.text().catch(() => "");
+    if (!res.ok) {
+      console.warn(`[WhatsApp] getBase64 HTTP ${res.status}: ${text.slice(0, 200)}`);
+      return null;
+    }
+
+    let parsed: any = null;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {
+      return null;
+    }
+
+    const base64: string | undefined = parsed?.base64 ?? parsed?.data?.base64;
+    if (!base64) {
+      console.warn("[WhatsApp] getBase64: respons tanpa field base64");
+      return null;
+    }
+    if (base64.startsWith("data:")) return base64;
+
+    const mime: string = parsed?.mimetype ?? parsed?.mimeType ?? "image/jpeg";
+    return `data:${mime};base64,${base64}`;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn("[WhatsApp] getBase64 gagal:", msg);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
