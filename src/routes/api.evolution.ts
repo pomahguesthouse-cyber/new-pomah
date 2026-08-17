@@ -115,9 +115,18 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     messageType,
   } = event;
 
+  // Gambar tanpa caption: jangan pakai "[Lampiran imageMessage]" — string teknis
+  // itu membuat LLM menjawab "saya tidak bisa memproses gambar". Beri petunjuk
+  // eksplisit dalam bahasa Indonesia supaya router mengarahkan ke Finance dan
+  // agent memakai tool OCR bukti transfer.
+  const isImageAttachment = /image/i.test(messageType ?? "") || /^image\//i.test(attachmentMime ?? "");
   const displayMessage =
     message ||
-    (attachmentUrl || attachmentMime || messageType ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]` : "");
+    (isImageAttachment
+      ? "[Tamu mengirim gambar, kemungkinan bukti transfer pembayaran]"
+      : attachmentUrl || attachmentMime || messageType
+        ? `[Lampiran ${messageType ?? attachmentMime ?? "media"}]`
+        : "");
   const logCtx = `phone=${customerPhone.slice(-6)} worker=${workerId}`;
 
   console.log("[EvolutionWebhook]", {
