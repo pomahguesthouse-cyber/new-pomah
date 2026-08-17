@@ -21,10 +21,14 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function evolutionDataKey(rawBody: unknown): unknown {
+function evolutionDataObject(rawBody: unknown): Record<string, unknown> | null {
   const data = (rawBody as any)?.data;
-  if (Array.isArray(data)) return data[0]?.key ?? null;
-  return data?.key ?? null;
+  const obj = Array.isArray(data) ? data[0] : data;
+  return obj && typeof obj === "object" ? (obj as Record<string, unknown>) : null;
+}
+
+function evolutionDataKey(rawBody: unknown): unknown {
+  return evolutionDataObject(rawBody)?.key ?? null;
 }
 
 function expectedWebhookToken(): string | undefined {
