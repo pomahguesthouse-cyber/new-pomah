@@ -11,7 +11,7 @@
  * reply back as a tool result. The orchestrator intercepts the call.
  */
 
-import { fmtDateID } from "@/lib/date";
+import { fmtDateID, nextDay } from "@/lib/date";
 import type { AgentDefinition, AgentContext, AgentKey } from "./types";
 import { BOOKING_LIST_FORMAT_BLOCK } from "./booking-list-format";
 import type { ToolDefinition } from "@/ai/types";
