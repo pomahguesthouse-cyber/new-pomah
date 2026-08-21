@@ -135,7 +135,11 @@ const USE_OTHER_PATTERN =
 const USE_THIS_PHONE_PATTERN =
   /^(ya|iya|yes)?\s*(pakai|gunakan|pake|nomor)?\s*(nomor)\s*(ini|sini|aja|saja|oke|ok|ya)\b/i;
 
-const CONFIRM_PATTERN = /\b(ya|iya|yes|lanjut|benar|oke|ok|setuju|betul|lanjutkan|ya benar|yup)\b/i;
+// Kata konfirmasi versi lengkap termasuk ragam informal ("bener ka", "sip",
+// "gas", "fix", "cocok") — tanpa ini balasan tamu seperti "bener ka" tidak
+// dikenali dan flow booking terasa macet.
+const CONFIRM_PATTERN =
+  /\b(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|benar|bener|bnr|bner|betul|btul|setuju|oke|okey|okay|ok+|sip|siap|mantap|gas|fix|deal|cocok|boleh|monggo|correct)\b/i;
 const CANCEL_PATTERN = /\b(tidak|batal|salah|ubah|ganti|cancel|no|nggak|ngga)\b/i;
 
 /**
