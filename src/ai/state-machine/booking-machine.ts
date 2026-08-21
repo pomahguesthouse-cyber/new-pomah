@@ -1817,8 +1817,14 @@ export async function processBookingState(
     // "deluxe 2 kamar", dll. JANGAN paksa Ya/Batal — update slot, validasi
     // ulang (terutama extra bed Deluxe), lalu tampilkan ringkasan baru.
     // Trigger HANYA jika pesan TIDAK murni konfirmasi/kanselasi singkat.
-    const isPureConfirm = /^(ya|iya|yes|lanjut|ok|oke|setuju|betul|benar)[\s.!]*$/i.test(message.trim());
-    const isPureCancel = /^(batal|cancel|tidak)[\s.!]*$/i.test(message.trim());
+    // Konfirmasi murni: satu/dua kata afirmasi, boleh diikuti partikel sapaan
+    // informal ("bener ka", "oke kak", "sip deh", "iya dong").
+    const PURE_CONFIRM_RE =
+      /^(ya|iya|iyaa+|yes|yess+|yup|yoi|lanjut|lanjutkan|ok+|oke|okey|okay|setuju|betul|btul|benar|bener|bnr|bner|sip|siap|mantap|gas|fix|deal|cocok|boleh)(\s+(ya|iya|betul|benar|bener|kak?|mba?k|bang|pak|bu|deh|aja|saja|dong|sih|banget))*[\s.!,]*$/i;
+    const isPureConfirm = PURE_CONFIRM_RE.test(message.trim());
+    const isPureCancel = /^(batal|batalkan|cancel|tidak|gak jadi|ga jadi|nggak jadi)(\s+(kak?|dulu|aja|saja))*[\s.!,]*$/i.test(
+      message.trim(),
+    );
     if (!isPureConfirm && !isPureCancel) {
       const { patch, changed } = parseSlotCorrection(message, ctx.rooms);
       if (changed) {
