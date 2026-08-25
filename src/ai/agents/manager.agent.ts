@@ -73,6 +73,7 @@ const MANAGER_TOOLS: ToolDefinition[] = [
       "check_room_availability",
       "get_room_specifications",
       "block_room",
+      "unblock_room",
       "send_to_manager",
       // Pricing langsung — TANPA hop `ask_agent`. Insiden 10 Agu 2026:
       // "rubah harga single 250 rb" harus melewati manager → ask_agent →

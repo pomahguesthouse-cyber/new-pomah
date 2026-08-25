@@ -33,6 +33,8 @@ const updateRoomRateTool        = requireTool("update_room_rate");
 const setDailyRoomRateTool      = requireTool("set_daily_room_rate");
 const getDailyRoomRatesTool     = requireTool("get_daily_room_rates");
 const deleteDailyRoomRateTool   = requireTool("delete_daily_room_rate");
+const blockRoomTool             = requireTool("block_room");
+const unblockRoomTool           = requireTool("unblock_room");
 
 const scrapeCompetitorPricesTool: ToolDefinition = {
   type: "function",
@@ -81,6 +83,8 @@ const PRICING_MANAGER_TOOLS: ToolDefinition[] = [
   setDailyRoomRateTool,
   getDailyRoomRatesTool,
   deleteDailyRoomRateTool,
+  blockRoomTool,
+  unblockRoomTool,
   scrapeCompetitorPricesTool,
 ];
 

@@ -42,6 +42,10 @@ const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
   "change_booking_room",
   "delete_booking",
   "update_booking_status",
+  // Blokir kamar juga harus bisa dari kanal WhatsApp mode manajerial,
+  // bukan cuma Telegram.
+  "block_room",
+  "unblock_room",
 ] as const);
 
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
