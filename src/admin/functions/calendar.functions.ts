@@ -170,6 +170,12 @@ export const getCalendarData = createServerFn({ method: "GET" })
       roomTypes: roomTypesRes.data ?? [],
       rooms: roomsRes.data ?? [],
       bookings,
+      // Bar stop_sell untuk ditampilkan sebagai "Blokir" di kalender.
+      blocks: (blocksRes.data ?? []) as Array<{
+        room_type_id: string;
+        date: string;
+        note: string | null;
+      }>,
     };
   });
 
