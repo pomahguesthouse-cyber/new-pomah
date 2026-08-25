@@ -323,11 +323,12 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
         const { fetchWaMediaDataUri } = await import("@/services/whatsapp.service");
         const { analyzePaymentProof } = await import("@/services/payment-proof.service");
 
-        const rawData = evolutionDataObject(event.rawBody);
+        const rawData = rawEvolutionData ?? evolutionDataObject(event.rawBody);
         let imageSource: string | null = null;
         if (rawData) {
           imageSource = await fetchWaMediaDataUri("", rawData);
         }
+
         // Fallback: sebagian provider mengirim URL media yang benar-benar publik.
         if (!imageSource && attachmentUrl && !/mmg\.whatsapp\.net/i.test(attachmentUrl)) {
           imageSource = attachmentUrl;
