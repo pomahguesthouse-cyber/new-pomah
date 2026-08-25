@@ -18,7 +18,7 @@ import {
   getMonth,
 } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2, Ban } from "lucide-react";
 
 import {
   getCalendarData,
@@ -32,6 +32,7 @@ import {
   type ExportRow,
 } from "@/admin/lib/booking-export";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
+import { BlockRoomDialog } from "@/admin/components/block-room-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,6 +166,7 @@ function CalendarPage() {
   const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<any>(null);
   const [newOpen, setNewOpen] = React.useState(false);
+  const [blockOpen, setBlockOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
@@ -303,6 +305,15 @@ function CalendarPage() {
             {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Cetak / PDF
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            onClick={() => setBlockOpen(true)}
+          >
+            <Ban className="h-4 w-4" />
+            Blokir Kamar
+          </Button>
           <Button size="sm" className="h-9 gap-2" onClick={() => setNewOpen(true)}>
             <Plus className="h-4 w-4" />
             Booking Baru
@@ -350,6 +361,13 @@ function CalendarPage() {
         onSaved={invalidate}
       />
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      <BlockRoomDialog
+        open={blockOpen}
+        roomTypes={(data?.roomTypes ?? []) as Array<{ id: string; name: string }>}
+        defaultDate={from}
+        onClose={() => setBlockOpen(false)}
+        onSaved={invalidate}
+      />
     </div>
   );
 }
