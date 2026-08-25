@@ -53,6 +53,22 @@ function isCatastrophicSsrErrorBody(body: string, responseStatus: number): boole
   );
 }
 
+// Klien (browser) yang membatalkan request di tengah SSR — misal user refresh
+// atau pindah halaman — memunculkan "Error: aborted"/ECONNRESET. Ini bukan bug
+// aplikasi, jadi jangan dilaporkan sebagai runtime error.
+function isClientAbortError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const fields = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (fields.code === "ECONNRESET" || fields.code === "ECONNABORTED") return true;
+    if (typeof fields.message === "string" && /\baborted\b/i.test(fields.message)) return true;
+    current = fields.cause;
+  }
+  return false;
+}
+
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
 async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
@@ -65,9 +81,15 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
     return response;
   }
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
+  const captured = consumeLastCapturedError();
+  if (isClientAbortError(captured)) {
+    // Koneksi sudah tertutup; balas tanpa mencatat error.
+    return new Response(null, { status: 499 });
+  }
+  console.error(captured ?? new Error(`h3 swallowed SSR error: ${body}`));
   return brandedErrorResponse();
 }
+
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
@@ -102,9 +124,13 @@ export default {
       );
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
+      if (isClientAbortError(error)) {
+        return new Response(null, { status: 499 });
+      }
       console.error(error);
       return brandedErrorResponse();
     }
+
   },
 
   // ── Cloudflare Cron Trigger (lihat triggers.crons di wrangler.jsonc) ──────
