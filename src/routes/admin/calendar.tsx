@@ -430,6 +430,16 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
     return rangesByType;
   }, [blocks, windowStart, days.length]);
 
+  const bookingsByRoom = React.useMemo(() => {
+    const m = new Map();
+    bookings.forEach((b: any) => {
+      if (!b.room_id) return;
+      if (!m.has(b.room_id)) m.set(b.room_id, []);
+      m.get(b.room_id).push(b);
+    });
+    return m;
+  }, [bookings]);
+
   // Bookings without a room yet (e.g. from the website or AI chatbot),
   // grouped by room type so staff can see and assign them.
   const unassignedByType = React.useMemo(() => {
