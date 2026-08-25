@@ -111,15 +111,29 @@ async function updateBookingStatusWithLock({
 export const getCalendarData = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: any) => d)
-  .handler(async ({ context }: any) => {
+  .handler(async ({ context, data }: any) => {
     const { supabase } = context;
-    const [roomTypesRes, roomsRes, bookingsRes] = await Promise.all([
+    // Rentang tanggal diteruskan oleh pemanggil (from/to YYYY-MM-DD). Ambil
+    // stop_sell harian dalam rentang ini supaya kalender bisa menampilkan
+    // bar "Blokir" per tipe kamar — sumber yang sama dengan chatbot WA/Telegram.
+    const from = data?.from as string | undefined;
+    const to = data?.to as string | undefined;
+
+    const [roomTypesRes, roomsRes, bookingsRes, blocksRes] = await Promise.all([
       supabase.from("room_types").select("*").order("name"),
       supabase.from("rooms").select("*").order("number"),
       supabase
         .from("bookings")
         .select("*, guests(*), booking_rooms(id, room_id, room_type_id, nightly_rate)")
         .neq("status", "cancelled"),
+      from && to
+        ? supabase
+            .from("room_daily_rates")
+            .select("room_type_id, date, note")
+            .eq("stop_sell", true)
+            .gte("date", from)
+            .lte("date", to)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     // The calendar grid is per-room. A booking now spans several rooms,
@@ -156,6 +170,12 @@ export const getCalendarData = createServerFn({ method: "GET" })
       roomTypes: roomTypesRes.data ?? [],
       rooms: roomsRes.data ?? [],
       bookings,
+      // Bar stop_sell untuk ditampilkan sebagai "Blokir" di kalender.
+      blocks: (blocksRes.data ?? []) as Array<{
+        room_type_id: string;
+        date: string;
+        note: string | null;
+      }>,
     };
   });
 

@@ -333,6 +333,7 @@ function CalendarPage() {
             rooms={data?.rooms ?? []}
             roomTypes={data?.roomTypes ?? []}
             bookings={data?.bookings ?? []}
+            blocks={data?.blocks ?? []}
             onCellClick={(roomId: string, date: Date) => {
               const room = data?.rooms.find((r: any) => r.id === roomId);
               const rt = data?.roomTypes.find((t: any) => t.id === room?.room_type_id);
@@ -372,10 +373,62 @@ function CalendarPage() {
   );
 }
 
-function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
+function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, onBookingClick }: any) {
   const cellWidth = 72;
   const labelWidth = 160;
   const windowStart = days[0];
+
+  // Gabungkan tanggal stop_sell per tipe kamar menjadi rentang kontigu
+  // agar bisa dirender sebagai satu bar "Blokir" per periode.
+  const blockRangesByType = React.useMemo(() => {
+    const byType = new Map<string, Array<{ date: string; note: string | null }>>();
+    for (const b of blocks ?? []) {
+      if (!byType.has(b.room_type_id)) byType.set(b.room_type_id, []);
+      byType.get(b.room_type_id)!.push({ date: b.date, note: b.note });
+    }
+    const rangesByType = new Map<string, Array<{ startIdx: number; endIdx: number; note: string | null }>>();
+    for (const [typeId, entries] of byType) {
+      entries.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const ranges: Array<{ startIdx: number; endIdx: number; note: string | null }> = [];
+      let curStart: string | null = null;
+      let curEnd: string | null = null;
+      let curNote: string | null = null;
+      const flush = () => {
+        if (curStart == null) return;
+        const sIdx = differenceInCalendarDays(parseISO(curStart), windowStart);
+        const eIdx = differenceInCalendarDays(parseISO(curEnd!), windowStart);
+        // Hanya simpan rentang yang overlap dengan jendela tampilan.
+        if (eIdx >= 0 && sIdx < days.length) {
+          ranges.push({
+            startIdx: Math.max(sIdx, 0),
+            endIdx: Math.min(eIdx, days.length - 1),
+            note: curNote,
+          });
+        }
+      };
+      for (const e of entries) {
+        if (curEnd == null) {
+          curStart = e.date;
+          curEnd = e.date;
+          curNote = e.note;
+        } else {
+          const expected = format(addDays(parseISO(curEnd), 1), "yyyy-MM-dd");
+          if (e.date === expected) {
+            curEnd = e.date;
+            if (!curNote && e.note) curNote = e.note;
+          } else {
+            flush();
+            curStart = e.date;
+            curEnd = e.date;
+            curNote = e.note;
+          }
+        }
+      }
+      flush();
+      rangesByType.set(typeId, ranges);
+    }
+    return rangesByType;
+  }, [blocks, windowStart, days.length]);
 
   const bookingsByRoom = React.useMemo(() => {
     const m = new Map();
@@ -499,6 +552,27 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                     {formatIDR(type.base_rate)}
                   </span>
                 </div>
+
+                {/* Bar Blokir (stop sell) — tipe kamar tidak dijual pada
+                    rentang ini; sumber: room_daily_rates.stop_sell, sama
+                    dengan chatbot WA/Telegram. */}
+                {(blockRangesByType.get(type.id) ?? []).map((r, i) => {
+                  const left = labelWidth + r.startIdx * cellWidth;
+                  const width = (r.endIdx - r.startIdx + 1) * cellWidth;
+                  return (
+                    <div
+                      key={`block-${type.id}-${i}`}
+                      title={r.note ?? "Diblokir (stop sell)"}
+                      style={{ left: left + 2, width: Math.max(width - 4, 24) }}
+                      className="absolute top-1.5 bottom-1.5 flex items-center gap-1.5 px-2 rounded-md border border-rose-600/60 bg-rose-600/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm overflow-hidden z-10"
+                    >
+                      <Ban className="h-3 w-3 shrink-0" />
+                      <span className="truncate">
+                        Blokir{r.note ? ` · ${r.note}` : ""}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               {rooms
