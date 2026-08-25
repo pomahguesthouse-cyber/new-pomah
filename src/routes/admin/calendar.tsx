@@ -594,8 +594,29 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, o
                       />
                     ))}
 
+                    {/* Bar Blokir (stop sell) — dirender di kolom tanggal,
+                        sumber: room_daily_rates.stop_sell (sama dengan chatbot). */}
+                    {(blockRangesByType.get(type.id) ?? []).map((r, i) => {
+                      const left = labelWidth + r.startIdx * cellWidth;
+                      const width = (r.endIdx - r.startIdx + 1) * cellWidth;
+                      return (
+                        <div
+                          key={`block-${room.id}-${i}`}
+                          title={r.note ?? "Diblokir (stop sell)"}
+                          style={{ left: left + 2, width: Math.max(width - 4, 24) }}
+                          className="pointer-events-none absolute top-2.5 bottom-2.5 flex items-center gap-1.5 px-2 rounded-md border border-rose-600/60 bg-rose-600/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm overflow-hidden z-[5]"
+                        >
+                          <Ban className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            Blokir{r.note ? ` · ${r.note}` : ""}
+                          </span>
+                        </div>
+                      );
+                    })}
+
                     {/* Bar Booking */}
                     {renderBars(bookingsByRoom.get(room.id) ?? [])}
+
                   </div>
                 ))}
 
