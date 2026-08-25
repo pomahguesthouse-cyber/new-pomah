@@ -124,9 +124,13 @@ export default {
       );
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
+      if (isClientAbortError(error)) {
+        return new Response(null, { status: 499 });
+      }
       console.error(error);
       return brandedErrorResponse();
     }
+
   },
 
   // ── Cloudflare Cron Trigger (lihat triggers.crons di wrangler.jsonc) ──────
