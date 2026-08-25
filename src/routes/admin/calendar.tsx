@@ -333,6 +333,7 @@ function CalendarPage() {
             rooms={data?.rooms ?? []}
             roomTypes={data?.roomTypes ?? []}
             bookings={data?.bookings ?? []}
+            blocks={data?.blocks ?? []}
             onCellClick={(roomId: string, date: Date) => {
               const room = data?.rooms.find((r: any) => r.id === roomId);
               const rt = data?.roomTypes.find((t: any) => t.id === room?.room_type_id);
