@@ -373,20 +373,62 @@ function CalendarPage() {
   );
 }
 
-function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
+function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, onBookingClick }: any) {
   const cellWidth = 72;
   const labelWidth = 160;
   const windowStart = days[0];
 
-  const bookingsByRoom = React.useMemo(() => {
-    const m = new Map();
-    bookings.forEach((b: any) => {
-      if (!b.room_id) return;
-      if (!m.has(b.room_id)) m.set(b.room_id, []);
-      m.get(b.room_id).push(b);
-    });
-    return m;
-  }, [bookings]);
+  // Gabungkan tanggal stop_sell per tipe kamar menjadi rentang kontigu
+  // agar bisa dirender sebagai satu bar "Blokir" per periode.
+  const blockRangesByType = React.useMemo(() => {
+    const byType = new Map<string, Array<{ date: string; note: string | null }>>();
+    for (const b of blocks ?? []) {
+      if (!byType.has(b.room_type_id)) byType.set(b.room_type_id, []);
+      byType.get(b.room_type_id)!.push({ date: b.date, note: b.note });
+    }
+    const rangesByType = new Map<string, Array<{ startIdx: number; endIdx: number; note: string | null }>>();
+    for (const [typeId, entries] of byType) {
+      entries.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const ranges: Array<{ startIdx: number; endIdx: number; note: string | null }> = [];
+      let curStart: string | null = null;
+      let curEnd: string | null = null;
+      let curNote: string | null = null;
+      const flush = () => {
+        if (curStart == null) return;
+        const sIdx = differenceInCalendarDays(parseISO(curStart), windowStart);
+        const eIdx = differenceInCalendarDays(parseISO(curEnd!), windowStart);
+        // Hanya simpan rentang yang overlap dengan jendela tampilan.
+        if (eIdx >= 0 && sIdx < days.length) {
+          ranges.push({
+            startIdx: Math.max(sIdx, 0),
+            endIdx: Math.min(eIdx, days.length - 1),
+            note: curNote,
+          });
+        }
+      };
+      for (const e of entries) {
+        if (curEnd == null) {
+          curStart = e.date;
+          curEnd = e.date;
+          curNote = e.note;
+        } else {
+          const expected = format(addDays(parseISO(curEnd), 1), "yyyy-MM-dd");
+          if (e.date === expected) {
+            curEnd = e.date;
+            if (!curNote && e.note) curNote = e.note;
+          } else {
+            flush();
+            curStart = e.date;
+            curEnd = e.date;
+            curNote = e.note;
+          }
+        }
+      }
+      flush();
+      rangesByType.set(typeId, ranges);
+    }
+    return rangesByType;
+  }, [blocks, windowStart, days.length]);
 
   // Bookings without a room yet (e.g. from the website or AI chatbot),
   // grouped by room type so staff can see and assign them.
