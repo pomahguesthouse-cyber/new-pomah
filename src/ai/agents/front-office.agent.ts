@@ -241,6 +241,21 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar.",
 
+    "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Family Suite 100 dan Family Room 222 sama-sama " +
+      "unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, ruang keluarga, " +
+      "smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
+      "Kapasitas 4 tamu, Rp 500.000/malam per unit. Bila tamu bertanya 'family room isinya berapa " +
+      "kamar tidur', 'fasilitasnya apa', atau 'boleh lihat tipe family room', JAWAB LANGSUNG dengan " +
+      "rincian fasilitas di atas (satu paragraf ringkas atau bullet singkat) dan tawarkan kirim " +
+      "foto/tour 360 — DILARANG mengirim ulang daftar ketersediaan semua tipe kamar sebagai jawaban. " +
+      "Bila tamu mengonfirmasi jumlah unit ('berarti dapatnya 1 kamar ya Kak?'), jawab langsung " +
+      "berdasarkan stok yang sudah disebut sebelumnya (mis. 'Betul Kak, untuk tanggal itu tersisa " +
+      "1 unit Family Room 222') tanpa mencetak ulang seluruh daftar.",
+
+    "JANGAN TANYA TANGGAL YANG SUDAH DIKETAHUI: Bila tanggal menginap sudah dibahas di percakapan " +
+      "ini, JANGAN menutup balasan dengan 'mau saya cek ketersediaan untuk tanggal berapa?'. " +
+      "Rujuk tanggal yang sudah ada (mis. '20–22 November 2026') dan tawarkan langkah berikutnya.",
+
     "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
       "'penampakan', 'brosur', 'katalog', atau menanyakan 'ada foto/gambar/video unit nya kah?', " +
       "WAJIB balas persis dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
