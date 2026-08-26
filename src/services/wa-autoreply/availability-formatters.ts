@@ -271,6 +271,41 @@ export function formatAvailabilityReply(
     };
   }
 
+  // Tamu menyebut satu tipe saja → jawab spesifik tipe itu.
+  if (focusRoomName) {
+    const focusLower = focusRoomName.toLowerCase();
+    const focus = rooms.find((room) => String(room.nama ?? "").toLowerCase() === focusLower);
+    if (focus) {
+      const count = Number(focus.kamar_tersedia ?? 0);
+      const price = Number(focus.harga_per_malam ?? focus.nightly_rate ?? 0);
+      const priceText = price > 0 ? ` Harganya Rp${price.toLocaleString("id-ID")}/malam.` : "";
+      if (count > 0 && focus.tidak_tersedia !== true) {
+        return {
+          intent: "deterministic_availability_focus",
+          reply:
+            `Masih ada Kak, untuk tanggal ${period} ${focusRoomName} tersisa ${count} unit.${priceText}\n\n` +
+            "Kakak rencana untuk berapa orang, biar saya siapkan bookingnya?",
+        };
+      }
+      const others = available
+        .filter((room) => String(room.nama ?? "").toLowerCase() !== focusLower)
+        .slice(0, 4)
+        .map((room) => {
+          const c = Number(room.kamar_tersedia ?? 0);
+          const p = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
+          return `- ${String(room.nama ?? "Kamar")}: ${c} unit${p > 0 ? `, Rp${p.toLocaleString("id-ID")}/malam` : ""}`;
+        });
+      return {
+        intent: "deterministic_availability_focus_full",
+        reply:
+          `Mohon maaf Kak, untuk tanggal ${period} ${focusRoomName} sudah penuh.` +
+          (others.length > 0
+            ? `\n\nYang masih tersedia:\n${others.join("\n")}\n\nMau saya bantu amankan salah satunya?`
+            : "\n\nKalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi."),
+      };
+    }
+  }
+
   const lines = available.slice(0, 5).map((room) => {
     const count = Number(room.kamar_tersedia ?? 0);
     const price = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
