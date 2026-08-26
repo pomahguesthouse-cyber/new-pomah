@@ -230,11 +230,49 @@ export function isExplicitBookingOrder(message: string, rooms: Array<{ name?: un
   return mentionsRoom || /\b(extra\s*-?\s*bed|extrabed|atas\s+nama)\b/i.test(text);
 }
 
+/**
+ * Tamu meminta DETAIL satu tipe kamar ("boleh lihat type family room?",
+ * "family room isinya 2 kamar tidur?", "kamarnya seperti apa?") — bukan
+ * pertanyaan ketersediaan. Insiden 26 Agu 2026: fast-path availability
+ * mengirim ulang daftar kamar yang sama tiga kali karena pesan ini lolos
+ * lewat kata "room/kamar". Turn seperti ini harus sampai ke agent supaya
+ * bisa memakai `get_room_specifications` / `send_room_photos`.
+ */
+export function isRoomTypeDetailQuestion(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || text.length > 200) return false;
+  // Pesan yang jelas menanyakan stok/tanggal tetap jalur availability.
+  if (/\b(ready|tersedia|available|avail|kosong|masih ada|tanggal|tgl)\b/i.test(text)) return false;
+  const mentionsType =
+    /\b(family\s*(room|suite)|grand\s*deluxe|deluxe|single|suite|tipe|type|unit)\b/i.test(text);
+  const asksDetail =
+    /\b(lihat|liat|liatin|lihatin|detail|detil|seperti apa|spek|spesifikasi|isinya|isi|fasilitas|berapa kamar tidur|kamar tidurnya|layout|denah|gimana|bagaimana)\b/i.test(
+      text,
+    );
+  return mentionsType && asksDetail;
+}
+
+/**
+ * Konfirmasi jumlah kamar dari daftar yang baru dikirim ("berarti dapatnya
+ * 1 kamar ya kak?"). Bukan permintaan cek ulang ketersediaan.
+ */
+export function isRoomCountConfirmationQuestion(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text || text.length > 140) return false;
+  return (
+    /\b(berarti|jadi|jd|maksudnya)\b/i.test(text) &&
+    /\b(kamar|unit|room)\b/i.test(text) &&
+    !/\b(tanggal|tgl|tersedia|ready|kosong)\b/i.test(text)
+  );
+}
+
 export function looksLikeBookingInquiry(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text || text.length > 240) return false;
   if (isPerRoomRentalClarification(text)) return false;
   if (isExplicitRoomCountRequirement(text)) return false;
+  if (isRoomTypeDetailQuestion(text)) return false;
+  if (isRoomCountConfirmationQuestion(text)) return false;
   if (
     /\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(
       text,
