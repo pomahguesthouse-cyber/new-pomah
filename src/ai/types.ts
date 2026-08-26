@@ -110,5 +110,19 @@ export interface LlmResponse {
       tool_calls?:  AiToolCall[];
     };
   }>;
+  /**
+   * Akuntansi token dari gateway. `cached_tokens` adalah satu-satunya bukti
+   * apakah prefix cache benar-benar kena — tanpa ini, pemisahan system message
+   * statis/dinamis hanya asumsi. Nama field berbeda antar provider, jadi
+   * ketiganya ditampung.
+   */
+  usage?: {
+    prompt_tokens?:      number;
+    completion_tokens?:  number;
+    total_tokens?:       number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    /** Penamaan ala Gemini native. */
+    cached_content_token_count?: number;
+  };
   error?: { message?: string };
 }

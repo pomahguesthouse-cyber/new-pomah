@@ -308,6 +308,26 @@ async function callLlm(
  * @param maxTurns       Max tool-call rounds
  * @param onAskAgent     Callback when `ask_agent` is called (manager only)
  */
+/**
+ * Catat pemakaian token per panggilan LLM.
+ *
+ * `cached=` adalah cara memverifikasi lever #3 (system message statis dipisah
+ * dari yang dinamis): kalau angkanya selalu 0 padahal prompt > 1k token,
+ * gateway TIDAK memakai prefix cache dan pemisahan itu tidak menghemat biaya —
+ * hanya merapikan struktur.
+ */
+function logTokenUsage(agentKey: AgentKey, turn: number, json: LlmResponse | null): void {
+  const u = json?.usage;
+  if (!u) return;
+  const prompt = u.prompt_tokens ?? 0;
+  const cached = u.prompt_tokens_details?.cached_tokens ?? u.cached_content_token_count ?? 0;
+  const pct = prompt > 0 ? Math.round((cached / prompt) * 100) : 0;
+  console.info(
+    `[MultiAgent][${agentKey}] tokens turn ${turn}: prompt=${prompt} ` +
+      `cached=${cached} (${pct}%) completion=${u.completion_tokens ?? 0}`,
+  );
+}
+
 async function runAgent(
   agent: AgentDefinition,
   conversationMsgs: Array<{ direction: string; body: string; isHuman?: boolean }>,
@@ -354,11 +374,23 @@ async function runAgent(
   while (trimmed.length && trimmed[trimmed.length - 1].direction !== "in") trimmed.pop();
   const history = trimmed.length ? trimmed : conversationMsgs;
 
-  // Build message array: agent system prompt (+ optional training examples
-  // as a second system message) + conversation history. Examples are kept
-  // in a SEPARATE system message so they don't bloat the agent's base prompt
-  // and are clearly labelled as guidance, not as part of the persona.
-  let systemPrompt = agent.buildSystemPrompt(agentCtx);
+  // Build message array — DUA system message terpisah (audit token 26 Agu 2026):
+  //
+  //   #1 STATIS  : persona + aturan yang identik untuk intent & properti yang
+  //                sama. Ini calon prefix cache di gateway, jadi TIDAK BOLEH
+  //                mengandung apa pun yang berubah tiap giliran.
+  //   #2 DINAMIS : konteks sesi, booking aktif, profil tamu, recovery, SOP,
+  //                instruksi AI Lab — plus aturan format JSON di akhir.
+  //
+  // Contoh training tetap jadi system message tersendiri (#3) supaya jelas
+  // labelnya sebagai panduan, bukan bagian dari persona.
+  //
+  // Agent yang belum memisahkan statis/dinamis (`buildStaticPrompt` kosong)
+  // memakai seluruh promptnya sebagai #1 — perilakunya tidak berubah.
+  const staticPrompt = agent.buildStaticPrompt
+    ? agent.buildStaticPrompt(agentCtx)
+    : agent.buildSystemPrompt(agentCtx);
+  let dynamicPrompt = agent.buildStaticPrompt ? (agent.buildDynamicPrompt?.(agentCtx) ?? "") : "";
   // Use structured JSON summary as primary context; only use text summary if JSON is empty
   if (agentCtx.chatSummaryJson && Object.keys(agentCtx.chatSummaryJson).length > 0) {
     const s = agentCtx.chatSummaryJson;
@@ -377,7 +409,7 @@ async function runAgent(
       `- Permintaan khusus: ${fmt(s.special_requests)}`,
       `- Preferensi tamu: ${fmt(s.preference_notes)}`,
     ].join("\n");
-    systemPrompt +=
+    dynamicPrompt +=
       `\n\nKONTEKS SESI (Default, JANGAN konfirmasi ulang):\n` +
       structuredLines +
       `\nJika tamu menyebut data baru, abaikan nilai lama.`;
@@ -385,15 +417,15 @@ async function runAgent(
     // dituntaskan di turn ini — bukan sekadar konteks latar. Tanpa blok ini
     // field tersebut hanya jadi satu baris pasif yang sering diabaikan model.
     if (s.unresolved_question) {
-      systemPrompt +=
+      dynamicPrompt +=
         `\n\n⚠️ JAWAB TUNTAS: "${s.unresolved_question}"`;
     }
   } else if (agentCtx.chatSummary) {
-    systemPrompt += `\n\nRINGKASAN: ${agentCtx.chatSummary}`;
+    dynamicPrompt += `\n\nRINGKASAN: ${agentCtx.chatSummary}`;
   }
 
   if (agentCtx.activeBookingContext) {
-    systemPrompt += `\n\n${agentCtx.activeBookingContext}`;
+    dynamicPrompt += `\n\n${agentCtx.activeBookingContext}`;
   }
 
   if (agentCtx.guestProfile && Number(agentCtx.guestProfile.total_bookings ?? 0) > 0) {
@@ -408,7 +440,7 @@ async function runAgent(
         const phase = booking.is_upcoming ? "mendatang/aktif" : "riwayat";
         return `- ${phase}: ${ref}, ${room}, ${dates || "tanggal tidak tersedia"}, status ${booking.status ?? "-"}, pembayaran ${booking.payment_status ?? "-"}`;
       });
-    systemPrompt +=
+    dynamicPrompt +=
       `\n\nPROFIL TAMU TERVERIFIKASI DARI DATABASE:\n` +
       `- Nama: ${verifiedName || "-"}\n` +
       `- Tamu lama: ya (${Number(gp.total_bookings ?? 0)} booking tercatat)\n` +
@@ -425,7 +457,7 @@ async function runAgent(
     // sehingga hanya membalas dengan sapaan terakhir. Sekarang tanggal
     // disajikan sebagai catatan konteks — agen tetap menanyakan ulang
     // kalau tamu jelas-jelas mengajukan pertanyaan baru tanpa tanggal.
-    systemPrompt +=
+    dynamicPrompt +=
       `\n\nCATATAN KONTEKS — tanggal yang sebelumnya pernah dibahas dengan tamu ini:\n` +
       `• check_in: ${agentCtx.agreedDates.checkIn}\n` +
       `• check_out: ${agentCtx.agreedDates.checkOut}\n` +
@@ -440,7 +472,7 @@ async function runAgent(
     const roomLines = ab.rooms
       .map((r) => `  - ${r.name}: ${idr(r.nightlyRate)}/malam (harga terkunci)`)
       .join("\n");
-    systemPrompt +=
+    dynamicPrompt +=
       `\n\n[BOOKING TAMU YANG SUDAH ADA — SUMBER KEBENARAN HARGA]\n` +
       `Tamu ini SUDAH punya booking aktif atas nomornya:\n` +
       `• Kode booking: ${ab.referenceCode}\n` +
@@ -456,23 +488,23 @@ async function runAgent(
   }
 
   if (agentCtx.bookingInProgress) {
-    systemPrompt += `\n\n[INFO BOOKING INTERRUPT]`;
-    systemPrompt += `\nSaat ini tamu sedang berada di tengah-tengah proses booking (fase pengumpulan data).`;
+    dynamicPrompt += `\n\n[INFO BOOKING INTERRUPT]`;
+    dynamicPrompt += `\nSaat ini tamu sedang berada di tengah-tengah proses booking (fase pengumpulan data).`;
     if (agentCtx.pendingBookingSlots && agentCtx.pendingBookingSlots.length > 0) {
-      systemPrompt += `\nData yang masih kosong: ${agentCtx.pendingBookingSlots.join(", ")}.`;
+      dynamicPrompt += `\nData yang masih kosong: ${agentCtx.pendingBookingSlots.join(", ")}.`;
     }
-    systemPrompt += `\nJawablah pertanyaan/permintaan terakhir dari tamu dengan singkat & ramah, lalu tambahkan ajakan sopan untuk melanjutkan pengisian data booking yang masih kurang tersebut.`;
+    dynamicPrompt += `\nJawablah pertanyaan/permintaan terakhir dari tamu dengan singkat & ramah, lalu tambahkan ajakan sopan untuk melanjutkan pengisian data booking yang masih kurang tersebut.`;
   }
 
   if (agentCtx.recoveryMode) {
-    systemPrompt += `\n\n[RECOVERY MODE ACTIVE]`;
-    systemPrompt += `\nTamu mengirimkan beberapa pesan cepat berturut-turut tanpa balasan.`;
+    dynamicPrompt += `\n\n[RECOVERY MODE ACTIVE]`;
+    dynamicPrompt += `\nTamu mengirimkan beberapa pesan cepat berturut-turut tanpa balasan.`;
     if (agentCtx.unansweredMessages && agentCtx.unansweredMessages.length > 0) {
-      systemPrompt +=
+      dynamicPrompt +=
         `\nPesan-pesan tamu yang belum terjawab:\n` +
         agentCtx.unansweredMessages.map((m, i) => `${i + 1}. "${m}"`).join("\n");
     }
-    systemPrompt +=
+    dynamicPrompt +=
       `\nJawab pertanyaan inti tamu secara langsung, ringkas, dan terpadu dalam satu balasan.` +
       ` Jika ada pesan yang hanya konteks sumber (mis. TikTok/Instagram/lampiran), boleh akui sangat singkat lalu kembali ke kebutuhan utama.` +
       ` Jangan memakai preamble recovery seperti "Maaf Kak, saya bantu lanjutkan ya", jangan memperkenalkan diri ulang, dan jangan menambahkan "Ada yang bisa Rani bantu?" ketika kebutuhan tamu sudah jelas.` +
@@ -480,14 +512,16 @@ async function runAgent(
   }
 
   // Enforce JSON output for text replies
-  systemPrompt += `\n\nPENTING: Jika Anda memberikan balasan akhir (bukan memanggil fungsi), balasan tersebut WAJIB berformat JSON murni dengan skema: {"reply": "isi pesan Anda untuk tamu/user"}. JANGAN membungkus dengan markdown block. Jika Anda memanggil fungsi/tool, biarkan content kosong dan gunakan tool_calls.`;
+  dynamicPrompt += `\n\nPENTING: Jika Anda memberikan balasan akhir (bukan memanggil fungsi), balasan tersebut WAJIB berformat JSON murni dengan skema: {"reply": "isi pesan Anda untuk tamu/user"}. JANGAN membungkus dengan markdown block. Jika Anda memanggil fungsi/tool, biarkan content kosong dan gunakan tool_calls.`;
 
   const humanTurnsPresent = history.some((m) => m.direction === "out" && m.isHuman);
   const humanHandoffNote = humanTurnsPresent
     ? "\n\nCATATAN KONTEKS: Beberapa balasan sebelumnya (ditandai prefix `[Admin manusia]:`) ditulis oleh staf Pomah secara manual, bukan oleh Anda. Anggap balasan itu sebagai keputusan resmi tim — JANGAN mengoreksi, mengulang, atau membantahnya. Lanjutkan percakapan mengikuti arah yang sudah diberikan admin dan hanya isi kekosongan info yang belum dijawab."
     : "";
+  const dynamicContent = (dynamicPrompt + humanHandoffNote).trim();
   const messages: AiMessage[] = [
-    { role: "system", content: systemPrompt + humanHandoffNote },
+    { role: "system", content: staticPrompt },
+    ...(dynamicContent ? [{ role: "system" as const, content: dynamicContent }] : []),
     ...(trainingExamplesBlock ? [{ role: "system" as const, content: trainingExamplesBlock }] : []),
     ...history.map((m) => ({
       role: (m.direction === "in" ? "user" : "assistant") as AiMessage["role"],
@@ -506,6 +540,8 @@ async function runAgent(
       deadlineAt,
     );
     if (retries.length) allRetries.push(...retries);
+
+    logTokenUsage(agent.key, turn, json);
 
     if (!json) {
       return {

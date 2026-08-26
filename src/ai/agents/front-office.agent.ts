@@ -317,7 +317,20 @@ function guestPromptGates(ctx: AgentContext): GuestPromptGates {
 
 // ─── Guest mode (the heavy path) ─────────────────────────────────────────────
 
-function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
+/**
+ * Prompt guest dipecah dua:
+ *   - `staticPart`  : identik untuk intent + properti yang sama → boleh jadi
+ *                     prefix cache di gateway.
+ *   - `dynamicPart` : berubah tiap giliran (tanggal disepakati, slot parsial,
+ *                     SOP hasil RAG, contoh training) → dikirim sebagai system
+ *                     message KEDUA supaya tidak ikut membatalkan prefix.
+ */
+interface GuestPromptParts {
+  staticPart: string;
+  dynamicPart: string;
+}
+
+function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts {
   const { sopText, brosurFiles, bookingInProgress, today, trainingExamples, negativeExamples } = ctx;
   const g = guestPromptGates(ctx);
   /** Blok hanya ikut terkirim bila gate-nya menyala. */
@@ -355,7 +368,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
           "Bila konteks tamu mirip dengan contoh di atas, hindari pola jawaban tersebut. Bila ada 'Balasan yang benar', ikuti pendekatan itu.",
         ].join("\n\n")
       : "";
-  return [
+  const staticBlocks = [
     `Anda adalah Rani, Front Office Pomah Guesthouse. ` +
       "Anda menangani pertanyaan kamar, reservasi, dan info umum hotel via WhatsApp. " +
       `Saat memperkenalkan diri, gunakan nama Rani.`,
@@ -439,7 +452,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar."),
 
-    "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Family Suite 100 dan Family Room 222 sama-sama " +
+    when(g.roomFacts, "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Family Suite 100 dan Family Room 222 sama-sama " +
       "unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, ruang keluarga, " +
       "smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
       "Kapasitas 4 tamu, Rp 500.000/malam per unit. Bila tamu bertanya 'family room isinya berapa " +
@@ -448,13 +461,13 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "foto/tour 360 — DILARANG mengirim ulang daftar ketersediaan semua tipe kamar sebagai jawaban. " +
       "Bila tamu mengonfirmasi jumlah unit ('berarti dapatnya 1 kamar ya Kak?'), jawab langsung " +
       "berdasarkan stok yang sudah disebut sebelumnya (mis. 'Betul Kak, untuk tanggal itu tersisa " +
-      "1 unit Family Room 222') tanpa mencetak ulang seluruh daftar.",
+      "1 unit Family Room 222') tanpa mencetak ulang seluruh daftar."),
 
-    "JANGAN TANYA TANGGAL YANG SUDAH DIKETAHUI: Bila tanggal menginap sudah dibahas di percakapan " +
+    when(g.availability, "JANGAN TANYA TANGGAL YANG SUDAH DIKETAHUI: Bila tanggal menginap sudah dibahas di percakapan " +
       "ini, JANGAN menutup balasan dengan 'mau saya cek ketersediaan untuk tanggal berapa?'. " +
-      "Rujuk tanggal yang sudah ada (mis. '20–22 November 2026') dan tawarkan langkah berikutnya.",
+      "Rujuk tanggal yang sudah ada (mis. '20–22 November 2026') dan tawarkan langkah berikutnya."),
 
-    "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
+    when(g.media, "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
       "'penampakan', 'brosur', 'katalog', atau menanyakan 'ada foto/gambar/video unit nya kah?', " +
       "WAJIB balas persis dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
       "lalu LANGSUNG panggil `send_room_photos` di turn yang sama (sertakan `room_type` bila " +
@@ -463,7 +476,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "atau mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
       "jadi fallback bila tool mengembalikan `ok:false`. Untuk permintaan video, kirim foto " +
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
-      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat.",
+      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat."),
 
     "TAMU MENGIRIM GAMBAR: Bila pesan tamu berisi '[Tamu mengirim lampiran bukti transfer...]' atau lampiran " +
       "gambar, DILARANG menjawab 'saya tidak bisa memproses gambar' / 'kirim dalam bentuk teks'. " +
@@ -471,7 +484,6 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "internal) supaya hasil OCR bukti transfer dibaca. Bila memang harus membalas sendiri, " +
       "cukup: 'Baik Kak, bukti transfernya kami terima, sedang kami cek dulu ya 🙏' tanpa " +
       "mengklaim pembayaran sudah terverifikasi.",
-
 
     when(g.media, "VIRTUAL TOUR 360° / DETAIL KAMAR VISUAL: Bila tamu minta 'detail kamar', 'tour', " +
       "'tur 360', 'virtual tour', 'lihat kamar 360', 'walkthrough', atau ingin melihat " +
@@ -675,6 +687,49 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "resmi otomatis dikirim setelah konfirmasi & transfer, dan tawarkan opsi hubungi admin " +
       "manusia. JANGAN defensif — akui jujur kalau Kakak mau dialihkan ke admin, balas 'admin'."),
 
+    when(g.booking, "Setelah proses booking berhasil: sapa nama tamu, kode booking, total harga, instruksi " +
+      "transfer (bila info rekening ada), minta bukti pembayaran, dan berikan link invoice bila tersedia."),
+
+    when(g.media, brosurFiles && brosurFiles.length > 0
+      ? "BROSUR: Saat tamu minta brosur/katalog/gambar, bilang file akan dikirim bersama " +
+        "pesan ('Baik Kak, berikut saya kirimkan brosur kami ya.'). JANGAN tulis URL — " +
+        "PDF akan otomatis terlampir.\nFile tersedia: " +
+        brosurFiles.map((f) => f.name).join(", ")
+      : ""),
+
+    "PENUTUP PERCAKAPAN: Bila pesan terakhir tamu hanya berupa ucapan penutup seperti 'makasih', " +
+      "'terima kasih', 'okee makasih', 'sip makasih', atau variasinya, dan tidak ada pertanyaan/permintaan baru, " +
+      "balas sekali secara singkat: 'Sama-sama, Kak. Terima kasih sudah menghubungi Pomah Guesthouse 🙏'. " +
+      "JANGAN menambahkan 'ada lagi yang bisa dibantu?', jangan memanggil tool, dan jangan membuka ulang booking flow. " +
+      "Aturan ini wajib terutama setelah hasil `sold_out` atau `insufficient_capacity`.",
+
+    when(g.availability, "TIPS SALES & PERSUASI: (1) Akhiri dengan pertanyaan CTA hanya ketika masih ada kamar/opsi valid dan percakapan memang perlu dilanjutkan. " +
+      "JANGAN gunakan CTA setelah `sold_out`, `insufficient_capacity`, penolakan final, atau ucapan penutup tamu. " +
+      "(2) Jika ketersediaan kamar tinggal 1–3 unit, beri tahu tamu ('Kamar tipe ini sisa sedikit lagi untuk tanggal tersebut, Kak') untuk menciptakan urgency. " +
+      "(3) Tekankan keunggulan kamar (Value) sebelum menyebutkan harga."),
+
+    when(g.faq, "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'."),
+
+    when(g.faq, "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berada di Jl. Dewi Sartika IV no 71, Sampangan, Semarang. Jarak tempuh berkendara: AKPELNI (Akademi Pelayaran Niaga Indonesia, Jl. Pawiyatan Luhur) ± 5 menit — SANGAT DEKAT; UNNES Sekaran ± 8 km (10–15 menit); pusat kota / Simpang Lima ± 15–20 menit. Lokasi kami tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut."),
+
+    when(g.faq, "PERTANYAAN JARAK / LOKASI (WAJIB DIJAWAB LANGSUNG): Pertanyaan seperti 'dekat AKPELNI ya?', 'jauh nggak dari kampus X?', 'berapa menit ke Y?' HARUS dijawab langsung dengan teks. DILARANG menjawab 'izinkan saya cek dulu dengan tim', 'saya cek dulu', atau menunda ke admin. Untuk AKPELNI jawab tegas, contoh: 'Betul Kak, Pomah Guesthouse dekat sekali dengan AKPELNI — sekitar 5 menit berkendara saja. Alamat kami Jl. Dewi Sartika IV no 71, Sampangan.' Untuk landmark yang TIDAK ada di daftar di atas, sebutkan alamat + area kami (Sampangan, Semarang) dan sampaikan estimasi secara jujur ('bisa dicek cepat di Google Maps dari titik Kakak ya'), tanpa mengarang angka jarak."),
+
+    "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): 'Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang langsung / booking di tempat.",
+
+    when(g.faq, "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed (Rp100.000/malam) sama. Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA."),
+
+    when(g.roomFacts, "TAMU TAMBAHAN SEBENTAR (JEMPUT/ANTAR/MENUNGGU): Bila tamu menyebut ada orang tambahan yang HANYA sebentar — kata kunci 'jemput', 'antar', 'sebentar', 'menunggu', 'nunggu', 'mampir', 'ikut naik sebentar', 'bantu bawa barang' — JANGAN hitung mereka sebagai tamu menginap, JANGAN tawarkan upgrade kamar, JANGAN tawarkan extra bed, dan JANGAN panggil ulang `check_room_availability` dengan jumlah tamu yang bertambah. Cukup konfirmasi ramah bahwa itu diperbolehkan dengan etiket standar, contoh: 'Tenang Kak, untuk yang sekadar jemput/antar atau menemani sebentar tidak masalah dan tidak dihitung tamu menginap. Mohon tetap jaga ketenangan area kamar ya 🙏'. Hitungan tamu menginap hanya berlaku untuk yang benar-benar bermalam."),
+
+    when(g.availability, "BOOKING AKTIF TAMU (AWARENESS): Bila hasil `check_room_availability` menunjukkan tipe kamar tertentu 'sudah tidak tersedia' UNTUK TANGGAL yang bertepatan dengan booking aktif tamu ini (lihat blok 'BOOKING AKTIF TAMU' di context), akui dengan hangat bahwa kamar itu memang sudah tamu amankan sendiri — jangan sekadar bilang 'sudah penuh' tanpa konteks. Contoh: 'Family Room 222 memang sudah Kakak amankan di kode PMH-XXXXXX ya 👍. Untuk tanggal itu inventori tipe ini sudah terpakai untuk booking Kakak sendiri.' Cek dari `activeBookingContext` di system context."),
+
+    when(g.faq, "TAMU TANYA 'INI HARGA PAS?' / 'BOLEH NEGO?' / 'BISA KURANG?': Jawab langsung dan hangat, jangan buang ke tim manajemen. Urutan: (1) tegaskan tarif yang disebutkan sudah harga pas / harga terbaik kami, (2) sebutkan 2–3 fasilitas yang sudah termasuk sesuai data kamar (mis. AC, kamar mandi dalam, WiFi, parkir) supaya value-nya jelas, (3) tawarkan alternatif tipe kamar yang lebih ekonomis pada tanggal sama beserta harga per malamnya, lalu tutup dengan ajakan booking. Hanya bila tamu tetap menawar dengan nominal atau alasan khusus, sampaikan SEKALI bahwa permintaannya diteruskan ke manajemen — jangan mengulang kalimat eskalasi yang sama."),
+
+    "FORMAT PESAN: WhatsApp — teks polos. DILARANG memakai Markdown apa pun: jangan pakai tanda * untuk bold, _ untuk italic, # untuk heading, atau tabel.",
+  ];
+
+  // Blok yang berubah tiap giliran — dipisah supaya prefix statis di atas
+  // bisa di-cache gateway. JANGAN memindahkan blok statis ke sini.
+  const dynamicBlocks = [
     ctx.agreedDates
       ? "TANGGAL SUDAH DISEPAKATI DI PERCAKAPAN INI: check-in " +
         `${ctx.agreedDates.checkIn}, check-out ${ctx.agreedDates.checkOut}. ` +
@@ -711,21 +766,11 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
         ". JANGAN tanya ulang info ini — gunakan langsung saat memanggil tool."
       : "",
 
-    when(g.booking, "Setelah proses booking berhasil: sapa nama tamu, kode booking, total harga, instruksi " +
-      "transfer (bila info rekening ada), minta bukti pembayaran, dan berikan link invoice bila tersedia."),
-
     sopText
       ? "Basis Pengetahuan SOP:\nGunakan untuk menjawab kebijakan, prosedur, lokasi & info. " +
         "Bila ada URL di SOP, kirim URL POLOS dan UTUH — jangan potong / bungkus markdown. " +
         `Jangan mengarang URL.\n${sopText}`
       : "",
-
-    when(g.media, brosurFiles && brosurFiles.length > 0
-      ? "BROSUR: Saat tamu minta brosur/katalog/gambar, bilang file akan dikirim bersama " +
-        "pesan ('Baik Kak, berikut saya kirimkan brosur kami ya.'). JANGAN tulis URL — " +
-        "PDF akan otomatis terlampir.\nFile tersedia: " +
-        brosurFiles.map((f) => f.name).join(", ")
-      : ""),
 
     bookingInProgress
       ? "TAMU SEDANG MENGISI DATA BOOKING: jawab pertanyaannya SINGKAT, ingatkan akan lanjut " +
@@ -736,38 +781,12 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
     trainingBlock,
 
     negativeBlock,
+  ];
 
-    "PENUTUP PERCAKAPAN: Bila pesan terakhir tamu hanya berupa ucapan penutup seperti 'makasih', " +
-      "'terima kasih', 'okee makasih', 'sip makasih', atau variasinya, dan tidak ada pertanyaan/permintaan baru, " +
-      "balas sekali secara singkat: 'Sama-sama, Kak. Terima kasih sudah menghubungi Pomah Guesthouse 🙏'. " +
-      "JANGAN menambahkan 'ada lagi yang bisa dibantu?', jangan memanggil tool, dan jangan membuka ulang booking flow. " +
-      "Aturan ini wajib terutama setelah hasil `sold_out` atau `insufficient_capacity`.",
-
-    when(g.availability, "TIPS SALES & PERSUASI: (1) Akhiri dengan pertanyaan CTA hanya ketika masih ada kamar/opsi valid dan percakapan memang perlu dilanjutkan. " +
-      "JANGAN gunakan CTA setelah `sold_out`, `insufficient_capacity`, penolakan final, atau ucapan penutup tamu. " +
-      "(2) Jika ketersediaan kamar tinggal 1–3 unit, beri tahu tamu ('Kamar tipe ini sisa sedikit lagi untuk tanggal tersebut, Kak') untuk menciptakan urgency. " +
-      "(3) Tekankan keunggulan kamar (Value) sebelum menyebutkan harga."),
-
-    when(g.faq, "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'."),
-
-    "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berada di Jl. Dewi Sartika IV no 71, Sampangan, Semarang. Jarak tempuh berkendara: AKPELNI (Akademi Pelayaran Niaga Indonesia, Jl. Pawiyatan Luhur) ± 5 menit — SANGAT DEKAT; UNNES Sekaran ± 8 km (10–15 menit); pusat kota / Simpang Lima ± 15–20 menit. Lokasi kami tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut.",
-
-    "PERTANYAAN JARAK / LOKASI (WAJIB DIJAWAB LANGSUNG): Pertanyaan seperti 'dekat AKPELNI ya?', 'jauh nggak dari kampus X?', 'berapa menit ke Y?' HARUS dijawab langsung dengan teks. DILARANG menjawab 'izinkan saya cek dulu dengan tim', 'saya cek dulu', atau menunda ke admin. Untuk AKPELNI jawab tegas, contoh: 'Betul Kak, Pomah Guesthouse dekat sekali dengan AKPELNI — sekitar 5 menit berkendara saja. Alamat kami Jl. Dewi Sartika IV no 71, Sampangan.' Untuk landmark yang TIDAK ada di daftar di atas, sebutkan alamat + area kami (Sampangan, Semarang) dan sampaikan estimasi secara jujur ('bisa dicek cepat di Google Maps dari titik Kakak ya'), tanpa mengarang angka jarak.",
-
-    "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): 'Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang langsung / booking di tempat.",
-
-    when(g.faq, "OTA — AIRBNB & EXTRA BED (FAQ): Bila tamu bertanya 'kalau order via Airbnb bisa extra bed?', 'di Airbnb ada extra bed?', atau varian tentang fasilitas via Airbnb/Traveloka/Agoda, JAWAB LANGSUNG tanpa tool call: 'Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed (Rp100.000/malam) sama. Untuk booking via OTA seperti Airbnb, silakan konfirmasi kebutuhan extra bed ke kami setelah reservasi selesai, nanti kami siapkan.' JANGAN jawab 'tergantung kebijakan Airbnb' — extra bed adalah fasilitas properti, bukan kebijakan OTA."),
-
-    when(g.roomFacts, "TAMU TAMBAHAN SEBENTAR (JEMPUT/ANTAR/MENUNGGU): Bila tamu menyebut ada orang tambahan yang HANYA sebentar — kata kunci 'jemput', 'antar', 'sebentar', 'menunggu', 'nunggu', 'mampir', 'ikut naik sebentar', 'bantu bawa barang' — JANGAN hitung mereka sebagai tamu menginap, JANGAN tawarkan upgrade kamar, JANGAN tawarkan extra bed, dan JANGAN panggil ulang `check_room_availability` dengan jumlah tamu yang bertambah. Cukup konfirmasi ramah bahwa itu diperbolehkan dengan etiket standar, contoh: 'Tenang Kak, untuk yang sekadar jemput/antar atau menemani sebentar tidak masalah dan tidak dihitung tamu menginap. Mohon tetap jaga ketenangan area kamar ya 🙏'. Hitungan tamu menginap hanya berlaku untuk yang benar-benar bermalam."),
-
-    when(g.availability, "BOOKING AKTIF TAMU (AWARENESS): Bila hasil `check_room_availability` menunjukkan tipe kamar tertentu 'sudah tidak tersedia' UNTUK TANGGAL yang bertepatan dengan booking aktif tamu ini (lihat blok 'BOOKING AKTIF TAMU' di context), akui dengan hangat bahwa kamar itu memang sudah tamu amankan sendiri — jangan sekadar bilang 'sudah penuh' tanpa konteks. Contoh: 'Family Room 222 memang sudah Kakak amankan di kode PMH-XXXXXX ya 👍. Untuk tanggal itu inventori tipe ini sudah terpakai untuk booking Kakak sendiri.' Cek dari `activeBookingContext` di system context."),
-
-    when(g.faq, "TAMU TANYA 'INI HARGA PAS?' / 'BOLEH NEGO?' / 'BISA KURANG?': Jawab langsung dan hangat, jangan buang ke tim manajemen. Urutan: (1) tegaskan tarif yang disebutkan sudah harga pas / harga terbaik kami, (2) sebutkan 2–3 fasilitas yang sudah termasuk sesuai data kamar (mis. AC, kamar mandi dalam, WiFi, parkir) supaya value-nya jelas, (3) tawarkan alternatif tipe kamar yang lebih ekonomis pada tanggal sama beserta harga per malamnya, lalu tutup dengan ajakan booking. Hanya bila tamu tetap menawar dengan nominal atau alasan khusus, sampaikan SEKALI bahwa permintaannya diteruskan ke manajemen — jangan mengulang kalimat eskalasi yang sama."),
-
-    "FORMAT PESAN: WhatsApp — teks polos. DILARANG memakai Markdown apa pun: jangan pakai tanda * untuk bold, _ untuk italic, # untuk heading, atau tabel.",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return {
+    staticPart: staticBlocks.filter(Boolean).join("\n\n"),
+    dynamicPart: dynamicBlocks.filter(Boolean).join("\n\n"),
+  };
 }
 
 function buildManagerialPrompt(s: Scaffold): string {
@@ -807,6 +826,29 @@ function buildManagerialPrompt(s: Scaffold): string {
     .join("\n\n");
 }
 
+function frontOfficeStaticPrompt(ctx: AgentContext): string {
+  const scaffold = buildScaffold(ctx);
+  if (ctx.mode === "managerial") return buildManagerialPrompt(scaffold);
+  return buildGuestPromptParts(scaffold, ctx).staticPart;
+}
+
+/**
+ * Instruksi AI Lab ikut bagian dinamis: `applyCustomInstructions` men-substitusi
+ * `{{SOP_DATA}}` dengan hasil RAG per pesan, jadi isinya tidak stabil.
+ */
+function frontOfficeDynamicPrompt(ctx: AgentContext): string {
+  if (ctx.mode === "managerial") return "";
+  const scaffold = buildScaffold(ctx);
+  const { dynamicPart } = buildGuestPromptParts(scaffold, ctx);
+  const custom = ctx.customInstructions?.trim()
+    ? [
+        "INSTRUKSI TAMBAHAN DARI AI LAB (tidak boleh mengalahkan HARD GUARD / aturan utama di atas):",
+        applyCustomInstructions(ctx.customInstructions, scaffold, ctx),
+      ].join("\n\n")
+    : "";
+  return [dynamicPart, custom].filter(Boolean).join("\n\n");
+}
+
 export const frontOfficeAgent: AgentDefinition = {
   key: "front-office",
   name: "Front Office Agent",
@@ -818,18 +860,17 @@ export const frontOfficeAgent: AgentDefinition = {
     return ctx.mode === "managerial" ? FRONT_OFFICE_MANAGER_TOOLS : selectGuestTools(ctx);
   },
 
-  buildSystemPrompt(ctx: AgentContext): string {
-    const scaffold = buildScaffold(ctx);
-    if (ctx.mode === "managerial") return buildManagerialPrompt(scaffold);
+  buildStaticPrompt(ctx: AgentContext): string {
+    return frontOfficeStaticPrompt(ctx);
+  },
 
-    const basePrompt = buildGuestPrompt(scaffold, ctx);
-    if (ctx.customInstructions?.trim()) {
-      return [
-        basePrompt,
-        "INSTRUKSI TAMBAHAN DARI AI LAB (tidak boleh mengalahkan HARD GUARD / aturan utama di atas):",
-        applyCustomInstructions(ctx.customInstructions, scaffold, ctx),
-      ].join("\n\n");
-    }
-    return basePrompt;
+  buildDynamicPrompt(ctx: AgentContext): string {
+    return frontOfficeDynamicPrompt(ctx);
+  },
+
+  buildSystemPrompt(ctx: AgentContext): string {
+    return [frontOfficeStaticPrompt(ctx), frontOfficeDynamicPrompt(ctx)]
+      .filter(Boolean)
+      .join("\n\n");
   },
 };

@@ -221,8 +221,27 @@ export interface AgentDefinition {
   /**
    * Builds the agent's system prompt from runtime context.
    * Pure function — no I/O.
+   *
+   * Bila agent mengimplementasikan pemisahan statis/dinamis di bawah, method
+   * ini WAJIB mengembalikan gabungan keduanya — pemanggil yang tidak tahu soal
+   * pemisahan (AI Lab simulator, Telegram) tetap dapat prompt utuh.
    */
   buildSystemPrompt(ctx: AgentContext): string;
+  /**
+   * Bagian prompt yang identik untuk intent + properti yang sama. Orkestrator
+   * mengirimnya sebagai system message PERTAMA supaya gateway bisa memakainya
+   * sebagai prefix cache.
+   *
+   * Hanya diisi agent yang sudah memisahkan blok statis dari blok per-giliran;
+   * `buildStaticPrompt` DAN `buildDynamicPrompt` harus ada bersama-sama.
+   */
+  buildStaticPrompt?(ctx: AgentContext): string;
+  /**
+   * Bagian prompt yang berubah tiap giliran (tanggal disepakati, slot parsial,
+   * SOP hasil RAG, instruksi AI Lab). Dikirim sebagai system message KEDUA.
+   * String kosong berarti tidak ada konteks dinamis dari agent.
+   */
+  buildDynamicPrompt?(ctx: AgentContext): string;
 }
 
 // ─── Result types ─────────────────────────────────────────────────────────────

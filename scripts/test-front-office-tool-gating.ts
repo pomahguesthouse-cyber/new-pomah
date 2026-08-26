@@ -110,13 +110,25 @@ const CORE_MARKERS = [
   "PENUTUP PERCAKAPAN",
   "FORMAT PESAN: WhatsApp",
   "CARA / METODE BOOKING (FAQ)",
+  "TAMU MENGIRIM GAMBAR",
 ];
-const FAQ_MARKERS = ["EARLY CHECK-IN / LATE CHECK-OUT", "INFO PENTING TAMBAHAN", "ULASAN GOOGLE"];
-const ROOM_FACT_MARKERS = ["KEBIJAKAN USIA TAMU", "KONSISTENSI LABEL KAPASITAS", "EXTRA BED:"];
+const FAQ_MARKERS = [
+  "EARLY CHECK-IN / LATE CHECK-OUT",
+  "INFO PENTING TAMBAHAN",
+  "ULASAN GOOGLE",
+  "PERTANYAAN JARAK / LOKASI",
+];
+const ROOM_FACT_MARKERS = [
+  "KEBIJAKAN USIA TAMU",
+  "KONSISTENSI LABEL KAPASITAS",
+  "EXTRA BED:",
+  "PERTANYAAN TIPE FAMILY",
+];
 const AVAIL_MARKERS = [
   "KETERSEDIAAN KAMAR — ATURAN TANGGAL",
   "HARD GUARD HASIL AVAILABILITY",
   "KAMAR DIMINTA PENUH",
+  "JANGAN TANYA TANGGAL YANG SUDAH DIKETAHUI",
 ];
 const SLOT_INVARIANT_MARKERS = [
   "ANTI-REPETISI PERTANYAAN SLOT",
@@ -232,6 +244,101 @@ const toolChars = (over: Partial<AgentContext>) =>
   JSON.stringify(frontOfficeAgent.getTools?.(ctx(over)) ?? []).length;
 const pct = (a: number, b: number) => Math.round((1 - a / b) * 100);
 const baseTools = JSON.stringify(frontOfficeAgent.tools).length;
+
+// ═══ BAGIAN D — pemisahan system message statis vs dinamis (lever #3) ════════
+
+const staticOf = (over: Partial<AgentContext> = {}) => frontOfficeAgent.buildStaticPrompt!(ctx(over));
+const dynamicOf = (over: Partial<AgentContext> = {}) => frontOfficeAgent.buildDynamicPrompt!(ctx(over));
+
+// ─── D1. Tidak ada yang hilang: statis + dinamis === prompt utuh ─────────────
+
+const SPLIT_VARIANTS: Array<Partial<AgentContext>> = [
+  {},
+  { intent: "greeting" },
+  { intent: "availability_check" },
+  { intent: "booking_inquiry", ...withDates },
+  { intent: "media_request", sopText: "SOP: check-in 14.00." },
+  { intent: "general", bookingInProgress: true },
+  { intent: "booking_inquiry", partialBooking: { roomType: "Deluxe", adults: 2 } },
+  { intent: "general", customInstructions: "Selalu sebut promo Agustus." },
+  { intent: "availability_check", ambiguousRoomReference: { candidate: "Deluxe", offeredRooms: ["Single", "Deluxe"] } },
+  { mode: "managerial", intent: "list_bookings" },
+];
+for (const over of SPLIT_VARIANTS) {
+  const joined = [staticOf(over), dynamicOf(over)].filter(Boolean).join("\n\n");
+  assert.equal(joined, frontOfficeAgent.buildSystemPrompt(ctx(over)),
+    `statis + dinamis harus persis sama dengan buildSystemPrompt (${JSON.stringify(over)})`);
+}
+
+// ─── D2. Prefix statis stabil terhadap perubahan per-giliran ────────────────
+// Kalau field di bawah bisa menggeser prompt statis, prefix cache batal tiap
+// pesan dan lever #3 tidak ada gunanya. Field yang MEMANG menggeser gate
+// (agreedDates, partialBooking, chatSummaryJson) sengaja tidak diuji di sini —
+// bucket cache-nya beda dan itu benar.
+
+const PER_TURN_ONLY: Array<[string, Partial<AgentContext>]> = [
+  ["sopText (hasil RAG)", { sopText: "SOP: kebijakan pembatalan H-3." }],
+  ["customInstructions", { customInstructions: "Selalu sebut promo Agustus." }],
+  ["chatSummary teks", { chatSummary: "Tamu tanya Deluxe untuk akhir pekan." }],
+  ["lastMessage", { lastMessage: "ada kamar besok?" }],
+  ["recoveryMode", { recoveryMode: true, unansweredMessages: ["halo", "kak?"] }],
+  ["activeBookingContext", { activeBookingContext: "BOOKING AKTIF: PMH-123" }],
+  ["guestProfile", { guestProfile: { full_name: "Budi", total_bookings: 3 } as never }],
+  ["trainingExamples", {
+    trainingExamples: [{ id: "1", intent: null, stage: null, user_message: "harga?", ideal_assistant_response: "Rp300rb" }],
+  }],
+];
+for (const intent of ["greeting", "availability_check", "booking_inquiry"] as const) {
+  const baseline = staticOf({ intent });
+  for (const [label, over] of PER_TURN_ONLY) {
+    assert.equal(staticOf({ intent, ...over }), baseline,
+      `prompt statis bergeser karena ${label} (intent ${intent}) — prefix cache batal tiap pesan`);
+  }
+}
+
+// ─── D3. Isi per-giliran benar-benar pindah ke bagian dinamis ───────────────
+
+const dyn = dynamicOf({
+  intent: "booking_inquiry",
+  ...withDates,
+  sopText: "SOP: kebijakan pembatalan H-3.",
+  partialBooking: { roomType: "Deluxe" },
+  customInstructions: "Selalu sebut promo Agustus.",
+});
+for (const marker of [
+  "TANGGAL SUDAH DISEPAKATI",
+  "INFO YANG SUDAH DISIMPAN",
+  "Basis Pengetahuan SOP",
+  "kebijakan pembatalan H-3",
+  "INSTRUKSI TAMBAHAN DARI AI LAB",
+  "promo Agustus",
+]) {
+  assert.ok(dyn.includes(marker), `"${marker}" wajib ada di bagian dinamis`);
+}
+
+const stat = staticOf({
+  intent: "booking_inquiry",
+  ...withDates,
+  sopText: "SOP: kebijakan pembatalan H-3.",
+  partialBooking: { roomType: "Deluxe" },
+  customInstructions: "Selalu sebut promo Agustus.",
+});
+for (const marker of [
+  "TANGGAL SUDAH DISEPAKATI",
+  "Basis Pengetahuan SOP",
+  "kebijakan pembatalan H-3",
+  "INSTRUKSI TAMBAHAN DARI AI LAB",
+  "promo Agustus",
+  "TAMU SEDANG MENGISI DATA BOOKING",
+]) {
+  assert.ok(!stat.includes(marker), `"${marker}" bocor ke prompt statis — prefix cache batal`);
+}
+assert.ok(contains(stat, CORE_MARKERS), "persona & aturan utama wajib tetap di bagian statis");
+
+// ─── D4. Mode managerial: seluruh prompt statis, tidak ada bagian dinamis ───
+
+assert.equal(dynamicOf({ mode: "managerial", intent: "list_bookings" }), "");
+assert.ok(staticOf({ mode: "managerial", intent: "list_bookings" }).includes("Manajer Front Office"));
 
 console.log(
   `✓ front office gating passed — ` +
