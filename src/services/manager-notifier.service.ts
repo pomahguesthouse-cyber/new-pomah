@@ -218,7 +218,8 @@ interface SendOptions {
     | "bot_loop"
     | "zombie_timeout"
     | "booking_stuck"
-    | "rpc_failure";
+    | "rpc_failure"
+    | "ai_credit_low";
   recipient: ManagerContact;
   message: string;
   fileUrl?: string;
@@ -1487,5 +1488,94 @@ export async function notifyRpcFailure(
     console.warn(`[ManagerNotifier] RPC failure logged: ${opts.rpcName} (${total}× / 1h)`);
   } catch (e) {
     console.warn("[ManagerNotifier] notifyRpcFailure error (non-fatal):", e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. AI Credit / Cloud AI Quota Alerts                               */
+/* ------------------------------------------------------------------ */
+
+const AI_ALERT_TITLE: Record<string, string> = {
+  credit_exhausted: "⚠️ KREDIT CLOUD AI HAMPIR HABIS",
+  policy_blocked: "🚫 CLOUD AI DIBLOKIR KEBIJAKAN WORKSPACE",
+  rate_limited: "🐢 CLOUD AI KENA RATE LIMIT BERULANG",
+};
+
+const AI_ALERT_ACTION: Record<string, string> = {
+  credit_exhausted:
+    "Segera top up kredit AI di Lovable. Jika kredit habis, chatbot WhatsApp/Telegram berhenti membalas tamu.",
+  policy_blocked:
+    "Cek pengaturan Lovable AI workspace (fitur AI dimatikan atau limit kredit admin tercapai).",
+  rate_limited:
+    "Permintaan AI dibatasi sementara. Balasan bot bisa melambat — pantau beberapa menit ke depan.",
+};
+
+/**
+ * Notifikasi ke super admin saat kredit cloud AI hampir habis / diblokir.
+ * Dedupe per (jenis, window 6 jam) supaya tidak banjir.
+ * Fire-and-forget-safe: tidak pernah throw.
+ */
+export async function notifyAiCreditLow(
+  db: Db,
+  opts: { kind: string; status: number; errorMessage: string | null; source: string },
+): Promise<void> {
+  try {
+    const { waToken, telegramToken } = await getPropertyTokens(db);
+    const superAdmins = await getActiveManagers(db, "super_admin");
+    if (superAdmins.length === 0) {
+      console.info("[ManagerNotifier] notifyAiCreditLow: no super_admin configured");
+      return;
+    }
+
+    const wibTime = new Date().toLocaleString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const title = AI_ALERT_TITLE[opts.kind] ?? "⚠️ MASALAH CLOUD AI";
+    const action = AI_ALERT_ACTION[opts.kind] ?? "Silakan cek konfigurasi AI.";
+    const errPreview = (opts.errorMessage ?? "(tanpa detail error)").slice(0, 280);
+
+    const message =
+      `${title}\n\n` +
+      `📡 Sumber: ${opts.source}\n` +
+      `🔢 Status gateway: ${opts.status}\n` +
+      `⏱️ Waktu: ${wibTime}\n\n` +
+      `❌ Detail:\n${errPreview}\n\n` +
+      `➡️ ${action}`;
+
+    // 1 alert per jenis per 6 jam.
+    const window6h = Math.floor(Date.now() / (6 * 60 * 60 * 1000));
+    const dedupeBase = `ai_credit:${opts.kind}:${window6h}`;
+
+    const jobs: Promise<unknown>[] = [];
+    for (const admin of superAdmins) {
+      if (admin.phone) {
+        jobs.push(
+          sendWithRetry(db, waToken, {
+            eventType: "ai_credit_low",
+            message,
+            recipient: admin,
+            channel: "wa",
+            dedupeKey: `${dedupeBase}:wa:${admin.id}`,
+          }),
+        );
+      }
+      if (telegramToken && admin.telegram_chat_id) {
+        jobs.push(
+          sendWithRetry(db, null, {
+            eventType: "ai_credit_low",
+            message,
+            recipient: admin,
+            channel: "telegram",
+            dedupeKey: `${dedupeBase}:tg:${admin.id}`,
+          }),
+        );
+      }
+    }
+    await Promise.all(jobs);
+    console.warn(`[ManagerNotifier] AI credit alert terkirim: ${opts.kind} (status ${opts.status})`);
+  } catch (e) {
+    console.warn("[ManagerNotifier] notifyAiCreditLow error (non-fatal):", e);
   }
 }
