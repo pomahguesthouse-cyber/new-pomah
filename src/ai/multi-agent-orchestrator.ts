@@ -16,7 +16,13 @@
  */
 
 import type { AiMessage, LlmResponse, AiClientConfig } from "./types";
-import type { MultiAgentResult, AgentDefinition, AgentContext, AgentKey } from "./agents/types";
+import type {
+  MultiAgentResult,
+  AgentDefinition,
+  AgentContext,
+  AgentKey,
+  IntentCategory,
+} from "./agents/types";
 import { mentionsExplicitDateSignal } from "@/lib/id-date";
 import { classifyIntent } from "./router/intent-classifier";
 import { routeToAgent } from "./router/agent-router";
@@ -1201,7 +1207,18 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     };
   }
 
-  console.info(`[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}`);
+  // Intent EFEKTIF = hasil klasifikasi + override di atas. Dipakai agent untuk
+  // memangkas daftar tool (lihat `frontOfficeAgent.getTools`). Permintaan media
+  // WAJIB terbaca sebagai `media_request` supaya `send_room_photos` /
+  // `send_room_tour` tetap tersedia — invarian #1 chatbot-consistency.
+  const effectiveIntent: IntentCategory = mediaWantedInBurst
+    ? "media_request"
+    : classified.category;
+
+  console.info(
+    `[MultiAgent] Routing → ${routing.agentKey} | ${routing.reason}` +
+      (effectiveIntent !== classified.category ? ` | intent→${effectiveIntent}` : ""),
+  );
 
   // 6. Load agent
   const agent = getAgent(routing.agentKey);
@@ -1254,6 +1271,7 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
     input.messages,
     {
       ...input.agentCtx,
+      intent: effectiveIntent,
       customInstructions: normalizeAgentInstruction(input.aiLabConfig?.agents?.[routing.agentKey]?.instructions),
       managerName: normalizeAgentManagerName(input.aiLabConfig?.agents?.[routing.agentKey]?.managerName),
     },

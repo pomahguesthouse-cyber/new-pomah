@@ -136,6 +136,17 @@ export interface AgentContext {
   bookingInProgress?: boolean;
   /** The raw last user message — agents may use it for tone awareness */
   lastMessage?: string;
+  /**
+   * Intent EFEKTIF turn ini — hasil `classifyIntent` setelah override routing
+   * (mis. permintaan media dalam burst dipaksa jadi `media_request`).
+   *
+   * Dipakai `getTools()` untuk memangkas daftar tool yang dikirim ke LLM:
+   * skema 9 tool guest Front Office = ±3.4rb token yang dikirim ULANG setiap
+   * turn loop. Biarkan `undefined` bila pemanggil tidak punya sinyal intent
+   * (AI Lab simulator, entry point lama) — agent akan memakai set tool PENUH
+   * supaya tidak ada regresi kapabilitas.
+   */
+  intent?: IntentCategory;
   /** The instructions configured in the AI Lab Dashboard for this agent */
   customInstructions?: string;
   /** The name of the manager assigned to this agent */
