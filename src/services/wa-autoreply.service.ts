@@ -41,6 +41,7 @@ import {
 } from "@/services/wa-autoreply/runtime-policy";
 import {
   generateSessionSummary,
+  planSummaryWindow,
   regenerateThreadSummary,
   SUMMARY_MIN_MESSAGES,
   updateThreadSummary,
@@ -2057,9 +2058,29 @@ export async function executeAutoreplyForPhone(
     }
     deferAfterReply("Autoreply.sessionSummarizer", async () => {
       try {
+        // Kirim hanya yang perlu: pesan baru sejak ringkasan terakhir, atau
+        // seluruh sesi bila ringkasan lama sudah tidak layak jadi dasar.
+        // `null` = tidak ada pesan baru sama sekali → lewati panggilan LLM.
+        const plan = planSummaryWindow({
+          messages: summarizableMessages,
+          previous: chatSummaryJson,
+          summaryUpdatedAt: chatSummaryUpdatedAt,
+          existingSummary: chatSummary,
+        });
+        if (!plan) {
+          console.info(
+            `[SessionSummarizer] summary skipped: tidak ada pesan baru sejak ringkasan terakhir ` +
+              `(thread ${c.thread_id.slice(0, 8)})`,
+          );
+          return;
+        }
+
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingActive = !!(bs && bs.state && bs.state !== "IDLE");
-        const summary = await generateSessionSummary(summarizableMessages, chatSummary, llmConfig);
+        const summary = await generateSessionSummary(summarizableMessages, chatSummary, llmConfig, {
+          plan,
+          previousStructured: chatSummaryJson,
+        });
         if (summary) {
           // Saat booking aktif → jsonOnly (jangan timpa teks). Selain itu → full.
           await updateThreadSummary(supabaseAdmin, c.thread_id, summary, {
@@ -2068,7 +2089,9 @@ export async function executeAutoreplyForPhone(
           console.info(
             `[SessionSummarizer] summary ${bookingActive ? "json-only " : ""}` +
               `generated for ${phone.slice(-6)} ` +
-              `(thread ${c.thread_id.slice(0, 8)}, ${summary.short_summary.length} chars, ` +
+              `(thread ${c.thread_id.slice(0, 8)}, mode=${plan.mode}, ` +
+              `${plan.window.length}/${summarizableMessages.length} pesan, ` +
+              `${summary.short_summary.length} chars, ` +
               `topic=${summary.last_topic ?? "-"}, room=${summary.room_type ?? "-"}, ` +
               `forced=${forced}, bookingActive=${bookingActive})`,
           );
