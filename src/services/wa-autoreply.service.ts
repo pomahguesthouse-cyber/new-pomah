@@ -69,6 +69,7 @@ import {
   buildAvailabilityNeedDatesReply,
   formatAvailabilityForGuestCount,
   formatAvailabilityReply,
+  detectFocusRoomName,
   lastBotAskedGuestCount,
 } from "@/services/wa-autoreply/availability-formatters";
 import {
@@ -310,7 +311,11 @@ async function buildDeterministicAvailabilityReply(params: {
     } as any,
   );
 
-  const result = formatAvailabilityReply(raw, messageOpensWithGreeting(params.message));
+  const focusRoom = detectFocusRoomName(
+    params.message,
+    (params.rooms ?? []).map((r: any) => String(r?.name ?? "")),
+  );
+  const result = formatAvailabilityReply(raw, messageOpensWithGreeting(params.message), focusRoom);
   // Lampirkan tanggal yang di-parse agar caller bisa mempersist-nya ke
   // conversation-state. Tanpa ini, tanggal hilang karena jalur deterministik
   // melewati orchestrator (satu-satunya tempat slot biasanya disimpan).
@@ -397,7 +402,14 @@ async function buildContextualBookingInquiryReply(params: {
   const greet = messageOpensWithGreeting(params.message);
   const result = adults
     ? formatAvailabilityForGuestCount(raw, { adults, children, total: adults + children })
-    : formatAvailabilityReply(raw, greet);
+    : formatAvailabilityReply(
+        raw,
+        greet,
+        detectFocusRoomName(
+          params.message,
+          (params.rooms ?? []).map((r: any) => String(r?.name ?? "")),
+        ),
+      );
 
   if (result) {
     result.dates = { checkIn, checkOut };
