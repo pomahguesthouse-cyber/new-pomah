@@ -1696,7 +1696,27 @@ export async function executeAutoreplyForPhone(
     const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
     const finalNorm = norm(finalReply);
     const finalPrefix = finalNorm.slice(0, 140);
-    const sinceIso = new Date(Date.now() - 300_000).toISOString();
+    // Insiden 26 Agu 2026 (+62 859-1446-84209): tamu bertanya ulang
+    // "20-22 november masih tersedia ga kak kalau yg family suites" tiga menit
+    // setelah daftar ketersediaan dikirim. Dedup body/prefix menganggapnya
+    // pengiriman ganda dan MEMBISUKAN balasan — percakapan mati.
+    // Dedup hanya boleh melindungi pengiriman ulang untuk turn yang SAMA,
+    // yaitu outbound yang lahir setelah pesan tamu terakhir masuk. Karena itu
+    // jendela dipotong pada waktu inbound terakhir (minus sedikit slack untuk
+    // race webhook), bukan flat 300 detik.
+    const { data: lastInboundRow } = await (supabaseAdmin as any)
+      .from("whatsapp_messages")
+      .select("sent_at")
+      .eq("thread_id", c.thread_id)
+      .eq("direction", "in")
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const floorMs = Date.now() - 300_000;
+    const inboundMs = lastInboundRow?.sent_at
+      ? new Date(lastInboundRow.sent_at).getTime() - 15_000
+      : floorMs;
+    const sinceIso = new Date(Math.max(floorMs, inboundMs)).toISOString();
     const { data: recentOut } = await (supabaseAdmin as any)
       .from("whatsapp_messages")
       .select("id, body, sent_at, metadata")
