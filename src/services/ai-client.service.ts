@@ -120,6 +120,8 @@ function buildAbortSignal(timeoutMs: number, externalSignal?: AbortSignal): { si
   };
 }
 
+import { reportAiGatewayFailureAsync } from "./ai-credit-alert";
+
 export async function chatCompletion(
   config: AiClientConfig,
   messages: AiChatMessage[],
@@ -154,11 +156,14 @@ export async function chatCompletion(
     }
 
     if (!res.ok) {
+      const errText = json?.error?.message ?? text ?? `AI request failed with ${res.status}`;
+      // Alarm ke super admin bila kredit cloud AI hampir habis / diblokir.
+      reportAiGatewayFailureAsync(res.status, errText, "chat_completion");
       return {
         ok: false,
         content: null,
         status: res.status,
-        error: json?.error?.message ?? text ?? `AI request failed with ${res.status}`,
+        error: errText,
         raw: json ?? text,
       };
     }
