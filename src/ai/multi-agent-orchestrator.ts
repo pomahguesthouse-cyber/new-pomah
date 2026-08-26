@@ -43,6 +43,7 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 import { burstWantsMedia, isMediaRequest } from "@/services/wa-autoreply/message-parsers";
+import { reportAiGatewayFailureAsync } from "@/services/ai-credit-alert";
 
 // Dulu 6 — tidak realistis: anggaran luar (AI_TIMEOUT_MS di
 // wa-autoreply.service.ts) hanya 14s, jadi maksimal ~2 ronde LLM yang benar-
@@ -228,6 +229,7 @@ async function callLlmOnce(
       const body = await res.text();
       console.error(`[MultiAgent][${agent.key}] LLM HTTP ${res.status}:`, body);
       // 408/429/5xx → boleh retry; 4xx lainnya → permanen.
+      reportAiGatewayFailureAsync(res.status, body, `orchestrator:${agent.key}`);
       const retriable = res.status === 408 || res.status === 429 || res.status >= 500;
       return { ok: false, retriable, reason: `http_${res.status}` };
     }

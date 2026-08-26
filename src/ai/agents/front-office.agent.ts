@@ -173,6 +173,10 @@ const FRONT_OFFICE_MANAGER_TOOLS = pickTools([
   "change_booking_room",
   "delete_booking",
   "update_booking_status",
+  // Blokir kamar juga harus bisa dari kanal WhatsApp mode manajerial,
+  // bukan cuma Telegram.
+  "block_room",
+  "unblock_room",
 ] as const);
 
 // ─── Shared scaffolding ──────────────────────────────────────────────────────
@@ -206,12 +210,26 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   const persona = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const roomSummary = rooms
-    .map(
-      (r) =>
+    .map((r) => {
+      // Detail fasilitas ikut disertakan supaya pertanyaan seperti "family room
+      // isinya 2 kamar tidur?" bisa dijawab langsung tanpa memanggil tool.
+      const facts = [
+        r.bed_type ? `bed ${r.bed_type}` : "",
+        (r as { bed_size?: string | null }).bed_size ?? "",
+        Array.isArray(r.amenities) && r.amenities.length > 0
+          ? `fasilitas: ${r.amenities.join(", ")}`
+          : "",
+        r.description ? `deskripsi: ${String(r.description).replace(/\s+/g, " ").trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join(" — ");
+      return (
         `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
         (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
-        formatExtraBedInfo(r),
-    )
+        formatExtraBedInfo(r) +
+        (facts ? `\n  ${facts}` : "")
+      );
+    })
     .join("\n");
   return {
     persona,
@@ -421,7 +439,22 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar."),
 
-    when(g.media, "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
+    "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Family Suite 100 dan Family Room 222 sama-sama " +
+      "unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, ruang keluarga, " +
+      "smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
+      "Kapasitas 4 tamu, Rp 500.000/malam per unit. Bila tamu bertanya 'family room isinya berapa " +
+      "kamar tidur', 'fasilitasnya apa', atau 'boleh lihat tipe family room', JAWAB LANGSUNG dengan " +
+      "rincian fasilitas di atas (satu paragraf ringkas atau bullet singkat) dan tawarkan kirim " +
+      "foto/tour 360 — DILARANG mengirim ulang daftar ketersediaan semua tipe kamar sebagai jawaban. " +
+      "Bila tamu mengonfirmasi jumlah unit ('berarti dapatnya 1 kamar ya Kak?'), jawab langsung " +
+      "berdasarkan stok yang sudah disebut sebelumnya (mis. 'Betul Kak, untuk tanggal itu tersisa " +
+      "1 unit Family Room 222') tanpa mencetak ulang seluruh daftar.",
+
+    "JANGAN TANYA TANGGAL YANG SUDAH DIKETAHUI: Bila tanggal menginap sudah dibahas di percakapan " +
+      "ini, JANGAN menutup balasan dengan 'mau saya cek ketersediaan untuk tanggal berapa?'. " +
+      "Rujuk tanggal yang sudah ada (mis. '20–22 November 2026') dan tawarkan langkah berikutnya.",
+
+    "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
       "'penampakan', 'brosur', 'katalog', atau menanyakan 'ada foto/gambar/video unit nya kah?', " +
       "WAJIB balas persis dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
       "lalu LANGSUNG panggil `send_room_photos` di turn yang sama (sertakan `room_type` bila " +
@@ -430,7 +463,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
       "atau mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
       "jadi fallback bila tool mengembalikan `ok:false`. Untuk permintaan video, kirim foto " +
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
-      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat."),
+      "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat.",
 
     when(g.media, "VIRTUAL TOUR 360° / DETAIL KAMAR VISUAL: Bila tamu minta 'detail kamar', 'tour', " +
       "'tur 360', 'virtual tour', 'lihat kamar 360', 'walkthrough', atau ingin melihat " +
@@ -709,7 +742,7 @@ function buildGuestPrompt(s: Scaffold, ctx: AgentContext): string {
 
     when(g.faq, "ULASAN GOOGLE (CHECK-OUT): Jika tamu menyatakan baru saja checkout atau memberikan apresiasi setelah menginap, sampaikan terima kasih yang hangat dan minta ulasan di Google Maps dengan link: https://g.page/r/CcJj347h2ojvEBM/review. Contoh: 'Sama-sama Kak, senang sekali bisa melayani. Jika ada waktu luang, kami akan sangat berterima kasih jika Kakak berkenan memberikan ulasan di Google Maps kami di sini ya: https://g.page/r/CcJj347h2ojvEBM/review'."),
 
-    when(g.faq, "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berlokasi sekitar 8 km (kurang lebih 10–15 menit berkendara) dari Kampus UNNES. Lokasi kami sangat tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas di area Semarang. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut."),
+    "INFO PENTING TAMBAHAN: (1) SARAPAN: Saat ini Pomah Guesthouse BELUM menyediakan sarapan. Jika tamu bertanya, sampaikan dengan jujur dan ramah bahwa kami belum menyediakan sarapan, namun lokasi kami sangat dekat dengan banyak pilihan kuliner enak. (2) LANDMARK TERDEKAT: Pomah Guesthouse berlokasi sekitar 8 km (kurang lebih 10–15 menit berkendara) dari Kampus UNNES. Lokasi kami sangat tenang dan nyaman untuk tamu keluarga, rombongan wisuda, atau kegiatan dinas di area Semarang. (3) SISTEM SEWA: Jika tamu mengklarifikasi 'itungannya kamar ya, bukan rumah?', 'per kamar bukan rumah?', atau variasi serupa, jawab singkat: 'Betul Kak, kita sistemnya sewa per kamar harian.' JANGAN panggil tool availability untuk klarifikasi ini. Jika tamu benar-benar ingin 'sewa satu rumah' atau 'sewa seluruh rumah', jelaskan bahwa itu berarti tamu menyewa seluruh kamar yang tersedia dan cek ketersediaan seluruh kamar menggunakan `check_room_availability` untuk tanggal tersebut.",
 
     "CARA / METODE BOOKING (FAQ): Bila tamu bertanya 'booking online gapapa kak?', 'harus datang ke tempat?', 'gimana cara bookingnya?', 'bisa booking dari sini?', atau variasi serupa tentang METODE booking, JAWAB LANGSUNG dengan teks (tanpa tool call): 'Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.' Lalu tawarkan: 'Mau saya bantu cek tanggalnya sekarang, Kak?'. JANGAN mengarahkan tamu untuk datang langsung / booking di tempat.",
 

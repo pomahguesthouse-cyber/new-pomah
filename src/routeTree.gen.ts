@@ -65,6 +65,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as ApiBookingInvoiceIdRouteImport } from './routes/api.booking-invoice.$id'
 import { Route as ApiCronBookingFormFollowupRouteImport } from './routes/api.cron.booking-form-followup'
 import { Route as ApiCronBookingStuckMonitorRouteImport } from './routes/api.cron.booking-stuck-monitor'
+import { Route as ApiCronEvolutionInboxPollRouteImport } from './routes/api.cron.evolution-inbox-poll'
 import { Route as ApiCronExpireBookingsRouteImport } from './routes/api.cron.expire-bookings'
 import { Route as ApiCronProcessWaQueueRouteImport } from './routes/api.cron.process-wa-queue'
 import { Route as ApiCronRunArticleSchedulesRouteImport } from './routes/api.cron.run-article-schedules'
@@ -365,6 +366,12 @@ const ApiCronBookingStuckMonitorRoute =
     path: '/api/cron/booking-stuck-monitor',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiCronEvolutionInboxPollRoute =
+  ApiCronEvolutionInboxPollRouteImport.update({
+    id: '/api/cron/evolution-inbox-poll',
+    path: '/api/cron/evolution-inbox-poll',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronExpireBookingsRoute = ApiCronExpireBookingsRouteImport.update({
   id: '/api/cron/expire-bookings',
   path: '/api/cron/expire-bookings',
@@ -490,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -560,6 +568,7 @@ export interface FileRoutesByTo {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -632,6 +641,7 @@ export interface FileRoutesById {
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
   '/api/cron/booking-form-followup': typeof ApiCronBookingFormFollowupRoute
   '/api/cron/booking-stuck-monitor': typeof ApiCronBookingStuckMonitorRoute
+  '/api/cron/evolution-inbox-poll': typeof ApiCronEvolutionInboxPollRoute
   '/api/cron/expire-bookings': typeof ApiCronExpireBookingsRoute
   '/api/cron/process-wa-queue': typeof ApiCronProcessWaQueueRoute
   '/api/cron/run-article-schedules': typeof ApiCronRunArticleSchedulesRoute
@@ -705,6 +715,7 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -775,6 +786,7 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -846,6 +858,7 @@ export interface FileRouteTypes {
     | '/api/booking-invoice/$id'
     | '/api/cron/booking-form-followup'
     | '/api/cron/booking-stuck-monitor'
+    | '/api/cron/evolution-inbox-poll'
     | '/api/cron/expire-bookings'
     | '/api/cron/process-wa-queue'
     | '/api/cron/run-article-schedules'
@@ -890,6 +903,7 @@ export interface RootRouteChildren {
   ApiBookingInvoiceIdRoute: typeof ApiBookingInvoiceIdRouteWithChildren
   ApiCronBookingFormFollowupRoute: typeof ApiCronBookingFormFollowupRoute
   ApiCronBookingStuckMonitorRoute: typeof ApiCronBookingStuckMonitorRoute
+  ApiCronEvolutionInboxPollRoute: typeof ApiCronEvolutionInboxPollRoute
   ApiCronExpireBookingsRoute: typeof ApiCronExpireBookingsRoute
   ApiCronProcessWaQueueRoute: typeof ApiCronProcessWaQueueRoute
   ApiCronRunArticleSchedulesRoute: typeof ApiCronRunArticleSchedulesRoute
@@ -1296,6 +1310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronBookingStuckMonitorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/cron/evolution-inbox-poll': {
+      id: '/api/cron/evolution-inbox-poll'
+      path: '/api/cron/evolution-inbox-poll'
+      fullPath: '/api/cron/evolution-inbox-poll'
+      preLoaderRoute: typeof ApiCronEvolutionInboxPollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/expire-bookings': {
       id: '/api/cron/expire-bookings'
       path: '/api/cron/expire-bookings'
@@ -1518,6 +1539,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBookingInvoiceIdRoute: ApiBookingInvoiceIdRouteWithChildren,
   ApiCronBookingFormFollowupRoute: ApiCronBookingFormFollowupRoute,
   ApiCronBookingStuckMonitorRoute: ApiCronBookingStuckMonitorRoute,
+  ApiCronEvolutionInboxPollRoute: ApiCronEvolutionInboxPollRoute,
   ApiCronExpireBookingsRoute: ApiCronExpireBookingsRoute,
   ApiCronProcessWaQueueRoute: ApiCronProcessWaQueueRoute,
   ApiCronRunArticleSchedulesRoute: ApiCronRunArticleSchedulesRoute,

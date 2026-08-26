@@ -18,7 +18,7 @@ import {
   getMonth,
 } from "date-fns";
 import { id } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, FileDown, Printer, Loader2, Ban } from "lucide-react";
 
 import {
   getCalendarData,
@@ -32,6 +32,7 @@ import {
   type ExportRow,
 } from "@/admin/lib/booking-export";
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
+import { BlockRoomDialog } from "@/admin/components/block-room-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -165,6 +166,7 @@ function CalendarPage() {
   const [createCtx, setCreateCtx] = React.useState<any>(null);
   const [editCtx, setEditCtx] = React.useState<any>(null);
   const [newOpen, setNewOpen] = React.useState(false);
+  const [blockOpen, setBlockOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState<null | "csv" | "pdf">(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-calendar"] });
@@ -303,6 +305,15 @@ function CalendarPage() {
             {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
             Cetak / PDF
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2"
+            onClick={() => setBlockOpen(true)}
+          >
+            <Ban className="h-4 w-4" />
+            Blokir Kamar
+          </Button>
           <Button size="sm" className="h-9 gap-2" onClick={() => setNewOpen(true)}>
             <Plus className="h-4 w-4" />
             Booking Baru
@@ -322,6 +333,7 @@ function CalendarPage() {
             rooms={data?.rooms ?? []}
             roomTypes={data?.roomTypes ?? []}
             bookings={data?.bookings ?? []}
+            blocks={data?.blocks ?? []}
             onCellClick={(roomId: string, date: Date) => {
               const room = data?.rooms.find((r: any) => r.id === roomId);
               const rt = data?.roomTypes.find((t: any) => t.id === room?.room_type_id);
@@ -350,14 +362,73 @@ function CalendarPage() {
         onSaved={invalidate}
       />
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      <BlockRoomDialog
+        open={blockOpen}
+        roomTypes={(data?.roomTypes ?? []) as Array<{ id: string; name: string }>}
+        defaultDate={from}
+        onClose={() => setBlockOpen(false)}
+        onSaved={invalidate}
+      />
     </div>
   );
 }
 
-function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBookingClick }: any) {
+function CalendarGrid({ days, rooms, roomTypes, bookings, blocks, onCellClick, onBookingClick }: any) {
   const cellWidth = 72;
   const labelWidth = 160;
   const windowStart = days[0];
+
+  // Gabungkan tanggal stop_sell per tipe kamar menjadi rentang kontigu
+  // agar bisa dirender sebagai satu bar "Blokir" per periode.
+  const blockRangesByType = React.useMemo(() => {
+    const byType = new Map<string, Array<{ date: string; note: string | null }>>();
+    for (const b of blocks ?? []) {
+      if (!byType.has(b.room_type_id)) byType.set(b.room_type_id, []);
+      byType.get(b.room_type_id)!.push({ date: b.date, note: b.note });
+    }
+    const rangesByType = new Map<string, Array<{ startIdx: number; endIdx: number; note: string | null }>>();
+    for (const [typeId, entries] of byType) {
+      entries.sort((a, b) => (a.date < b.date ? -1 : 1));
+      const ranges: Array<{ startIdx: number; endIdx: number; note: string | null }> = [];
+      let curStart: string | null = null;
+      let curEnd: string | null = null;
+      let curNote: string | null = null;
+      const flush = () => {
+        if (curStart == null) return;
+        const sIdx = differenceInCalendarDays(parseISO(curStart), windowStart);
+        const eIdx = differenceInCalendarDays(parseISO(curEnd!), windowStart);
+        // Hanya simpan rentang yang overlap dengan jendela tampilan.
+        if (eIdx >= 0 && sIdx < days.length) {
+          ranges.push({
+            startIdx: Math.max(sIdx, 0),
+            endIdx: Math.min(eIdx, days.length - 1),
+            note: curNote,
+          });
+        }
+      };
+      for (const e of entries) {
+        if (curEnd == null) {
+          curStart = e.date;
+          curEnd = e.date;
+          curNote = e.note;
+        } else {
+          const expected = format(addDays(parseISO(curEnd), 1), "yyyy-MM-dd");
+          if (e.date === expected) {
+            curEnd = e.date;
+            if (!curNote && e.note) curNote = e.note;
+          } else {
+            flush();
+            curStart = e.date;
+            curEnd = e.date;
+            curNote = e.note;
+          }
+        }
+      }
+      flush();
+      rangesByType.set(typeId, ranges);
+    }
+    return rangesByType;
+  }, [blocks, windowStart, days.length]);
 
   const bookingsByRoom = React.useMemo(() => {
     const m = new Map();
@@ -481,6 +552,17 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                     {formatIDR(type.base_rate)}
                   </span>
                 </div>
+
+                {/* Sel tanggal kosong pada baris tipe agar lebar baris sama
+                    dengan grid tanggal (bar blokir dirender di baris kamar). */}
+                {days.map((d: Date) => (
+                  <div
+                    key={d.toISOString()}
+                    style={{ width: cellWidth }}
+                    className="shrink-0 border-l border-border/40"
+                  />
+                ))}
+
               </div>
 
               {rooms
@@ -512,8 +594,29 @@ function CalendarGrid({ days, rooms, roomTypes, bookings, onCellClick, onBooking
                       />
                     ))}
 
+                    {/* Bar Blokir (stop sell) — dirender di kolom tanggal,
+                        sumber: room_daily_rates.stop_sell (sama dengan chatbot). */}
+                    {(blockRangesByType.get(type.id) ?? []).map((r, i) => {
+                      const left = labelWidth + r.startIdx * cellWidth;
+                      const width = (r.endIdx - r.startIdx + 1) * cellWidth;
+                      return (
+                        <div
+                          key={`block-${room.id}-${i}`}
+                          title={r.note ?? "Diblokir (stop sell)"}
+                          style={{ left: left + 2, width: Math.max(width - 4, 24) }}
+                          className="pointer-events-none absolute top-2.5 bottom-2.5 flex items-center gap-1.5 px-2 rounded-md border border-rose-600/60 bg-rose-600/90 text-white text-[9px] font-black uppercase tracking-wider shadow-sm overflow-hidden z-[5]"
+                        >
+                          <Ban className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            Blokir{r.note ? ` · ${r.note}` : ""}
+                          </span>
+                        </div>
+                      );
+                    })}
+
                     {/* Bar Booking */}
                     {renderBars(bookingsByRoom.get(room.id) ?? [])}
+
                   </div>
                 ))}
 

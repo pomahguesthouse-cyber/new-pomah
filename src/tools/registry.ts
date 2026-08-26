@@ -737,6 +737,23 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: "function",
     function: {
+      name: "unblock_room",
+      description: "Lepas blokir (stop sell) tipe kamar untuk rentang tanggal tertentu sehingga kembali bisa dijual.",
+      parameters: {
+        type: "object",
+        properties: {
+          room_type: { type: "string", description: "Nama tipe kamar (mis. 'Deluxe')" },
+          start_date: { type: "string", description: "YYYY-MM-DD" },
+          end_date: { type: "string", description: "YYYY-MM-DD" },
+          reason: { type: "string", description: "Alasan pelepasan blokir (opsional)" },
+        },
+        required: ["room_type", "start_date", "end_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "send_to_manager",
       description: "Teruskan pesan, informasi, atau laporan langsung ke owner/manajer properti.",
       parameters: {
@@ -795,5 +812,6 @@ export const TOOL_LABELS: Record<string, string> = {
   generate_booking_form:        "Booking - Kirim Form Sekali Pakai",
   get_booking_form_submission:  "Booking - Baca Submission Form",
   block_room:                   "Manager - Blokir Kamar",
+  unblock_room:                 "Manager - Lepas Blokir Kamar",
   send_to_manager:              "Manager - Eskalasi ke Manajer",
 };

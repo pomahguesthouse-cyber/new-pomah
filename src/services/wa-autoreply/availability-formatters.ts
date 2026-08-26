@@ -215,7 +215,33 @@ function unknownAvailabilityReply(data: any): FastFaqResult | null {
   return { intent: "deterministic_availability_unknown", reply };
 }
 
-export function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
+/**
+ * Deteksi tipe kamar yang disebut tamu di pesannya ("kalau yg family suites?").
+ * Dipakai agar jawaban ketersediaan fokus ke tipe itu, bukan mengulang seluruh
+ * daftar yang baru saja dikirim (insiden 26 Agu 2026).
+ */
+export function detectFocusRoomName(message: string, roomNames: string[]): string | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const candidates = roomNames
+    .map((n) => String(n ?? "").trim())
+    .filter((n) => n.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  for (const name of candidates) {
+    const lower = name.toLowerCase();
+    if (text.includes(lower)) return name;
+    // Cocokkan tanpa nomor unit & bentuk plural: "family suites" → "Family Suite 100".
+    const base = lower.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
+    if (base.length >= 5 && (text.includes(base) || text.includes(`${base}s`))) return name;
+  }
+  return null;
+}
+
+export function formatAvailabilityReply(
+  raw: string,
+  greet = false,
+  focusRoomName?: string | null,
+): FastFaqResult | null {
   let data: any;
   try {
     data = JSON.parse(raw);
@@ -243,6 +269,41 @@ export function formatAvailabilityReply(raw: string, greet = false): FastFaqResu
         `${greet ? "Halo Kak, mohon" : "Mohon"} maaf Kak, untuk tanggal ${period} kamar kami sudah penuh.\n\n` +
         "Kalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi.",
     };
+  }
+
+  // Tamu menyebut satu tipe saja → jawab spesifik tipe itu.
+  if (focusRoomName) {
+    const focusLower = focusRoomName.toLowerCase();
+    const focus = rooms.find((room) => String(room.nama ?? "").toLowerCase() === focusLower);
+    if (focus) {
+      const count = Number(focus.kamar_tersedia ?? 0);
+      const price = Number(focus.harga_per_malam ?? focus.nightly_rate ?? 0);
+      const priceText = price > 0 ? ` Harganya Rp${price.toLocaleString("id-ID")}/malam.` : "";
+      if (count > 0 && focus.tidak_tersedia !== true) {
+        return {
+          intent: "deterministic_availability_focus",
+          reply:
+            `Masih ada Kak, untuk tanggal ${period} ${focusRoomName} tersisa ${count} unit.${priceText}\n\n` +
+            "Kakak rencana untuk berapa orang, biar saya siapkan bookingnya?",
+        };
+      }
+      const others = available
+        .filter((room) => String(room.nama ?? "").toLowerCase() !== focusLower)
+        .slice(0, 4)
+        .map((room) => {
+          const c = Number(room.kamar_tersedia ?? 0);
+          const p = Number(room.harga_per_malam ?? room.nightly_rate ?? 0);
+          return `- ${String(room.nama ?? "Kamar")}: ${c} unit${p > 0 ? `, Rp${p.toLocaleString("id-ID")}/malam` : ""}`;
+        });
+      return {
+        intent: "deterministic_availability_focus_full",
+        reply:
+          `Mohon maaf Kak, untuk tanggal ${period} ${focusRoomName} sudah penuh.` +
+          (others.length > 0
+            ? `\n\nYang masih tersedia:\n${others.join("\n")}\n\nMau saya bantu amankan salah satunya?`
+            : "\n\nKalau Kakak berkenan, kirim tanggal alternatif ya, nanti saya cek lagi."),
+      };
+    }
   }
 
   const lines = available.slice(0, 5).map((room) => {

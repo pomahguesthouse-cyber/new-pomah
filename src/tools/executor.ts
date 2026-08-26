@@ -27,6 +27,7 @@ import { changeBookingRoom }              from "./manager/change-booking-room.to
 import { setExtraBed }                    from "./manager/set-extra-bed.tool";
 import { replyToGuest }                   from "./manager/reply-to-guest.tool";
 import { blockRoom }                      from "./manager/block-room.tool";
+import { unblockRoom }                    from "./manager/unblock-room.tool";
 import { sendToManager }                  from "./manager/send-to-manager.tool";
 import { discoverSemarangContent }        from "./content/discover-semarang-content.tool";
 import { upsertExploreItem }              from "./content/upsert-explore-item.tool";
@@ -74,6 +75,7 @@ const HANDLERS: Record<string, ToolHandler> = {
   set_extra_bed:                 setExtraBed,
   reply_to_guest:                replyToGuest,
   block_room:                    blockRoom,
+  unblock_room:                  unblockRoom,
   send_to_manager:               sendToManager,
   discover_semarang_content:     discoverSemarangContent,
   upsert_explore_item:           upsertExploreItem,
