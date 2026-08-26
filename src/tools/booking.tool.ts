@@ -77,19 +77,30 @@ async function pickAvailableRooms(
  * into a single-room view (callers can format the confirmation the same way
  * either time).
  */
+const EXISTING_BOOKING_SELECT =
+  "id, reference_code, status, check_in, check_out, nights, total_amount, paid_amount, payment_status, " +
+  "guests(full_name, email, phone), " +
+  "booking_rooms(room_type_id, nightly_rate, rooms(number), room_types(name))";
+
 async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<string | null> {
   const { data: b, error } = await (ctx.supabaseAdmin as any)
     .from("bookings")
-    .select(
-      "id, reference_code, check_in, check_out, nights, total_amount, paid_amount, payment_status, " +
-        "guests(full_name, email, phone), " +
-        "booking_rooms(room_type_id, nightly_rate, rooms(number), room_types(name))",
-    )
+    .select(EXISTING_BOOKING_SELECT)
     .eq("idempotency_key", idemKey)
     .maybeSingle();
   if (error) throw error;
 
   if (!b) return null;
+  return buildExistingBookingPayload(ctx, b, { idempotent_replay: true });
+}
+
+/**
+ * Bangun payload sukses dari booking yang SUDAH ada di DB (replay idempoten
+ * atau duplikat tanggal/nomor yang sama). Bentuknya identik dengan jalur
+ * sukses create_booking supaya pemanggil bisa memformat konfirmasi sama.
+ */
+function buildExistingBookingPayload(ctx: ToolContext, b: any, extra: Record<string, unknown>): string {
+
 
   const bookingRoomsList: any[] = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
   const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
@@ -158,9 +169,61 @@ async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<
           : "https://pomahguesthouse.com";
       return `${base}/book/confirmation/${b.reference_code ?? b.id}`;
     })(),
-    idempotent_replay: true,
+    status: String(b.status ?? "pending"),
+    ...extra,
   });
 }
+
+/**
+ * Guard anti-booking-dobel (insiden 26 Agu 2026, +62 859-1446-84209):
+ * booking PG-Y5E56 sudah dibuat lewat manager chat, lalu agent membuat
+ * PG-T4DWK untuk tamu, tanggal, dan kamar yang sama. Sebelum insert, cek
+ * apakah nomor HP tamu sudah punya booking aktif untuk periode yang sama —
+ * kalau ada, kembalikan booking itu, bukan membuat yang baru.
+ */
+async function findDuplicateActiveBooking(
+  ctx: ToolContext,
+  phone: string | null,
+  checkIn: string,
+  checkOut: string,
+): Promise<string | null> {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  // Cocokkan pada 9 digit terakhir supaya 0859… dan 62859… dianggap sama.
+  const tail = digits.slice(-9);
+
+  const { data, error } = await (ctx.supabaseAdmin as any)
+    .from("bookings")
+    .select(EXISTING_BOOKING_SELECT)
+    .eq("check_in", checkIn)
+    .eq("check_out", checkOut)
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) {
+    console.warn("[create_booking] gagal cek duplikat booking:", error.message);
+    return null;
+  }
+
+  const match = ((data ?? []) as any[]).find((b) => {
+    const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
+    const gPhone = String(g?.phone ?? "").replace(/\D/g, "");
+    return gPhone.length >= 9 && gPhone.slice(-9) === tail;
+  });
+  if (!match) return null;
+
+  console.info(
+    `[create_booking] duplikat dicegah — ${match.reference_code} sudah ada untuk ${tail} ${checkIn}→${checkOut}`,
+  );
+  return buildExistingBookingPayload(ctx, match, {
+    duplicate_prevented: true,
+    note:
+      `Tamu ini sudah punya booking aktif ${match.reference_code} untuk tanggal yang sama. ` +
+      `Gunakan booking ini — JANGAN buat booking baru. Sampaikan detail booking yang sudah ada ke tamu.`,
+  });
+}
+
 
 // ─── Rollback helpers ──────────────────────────────────────────────────────
 // create_booking writes guest → bookings → booking_rooms in three steps. We
@@ -539,7 +602,16 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       : "",
   ].filter(Boolean).join("\n");
 
+  // Anti-dobel: kalau nomor HP tamu sudah punya booking aktif untuk periode
+  // yang sama, kembalikan booking itu. Bisa dilewati eksplisit dengan
+  // allow_duplicate=true (mis. tamu memang menambah unit lewat booking baru).
+  if (args.allow_duplicate !== true) {
+    const dup = await findDuplicateActiveBooking(ctx, phone, checkIn, checkOut);
+    if (dup) return dup;
+  }
+
   let guestResolution: { id: string; created: boolean };
+
   try {
     guestResolution = await resolveOrCreateGuest(ctx.supabaseAdmin as any, {
       fullName,
