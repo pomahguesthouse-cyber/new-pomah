@@ -77,19 +77,30 @@ async function pickAvailableRooms(
  * into a single-room view (callers can format the confirmation the same way
  * either time).
  */
+const EXISTING_BOOKING_SELECT =
+  "id, reference_code, status, check_in, check_out, nights, total_amount, paid_amount, payment_status, " +
+  "guests(full_name, email, phone), " +
+  "booking_rooms(room_type_id, nightly_rate, rooms(number), room_types(name))";
+
 async function findBookingByIdemKey(ctx: ToolContext, idemKey: string): Promise<string | null> {
   const { data: b, error } = await (ctx.supabaseAdmin as any)
     .from("bookings")
-    .select(
-      "id, reference_code, check_in, check_out, nights, total_amount, paid_amount, payment_status, " +
-        "guests(full_name, email, phone), " +
-        "booking_rooms(room_type_id, nightly_rate, rooms(number), room_types(name))",
-    )
+    .select(EXISTING_BOOKING_SELECT)
     .eq("idempotency_key", idemKey)
     .maybeSingle();
   if (error) throw error;
 
   if (!b) return null;
+  return buildExistingBookingPayload(ctx, b, { idempotent_replay: true });
+}
+
+/**
+ * Bangun payload sukses dari booking yang SUDAH ada di DB (replay idempoten
+ * atau duplikat tanggal/nomor yang sama). Bentuknya identik dengan jalur
+ * sukses create_booking supaya pemanggil bisa memformat konfirmasi sama.
+ */
+function buildExistingBookingPayload(ctx: ToolContext, b: any, extra: Record<string, unknown>): string {
+
 
   const bookingRoomsList: any[] = Array.isArray(b.booking_rooms) ? b.booking_rooms : [b.booking_rooms].filter(Boolean);
   const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
