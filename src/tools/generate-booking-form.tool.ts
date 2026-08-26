@@ -185,6 +185,8 @@ export const generateBookingForm: ToolHandler = async (args, ctx) => {
     url,
     expires_at: expiresAt,
     ttl_minutes: ttlMinutes,
+    // URL sekali pakai — LLM tidak boleh menulis ulang teksnya.
+    relay_verbatim: true,
     suggested_reply: suggestedReply,
     instruction_to_agent:
       "Kirim teks `suggested_reply` ini VERBATIM sebagai balasan ke tamu (jangan ubah URL, jangan tambah basa-basi lain). " +

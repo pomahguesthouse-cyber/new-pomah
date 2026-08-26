@@ -74,6 +74,54 @@ export function clearTrainingRagConfigCache(): void {
   cachedRagCfg = null;
 }
 
+/**
+ * Hasil tool yang SUDAH berupa teks final untuk tamu.
+ *
+ * Beberapa tool mengembalikan `relay_verbatim: true` — prompt agent memang
+ * menyuruh mengirim teksnya APA ADANYA (`sold_out`, `insufficient_capacity`,
+ * "belum ada tanggal", ringkasan `start_booking_details`, link form sekali
+ * pakai). Untuk kasus itu panggilan LLM kedua tidak menambah apa pun: ia hanya
+ * membungkus ulang teks yang sudah jadi, dengan biaya satu prompt penuh dan
+ * risiko HARD GUARD dilanggar (menambah CTA setelah sold_out, menulis ulang
+ * URL form). Jadi giliran diselesaikan di sini.
+ *
+ * Dua penjagaan yang membuat ini aman:
+ *   1. HANYA saat tepat satu tool dipanggil di giliran ini. Bila LLM memanggil
+ *      beberapa tool, balasannya memang harus menggabungkan hasil — biarkan
+ *      LLM yang menyusun.
+ *   2. TIDAK untuk `media_request`. Permintaan foto/tour butuh kalimat
+ *      pengantar spesifik plus lampiran (invarian #1), bukan teks tool.
+ *
+ * Fungsi murni supaya bisa diuji tanpa gateway.
+ */
+export function resolveVerbatimRelay(params: {
+  /** Jumlah tool yang dipanggil LLM di giliran ini. */
+  toolCallCount: number;
+  /** Output mentah tool (JSON string). */
+  output: string;
+  /** Intent efektif turn ini (`AgentContext.intent`). */
+  intent?: IntentCategory;
+}): string | null {
+  const { toolCallCount, output, intent } = params;
+  if (toolCallCount !== 1) return null;
+  if (intent === "media_request") return null;
+  if (!output.includes('"relay_verbatim"')) return null;
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(output) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (parsed?.relay_verbatim !== true) return null;
+
+  for (const field of ["reply_to_guest", "message", "suggested_reply"] as const) {
+    const value = parsed[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
 function formatToolDraftReply(toolName: string, output: string): string | null {
   try {
     const data = JSON.parse(output) as Record<string, any>;
@@ -669,6 +717,23 @@ async function runAgent(
       }
 
       if (toolLabel) toolsUsed.add(toolLabel);
+
+      const verbatimReply = resolveVerbatimRelay({
+        toolCallCount: toolCalls.length,
+        output,
+        intent: agentCtx.intent,
+      });
+      if (verbatimReply) {
+        console.info(
+          `[MultiAgent][${agent.key}] relay verbatim dari ${toolName} — ` +
+            "panggilan LLM ke-2 dilewati",
+        );
+        return {
+          reply: verbatimReply,
+          toolsUsed: Array.from(toolsUsed),
+          ...(allRetries.length ? { retries: allRetries } : {}),
+        };
+      }
 
       const draft = formatToolDraftReply(toolName, output);
       if (draft) lastToolDraftReply = draft;

@@ -265,6 +265,9 @@ export const checkRoomAvailability: ToolHandler = async (
     return JSON.stringify({
       ok: true,
       need_dates: true,
+      // Teks ini final untuk tamu — orkestrator meneruskannya langsung tanpa
+      // panggilan LLM kedua (lihat resolveVerbatimRelay).
+      relay_verbatim: true,
       reply_to_guest:
         "Boleh tahu untuk tanggal berapa Kakak rencana menginap, dan sampai tanggal berapa ya? 📅",
       instruction_to_agent:
@@ -307,6 +310,9 @@ export const checkRoomAvailability: ToolHandler = async (
       ok: false,
       availability_unknown: true,
       error: `Gagal mengecek ketersediaan kamar: ${(availErr as { message?: string })?.message ?? availErr}`,
+      // Status kamar TIDAK diketahui — justru di sinilah LLM paling berbahaya
+      // (cenderung menyimpulkan "penuh"). Teruskan teks ini apa adanya.
+      relay_verbatim: true,
       reply_to_guest:
         "Mohon maaf Kak, sistem ketersediaan kami sedang tersendat sebentar. " +
         "Boleh saya cek ulang dalam beberapa saat? 🙏",
