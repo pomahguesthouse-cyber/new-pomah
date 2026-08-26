@@ -169,9 +169,61 @@ function buildExistingBookingPayload(ctx: ToolContext, b: any, extra: Record<str
           : "https://pomahguesthouse.com";
       return `${base}/book/confirmation/${b.reference_code ?? b.id}`;
     })(),
-    idempotent_replay: true,
+    status: String(b.status ?? "pending"),
+    ...extra,
   });
 }
+
+/**
+ * Guard anti-booking-dobel (insiden 26 Agu 2026, +62 859-1446-84209):
+ * booking PG-Y5E56 sudah dibuat lewat manager chat, lalu agent membuat
+ * PG-T4DWK untuk tamu, tanggal, dan kamar yang sama. Sebelum insert, cek
+ * apakah nomor HP tamu sudah punya booking aktif untuk periode yang sama —
+ * kalau ada, kembalikan booking itu, bukan membuat yang baru.
+ */
+async function findDuplicateActiveBooking(
+  ctx: ToolContext,
+  phone: string | null,
+  checkIn: string,
+  checkOut: string,
+): Promise<string | null> {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  // Cocokkan pada 9 digit terakhir supaya 0859… dan 62859… dianggap sama.
+  const tail = digits.slice(-9);
+
+  const { data, error } = await (ctx.supabaseAdmin as any)
+    .from("bookings")
+    .select(EXISTING_BOOKING_SELECT)
+    .eq("check_in", checkIn)
+    .eq("check_out", checkOut)
+    .in("status", ["pending", "confirmed", "checked_in"])
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) {
+    console.warn("[create_booking] gagal cek duplikat booking:", error.message);
+    return null;
+  }
+
+  const match = ((data ?? []) as any[]).find((b) => {
+    const g = Array.isArray(b.guests) ? b.guests[0] : b.guests;
+    const gPhone = String(g?.phone ?? "").replace(/\D/g, "");
+    return gPhone.length >= 9 && gPhone.slice(-9) === tail;
+  });
+  if (!match) return null;
+
+  console.info(
+    `[create_booking] duplikat dicegah — ${match.reference_code} sudah ada untuk ${tail} ${checkIn}→${checkOut}`,
+  );
+  return buildExistingBookingPayload(ctx, match, {
+    duplicate_prevented: true,
+    note:
+      `Tamu ini sudah punya booking aktif ${match.reference_code} untuk tanggal yang sama. ` +
+      `Gunakan booking ini — JANGAN buat booking baru. Sampaikan detail booking yang sudah ada ke tamu.`,
+  });
+}
+
 
 // ─── Rollback helpers ──────────────────────────────────────────────────────
 // create_booking writes guest → bookings → booking_rooms in three steps. We
