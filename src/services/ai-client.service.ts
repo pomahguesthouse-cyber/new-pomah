@@ -1,3 +1,5 @@
+import { reportAiGatewayFailureAsync } from "./ai-credit-alert";
+
 export type AiChatRole = "system" | "user" | "assistant" | "tool" | string;
 
 export type AiTextContentPart = {
@@ -119,8 +121,6 @@ function buildAbortSignal(timeoutMs: number, externalSignal?: AbortSignal): { si
     },
   };
 }
-
-import { reportAiGatewayFailureAsync } from "./ai-credit-alert";
 
 export async function chatCompletion(
   config: AiClientConfig,
