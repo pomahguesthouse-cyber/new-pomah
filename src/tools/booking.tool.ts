@@ -602,7 +602,16 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       : "",
   ].filter(Boolean).join("\n");
 
+  // Anti-dobel: kalau nomor HP tamu sudah punya booking aktif untuk periode
+  // yang sama, kembalikan booking itu. Bisa dilewati eksplisit dengan
+  // allow_duplicate=true (mis. tamu memang menambah unit lewat booking baru).
+  if (args.allow_duplicate !== true) {
+    const dup = await findDuplicateActiveBooking(ctx, phone, checkIn, checkOut);
+    if (dup) return dup;
+  }
+
   let guestResolution: { id: string; created: boolean };
+
   try {
     guestResolution = await resolveOrCreateGuest(ctx.supabaseAdmin as any, {
       fullName,
