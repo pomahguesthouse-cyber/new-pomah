@@ -215,7 +215,33 @@ function unknownAvailabilityReply(data: any): FastFaqResult | null {
   return { intent: "deterministic_availability_unknown", reply };
 }
 
-export function formatAvailabilityReply(raw: string, greet = false): FastFaqResult | null {
+/**
+ * Deteksi tipe kamar yang disebut tamu di pesannya ("kalau yg family suites?").
+ * Dipakai agar jawaban ketersediaan fokus ke tipe itu, bukan mengulang seluruh
+ * daftar yang baru saja dikirim (insiden 26 Agu 2026).
+ */
+export function detectFocusRoomName(message: string, roomNames: string[]): string | null {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const candidates = roomNames
+    .map((n) => String(n ?? "").trim())
+    .filter((n) => n.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  for (const name of candidates) {
+    const lower = name.toLowerCase();
+    if (text.includes(lower)) return name;
+    // Cocokkan tanpa nomor unit & bentuk plural: "family suites" → "Family Suite 100".
+    const base = lower.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
+    if (base.length >= 5 && (text.includes(base) || text.includes(`${base}s`))) return name;
+  }
+  return null;
+}
+
+export function formatAvailabilityReply(
+  raw: string,
+  greet = false,
+  focusRoomName?: string | null,
+): FastFaqResult | null {
   let data: any;
   try {
     data = JSON.parse(raw);
