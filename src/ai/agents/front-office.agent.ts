@@ -79,12 +79,26 @@ function buildScaffold(ctx: AgentContext): Scaffold {
   const persona = normalizeAssistantName(managerName);
   const propName = property.name ?? "Pomah Guesthouse";
   const roomSummary = rooms
-    .map(
-      (r) =>
+    .map((r) => {
+      // Detail fasilitas ikut disertakan supaya pertanyaan seperti "family room
+      // isinya 2 kamar tidur?" bisa dijawab langsung tanpa memanggil tool.
+      const facts = [
+        r.bed_type ? `bed ${r.bed_type}` : "",
+        (r as { bed_size?: string | null }).bed_size ?? "",
+        Array.isArray(r.amenities) && r.amenities.length > 0
+          ? `fasilitas: ${r.amenities.join(", ")}`
+          : "",
+        r.description ? `deskripsi: ${String(r.description).replace(/\s+/g, " ").trim()}` : "",
+      ]
+        .filter(Boolean)
+        .join(" — ");
+      return (
         `• ${r.name} — Rp ${formatCurrency(r.base_rate)}/malam` +
         (r.capacity ? `, kapasitas ${r.capacity} tamu` : "") +
-        formatExtraBedInfo(r),
-    )
+        formatExtraBedInfo(r) +
+        (facts ? `\n  ${facts}` : "")
+      );
+    })
     .join("\n");
   return {
     persona,
