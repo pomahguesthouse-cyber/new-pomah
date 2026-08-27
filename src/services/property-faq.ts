@@ -92,6 +92,83 @@ const THANKS_RE = new RegExp(
 // Biarkan AI menjawab utuh.
 const ONE_LINER_MAX_LEN = 80;
 
+// ─── Fakta bisnis tetap ──────────────────────────────────────────────────────
+//
+// Nilai-nilai di bawah HARUS sama dengan yang tertulis di prompt Front Office
+// (`src/ai/agents/front-office.agent.ts`). Kalau salah satunya diubah tanpa
+// yang lain, tamu bisa mendapat dua angka berbeda tergantung pesannya kebetulan
+// kena fast-path atau tidak. `scripts/test-property-faq.ts` menjaga keduanya
+// tetap sinkron dan akan gagal kalau angkanya berbeda.
+
+/** Tarif early check-in / late check-out, per jam berjalan. */
+export const EARLY_LATE_HOURLY_FEE_IDR = 25_000;
+
+/** Tarif extra bed per malam — sama di semua channel booking. */
+export const EXTRA_BED_RATE_IDR = 100_000;
+
+/** Area properti, dipakai saat menjawab pertanyaan jarak. */
+export const PROPERTY_AREA = "Sampangan, Semarang";
+
+/**
+ * Landmark yang jarak tempuhnya sudah diketahui pasti. Landmark DI LUAR daftar
+ * ini sengaja tidak dijawab fast-path — mengarang angka jarak jauh lebih mahal
+ * daripada satu panggilan AI.
+ */
+export const KNOWN_LANDMARKS: ReadonlyArray<{ re: RegExp; label: string; distance: string }> = [
+  { re: /\bakpelni\b|\bpawiyatan\s+luhur\b/i, label: "AKPELNI", distance: "sekitar 5 menit berkendara — dekat sekali" },
+  { re: /\bunnes\b|\bsekaran\b|\buniversitas\s+negeri\s+semarang\b/i, label: "UNNES Sekaran", distance: "sekitar 8 km, kurang lebih 10–15 menit berkendara" },
+  { re: /\bsimpang\s*lima\b|\bpusat\s+kota\b/i, label: "Simpang Lima / pusat kota", distance: "sekitar 15–20 menit berkendara" },
+];
+
+const idr = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
+
+/**
+ * Pesan yang juga menanyakan ketersediaan/harga adalah pesan gabungan. Cabang
+ * FAQ satu-topik hanya akan menjawab separuhnya lalu menelan sisanya — lebih
+ * baik biarkan AI menjawab utuh. (Cabang OTA dikecualikan: "di Agoda lebih
+ * murah?" memang pertanyaan harga, dan jawabannya sudah baku.)
+ */
+const AVAILABILITY_OR_PRICE_RE =
+  /\b(tersedia|available|kosong|masih\s+ada|cek\s+(?:kamar|ketersediaan)|harga|tarif|rate|bookingkan|book\s*kan)\b/i;
+
+const OTA_RE = /\b(traveloka|agoda|booking\.?com|tiket\.?com|trip\.?com|airbnb|ota)\b/i;
+const EXTRA_BED_RE = /\b(extra\s*bed|ekstra\s*bed|kasur\s+tambahan|bed\s+tambahan)\b/i;
+const BREAKFAST_RE = /\b(sarapan|breakfast|makan\s+pagi)(?:nya)?\b/i;
+const DISTANCE_INTENT_RE = /\b(dekat|deket|jauh|jarak|berapa\s*(?:menit|km|kilo|jauh)|akses|menuju)\b/i;
+const BOOKING_METHOD_RE =
+  /\b(cara\s+(?:booking|pesan|order|reservasi)|gimana\s+(?:cara\s+)?(?:booking|pesan)|bagaimana\s+cara\s+(?:booking|pesan)|booking\s+(?:online|lewat\s+wa|via\s+wa|dari\s+sini|di\s*sini)|pesan\s+online|harus\s+(?:datang|ke\s+(?:tempat|lokasi))|datang\s+ke\s+tempat)\b/i;
+const DAY_USE_RE =
+  /\b(day\s*use|dayuse|transit|sewa\s+per\s*jam|per\s*jam(?:an)?|hitungan\s+jam|istirahat\s+(?:sebentar|siang)|sampai\s+siang\s+(?:saja|aja)|beberapa\s+jam\s+(?:saja|aja))\b/i;
+
+/** Pertanyaan tentang MASUK LEBIH AWAL / KELUAR LEBIH SORE, bukan jam standar. */
+const EARLY_CHECKIN_RE =
+  /\b(early\s*check\s*[- ]?in|check\s*[- ]?in\s+(?:lebih\s+)?(?:awal|pagi|cepat)|masuk\s+(?:kamar\s+)?lebih\s+(?:awal|pagi)|datang\s+lebih\s+(?:awal|pagi))\b/i;
+const LATE_CHECKOUT_RE =
+  /\b(late\s*check\s*[- ]?out|check\s*[- ]?out\s+(?:lebih\s+)?(?:siang|sore|lambat|telat)|keluar\s+lebih\s+(?:siang|sore)|perpanjang\s+(?:jam|waktu))\b/i;
+
+/**
+ * Ambil jam dari pesan tamu. `direction` dipakai untuk membaca angka yang
+ * ambigu: "check-out jam 5" hampir pasti 17.00, "check-in jam 9" hampir pasti
+ * 09.00. Tanpa konteks itu tebakannya tidak aman, jadi arahnya wajib diberikan.
+ */
+export function parseRequestedHour(text: string, direction: "in" | "out"): number | null {
+  const m = /\b(?:jam|pukul)\s*(\d{1,2})(?:[.:](\d{2}))?\s*(pagi|siang|sore|malam)?/i.exec(text);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  const suffix = (m[3] ?? "").toLowerCase();
+
+  if (suffix === "pagi") {
+    if (hour === 12) hour = 0;
+  } else if (suffix === "siang" || suffix === "sore" || suffix === "malam") {
+    if (hour < 12) hour += 12;
+  } else if (hour <= 12) {
+    // Tanpa keterangan waktu: pakai arah pertanyaan untuk membaca angkanya.
+    if (direction === "out" && hour < 12) hour += 12;
+  }
+  return hour >= 0 && hour <= 23 ? hour : null;
+}
+
 // ─── Builder ─────────────────────────────────────────────────────────────────
 
 export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply | null {
@@ -213,6 +290,41 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return { reply: `${opener}Berikut kontak kami:\n${bits.join("\n")}`, intent: "contact_request" };
   }
 
+  // — Early check-in / late check-out — tarifnya kebijakan tetap, jadi jawab
+  //   langsung lengkap dengan hitungannya. Prompt Front Office menyuruh hal
+  //   yang sama; menjawabnya di sini menghemat satu giliran AI penuh DAN
+  //   menghilangkan peluang model mengarang angka.
+  if (!DATE_SIGNAL_RE.test(raw)) {
+    const wantsEarly = EARLY_CHECKIN_RE.test(raw);
+    const wantsLate = LATE_CHECKOUT_RE.test(raw);
+    if (wantsEarly !== wantsLate) {
+      const direction = wantsEarly ? "in" : "out";
+      const standard = Number((wantsEarly ? checkInTime : checkOutTime).slice(0, 2));
+      const hour = parseRequestedHour(raw, direction);
+      const hours =
+        hour === null || !Number.isFinite(standard)
+          ? null
+          : wantsEarly
+            ? standard - hour
+            : hour - standard;
+
+      const head = wantsEarly
+        ? `${opener}Untuk early check-in (masuk sebelum pukul ${checkInTime})`
+        : `${opener}Untuk late check-out (keluar setelah pukul ${checkOutTime})`;
+      const rate = `dikenakan biaya tambahan ${idr(EARLY_LATE_HOURLY_FEE_IDR)} per jam berjalan`;
+      const calc =
+        hours !== null && hours > 0
+          ? `.\nKalau dari pukul ${String(hour).padStart(2, "0")}.00, jadinya ${idr(EARLY_LATE_HOURLY_FEE_IDR)} × ${hours} jam = ${idr(EARLY_LATE_HOURLY_FEE_IDR * hours)}`
+          : "";
+      return {
+        reply:
+          `${head} ${rate}${calc}, Kak.\n` +
+          `Ketersediaannya menyesuaikan kondisi kamar hari itu ya 🙏`,
+        intent: "early_late_checkin_policy",
+      };
+    }
+  }
+
   // — Jam check-in / check-out — (guard sinyal tanggal: "tgl 8 udh checkout"
   //   adalah jawaban tanggal, bukan pertanyaan kebijakan)
   if (
@@ -222,18 +334,86 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply:
         `${opener}Waktu check-in mulai pukul *${checkInTime}* dan check-out paling lambat *${checkOutTime}*.\n` +
-        `Early check-in / late check-out mengikuti ketersediaan kamar ya Kak 🙏`,
+        `Early check-in / late check-out dikenakan ${idr(EARLY_LATE_HOURLY_FEE_IDR)} per jam berjalan, ` +
+        `menyesuaikan ketersediaan kamar ya Kak 🙏`,
       intent: "policy_question",
     };
   }
 
+  // — Sarapan — kebijakan tetap, jawab jujur dan langsung.
+  if (BREAKFAST_RE.test(raw) && !AVAILABILITY_OR_PRICE_RE.test(raw)) {
+    return {
+      reply:
+        `${opener}Mohon maaf Kak, saat ini kami belum menyediakan sarapan. ` +
+        `Tapi lokasi kami dekat dengan banyak pilihan kuliner enak, jadi gampang cari makan pagi 🙏`,
+      intent: "faq_breakfast",
+    };
+  }
+
+  // — Jarak ke landmark yang jaraknya sudah pasti —
+  // Landmark di luar daftar sengaja dilewatkan ke AI: mengarang angka jarak
+  // jauh lebih mahal daripada satu panggilan LLM.
+  const landmark = KNOWN_LANDMARKS.find((l) => l.re.test(raw));
+  if (landmark && DISTANCE_INTENT_RE.test(raw) && !AVAILABILITY_OR_PRICE_RE.test(raw)) {
+    const lines = [`${opener}Dari ${landmark.label}, ${propertyName} ${landmark.distance}, Kak.`];
+    if (address) lines.push(`Alamat kami: 📍 ${address}`);
+    return { reply: lines.join("\n"), intent: "faq_distance" };
+  }
+
+  // — Pertanyaan OTA (rate parity & extra bed) —
+  if (OTA_RE.test(raw)) {
+    if (EXTRA_BED_RE.test(raw)) {
+      return {
+        reply:
+          `${opener}Extra bed tetap tersedia apapun channel bookingnya, Kak — properti dan tarif extra bed ` +
+          `(${idr(EXTRA_BED_RATE_IDR)}/malam) sama saja.\n` +
+          `Kalau booking lewat OTA, konfirmasikan kebutuhan extra bed ke kami setelah reservasi selesai ya, nanti kami siapkan.`,
+        intent: "faq_ota_extra_bed",
+      };
+    }
+    return {
+      reply:
+        `${opener}Kami memang terdaftar di beberapa OTA, tapi harga booking langsung via WhatsApp ini biasanya ` +
+        `sama atau lebih hemat karena tidak ada biaya layanan OTA, Kak.\n` +
+        `Kami juga bisa lebih fleksibel soal jam check-in/out kalau memang tersedia. Mau saya bantu cek tanggalnya?`,
+      intent: "faq_ota",
+    };
+  }
+
+  // — Cara / metode booking — (bukan permintaan booking itu sendiri) —
+  if (
+    BOOKING_METHOD_RE.test(raw) &&
+    !DATE_SIGNAL_RE.test(raw) &&
+    !AVAILABILITY_OR_PRICE_RE.test(raw) &&
+    findMentionedRooms(raw, rooms).length === 0
+  ) {
+    return {
+      reply:
+        `${opener}Booking bisa langsung via WhatsApp ini Kak, tidak perlu datang ke tempat. ` +
+        `Setelah data lengkap dan DP masuk, kamar langsung kami amankan dan invoice otomatis dikirim ke sini juga.\n\n` +
+        `Mau saya bantu cek tanggalnya sekarang, Kak?`,
+      intent: "faq_booking_method",
+    };
+  }
+
+  // — Istirahat singkat / day-use — tawarkan solusinya, bukan penolakan.
+  if (DAY_USE_RE.test(raw) && !AVAILABILITY_OR_PRICE_RE.test(raw)) {
+    return {
+      reply:
+        `${opener}Bisa Kak — Kakak check-in sekarang dan check-out standar besok pukul ${checkOutTime}, ` +
+        `jadi tetap bisa istirahat sampai siang.\n` +
+        `Untuk saat ini kami memang melayani menginap minimal 1 malam ya Kak, belum ada sewa per jam 🙏`,
+      intent: "faq_day_use",
+    };
+  }
+
   // — WiFi — (satu-baris → batas panjang O5)
-  if (raw.length <= ONE_LINER_MAX_LEN && /\b(wifi|wi-fi|internet)\b/i.test(raw)) {
+  if (raw.length <= ONE_LINER_MAX_LEN && /\b(wifi|wi-fi|internet)(?:nya)?\b/i.test(raw)) {
     return { reply: "Iya Kak, tersedia WiFi untuk tamu.", intent: "faq_wifi" };
   }
 
   // — Parkir — (satu-baris → batas panjang O5)
-  if (raw.length <= ONE_LINER_MAX_LEN && /\b(parkir|parking|mobil|motor)\b/i.test(raw)) {
+  if (raw.length <= ONE_LINER_MAX_LEN && /\b(parkir(?:an)?|parking|mobil|motor)(?:nya)?\b/i.test(raw)) {
     return {
       reply:
         "Iya Kak, tersedia area parkir untuk tamu. Untuk kendaraan besar atau rombongan, " +
