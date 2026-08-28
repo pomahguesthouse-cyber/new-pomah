@@ -667,7 +667,40 @@ export const createBooking: ToolHandler = async (args: Record<string, unknown>, 
       .single();
   }
 
+  // ── Precheck bentrok kamar SEBELUM insert ─────────────────────────────────
+  // Tanpa ini, kamar yang sudah terisi baru terdeteksi oleh exclusion
+  // constraint `booking_rooms_no_overlap` setelah header booking + guest
+  // tersimpan, sehingga harus di-rollback. Precheck memakai logika yang sama
+  // dengan alur admin (src/lib/room-availability.ts).
+  {
+    const { findRoomConflicts, describeRoomConflicts } = await import("@/lib/room-availability");
+    const conflicts = await findRoomConflicts(ctx.supabaseAdmin as any, {
+      roomIds: assignments.map((a) => a.roomId),
+      checkIn,
+      checkOut,
+    });
+    if (conflicts.length > 0) {
+      await rollbackBooking(ctx, { guestId: guestResolution.created ? guest.id : undefined });
+      return JSON.stringify({
+        ok: false,
+        room_conflict: true,
+        conflicts: conflicts.map((c) => ({
+          kamar: c.roomNumber,
+          booking: c.referenceCode,
+          check_in: c.checkIn,
+          check_out: c.checkOut,
+        })),
+        error: `Kamar sudah terisi untuk ${checkIn} – ${checkOut}: ${describeRoomConflicts(conflicts)}.`,
+        instruction_to_agent:
+          "JANGAN coba simpan ulang booking dengan kamar yang sama. Panggil " +
+          "`check_room_availability` untuk tanggal tersebut, lalu tawarkan tipe/unit " +
+          "kamar lain atau tanggal alternatif ke tamu.",
+      });
+    }
+  }
+
   let { data: booking, error: bErr } = await insertBooking(desiredSource);
+
 
   // Graceful fallback: a DB that hasn't been migrated yet won't know
   // 'manager_chat' as a booking_source enum value (22P02 invalid_text_representation).
