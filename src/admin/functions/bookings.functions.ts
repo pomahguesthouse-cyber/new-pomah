@@ -503,8 +503,17 @@ export const createMultiRoomBooking = createServerFn({ method: "POST" })
       finalPaidAmount = 0;
     }
 
+    // Cegah bentrok kamar sebelum insert (pesan ramah, bukan error constraint DB).
+    const { assertRoomsFree } = await import("@/admin/lib/room-conflict");
+    await assertRoomsFree(context.supabase, {
+      roomIds: selectedRooms.map((r) => r.room_id),
+      checkIn: data.check_in,
+      checkOut: data.check_out,
+    });
+
     // 1 booking header covers every room in this reservation.
     const { data: booking, error: bookErr } = await context.supabase
+
       .from("bookings")
       .insert({
         property_id: property.id,
@@ -685,7 +694,17 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       0,
     );
 
+    // Cegah bentrok kamar (kecuali dengan booking ini sendiri).
+    const { assertRoomsFree } = await import("@/admin/lib/room-conflict");
+    await assertRoomsFree(context.supabase, {
+      roomIds: selectedRooms.map((r) => r.room_id),
+      checkIn: data.check_in,
+      checkOut: data.check_out,
+      excludeBookingId: data.id,
+    });
+
     const patch = {
+
       check_in: data.check_in,
       check_out: data.check_out,
       adults: data.adults,
