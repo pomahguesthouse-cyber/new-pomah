@@ -4066,6 +4066,10 @@ export type Database = {
           user_message: string
         }[]
       }
+      merge_wa_threads_to_canonical_phone: {
+        Args: { p_canonical_phone: string }
+        Returns: number
+      }
       normalize_guest_booking_status: {
         Args: { p_value: string }
         Returns: string

@@ -10,7 +10,6 @@ export interface NotificationThreadCandidate {
   external_chat_id?: string | null;
   lid_alias?: string | null;
   last_message_at?: string | null;
-  updated_at?: string | null;
 }
 
 function normalizeIdentity(value: string | null | undefined): string {
@@ -30,7 +29,7 @@ function identityScore(row: NotificationThreadCandidate, target: string): number
 }
 
 function activityTime(row: NotificationThreadCandidate): number {
-  return Date.parse(row.last_message_at ?? row.updated_at ?? "") || 0;
+  return Date.parse(row.last_message_at ?? "") || 0;
 }
 
 /**
@@ -73,7 +72,7 @@ export async function findNotificationThreadId(
 
   const { data, error } = await (supabase as any)
     .from("whatsapp_threads")
-    .select("id, phone, canonical_phone, external_chat_id, lid_alias, last_message_at, updated_at")
+    .select("id, phone, canonical_phone, external_chat_id, lid_alias, last_message_at")
     .or(filter)
     .limit(20);
 
