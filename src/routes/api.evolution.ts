@@ -146,7 +146,21 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
   // latter so it appears in the admin inbox; skip the former to avoid duplicates.
   if (isOutgoing) {
     try {
+      // 0) Perintah takeover yang diketik operator langsung di chat tamu.
+      const outCommand = parseTakeoverCommand(displayMessage);
+      if (outCommand) {
+        const targetPhone = outCommand.targetPhone || customerPhone;
+        const threadId = await resolveThreadIdByPhone(supabaseAdmin as any, targetPhone, name);
+        if (threadId) {
+          await applyTakeoverMode(supabaseAdmin as any, threadId, outCommand.mode);
+          await logTakeoverNote(supabaseAdmin as any, threadId, outCommand.mode, "operator (WhatsApp)");
+        }
+        console.log(`[EvolutionWebhook] takeover command (${outCommand.mode}) | ${logCtx}`);
+        return new Response("OK", { status: 200 });
+      }
+
       // 1) Dedup by provider message id — echo of our own API send.
+
       if (wppId) {
         const { data: existingById } = await (supabaseAdmin as any)
           .from("whatsapp_messages")
