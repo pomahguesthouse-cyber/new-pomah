@@ -13,6 +13,13 @@ import { buildDedupKey, isDuplicate, isDuplicateBody } from "@/webhook/deduplica
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
+import {
+  parseTakeoverCommand,
+  applyTakeoverMode,
+  logTakeoverNote,
+  resolveThreadIdByPhone,
+} from "@/services/wa-autoreply/takeover-commands";
+
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -146,7 +153,21 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
   // latter so it appears in the admin inbox; skip the former to avoid duplicates.
   if (isOutgoing) {
     try {
+      // 0) Perintah takeover yang diketik operator langsung di chat tamu.
+      const outCommand = parseTakeoverCommand(displayMessage);
+      if (outCommand) {
+        const targetPhone = outCommand.targetPhone || customerPhone;
+        const threadId = await resolveThreadIdByPhone(supabaseAdmin as any, targetPhone, name);
+        if (threadId) {
+          await applyTakeoverMode(supabaseAdmin as any, threadId, outCommand.mode);
+          await logTakeoverNote(supabaseAdmin as any, threadId, outCommand.mode, "operator (WhatsApp)");
+        }
+        console.log(`[EvolutionWebhook] takeover command (${outCommand.mode}) | ${logCtx}`);
+        return new Response("OK", { status: 200 });
+      }
+
       // 1) Dedup by provider message id — echo of our own API send.
+
       if (wppId) {
         const { data: existingById } = await (supabaseAdmin as any)
           .from("whatsapp_messages")
@@ -242,6 +263,49 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     }
     return new Response("OK", { status: 200 });
   }
+
+  // Perintah takeover dari nomor manajer/admin: `/human 0812xxxx` atau `/ai 0812xxxx`.
+  const inCommand = parseTakeoverCommand(displayMessage);
+  if (inCommand) {
+    try {
+      const { isConfiguredAdminPhone, resolveManagerByPhone } = await import(
+        "@/services/wa-autoreply/identity"
+      );
+      const manager = await resolveManagerByPhone(customerPhone);
+      const isStaff = !!manager || isConfiguredAdminPhone(customerPhone);
+      if (isStaff && inCommand.targetPhone) {
+        const threadId = await resolveThreadIdByPhone(supabaseAdmin as any, inCommand.targetPhone);
+        let reply = `Nomor ${inCommand.targetPhone} tidak ditemukan.`;
+        if (threadId) {
+          await applyTakeoverMode(supabaseAdmin as any, threadId, inCommand.mode);
+          await logTakeoverNote(
+            supabaseAdmin as any,
+            threadId,
+            inCommand.mode,
+            manager?.name ?? "Admin",
+          );
+          reply =
+            inCommand.mode === "human"
+              ? `AI dimatikan untuk ${inCommand.targetPhone}. Percakapan sekarang ditangani manusia.`
+              : `AI diaktifkan kembali untuk ${inCommand.targetPhone}.`;
+        }
+        const { data: prop } = await (supabaseAdmin as any)
+          .from("properties")
+          .select("wpp_token")
+          .limit(1)
+          .maybeSingle();
+        if (prop?.wpp_token) {
+          const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
+          await sendWhatsAppMessage(prop.wpp_token, customerPhone, reply);
+        }
+        console.log(`[EvolutionWebhook] staff takeover command (${inCommand.mode}) | ${logCtx}`);
+        return new Response("OK", { status: 200 });
+      }
+    } catch (e) {
+      console.warn("[EvolutionWebhook] takeover command gagal (non-fatal):", e);
+    }
+  }
+
 
   const dedupKey = buildDedupKey(wppId, customerPhone, displayMessage);
   if (isDuplicate(dedupKey) || isDuplicateBody(customerPhone, displayMessage)) {
