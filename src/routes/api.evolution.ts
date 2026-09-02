@@ -13,6 +13,13 @@ import { buildDedupKey, isDuplicate, isDuplicateBody } from "@/webhook/deduplica
 import { classifyMessageIntent } from "@/webhook/intent-classifier";
 import { saveInboundMessage, saveMessageMetadata } from "@/repositories/message.repository";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
+import {
+  parseTakeoverCommand,
+  applyTakeoverMode,
+  logTakeoverNote,
+  resolveThreadIdByPhone,
+} from "@/services/wa-autoreply/takeover-commands";
+
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
