@@ -257,6 +257,49 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
     return new Response("OK", { status: 200 });
   }
 
+  // Perintah takeover dari nomor manajer/admin: `/human 0812xxxx` atau `/ai 0812xxxx`.
+  const inCommand = parseTakeoverCommand(displayMessage);
+  if (inCommand) {
+    try {
+      const { isConfiguredAdminPhone, resolveManagerByPhone } = await import(
+        "@/services/wa-autoreply/identity"
+      );
+      const manager = await resolveManagerByPhone(customerPhone);
+      const isStaff = !!manager || isConfiguredAdminPhone(customerPhone);
+      if (isStaff && inCommand.targetPhone) {
+        const threadId = await resolveThreadIdByPhone(supabaseAdmin as any, inCommand.targetPhone);
+        let reply = `Nomor ${inCommand.targetPhone} tidak ditemukan.`;
+        if (threadId) {
+          await applyTakeoverMode(supabaseAdmin as any, threadId, inCommand.mode);
+          await logTakeoverNote(
+            supabaseAdmin as any,
+            threadId,
+            inCommand.mode,
+            manager?.name ?? "Admin",
+          );
+          reply =
+            inCommand.mode === "human"
+              ? `AI dimatikan untuk ${inCommand.targetPhone}. Percakapan sekarang ditangani manusia.`
+              : `AI diaktifkan kembali untuk ${inCommand.targetPhone}.`;
+        }
+        const { data: prop } = await (supabaseAdmin as any)
+          .from("properties")
+          .select("wpp_token")
+          .limit(1)
+          .maybeSingle();
+        if (prop?.wpp_token) {
+          const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
+          await sendWhatsAppMessage(prop.wpp_token, customerPhone, reply);
+        }
+        console.log(`[EvolutionWebhook] staff takeover command (${inCommand.mode}) | ${logCtx}`);
+        return new Response("OK", { status: 200 });
+      }
+    } catch (e) {
+      console.warn("[EvolutionWebhook] takeover command gagal (non-fatal):", e);
+    }
+  }
+
+
   const dedupKey = buildDedupKey(wppId, customerPhone, displayMessage);
   if (isDuplicate(dedupKey) || isDuplicateBody(customerPhone, displayMessage)) {
     console.log(`[EvolutionWebhook] duplicate | ${logCtx}`);
