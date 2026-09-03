@@ -118,6 +118,7 @@ export const KNOWN_LANDMARKS: ReadonlyArray<{ re: RegExp; label: string; distanc
   { re: /\bakpelni\b|\bpawiyatan\s+luhur\b/i, label: "AKPELNI", distance: "sekitar 5 menit berkendara — dekat sekali" },
   { re: /\bunnes\b|\bsekaran\b|\buniversitas\s+negeri\s+semarang\b/i, label: "UNNES Sekaran", distance: "sekitar 8 km, kurang lebih 10–15 menit berkendara" },
   { re: /\bsimpang\s*lima\b|\bpusat\s+kota\b/i, label: "Simpang Lima / pusat kota", distance: "sekitar 15–20 menit berkendara" },
+  { re: /\buntag\b|\btujuh\s+belas\s+agustus\b|\bfakultas\s+hukum\b/i, label: "Fakultas Hukum UNTAG", distance: "sekitar 1,9 km, kurang lebih 5 menit berkendara" },
 ];
 
 const idr = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
