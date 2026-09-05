@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
   LayoutDashboard,
@@ -48,7 +48,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { toast } from "sonner";
+
 import { getBrandingSettings } from "@/admin/modules/settings/settings.functions";
+import { getGlobalAutoReply, setGlobalAutoReply } from "@/admin/modules/ai-lab/ai-lab.functions";
+import { Switch } from "@/components/ui/switch";
 import {
   Sidebar,
   SidebarContent,
@@ -427,20 +431,7 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
       </SidebarContent>
 
       <SidebarFooter>
-        {!collapsed && (
-          <div className="rounded-md border border-sidebar-border/60 bg-sidebar-accent/40 px-3 py-2.5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-              AI Concierge
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-sidebar-foreground">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              </span>
-              All systems nominal
-            </p>
-          </div>
-        )}
+        <AutoReplyToggle collapsed={collapsed} />
       </SidebarFooter>
     </Sidebar>
   );
@@ -463,5 +454,80 @@ function GroupDropZone({ label, empty }: { label: string; empty: boolean }) {
     >
       {empty ? "Drop di sini" : null}
     </li>
+  );
+}
+
+/**
+ * Saklar on/off auto-reply chatbot di bagian bawah sidebar backend.
+ * Menyimpan ke ai_lab_config properti (gate front-office autoReply).
+ */
+function AutoReplyToggle({ collapsed }: { collapsed: boolean }) {
+  const getFn = useServerFn(getGlobalAutoReply);
+  const setFn = useServerFn(setGlobalAutoReply);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["global-auto-reply"],
+    queryFn: () => getFn(),
+  });
+
+  const mutation = useMutation({
+    mutationFn: (enabled: boolean) => setFn({ data: { enabled } }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["global-auto-reply"] });
+      qc.invalidateQueries({ queryKey: ["ai-lab-config"] });
+      toast.success(res.enabled ? "Auto-reply chatbot aktif" : "Auto-reply chatbot nonaktif");
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const enabled = data?.enabled ?? false;
+  const disabled = isLoading || mutation.isPending;
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        aria-label="Toggle auto-reply chatbot"
+        disabled={disabled}
+        onClick={() => mutation.mutate(!enabled)}
+        className={`mx-auto flex h-8 w-8 items-center justify-center rounded-md border transition ${
+          enabled
+            ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300"
+            : "border-sidebar-border/60 bg-sidebar-accent/40 text-sidebar-foreground/60"
+        }`}
+      >
+        <Brain className="h-4 w-4" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 bg-sidebar-accent/40 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
+          AI Concierge
+        </p>
+        <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-sidebar-foreground">
+          <span className="relative flex h-1.5 w-1.5">
+            {enabled && (
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+            )}
+            <span
+              className={`relative inline-flex h-1.5 w-1.5 rounded-full ${
+                enabled ? "bg-emerald-500" : "bg-sidebar-foreground/40"
+              }`}
+            />
+          </span>
+          {enabled ? "Auto-reply aktif" : "Auto-reply mati"}
+        </p>
+      </div>
+      <Switch
+        aria-label="Toggle auto-reply chatbot"
+        checked={enabled}
+        disabled={disabled}
+        onCheckedChange={(v) => mutation.mutate(v)}
+      />
+    </div>
   );
 }
