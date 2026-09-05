@@ -427,20 +427,7 @@ export function AdminSidebar({ propertyName }: { propertyName?: string | null })
       </SidebarContent>
 
       <SidebarFooter>
-        {!collapsed && (
-          <div className="rounded-md border border-sidebar-border/60 bg-sidebar-accent/40 px-3 py-2.5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/60">
-              AI Concierge
-            </p>
-            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-sidebar-foreground">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              </span>
-              All systems nominal
-            </p>
-          </div>
-        )}
+        <AutoReplyToggle collapsed={collapsed} />
       </SidebarFooter>
     </Sidebar>
   );
