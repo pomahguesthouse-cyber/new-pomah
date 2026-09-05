@@ -97,6 +97,8 @@ type InvoiceRoomGroup = {
   name: string;
   qty: number;
   nightly_rate: number;
+  extraBedQty: number;
+  extraBedRate: number;
 };
 
 function normalizeRoomDetails(inv: any): InvoiceRoomDetail[] {
