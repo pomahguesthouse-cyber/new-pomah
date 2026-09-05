@@ -353,6 +353,61 @@ export const updateAiLabConfig = createServerFn({ method: "POST" })
   });
 
 /**
+ * Saklar master auto-reply chatbot.
+ * Gate di database memakai agents["front-office"].autoReply, jadi flag inilah
+ * yang menentukan chatbot membalas otomatis atau tidak.
+ */
+export const getGlobalAutoReply = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await db(context.supabase)
+      .from("properties")
+      .select("id, ai_lab_config")
+      .limit(1)
+      .maybeSingle();
+    const row = (data ?? {}) as Record<string, unknown>;
+    const config = mergeAiLabConfig(row.ai_lab_config);
+    return {
+      id: (row.id as string | undefined) ?? null,
+      enabled: config.agents["front-office"]?.autoReply ?? false,
+    };
+  });
+
+/** Aktif/nonaktifkan auto-reply chatbot secara global. */
+export const setGlobalAutoReply = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ enabled: z.boolean() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: row } = await db(context.supabase)
+      .from("properties")
+      .select("id, ai_lab_config")
+      .limit(1)
+      .maybeSingle();
+    const propertyRow = (row ?? {}) as Record<string, unknown>;
+    const id = propertyRow.id as string | undefined;
+    if (!id) throw new Error("Data properti belum tersedia");
+
+    const config = mergeAiLabConfig(propertyRow.ai_lab_config);
+    const next: AiLabConfig = {
+      ...config,
+      agents: {
+        ...config.agents,
+        "front-office": {
+          ...config.agents["front-office"],
+          enabled: true,
+          autoReply: data.enabled,
+        },
+      },
+    };
+    const { error } = await db(context.supabase)
+      .from("properties")
+      .update({ ai_lab_config: next } as never)
+      .eq("id", id);
+    if (error) throw error;
+    return { ok: true, enabled: data.enabled };
+  });
+
+/**
  * Helper non-serverFn: baca pengaturan RAG dari properti pertama. Dipakai
  * oleh orchestrator yang berjalan di server tanpa konteks autentikasi user.
  */
