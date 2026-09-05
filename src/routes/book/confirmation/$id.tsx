@@ -134,17 +134,23 @@ function groupRoomDetails(rooms: InvoiceRoomDetail[]): InvoiceRoomGroup[] {
   for (const room of rooms) {
     const name = String(room.room_type || "Kamar").trim() || "Kamar";
     const nightlyRate = Number(room.nightly_rate ?? 0);
+    const extraBedQty = Number(room.extra_bed_count ?? 0) || 0;
+    const extraBedRate = Number(room.extra_bed_rate ?? 0) || 0;
     const key = `${name}:${nightlyRate}`;
     const existing = groups.get(key);
 
     if (existing) {
       existing.qty += 1;
+      existing.extraBedQty += extraBedQty;
+      if (extraBedRate > 0) existing.extraBedRate = extraBedRate;
     } else {
       groups.set(key, {
         key,
         name,
         qty: 1,
         nightly_rate: nightlyRate,
+        extraBedQty,
+        extraBedRate,
       });
     }
   }
