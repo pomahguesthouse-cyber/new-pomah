@@ -375,16 +375,30 @@ function ConfirmationPage() {
                     <p className="font-semibold text-stone-700 print:text-black">Rincian Kamar</p>
                     {roomGroups.map((room) => {
                       const subtotal = room.nightly_rate * Number(inv.nights ?? 1) * room.qty;
+                      const extraBedSubtotal = room.extraBedRate * room.extraBedQty * Number(inv.nights ?? 1);
                       return (
-                        <div key={room.key} className="flex justify-between gap-4 border-t border-stone-100 pt-2 first:border-t-0 first:pt-0">
-                          <span>
-                            {room.name} × {room.qty} kamar
-                            <span className="block text-xs text-stone-500">
-                              {formatIDR(room.nightly_rate)} × {inv.nights} malam × {room.qty} kamar
+                        <React.Fragment key={room.key}>
+                          <div className="flex justify-between gap-4 border-t border-stone-100 pt-2 first:border-t-0 first:pt-0">
+                            <span>
+                              {room.name} × {room.qty} kamar
+                              <span className="block text-xs text-stone-500">
+                                {formatIDR(room.nightly_rate)} × {inv.nights} malam × {room.qty} kamar
+                              </span>
                             </span>
-                          </span>
-                          <span>{formatIDR(subtotal)}</span>
-                        </div>
+                            <span>{formatIDR(subtotal)}</span>
+                          </div>
+                          {room.extraBedQty > 0 && room.extraBedRate > 0 && (
+                            <div className="flex justify-between gap-4 border-t border-stone-100 pt-2">
+                              <span>
+                                Extra bed ({room.name}) × {room.extraBedQty}
+                                <span className="block text-xs text-stone-500">
+                                  {formatIDR(room.extraBedRate)} × {inv.nights} malam × {room.extraBedQty} bed
+                                </span>
+                              </span>
+                              <span>{formatIDR(extraBedSubtotal)}</span>
+                            </div>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </div>
