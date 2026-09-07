@@ -45,13 +45,17 @@ export async function generateEmbedding(
     });
 
     if (!res.ok) {
-      console.error(
-        "[EmbeddingService] HTTP error:",
-        res.status,
-        await res.text()
-      );
+      const errText = await res.text();
+      console.error("[EmbeddingService] HTTP error:", res.status, errText);
+      // Kegagalan kredit (402/403) harus terlihat oleh super admin, sama
+      // seperti jalur LLM. RAG tetap degrade dengan mengembalikan null.
+      if (res.status === 402 || res.status === 403) {
+        const { reportAiGatewayFailureAsync } = await import("@/services/ai-credit-alert");
+        reportAiGatewayFailureAsync(res.status, errText, "embedding");
+      }
       return null;
     }
+
 
     const json = await res.json();
     const embedding = (json.data?.[0]?.embedding ?? null) as number[] | null;

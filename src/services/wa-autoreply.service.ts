@@ -235,7 +235,11 @@ export type AutoreplyOutcome =
   /** AI tidak menghasilkan balasan, tapi antrian masih punya sisa percobaan —
    *  entry dijadwalkan ulang, TIDAK ada pesan menyerah yang dikirim ke tamu. */
   | "ai_no_reply"
+  /** AI gagal karena kredit gateway habis/diblokir (402/403) dan tidak ada
+   *  failover yang berhasil — retry hanya memperbesar lonjakan 402. */
+  | "ai_credit_exhausted"
   | "fatal";
+
 
 /**
  * Cermin dari `wa_conversation_queue.max_attempts` (DEFAULT 3, migrasi
@@ -1621,6 +1625,26 @@ export async function executeAutoreplyForPhone(
   // Fallback state-aware (mis. "mohon ketikkan nama lengkap") TIDAK ditunda —
   // itu balasan yang benar-benar berguna, bukan pengakuan kegagalan.
   const isGenericFallback = finalFallback === FALLBACK_MESSAGE || finalFallback === MANAGER_FALLBACK_MESSAGE;
+  // Kegagalan kredit gateway (402/403) bersifat permanen sampai kredit diisi.
+  // Retry hanya memperbesar lonjakan 402, jadi tandai sebagai outcome khusus
+  // yang TIDAK di-retry oleh antrian.
+  const creditFailure =
+    !reply &&
+    Array.isArray(orchResult?.retries) &&
+    orchResult.retries.some(
+      (r: { reason?: string }) =>
+        r?.reason === "http_402" ||
+        r?.reason === "http_403" ||
+        (typeof r?.reason === "string" && r.reason.startsWith("fallback_openai_after_") && r.reason.includes("_failed_")),
+    );
+  if (creditFailure && queueEntryId) {
+    if (quickAckTimer) clearTimeout(quickAckTimer);
+    try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
+    console.error(
+      `[Autoreply] AI credit failure (gateway 402/403) for ${phone.slice(-6)} — tidak di-retry`,
+    );
+    return "ai_credit_exhausted";
+  }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
     if (quickAckTimer) clearTimeout(quickAckTimer);
     try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
@@ -1631,6 +1655,7 @@ export async function executeAutoreplyForPhone(
     );
     return "ai_no_reply";
   }
+
 
   const rawReply = reply ?? finalFallback;
   const isFallback = !reply;
@@ -2123,7 +2148,12 @@ function cooldownActive(updatedAt: string | null | undefined): boolean {
 
 // Outcomes that must NOT be retried — they are config/permanent, so retrying
 // just burns attempts and delays the 'failed' terminal state.
-const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set(["skipped_config", "no_api_key"]);
+const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set([
+  "skipped_config",
+  "no_api_key",
+  "ai_credit_exhausted",
+]);
+
 const FALLBACK_SENT_MARKER_RE = /\[fallback_sent(?::[^\]]+)?\]/;
 
 function hasFallbackSentMarker(lastError: unknown): boolean {

@@ -322,8 +322,37 @@ async function callLlm(
     const latency_ms = Date.now() - t0;
     retries.push({ attempt, reason: r.reason, latency_ms });
     if (!r.retriable) {
+      // ── Failover kredit: bila gateway Lovable menolak karena kredit
+      // (402/403) dan OPENAI_API_KEY tersedia, coba SATU kali lewat OpenAI
+      // langsung supaya balasan tamu tidak hilang.
+      const isCreditFailure = r.reason === "http_402" || r.reason === "http_403";
+      const openAiKey = process.env.OPENAI_API_KEY?.trim();
+      if (isCreditFailure && openAiKey) {
+        const fallbackTimeoutMs = resolveCallTimeoutMs(deadlineAt);
+        if (fallbackTimeoutMs === null) {
+          retries.push({ attempt: attempt + 1, reason: "budget_exhausted", latency_ms: 0 });
+          return { response: null, retries };
+        }
+        const fallbackConfig: AiClientConfig = {
+          ...config,
+          baseUrl: "https://api.openai.com/v1",
+          model: "gpt-4o-mini",
+          apiKey: openAiKey,
+        };
+        console.warn(`[MultiAgent][${agent.key}] ${r.reason} dari gateway — failover ke OpenAI sekali`);
+        const f0 = Date.now();
+        const fb = await callLlmOnce(fallbackConfig, messages, agent, tools, signal, fallbackTimeoutMs);
+        const fallbackReason = `fallback_openai_after_${r.reason.replace("http_", "")}`;
+        retries.push({
+          attempt: attempt + 1,
+          reason: fb.ok ? fallbackReason : `${fallbackReason}_failed_${fb.reason}`,
+          latency_ms: Date.now() - f0,
+        });
+        if (fb.ok) return { response: fb.data, retries };
+      }
       return { response: null, retries };
     }
+
     if (attempt < LLM_MAX_RETRIES) {
       // Retry hanya masuk akal bila sisa waktu cukup untuk satu panggilan
       // penuh lagi SETELAH backoff — kalau tidak, kita hanya membakar sisa
