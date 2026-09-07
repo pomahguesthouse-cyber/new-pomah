@@ -235,7 +235,11 @@ export type AutoreplyOutcome =
   /** AI tidak menghasilkan balasan, tapi antrian masih punya sisa percobaan —
    *  entry dijadwalkan ulang, TIDAK ada pesan menyerah yang dikirim ke tamu. */
   | "ai_no_reply"
+  /** AI gagal karena kredit gateway habis/diblokir (402/403) dan tidak ada
+   *  failover yang berhasil — retry hanya memperbesar lonjakan 402. */
+  | "ai_credit_exhausted"
   | "fatal";
+
 
 /**
  * Cermin dari `wa_conversation_queue.max_attempts` (DEFAULT 3, migrasi
