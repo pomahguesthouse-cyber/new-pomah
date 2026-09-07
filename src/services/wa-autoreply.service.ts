@@ -2148,7 +2148,12 @@ function cooldownActive(updatedAt: string | null | undefined): boolean {
 
 // Outcomes that must NOT be retried — they are config/permanent, so retrying
 // just burns attempts and delays the 'failed' terminal state.
-const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set(["skipped_config", "no_api_key"]);
+const NON_RETRYABLE_OUTCOMES: ReadonlySet<AutoreplyOutcome> = new Set([
+  "skipped_config",
+  "no_api_key",
+  "ai_credit_exhausted",
+]);
+
 const FALLBACK_SENT_MARKER_RE = /\[fallback_sent(?::[^\]]+)?\]/;
 
 function hasFallbackSentMarker(lastError: unknown): boolean {
