@@ -242,6 +242,12 @@ export interface HomepageConfig {
   seo: {
     metaTitle: string;
     metaDescription: string;
+    /** Judul utama (H1) yang dirender di hero halaman. */
+    h1: string;
+    /** Judul kartu Twitter; kosong = pakai metaTitle. */
+    twitterTitle: string;
+    /** Deskripsi kartu Twitter; kosong = pakai metaDescription. */
+    twitterDescription: string;
     targetKeyword: string;
     ogImageUrl: string;
     customHead: string;
@@ -252,6 +258,9 @@ export interface HomepageConfig {
   bookingSeo: {
     metaTitle: string;
     metaDescription: string;
+    h1: string;
+    twitterTitle: string;
+    twitterDescription: string;
     targetKeyword: string;
     ogImageUrl: string;
     customHead: string;
@@ -259,6 +268,7 @@ export interface HomepageConfig {
     jsonLdEnabled: boolean;
     customJsonLd: string;
   };
+
 }
 
 /** Lowest / highest z-index a section layer can take. */
@@ -426,9 +436,13 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   },
   sectionOrder: [...DEFAULT_SECTION_ORDER],
   seo: {
-    metaTitle: "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang",
+    metaTitle: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
     metaDescription:
-      "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.",
+      "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+    h1: "Penginapan Dekat UNNES Semarang",
+    twitterTitle: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
+    twitterDescription:
+      "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
     targetKeyword: "",
     ogImageUrl: "",
     customHead: "",
@@ -440,6 +454,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     metaTitle: "Booking Kamar | Pomah Guesthouse Semarang",
     metaDescription:
       "Booking kamar di Pomah Guesthouse Semarang. Cek ketersediaan dan pesan kamar dengan harga terbaik langsung dari website resmi kami.",
+    h1: "",
+    twitterTitle: "",
+    twitterDescription: "",
     targetKeyword: "",
     ogImageUrl: "",
     customHead: "",
@@ -447,6 +464,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     jsonLdEnabled: true,
     customJsonLd: "",
   },
+
 };
 
 /**

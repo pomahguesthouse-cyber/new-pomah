@@ -647,9 +647,12 @@ export function HeroSlider({
   accent,
   rating,
   actions,
+  h1Text,
 }: {
   hero: HomepageConfig["hero"];
   fallbackTitle: string;
+  /** Teks H1 dari pengaturan SEO; menggantikan heading slide pertama bila diisi. */
+  h1Text?: string;
   /** Optional gold script accent rendered just under the heading (home only). */
   accent?: string;
   /** Optional Google-rating badge shown under the subheading (home only). */
@@ -737,7 +740,7 @@ export function HeroSlider({
                 }
               }
             `}</style>
-            {active.heading}
+            {i === 0 && h1Text ? h1Text : active.heading}
           </h1>
           {accent && (
             <p className="mt-1 font-serif text-3xl italic text-amber-300 drop-shadow md:text-4xl">

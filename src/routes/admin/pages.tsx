@@ -2499,6 +2499,9 @@ function PageSettingsPanel({
   const [slug, setSlug] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc] = useState("");
+  const [h1, setH1] = useState("");
+  const [twitterTitle, setTwitterTitle] = useState("");
+  const [twitterDesc, setTwitterDesc] = useState("");
   const [targetKw, setTargetKw] = useState("");
   const [ogImage, setOgImage] = useState("");
   const [indexable, setIndexable] = useState(true);
@@ -2513,6 +2516,9 @@ function PageSettingsPanel({
       setSlug("");
       setMetaTitle(s.metaTitle ?? "");
       setMetaDesc(s.metaDescription ?? "");
+      setH1(s.h1 ?? "");
+      setTwitterTitle(s.twitterTitle ?? "");
+      setTwitterDesc(s.twitterDescription ?? "");
       setTargetKw(s.targetKeyword ?? "");
       setOgImage(s.ogImageUrl ?? "");
       setIndexable(true);
@@ -2525,6 +2531,9 @@ function PageSettingsPanel({
       setSlug(page.slug ?? "");
       setMetaTitle(page.meta_title ?? "");
       setMetaDesc(page.meta_description ?? "");
+      setH1(page.hero_headline ?? "");
+      setTwitterTitle("");
+      setTwitterDesc("");
       setTargetKw(page.target_keyword ?? "");
       setOgImage(page.og_image_url ?? "");
       setIndexable(page.published);
@@ -2536,19 +2545,17 @@ function PageSettingsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey]);
 
+
   const handleSave = async () => {
     setSaving(true);
     try {
       if (target.kind === "home" || target.kind === "book") {
-        if (!target.propertyId) {
-          toast.error("Properti belum tersedia.");
-          setSaving(false);
-          return;
-        }
-
         const newSeo = {
           metaTitle: metaTitle,
           metaDescription: metaDesc,
+          h1,
+          twitterTitle,
+          twitterDescription: twitterDesc,
           targetKeyword: targetKw,
           ogImageUrl: ogImage,
           customHead,
@@ -2559,13 +2566,15 @@ function PageSettingsPanel({
 
         await updateHomepageConfig({
           data: {
-            id: target.propertyId,
+            // Bila id properti belum termuat di klien, server memakai properti pertama.
+            id: target.propertyId ?? null,
             config: {
               ...target.cfg,
               ...(target.kind === "book" ? { bookingSeo: newSeo } : { seo: newSeo }),
             } as unknown as Record<string, unknown>,
           },
         });
+
       } else {
         const cleanSlug = slug
           .trim()
@@ -2582,6 +2591,7 @@ function PageSettingsPanel({
             slug: cleanSlug,
             meta_title: metaTitle || null,
             meta_description: metaDesc || null,
+            hero_headline: h1 || null,
             target_keyword: targetKw || null,
             og_image_url: ogImage || null,
             published: indexable,
@@ -2718,6 +2728,16 @@ function PageSettingsPanel({
                 {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
               </p>
             </div>
+            <FieldRow label="Judul utama halaman (H1)">
+              <Input
+                value={h1}
+                onChange={(e) => setH1(e.target.value)}
+                placeholder="mis. Penginapan Dekat UNNES Semarang"
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Judul besar yang tampil di halaman. Kosongkan untuk memakai judul bawaan.
+              </p>
+            </FieldRow>
             <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
               <Input
                 value={metaTitle}
@@ -2811,6 +2831,23 @@ function PageSettingsPanel({
             <FieldRow label="Gambar share (OG Image)">
               <ImageField value={ogImage} onChange={setOgImage} kind="image" />
               <p className="mt-0.5 text-[10px] text-muted-foreground">Muncul saat halaman dibagikan di media sosial.</p>
+            </FieldRow>
+            <FieldRow label="Twitter title">
+              <Input
+                value={twitterTitle}
+                onChange={(e) => setTwitterTitle(e.target.value)}
+                placeholder={metaTitle || "Judul untuk kartu Twitter"}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Kosong = memakai title tag.</p>
+            </FieldRow>
+            <FieldRow label="Twitter description">
+              <Textarea
+                value={twitterDesc}
+                onChange={(e) => setTwitterDesc(e.target.value)}
+                rows={3}
+                placeholder={metaDesc || "Deskripsi untuk kartu Twitter"}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Kosong = memakai meta description.</p>
             </FieldRow>
             <div className="overflow-hidden rounded-lg border border-stone-200">
               <div className="flex h-36 items-center justify-center bg-stone-100">
