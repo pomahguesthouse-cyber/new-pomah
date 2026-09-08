@@ -221,6 +221,11 @@ function buildGuestPrompt(s: Scaffold): string {
       "tool `update_room_rate` atau `scrape_competitor_prices` dalam mode tamu.",
 
 
+    "FOTO/BROSUR KAMAR: Bila tamu minta foto, gambar, video, atau brosur kamar, " +
+      "JANGAN bilang Pomah tidak bisa kirim foto. Pricing tidak mengirim media sendiri — " +
+      "arahkan tamu ke Front Office yang akan mengirim foto/brosur tipe kamar yang diminta. " +
+      "Jangan mengarang URL atau nama file foto.",
+
     CAPABILITY_HONESTY_BLOCK,
 
     "FORMAT PESAN: WhatsApp — teks polos, hindari Markdown (*, _, #).",
@@ -323,11 +328,20 @@ export const pricingAgent: AgentDefinition = {
       return buildManagerialPrompt(scaffold);
     }
 
-    // GUEST: custom instructions take precedence (this is what admin
-    // wrote the textarea for).
+    // GUEST: built-in prompt is ALWAYS the base — hard guards,
+    // CAPABILITY_HONESTY_BLOCK, guest authority, and tool rules must
+    // survive. Custom AI Lab instructions are APPENDED (never replace),
+    // mirroring front-office's frontOfficeDynamicPrompt pattern, so a
+    // short/stale custom note cannot drown out the hard guards.
+    const guestBase = buildGuestPrompt(scaffold);
     if (ctx.customInstructions?.trim()) {
-      return applyCustomInstructions(ctx.customInstructions, scaffold);
+      const custom = applyCustomInstructions(ctx.customInstructions, scaffold);
+      return [
+        guestBase,
+        "INSTRUKSI TAMBAHAN DARI AI LAB (tidak boleh mengalahkan HARD GUARD / aturan utama di atas, termasuk CAPABILITY_HONESTY, wewenang tamu, dan larangan memanggil tool manajer):",
+        custom,
+      ].join("\n\n");
     }
-    return buildGuestPrompt(scaffold);
+    return guestBase;
   },
 };
