@@ -5,6 +5,7 @@ import { generateObject } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import { ExploreConfig } from "@/admin/modules/explore/explore.config";
+import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 
 export const Route = createFileRoute("/api/cron/sync-explore")({
   server: {
@@ -89,7 +90,9 @@ ${rssText}
           const newConfig: ExploreConfig = {
             ...currentConfig,
             news: object.news.length > 0 ? object.news : (currentConfig.news || []),
-            events: object.events.length > 0 ? object.events : (currentConfig.events || []),
+            events: filterPublicExploreEvents(
+              object.events.length > 0 ? object.events : (currentConfig.events || []),
+            ),
           };
 
           await (supabaseAdmin as any)

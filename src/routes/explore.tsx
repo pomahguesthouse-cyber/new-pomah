@@ -30,6 +30,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
+import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/explore")({
@@ -220,7 +221,11 @@ function ExploreSemarang() {
     initialData: loaderData,
   });
 
-  const config = mergeExploreConfig(data?.property?.explore_config);
+  const mergedConfig = mergeExploreConfig(data?.property?.explore_config);
+  const config = {
+    ...mergedConfig,
+    events: filterPublicExploreEvents(mergedConfig.events),
+  };
   const now = useCurrentTime();
   const [activeTab, setActiveTab] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -231,7 +236,7 @@ function ExploreSemarang() {
     queryFn: () => listActivePublicEvents(),
     staleTime: 5 * 60 * 1000,
   });
-  const autoEvents = (autoEventsData?.events ?? []).map((e) => {
+  const autoEvents = filterPublicExploreEvents((autoEventsData?.events ?? []).map((e) => {
     const startIso = e.event_start_date ?? e.event_end_date ?? "";
     const isoStr = startIso
       ? new Date(startIso + "T00:00:00").toLocaleDateString("id-ID", {
@@ -250,7 +255,7 @@ function ExploreSemarang() {
       image: e.image_url ?? "",
       label: "EVENT",
     };
-  });
+  }));
 
   // Combine events + news for the sidebar
   const sidebarItems = [

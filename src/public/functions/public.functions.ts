@@ -12,6 +12,7 @@ import {
 } from "@/services/pricing/daily-rate.service";
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
+import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -209,7 +210,13 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
       .order("base_rate"),
   ]);
 
-  const property = (propertyData ?? null) as PublicProperty | null;
+  const propertyRaw = (propertyData ?? null) as PublicProperty | null;
+  const property = propertyRaw
+    ? {
+        ...propertyRaw,
+        explore_config: stripPastEventsFromExploreConfig(propertyRaw.explore_config),
+      }
+    : null;
 
   const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,

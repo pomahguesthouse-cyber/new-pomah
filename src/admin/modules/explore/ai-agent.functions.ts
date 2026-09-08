@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getIntegrationSettings } from "../settings/settings.functions";
 import { ExploreConfig } from "./explore.config";
+import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 
 function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
@@ -150,7 +151,9 @@ ${rssText}
       // Jika AI menemukan event baru, kita tambahkan/timpa. 
       // Untuk news, karena diupdate tiap 2 hari, kita bisa replace langsung dengan hasil AI terbaru.
       news: object.news.length > 0 ? object.news : (currentConfig.news || []),
-      events: object.events.length > 0 ? object.events : (currentConfig.events || []),
+      events: filterPublicExploreEvents(
+        object.events.length > 0 ? object.events : (currentConfig.events || []),
+      ),
     };
 
     const { error } = await db(context.supabase)
