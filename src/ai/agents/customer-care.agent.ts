@@ -106,9 +106,11 @@ interface Scaffold {
 }
 
 function buildScaffold(ctx: AgentContext): Scaffold {
-  const { property, today, managerName } = ctx;
+  const { property, today, managerName, mode } = ctx;
   return {
-    persona:   normalizeAssistantName(managerName),
+    // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani; mode
+    // managerial tetap pakai nama manajer asli.
+    persona:   mode === "managerial" ? normalizeAssistantName(managerName) : "Rani",
     propName:  property.name ?? "Pomah Guesthouse",
     todayLine: `Hari ini tanggal ${fmtDateID(today)}.`,
   };

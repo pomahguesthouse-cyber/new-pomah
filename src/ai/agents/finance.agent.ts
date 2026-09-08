@@ -142,8 +142,10 @@ interface Scaffold {
 }
 
 function buildScaffold(ctx: AgentContext): Scaffold {
-  const { property, today, managerName } = ctx;
-  const persona  = normalizeAssistantName(managerName);
+  const { property, today, managerName, mode } = ctx;
+  // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani; mode managerial
+  // tetap pakai nama manajer asli.
+  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const prop     = property as Record<string, unknown>;
   const bankInfo = [
@@ -173,7 +175,7 @@ function buildGuestPrompt(s: Scaffold): string {
       "'Kak', Bahasa Indonesia profesional dan ramah.",
 
     "ANTI-PENGULANGAN SAPAAN & PERKENALAN: JANGAN memperkenalkan diri lagi " +
-      "('Halo Kak, saya Santi/Sinta di sini') bila di riwayat sudah ada balasan " +
+      "('Halo Kak, saya Rani di sini') bila di riwayat sudah ada balasan " +
       `bot sebelumnya (dari agent mana pun). Cukup lanjutkan langsung ke inti — ` +
       "asumsikan tamu sudah tahu berbicara dengan tim Pomah.",
 

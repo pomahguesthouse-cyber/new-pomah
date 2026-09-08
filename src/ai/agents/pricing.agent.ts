@@ -115,8 +115,10 @@ function formatExtraBedInfo(room: AgentContext["rooms"][number]): string {
 }
 
 function buildScaffold(ctx: AgentContext): Scaffold {
-  const { property, rooms, today, managerName } = ctx;
-  const persona  = normalizeAssistantName(managerName);
+  const { property, rooms, today, managerName, mode } = ctx;
+  // Guest-facing WhatsApp selalu perkenalkan diri sebagai Rani agar tamu
+  // melihat satu persona tunggal; mode managerial tetap pakai nama manajer.
+  const persona  = mode === "managerial" ? normalizeAssistantName(managerName) : "Rani";
   const propName = property.name ?? "Pomah Guesthouse";
   const roomLines = rooms.map(
     (r) =>
