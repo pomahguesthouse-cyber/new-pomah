@@ -2499,6 +2499,9 @@ function PageSettingsPanel({
   const [slug, setSlug] = useState("");
   const [metaTitle, setMetaTitle] = useState("");
   const [metaDesc, setMetaDesc] = useState("");
+  const [h1, setH1] = useState("");
+  const [twitterTitle, setTwitterTitle] = useState("");
+  const [twitterDesc, setTwitterDesc] = useState("");
   const [targetKw, setTargetKw] = useState("");
   const [ogImage, setOgImage] = useState("");
   const [indexable, setIndexable] = useState(true);
@@ -2513,6 +2516,9 @@ function PageSettingsPanel({
       setSlug("");
       setMetaTitle(s.metaTitle ?? "");
       setMetaDesc(s.metaDescription ?? "");
+      setH1(s.h1 ?? "");
+      setTwitterTitle(s.twitterTitle ?? "");
+      setTwitterDesc(s.twitterDescription ?? "");
       setTargetKw(s.targetKeyword ?? "");
       setOgImage(s.ogImageUrl ?? "");
       setIndexable(true);
@@ -2525,6 +2531,9 @@ function PageSettingsPanel({
       setSlug(page.slug ?? "");
       setMetaTitle(page.meta_title ?? "");
       setMetaDesc(page.meta_description ?? "");
+      setH1(page.hero_headline ?? "");
+      setTwitterTitle("");
+      setTwitterDesc("");
       setTargetKw(page.target_keyword ?? "");
       setOgImage(page.og_image_url ?? "");
       setIndexable(page.published);
@@ -2535,6 +2544,7 @@ function PageSettingsPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey]);
+
 
   const handleSave = async () => {
     setSaving(true);
