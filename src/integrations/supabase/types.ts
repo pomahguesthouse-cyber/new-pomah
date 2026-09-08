@@ -1724,8 +1724,11 @@ export type Database = {
           is_active: boolean | null
           is_published: boolean | null
           max_occupancy: number | null
+          meta_description: string | null
           name: string
           property_id: string
+          seo_h1: string | null
+          seo_title: string | null
           short_description: string | null
           size_sqm: number | null
           slug: string
@@ -1749,8 +1752,11 @@ export type Database = {
           is_active?: boolean | null
           is_published?: boolean | null
           max_occupancy?: number | null
+          meta_description?: string | null
           name: string
           property_id: string
+          seo_h1?: string | null
+          seo_title?: string | null
           short_description?: string | null
           size_sqm?: number | null
           slug: string
@@ -1774,8 +1780,11 @@ export type Database = {
           is_active?: boolean | null
           is_published?: boolean | null
           max_occupancy?: number | null
+          meta_description?: string | null
           name?: string
           property_id?: string
+          seo_h1?: string | null
+          seo_title?: string | null
           short_description?: string | null
           size_sqm?: number | null
           slug?: string

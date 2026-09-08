@@ -40,22 +40,41 @@ export const getHomepageConfig = createServerFn({ method: "GET" })
     };
   });
 
-/** Persist the homepage config onto the property row. */
+/**
+ * Persist the homepage config onto the property row.
+ *
+ * `id` bersifat opsional: bila klien tidak mengirim UUID yang valid
+ * (mis. properti belum termuat saat panel dibuka), id properti pertama
+ * diambil di server sehingga penyimpanan tidak gagal.
+ */
 export const updateHomepageConfig = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z
       .object({
-        id: z.string().uuid(),
+        id: z.string().optional().nullable(),
         config: z.record(z.string(), z.unknown()),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase)
+    const client = db(context.supabase);
+    const isUuid = (v: unknown): v is string =>
+      typeof v === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+    let propertyId = isUuid(data.id) ? data.id : null;
+    if (!propertyId) {
+      const { data: row } = await client.from("properties").select("id").limit(1).maybeSingle();
+      propertyId = ((row ?? {}) as Record<string, unknown>).id as string | undefined ?? null;
+    }
+    if (!propertyId) throw new Error("Properti tidak ditemukan.");
+
+    const { error } = await client
       .from("properties")
       .update({ homepage_config: data.config } as never)
-      .eq("id", data.id);
+      .eq("id", propertyId);
     if (error) throw error;
     return { ok: true };
   });
+
