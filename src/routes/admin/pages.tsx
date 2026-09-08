@@ -2591,6 +2591,7 @@ function PageSettingsPanel({
             slug: cleanSlug,
             meta_title: metaTitle || null,
             meta_description: metaDesc || null,
+            hero_headline: h1 || null,
             target_keyword: targetKw || null,
             og_image_url: ogImage || null,
             published: indexable,
@@ -2727,6 +2728,16 @@ function PageSettingsPanel({
                 {metaDesc || <span className="italic text-stone-400">Meta description belum diisi…</span>}
               </p>
             </div>
+            <FieldRow label="Judul utama halaman (H1)">
+              <Input
+                value={h1}
+                onChange={(e) => setH1(e.target.value)}
+                placeholder="mis. Penginapan Dekat UNNES Semarang"
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Judul besar yang tampil di halaman. Kosongkan untuk memakai judul bawaan.
+              </p>
+            </FieldRow>
             <FieldRow label={`Title tag (${metaTitle.length}/60)`}>
               <Input
                 value={metaTitle}
@@ -2820,6 +2831,23 @@ function PageSettingsPanel({
             <FieldRow label="Gambar share (OG Image)">
               <ImageField value={ogImage} onChange={setOgImage} kind="image" />
               <p className="mt-0.5 text-[10px] text-muted-foreground">Muncul saat halaman dibagikan di media sosial.</p>
+            </FieldRow>
+            <FieldRow label="Twitter title">
+              <Input
+                value={twitterTitle}
+                onChange={(e) => setTwitterTitle(e.target.value)}
+                placeholder={metaTitle || "Judul untuk kartu Twitter"}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Kosong = memakai title tag.</p>
+            </FieldRow>
+            <FieldRow label="Twitter description">
+              <Textarea
+                value={twitterDesc}
+                onChange={(e) => setTwitterDesc(e.target.value)}
+                rows={3}
+                placeholder={metaDesc || "Deskripsi untuk kartu Twitter"}
+              />
+              <p className="mt-0.5 text-[10px] text-muted-foreground">Kosong = memakai meta description.</p>
             </FieldRow>
             <div className="overflow-hidden rounded-lg border border-stone-200">
               <div className="flex h-36 items-center justify-center bg-stone-100">
