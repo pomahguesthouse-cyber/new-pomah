@@ -2550,15 +2550,12 @@ function PageSettingsPanel({
     setSaving(true);
     try {
       if (target.kind === "home" || target.kind === "book") {
-        if (!target.propertyId) {
-          toast.error("Properti belum tersedia.");
-          setSaving(false);
-          return;
-        }
-
         const newSeo = {
           metaTitle: metaTitle,
           metaDescription: metaDesc,
+          h1,
+          twitterTitle,
+          twitterDescription: twitterDesc,
           targetKeyword: targetKw,
           ogImageUrl: ogImage,
           customHead,
@@ -2569,13 +2566,15 @@ function PageSettingsPanel({
 
         await updateHomepageConfig({
           data: {
-            id: target.propertyId,
+            // Bila id properti belum termuat di klien, server memakai properti pertama.
+            id: target.propertyId ?? null,
             config: {
               ...target.cfg,
               ...(target.kind === "book" ? { bookingSeo: newSeo } : { seo: newSeo }),
             } as unknown as Record<string, unknown>,
           },
         });
+
       } else {
         const cleanSlug = slug
           .trim()
