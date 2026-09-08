@@ -30,6 +30,7 @@ import {
   Navigation,
 } from "lucide-react";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
+import { EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/explore")({
   loader: async () => {
@@ -37,16 +38,21 @@ export const Route = createFileRoute("/explore")({
     return getPublicSiteData();
   },
   head: ({ loaderData }: any) => {
+    const seo = mergeExploreConfig(loaderData?.property?.explore_config).seo;
+    const title = seo.metaTitle || EXPLORE_SEO.title;
+    const desc = seo.metaDescription || EXPLORE_SEO.description;
     const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/explore`;
     return {
-      meta: [
-        { title: "Jelajahi Semarang — Destinasi Wisata & Kuliner" },
+      meta: publicSeoMeta(
         {
-          name: "description",
-          content: "Temukan destinasi wisata terkenal, kuliner terbaik, event seru, dan berita terbaru di Kota Semarang.",
+          title,
+          description: desc,
+          twitterTitle: seo.twitterTitle || title,
+          twitterDescription: seo.twitterDescription || desc,
         },
-      ],
+        EXPLORE_SEO,
+      ),
       links: [
         { rel: "canonical", href: canonicalUrl }
       ],
@@ -374,7 +380,7 @@ function ExploreSemarang() {
                 City Guide
               </span>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight tracking-tight">
-                {config.hero.heading}
+                {config.seo.h1 || config.hero.heading}
               </h1>
               <p className="mt-3 text-stone-300 text-sm md:text-base leading-relaxed max-w-lg">
                 Temukan destinasi wisata, kuliner, event menarik dan informasi seputar Kota Semarang.

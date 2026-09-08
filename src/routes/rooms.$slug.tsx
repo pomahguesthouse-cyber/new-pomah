@@ -46,6 +46,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { DatePickerID } from "@/components/ui/date-picker";
+import { publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -82,19 +83,21 @@ export const Route = createFileRoute("/rooms/$slug")({
         ],
       };
     }
-    const name = room.name ?? "Kamar";
-    const desc = room.description ?? "Kamar di Pomah Guesthouse Semarang";
+    const seo = resolveRoomPublicSeo(room);
     const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room.slug || ""}`;
     return {
-      meta: [
-        { title: `${name} — Pomah Guesthouse Semarang` },
-        { name: "description", content: desc },
-        { name: "robots", content: "index, follow" },
-        { property: "og:title", content: `${name} — Pomah Guesthouse Semarang` },
-        { property: "og:description", content: desc },
-        { property: "og:image", content: room?.hero_image_url || undefined },
-      ],
+      meta: publicSeoMeta(
+        {
+          title: seo.title,
+          description: seo.description,
+          twitterTitle: seo.twitterTitle,
+          twitterDescription: seo.twitterDescription,
+          ogImageUrl: seo.ogImageUrl || room.hero_image_url,
+          robots: "index, follow",
+        },
+        { title: seo.title, description: seo.description },
+      ),
       links: [
         { rel: "canonical", href: canonicalUrl }
       ],
@@ -116,6 +119,9 @@ export type RoomRow = {
   amenities: string[] | null;
   hero_image_url: string | null;
   images: string[] | null;
+  seo_h1?: string | null;
+  seo_title?: string | null;
+  meta_description?: string | null;
   extrabed_rate?: number | string | null;
   extrabed_capacity?: number | null;
   total_physical_rooms?: number | null;
@@ -359,7 +365,9 @@ function RoomBookingPage() {
               </div>
             )}
 
-            <h1 className="mt-8 text-3xl font-bold tracking-tight">{room.name}</h1>
+            <h1 className="mt-8 text-3xl font-bold tracking-tight">
+              {resolveRoomPublicSeo(room).h1}
+            </h1>
             {room.description && (
               <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">{room.description}</p>
             )}

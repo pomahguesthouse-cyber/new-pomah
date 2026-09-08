@@ -21,6 +21,7 @@ import {
   Banknote,
   ListChecks,
   Image as ImageIcon,
+  Search,
 } from "lucide-react";
 import {
   createRoomType,
@@ -43,12 +44,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type RoomTab = "general" | "pricing" | "features" | "media";
+type RoomTab = "general" | "pricing" | "features" | "media" | "seo";
 const TABS: { key: RoomTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "general", label: "General", icon: FileText },
   { key: "pricing", label: "Pricing", icon: Banknote },
   { key: "features", label: "Features", icon: ListChecks },
   { key: "media", label: "Media", icon: ImageIcon },
+  { key: "seo", label: "SEO", icon: Search },
 ];
 
 /** A room type as managed in this dialog. */
@@ -68,6 +70,9 @@ export type ManagedRoomType = {
   amenities?: string[] | null;
   hero_image_url?: string | null;
   images?: string[] | null;
+  seo_h1?: string | null;
+  seo_title?: string | null;
+  meta_description?: string | null;
 };
 
 const BED_TYPES = ["Single", "Double", "Queen", "King", "Twin", "Bunk"];
@@ -111,6 +116,9 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
   const [roomNumbers, setRoomNumbers] = React.useState<string[]>([]);
   const [roomNumberInput, setRoomNumberInput] = React.useState("");
   const [tab, setTab] = React.useState<RoomTab>("general");
+  const [seoH1, setSeoH1] = React.useState("");
+  const [seoTitle, setSeoTitle] = React.useState("");
+  const [seoMeta, setSeoMeta] = React.useState("");
 
   // Existing room numbers for the edited type.
   const { data: numbersData } = useQuery({
@@ -188,6 +196,9 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
             ? [roomType.hero_image_url]
             : [],
       );
+      setSeoH1(roomType.seo_h1 ?? "");
+      setSeoTitle(roomType.seo_title ?? "");
+      setSeoMeta(roomType.meta_description ?? "");
       setRoomNumberInput("");
       // roomNumbers is filled by the listRoomNumbers query.
     } else {
@@ -205,6 +216,9 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
       setDescription("");
       setAmenities("");
       setImages([]);
+      setSeoH1("");
+      setSeoTitle("");
+      setSeoMeta("");
       setRoomNumbers([]);
       setRoomNumberInput("");
     }
@@ -229,6 +243,9 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
           .map((a) => a.trim())
           .filter(Boolean),
         images,
+        seo_h1: seoH1.trim() || null,
+        seo_title: seoTitle.trim() || null,
+        meta_description: seoMeta.trim() || null,
       };
       let typeId: string | undefined = roomType?.id;
       if (mode === "edit" && roomType) {
@@ -599,6 +616,40 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {tab === "seo" && (
+            <div className="grid gap-4">
+              <p className="text-xs text-muted-foreground">
+                Field ini tampil di halaman publik <span className="font-mono">/rooms/{slug || "slug"}</span>{" "}
+                sebagai H1, title tag, meta description, dan kartu Twitter.
+              </p>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">H1 halaman</Label>
+                <Input
+                  value={seoH1}
+                  placeholder="mis. Kamar Deluxe, Penginapan Dekat UNNES"
+                  onChange={(e) => setSeoH1(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">SEO title ({seoTitle.length}/60)</Label>
+                <Input
+                  value={seoTitle}
+                  placeholder="mis. Kamar Deluxe | Penginapan Dekat UNNES Semarang"
+                  onChange={(e) => setSeoTitle(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Meta description ({seoMeta.length}/160)</Label>
+                <Textarea
+                  rows={3}
+                  value={seoMeta}
+                  placeholder="Deskripsi singkat di hasil pencarian Google."
+                  onChange={(e) => setSeoMeta(e.target.value)}
+                />
+              </div>
             </div>
           )}
         </div>

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { collectSitemapPaths } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
@@ -11,17 +12,10 @@ export const Route = createFileRoute("/sitemap.xml")({
           supabasePublic.from("seo_pages").select("slug, updated_at"),
           supabasePublic.from("room_types").select("slug"),
         ]);
-        const urls = new Set<string>(["/", "/book"]);
-        for (const p of pages ?? []) {
-          if (!p.slug) continue;
-          const slug = p.slug.startsWith("/") ? p.slug : `/${p.slug}`;
-          urls.add(slug);
-        }
-        for (const r of roomTypes ?? []) {
-          if (!r.slug) continue;
-          const slug = r.slug.startsWith("/") ? r.slug : `/${r.slug}`;
-          urls.add(`/rooms${slug}`);
-        }
+        const urls = collectSitemapPaths({
+          pageSlugs: (pages ?? []).map((p) => p.slug),
+          roomSlugs: (roomTypes ?? []).map((r) => r.slug),
+        });
         const lastmod = new Date().toISOString();
         const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[
           ...urls,

@@ -7,6 +7,8 @@
  * must stay free of server-only imports.
  */
 
+import { HOME_SEO } from "@/public/lib/public-seo";
+
 export interface NavLink {
   label: string;
   href: string;
@@ -436,13 +438,11 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
   },
   sectionOrder: [...DEFAULT_SECTION_ORDER],
   seo: {
-    metaTitle: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
-    metaDescription:
-      "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
-    h1: "Penginapan Dekat UNNES Semarang",
-    twitterTitle: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
-    twitterDescription:
-      "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+    metaTitle: HOME_SEO.title,
+    metaDescription: HOME_SEO.description,
+    h1: HOME_SEO.h1,
+    twitterTitle: HOME_SEO.title,
+    twitterDescription: HOME_SEO.description,
     targetKeyword: "",
     ogImageUrl: "",
     customHead: "",

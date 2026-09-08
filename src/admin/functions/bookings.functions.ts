@@ -806,7 +806,7 @@ export const listRoomTypes = createServerFn({ method: "GET" })
     const { data, error } = await db(context.supabase)
       .from("room_types")
       .select(
-        "id, name, slug, description, bed_type, bed_size, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images",
+        "id, name, slug, description, bed_type, bed_size, floor_info, size_sqm, capacity, extrabed_capacity, extrabed_rate, base_rate, amenities, hero_image_url, images, seo_h1, seo_title, meta_description",
       )
       .order("name");
     if (error) throw error;
@@ -889,6 +889,9 @@ const roomTypeFieldsSchema = z.object({
   amenities: z.array(z.string().min(1).max(60)).max(40).nullable().optional(),
   hero_image_url: z.string().url().max(500).nullable().optional().or(z.literal("")),
   images: z.array(z.string().url().max(500)).max(30).nullable().optional(),
+  seo_h1: z.string().max(160).nullable().optional(),
+  seo_title: z.string().max(120).nullable().optional(),
+  meta_description: z.string().max(220).nullable().optional(),
 });
 
 /** Map a validated room-type payload to a DB row patch. */
@@ -909,6 +912,9 @@ function roomTypeRow(d: z.infer<typeof roomTypeFieldsSchema>) {
     images: d.images ?? [],
     // The first gallery image is the cover; keep hero_image_url synced.
     hero_image_url: d.images?.[0] ?? (d.hero_image_url || null),
+    seo_h1: d.seo_h1?.trim() || null,
+    seo_title: d.seo_title?.trim() || null,
+    meta_description: d.meta_description?.trim() || null,
   };
 }
 

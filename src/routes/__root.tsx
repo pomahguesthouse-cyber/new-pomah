@@ -18,6 +18,7 @@ import "@fontsource/jetbrains-mono/500.css";
 
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { HOME_SEO } from "@/public/lib/public-seo";
 import appCss from "../styles.css?url";
 
 const pomahStructuredData = {
@@ -330,26 +331,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
-      {
-        name: "description",
-        content:
-          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
-      },
-      { property: "og:title", content: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
-      {
-        property: "og:description",
-        content:
-          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
-      },
+      // Fallback title only. Page routes set title, description, and Twitter
+      // cards from saved SEO fields so this root copy cannot leak onto them.
+      { title: HOME_SEO.title },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Pomah Guesthouse — Penginapan Nyaman dan Murah Di Semarang" },
-      {
-        name: "twitter:description",
-        content:
-          "Penginapan nyaman dan murah di Gunungpati, Semarang. Dekat UNNES, parkir luas, suasana tenang. Pesan langsung lewat WhatsApp.",
-      },
       {
         property: "og:image",
         content: "https://pomahguesthouse.com/og-home.jpg",

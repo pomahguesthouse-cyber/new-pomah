@@ -912,7 +912,7 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
   .inputValidator((d) => z.object({ slug: z.string().min(1).max(200) }).parse(d))
   .handler(async ({ data }) => {
     const fields =
-      "id, name, slug, description, base_rate, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images";
+      "id, name, slug, description, base_rate, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, seo_h1, seo_title, meta_description";
     const sb = db(supabasePublic);
     const [{ data: property }, { data: room }, { data: others }] = await Promise.all([
       supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),

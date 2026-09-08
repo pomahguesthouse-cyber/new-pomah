@@ -58,6 +58,7 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
+import { HOME_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
 const BookingDialog = lazy(() =>
@@ -78,10 +79,10 @@ export const Route = createFileRoute("/")({
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
     );
     const seo = cfg.seo;
-    const title = seo.metaTitle || "Pomah Guesthouse Semarang | Hotel Murah & Nyaman di Semarang";
-    const desc =
-      seo.metaDescription ||
-      "Pomah Guesthouse — penginapan murah dan nyaman di Kota Semarang. Kamar bersih, pelayanan ramah, lokasi strategis.";
+    const title = seo.metaTitle || HOME_SEO.title;
+    const desc = seo.metaDescription || HOME_SEO.description;
+    const twitterTitle = seo.twitterTitle || title;
+    const twitterDescription = seo.twitterDescription || desc;
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
     const heroImage = heroImageRaw
       ? buildStorageImageUrl(heroImageRaw, { width: 1600, quality: 75 })
@@ -92,13 +93,16 @@ export const Route = createFileRoute("/")({
     const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
     const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
     return {
-      meta: [
-        { title },
-        { name: "description", content: desc },
-        { property: "og:title", content: title },
-        { property: "og:description", content: desc },
-        ...(seo.ogImageUrl ? [{ property: "og:image", content: seo.ogImageUrl }] : []),
-      ],
+      meta: publicSeoMeta(
+        {
+          title,
+          description: desc,
+          twitterTitle,
+          twitterDescription,
+          ogImageUrl: seo.ogImageUrl,
+        },
+        HOME_SEO,
+      ),
       links: [
         { rel: "canonical", href: canonicalUrl },
         ...(heroImage
@@ -542,6 +546,7 @@ export function PomahHomeView({
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
+          h1Text={cfg.seo.h1 || undefined}
           accent={cfg.hero.accent}
           rating={{ score: gRating, total: gTotal }}
           actions={

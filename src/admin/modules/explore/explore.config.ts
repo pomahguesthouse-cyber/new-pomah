@@ -1,3 +1,5 @@
+import { EXPLORE_SEO } from "@/public/lib/public-seo";
+
 export type ExploreConfig = {
   hero: {
     heading: string;
@@ -44,6 +46,13 @@ export type ExploreConfig = {
     location?: string;
   }[];
   gemini_api_key?: string;
+  seo: {
+    h1: string;
+    metaTitle: string;
+    metaDescription: string;
+    twitterTitle: string;
+    twitterDescription: string;
+  };
 };
 
 export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
@@ -186,6 +195,13 @@ export const DEFAULT_EXPLORE_CONFIG: ExploreConfig = {
       location: "Seluruh Kota Semarang",
     },
   ],
+  seo: {
+    h1: EXPLORE_SEO.h1,
+    metaTitle: EXPLORE_SEO.title,
+    metaDescription: EXPLORE_SEO.description,
+    twitterTitle: EXPLORE_SEO.title,
+    twitterDescription: EXPLORE_SEO.description,
+  },
 };
 
 export function mergeExploreConfig(data: any): ExploreConfig {
@@ -203,5 +219,6 @@ export function mergeExploreConfig(data: any): ExploreConfig {
     events: clonedData.events || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.events)),
     news: clonedData.news || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.news)),
     gemini_api_key: clonedData.gemini_api_key || DEFAULT_EXPLORE_CONFIG.gemini_api_key,
+    seo: { ...DEFAULT_EXPLORE_CONFIG.seo, ...(clonedData.seo || {}) },
   };
 }

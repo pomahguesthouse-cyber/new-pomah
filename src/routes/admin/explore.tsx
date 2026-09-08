@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { MediaPicker } from "@/admin/components/media-picker";
 import { updateExploreConfig, getDistanceBetweenPlaces, getAdminExploreData, autoFillFromGoogleMaps } from "@/admin/modules/explore/explore.functions";
-import { ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
+import { DEFAULT_EXPLORE_CONFIG, ExploreConfig, mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { useRealtimeInvalidate } from "@/admin/hooks/use-realtime-invalidate";
 import { AiSidebar } from "@/admin/components/ai-sidebar";
 import { syncExploreFromAI } from "@/admin/modules/explore/ai-agent.functions";
@@ -348,6 +348,61 @@ function AdminExplorePage() {
               {!mutation.isPending && <Check className="h-4 w-4" />}
             </Button>
           </div>
+        </div>
+
+        {/* SEO halaman publik /explore */}
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-stone-900">SEO halaman</h2>
+          <Card className="space-y-4 border-stone-200 p-4 shadow-sm">
+            <p className="text-xs text-stone-500">
+              Title tag, meta description, dan kartu Twitter halaman{" "}
+              <span className="font-mono">/explore</span>. H1 memakai judul hero bila field H1 kosong.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-700">
+                Title tag ({(config.seo?.metaTitle ?? "").length}/60)
+              </label>
+              <Input
+                className="h-9 text-sm"
+                value={config.seo?.metaTitle ?? ""}
+                placeholder="Jelajahi Semarang | Panduan Tamu Penginapan Dekat UNNES"
+                onChange={(e) => {
+                  const metaTitle = e.target.value;
+                  setConfig({
+                    ...config,
+                    seo: {
+                      ...DEFAULT_EXPLORE_CONFIG.seo,
+                      ...config.seo,
+                      metaTitle,
+                      twitterTitle: metaTitle,
+                    },
+                  });
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-stone-700">
+                Meta description ({(config.seo?.metaDescription ?? "").length}/160)
+              </label>
+              <Textarea
+                className="h-20 text-sm resize-none"
+                value={config.seo?.metaDescription ?? ""}
+                placeholder="Panduan wisata dan kuliner Semarang untuk tamu penginapan dekat UNNES."
+                onChange={(e) => {
+                  const metaDescription = e.target.value;
+                  setConfig({
+                    ...config,
+                    seo: {
+                      ...DEFAULT_EXPLORE_CONFIG.seo,
+                      ...config.seo,
+                      metaDescription,
+                      twitterDescription: metaDescription,
+                    },
+                  });
+                }}
+              />
+            </div>
+          </Card>
         </div>
 
         {/* Hero Banner Section */}
