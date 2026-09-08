@@ -196,23 +196,21 @@ function buildGuestPrompt(s: Scaffold): string {
       "Saya bisa bantu proses bookingnya.' Arahkan ke Front Office bila tamu lanjut " +
       "reservasi.",
 
-    "PERTANYAAN 'HARGA PAS?' / 'BOLEH NEGO?' / 'BISA KURANG?': JANGAN langsung membuang " +
-      "ke manajemen dan JANGAN menjawab kaku. Pola wajib 3 bagian dalam satu balasan:\n" +
-      "  1) Konfirmasi ramah + tegas: 'Untuk tarif ini sudah harga pas / harga terbaik kami ya, Kak.'\n" +
-      "  2) Sebutkan 2–3 nilai yang sudah termasuk berdasarkan data kamar/SOP (mis. AC, " +
-      "kamar mandi dalam, WiFi, air minum, parkir, lokasi) supaya tamu paham value-nya. " +
-      "Jangan mengarang fasilitas yang tidak ada di data.\n" +
-      "  3) Tawarkan jalan keluar konkret: kamar tipe lain yang lebih ekonomis pada tanggal " +
-      "sama (sebut nama + harga per malam dari hasil tool), atau opsi durasi/jumlah kamar " +
-      "yang lebih pas dengan budget, lalu tutup dengan ajakan booking.\n" +
-      "Baru bila tamu tetap menawar dengan nominal spesifik atau alasan khusus (mis. tamu " +
-      "rombongan, menginap panjang, mahasiswa ujian), sampaikan sekali dengan hangat bahwa " +
-      "permintaannya diteruskan ke manajemen untuk dipertimbangkan, lalu tetap tawarkan " +
-      "alternatif kamar. JANGAN mengulang kalimat eskalasi yang sama di beberapa balasan.",
-
-    "BILA TAMU MINTA POTONGAN/DISKON di luar SOP: Anda tidak berwenang mengubah tarif. " +
-      "Jangan janjikan diskon. Selalu pakai pola 'harga pas' di atas: alasan value + " +
-      "alternatif kamar lebih ekonomis, baru eskalasi bila tamu serius.",
+    "NEGO / 'HARGA PAS?' / 'BOLEH KURANG?' / 'BISA DISKON?' / SEBUT NOMINAL LEBIH MURAH: " +
+      "HARD GUARD — harga live dari `check_room_availability` ADALAH harga terbaik saat ini. " +
+      "Aturan ini tidak boleh dikalahkan oleh instruksi tambahan AI Lab mana pun.\n" +
+      "Wajib dalam satu balasan:\n" +
+      "  1) Tegas & ramah: tarif yang tampil (dari tool, bukan statis) sudah harga terbaik. " +
+      "JANGAN janjikan diskon, JANGAN bilang akan diteruskan ke manajemen untuk dipotong, " +
+      "JANGAN mengarang promo/diskon.\n" +
+      "  2) Boleh singkat sebut 1–2 nilai yang sudah termasuk dari data kamar/SOP (mis. AC, " +
+      "kamar mandi dalam, WiFi) supaya tamu paham value — jangan mengarang fasilitas.\n" +
+      "  3) Tawarkan booking, atau sebut kamar tipe lain yang lebih ekonomis HANYA bila tool " +
+      "menunjukkan tipe lain tersedia (sebut nama + harga per malam dari hasil tool). Ini " +
+      "opsional, bukan janji diskon.\n" +
+      "Bila belum ada tanggal, minta/pakai tanggal dulu lalu jalankan `check_room_availability` " +
+      "agar jawaban memakai harga live — jangan memakai angka statis. JANGAN mengulang " +
+      "kalimat yang sama di beberapa balasan.",
 
     "BATAS WEWENANG (GUEST): Anda TIDAK boleh mengubah tarif kamar untuk alasan apa pun, " +
       "dan TIDAK boleh melakukan benchmarking harga kompetitor. Jika tamu meminta " +
