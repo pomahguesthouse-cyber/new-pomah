@@ -29,6 +29,7 @@ import {
   Activity,
   GripVertical,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   DndContext,
