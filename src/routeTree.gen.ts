@@ -33,6 +33,7 @@ import { Route as AdminComplaintsRouteImport } from './routes/admin/complaints'
 import { Route as AdminContactsRouteImport } from './routes/admin/contacts'
 import { Route as AdminContentManagerRouteImport } from './routes/admin/content-manager'
 import { Route as AdminExploreRouteImport } from './routes/admin/explore'
+import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
 import { Route as AdminHandoffRouteImport } from './routes/admin/handoff'
 import { Route as AdminHealthRouteImport } from './routes/admin/health'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
@@ -200,6 +201,11 @@ const AdminContentManagerRoute = AdminContentManagerRouteImport.update({
 const AdminExploreRoute = AdminExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFinanceRoute = AdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminHandoffRoute = AdminHandoffRouteImport.update({
@@ -464,6 +470,7 @@ export interface FileRoutesByFullPath {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/media': typeof AdminMediaRoute
@@ -535,6 +542,7 @@ export interface FileRoutesByTo {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/media': typeof AdminMediaRoute
@@ -608,6 +616,7 @@ export interface FileRoutesById {
   '/admin/contacts': typeof AdminContactsRoute
   '/admin/content-manager': typeof AdminContentManagerRoute
   '/admin/explore': typeof AdminExploreRoute
+  '/admin/finance': typeof AdminFinanceRoute
   '/admin/handoff': typeof AdminHandoffRoute
   '/admin/health': typeof AdminHealthRoute
   '/admin/media': typeof AdminMediaRoute
@@ -682,6 +691,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
     | '/admin/media'
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
     | '/admin/media'
@@ -825,6 +836,7 @@ export interface FileRouteTypes {
     | '/admin/contacts'
     | '/admin/content-manager'
     | '/admin/explore'
+    | '/admin/finance'
     | '/admin/handoff'
     | '/admin/health'
     | '/admin/media'
@@ -1084,6 +1096,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/admin/explore'
       preLoaderRoute: typeof AdminExploreRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/finance': {
+      id: '/admin/finance'
+      path: '/finance'
+      fullPath: '/admin/finance'
+      preLoaderRoute: typeof AdminFinanceRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/handoff': {
@@ -1423,6 +1442,7 @@ interface AdminRouteChildren {
   AdminContactsRoute: typeof AdminContactsRoute
   AdminContentManagerRoute: typeof AdminContentManagerRoute
   AdminExploreRoute: typeof AdminExploreRoute
+  AdminFinanceRoute: typeof AdminFinanceRoute
   AdminHandoffRoute: typeof AdminHandoffRoute
   AdminHealthRoute: typeof AdminHealthRoute
   AdminMediaRoute: typeof AdminMediaRoute
@@ -1454,6 +1474,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminContactsRoute: AdminContactsRoute,
   AdminContentManagerRoute: AdminContentManagerRoute,
   AdminExploreRoute: AdminExploreRoute,
+  AdminFinanceRoute: AdminFinanceRoute,
   AdminHandoffRoute: AdminHandoffRoute,
   AdminHealthRoute: AdminHealthRoute,
   AdminMediaRoute: AdminMediaRoute,

@@ -29,6 +29,7 @@ import {
   Activity,
   GripVertical,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   DndContext,
@@ -115,6 +116,7 @@ const DEFAULT_GROUPS: NavGroup[] = [
     label: "Insights",
     items: [
       { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+      { to: "/admin/finance", label: "Laporan Keuangan", icon: Wallet },
       { to: "/admin/seo", label: "SEO", icon: Search },
     ],
   },

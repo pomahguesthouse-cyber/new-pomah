@@ -713,6 +713,51 @@ export type Database = {
           },
         ]
       }
+      expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expense_date: string
+          id: string
+          notes: string | null
+          payment_method: string | null
+          receipt_url: string | null
+          updated_at: string
+          vendor: string | null
+        }
+        Insert: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          receipt_url?: string | null
+          updated_at?: string
+          vendor?: string | null
+        }
+        Relationships: []
+      }
       explore_items: {
         Row: {
           badge: string | null
