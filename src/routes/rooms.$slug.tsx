@@ -1,3 +1,4 @@
+import { canReserveRooms, getAvailableRoomCount, roomAvailabilityLabel } from "@/lib/public-room-availability";
 /**
  * /rooms/$slug — dedicated booking page for one room type.
  *
@@ -208,7 +209,6 @@ function RoomBookingPage() {
 
   const room = (data?.room ?? null) as RoomRow | null;
   const others = (data?.others ?? []) as RoomRow[];
-  const roomCount = data?.roomCount ?? 0;
   const property = useMemo(() => (data?.property ?? {}) as Record<string, unknown>, [data]);
 
   const gallery = useMemo(() => (room ? galleryOf(room) : []), [room]);
@@ -246,7 +246,6 @@ function RoomBookingPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const capacity = room?.capacity ?? 2;
-  const maxRooms = Math.max(1, roomCount || 1);
   const maxGuests = Math.max(1, capacity * rooms);
 
   const { data: availData } = useQuery({
@@ -254,18 +253,10 @@ function RoomBookingPage() {
     queryFn: () => availFn({ data: { checkIn, checkOut } }),
     enabled: !!checkIn && !!checkOut && checkIn < checkOut,
   });
-  const availability: string =
-    !checkIn || !checkOut
-      ? "—"
-      : checkIn >= checkOut
-        ? "Tanggal tidak valid"
-        : availData
-          ? room && room.id in (availData.availability ?? {})
-            ? availData.availability[room.id]
-              ? "Tersedia"
-              : "Penuh"
-            : "Tersedia"
-          : "Mengecek…";
+  const availableCount = room ? getAvailableRoomCount(availData, room.id) : null;
+  const maxRooms = availableCount ?? 0;
+  const canBook = !!checkIn && !!checkOut && checkIn < checkOut && canReserveRooms(availableCount, rooms);
+  const availability = roomAvailabilityLabel(availableCount);
 
   const displayRoom = useMemo(() => {
     if (!room) return null;
@@ -432,7 +423,7 @@ function RoomBookingPage() {
                 <Spec
                   icon={<BedDouble className="h-4 w-4" />}
                   label="Kamar Tersedia"
-                  value={`${roomCount} rooms`}
+                  value={roomAvailabilityLabel(availableCount)}
                 />
                 {room.floor_info && (
                   <Spec
@@ -478,9 +469,9 @@ function RoomBookingPage() {
                   icon={<BedDouble className="h-4 w-4" />}
                   label="Jumlah Kamar"
                   value={rooms}
-                  hint={`Maks ${maxRooms}`}
+                  hint={availableCount === 0 ? "Tidak tersedia" : availableCount === null ? "Mengecek…" : `Maks ${maxRooms}`}
                   onDec={() => setRooms((v) => Math.max(1, v - 1))}
-                  onInc={() => setRooms((v) => Math.min(maxRooms, v + 1))}
+                  onInc={() => setRooms((v) => canReserveRooms(availableCount, v + 1) ? v + 1 : v)}
                 />
                 <Stepper
                   icon={<Users className="h-4 w-4" />}
@@ -492,16 +483,18 @@ function RoomBookingPage() {
                 />
 
                 <button
+                  disabled={!canBook}
                   onClick={() => {
+                    if (!canBook) return;
                     if (checkIn >= checkOut) {
                       toast.error("Tanggal check-out harus setelah check-in");
                       return;
                     }
                     setDialogOpen(true);
                   }}
-                  className="w-full rounded-lg bg-rose-400 py-3 text-sm font-semibold text-white transition hover:bg-rose-500"
+                  className="w-full rounded-lg bg-rose-400 py-3 text-sm font-semibold text-white transition hover:bg-rose-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Book This Room
+                  {availableCount === 0 || availableCount === null ? availability : "Book This Room"}
                 </button>
               </div>
 
@@ -511,8 +504,8 @@ function RoomBookingPage() {
                 <Line
                   label="Availability"
                   value={availability}
-                  highlight={availability === "Tersedia" || availability === "Penuh"}
-                  bad={availability === "Penuh"}
+                  highlight={availableCount !== null}
+                  bad={availableCount === 0}
                 />
               </div>
             </div>
@@ -594,7 +587,6 @@ export function BookingDialog({
   onCheckOutChange,
   rooms: initialRooms,
   extrabed: initialExtrabed = 0,
-  maxRooms,
   guests,
   hotelPolicy,
 }: {
@@ -613,6 +605,14 @@ export function BookingDialog({
 }) {
   const navigate = useNavigate();
   const submit = useServerFn(submitPublicBooking);
+  const availFn = useServerFn(checkRoomTypeAvailability);
+  const { data: dialogAvailability } = useQuery({
+    queryKey: ["availability", checkIn, checkOut],
+    queryFn: () => availFn({ data: { checkIn, checkOut } }),
+    enabled: open && !!checkIn && !!checkOut && checkIn < checkOut,
+  });
+  const availableCount = getAvailableRoomCount(dialogAvailability, room.id);
+  const maxRooms = availableCount ?? 0;
 
   const [rooms, setRooms] = useState(initialRooms);
   const [extrabed, setExtrabed] = useState(initialExtrabed);
@@ -625,6 +625,7 @@ export function BookingDialog({
   const [payment, setPayment] = useState<"transfer">("transfer");
   const [pending, setPending] = useState(false);
 
+  const canBook = checkIn < checkOut && canReserveRooms(availableCount, rooms);
   const nights = nightsBetween(checkIn, checkOut);
   const rate = Number(room.base_rate ?? 0);
   const extrabedRate = Number(room.extrabed_rate ?? 0);
@@ -637,6 +638,10 @@ export function BookingDialog({
     .filter(Boolean);
 
   const submitBooking = async () => {
+    if (!canBook) {
+      toast.error("Kamar tidak tersedia dalam jumlah yang dipilih.");
+      return;
+    }
     if (!fullName.trim() || !email.trim() || !phone.trim()) {
       toast.error("Lengkapi nama, email, dan nomor telepon");
       return;
@@ -724,12 +729,13 @@ export function BookingDialog({
               </button>
               <span className="w-8 text-center text-xl font-bold text-amber-700">{rooms}</span>
               <button
-                onClick={() => setRooms((v) => Math.min(maxRooms, v + 1))}
+                disabled={!canReserveRooms(availableCount, rooms + 1)}
+                onClick={() => setRooms((v) => canReserveRooms(availableCount, v + 1) ? v + 1 : v)}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300 text-amber-700"
               >
                 <Plus className="h-4 w-4" />
               </button>
-              <span className="text-sm text-stone-400">Maks: {maxRooms} kamar</span>
+              <span className="text-sm text-stone-400">{availableCount === null || availableCount === 0 ? roomAvailabilityLabel(availableCount) : `Maks: ${maxRooms} kamar`}</span>
             </div>
           </div>
 
@@ -892,9 +898,10 @@ export function BookingDialog({
             </div>
           </div>
 
+          {!canBook && <p role="alert" className="text-sm text-red-600">{availableCount === 0 || availableCount === null ? roomAvailabilityLabel(availableCount) : "Jumlah kamar melebihi ketersediaan."}</p>}
           <button
             onClick={submitBooking}
-            disabled={pending}
+            disabled={pending || !canBook}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-60"
           >
             {pending ? (

@@ -1,3 +1,4 @@
+import { canReserveRooms, getAvailableRoomCount, roomAvailabilityLabel } from "@/lib/public-room-availability";
 // LOCKED: Halaman utama "/" WAJIB merender landing Pomah Guesthouse.
 // JANGAN mengganti file ini dengan landing lain (mis. Baboo / template generik)
 // kecuali diminta eksplisit oleh pemilik. Lihat mem://constraints/homepage-pomah-lock.
@@ -403,7 +404,7 @@ export function PomahHomeView({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const addToCart = (rt: RoomType) => {
-    if (cart[rt.id]) return;
+    if (cart[rt.id] || !canReserveRooms(getAvailableRoomCount(availData, rt.id))) return;
     setCart((c) => ({
       ...c,
       [rt.id]: {
@@ -437,6 +438,7 @@ export function PomahHomeView({
         const { [id]: _drop, ...rest } = c;
         return rest;
       }
+      if (n > c[id].rooms && !canReserveRooms(getAvailableRoomCount(availData, id), n)) return c;
       // Clamp extrabed to new max (rooms × extrabed_capacity per room)
       const perRoomCap = Math.max(0, Number(c[id].room.extrabed_capacity ?? 0));
       const newMaxExtrabed = perRoomCap * n;
@@ -493,8 +495,9 @@ export function PomahHomeView({
     enabled: !!effCheckIn && !!effCheckOut && effCheckIn < effCheckOut,
     staleTime: 60 * 1000,
   });
-  const availability = availData?.availability ?? null;
-  const availableRooms = availData?.availableRooms ?? null;
+  const availableRooms = availData && !availData.debug?.error
+    ? Object.fromEntries(rooms.map((room) => [room.id, getAvailableRoomCount(availData, room.id) ?? 0]))
+    : null;
 
   const resolvedRates = availData?.rates ?? null;
   const displayRooms = useMemo(() => {
@@ -715,10 +718,7 @@ export function PomahHomeView({
             onCheckOutChange={(v) => setCheckOut(v)}
             rooms={cartEntries[0].rooms}
             extrabed={cartEntries[0].extrabed}
-            maxRooms={Math.max(
-              1,
-              Number(cartEntries[0].room.total_physical_rooms ?? 0) || 10,
-            )}
+            maxRooms={getAvailableRoomCount(availData, cartEntries[0].room.id) ?? 0}
             guests={guests}
             hotelPolicy={
               (property as { hotel_policy?: string | null } | null | undefined)?.hotel_policy ??
@@ -963,7 +963,6 @@ export function PomahHomeView({
                     <RoomCarousel
                       rooms={displayRooms}
                       rc={cfg.roomCarousel}
-                      availability={availability}
                       availableRooms={availableRooms}
                       checkIn={checkIn}
                       checkOut={checkOut}
@@ -1636,6 +1635,15 @@ function CartBookingDialog({
 }) {
   const navigate = useNavigate();
   const submitFn = useServerFn(submitCartBooking);
+  const availFn = useServerFn(checkRoomTypeAvailability);
+  const { data: dialogAvailability } = useQuery({
+    queryKey: ["availability", checkIn, checkOut],
+    queryFn: () => availFn({ data: { checkIn, checkOut } }),
+    enabled: open && !!checkIn && !!checkOut && checkIn < checkOut,
+  });
+  const hasAvailabilityConflict = cart.some((item) =>
+    !canReserveRooms(getAvailableRoomCount(dialogAvailability, item.room.id), item.rooms),
+  );
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -1658,6 +1666,10 @@ function CartBookingDialog({
   }, 0);
 
   const onSubmit = async () => {
+    if (hasAvailabilityConflict) {
+      toast.error("Kamar tidak tersedia dalam jumlah yang dipilih.");
+      return;
+    }
     if (!fullName.trim() || !phone.trim()) {
       toast.error("Lengkapi nama dan nomor WhatsApp");
       return;
@@ -1771,9 +1783,10 @@ function CartBookingDialog({
           </div>
         </div>
 
+        {hasAvailabilityConflict && <p role="alert" className="text-sm text-red-600">Kamar tidak tersedia dalam jumlah yang dipilih. Periksa kembali pilihan kamar.</p>}
         <button
           onClick={onSubmit}
-          disabled={pending}
+          disabled={pending || hasAvailabilityConflict}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-700 py-3 text-sm font-semibold text-white transition hover:bg-amber-800 disabled:opacity-60"
         >
           {pending ? (
@@ -1826,7 +1839,7 @@ function BookingSidePanel({
     const currentAvail = availableRooms !== undefined && availableRooms !== null
       ? availableRooms[item.room.id] ?? 0
       : null;
-    return currentAvail !== null && currentAvail < item.rooms;
+    return !canReserveRooms(currentAvail, item.rooms);
   });
 
   let grandTotal = 0;
@@ -1915,7 +1928,7 @@ function BookingSidePanel({
                   </p>
                   {isSoldOut && (
                     <span className="mt-1.5 inline-block rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[9px] font-bold text-red-600">
-                      Habis Terpesan (Chatbot/Tamu Lain)
+                      Tidak tersedia
                     </span>
                   )}
                   {isReduced && (
@@ -2041,7 +2054,6 @@ const getAmenityIcon = (name: string) => {
 function RoomCarousel({
   rooms,
   rc,
-  availability,
   availableRooms,
   checkIn,
   checkOut,
@@ -2054,7 +2066,6 @@ function RoomCarousel({
 }: {
   rooms: RoomType[];
   rc: HomepageConfig["roomCarousel"];
-  availability: Record<string, boolean> | null;
   availableRooms?: Record<string, number> | null;
   checkIn?: string;
   checkOut?: string;
@@ -2241,7 +2252,7 @@ function RoomCarousel({
                         if (count === 0) {
                           return (
                             <span className="rounded-full bg-red-600/90 backdrop-blur px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
-                              Habis Terpesan
+                              Tidak tersedia
                             </span>
                           );
                         }
@@ -2346,11 +2357,15 @@ function RoomCarousel({
                   )}
                   {(() => {
                     const item = cart?.[rt.id];
-                    if (availability && availability[rt.id] === false && !item) {
+                    const count = availableRooms == null ? null : availableRooms[rt.id] ?? 0;
+                    if (!canReserveRooms(count)) {
                       return (
-                        <span className={`block cursor-not-allowed rounded-lg bg-stone-300 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
-                          Tidak Tersedia
-                        </span>
+                        <div>
+                          <button type="button" disabled className={`block w-full cursor-not-allowed rounded-lg bg-stone-300 text-center font-semibold text-stone-500 ${cartOpen ? "mt-3 py-1.5 text-xs" : "mt-5 py-2.5 text-sm"}`}>
+                            {roomAvailabilityLabel(count)}
+                          </button>
+                          {item && <button type="button" onClick={() => onChangeRooms?.(rt.id, 0)} className="mt-2 text-xs text-red-600">Hapus kamar</button>}
+                        </div>
                       );
                     }
                     if (item) {
@@ -2360,7 +2375,7 @@ function RoomCarousel({
                         <RoomCardSteppers
                           rooms={item.rooms}
                           extrabed={Math.min(item.extrabed, totalMaxExtrabed)}
-                          maxRooms={Math.max(1, Number(rt.total_physical_rooms ?? 0) || 1)}
+                          maxRooms={count ?? 0}
                           maxExtrabed={totalMaxExtrabed}
                           extrabedRate={Number(rt.extrabed_rate ?? 0)}
                           onChangeRooms={(v) => onChangeRooms?.(rt.id, v)}

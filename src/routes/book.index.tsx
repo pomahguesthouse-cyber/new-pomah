@@ -1,3 +1,4 @@
+import { canReserveRooms, getAvailableRoomCount, roomAvailabilityLabel } from "@/lib/public-room-availability";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -120,16 +121,6 @@ function BookPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [pending, setPending] = useState(false);
 
-  // Prefill the room from the ?room=<slug> param once room types load.
-  const prefillRoom = search.room;
-  useEffect(() => {
-    if (!prefillRoom || rooms.length === 0) return;
-    const match = rooms.find((r: any) => r.slug === prefillRoom || r.id === prefillRoom);
-    if (match && cartItems.length === 0) {
-      setCartItems([{ roomTypeId: match.id, quantity: 1, extraBeds: 0 }]);
-    }
-  }, [prefillRoom, rooms]);
-
   // Calculations for summary
   const availFn = useServerFn(checkRoomTypeAvailability);
   const { data: availData } = useQuery({
@@ -138,6 +129,21 @@ function BookPage() {
     enabled: !!form.checkIn && !!form.checkOut && form.checkIn < form.checkOut,
     staleTime: 60 * 1000,
   });
+
+  const availableCountFor = (id: string) => getAvailableRoomCount(availData, id);
+  const hasAvailabilityConflict = cartItems.some(
+    (item) => !canReserveRooms(availableCountFor(item.roomTypeId), item.quantity),
+  );
+
+  // Wait for real stock before prefilling a room from the URL.
+  const prefilledRoom = useRef<string | null>(null);
+  useEffect(() => {
+    if (!search.room || !availData || prefilledRoom.current === search.room) return;
+    const match = rooms.find((r: any) => r.slug === search.room || r.id === search.room);
+    if (!match || !canReserveRooms(getAvailableRoomCount(availData, match.id))) return;
+    prefilledRoom.current = search.room;
+    setCartItems((current) => current.length ? current : [{ roomTypeId: match.id, quantity: 1, extraBeds: 0 }]);
+  }, [search.room, rooms, availData]);
 
   const displayRooms = useMemo(() => {
     const resolvedRates = availData?.rates ?? null;
@@ -178,12 +184,12 @@ function BookPage() {
   }, [cartItems, nights, displayRooms]);
 
   const handleAddToCart = (roomTypeId: string) => {
+    const limit = availableCountFor(roomTypeId);
+    if (!canReserveRooms(limit)) return;
     setCartItems(prev => {
       const existing = prev.find(item => item.roomTypeId === roomTypeId);
       if (existing) {
-        const room = displayRooms.find((r: any) => r.id === roomTypeId);
-        const limit = room?.total_physical_rooms || 10;
-        if (existing.quantity < limit) {
+        if (canReserveRooms(limit, existing.quantity + 1)) {
            return prev.map(item => item.roomTypeId === roomTypeId ? { ...item, quantity: item.quantity + 1 } : item);
         }
         return prev;
@@ -194,7 +200,13 @@ function BookPage() {
   };
 
   const updateCartItem = (roomTypeId: string, updates: Partial<CartItem>) => {
-    setCartItems(prev => prev.map(item => item.roomTypeId === roomTypeId ? { ...item, ...updates } : item));
+    setCartItems(prev => prev.map(item => {
+      if (item.roomTypeId !== roomTypeId) return item;
+      const quantity = updates.quantity ?? item.quantity;
+      if (quantity > item.quantity && !canReserveRooms(availableCountFor(roomTypeId), quantity)) return item;
+      const room = displayRooms.find((r: any) => r.id === roomTypeId);
+      return { ...item, ...updates, extraBeds: Math.min(updates.extraBeds ?? item.extraBeds, (room?.extrabed_capacity ?? 0) * quantity) };
+    }));
   };
 
   const removeFromCart = (roomTypeId: string) => {
@@ -211,6 +223,7 @@ function BookPage() {
     e.preventDefault();
     if (cartItems.length === 0) return toast.error("Silakan pilih minimal satu kamar terlebih dahulu");
     if (nights <= 0) return toast.error("Check-out harus setelah check-in");
+    if (hasAvailabilityConflict) return toast.error("Kamar tidak tersedia dalam jumlah yang dipilih. Periksa kembali pilihan kamar.");
     
     setPending(true);
     try {
@@ -336,7 +349,7 @@ function BookPage() {
                   {displayRooms.map((room: any, index: number) => {
                     const cartItem = cartItems.find(item => item.roomTypeId === room.id);
                     const isInCart = !!cartItem;
-                    const availableCount = availData?.availableRooms?.[room.id] ?? room.total_physical_rooms ?? 10;
+                    const availableCount = availableCountFor(room.id);
                     
                     return (
                       <CarouselItem key={room.id} className="pl-6 md:basis-1/2 xl:basis-1/3">
@@ -389,13 +402,16 @@ function BookPage() {
                               </div>
                             </div>
 
+                            <p role="status" className={`mb-3 text-xs font-medium ${availableCount === 0 ? "text-red-600" : "text-stone-500"}`}>
+                              {roomAvailabilityLabel(availableCount)}
+                            </p>
                             <div className={`mt-auto flex flex-col justify-end ${room.extrabed_capacity > 0 ? 'min-h-[131px]' : 'min-h-[66px]'}`}>
                               {isInCart ? (
                                  <div className="bg-[#FAF9F7] rounded-xl border border-stone-200 divide-y divide-stone-200">
                                    <div className="flex items-center justify-between p-4">
                                      <div className="flex flex-col">
                                        <span className="text-sm font-semibold text-stone-800">Jumlah Kamar</span>
-                                       <span className="text-[10px] text-stone-500">(Maksimal {availableCount})</span>
+                                       <span className="text-[10px] text-stone-500">{availableCount === null ? "Mengecek…" : availableCount === 0 ? "Tidak tersedia" : `(Maksimal ${availableCount})`}</span>
                                      </div>
                                      <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-lg p-1">
                                        <Button 
@@ -413,7 +429,7 @@ function BookPage() {
                                          variant="ghost" 
                                          size="icon" 
                                          className="h-8 w-8 rounded-md hover:bg-stone-100 text-stone-600"
-                                         disabled={cartItem.quantity >= availableCount}
+                                         disabled={!canReserveRooms(availableCount, cartItem.quantity + 1)}
                                          onClick={() => updateCartItem(room.id, { quantity: cartItem.quantity + 1 })}
                                        >
                                          <Plus className="h-4 w-4" />
@@ -458,8 +474,7 @@ function BookPage() {
                                  </div>
                               ) : (
                                 (() => {
-                                  const hasValidRange = !!form.checkIn && !!form.checkOut && form.checkIn < form.checkOut;
-                                  const isUnavailable = hasValidRange && !!availData && availableCount <= 0;
+                                  const isUnavailable = !canReserveRooms(availableCount);
                                   return (
                                     <Button
                                       type="button"
@@ -468,7 +483,7 @@ function BookPage() {
                                       className="w-full rounded-xl border-[#364935] text-[#364935] hover:bg-stone-50 h-12 disabled:opacity-60 disabled:cursor-not-allowed"
                                       onClick={() => handleAddToCart(room.id)}
                                     >
-                                      {isUnavailable ? "Tidak tersedia" : "Tambahkan kamar"}
+                                      {isUnavailable ? roomAvailabilityLabel(availableCount) : "Tambahkan kamar"}
                                     </Button>
                                   );
                                 })()
@@ -659,11 +674,14 @@ function BookPage() {
                     <span className="font-serif text-2xl font-semibold text-stone-900">Rp{grandTotal.toLocaleString("id-ID")}</span>
                   </div>
                   
+                  {hasAvailabilityConflict && (
+                    <p role="alert" className="mb-3 text-sm text-red-600">Kamar tidak tersedia dalam jumlah yang dipilih. Periksa kembali pilihan kamar.</p>
+                  )}
                   <div className="space-y-3">
                     <Button 
                       type="submit" 
                       form="booking-form"
-                      disabled={pending}
+                      disabled={pending || nights <= 0 || cartItems.length === 0 || hasAvailabilityConflict}
                       className="w-full h-12 bg-[#364935] hover:bg-[#2A3929] text-white rounded-xl font-medium text-base"
                     >
                       {pending ? "Memproses..." : "Pesan Kamar"}
