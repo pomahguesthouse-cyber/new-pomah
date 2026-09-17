@@ -140,6 +140,10 @@ const BOOKING_METHOD_RE =
   /\b(cara\s+(?:booking|pesan|order|reservasi)|gimana\s+(?:cara\s+)?(?:booking|pesan)|bagaimana\s+cara\s+(?:booking|pesan)|booking\s+(?:online|lewat\s+wa|via\s+wa|dari\s+sini|di\s*sini)|pesan\s+online|harus\s+(?:datang|ke\s+(?:tempat|lokasi))|datang\s+ke\s+tempat)\b/i;
 const DAY_USE_RE =
   /\b(day\s*use|dayuse|transit|sewa\s+per\s*jam|per\s*jam(?:an)?|hitungan\s+jam|istirahat\s+(?:sebentar|siang)|sampai\s+siang\s+(?:saja|aja)|beberapa\s+jam\s+(?:saja|aja))\b/i;
+const NEGOTIATION_RE =
+  /\b(nego(?:siasi)?|harga\s+pas|bisa\s+(?:kurang|diskon)|boleh\s+(?:kurang|nego)|minta\s+(?:kurang|diskon)|potong\s+harga|harga\s+(?:belum|tidak|nggak|gak|ga)\s+cocok|kalau\s+di\s+harga\s+(?:rp\s*)?\d|(?:rp\s*)?\d[\d.,]*\s*(?:ribu|rb|k|ribu)?\s+(?:boleh|bisa))\b/i;
+const NEGOTIATION_CLOSING_RE =
+  /\b(kalau\s+(?:tidak|nggak|gak|ga)\s+(?:juga\s+)?(?:tidak|nggak|gak|ga)\s+apa[ -]?apa|kalau\s+(?:tidak|nggak|gak|ga)\s+bisa\s+(?:tidak|nggak|gak|ga)\s+apa[ -]?apa|(?:tidak|nggak|gak|ga)\s+jadi|belum\s+jadi|saya\s+cari\s+(?:yang\s+)?lain|terima\s*kasih|makasih|thanks)\b/i;
 
 /** Pertanyaan tentang MASUK LEBIH AWAL / KELUAR LEBIH SORE, bukan jam standar. */
 const EARLY_CHECKIN_RE =
@@ -195,6 +199,16 @@ export function buildPropertyFaqReply(input: PropertyFaqInput): PropertyFaqReply
     return {
       reply: "Baik Kak, kami tunggu ya. Rencana jam berapa Kak?",
       intent: "visit_survey_plan",
+    };
+  }
+
+  // Tamu sudah menawar sekaligus memberi sinyal tidak melanjutkan. Jangan
+  // mengulang daftar kamar, menanyakan jumlah tamu, atau membuka booking lagi.
+  if (NEGOTIATION_RE.test(raw) && NEGOTIATION_CLOSING_RE.test(raw)) {
+    return {
+      reply:
+        "Baik Kak, tarif yang tampil sudah merupakan harga terbaik kami saat ini. Tidak apa-apa jika belum cocok. Terima kasih sudah mempertimbangkan Pomah Guesthouse, semoga lain waktu kami bisa menyambut Kakak 🙏",
+      intent: "negotiation_closed",
     };
   }
 

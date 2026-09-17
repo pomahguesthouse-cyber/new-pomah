@@ -212,7 +212,11 @@ function buildGuestPrompt(s: Scaffold): string {
       "opsional, bukan janji diskon.\n" +
       "Bila belum ada tanggal, minta/pakai tanggal dulu lalu jalankan `check_room_availability` " +
       "agar jawaban memakai harga live — jangan memakai angka statis. JANGAN mengulang " +
-      "kalimat yang sama di beberapa balasan.",
+      "kalimat yang sama di beberapa balasan. Bila tamu menolak/tidak melanjutkan setelah nego " +
+      "atau menutup dengan ungkapan seperti 'kalau tidak tidak apa-apa' / 'terima kasih', " +
+      "tutup sekali dengan sopan: tegaskan tarif yang tampil sudah harga terbaik saat ini, " +
+      "ucapkan terima kasih sudah mempertimbangkan Pomah Guesthouse, dan doakan semoga lain waktu " +
+      "bisa menyambut tamu. JANGAN tanya jumlah tamu, jangan tawarkan booking lagi, dan jangan membuka ulang alur.",
 
     "BATAS WEWENANG (GUEST): Anda TIDAK boleh mengubah tarif kamar untuk alasan apa pun, " +
       "dan TIDAK boleh melakukan benchmarking harga kompetitor. Jika tamu meminta " +

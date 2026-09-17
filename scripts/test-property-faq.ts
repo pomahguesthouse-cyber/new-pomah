@@ -85,6 +85,22 @@ assert.ok(otaBed.includes("100.000"), "tarif extra bed wajib disebut apa adanya"
 assert.ok(hits("booking online gapapa kak?", "faq_booking_method").toLowerCase().includes("whatsapp"));
 assert.ok(hits("harus datang ke tempat ya?", "faq_booking_method").length > 0);
 
+// Nego yang tidak berlanjut harus ditutup sopan, bukan membuka ulang booking.
+const negotiationClosed = hits(
+  "Maaf kak untuk segitu harga masih belum cocok, kalau saya boleh nego di harga 120 ribu kalau boleh, kalau tidak juga tidak apa apa terima kasih🙏",
+  "negotiation_closed",
+  "early",
+);
+assert.ok(negotiationClosed.includes("harga terbaik"));
+assert.ok(negotiationClosed.includes("Terima kasih sudah mempertimbangkan"));
+assert.ok(!/berapa orang|bantu booking|pesan sekarang/i.test(negotiationClosed));
+
+fallsThrough(
+  "boleh nego sedikit kak?",
+  "nego yang masih terbuka tetap harus dijawab memakai harga live",
+  "early",
+);
+
 // Day-use / istirahat singkat — framing positif, bukan penolakan.
 const dayUse = hits("bisa sewa per jam ga kak?", "faq_day_use");
 assert.ok(/^.*bisa/i.test(dayUse), "jawaban day-use harus dibuka dengan solusi, bukan 'tidak bisa'");
