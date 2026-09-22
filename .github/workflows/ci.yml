@@ -28,5 +28,8 @@ jobs:
       - name: Regression tests
         run: bun run test:wa-refactor
 
+      - name: Public room availability regression tests
+        run: bun scripts/test-public-room-availability.ts
+
       - name: Lint
         run: bun run lint
