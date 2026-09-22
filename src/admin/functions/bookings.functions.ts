@@ -632,17 +632,16 @@ export const updateBookingFull = createServerFn({ method: "POST" })
       final_paid_amount = 0;
     }
 
-    // Update guest contact info
-    const { error: gErr } = await context.supabase
-      .from("guests")
-      .update({
-        full_name: data.guest.full_name,
-        email: data.guest.email || null,
-        phone: data.guest.phone || null,
-        country: data.guest.country || null,
-      })
-      .eq("id", data.guest.id);
-    if (gErr) throw gErr;
+    // Gunakan kontak kanonis bila nomor telepon sudah terdaftar pada tamu lain.
+    // Ini mencegah pelanggaran indeks unik phone_normalized saat booking diedit.
+    const resolvedGuest = await resolveOrCreateGuest(context.supabase, {
+      preferredGuestId: data.guest.id,
+      fullName: data.guest.full_name,
+      email: data.guest.email,
+      phone: data.guest.phone,
+      country: data.guest.country,
+      source: "booking",
+    });
 
     // ── Extra bed capacity guard ─────────────────────────────────────────
     const perTypeReq = new Map<string, { requested: number; rooms: number }>();
@@ -704,7 +703,7 @@ export const updateBookingFull = createServerFn({ method: "POST" })
     });
 
     const patch = {
-
+      guest_id: resolvedGuest.id,
       check_in: data.check_in,
       check_out: data.check_out,
       adults: data.adults,
