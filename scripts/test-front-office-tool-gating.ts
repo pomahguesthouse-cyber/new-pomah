@@ -170,6 +170,30 @@ assert.ok(containsNone(greetingPrompt, [...AVAIL_MARKERS, ...BOOKING_MARKERS, ..
 assert.ok(greetingPrompt.length < fullPrompt.length * 0.45,
   `prompt sapaan harus <45% prompt penuh, dapatnya ${Math.round((greetingPrompt.length / fullPrompt.length) * 100)}%`);
 
+// ─── B3b. general tanpa konteks booking → prompt ringan, bukan blok tool ──
+// Identitas + hard guard + FAQ pendek. Availability/booking tetap utuh untuk
+// intent kamar, dan menyala lagi begitu tanggal/tipe sudah tersimpan.
+
+const generalPrompt = prompt({ intent: "general" });
+assert.ok(contains(generalPrompt, ["Anda adalah Rani", "FORMAT PESAN: WhatsApp", "EARLY CHECK-IN / LATE CHECK-OUT", "INI HARGA PAS"]),
+  "general wajib tetap bawa identitas, hard guard harga, dan FAQ pendek");
+assert.ok(containsNone(generalPrompt, [...AVAIL_MARKERS, ...BOOKING_MARKERS, ...MEDIA_MARKERS, ...ROOM_FACT_MARKERS]),
+  "general tanpa konteks booking tidak boleh membawa blok availability/booking/media");
+assert.ok(generalPrompt.length < fullPrompt.length * 0.5,
+  `prompt general harus <50% prompt penuh, dapatnya ${Math.round((generalPrompt.length / fullPrompt.length) * 100)}%`);
+assert.ok(contains(prompt({ intent: "availability_check" }), AVAIL_MARKERS),
+  "availability wajib tetap prompt penuh");
+assert.ok(contains(prompt({ intent: "booking_start" }), BOOKING_MARKERS),
+  "booking wajib tetap prompt penuh");
+assert.ok(contains(prompt({ intent: "payment" }), AVAIL_MARKERS),
+  "payment yang jatuh ke Front Office wajib tetap blok ketersediaan");
+const generalCustom = frontOfficeAgent.buildDynamicPrompt!(ctx({
+  intent: "general",
+  customInstructions: "Selalu sebut promo Agustus.",
+}));
+assert.ok(generalCustom.includes("INSTRUKSI TAMBAHAN DARI AI LAB"));
+assert.ok(generalCustom.includes("promo Agustus"));
+
 // ─── B4. Invarian #1 — blok media menyala bersama tool-nya ───────────────
 
 const mediaPrompt = prompt({ intent: "media_request" });

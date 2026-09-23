@@ -43,6 +43,7 @@ import {
 import { normalizeAssistantName } from "./agents/persona";
 import { runDeferred } from "@/lib/cf-context";
 import { burstWantsMedia, isMediaRequest } from "@/services/wa-autoreply/message-parsers";
+import { shouldSkipOrchestratorTrainingRetrieval } from "./router/message-gates";
 import { reportAiGatewayFailureAsync } from "@/services/ai-credit-alert";
 
 // Dulu 6 — tidak realistis: anggaran luar (AI_TIMEOUT_MS di
@@ -1203,8 +1204,21 @@ export async function runMultiAgentOrchestration(input: MultiAgentInput): Promis
   // tidak perlu menunggu — dulu serial dan menambah 0,3–1s per turn AI
   // (lebih parah lagi saat classifier jatuh ke LLM fallback ~5s).
   const trainingExamplesPromise: Promise<TrainingExample[]> = (async () => {
-    const alreadyProvided = (input.agentCtx.trainingExamples?.length ?? 0) > 0;
-    if (alreadyProvided || input.agentCtx.bookingInProgress || lastUserMsg.trim().length === 0) {
+    // Autoreply sudah mencoba findTrainingSignals untuk pesan ini — termasuk
+    // hasil kosong atau gagal. Jangan embed ulang. Flag-nya bukan `length > 0`.
+    if (
+      shouldSkipOrchestratorTrainingRetrieval({
+        trainingRetrievalAttempted: input.agentCtx.trainingRetrievalAttempted,
+        trainingExampleCount: input.agentCtx.trainingExamples?.length ?? 0,
+        bookingInProgress: input.agentCtx.bookingInProgress,
+        lastUserMessage: lastUserMsg,
+      })
+    ) {
+      if (input.agentCtx.trainingRetrievalAttempted) {
+        console.info(
+          "[MultiAgent] Training RAG skipped — retrieval already attempted for this message",
+        );
+      }
       return [];
     }
     try {

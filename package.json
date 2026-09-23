@@ -27,6 +27,7 @@
     "test:booking-form-followup": "tsx scripts/test-booking-form-followup.ts",
     "test:manager-pricing-command": "tsx scripts/test-manager-pricing-command.ts",
     "test:fo-tool-gating": "tsx scripts/test-front-office-tool-gating.ts",
+    "test:token-saving": "tsx scripts/test-token-saving-gates.ts",
     "test:verbatim-relay": "tsx scripts/test-verbatim-relay.ts",
     "test:summary-window": "tsx scripts/test-summary-window.ts",
     "test:property-faq": "tsx scripts/test-property-faq.ts",
