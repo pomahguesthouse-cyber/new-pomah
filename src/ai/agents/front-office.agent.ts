@@ -276,6 +276,7 @@ interface GuestPromptGates {
 /** Intent yang tidak pernah menyentuh detail fisik/kapasitas kamar. */
 const NON_ROOM_INTENTS: ReadonlySet<IntentCategory> = new Set<IntentCategory>([
   "greeting",
+  "general",
   "complaint",
   "customer-care",
   "maintenance",
@@ -285,6 +286,17 @@ const NON_ROOM_INTENTS: ReadonlySet<IntentCategory> = new Set<IntentCategory>([
   "invoice_request",
   "checkin_policy_question",
   "early_arrival_guest_question",
+]);
+
+/**
+ * Intent FAQ/sapaan: prompt ringan (identitas + hard guard + FAQ pendek).
+ * Booking, availability, pembayaran, dan negosiasi TIDAK masuk sini — mereka
+ * tetap memakai blok tool penuh. Begitu ada konteks booking tersimpan, prompt
+ * penuh kembali menyala lewat `hasBookingContext`.
+ */
+const LIGHT_FAQ_INTENTS: ReadonlySet<IntentCategory> = new Set<IntentCategory>([
+  "general",
+  "greeting",
 ]);
 
 /** Intent yang memang sedang menuju pembuatan booking. */
@@ -298,6 +310,13 @@ function guestPromptGates(ctx: AgentContext): GuestPromptGates {
   const intent = ctx.intent;
   if (!intent) {
     return { faq: true, roomFacts: true, availability: true, booking: true, media: true };
+  }
+
+  // General / sapaan tanpa slot booking: jangan kirim blok availability,
+  // booking, atau fakta kamar yang menyuruh tool. Hard guard + FAQ tetap di
+  // gate `faq`. Instruksi AI Lab menyusul di bagian dinamis, di atas prompt ini.
+  if (LIGHT_FAQ_INTENTS.has(intent) && !hasBookingContext(ctx)) {
+    return { faq: true, roomFacts: false, availability: false, booking: false, media: false };
   }
 
   const roomFlow = isRoomFlow(ctx, intent);
@@ -495,7 +514,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "tipe itu), tawarkan foto via `send_room_photos` sebagai alternatif dan arahkan ke " +
       "pomahguesthouse.com/rooms. Setelah tool sukses, tutup dengan CTA singkat."),
 
-    s.roomSummary,
+    when(g.roomFacts || g.availability, s.roomSummary),
 
     when(g.availability, "KETERSEDIAAN KAMAR — ATURAN TANGGAL (BACA DULU SEBELUM TOOL CALL): " +
       "(1) JANGAN PERNAH mengisi argumen `check_in` dengan tanggal hari ini (" + today + ") " +

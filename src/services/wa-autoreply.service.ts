@@ -26,6 +26,7 @@ import {
   PAYMENT_STATUS_VALUES,
 } from "@/ai/chat-summary.types";
 import { findTrainingSignals } from "@/services/training-retrieval.service";
+import { shouldSkipSopRetrieval } from "@/ai/router/message-gates";
 import { runDeferred } from "@/lib/cf-context";
 import { checkRoomAvailability } from "@/tools/availability.tool";
 import { retrieveRelevantSopContext } from "@/ai/rag.service";
@@ -266,6 +267,8 @@ const QUEUE_MAX_ATTEMPTS = 3;
 function shouldLoadHeavyRetrieval(message: string): boolean {
   const text = message.toLowerCase().replace(/\s+/g, " ").trim();
   if (!text) return false;
+  // Sapaan, terima kasih, emoji, dan media tanpa caption tidak perlu embedding.
+  if (shouldSkipSopRetrieval(message)) return false;
   if (/^(halo|hai|hi|hello|pagi|siang|sore|malam|assalamualaikum|terima kasih|makasih|thanks|ok|oke|sip|baik)\b[.!?\s]*$/i.test(text)) {
     return false;
   }
@@ -1112,11 +1115,17 @@ export async function executeAutoreplyForPhone(
   let brosurFiles: { name: string; url: string }[] = [];
 
   const isQueueRetry = queueAttempt > 1;
-  const loadHeavyRetrieval = !isQueueRetry && shouldLoadHeavyRetrieval(lastMessage);
+  const loadHeavyRetrieval = !isQueueRetry && shouldLoadHeavyRetrieval(lastMessage ?? "");
+  // SOP di-gate sebelum embedding. Pesan sosial lolos shouldLoadHeavyRetrieval
+  // juga, tetapi cek ini tetap eksplisit supaya SOP tidak ikut jalan bila
+  // gerbang training nanti dilonggarkan.
+  const skipSopRetrieval = shouldSkipSopRetrieval(lastMessage ?? "");
 
   // O1: retrieval training signals dimulai DI SINI, paralel dengan SOP
   // retrieval di bawah — keduanya independen (embedding + RPC masing-masing).
   // Dulu serial: SOP selesai dulu baru training mulai, menambah ~0,3-0,8s.
+  // Promise ini — sukses, kosong, ATAU gagal — menandai percobaan retrieval
+  // selesai. Orchestrator tidak boleh embed training sekali lagi.
   const trainingSignalsPromise =
     !reply && llmConfig && loadHeavyRetrieval
       ? findTrainingSignals(
@@ -1138,7 +1147,7 @@ export async function executeAutoreplyForPhone(
         })
       : null;
 
-  if (sopEnabled && !reply && llmConfig && loadHeavyRetrieval) {
+  if (sopEnabled && !reply && llmConfig && loadHeavyRetrieval && !skipSopRetrieval) {
     try {
       const sopQuery = [lastMessage, chatSummaryJson?.last_topic, chatSummaryJson?.room_type]
         .filter(Boolean)
@@ -1447,6 +1456,7 @@ export async function executeAutoreplyForPhone(
           activeBookingContext,
           guestProfile,
           chatPhone: phone,
+          trainingRetrievalAttempted: trainingSignalsPromise !== null,
           trainingExamples: trainingExamples.map((ex) => ({
             id: ex.id,
             intent: ex.intent,

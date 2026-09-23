@@ -15,6 +15,15 @@ import type { IntentCategory }   from "@/ai/agents/types";
 import type { ClassifiedIntent }  from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_INTENT_CATEGORIES } from "./intent-categories";
+import {
+  isClearGreeting,
+  isClearThanks,
+  isEmojiOnly,
+  isLongAmbiguousGeneral,
+  isMediaOnlyWithoutText,
+  isTrivialSocialMessage,
+  isVeryShortMessage,
+} from "./message-gates";
 
 // ─── Rule definitions ─────────────────────────────────────────────────────────
 
@@ -199,6 +208,8 @@ export const RULES: IntentRule[] = [
       /\b(anak|children|child|kids?)\s*\d+/i,
       /\d+\s*(anak|children|child|kids?)/i,
       /\b(kami|kita)\s+(?:ber)?\d+\b/i,
+      /\b(\d+|satu|dua|tiga|empat|lima|enam)\s*(orang|tamu|pax)\b/i,
+      /\b(berdua|bertiga|berempat|berlima)\b/i,
     ],
   },
 
@@ -240,6 +251,7 @@ export const RULES: IntentRule[] = [
       /\b(wifi|wi-fi|parkir|sarapan|breakfast|kolam|pool|fasilitas|amenities|lantai berapa|view|pemandangan|kamar mandi|bathroom)\b.*\?/i,
       /\b(ada (?:wifi|parkir|sarapan|kolam|breakfast|ac))\b/i,
       /\b(kamar(?:nya)? (?:ada|punya|include|termasuk))\b/i,
+      /\b(family\s*(room|suite)|tipe\s+family)\b/i,
     ],
   },
 
@@ -270,6 +282,7 @@ export const RULES: IntentRule[] = [
     patterns: [
       /^(halo|hai|hi|hey|hello|hei|assalam|selamat (pagi|siang|sore|malam)|pagi|siang|sore|malam)\b/i,
       /\b(apa kabar|gimana kabarnya|ada yang bisa dibantu|bisa dibantu)\b/i,
+      /^(?:(?:ya+|yah|oke?|ok|sip|siap)[\s,!.]+)*(?:makasih+|makasi+|terima\s*kasih|terimakasih|trims?|trimakasih|thanks|thank\s*you|thx|tq|nuhun)(?:[\s,!.]+(?:kak|kakak|ka|min|admin|pak|bu|ya+|yah|dong|deh|nih))*[\s!.]*$/iu,
     ],
   },
 ];
@@ -394,6 +407,61 @@ const TOPIC_TO_INTENT: Record<string, IntentCategory> = {
  */
 export interface IntentContextExtras {
   roomTypeNames?: string[];
+}
+
+/**
+ * LLM intent hanya untuk pesan yang benar-benar ambigu.
+ *
+ * Bukan untuk: pesan sangat pendek, sapaan/thanks/emoji/media yang sudah
+ * terklasifikasi, atau aturan yang sudah menang tegas (confidence ≥ 0.7 atau
+ * bobot ≥ 6). `general` saja TIDAK cukup — hanya pertanyaan panjang yang
+ * tidak kena aturan sama sekali.
+ */
+export function shouldInvokeIntentLlm(args: {
+  text: string;
+  category: IntentCategory;
+  confidence: number;
+  bestScore: number;
+  secondScore: number;
+  hasLlmConfig: boolean;
+}): boolean {
+  if (!args.hasLlmConfig) return false;
+  if (isVeryShortMessage(args.text)) return false;
+  if (isTrivialSocialMessage(args.text)) return false;
+  if (args.category === "greeting") return false;
+  const strong =
+    args.category !== "general" &&
+    (args.confidence >= 0.7 || (args.bestScore >= 6 && args.bestScore >= args.secondScore));
+  if (strong) return false;
+  const closeRace = args.category !== "general" && args.confidence < 0.7 && args.bestScore > 0;
+  if (closeRace) return true;
+  return args.category === "general" && isLongAmbiguousGeneral(args.text);
+}
+
+/**
+ * Klasifikasi sosial deterministik. Tidak menimpa intent kuat (booking,
+ * availability, payment, komplain, dll.) yang sudah menang dengan bobot ≥ 5.
+ */
+function socialClassification(
+  text: string,
+  best: IntentCategory,
+  bestScore: number,
+  scoresSize: number,
+): ClassifiedIntent | null {
+  if (scoresSize > 0 && best !== "general" && best !== "greeting" && bestScore >= 5) return null;
+  if (isMediaOnlyWithoutText(text)) {
+    return { category: "general", confidence: 0.88, matchedTerms: ["media-only"] };
+  }
+  if (isEmojiOnly(text)) {
+    return { category: "greeting", confidence: 0.92, matchedTerms: ["emoji-only"] };
+  }
+  if (isClearThanks(text)) {
+    return { category: "greeting", confidence: 0.92, matchedTerms: ["thanks"] };
+  }
+  if (isClearGreeting(text)) {
+    return { category: "greeting", confidence: 0.92, matchedTerms: ["greeting"] };
+  }
+  return null;
 }
 
 /**
@@ -543,6 +611,21 @@ export async function classifyIntent(
     }
   }
 
+  // Negosiasi murni ("boleh nego?", "bisa kurang?") tidak punya kata "harga",
+  // jadi dulu jatuh ke general dan kehilangan prompt pricing. Naikkan ke
+  // pricing HANYA bila belum ada intent operasional yang lebih kuat — supaya
+  // "ada kamar, boleh nego?" tetap availability dan "mau booking, nego?" tetap booking.
+  const NEGO_ONLY_RE =
+    /\b(nego(?:siasi)?|bisa\s+kurang|boleh\s+kurang|minta\s+(?:kurang|diskon)|potong\s+harga)\b/i;
+  if (NEGO_ONLY_RE.test(text) && (scores.size === 0 || best === "general" || best === "greeting")) {
+    const hit = text.match(NEGO_ONLY_RE);
+    scores.set("pricing_inquiry", 6);
+    matched.set("pricing_inquiry", hit ? [hit[0]] : ["nego"]);
+    secondScore = bestScore;
+    bestScore = 6;
+    best = "pricing_inquiry";
+  }
+
   // Confidence = dominasi kategori terbaik atas RUNNER-UP, bukan atas total
   // semua kategori. Formula lama (bestScore/totalScore) menghukum pesan yang
   // menyentuh dua topik — "berapa harga kamar, masih ada?" match pricing(6) +
@@ -566,9 +649,6 @@ export async function classifyIntent(
     matchedTerms: scores.size === 0 ? [] : (matched.get(best) ?? []),
   };
 
-  // Trigger LLM Fallback if ambiguous or general and llmConfig is present
-  const isAmbiguous = ruleResult.category === "general" || ruleResult.confidence < 0.70;
-
   // Gibberish guard: don't let the LLM "autocorrect" a single nonsense token
   // (e.g. "sisng", "kmar", "asdf") into a confident booking/availability intent.
   // If the rules matched nothing AND the message is one short alphabetic token
@@ -591,7 +671,22 @@ export async function classifyIntent(
     };
   }
 
-  if (isAmbiguous && llmConfig?.apiKey) {
+  const social = socialClassification(text, ruleResult.category, bestScore, scores.size);
+  if (social) return social;
+
+  // `isAmbiguous` lama memicu LLM untuk SETIAP general. Itu yang membakar
+  // kredit pada sapaan dan FAQ pendek. Sekarang hanya balapan aturan yang
+  // ketat, atau pertanyaan panjang yang tidak kena aturan sama sekali.
+  const invokeLlm = shouldInvokeIntentLlm({
+    text,
+    category: ruleResult.category,
+    confidence: ruleResult.confidence,
+    bestScore,
+    secondScore,
+    hasLlmConfig: Boolean(llmConfig?.apiKey),
+  });
+
+  if (invokeLlm && llmConfig?.apiKey) {
     const INTENT_LLM_TIMEOUT_MS = 5_000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), INTENT_LLM_TIMEOUT_MS);

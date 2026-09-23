@@ -177,6 +177,13 @@ export interface AgentContext {
     ideal_assistant_response: string;
   }>;
   /**
+   * True bila pemanggil SUDAH mencoba retrieval training untuk pesan ini,
+   * termasuk hasil kosong atau gagal. Orchestrator tidak boleh memanggil
+   * `retrieveTrainingExamples` lagi — itu embedding kedua untuk pesan yang sama.
+   * Cache hit di dalam satu percobaan tetap boleh.
+   */
+  trainingRetrievalAttempted?: boolean;
+  /**
    * Contoh jawaban yang sudah ditandai admin sebagai 'bad' beserta
    * koreksinya bila ada. Diinject sebagai blok "JANGAN tiru" agar agent
    * menghindari pola yang gagal pada konteks serupa.
