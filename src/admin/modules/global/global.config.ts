@@ -82,7 +82,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   },
   whatsapp: {
     enabled: true,
-    phoneNumber: "628112651818",
+    phoneNumber: "6285190986169",
     message: "Halo, saya ingin bertanya tentang Pomah Guesthouse.",
     position: "bottom-right",
   },
