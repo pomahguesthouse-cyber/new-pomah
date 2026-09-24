@@ -16,6 +16,36 @@ export const MANAGER_FALLBACK_MESSAGE =
 
 export const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 
+/**
+ * Ack harus berangkat dalam anggaran ini, dihitung dari saat worker
+ * mengambil item antrian (`workerStartedAt`), bukan dari akhir retrieval.
+ *
+ * `QUICK_ACK_SEND_BUDGET_MS` menyisakan waktu untuk cek dedup DB + kirim
+ * teks. Callback dijadwalkan pada `deadline - sendBudget` supaya kirim
+ * biasanya selesai di bawah 2 detik. Diukur oleh
+ * `scripts/test-meta-guest-fastpath.ts` (timer dinding-jam, tanpa mengirim
+ * WhatsApp).
+ */
+export const QUICK_ACK_DEADLINE_MS = 1_600;
+export const QUICK_ACK_SEND_BUDGET_MS = 700;
+
+export function quickAckDelayMs(elapsedSincePickupMs: number): number {
+  const elapsed = Number.isFinite(elapsedSincePickupMs) ? Math.max(0, elapsedSincePickupMs) : 0;
+  const targetStart = QUICK_ACK_DEADLINE_MS - QUICK_ACK_SEND_BUDGET_MS;
+  return Math.max(0, targetStart - elapsed);
+}
+
+const CLOSING_CHITCHAT_RE =
+  /\b(makasih|terima\s*kasih|trims?|trimakasih|thanks?|thank\s*you|thx|tq|sama\s*-?\s*sama|mantap|oke?\s*deh|ya\s*udah?|yaudah|sampai\s*(jumpa|ketemu)|see\s*you|bye)\b/i;
+
+/** Ack "sebentar" tidak pantas untuk penutup/basa-basi singkat. */
+export function isQuickAckSuppressedMessage(message: string): boolean {
+  const text = (message ?? "").trim();
+  if (!text || text.length > 60) return false;
+  if (text.includes("?")) return false;
+  return CLOSING_CHITCHAT_RE.test(text);
+}
+
 export function buildStateAwareFallback(state?: string): string {
   if (state === "WAITING_DATE_CHANGE" || state === "WAITING_DATE_CHANGE_CONFIRMATION") {
     return "Baik Kak, untuk melanjutkan booking, tanggal barunya kapan dan berapa malam?";
