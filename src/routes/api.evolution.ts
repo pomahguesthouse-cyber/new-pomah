@@ -410,19 +410,12 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
   }
 
 
+  // Pesan tamu tidak lagi diteruskan ke admin; Rani langsung membalas.
   runBackground((async () => {
     try {
-      const { notifyIncomingMessage } = await import("@/services/manager-notifier.service");
-      await notifyIncomingMessage(supabaseAdmin as any, {
-        phone: customerPhone,
-        guestName: name || null,
-        body: displayMessage,
-        messageId,
-        threadId: null,
-        hasAttachment: !!attachmentUrl,
-      });
+      void messageId;
     } catch (e) {
-      console.warn("[EvolutionWebhook] notifyIncomingMessage failed (non-fatal):", e);
+      console.warn("[EvolutionWebhook] noop failed (non-fatal):", e);
     }
   })());
 
