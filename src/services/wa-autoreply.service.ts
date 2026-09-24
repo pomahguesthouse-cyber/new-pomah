@@ -551,9 +551,13 @@ export async function executeAutoreplyForPhone(
   const c = ctx as any;
   const sendTarget = String(c.send_target || c.external_chat_id || phone);
   const rawManager = await resolveManagerByPhone(phone);
+  // Nomor resmi Meta khusus melayani tamu: semua pengirim (termasuk manager)
+  // selalu dilayani Rani, bukan Asisten Admin.
+  const { resolveThreadProvider } = await import("./whatsapp-meta.service");
+  const viaOfficialNumber = (await resolveThreadProvider(phone)) === "meta";
   // Manager bisa mengaktifkan "guest mode" untuk menguji alur tamu (booking,
   // invoice, pembayaran) tanpa ter-route ke agen manajerial.
-  const guestModeActive = rawManager ? await isManagerInGuestMode(phone) : false;
+  const guestModeActive = viaOfficialNumber || (rawManager ? await isManagerInGuestMode(phone) : false);
   const manager = guestModeActive ? null : rawManager;
   const metrics = {
     workerStartedAt: Date.now(),
@@ -2466,7 +2470,10 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const isManagerEntry = !!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone);
+    const { resolveThreadProvider: resolveProvider } = await import("./whatsapp-meta.service");
+    const entryViaOfficial = (await resolveProvider(entry.phone)) === "meta";
+    const isManagerEntry =
+      !entryViaOfficial && (!!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone));
     const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
 
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
