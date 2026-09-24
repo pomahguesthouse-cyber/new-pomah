@@ -112,19 +112,9 @@ async function handleInboundMessage(
     }
   }
 
-  if (!duplicate) try {
-    const { notifyIncomingMessage } = await import("./manager-notifier.service");
-    await notifyIncomingMessage(admin as never, {
-      phone,
-      guestName: name,
-      body,
-      messageId,
-      threadId: null,
-      hasAttachment: !!mediaId,
-    });
-  } catch (e) {
-    console.warn("[MetaInbox] notify gagal (non-fatal):", e);
-  }
+  // Pesan tamu tidak lagi diteruskan ke admin; Rani langsung membalas.
+
+
 
   const { data: ctx, error: ctxErr } = await admin.rpc("get_autoreply_context", { p_phone: phone });
   if (ctxErr || !ctx) throw new Error(`context gagal: ${ctxErr?.message ?? "kosong"}`);
