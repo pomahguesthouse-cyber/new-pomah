@@ -411,13 +411,6 @@ export const evolutionWebhookPost = async ({ request }: { request: Request }): P
 
 
   // Pesan tamu tidak lagi diteruskan ke admin; Rani langsung membalas.
-  runBackground((async () => {
-    try {
-      void messageId;
-    } catch (e) {
-      console.warn("[EvolutionWebhook] noop failed (non-fatal):", e);
-    }
-  })());
 
   try {
     let { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc(
