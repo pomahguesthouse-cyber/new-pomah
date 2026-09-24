@@ -133,12 +133,13 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
   }
 
   const totalSent = results.reduce((n, r) => n + r.sent, 0);
+  const anySkipped = results.some((r) => r.skipped);
   return JSON.stringify({
-    ok: totalSent > 0,
+    ok: totalSent > 0 || anySkipped,
     total_sent: totalSent,
     results,
     note:
-      totalSent > 0
+      totalSent > 0 || anySkipped
         ? "BERHASIL: foto sudah terkirim ke chat tamu. JANGAN kirim permintaan maaf, " +
           "pesan 'kendala teknis', atau fallback ke website. Cukup tutup dengan CTA singkat, " +
           "mis. tanyakan tanggal menginap atau tawarkan booking."
