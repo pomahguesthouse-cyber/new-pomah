@@ -1659,6 +1659,14 @@ export async function executeAutoreplyForPhone(
     );
     return "ai_credit_exhausted";
   }
+  // Jika foto/tour sudah terkirim ke tamu, JANGAN retry — retry akan
+  // menjalankan ulang tool dan mengirim foto yang sama berulang kali.
+  const mediaAlreadySent = (orchResult?.toolsUsed ?? []).some(
+    (t: string) => t === "Room - Kirim Foto ke WA Tamu" || t === "Room - Kirim Link Virtual Tour 360°",
+  );
+  if (!reply && mediaAlreadySent) {
+    reply = "Itu foto kamarnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?";
+  }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
     if (quickAckTimer) clearTimeout(quickAckTimer);
     try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
