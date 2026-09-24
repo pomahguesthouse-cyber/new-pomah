@@ -81,8 +81,36 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
     });
   }
 
-  const results: Array<{ room: string; sent: number; failed: number }> = [];
+  // Anti-duplikat: lewati kamar yang fotonya sudah dikirim ke tamu ini
+  // dalam 30 menit terakhir (mencegah kiriman berulang saat retry/putaran ulang).
+  const recentCaptions = new Set<string>();
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const digits = phone.replace(/\D/g, "").replace(/^0/, "62");
+    const { data } = await (supabaseAdmin as unknown as {
+      from: (t: string) => {
+        select: (c: string) => {
+          eq: (k: string, v: string) => {
+            gte: (k: string, v: string) => Promise<{ data: Array<{ body: string | null }> | null }>;
+          };
+        };
+      };
+    })
+      .from("whatsapp_meta_outbound")
+      .select("body")
+      .eq("recipient", digits)
+      .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString());
+    for (const row of data ?? []) if (row.body) recentCaptions.add(row.body);
+  } catch {
+    /* non-fatal: lanjut tanpa dedup */
+  }
+
+  const results: Array<{ room: string; sent: number; failed: number; skipped?: boolean }> = [];
   for (const room of targets) {
+    if (recentCaptions.has(`Foto kamar *${room.name}* 📸`)) {
+      results.push({ room: room.name, sent: 0, failed: 0, skipped: true });
+      continue;
+    }
     const photos = pickImages(room, max);
     let sent = 0;
     let failed = 0;
