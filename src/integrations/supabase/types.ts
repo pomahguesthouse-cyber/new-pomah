@@ -3656,6 +3656,42 @@ export type Database = {
           },
         ]
       }
+      whatsapp_meta_outbound: {
+        Row: {
+          body: string | null
+          created_at: string
+          error: Json | null
+          id: string
+          provider_message_id: string | null
+          recipient: string
+          status: string
+          status_timestamps: Json
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          error?: Json | null
+          id?: string
+          provider_message_id?: string | null
+          recipient: string
+          status?: string
+          status_timestamps?: Json
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          error?: Json | null
+          id?: string
+          provider_message_id?: string | null
+          recipient?: string
+          status?: string
+          status_timestamps?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_threads: {
         Row: {
           ai_analysis: Json | null
@@ -3680,6 +3716,7 @@ export type Database = {
           lid_alias: string | null
           phone: string
           pinned: boolean
+          provider: string
           status: Database["public"]["Enums"]["thread_status"]
           sync_error: string | null
           sync_status: string
@@ -3709,6 +3746,7 @@ export type Database = {
           lid_alias?: string | null
           phone: string
           pinned?: boolean
+          provider?: string
           status?: Database["public"]["Enums"]["thread_status"]
           sync_error?: string | null
           sync_status?: string
@@ -3738,6 +3776,7 @@ export type Database = {
           lid_alias?: string | null
           phone?: string
           pinned?: boolean
+          provider?: string
           status?: Database["public"]["Enums"]["thread_status"]
           sync_error?: string | null
           sync_status?: string
@@ -3753,6 +3792,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_webhook_events: {
+        Row: {
+          attempts: number
+          delivery_id: string
+          event: string
+          id: string
+          next_attempt_at: string
+          payload: Json
+          processed_at: string | null
+          processing_error: string | null
+          received_at: string
+        }
+        Insert: {
+          attempts?: number
+          delivery_id: string
+          event: string
+          id?: string
+          next_attempt_at?: string
+          payload: Json
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string
+        }
+        Update: {
+          attempts?: number
+          delivery_id?: string
+          event?: string
+          id?: string
+          next_attempt_at?: string
+          payload?: Json
+          processed_at?: string | null
+          processing_error?: string | null
+          received_at?: string
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -3905,6 +3980,15 @@ export type Database = {
       _jsonb_date: { Args: { p_json: Json; p_key: string }; Returns: string }
       _jsonb_int: { Args: { p_json: Json; p_key: string }; Returns: number }
       _jsonb_text: { Args: { p_json: Json; p_key: string }; Returns: string }
+      apply_whatsapp_meta_status: {
+        Args: {
+          p_errors: Json
+          p_message_id: string
+          p_status: string
+          p_ts: string
+        }
+        Returns: boolean
+      }
       claim_queue_winner: {
         Args: {
           p_body: string
