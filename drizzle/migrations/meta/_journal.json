@@ -8,6 +8,13 @@
       "when": 1790245848888,
       "tag": "0000_whatsapp_meta_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790247763809,
+      "tag": "0001_enable_ai_thread_and_faster_delay",
+      "breakpoints": true
     }
   ]
 }

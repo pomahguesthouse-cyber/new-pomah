@@ -1,0 +1,2 @@
+UPDATE public.whatsapp_threads SET ai_auto = true WHERE id = 'e473e0ec-d5de-43c0-8a44-fa30a2dfcc64';
+UPDATE public.properties SET smart_delay_config = '{"enabled":true,"shortMs":1500,"mediumMs":1000,"longMs":500,"waitSignalMs":4000,"maxDelayMs":30500}'::jsonb;
