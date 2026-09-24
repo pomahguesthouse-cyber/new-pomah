@@ -58,7 +58,12 @@ function messageText(m: MetaMessage): string {
   return m.type ? `[Lampiran ${m.type}]` : "";
 }
 
-async function handleInboundMessage(admin: Admin, value: Record<string, unknown>, m: MetaMessage) {
+async function handleInboundMessage(
+  admin: Admin,
+  value: Record<string, unknown>,
+  m: MetaMessage,
+  isRetry: boolean,
+) {
   if (!m.from || !m.id) return;
   const contacts = value.contacts as Array<{ profile?: { name?: string } }> | undefined;
   const name = contacts?.[0]?.profile?.name ?? m.from;
@@ -80,10 +85,10 @@ async function handleInboundMessage(admin: Admin, value: Record<string, unknown>
     .or(`phone.eq.${phone},canonical_phone.eq.${phone}`);
   if (provErr) throw new Error(`set provider gagal: ${provErr.message}`);
 
-  if (duplicate) return;
-
   const mediaId = m.image?.id ?? m.document?.id ?? m.video?.id ?? m.audio?.id ?? m.sticker?.id ?? null;
-  await saveMessageMetadata(admin as never, {
+  // Pada percobaan ulang, pesan sudah tersimpan tapi antrian balasan mungkin belum.
+  if (duplicate && !isRetry) return;
+  if (!duplicate) await saveMessageMetadata(admin as never, {
     messageId,
     metadata: {
       source: "whatsapp_meta",
@@ -96,7 +101,7 @@ async function handleInboundMessage(admin: Admin, value: Record<string, unknown>
     },
   });
 
-  if (m.type === "image" && m.image?.id) {
+  if (!duplicate && m.type === "image" && m.image?.id) {
     try {
       const { fetchMetaMediaDataUri } = await import("./whatsapp-meta.service");
       const { analyzePaymentProof } = await import("./payment-proof.service");
@@ -107,7 +112,7 @@ async function handleInboundMessage(admin: Admin, value: Record<string, unknown>
     }
   }
 
-  try {
+  if (!duplicate) try {
     const { notifyIncomingMessage } = await import("./manager-notifier.service");
     await notifyIncomingMessage(admin as never, {
       phone,
@@ -134,7 +139,7 @@ async function handleInboundMessage(admin: Admin, value: Record<string, unknown>
 
   const { resolveQueueTiming, queueUpsert } = await import("./queue.service");
   const { delayMs, maxWaitMs } = resolveQueueTiming(body, c.smart_delay_config as never);
-  await queueUpsert(admin as never, {
+  const entry = await queueUpsert(admin as never, {
     phone: c.canonical_phone || c.thread_phone || phone,
     threadId: c.thread_id,
     messageId,
@@ -142,6 +147,8 @@ async function handleInboundMessage(admin: Admin, value: Record<string, unknown>
     delayMs,
     maxWaitMs,
   });
+  // Gagal masuk antrian = balasan tidak akan terkirim; ulangi lewat inbox.
+  if (!entry) throw new Error("queueUpsert gagal: balasan belum dijadwalkan");
 }
 
 async function handleStatus(admin: Admin, s: MetaStatus) {
@@ -158,11 +165,11 @@ async function handleStatus(admin: Admin, s: MetaStatus) {
 }
 
 /** Proses satu event tersimpan. Melempar error bila harus diulang. */
-async function processEvent(admin: Admin, event: string, payload: unknown) {
+async function processEvent(admin: Admin, event: string, payload: unknown, isRetry: boolean) {
   const value = valueOf(payload);
   if (event === "whatsapp.message") {
     for (const m of (value.messages as MetaMessage[] | undefined) ?? []) {
-      await handleInboundMessage(admin, value, m);
+      await handleInboundMessage(admin, value, m, isRetry);
     }
   } else if (event === "whatsapp.status") {
     for (const s of (value.statuses as MetaStatus[] | undefined) ?? []) {
@@ -183,7 +190,7 @@ export async function processInboxRow(row: {
 }): Promise<{ done: boolean; deferred: boolean; error?: string }> {
   const admin = await getAdmin();
   try {
-    await processEvent(admin, row.event, row.payload);
+    await processEvent(admin, row.event, row.payload, row.attempts > 0);
     const { error } = await admin
       .from("whatsapp_webhook_events")
       .update({ processed_at: new Date().toISOString(), processing_error: null })
