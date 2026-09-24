@@ -79,6 +79,7 @@ import { Route as BookConfirmationIdRouteImport } from './routes/book/confirmati
 import { Route as BookingFormTokenRouteImport } from './routes/booking.form.$token'
 import { Route as ApiBookingInvoiceIdSendRouteImport } from './routes/api.booking-invoice.$id.send'
 import { Route as ApiPublicBookingFormTokenRouteImport } from './routes/api.public.booking-form.$token'
+import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api.public.whatsapp.webhook'
 import { Route as BookConfirmationIdChatRouteImport } from './routes/book/confirmation/$id.chat'
 
 const IndexRoute = IndexRouteImport.update({
@@ -440,6 +441,12 @@ const ApiPublicBookingFormTokenRoute =
     path: '/api/public/booking-form/$token',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicWhatsappWebhookRoute =
+  ApiPublicWhatsappWebhookRouteImport.update({
+    id: '/api/public/whatsapp/webhook',
+    path: '/api/public/whatsapp/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BookConfirmationIdChatRoute = BookConfirmationIdChatRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -517,6 +524,7 @@ export interface FileRoutesByFullPath {
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesByTo {
@@ -589,6 +597,7 @@ export interface FileRoutesByTo {
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRoutesById {
@@ -663,6 +672,7 @@ export interface FileRoutesById {
   '/booking/form/$token': typeof BookingFormTokenRoute
   '/api/booking-invoice/$id/send': typeof ApiBookingInvoiceIdSendRoute
   '/api/public/booking-form/$token': typeof ApiPublicBookingFormTokenRoute
+  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
   '/book/confirmation/$id/chat': typeof BookConfirmationIdChatRoute
 }
 export interface FileRouteTypes {
@@ -738,6 +748,7 @@ export interface FileRouteTypes {
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
+    | '/api/public/whatsapp/webhook'
     | '/book/confirmation/$id/chat'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -810,6 +821,7 @@ export interface FileRouteTypes {
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
+    | '/api/public/whatsapp/webhook'
     | '/book/confirmation/$id/chat'
   id:
     | '__root__'
@@ -883,6 +895,7 @@ export interface FileRouteTypes {
     | '/booking/form/$token'
     | '/api/booking-invoice/$id/send'
     | '/api/public/booking-form/$token'
+    | '/api/public/whatsapp/webhook'
     | '/book/confirmation/$id/chat'
   fileRoutesById: FileRoutesById
 }
@@ -926,6 +939,7 @@ export interface RootRouteChildren {
   BookConfirmationIdRoute: typeof BookConfirmationIdRouteWithChildren
   BookingFormTokenRoute: typeof BookingFormTokenRoute
   ApiPublicBookingFormTokenRoute: typeof ApiPublicBookingFormTokenRoute
+  ApiPublicWhatsappWebhookRoute: typeof ApiPublicWhatsappWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1420,6 +1434,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicBookingFormTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/whatsapp/webhook': {
+      id: '/api/public/whatsapp/webhook'
+      path: '/api/public/whatsapp/webhook'
+      fullPath: '/api/public/whatsapp/webhook'
+      preLoaderRoute: typeof ApiPublicWhatsappWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/book/confirmation/$id/chat': {
       id: '/book/confirmation/$id/chat'
       path: '/chat'
@@ -1571,6 +1592,7 @@ const rootRouteChildren: RootRouteChildren = {
   BookConfirmationIdRoute: BookConfirmationIdRouteWithChildren,
   BookingFormTokenRoute: BookingFormTokenRoute,
   ApiPublicBookingFormTokenRoute: ApiPublicBookingFormTokenRoute,
+  ApiPublicWhatsappWebhookRoute: ApiPublicWhatsappWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
