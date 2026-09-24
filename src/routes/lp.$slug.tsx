@@ -84,7 +84,11 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
 
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
-  const { page } = Route.useLoaderData() as { page: SeoLandingPage };
+  const { page, property } = Route.useLoaderData() as {
+    page: SeoLandingPage;
+    property?: { whatsapp_number?: string | null };
+  };
+  const whatsappNumber = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
   // standar di bawah agar build tidak gagal.
   // if (page.homepage_config && typeof page.homepage_config === "object") { ... }
@@ -230,7 +234,7 @@ function LandingPage() {
       <LPFooter />
 
       {/* WhatsApp float */}
-      <a href={`https://wa.me/628112651818`} target="_blank" rel="noopener noreferrer"
+      <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
         aria-label="Hubungi via WhatsApp"
         className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg transition hover:bg-green-600">
         <MessageCircle className="h-7 w-7" />

@@ -33,7 +33,7 @@ const pomahStructuredData = {
       image:
         "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
       email: "info@pomahguesthouse.com",
-      telephone: "+6281227271799",
+      telephone: "+6285190986169",
       address: {
         "@type": "PostalAddress",
         streetAddress: "Jl. Dewi Sartika IV No. 71 Sampangan",
@@ -61,7 +61,7 @@ const pomahStructuredData = {
       url: "https://pomahguesthouse.com",
       image:
         "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/branding/1779972746377-83dfkm.png",
-      telephone: "+6281227271799",
+      telephone: "+6285190986169",
       email: "info@pomahguesthouse.com",
       priceRange: "IDR 200000 - 500000",
       checkinTime: "14:00",
@@ -231,7 +231,7 @@ const pomahStructuredData = {
           name: "Bagaimana cara booking kamar?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Tamu dapat melakukan pemesanan melalui website resmi Pomah Guesthouse atau menghubungi WhatsApp resmi di +62 812-2727-1799.",
+            text: "Tamu dapat melakukan pemesanan melalui website resmi Pomah Guesthouse atau menghubungi WhatsApp resmi di +62 851-9098-6169.",
           },
         },
       ],

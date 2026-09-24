@@ -105,6 +105,7 @@ function BookPage() {
   const pb: Pb = { isBuilder: false, sel: null, onSelect: () => {} };
   const propertyName = data?.property?.name || "Pomah Guesthouse";
   const logoUrl = data?.property?.logo_url ?? null;
+  const whatsappNumber = String(data?.property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   const cfg = mergeHomepageConfig((data?.property as any)?.homepage_config);
 
   const [form, setForm] = useState({
@@ -589,7 +590,7 @@ function BookPage() {
                   </div>
                 </div>
                 <Button variant="outline" className="shrink-0 rounded-xl bg-white border-stone-200 text-stone-700 hover:bg-stone-50" asChild>
-                  <a href="https://wa.me/6281234567890" target="_blank" rel="noreferrer">
+                  <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer">
                     Chat via WhatsApp
                   </a>
                 </Button>
@@ -673,7 +674,7 @@ function BookPage() {
                       className="w-full h-12 bg-white border-stone-200 text-stone-700 rounded-xl hover:bg-stone-50 flex items-center justify-center gap-2"
                       asChild
                     >
-                      <a href="https://wa.me/6281234567890" target="_blank" rel="noreferrer">
+                      <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noreferrer">
                         <MessageCircle className="w-4 h-4 text-green-600" /> Chat admin via WhatsApp
                       </a>
                     </Button>
