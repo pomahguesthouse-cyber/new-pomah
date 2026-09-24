@@ -2470,7 +2470,10 @@ export async function sendFailureFallbackToGuests(): Promise<{
       continue;
     }
 
-    const isManagerEntry = !!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone);
+    const { resolveThreadProvider: resolveProvider } = await import("./whatsapp-meta.service");
+    const entryViaOfficial = (await resolveProvider(entry.phone)) === "meta";
+    const isManagerEntry =
+      !entryViaOfficial && (!!(await resolveManagerByPhone(entry.phone)) || isConfiguredAdminPhone(entry.phone));
     const fallbackBody = isManagerEntry ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
 
     // Lewati kalau worker sebenarnya sudah mengirim balasan sebelum di-mark zombie/failed,
