@@ -2,9 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { pollEvolutionInbox } from "@/services/evolution-inbox-poll.service";
 
 /**
- * Jaring pengaman inbound WhatsApp: tarik pesan terbaru dari Evolution API dan
- * putar ulang ke /api/evolution. Dipanggil pg_cron tiap menit sehingga chatbot
- * tetap membalas walau webhook Evolution berhenti mengirim event.
+ * Jaring pengaman inbound Evolution (internal/staf).
+ *
+ * pg_cron masih boleh memanggil endpoint ini tiap menit. Bila kanal tamu
+ * adalah Meta, handler kembali segera tanpa menarik atau memutar ulang pesan
+ * (lihat `evolutionInboxPollDecision`). Webhook langsung `/api/evolution`
+ * tidak dimatikan di sini.
  */
 async function handle(request: Request): Promise<Response> {
   const origin = new URL(request.url).origin;

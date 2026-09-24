@@ -12,6 +12,7 @@
  */
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { evolutionInboxPollDecision } from "@/services/evolution-inbox-gate";
 
 const BASE_URL = (process.env.EVOLUTION_BASE_URL ?? "").replace(/\/+$/, "");
 const INSTANCE = process.env.EVOLUTION_INSTANCE ?? "";
@@ -94,8 +95,21 @@ async function writeCursor(cursor: number, stats: PollResult): Promise<void> {
  * `origin` dipakai supaya poller memakai handler webhook yang sama persis.
  */
 export async function pollEvolutionInbox(origin: string): Promise<PollResult> {
+  // Kanal tamu = Meta. Poll ini tidak boleh memutar ulang chat tamu ke webhook
+  // Evolution. Aktifkan lagi lewat env bila nomor internal masih butuh jaring
+  // pengaman (lihat evolutionInboxPollDecision).
+  const gate = evolutionInboxPollDecision(process.env);
+  if (!gate.run) {
+    return { ok: true, fetched: 0, replayed: 0, skipped: 0, reason: gate.reason };
+  }
   if (!BASE_URL || !INSTANCE) {
-    return { ok: false, fetched: 0, replayed: 0, skipped: 0, reason: "evolution belum dikonfigurasi" };
+    return {
+      ok: false,
+      fetched: 0,
+      replayed: 0,
+      skipped: 0,
+      reason: "evolution belum dikonfigurasi",
+    };
   }
   const token = webhookToken();
   if (!token) {

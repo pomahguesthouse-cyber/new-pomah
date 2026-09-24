@@ -6,6 +6,8 @@
  * `whatsapp_threads.provider = 'meta'`, dan balasan otomatis ikut kanal itu.
  */
 import { phoneVariants } from "@/lib/phone";
+import { runDeferred } from "@/lib/cf-context";
+import { isUnsupportedMetaImage, prepareMetaImageForSend } from "@/services/meta-media";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/whatsapp";
 const MAX_MEDIA_BYTES = 10 * 1024 * 1024;
@@ -34,7 +36,9 @@ export function isMetaConfigured(): boolean {
 
 /** Ubah nomor ke format digit E.164 tanpa "+" (Indonesia). */
 export function toMetaRecipient(phone: string): string {
-  let p = String(phone ?? "").replace(/@.*$/, "").replace(/\D/g, "");
+  let p = String(phone ?? "")
+    .replace(/@.*$/, "")
+    .replace(/\D/g, "");
   if (p.startsWith("0")) p = "62" + p.slice(1);
   else if (/^8\d{7,14}$/.test(p)) p = "62" + p;
   return p;
@@ -60,7 +64,9 @@ export async function resolveThreadProvider(phone: string): Promise<"meta" | "ev
     const { data } = await admin
       .from("whatsapp_threads")
       .select("provider")
-      .or(`phone.in.(${variants.map((v) => `"${v}"`).join(",")}),canonical_phone.in.(${variants.map((v) => `"${v}"`).join(",")})`)
+      .or(
+        `phone.in.(${variants.map((v) => `"${v}"`).join(",")}),canonical_phone.in.(${variants.map((v) => `"${v}"`).join(",")})`,
+      )
       .order("last_message_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -91,14 +97,37 @@ export async function sendMetaMessage(
   if (!/^\d{8,15}$/.test(to)) return { ok: false, error: `Nomor tidak valid: ${phone}` };
 
   let payload: Record<string, unknown>;
+  const outboundBody = message;
   if (fileUrl) {
-    const type = guessMediaType(fileUrl, filename);
-    const media: Record<string, unknown> = { link: fileUrl };
+    let link = fileUrl;
+    let name = filename;
+    if (isUnsupportedMetaImage(fileUrl, filename)) {
+      const { createMetaImageDeps } = await import("./meta-image-runtime");
+      const prepared = await prepareMetaImageForSend(fileUrl, filename, createMetaImageDeps());
+      if (!prepared) {
+        return {
+          ok: false,
+          error: "Format gambar tidak didukung WhatsApp (perlu JPEG/PNG, WebP ditolak)",
+        };
+      }
+      link = prepared.url;
+      name = prepared.filename;
+    }
+    if (/\.webp(\?|#|$)/i.test(link)) {
+      return { ok: false, error: "WebP tidak didukung WhatsApp Cloud API (131053)" };
+    }
+    const type = guessMediaType(link, name);
+    const media: Record<string, unknown> = { link };
     if (type !== "audio" && message) media.caption = message;
-    if (type === "document") media.filename = filename ?? "file";
+    if (type === "document") media.filename = name ?? "file";
     payload = { messaging_product: "whatsapp", to, type, [type]: media };
   } else {
-    payload = { messaging_product: "whatsapp", to, type: "text", text: { body: message, preview_url: true } };
+    payload = {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body: message, preview_url: true },
+    };
   }
 
   const admin = await getAdmin();
@@ -117,19 +146,27 @@ export async function sendMetaMessage(
     }
     if (!res.ok) {
       console.error(`[WhatsAppMeta] send failed [${res.status}]: ${text.slice(0, 500)}`);
+      const errText = `HTTP ${res.status}: ${text}`;
+      noteMetaChannelHealth(false, errText);
       await admin.from("whatsapp_meta_outbound").insert({
         recipient: to,
-        body: message,
+        body: outboundBody,
         status: "failed",
         error: { http_status: res.status, body: json },
       });
-      return { ok: false, status: res.status, error: `HTTP ${res.status}: ${text}`, raw: json };
+      return { ok: false, status: res.status, error: errText, raw: json };
     }
     const messageId =
       (json as { messages?: Array<{ id?: string }> } | null)?.messages?.[0]?.id ?? null;
+    noteMetaChannelHealth(true, null);
     const { error: insErr } = await admin
       .from("whatsapp_meta_outbound")
-      .insert({ provider_message_id: messageId, recipient: to, body: message, status: "accepted" });
+      .insert({
+        provider_message_id: messageId,
+        recipient: to,
+        body: outboundBody,
+        status: "accepted",
+      });
     if (insErr) console.error("[WhatsAppMeta] outbound record failed:", insErr.message);
     // Status yang sempat datang lebih dulu akan diproses ulang oleh drain inbox.
     if (messageId) {
@@ -142,11 +179,32 @@ export async function sendMetaMessage(
     return { ok: true, status: res.status, error: null, raw: json, messageId };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    noteMetaChannelHealth(false, msg);
     await admin
       .from("whatsapp_meta_outbound")
-      .insert({ recipient: to, body: message, status: "failed", error: { exception: msg } });
+      .insert({ recipient: to, body: outboundBody, status: "failed", error: { exception: msg } });
     return { ok: false, error: msg };
   }
+}
+
+/** Catat kesehatan kanal Meta tanpa menahan jalur kirim (termasuk quick-ack). */
+function noteMetaChannelHealth(ok: boolean, error: string | null): void {
+  runDeferred("WhatsAppMeta.channelStatus", async () => {
+    const admin = await getAdmin();
+    const now = new Date().toISOString();
+    const patch = ok
+      ? { channel: "whatsapp_meta", status: "online", last_ok_at: now, last_error_message: null }
+      : {
+          channel: "whatsapp_meta",
+          status: "degraded",
+          last_error_at: now,
+          last_error_message: (error ?? "send failed").slice(0, 300),
+        };
+    const { error: upErr } = await admin
+      .from("channel_status")
+      .upsert(patch, { onConflict: "channel" });
+    if (upErr) console.warn("[WhatsAppMeta] channel_status:", upErr.message);
+  });
 }
 
 /** Unduh media masuk (mis. bukti transfer) sebagai data URI, dengan batas ukuran. */
@@ -155,7 +213,9 @@ export async function fetchMetaMediaDataUri(mediaId: string): Promise<string | n
   if (!headers || !mediaId) return null;
   const metaRes = await fetch(`${GATEWAY_URL}/media/${encodeURIComponent(mediaId)}`, { headers });
   if (!metaRes.ok) {
-    console.warn(`[WhatsAppMeta] media lookup [${metaRes.status}]: ${(await metaRes.text()).slice(0, 200)}`);
+    console.warn(
+      `[WhatsAppMeta] media lookup [${metaRes.status}]: ${(await metaRes.text()).slice(0, 200)}`,
+    );
     return null;
   }
   const meta = (await metaRes.json()) as { url?: string; mime_type?: string; file_size?: number };

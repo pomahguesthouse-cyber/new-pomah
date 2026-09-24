@@ -1,6 +1,11 @@
 /**
  * /api/evolution - Evolution API webhook endpoint.
  *
+ * Kanal tamu resmi adalah Meta (`/api/public/whatsapp/webhook`). Endpoint ini
+ * tetap untuk nomor internal/staf yang masih menerima event Evolution langsung.
+ * Poll jaring pengaman (`evolution-inbox-poll`) digerbang terpisah supaya tidak
+ * memutar ulang chat tamu.
+ *
  * This mirrors the Evolution API webhook path, but normalizes Evolution/Baileys
  * payloads where a chat can arrive as `remoteJid=@lid` with the public WhatsApp
  * number in `remoteJidAlt`. Supabase remains the primary conversation DB.

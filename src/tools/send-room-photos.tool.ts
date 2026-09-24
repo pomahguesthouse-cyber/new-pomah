@@ -1,8 +1,9 @@
 /**
  * Tool: send_room_photos
  *
- * Kirim foto kamar via WhatsApp (Evolution API) langsung ke tamu yang sedang
- * chat. Dipakai ketika tamu minta "foto", "gambar", atau "penampakan" kamar.
+ * Kirim foto kamar via WhatsApp langsung ke tamu yang sedang chat.
+ * Thread Meta memakai Cloud API; URL WebP dikonversi ke JPEG/PNG sebelum kirim.
+ * Dipakai ketika tamu minta "foto", "gambar", atau "penampakan" kamar.
  *
  * Best-effort — kegagalan pengiriman satu foto tidak menghentikan sisanya.
  * Tool tidak berjalan di simulator (isSimulator=true) atau ketika phone/token
@@ -12,6 +13,7 @@
 
 import type { ToolContext, ToolHandler } from "./types";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { loadRecentOutboundCaptions, roomPhotoCaption } from "@/services/wa-media-dedup";
 
 function normalizeName(value: unknown): string {
   return String(value ?? "")
@@ -33,9 +35,7 @@ function resolveRoom(input: string, rooms: ToolContext["rooms"]) {
       return n.length >= 3 && q.includes(n);
     });
   if (contains) return contains;
-  const alias = rooms.filter((r) =>
-    normalizeName(r.name).split(" ").filter(Boolean).includes(q),
-  );
+  const alias = rooms.filter((r) => normalizeName(r.name).split(" ").filter(Boolean).includes(q));
   return alias.length === 1 ? alias[0] : null;
 }
 
@@ -54,7 +54,7 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
   const max = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.min(5, Math.floor(maxRaw)) : 3;
 
   const targets = roomTypeArg
-    ? [resolveRoom(roomTypeArg, ctx.rooms)].filter(Boolean) as ToolContext["rooms"]
+    ? ([resolveRoom(roomTypeArg, ctx.rooms)].filter(Boolean) as ToolContext["rooms"])
     : ctx.rooms;
 
   if (roomTypeArg && targets.length === 0) {
@@ -83,31 +83,12 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
 
   // Anti-duplikat: lewati kamar yang fotonya sudah dikirim ke tamu ini
   // dalam 30 menit terakhir (mencegah kiriman berulang saat retry/putaran ulang).
-  const recentCaptions = new Set<string>();
-  try {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const digits = phone.replace(/\D/g, "").replace(/^0/, "62");
-    const { data } = await (supabaseAdmin as unknown as {
-      from: (t: string) => {
-        select: (c: string) => {
-          eq: (k: string, v: string) => {
-            gte: (k: string, v: string) => Promise<{ data: Array<{ body: string | null }> | null }>;
-          };
-        };
-      };
-    })
-      .from("whatsapp_meta_outbound")
-      .select("body")
-      .eq("recipient", digits)
-      .gte("created_at", new Date(Date.now() - 30 * 60_000).toISOString());
-    for (const row of data ?? []) if (row.body) recentCaptions.add(row.body);
-  } catch {
-    /* non-fatal: lanjut tanpa dedup */
-  }
+  const recentCaptions = await loadRecentOutboundCaptions(phone);
 
   const results: Array<{ room: string; sent: number; failed: number; skipped?: boolean }> = [];
   for (const room of targets) {
-    if (recentCaptions.has(`Foto kamar *${room.name}* 📸`)) {
+    const caption = roomPhotoCaption(room.name);
+    if (recentCaptions.has(caption)) {
       results.push({ room: room.name, sent: 0, failed: 0, skipped: true });
       continue;
     }
@@ -115,10 +96,10 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
     let sent = 0;
     let failed = 0;
     for (let i = 0; i < photos.length; i++) {
-      const caption = i === 0 ? `Foto kamar *${room.name}* 📸` : "";
+      const photoCaption = i === 0 ? caption : "";
       const filename = `${room.name.replace(/\s+/g, "_")}_${i + 1}.jpg`;
       try {
-        const r = await sendWhatsAppMessage(token, phone, caption, photos[i], filename);
+        const r = await sendWhatsAppMessage(token, phone, photoCaption, photos[i], filename);
         if (r.ok) sent++;
         else {
           failed++;
@@ -126,7 +107,11 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
         }
       } catch (e) {
         failed++;
-        console.error("❌ sendMedia exception", room.name, e instanceof Error ? e.message : String(e));
+        console.error(
+          "❌ sendMedia exception",
+          room.name,
+          e instanceof Error ? e.message : String(e),
+        );
       }
     }
     results.push({ room: room.name, sent, failed });
@@ -146,4 +131,3 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
         : "Semua percobaan kirim foto gagal; sampaikan kendala teknis singkat dan arahkan tamu ke pomahguesthouse.com.",
   });
 };
-
