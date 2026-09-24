@@ -46,6 +46,11 @@ async function hasQueueWork(): Promise<boolean> {
 }
 
 async function handle(request: Request): Promise<Response> {
+  // Recovery inbox WhatsApp Business (Meta) — ringan, dibatasi 3 baris.
+  void runDeferred("Cron.metaInbox", async () => {
+    const { drainMetaInbox } = await import("@/services/whatsapp-meta-inbox.service");
+    await drainMetaInbox(3);
+  });
   if (!(await hasQueueWork())) {
     return new Response(JSON.stringify({ accepted: true, idle: true }), {
       status: 200,

@@ -81,6 +81,11 @@ export async function sendWhatsAppMessage(
   fileUrl?: string,
   filename?: string,
 ): Promise<SendResult> {
+  // Tamu yang chat lewat nomor resmi Meta dibalas lewat kanal yang sama.
+  const { resolveThreadProvider, sendMetaMessage } = await import("./whatsapp-meta.service");
+  if ((await resolveThreadProvider(phone)) === "meta") {
+    return sendMetaMessage(phone, message, fileUrl, filename);
+  }
   return sendEvolutionMessage({ token, phone, message, fileUrl, filename });
 }
 
@@ -239,6 +244,9 @@ async function sendEvolutionPresence(
   phone: string,
   presence: "available" | "composing" | "paused",
 ): Promise<void> {
+  // Kanal Meta tidak punya indikator mengetik lewat API ini; lewati.
+  const { resolveThreadProvider } = await import("./whatsapp-meta.service");
+  if ((await resolveThreadProvider(phone)) === "meta") return;
   if (!EVOLUTION_BASE_URL || !EVOLUTION_INSTANCE) {
     console.warn("[WhatsApp] presence skipped: Evolution API belum terkonfigurasi");
     return;
