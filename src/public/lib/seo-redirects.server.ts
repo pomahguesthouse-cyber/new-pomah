@@ -3,8 +3,8 @@
  * that need them (Deluxe room slug, explore place names).
  */
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
 import {
-  EXPLORE_DETAIL_PATHS,
   buildSeoRedirect,
   isApiPath,
   legacyKindForPath,
@@ -18,19 +18,6 @@ import {
 const CACHE_MS = 60_000;
 
 let deluxeCache: { at: number; path: string } | null = null;
-let placesCache: { at: number; places: ExplorePlaceRef[] } | null = null;
-
-type ExploreConfigShape = {
-  destinations?: Array<{ name?: string | null }>;
-  culinary?: Array<{ name?: string | null }>;
-  events?: Array<{ title?: string | null }>;
-  news?: Array<{ title?: string | null }>;
-};
-
-function pushName(out: ExplorePlaceRef[], name: string | null | undefined) {
-  const trimmed = name?.trim();
-  if (trimmed) out.push({ name: trimmed });
-}
 
 export async function lookupDeluxeRoomPath(): Promise<string> {
   const now = Date.now();
@@ -58,31 +45,8 @@ export async function lookupDeluxeRoomSlug(): Promise<string> {
 }
 
 export async function lookupExplorePlaces(): Promise<ExplorePlaceRef[]> {
-  const now = Date.now();
-  if (placesCache && now - placesCache.at < CACHE_MS) return placesCache.places;
-  const places: ExplorePlaceRef[] = [];
-  try {
-    const [{ data: property }, { data: items, error: itemsError }] = await Promise.all([
-      supabasePublic.rpc("get_public_property" as never),
-      supabasePublic.from("explore_items").select("title").eq("is_published", true),
-    ]);
-    if (itemsError) throw itemsError;
-    const config = ((property as { explore_config?: ExploreConfigShape } | null)?.explore_config ??
-      {}) as ExploreConfigShape;
-    for (const row of config.destinations ?? []) pushName(places, row.name);
-    for (const row of config.culinary ?? []) pushName(places, row.name);
-    for (const row of config.events ?? []) pushName(places, row.title);
-    for (const row of config.news ?? []) pushName(places, row.title);
-    for (const row of items ?? []) pushName(places, row.title);
-    placesCache = { at: now, places };
-    return places;
-  } catch (error) {
-    console.warn(
-      "[seo-redirect] explore place lookup failed:",
-      error instanceof Error ? error.message : error,
-    );
-    return places;
-  }
+  const places = await loadCityGuidePlaces();
+  return places.map((place) => ({ name: place.name, slug: place.slug }));
 }
 
 export async function resolveSeoRedirect(request: Request): Promise<SeoRedirect | null> {
@@ -103,6 +67,5 @@ export async function resolveSeoRedirect(request: Request): Promise<SeoRedirect 
     requestUrl: request.url,
     deluxeRoomPath,
     explorePlaces,
-    exploreDetailPaths: EXPLORE_DETAIL_PATHS,
   });
 }

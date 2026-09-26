@@ -58,6 +58,8 @@ import { Route as ApiPublicSiteDataRouteImport } from './routes/api.public-site-
 import { Route as ApiQueueWorkerRouteImport } from './routes/api.queue-worker'
 import { Route as ApiTelegramRouteImport } from './routes/api.telegram'
 import { Route as BookIndexRouteImport } from './routes/book.index'
+import { Route as ExploreIndexRouteImport } from './routes/explore.index'
+import { Route as ExploreSlugRouteImport } from './routes/explore.$slug'
 import { Route as LpSlugRouteImport } from './routes/lp.$slug'
 import { Route as RoomsSlugRouteImport } from './routes/rooms.$slug'
 import { Route as TourSlugRouteImport } from './routes/tour.$slug'
@@ -330,6 +332,16 @@ const BookIndexRoute = BookIndexRouteImport.update({
   path: '/book/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ExploreIndexRoute = ExploreIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ExploreRoute,
+} as any)
+const ExploreSlugRoute = ExploreSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => ExploreRoute,
+} as any)
 const LpSlugRoute = LpSlugRouteImport.update({
   id: '/lp/$slug',
   path: '/lp/$slug',
@@ -458,7 +470,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/connect': typeof ConnectRoute
-  '/explore': typeof ExploreRoute
+  '/explore': typeof ExploreRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
@@ -501,11 +513,13 @@ export interface FileRoutesByFullPath {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
+  '/explore/': typeof ExploreIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -531,7 +545,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
   '/connect': typeof ConnectRoute
-  '/explore': typeof ExploreRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
@@ -574,11 +587,13 @@ export interface FileRoutesByTo {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
   '/admin': typeof AdminIndexRoute
   '/book': typeof BookIndexRoute
+  '/explore': typeof ExploreIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -606,7 +621,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/connect': typeof ConnectRoute
-  '/explore': typeof ExploreRoute
+  '/explore': typeof ExploreRouteWithChildren
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
@@ -649,11 +664,13 @@ export interface FileRoutesById {
   '/api/public-site-data': typeof ApiPublicSiteDataRoute
   '/api/queue-worker': typeof ApiQueueWorkerRoute
   '/api/telegram': typeof ApiTelegramRouteWithChildren
+  '/explore/$slug': typeof ExploreSlugRoute
   '/lp/$slug': typeof LpSlugRoute
   '/rooms/$slug': typeof RoomsSlugRoute
   '/tour/$slug': typeof TourSlugRoute
   '/admin/': typeof AdminIndexRoute
   '/book/': typeof BookIndexRoute
+  '/explore/': typeof ExploreIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/api/booking-invoice/$id': typeof ApiBookingInvoiceIdRouteWithChildren
@@ -725,11 +742,13 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
     | '/admin/'
     | '/book/'
+    | '/explore/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -755,7 +774,6 @@ export interface FileRouteTypes {
     | '/'
     | '/chat'
     | '/connect'
-    | '/explore'
     | '/llms.txt'
     | '/login'
     | '/mcp'
@@ -798,11 +816,13 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
     | '/admin'
     | '/book'
+    | '/explore'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -872,11 +892,13 @@ export interface FileRouteTypes {
     | '/api/public-site-data'
     | '/api/queue-worker'
     | '/api/telegram'
+    | '/explore/$slug'
     | '/lp/$slug'
     | '/rooms/$slug'
     | '/tour/$slug'
     | '/admin/'
     | '/book/'
+    | '/explore/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/api/booking-invoice/$id'
@@ -904,7 +926,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   ChatRoute: typeof ChatRoute
   ConnectRoute: typeof ConnectRoute
-  ExploreRoute: typeof ExploreRoute
+  ExploreRoute: typeof ExploreRouteWithChildren
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
@@ -1287,6 +1309,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/explore/': {
+      id: '/explore/'
+      path: '/'
+      fullPath: '/explore/'
+      preLoaderRoute: typeof ExploreIndexRouteImport
+      parentRoute: typeof ExploreRoute
+    }
+    '/explore/$slug': {
+      id: '/explore/$slug'
+      path: '/$slug'
+      fullPath: '/explore/$slug'
+      preLoaderRoute: typeof ExploreSlugRouteImport
+      parentRoute: typeof ExploreRoute
+    }
     '/lp/$slug': {
       id: '/lp/$slug'
       path: '/lp/$slug'
@@ -1517,6 +1553,19 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface ExploreRouteChildren {
+  ExploreSlugRoute: typeof ExploreSlugRoute
+  ExploreIndexRoute: typeof ExploreIndexRoute
+}
+
+const ExploreRouteChildren: ExploreRouteChildren = {
+  ExploreSlugRoute: ExploreSlugRoute,
+  ExploreIndexRoute: ExploreIndexRoute,
+}
+
+const ExploreRouteWithChildren =
+  ExploreRoute._addFileChildren(ExploreRouteChildren)
+
 interface ApiTelegramRouteChildren {
   ApiTelegramAgentKeyRoute: typeof ApiTelegramAgentKeyRoute
 }
@@ -1556,7 +1605,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   ChatRoute: ChatRoute,
   ConnectRoute: ConnectRoute,
-  ExploreRoute: ExploreRoute,
+  ExploreRoute: ExploreRouteWithChildren,
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
@@ -1597,13 +1646,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

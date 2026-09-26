@@ -5,20 +5,16 @@
  * (*.lovable.app), localhost, and /api routes are never sent to that host
  * so Meta/Lovable webhooks and local dev keep working.
  *
- * Explore places live as cards on /explore (explore_config + explore_items).
- * There is no /explore/$slug route, so a name match must not invent a URL
- * that would 404. Pass detail paths only when a real route exists.
+ * Explore places are public pages at /explore/<slug>, built from the same
+ * City Guide catalog (explore_config + published explore_items).
  */
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
 
 export const CANONICAL_HOST = "pomahguesthouse.com";
 
-/** No per-place explore route exists today. Kept so a future route can opt in. */
-export const EXPLORE_DETAIL_PATHS: readonly string[] = [];
-
 export const DELUXE_OCEAN_VIEW_FALLBACK = "/rooms/deluxe";
 
-export type ExplorePlaceRef = { name: string };
+export type ExplorePlaceRef = { name: string; slug?: string | null };
 
 export type SeoRedirect = { location: string; reason: string };
 
@@ -26,7 +22,6 @@ export type SeoRedirectInput = {
   requestUrl: string;
   deluxeRoomPath?: string;
   explorePlaces?: ExplorePlaceRef[];
-  exploreDetailPaths?: readonly string[];
 };
 
 export function normalizeHost(hostname: string): string {
@@ -102,22 +97,21 @@ export function placeSlugMatches(requestedSlug: string, placeName: string): bool
 export function resolveExploreLegacyTarget(
   requestedSlug: string,
   places: readonly ExplorePlaceRef[],
-  detailPaths: readonly string[] = EXPLORE_DETAIL_PATHS,
 ): string {
   const req = slugifyPlaceName(requestedSlug);
   if (!req) return "/explore";
-  const matches = places.filter((place) => placeSlugMatches(req, place.name));
+  const catalog = places
+    .map((place) => ({
+      name: place.name,
+      slug: (place.slug?.trim() || slugifyPlaceName(place.name)).replace(/^\/+/, ""),
+    }))
+    .filter((place) => place.slug);
+  const exact = catalog.find((place) => place.slug === req);
+  if (exact) return `/explore/${exact.slug}`;
+  const matches = catalog.filter((place) => placeSlugMatches(req, place.name));
   if (matches.length === 0) return "/explore";
-  const known = new Set(detailPaths.map((path) => normalizePathname(path)));
-  const candidates = [`/explore/${req}`];
-  for (const match of matches) {
-    const full = slugifyPlaceName(match.name);
-    if (full) candidates.push(`/explore/${full}`);
-  }
-  for (const candidate of candidates) {
-    if (known.has(candidate)) return candidate;
-  }
-  return "/explore";
+  matches.sort((a, b) => a.slug.length - b.slug.length);
+  return `/explore/${matches[0].slug}`;
 }
 
 /** Current Deluxe room page. "Grand Deluxe" must not win. */
@@ -154,7 +148,7 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
   if (kind === "explore-index") path = "/explore";
   else if (kind === "explore-slug") {
     const slug = pathname.slice("/explore-semarang/".length);
-    path = resolveExploreLegacyTarget(slug, input.explorePlaces ?? [], input.exploreDetailPaths);
+    path = resolveExploreLegacyTarget(slug, input.explorePlaces ?? []);
   } else if (kind === "deluxe-ocean-view") {
     path = input.deluxeRoomPath?.trim() || DELUXE_OCEAN_VIEW_FALLBACK;
   }

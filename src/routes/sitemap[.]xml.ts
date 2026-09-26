@@ -1,32 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { cityGuideSitemapUrls, renderSitemapXml, type SitemapUrl } from "@/public/lib/city-guide";
+import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
 import { canonicalUrlForPath, collectSitemapPaths } from "@/public/lib/public-seo";
-
-function xmlEscape(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async () => {
-        const [{ data: pages }, { data: roomTypes }, landingResult] = await Promise.all([
+        const [{ data: pages }, { data: roomTypes }, landingResult, places] = await Promise.all([
           supabasePublic.from("seo_pages").select("slug"),
           supabasePublic.from("room_types").select("slug").eq("is_published", true),
           supabasePublic.from("seo_landing_pages").select("slug").eq("published", true),
+          loadCityGuidePlaces(),
         ]);
-        const urls = collectSitemapPaths({
+        const paths = collectSitemapPaths({
           pageSlugs: (pages ?? []).map((p) => p.slug),
           roomSlugs: (roomTypes ?? []).map((r) => r.slug),
           landingSlugs: landingResult.error ? [] : (landingResult.data ?? []).map((p) => p.slug),
         });
-        const lastmod = new Date().toISOString();
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls
-          .map((u) => {
-            const locUrl = canonicalUrlForPath(u);
-            return `  <url><loc>${xmlEscape(locUrl)}</loc><lastmod>${lastmod}</lastmod></url>`;
-          })
-          .join("\n")}\n</urlset>`;
+        const staticLastmod = new Date().toISOString();
+        const entries: SitemapUrl[] = [
+          ...paths.map((path) => ({ loc: canonicalUrlForPath(path), lastmod: staticLastmod })),
+          ...cityGuideSitemapUrls(places),
+        ];
+        const xml = renderSitemapXml(entries);
         return new Response(xml, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",

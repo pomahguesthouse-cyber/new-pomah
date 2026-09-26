@@ -43,7 +43,10 @@ function firstNonEmpty(...values: Array<string | null | undefined>): string {
 }
 
 /** Build title / description / OG / Twitter tags from saved SEO fields. */
-export function publicSeoMeta(input: PublicSeoInput, fallback: { title: string; description: string }): PublicSeoMetaTag[] {
+export function publicSeoMeta(
+  input: PublicSeoInput,
+  fallback: { title: string; description: string },
+): PublicSeoMetaTag[] {
   const title = firstNonEmpty(input.title, fallback.title);
   const description = firstNonEmpty(input.description, fallback.description);
   const twitterTitle = firstNonEmpty(input.twitterTitle, title);
@@ -132,6 +135,7 @@ export function canonicalHeadTags(pathname: string): {
 const BARE_ROOMS_LISTING = /^\/rooms\/?$/;
 const ROOM_PATH = /^\/rooms\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const LANDING_PATH = /^\/lp\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const EXPLORE_PLACE_PATH = /^\/explore\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function normalizeHost(hostname: string): string {
   return hostname.toLowerCase().replace(/\.$/, "");
@@ -168,6 +172,7 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   if (BARE_ROOMS_LISTING.test(path)) return false;
   if (ROOM_PATH.test(path)) return true;
   if (LANDING_PATH.test(path)) return true;
+  if (EXPLORE_PLACE_PATH.test(path)) return true;
   return false;
 }
 
@@ -180,6 +185,7 @@ export function collectSitemapPaths(input: {
   pageSlugs?: Array<string | null | undefined>;
   roomSlugs?: Array<string | null | undefined>;
   landingSlugs?: Array<string | null | undefined>;
+  exploreSlugs?: Array<string | null | undefined>;
 }): string[] {
   const urls = new Set<string>(["/", "/book", "/explore"]);
   const consider = (path: string | null) => {
@@ -190,7 +196,10 @@ export function collectSitemapPaths(input: {
   for (const raw of input.pageSlugs ?? []) consider(normalizeCandidatePath(raw));
   for (const raw of input.roomSlugs ?? []) {
     if (!raw) continue;
-    const slug = raw.trim().replace(/^\/+/, "").replace(/^rooms\//, "");
+    const slug = raw
+      .trim()
+      .replace(/^\/+/, "")
+      .replace(/^rooms\//, "");
     if (!slug || slug === "rooms" || slug.includes("/")) continue;
     consider(`/rooms/${slug}`);
   }
@@ -199,6 +208,15 @@ export function collectSitemapPaths(input: {
     const slug = raw.trim().replace(/^\/+/, "").replace(/^lp\//, "");
     if (!slug || slug.includes("/")) continue;
     consider(`/lp/${slug}`);
+  }
+  for (const raw of input.exploreSlugs ?? []) {
+    if (!raw) continue;
+    const slug = raw
+      .trim()
+      .replace(/^\/+/, "")
+      .replace(/^explore\//, "");
+    if (!slug || slug.includes("/")) continue;
+    consider(`/explore/${slug}`);
   }
   return [...urls];
 }

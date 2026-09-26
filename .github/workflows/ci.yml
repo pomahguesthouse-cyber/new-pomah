@@ -29,7 +29,7 @@ jobs:
         run: bun run test:wa-refactor
 
       - name: Public SEO redirects and canonicals
-        run: bun run test:public-seo && bun run test:seo-redirects
+        run: bun run test:public-seo && bun run test:seo-redirects && bun run test:city-guide
 
       - name: Lint
         run: bun run lint

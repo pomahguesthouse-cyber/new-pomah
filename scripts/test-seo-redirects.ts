@@ -36,22 +36,13 @@ assert.equal(placeSlugMatches("goa-kreo", "Obyek Wisata Goa Kreo"), true);
 assert.equal(placeSlugMatches("wingko-babat", "SAM POO KONG"), false);
 assert.equal(placeSlugMatches("bandeng-presto", "Obyek Wisata Goa Kreo"), false);
 
-assert.equal(resolveExploreLegacyTarget("sam-poo-kong", places), "/explore");
-assert.equal(resolveExploreLegacyTarget("goa-kreo", places), "/explore");
+assert.equal(resolveExploreLegacyTarget("sam-poo-kong", places), "/explore/sam-poo-kong");
+assert.equal(resolveExploreLegacyTarget("goa-kreo", places), "/explore/obyek-wisata-goa-kreo");
 assert.equal(resolveExploreLegacyTarget("wingko-babat", places), "/explore");
 assert.equal(resolveExploreLegacyTarget("bandeng-presto", places), "/explore");
 assert.equal(
-  resolveExploreLegacyTarget("sam-poo-kong", places, ["/explore/sam-poo-kong"]),
-  "/explore/sam-poo-kong",
-);
-assert.equal(
-  resolveExploreLegacyTarget("goa-kreo", places, ["/explore/obyek-wisata-goa-kreo"]),
-  "/explore/obyek-wisata-goa-kreo",
-);
-assert.equal(
-  resolveExploreLegacyTarget("wingko-babat", places, ["/explore/wingko-babat"]),
-  "/explore",
-  "a detail path is used only when the slug matches a place",
+  resolveExploreLegacyTarget("wingko-babat", [{ name: "Wingko Babat", slug: "wingko-babat" }]),
+  "/explore/wingko-babat",
 );
 
 function location(
@@ -102,11 +93,11 @@ assert.equal(
 );
 assert.equal(
   location("https://www.pomahguesthouse.com/explore-semarang/sam-poo-kong?utm=1")?.location,
-  "https://pomahguesthouse.com/explore?utm=1",
+  "https://pomahguesthouse.com/explore/sam-poo-kong?utm=1",
 );
 assert.equal(
   location("https://pomahguesthouse.com/explore-semarang/goa-kreo")?.location,
-  "https://pomahguesthouse.com/explore",
+  "https://pomahguesthouse.com/explore/obyek-wisata-goa-kreo",
 );
 assert.equal(
   location("https://pomahguesthouse.com/explore-semarang/wingko-babat")?.location,
@@ -117,11 +108,11 @@ assert.equal(
   "https://pomahguesthouse.com/explore",
 );
 assert.equal(
-  location("https://pomahguesthouse.com/explore-semarang/sam-poo-kong", {
-    requestUrl: "https://pomahguesthouse.com/explore-semarang/sam-poo-kong",
-    exploreDetailPaths: ["/explore/sam-poo-kong"],
+  location("https://pomahguesthouse.com/explore-semarang/bandeng-presto", {
+    requestUrl: "https://pomahguesthouse.com/explore-semarang/bandeng-presto",
+    explorePlaces: [{ name: "Bandeng Presto", slug: "bandeng-presto" }],
   })?.location,
-  "https://pomahguesthouse.com/explore/sam-poo-kong",
+  "https://pomahguesthouse.com/explore/bandeng-presto",
 );
 
 assert.equal(
