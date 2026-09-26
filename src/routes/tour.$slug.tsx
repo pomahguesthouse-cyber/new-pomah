@@ -11,9 +11,16 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Compass, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Pannellum360Viewer, type WalkScene } from "@/admin/modules/walkthrough/pannellum-viewer";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/tour/$slug")({
-  head: () => ({ meta: [{ title: "Virtual Tour 360° — Pomah Guesthouse" }] }),
+  head: ({ params }) => {
+    const canonical = canonicalHeadTags(`/tour/${params.slug}`);
+    return {
+      meta: [{ title: "Virtual Tour 360° — Pomah Guesthouse" }, ...canonical.meta],
+      links: canonical.links,
+    };
+  },
   component: TourViewerPage,
 });
 

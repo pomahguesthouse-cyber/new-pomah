@@ -2,18 +2,24 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { WebchatWindow } from "@/public/components/webchat/webchat-window";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/book/confirmation/$id/chat")({
-  head: () => ({
-    meta: [
-      { title: "Bantuan Booking — Pomah Guesthouse" },
-      {
-        name: "description",
-        content: "Lanjutkan percakapan dengan Pomah Guesthouse via Web Chat.",
-      },
-      { name: "robots", content: "noindex, nofollow" },
-    ],
-  }),
+  head: ({ params }) => {
+    const canonical = canonicalHeadTags(`/book/confirmation/${params.id}/chat`);
+    return {
+      meta: [
+        { title: "Bantuan Booking — Pomah Guesthouse" },
+        {
+          name: "description",
+          content: "Lanjutkan percakapan dengan Pomah Guesthouse via Web Chat.",
+        },
+        { name: "robots", content: "noindex, nofollow" },
+        ...canonical.meta,
+      ],
+      links: canonical.links,
+    };
+  },
   component: BookingChatPage,
 });
 

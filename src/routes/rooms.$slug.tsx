@@ -46,7 +46,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { DatePickerID } from "@/components/ui/date-picker";
-import { publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
+import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -60,8 +60,16 @@ export const Route = createFileRoute("/rooms/$slug")({
   },
   loader: async ({ params }) => {
     if (params.slug === "deluxe-ocean-view") {
+      let slug = "deluxe";
+      try {
+        const { lookupDeluxeRoomSlug } = await import("@/public/lib/seo-redirects.server");
+        slug = await lookupDeluxeRoomSlug();
+      } catch {
+        slug = "deluxe";
+      }
       throw redirect({
-        to: "/",
+        to: "/rooms/$slug",
+        params: { slug },
         statusCode: 301,
       });
     }
@@ -84,23 +92,23 @@ export const Route = createFileRoute("/rooms/$slug")({
       };
     }
     const seo = resolveRoomPublicSeo(room);
-    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/rooms/${room.slug || ""}`;
+    const canonical = canonicalHeadTags(`/rooms/${room.slug || ""}`);
     return {
-      meta: publicSeoMeta(
-        {
-          title: seo.title,
-          description: seo.description,
-          twitterTitle: seo.twitterTitle,
-          twitterDescription: seo.twitterDescription,
-          ogImageUrl: seo.ogImageUrl || room.hero_image_url,
-          robots: "index, follow",
-        },
-        { title: seo.title, description: seo.description },
-      ),
-      links: [
-        { rel: "canonical", href: canonicalUrl }
+      meta: [
+        ...publicSeoMeta(
+          {
+            title: seo.title,
+            description: seo.description,
+            twitterTitle: seo.twitterTitle,
+            twitterDescription: seo.twitterDescription,
+            ogImageUrl: seo.ogImageUrl || room.hero_image_url,
+            robots: "index, follow",
+          },
+          { title: seo.title, description: seo.description },
+        ),
+        ...canonical.meta,
       ],
+      links: canonical.links,
     };
   },
   component: RoomBookingPage,

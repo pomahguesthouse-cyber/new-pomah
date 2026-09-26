@@ -58,7 +58,7 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { HOME_SEO, publicSeoMeta } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
 const BookingDialog = lazy(() =>
@@ -90,21 +90,23 @@ export const Route = createFileRoute("/")({
     const heroImageSrcSet = heroImageRaw
       ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
       : undefined;
-    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/`;
+    const canonical = canonicalHeadTags("/");
     return {
-      meta: publicSeoMeta(
-        {
-          title,
-          description: desc,
-          twitterTitle,
-          twitterDescription,
-          ogImageUrl: seo.ogImageUrl,
-        },
-        HOME_SEO,
-      ),
+      meta: [
+        ...publicSeoMeta(
+          {
+            title,
+            description: desc,
+            twitterTitle,
+            twitterDescription,
+            ogImageUrl: seo.ogImageUrl,
+          },
+          HOME_SEO,
+        ),
+        ...canonical.meta,
+      ],
       links: [
-        { rel: "canonical", href: canonicalUrl },
+        ...canonical.links,
         ...(heroImage
           ? [
               {

@@ -3,6 +3,7 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { runWithCfContext } from "./lib/cf-context";
+import { resolveSeoRedirect } from "./public/lib/seo-redirects.server";
 
 type ExecutionContextLike = { waitUntil?: (promise: Promise<unknown>) => void };
 
@@ -90,31 +91,28 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function seoRedirectResponse(location: string, reason: string): Response {
+  return new Response(null, {
+    status: 301,
+    headers: {
+      Location: location,
+      "Cache-Control": "public, max-age=86400",
+      "X-Redirect-Reason": reason,
+    },
+  });
+}
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // ── Redirect 301 permanen ────────────────────────────────────────
-    // URL-URL berikut pernah terindeks mesin pencari namun tidak valid.
-    // Redirect 301 memindahkan link-equity ke URL yang benar dan
-    // memberi sinyal kepada Googlebot untuk menghapus URL lama dari indeks.
-    const PERMANENT_REDIRECTS: Record<string, string> = {
-      "/rooms/deluxe-ocean-view": "/rooms",
-      // Tambahkan slug kamar tidak valid lainnya di sini jika ada:
-      // "/rooms/contoh-slug-salah": "/rooms",
-    };
-    const pathname = new URL(request.url).pathname;
-    const redirectTarget = PERMANENT_REDIRECTS[pathname];
-    if (redirectTarget) {
-      return new Response(null, {
-        status: 301,
-        headers: {
-          Location: redirectTarget,
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "X-Redirect-Reason": "seo-cleanup",
-        },
-      });
+    // Host canonicalization (www / http → https://pomahguesthouse.com) and
+    // legacy indexed paths. /api is skipped so webhooks are never redirected.
+    // localhost and *.lovable.app are skipped for host changes.
+    try {
+      const seoRedirect = await resolveSeoRedirect(request);
+      if (seoRedirect) return seoRedirectResponse(seoRedirect.location, seoRedirect.reason);
+    } catch (error) {
+      console.error("[seo-redirect] failed:", error);
     }
-    // ────────────────────────────────────────────────────────────────
 
     try {
       const handler = await getServerEntry();

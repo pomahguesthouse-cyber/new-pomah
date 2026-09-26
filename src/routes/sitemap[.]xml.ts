@@ -1,32 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
-import { collectSitemapPaths } from "@/public/lib/public-seo";
+import { cityGuideSitemapUrls, renderSitemapXml, type SitemapUrl } from "@/public/lib/city-guide";
+import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
+import { canonicalUrlForPath, collectSitemapPaths } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
-      GET: async ({ request }) => {
-        const url = new URL(request.url);
-        const origin = url.origin;
-        const [{ data: pages }, { data: roomTypes }] = await Promise.all([
-          supabasePublic.from("seo_pages").select("slug, updated_at"),
-          supabasePublic.from("room_types").select("slug"),
+      GET: async () => {
+        const [{ data: pages }, { data: roomTypes }, landingResult, places] = await Promise.all([
+          supabasePublic.from("seo_pages").select("slug"),
+          supabasePublic.from("room_types").select("slug").eq("is_published", true),
+          supabasePublic.from("seo_landing_pages").select("slug").eq("published", true),
+          loadCityGuidePlaces(),
         ]);
-        const urls = collectSitemapPaths({
+        const paths = collectSitemapPaths({
           pageSlugs: (pages ?? []).map((p) => p.slug),
           roomSlugs: (roomTypes ?? []).map((r) => r.slug),
+          landingSlugs: landingResult.error ? [] : (landingResult.data ?? []).map((p) => p.slug),
         });
-        const lastmod = new Date().toISOString();
-        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[
-          ...urls,
-        ]
-          .map((u) => {
-            const cleanPath = u.startsWith("/") ? u : `/${u}`;
-            // Avoid double slash if path is just "/"
-            const locUrl = cleanPath === "/" ? origin : `${origin}${cleanPath}`;
-            return `  <url><loc>${locUrl}</loc><lastmod>${lastmod}</lastmod></url>`;
-          })
-          .join("\n")}\n</urlset>`;
+        const staticLastmod = new Date().toISOString();
+        const entries: SitemapUrl[] = [
+          ...paths.map((path) => ({ loc: canonicalUrlForPath(path), lastmod: staticLastmod })),
+          ...cityGuideSitemapUrls(places),
+        ];
+        const xml = renderSitemapXml(entries);
         return new Response(xml, {
           headers: {
             "Content-Type": "application/xml; charset=utf-8",
