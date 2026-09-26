@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from "@/public/functions/public.functions";
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,19 +62,17 @@ export const Route = createFileRoute("/book/")({
     const desc =
       bookingSeo.metaDescription ||
       "Booking kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.";
-    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/book`;
+    const canonical = canonicalHeadTags("/book");
     return {
       meta: [
         { title },
         { name: "description", content: desc },
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
+        ...canonical.meta,
         ...(bookingSeo.ogImageUrl ? [{ property: "og:image", content: bookingSeo.ogImageUrl }] : []),
       ],
-      links: [
-        { rel: "canonical", href: canonicalUrl }
-      ],
+      links: canonical.links,
     };
   },
   component: BookPage,

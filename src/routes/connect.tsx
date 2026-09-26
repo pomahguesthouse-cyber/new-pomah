@@ -3,26 +3,32 @@ import { useEffect, useState } from "react";
 import { Check, Copy, Bot, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/connect")({
-  head: () => ({
-    meta: [
-      { title: "Hubungkan asisten AI Anda ke Pomah Guesthouse" },
-      {
-        name: "description",
-        content:
-          "Panduan menghubungkan ChatGPT atau Claude ke Pomah Guesthouse melalui MCP untuk mengecek kamar dan tarif langsung dari asisten AI Anda.",
-      },
-      { property: "og:title", content: "Hubungkan asisten AI Anda ke Pomah Guesthouse" },
-      {
-        property: "og:description",
-        content:
-          "Panduan singkat memasang koneksi MCP Pomah Guesthouse di ChatGPT atau Claude.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  head: () => {
+    const canonical = canonicalHeadTags("/connect");
+    return {
+      meta: [
+        { title: "Hubungkan asisten AI Anda ke Pomah Guesthouse" },
+        {
+          name: "description",
+          content:
+            "Panduan menghubungkan ChatGPT atau Claude ke Pomah Guesthouse melalui MCP untuk mengecek kamar dan tarif langsung dari asisten AI Anda.",
+        },
+        { property: "og:title", content: "Hubungkan asisten AI Anda ke Pomah Guesthouse" },
+        {
+          property: "og:description",
+          content:
+            "Panduan singkat memasang koneksi MCP Pomah Guesthouse di ChatGPT atau Claude.",
+        },
+        { property: "og:type", content: "website" },
+        { name: "twitter:card", content: "summary" },
+        ...canonical.meta,
+      ],
+      links: canonical.links,
+    };
+  },
   component: ConnectPage,
 });
 

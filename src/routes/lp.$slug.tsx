@@ -32,6 +32,7 @@ import {
   type LPRoomSliderSection,
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -54,19 +55,17 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
-    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/lp/${p.slug || ""}`;
+    const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
     return {
       meta: [
         { title: p.meta_title || p.title },
         { name: "description", content: p.meta_description || "" },
         { property: "og:title", content: p.meta_title || p.title },
         { property: "og:description", content: p.meta_description || "" },
+        ...canonical.meta,
         ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
       ],
-      links: [
-        { rel: "canonical", href: canonicalUrl }
-      ],
+      links: canonical.links,
     };
   },
 

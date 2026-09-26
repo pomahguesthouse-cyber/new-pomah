@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -321,5 +322,16 @@ function BookingFormPage() {
 }
 
 export const Route = createFileRoute("/booking/form/$token")({
+  head: ({ params }) => {
+    const canonical = canonicalHeadTags(`/booking/form/${params.token}`);
+    return {
+      meta: [
+        { title: "Form Booking — Pomah Guesthouse" },
+        { name: "robots", content: "noindex, nofollow" },
+        ...canonical.meta,
+      ],
+      links: canonical.links,
+    };
+  },
   component: BookingFormPage,
 });

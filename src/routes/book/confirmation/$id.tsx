@@ -9,6 +9,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Printer, Loader2, Download, Send } from "lucide-react";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
+import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 const GuestPDFDownloadLink = React.lazy(() => import("@/public/components/guest-pdf-download-link"));
 
@@ -17,11 +18,12 @@ export const Route = createFileRoute("/book/confirmation/$id")({
   // Override the site-wide og:image (homepage hero) with a dedicated invoice
   // banner so the WhatsApp link preview shows appropriate branding instead of
   // the generic homepage screenshot.
-  head: () => {
+  head: ({ params }) => {
     const ogImage =
       "https://gofvxeiulaljwyfyhnww.supabase.co/storage/v1/object/public/room-images/banner/banner-1200x600-d45c57c0.webp";
     const title = "Invoice Pemesanan — Pomah Guesthouse";
     const desc = "Invoice reservasi Anda.";
+    const canonical = canonicalHeadTags(`/book/confirmation/${params.id}`);
     return {
       meta: [
         { title },
@@ -29,6 +31,7 @@ export const Route = createFileRoute("/book/confirmation/$id")({
         { name: "robots", content: "noindex" },
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
+        ...canonical.meta,
         ...(ogImage
           ? [
               { property: "og:image", content: ogImage },
@@ -36,6 +39,7 @@ export const Route = createFileRoute("/book/confirmation/$id")({
             ]
           : []),
       ],
+      links: canonical.links,
     };
   },
   component: ConfirmationPage,

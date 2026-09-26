@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import {
+  canonicalHeadTags,
+  canonicalUrlForPath,
   collectSitemapPaths,
   EXPLORE_SEO,
   HOME_SEO,
@@ -150,17 +152,43 @@ for (const room of rooms) {
 }
 
 const paths = collectSitemapPaths({
-  pageSlugs: ["/", "/rooms", "rooms", "/book"],
+  pageSlugs: [
+    "/",
+    "/rooms",
+    "rooms",
+    "/book",
+    "/explore-semarang",
+    "/explore-semarang/sam-poo-kong",
+    "https://www.pomahguesthouse.com/rooms/deluxe",
+    "https://pomahguesthouse.com/rooms/deluxe-ocean-view",
+    "http://pomahguesthouse.com/explore",
+  ],
   roomSlugs: rooms.map((r) => r.slug),
+  landingSlugs: ["penginapan-dekat-unnes", "/lp/should-not-duplicate"],
 });
 assert.ok(paths.includes("/"));
 assert.ok(paths.includes("/book"));
 assert.ok(paths.includes("/explore"), "sitemap must list /explore");
+assert.ok(paths.includes("/lp/penginapan-dekat-unnes"));
 assert.ok(!paths.includes("/rooms"), "bare /rooms 404s and must not be listed");
 assert.ok(!paths.includes("/rooms/"), "trailing-slash /rooms must not be listed");
+assert.ok(!paths.includes("/explore-semarang"));
+assert.ok(!paths.includes("/explore-semarang/sam-poo-kong"));
+assert.ok(!paths.includes("/rooms/deluxe-ocean-view"));
 for (const room of rooms) {
   assert.ok(paths.includes(`/rooms/${room.slug}`), room.slug);
 }
+for (const path of paths) {
+  const loc = canonicalUrlForPath(path);
+  assert.match(loc, /^https:\/\/pomahguesthouse\.com(\/|$)/);
+  assert.doesNotMatch(loc, /www\.|http:\/\/|explore-semarang|deluxe-ocean-view/);
+}
+assert.equal(canonicalUrlForPath("/"), "https://pomahguesthouse.com/");
+assert.equal(canonicalUrlForPath("/explore?utm=1"), "https://pomahguesthouse.com/explore");
+assert.equal(canonicalUrlForPath("/rooms/deluxe/"), "https://pomahguesthouse.com/rooms/deluxe");
+const homeCanonical = canonicalHeadTags("/");
+assert.equal(homeCanonical.links[0]?.href, "https://pomahguesthouse.com/");
+assert.equal(homeCanonical.meta[0]?.content, "https://pomahguesthouse.com/");
 
 const homeBlob = JSON.stringify(DEFAULT_HOMEPAGE_CONFIG.seo);
 const exploreBlob = JSON.stringify(DEFAULT_EXPLORE_CONFIG.seo);

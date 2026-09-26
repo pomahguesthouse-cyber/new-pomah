@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
-import { EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
+import { canonicalHeadTags, EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/explore")({
   loader: async () => {
@@ -42,21 +42,21 @@ export const Route = createFileRoute("/explore")({
     const seo = mergeExploreConfig(loaderData?.property?.explore_config).seo;
     const title = seo.metaTitle || EXPLORE_SEO.title;
     const desc = seo.metaDescription || EXPLORE_SEO.description;
-    const domain = loaderData?.property?.public_domain || "pomahguesthouse.com";
-    const canonicalUrl = `https://${domain.replace(/^https?:\/\//, "")}/explore`;
+    const canonical = canonicalHeadTags("/explore");
     return {
-      meta: publicSeoMeta(
-        {
-          title,
-          description: desc,
-          twitterTitle: seo.twitterTitle || title,
-          twitterDescription: seo.twitterDescription || desc,
-        },
-        EXPLORE_SEO,
-      ),
-      links: [
-        { rel: "canonical", href: canonicalUrl }
+      meta: [
+        ...publicSeoMeta(
+          {
+            title,
+            description: desc,
+            twitterTitle: seo.twitterTitle || title,
+            twitterDescription: seo.twitterDescription || desc,
+          },
+          EXPLORE_SEO,
+        ),
+        ...canonical.meta,
       ],
+      links: canonical.links,
     };
   },
   component: ExploreSemarang,
