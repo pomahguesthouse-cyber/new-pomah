@@ -16,7 +16,12 @@ type AnyClient = SupabaseClient<any>;
 export interface SaveInboundResult {
   /** UUID of the newly created whatsapp_messages row */
   messageId: string | null;
-  /** True when a durable WhatsApp gateway ID already existed, so callers should not enqueue. */
+  /**
+   * True when this gateway id was already stored. Callers must NOT treat that
+   * as "already queued": a prior request may have saved the row and died
+   * before `wa_queue_upsert`. Enqueue unless a queue row or outbound reply
+   * already covers this message.
+   */
   duplicate?: boolean;
   error:     Error   | null;
 }
@@ -24,9 +29,11 @@ export interface SaveInboundResult {
 // ─── Inbound ──────────────────────────────────────────────────────────────────
 
 /**
- * The RPC returns TABLE(message_id, is_duplicate) so callers can skip
- * re-enqueueing/re-notifying on a detected duplicate (see
- * 20260721080000_atomic_inbound_message_dedup.sql). Parsed defensively:
+ * The RPC returns TABLE(message_id, is_duplicate) so callers can tell a
+ * redelivery from a first insert (see
+ * 20260721080000_atomic_inbound_message_dedup.sql). A duplicate still needs
+ * an enqueue check — skipping it drops replies when the first request saved
+ * the message and died before the queue write. Parsed defensively:
  * `data` is an array of rows for the table-returning function, but stays a
  * plain uuid string if this runs against a DB where that migration hasn't
  * been applied yet (code can deploy ahead of a manually-run SQL migration).

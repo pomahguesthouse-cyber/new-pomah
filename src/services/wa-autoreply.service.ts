@@ -12,6 +12,11 @@ import { phoneVariants } from "@/lib/phone";
 import type { AgentContext } from "@/ai/agents/types";
 import { queueClaimNext, queueComplete, queueFail, queueHeartbeat, queueUpsert } from "@/services/queue.service";
 import {
+  assessInboundCoverage,
+  logInboundSkip,
+  phoneTail,
+} from "@/services/wa-inbound-enqueue";
+import {
   findSessionStartIndex,
   isBrosurDoc,
   pickAttachment,
@@ -2497,46 +2502,70 @@ export async function recoverUnqueuedInboundMessages(options?: {
   let recovered = 0;
   for (const row of rows.reverse()) {
     const phone = phoneByThread.get(row.thread_id);
-    if (!phone) continue;
+    if (!phone) {
+      logInboundSkip("QueueRecovery", "missing_thread_phone", {
+        message_id: row.id,
+        thread_id: row.thread_id,
+      });
+      continue;
+    }
 
     try {
-      const { data: queued } = await (supabaseAdmin as any)
-        .from("wa_conversation_queue")
-        .select("id")
-        .eq("last_message_id", row.id)
-        .limit(1);
-      if ((queued ?? []).length > 0) continue;
-
-      const { data: activeQueue } = await (supabaseAdmin as any)
-        .from("wa_conversation_queue")
-        .select("id")
-        .eq("thread_id", row.thread_id)
-        .in("status", ["pending", "waiting", "processing", "retrying"])
-        .gte("created_at", row.sent_at)
-        .limit(1);
-      if ((activeQueue ?? []).length > 0) continue;
-
-      const { data: outboundAfter } = await (supabaseAdmin as any)
-        .from("whatsapp_messages")
-        .select("id")
-        .eq("thread_id", row.thread_id)
-        .eq("direction", "out")
-        .gte("sent_at", row.sent_at)
-        .limit(1);
-      if ((outboundAfter ?? []).length > 0) continue;
+      // Predikat yang sama dengan redelivery webhook. Lewati tanpa log bila
+      // sudah ter-cover — fungsi ini berjalan tiap menit dan sebagian besar
+      // pesan memang sudah mengantri.
+      const coverage = await assessInboundCoverage(supabaseAdmin, {
+        messageId: row.id,
+        threadId: row.thread_id,
+        sentAt: row.sent_at,
+        autoReplyEnabled: true,
+      });
+      if (coverage.action === "skip") continue;
 
       const { data: ctx, error: ctxErr } = await (supabaseAdmin as any).rpc("get_autoreply_context", {
         p_phone: phone,
       });
       if (ctxErr || !ctx) {
         console.warn(
-          `[QueueRecovery] context lookup failed for ${phone.slice(-6)}: ${ctxErr?.message ?? "empty context"}`,
+          `[QueueRecovery] context lookup failed for ${phoneTail(phone)}: ${ctxErr?.message ?? "empty context"}`,
         );
         continue;
       }
 
       const c = ctx as { auto_reply_enabled?: boolean; wpp_token?: string | null };
-      if (!c.auto_reply_enabled || !c.wpp_token) continue;
+      if (!c.auto_reply_enabled) {
+        logInboundSkip("QueueRecovery", "auto_reply_disabled", {
+          message_id: row.id,
+          phone_tail: phoneTail(phone),
+        });
+        continue;
+      }
+      if (!c.wpp_token) {
+        logInboundSkip("QueueRecovery", "missing_send_token", {
+          message_id: row.id,
+          phone_tail: phoneTail(phone),
+        });
+        continue;
+      }
+
+      // Cek ulang persis sebelum upsert. Webhook bisa saja sudah mengantri
+      // (atau worker sudah membalas) selagi context RPC berjalan. wa_queue_upsert
+      // juga mengunci per nomor dan menggabungkan burst pending/waiting, jadi
+      // dua upsert bersamaan tidak menjadi dua balasan.
+      const again = await assessInboundCoverage(supabaseAdmin, {
+        messageId: row.id,
+        threadId: row.thread_id,
+        sentAt: row.sent_at,
+        autoReplyEnabled: true,
+      });
+      if (again.action === "skip") {
+        logInboundSkip("QueueRecovery", again.reason, {
+          message_id: row.id,
+          phone_tail: phoneTail(phone),
+          stage: "recheck",
+        });
+        continue;
+      }
 
       const entry = await queueUpsert(supabaseAdmin, {
         phone,
@@ -2554,7 +2583,7 @@ export async function recoverUnqueuedInboundMessages(options?: {
         recovered++;
         console.warn(
           `[QueueRecovery] recovered inbound ${row.id.slice(0, 8)} ` +
-            `for ${phone.slice(-6)} into queue ${entry.entryId.slice(0, 8)}`,
+            `for ${phoneTail(phone)} into queue ${entry.entryId.slice(0, 8)}`,
         );
       }
     } catch (e) {
