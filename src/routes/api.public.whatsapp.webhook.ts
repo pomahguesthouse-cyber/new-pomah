@@ -53,6 +53,11 @@ export const Route = createFileRoute("/api/public/whatsapp/webhook")({
           "@/services/whatsapp-meta-inbox.service"
         );
 
+        // processInboxRow tetap di request ini, bukan di waitUntil. Ack 200
+        // sebelum queueUpsert membuat Lovable/Meta menganggap delivery selesai
+        // dan tidak mengirim ulang — persis saat request cold-start terputus
+        // setelah pesan tersimpan. OCR saja yang berjalan di latar (lihat
+        // schedulePaymentProofOcr). Gagal enqueue tetap 500 agar diantar ulang.
         if (!row.processed_at) {
           const result = await processInboxRow(row);
           // Status yang menunggu pasangan outbound sudah tersimpan & dijadwalkan ulang.
