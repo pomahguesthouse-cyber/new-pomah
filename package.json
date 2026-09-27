@@ -46,10 +46,20 @@
     "test:notification-thread": "tsx scripts/test-notification-thread-resolver.ts",
     "test:extra-bed-parser": "tsx scripts/test-extra-bed-parser.ts",
     "test:guest-resolver": "tsx scripts/test-guest-resolver.ts",
-    "test:returning-guest-memory": "tsx scripts/test-returning-guest-memory.ts"
+    "test:returning-guest-memory": "tsx scripts/test-returning-guest-memory.ts",
+    "test:native-oauth": "tsx scripts/test-native-oauth.ts",
+    "android:icons": "python3 scripts/generate-android-icons.py",
+    "android:sync": "cap sync android",
+    "android:debug": "bash scripts/build-android-debug.sh"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.79",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@cloudflare/vite-plugin": "^1.25.5",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -122,6 +132,8 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "2.23.1",
     "@types/node": "^22.16.5",

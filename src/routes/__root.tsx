@@ -22,6 +22,7 @@ import { HOME_SEO } from "@/public/lib/public-seo";
 import { clearAdminAssignFlag, clearAuthNext, clearStaffSessionHint } from "@/lib/auth-return";
 import { isChunkLoadError, reloadOnceOnChunkError } from "@/lib/chunk-reload";
 import { siteIdentityGraph } from "@/public/lib/structured-data";
+import { NativeAdminRuntime } from "@/lib/native-admin-runtime";
 import { StaffOAuthReturn } from "@/public/components/staff-oauth-return";
 import appCss from "../styles.css?url";
 
@@ -133,7 +134,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: ({ loaderData }) => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       // Fallback title only. Page routes set title, description, and Twitter
       // cards from saved SEO fields so this root copy cannot leak onto them.
       { title: HOME_SEO.title },
@@ -201,6 +202,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <AuthSync />
       <StaffOAuthReturn />
+      <NativeAdminRuntime />
       <Outlet />
       <Toaster />
     </QueryClientProvider>

@@ -372,11 +372,11 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[920px] p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:w-full sm:max-w-[920px]">
         {/* Hero header */}
-        <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-6 py-5">
+        <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-4 py-4 pr-12 sm:px-6 sm:py-5">
           <DialogHeader>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
                 <Sparkles className="h-5 w-5" />
               </div>
@@ -405,7 +405,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
         {/* Body — 2-col on lg+, stacked on mobile */}
         <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[1fr_320px]">
           <ScrollArea className="border-r border-border">
-            <div className="space-y-5 p-6">
+            <div className="space-y-5 p-4 sm:p-6">
               {/* Tamu */}
               <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -864,11 +864,11 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
           </aside>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border bg-muted/30 px-6 py-3">
-          <Button variant="outline" onClick={onClose} disabled={createMut.isPending}>
+        <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-muted/30 px-4 py-3 sm:flex-row sm:px-6">
+          <Button variant="outline" onClick={onClose} disabled={createMut.isPending} className="h-11 sm:h-9">
             Batal
           </Button>
-          <Button onClick={() => createMut.mutate()} disabled={!canSubmit} className="gap-1.5">
+          <Button onClick={() => createMut.mutate()} disabled={!canSubmit} className="h-11 gap-1.5 sm:h-9">
             {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {createMut.isPending ? "Menyimpan…" : "Buat Booking"}
           </Button>

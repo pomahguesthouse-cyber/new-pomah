@@ -21,6 +21,17 @@ dist-ssr
 .env.*
 !.env.example
 
+# Firebase / Android signing. Never commit these.
+android/app/google-services.json
+android/keystore.properties
+*.jks
+*.keystore
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/captures/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

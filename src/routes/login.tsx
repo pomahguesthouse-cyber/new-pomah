@@ -17,6 +17,7 @@ import {
   safeNext,
 } from "@/lib/auth-return";
 import { oauthReturnLocation, wasOAuthReturnOnLoad } from "@/public/components/staff-oauth-return";
+import { isNativeAdminApp, startNativeGoogleSignIn } from "@/lib/native-admin";
 import { checkSession } from "@/lib/staff-auth-cleanup";
 
 export const Route = createFileRoute("/login")({
@@ -142,6 +143,15 @@ function LoginPage() {
   const onGoogle = async () => {
     const next = loginDestination(nextPath);
     rememberAuthNext(next);
+    if (await isNativeAdminApp()) {
+      try {
+        await startNativeGoogleSignIn(next);
+      } catch (err) {
+        clearAuthNext();
+        toast.error((err as Error).message);
+      }
+      return;
+    }
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: loginReturnUrl(window.location.origin, next),
       extraParams: { prompt: "select_account" },

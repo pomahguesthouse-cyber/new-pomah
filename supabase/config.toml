@@ -1,1 +1,5 @@
 project_id = "gofvxeiulaljwyfyhnww"
+
+# pg_net calls this without a user JWT. The function checks PUSH_WEBHOOK_SECRET.
+[functions.send-staff-push]
+verify_jwt = false
