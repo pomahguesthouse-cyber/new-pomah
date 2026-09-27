@@ -184,6 +184,7 @@ const paths = collectSitemapPaths({
     "/explore-semarang/sam-poo-kong",
     "https://www.pomahguesthouse.com/rooms/deluxe",
     "https://pomahguesthouse.com/rooms/deluxe-ocean-view",
+    "/explore/eksplorasi-sejarah-kota-lama-semarang",
     "http://pomahguesthouse.com/explore",
   ],
   roomSlugs: rooms.map((r) => r.slug),
@@ -198,6 +199,7 @@ assert.ok(!paths.includes("/rooms/"), "trailing-slash /rooms must not be listed"
 assert.ok(!paths.includes("/explore-semarang"));
 assert.ok(!paths.includes("/explore-semarang/sam-poo-kong"));
 assert.ok(!paths.includes("/rooms/deluxe-ocean-view"));
+assert.ok(!paths.includes("/explore/eksplorasi-sejarah-kota-lama-semarang"));
 for (const room of rooms) {
   assert.ok(paths.includes(`/rooms/${room.slug}`), room.slug);
 }

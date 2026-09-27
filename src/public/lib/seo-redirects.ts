@@ -61,13 +61,35 @@ export function shouldCanonicalizeHost(url: URL): boolean {
   return false;
 }
 
-export type LegacyKind = "explore-index" | "explore-slug" | "deluxe-ocean-view";
+/**
+ * Duplicate City Guide URLs that should 301 to the page we keep.
+ * The source row is left in the database; listings and the sitemap skip it.
+ */
+export const EXPLORE_SLUG_ALIASES: Record<string, string> = {
+  "eksplorasi-sejarah-kota-lama-semarang": "kota-lama-semarang",
+};
+
+export function exploreAliasTarget(pathname: string): string | null {
+  const path = normalizePathname(pathname);
+  if (!path.startsWith("/explore/")) return null;
+  const slug = path.slice("/explore/".length);
+  const target = EXPLORE_SLUG_ALIASES[slug];
+  return target ? `/explore/${target}` : null;
+}
+
+export function isRetiredExploreSlug(slug: string | null | undefined): boolean {
+  const clean = (slug ?? "").trim().replace(/^\/+/, "");
+  return Boolean(clean && Object.prototype.hasOwnProperty.call(EXPLORE_SLUG_ALIASES, clean));
+}
+
+export type LegacyKind = "explore-index" | "explore-slug" | "deluxe-ocean-view" | "explore-alias";
 
 export function legacyKindForPath(pathname: string): LegacyKind | null {
   const path = normalizePathname(pathname);
   if (path === "/explore-semarang") return "explore-index";
   if (path.startsWith("/explore-semarang/")) return "explore-slug";
   if (path === "/rooms/deluxe-ocean-view") return "deluxe-ocean-view";
+  if (exploreAliasTarget(path)) return "explore-alias";
   return null;
 }
 
@@ -146,6 +168,7 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
 
   let path = pathname;
   if (kind === "explore-index") path = "/explore";
+  else if (kind === "explore-alias") path = exploreAliasTarget(pathname) ?? "/explore";
   else if (kind === "explore-slug") {
     const slug = pathname.slice("/explore-semarang/".length);
     path = resolveExploreLegacyTarget(slug, input.explorePlaces ?? []);

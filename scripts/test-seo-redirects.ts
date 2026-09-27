@@ -116,6 +116,19 @@ assert.equal(
 );
 
 assert.equal(
+  location("https://pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang")?.location,
+  "https://pomahguesthouse.com/explore/kota-lama-semarang",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang/")?.location,
+  "https://pomahguesthouse.com/explore/kota-lama-semarang",
+);
+assert.match(
+  location("https://pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang")?.reason ?? "",
+  /legacy-url/,
+);
+
+assert.equal(
   location("https://pomahguesthouse.com/rooms/deluxe-ocean-view")?.location,
   "https://pomahguesthouse.com/rooms/deluxe",
 );

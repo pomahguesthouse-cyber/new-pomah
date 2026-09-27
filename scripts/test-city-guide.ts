@@ -61,6 +61,17 @@ const places = collectCityGuidePlaces({
   ],
 });
 
+const withDuplicate = collectCityGuidePlaces({
+  destinations: [
+    { name: "Kota Lama Semarang", desc: "yang dipertahankan" },
+    { name: "Eksplorasi Sejarah Kota Lama Semarang", desc: "duplikat" },
+  ],
+});
+assert.deepEqual(
+  withDuplicate.map((place) => place.slug),
+  ["kota-lama-semarang"],
+);
+
 const slugs = places.map((place) => place.slug).sort();
 assert.deepEqual(slugs, [
   "bandeng-presto",

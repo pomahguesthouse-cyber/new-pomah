@@ -375,7 +375,7 @@ export function PomahHomeView({
   }));
 
   const newsEvents = [...destinationItems, ...culinaryItems, ...eventItems, ...newsItems]
-    .filter((n) => n.title && n.href)
+    .filter((n) => n.title && n.href && !n.href.endsWith("/eksplorasi-sejarah-kota-lama-semarang"))
     .slice(0, 12);
 
 

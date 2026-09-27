@@ -8,7 +8,7 @@
  */
 import { isPublicExploreEventVisible } from "@/lib/explore-event-date";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
-import { placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
+import { isRetiredExploreSlug, placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export type CityGuideCategory = "destinasi" | "kuliner" | "event" | "berita" | "tips";
 
@@ -233,6 +233,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     let n = 2;
     while (used.has(slug)) slug = `${draft.slugBase}-${n++}`;
     used.add(slug);
+    if (isRetiredExploreSlug(slug)) continue;
     places.push({
       slug,
       name: draft.name,

@@ -8,7 +8,7 @@ import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
-import { slugifyPlaceName } from "@/public/lib/seo-redirects";
+import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 const CATEGORY_LABEL: Record<CityGuidePlace["category"], string> = {
   destinasi: "Destinasi",
@@ -39,6 +39,14 @@ export const Route = createFileRoute("/explore/$slug")({
   loader: async ({ params }) => {
     const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    const alias = exploreAliasTarget(`/explore/${params.slug}`);
+    if (alias) {
+      throw redirect({
+        to: "/explore/$slug",
+        params: { slug: alias.replace(/^\/explore\//, "") },
+        statusCode: 301,
+      });
+    }
     const [places, site] = await Promise.all([loadCityGuidePlaces(), getPublicSiteData()]);
     const place = findCityGuidePlace(places, params.slug);
     if (!place) throw notFound();

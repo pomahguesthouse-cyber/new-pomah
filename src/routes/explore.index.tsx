@@ -32,7 +32,7 @@ import {
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { canonicalHeadTags, EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
-import { slugifyPlaceName } from "@/public/lib/seo-redirects";
+import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 import { GuideTextLinks, exploreHrefForName, type GuideLinkPlace } from "@/public/components/guide-links";
 
 function PlaceNameLink({ name }: { name: string }) {
@@ -333,7 +333,10 @@ function ExploreSemarang() {
   };
 
   // Filtered items based on tab and search query
+  const isListedPlace = (name: string) => !isRetiredExploreSlug(slugifyPlaceName(name));
+
   const filteredDestinations = config.destinations.filter((d) => {
+    if (!isListedPlace(d.name)) return false;
     const matchesSearch =
       searchQuery === "" ||
       d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -344,6 +347,7 @@ function ExploreSemarang() {
   });
 
   const filteredCulinary = config.culinary.filter((c) => {
+    if (!isListedPlace(c.name)) return false;
     const matchesSearch =
       searchQuery === "" ||
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -358,6 +362,7 @@ function ExploreSemarang() {
   const culScroll = useSliderTransform(filteredCulinary.length, true);
 
   const filteredEvents = [...config.events, ...autoEvents].filter((e) => {
+    if (!isListedPlace(e.title)) return false;
     const matchesSearch =
       searchQuery === "" ||
       e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -369,6 +374,7 @@ function ExploreSemarang() {
   });
 
   const filteredSidebarItems = sidebarItems.filter((item) => {
+    if (!isListedPlace(item.title)) return false;
     const matchesSearch =
       searchQuery === "" ||
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
