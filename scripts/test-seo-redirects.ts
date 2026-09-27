@@ -72,6 +72,40 @@ assert.equal(
 assert.equal(location("https://pomahguesthouse.com/explore"), null);
 assert.equal(location("https://pomahguesthouse.com/"), null);
 
+// Staff sign-in and OAuth return must not be rewritten to the homepage,
+// and query/hash must survive a www or http hop.
+assert.equal(location("https://pomahguesthouse.com/admin"), null);
+assert.equal(location("https://pomahguesthouse.com/admin/"), null);
+assert.equal(location("https://pomahguesthouse.com/login"), null);
+assert.equal(location("https://pomahguesthouse.com/login?next=%2Fadmin"), null);
+assert.equal(location("https://pomahguesthouse.com/login?code=abc"), null);
+assert.equal(location("https://pomahguesthouse.com/admin#access_token=tok"), null);
+assert.equal(
+  location("https://www.pomahguesthouse.com/admin")?.location,
+  "https://pomahguesthouse.com/admin",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/admin/")?.location,
+  "https://pomahguesthouse.com/admin",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/admin?code=abc")?.location,
+  "https://pomahguesthouse.com/admin?code=abc",
+);
+assert.equal(
+  location("http://pomahguesthouse.com/login?next=%2Fadmin")?.location,
+  "https://pomahguesthouse.com/login?next=%2Fadmin",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/login/?next=%2Fadmin&code=abc#access_token=tok")
+    ?.location,
+  "https://pomahguesthouse.com/login?next=%2Fadmin&code=abc#access_token=tok",
+);
+assert.equal(
+  location("http://www.pomahguesthouse.com/admin#refresh_token=tok")?.location,
+  "https://pomahguesthouse.com/admin#refresh_token=tok",
+);
+
 assert.equal(location("https://www.pomahguesthouse.com/api/public/whatsapp/webhook"), null);
 assert.equal(location("http://pomahguesthouse.com/api/evolution"), null);
 assert.equal(location("https://www.pomahguesthouse.com/api/cron/process-wa-queue"), null);

@@ -153,12 +153,18 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
     path = input.deluxeRoomPath?.trim() || DELUXE_OCEAN_VIEW_FALLBACK;
   }
 
+  // Query and hash ride along. OAuth returns (`?code=`, `?next=`, `#access_token`)
+  // must survive www/http canonicalization. The hash is not sent on a normal
+  // browser request; when it is present on the URL we still keep it.
+  // `/admin` and `/login` are not legacy paths, so they are never rewritten
+  // down to `/` — only the host (and a trailing slash on that host change) moves.
   const search = url.search;
+  const hash = url.hash;
   const onProduction = isProductionHost(url.hostname);
   const location = onProduction
-    ? `${canonicalUrlForPath(path)}${search}`
+    ? `${canonicalUrlForPath(path)}${search}${hash}`
     : kind
-      ? `${path}${search}`
+      ? `${path}${search}${hash}`
       : null;
   if (!location) return null;
 
