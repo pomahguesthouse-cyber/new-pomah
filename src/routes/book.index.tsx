@@ -9,6 +9,7 @@ import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -290,16 +291,13 @@ function BookPage() {
               <Users className="w-5 h-5 text-stone-400 shrink-0" />
               <div className="min-w-0 flex flex-col w-full">
                 <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Tamu</span>
-                <input
-                  type="number"
+                <NumericInput
                   min={1}
                   max={50}
+                  emptyValue={1}
                   value={form.adults}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    setForm({ ...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val)) });
-                  }}
-                  className="text-sm font-semibold border-none outline-none focus:ring-0 p-0 text-stone-800 bg-transparent w-full"
+                  onValueChange={(adults) => setForm({ ...form, adults })}
+                  className="h-auto w-full border-none bg-transparent p-0 text-sm font-semibold text-stone-800 shadow-none outline-none focus-visible:ring-0"
                 />
               </div>
             </div>
@@ -550,17 +548,13 @@ function BookPage() {
                   </div>
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-stone-700">Jumlah tamu <span className="text-red-500">*</span></Label>
-                    <Input
-                      type="number"
+                    <NumericInput
                       min={1}
                       max={50}
-                      required
+                      emptyValue={1}
                       className="rounded-xl border-stone-200"
                       value={form.adults}
-                      onChange={e => {
-                        const val = parseInt(e.target.value, 10);
-                        setForm({...form, adults: Number.isNaN(val) ? 1 : Math.max(1, Math.min(50, val))});
-                      }}
+                      onValueChange={(adults) => setForm({ ...form, adults })}
                     />
                   </div>
                 </div>

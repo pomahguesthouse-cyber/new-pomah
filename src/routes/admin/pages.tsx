@@ -81,6 +81,7 @@ import { MediaPicker } from "@/admin/components/media-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -1310,10 +1311,10 @@ function HeroTab({ cfg, setCfg, isBooking, activeMode }: TabProps & { isBooking?
     <Section title="Desain Hero Slider" desc="Banner berganti otomatis di bagian paling atas halaman.">
       <div className="grid grid-cols-2 gap-3">
         <FieldRow label="Kecepatan slide (ms)">
-          <Input type="number" value={hero.autoplayMs} onChange={(e) => set({ autoplayMs: Number(e.target.value) })} />
+          <NumericInput value={hero.autoplayMs} onValueChange={(autoplayMs) => set({ autoplayMs })} />
         </FieldRow>
         <FieldRow label="Tinggi banner (px)">
-          <Input type="number" value={hero.height} onChange={(e) => set({ height: Number(e.target.value) })} />
+          <NumericInput value={hero.height} onValueChange={(height) => set({ height })} />
         </FieldRow>
       </div>
 
@@ -2011,7 +2012,7 @@ function CarouselTab({ cfg, setCfg }: TabProps) {
         />
       </FieldRow>
       <FieldRow label="Kecepatan slider — waktu antar slide (ms)">
-        <Input type="number" value={rc.slideMs} onChange={(e) => set({ slideMs: Number(e.target.value) })} />
+        <NumericInput value={rc.slideMs} onValueChange={(slideMs) => set({ slideMs })} />
       </FieldRow>
       <FieldRow label="Warna latar belakang">
         <ColorField value={rc.bgColor ?? "#f3ece0"} onChange={(v) => set({ bgColor: v })} />

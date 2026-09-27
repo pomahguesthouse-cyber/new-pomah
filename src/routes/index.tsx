@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
@@ -637,29 +638,13 @@ export function PomahHomeView({
                 <Field label="Tamu" className="flex-none w-[72px] md:flex-1 md:w-auto">
                   <div className="relative">
                     <Users className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 md:left-3" />
-                    <input
-                      type="number"
-                      inputMode="numeric"
+                    <NumericInput
                       min={1}
                       max={30}
-                      value={guests === 0 ? "" : guests}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "") {
-                          setGuests(0);
-                        } else {
-                          const parsed = parseInt(val, 10);
-                          if (!isNaN(parsed)) {
-                            setGuests(Math.min(30, parsed));
-                          }
-                        }
-                      }}
-                      onBlur={() => {
-                        if (guests < 1) {
-                          setGuests(1);
-                        }
-                      }}
-                      className="h-11 w-full rounded-md border border-stone-200 bg-background pl-8 pr-3 text-xs outline-none focus:ring-1 focus:ring-amber-500 md:h-10 md:pl-9 md:pr-4 md:text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      emptyValue={1}
+                      value={guests}
+                      onValueChange={setGuests}
+                      className="h-11 w-full rounded-md border border-stone-200 bg-background py-0 pl-8 pr-3 text-xs shadow-none outline-none focus-visible:ring-amber-500 md:h-10 md:pl-9 md:pr-4 md:text-sm"
                     />
                   </div>
                 </Field>

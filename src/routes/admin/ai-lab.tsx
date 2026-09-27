@@ -94,6 +94,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -1017,11 +1018,10 @@ function HumanTakeoverSettings({ config, commitConfig }: { config: AiLabConfig; 
         lanjut sendiri. Timer di-reset setiap ada balasan human. Isi 0 untuk menonaktifkan.
       </p>
       <div className="mt-3 flex items-center gap-2">
-        <Input
-          type="number"
+        <NumericInput
           min={0}
           value={minutes}
-          onChange={(e) => setMinutes(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+          onValueChange={setMinutes}
           className="h-9 w-24"
         />
         <span className="text-xs text-muted-foreground">menit</span>
