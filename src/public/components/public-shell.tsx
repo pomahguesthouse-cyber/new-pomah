@@ -759,7 +759,11 @@ export function HeroSlider({
             sizes={HERO_SIZES}
             width={1200}
             height={675}
-            alt={active.heading || "Pomah Guesthouse Semarang"}
+            alt={
+              active.heading?.trim()
+                ? `Foto ${active.heading.trim()} di Pomah Guesthouse Semarang`
+                : "Foto tamu menginap di Pomah Guesthouse Semarang"
+            }
             loading={i === 0 ? "eager" : "lazy"}
             fetchPriority={i === 0 ? "high" : "low"}
             decoding="async"

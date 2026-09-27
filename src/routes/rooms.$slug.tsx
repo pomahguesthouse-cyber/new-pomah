@@ -386,7 +386,7 @@ function RoomBookingPage() {
                       src={buildStorageImageUrl(src, { width: 240, quality: 60 })}
                       width={112}
                       height={80}
-                      alt=""
+                      alt={`Foto ${room.name} di Pomah Guesthouse, gambar ${i + 1}`}
                       loading="lazy"
                       decoding="async"
                       className="h-full w-full object-cover"
