@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
 import { CANONICAL_ORIGIN } from "@/public/lib/public-seo";
+import { toPublicSettings } from "@/public/lib/public-settings";
 
 export const Route = createFileRoute("/llms.txt")({
   server: {
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/llms.txt")({
       GET: async () => {
         const origin = CANONICAL_ORIGIN;
         const { data: propData } = await supabasePublic.rpc("get_public_property" as never);
-        const property = (propData ?? {}) as Record<string, string | null | undefined>;
+        const property = (toPublicSettings(propData) ?? {}) as Record<string, string | null | undefined>;
         const { data: roomTypes } = await supabasePublic
           .from("room_types")
           .select("name, slug, description, base_rate, capacity, bed_type");

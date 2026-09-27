@@ -21,6 +21,7 @@
     "test:wa-summary-io": "tsx scripts/test-wa-session-summary-io.ts",
     "test:guest-role-disclosure": "tsx scripts/test-guest-role-disclosure.ts",
     "test:security": "tsx scripts/test-security-hardening.ts",
+    "test:public-settings": "tsx scripts/test-public-settings.ts",
     "test:date-consistency": "tsx scripts/test-date-parsing-consistency.ts",
     "test:guest-count": "tsx scripts/test-guest-count-capacity.ts",
     "test:numeric-input": "tsx scripts/test-numeric-input.ts",

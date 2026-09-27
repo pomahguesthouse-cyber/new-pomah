@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { type GlobalConfig, mergeGlobalConfig } from "./global.config";
+import { stripSecretKeys } from "@/public/lib/public-settings";
 
 function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
@@ -26,7 +27,7 @@ export const getGlobalConfig = createServerFn({ method: "GET" })
 
     return {
       id: data?.id ?? null,
-      config: mergeGlobalConfig(data?.global_config),
+      config: stripSecretKeys(mergeGlobalConfig(data?.global_config)),
     };
   });
 

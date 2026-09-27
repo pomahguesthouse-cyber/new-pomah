@@ -11,6 +11,7 @@ import {
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
+import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -208,12 +209,12 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
       .order("base_rate"),
   ]);
 
-  const propertyRaw = (propertyData ?? null) as PublicProperty | null;
+  const propertyRaw = (propertyData ?? null) as (PublicProperty & Record<string, unknown>) | null;
   const property = propertyRaw
-    ? {
+    ? (toPublicSettings({
         ...propertyRaw,
         explore_config: stripPastEventsFromExploreConfig(propertyRaw.explore_config),
-      }
+      }) as PublicProperty)
     : null;
 
   const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
@@ -919,8 +920,12 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
     const fields =
       "id, name, slug, description, base_rate, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, seo_h1, seo_title, meta_description";
     const sb = db(supabasePublic);
-    const [{ data: property }, { data: room }, { data: others }] = await Promise.all([
-      supabaseAdmin.from("properties").select("*").limit(1).maybeSingle(),
+    const [{ data: propertyRow }, { data: room }, { data: others }] = await Promise.all([
+      db(supabaseAdmin)
+        .from("properties")
+        .select(PUBLIC_PROPERTY_FIELDS.join(", "))
+        .limit(1)
+        .maybeSingle(),
       sb.from("room_types").select(fields).eq("slug", data.slug).maybeSingle(),
       sb.from("room_types").select(fields).neq("slug", data.slug).order("base_rate"),
     ]);
@@ -934,7 +939,12 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       roomCount = count ?? 0;
     }
 
-    return { property, room: room ?? null, others: others ?? [], roomCount };
+    return {
+      property: toPublicSettings(propertyRow) as PublicProperty | null,
+      room: room ?? null,
+      others: others ?? [],
+      roomCount,
+    };
   });
 
 /* ------------------------------------------------------------------ */

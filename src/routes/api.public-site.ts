@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { toPublicSettings } from "@/public/lib/public-settings";
 
 async function handle(): Promise<Response> {
   try {
@@ -22,7 +23,7 @@ async function handle(): Promise<Response> {
       total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
     }));
 
-    return new Response(JSON.stringify({ property: propertyData ?? null, roomTypes }), {
+    return new Response(JSON.stringify({ property: toPublicSettings(propertyData), roomTypes }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

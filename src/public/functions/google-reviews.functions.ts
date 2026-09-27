@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { supabasePublic } from "@/integrations/supabase/client.server";
+import { supabaseAdmin, supabasePublic } from "@/integrations/supabase/client.server";
 
 export interface GoogleReview {
   author: string;
@@ -55,9 +55,22 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
   }
 
   const placeId = (row.google_place_id as string | undefined)?.trim();
-  const key = (
-    (row.google_places_api_key as string | undefined) || process.env.GOOGLE_PLACES_API_KEY
-  )?.trim();
+  // The public RPC must not be the source of the key. Read it with the service role.
+  let key = process.env.GOOGLE_PLACES_API_KEY?.trim() || "";
+  try {
+    const { data: secretRow } = await supabaseAdmin
+      .from("properties")
+      .select("google_places_api_key")
+      .limit(1)
+      .maybeSingle();
+    const fromDb = secretRow?.google_places_api_key?.trim();
+    if (fromDb) key = fromDb;
+  } catch (error) {
+    console.warn(
+      "[GoogleReviews] service-role key lookup failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
 
   if (!key) return empty("NO_API_KEY");
   if (!placeId) return empty("NO_PLACE_ID");

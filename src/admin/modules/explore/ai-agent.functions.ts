@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getIntegrationSettings } from "../settings/settings.functions";
 import { ExploreConfig } from "./explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
+import { resolveGeminiApiKey } from "./gemini-key";
 
 function db(client: unknown): SupabaseClient {
   return client as SupabaseClient;
@@ -28,7 +29,10 @@ export const syncExploreFromAI = createServerFn({ method: "POST" })
     }
     const currentConfig = (propData.explore_config || {}) as ExploreConfig;
 
-    const apiKey = currentConfig.gemini_api_key;
+    const apiKey = resolveGeminiApiKey({
+      explore_config: currentConfig,
+      gemini_api_key: (propData as { gemini_api_key?: string | null }).gemini_api_key,
+    });
     if (!apiKey) {
       throw new Error("Gemini API Key belum diatur. Silakan atur di bagian atas halaman Jelajahi Semarang.");
     }
