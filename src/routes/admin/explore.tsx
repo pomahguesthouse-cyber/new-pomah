@@ -325,7 +325,8 @@ function AdminExplorePage() {
   const isEditing = (type: string, index: number) => editingItem?.type === type && editingItem?.index === index;
 
   return (
-    <div className="flex p-6 md:p-10 gap-8 h-full bg-stone-50/50 min-h-screen">
+    <div className="@container/explore w-full min-w-0 max-w-full">
+    <div className="flex min-h-full w-full min-w-0 max-w-full flex-col gap-6 overflow-x-clip bg-stone-50/50 p-4 @min-[40rem]/explore:p-6 @min-[62rem]/explore:flex-row @min-[62rem]/explore:items-start @min-[62rem]/explore:gap-8 @min-[62rem]/explore:p-10">
       
       <MediaPicker
         open={pickerState.open}
@@ -337,22 +338,22 @@ function AdminExplorePage() {
       <div className="flex-1 min-w-0 space-y-8">
         
         {/* Header */}
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex flex-col gap-4 @min-[62rem]/explore:flex-row @min-[62rem]/explore:items-start @min-[62rem]/explore:justify-between">
+          <div className="min-w-0">
             <p className="font-bold text-[10px] tracking-widest text-emerald-600 uppercase mb-1">
               City Guide
             </p>
-            <h1 className="text-2xl font-bold tracking-tight text-stone-900">Jelajahi Semarang</h1>
+            <h1 className="text-xl font-bold tracking-tight text-stone-900 @min-[62rem]/explore:text-2xl">Jelajahi Semarang</h1>
             <p className="text-sm text-stone-500 mt-1">
               Kelola konten destinasi, kuliner, event dan informasi seputar Semarang.
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-[11px] text-stone-500 mb-2">Terakhir diperbarui: {updatedAt}</p>
+          <div className="flex w-full min-w-0 flex-col items-stretch gap-2 @min-[24rem]/explore:items-start @min-[62rem]/explore:w-auto @min-[62rem]/explore:items-end @min-[62rem]/explore:text-right">
+            <p className="text-xs text-stone-500">Terakhir diperbarui: {updatedAt}</p>
             <Button 
               onClick={handleSave} 
               disabled={mutation.isPending}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2 h-9"
+              className="h-10 w-full gap-2 bg-emerald-700 text-white hover:bg-emerald-800 @min-[24rem]/explore:w-auto"
             >
               {mutation.isPending ? "Menyimpan..." : "Simpan Semua Perubahan"}
               {!mutation.isPending && <Check className="h-4 w-4" />}
@@ -373,7 +374,7 @@ function AdminExplorePage() {
                 Title tag ({(config.seo?.metaTitle ?? "").length}/60)
               </label>
               <Input
-                className="h-9 text-sm"
+                className="h-10 text-sm"
                 value={config.seo?.metaTitle ?? ""}
                 placeholder="Jelajahi Semarang | Panduan Tamu Penginapan Dekat UNNES"
                 onChange={(e) => {
@@ -418,33 +419,34 @@ function AdminExplorePage() {
         {/* Hero Banner Section */}
         <div className="space-y-3">
           <h2 className="text-sm font-bold text-stone-900">Hero Banner</h2>
-          <Card className="p-4 border-stone-200 shadow-sm flex flex-col md:flex-row gap-6">
-            <div className="md:w-[40%] shrink-0 space-y-3">
+          <Card className="flex flex-col gap-6 border-stone-200 p-4 shadow-sm md:flex-row">
+            <div className="w-full min-w-0 shrink-0 space-y-3 md:w-[40%] md:max-w-md">
               <div className="aspect-video bg-stone-100 rounded-lg border border-stone-200 overflow-hidden relative group">
                 {config.hero.videoUrl ? (
-                  <video src={config.hero.videoUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                  <video src={config.hero.videoUrl} className="absolute inset-0 h-full w-full object-cover" muted loop autoPlay playsInline />
                 ) : config.hero.bgImageUrl ? (
-                  <img src={config.hero.bgImageUrl} alt="Hero Banner" className="w-full h-full object-cover" />
+                  <img src={config.hero.bgImageUrl} alt="Hero Banner" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-stone-400 text-xs">
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-stone-400">
                     No Image / Video
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                    <Button 
                      size="sm" 
-                     variant="secondary" 
+                     variant="secondary"
+                     className="h-10 px-3"
                      onClick={() => setPickerState({ open: true, target: "hero" })}
                    >
                      Ubah Gambar
                    </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  className="gap-2 h-8 text-xs font-medium"
+                  className="h-10 gap-2 px-3 text-xs font-medium"
                   onClick={() => setPickerState({ open: true, target: "hero" })}
                 >
                   <Pencil className="h-3 w-3" />
@@ -454,11 +456,11 @@ function AdminExplorePage() {
               </div>
             </div>
             
-            <div className="flex-1 space-y-3 relative">
+            <div className="relative min-w-0 flex-1 space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">Judul</label>
                 <Input
-                  className="h-9 text-sm"
+                  className="h-10 text-sm"
                   value={config.hero.heading}
                   onChange={(e) => setConfig({ ...config, hero: { ...config.hero, heading: e.target.value } })}
                 />
@@ -473,9 +475,9 @@ function AdminExplorePage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-stone-700">Video Latar Belakang (Opsional)</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Input
-                    className="h-9 text-sm bg-stone-50/50"
+                    className="h-10 min-w-0 text-sm bg-stone-50/50"
                     placeholder="Belum ada video terpilih..."
                     value={config.hero.videoUrl || ""}
                     readOnly
@@ -484,7 +486,7 @@ function AdminExplorePage() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-9 shrink-0 gap-1.5"
+                    className="h-10 shrink-0 gap-1.5 px-3"
                     onClick={() => setPickerState({ open: true, kind: "video", target: "hero-video" })}
                   >
                     <Pencil className="h-3 w-3" />
@@ -495,7 +497,7 @@ function AdminExplorePage() {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className="h-9 shrink-0 text-red-500 hover:text-red-650 hover:bg-red-50"
+                      className="h-10 shrink-0 px-3 text-red-500 hover:text-red-650 hover:bg-red-50"
                       onClick={() => setConfig({ ...config, hero: { ...config.hero, videoUrl: "" } })}
                     >
                       Hapus
@@ -518,7 +520,7 @@ function AdminExplorePage() {
               <Input
                 type="password"
                 autoComplete="new-password"
-                className="h-9 text-sm"
+                className="h-10 text-sm"
                 placeholder={geminiKeySet ? "Key tersimpan di server — isi hanya untuk mengganti" : "Tempel API key baru"}
                 value={geminiKeyDraft}
                 onChange={(e) => setGeminiKeyDraft(e.target.value)}
@@ -533,7 +535,7 @@ function AdminExplorePage() {
         </div>
         {/* Destinasi Wisata */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2">
               <ListOrdered className="h-4 w-4 text-emerald-600" />
               Destinasi Wisata
@@ -541,7 +543,7 @@ function AdminExplorePage() {
             <Button
               size="sm"
               variant="outline"
-              className="h-8 gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              className="h-10 gap-1.5 px-3 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
               onClick={() => {
                 setConfig({
                   ...config,
@@ -555,17 +557,17 @@ function AdminExplorePage() {
             </Button>
           </div>
           
-          <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
+          <div className="flex min-w-0 flex-col gap-4 @min-[32rem]/explore:flex-row @min-[32rem]/explore:flex-wrap @min-[62rem]/explore:flex-nowrap @min-[62rem]/explore:snap-x @min-[62rem]/explore:overflow-x-auto @min-[62rem]/explore:pb-4">
             {config.destinations.map((dest, i) => (
-              <Card key={i} className="flex flex-col sm:flex-row w-[400px] shrink-0 border-stone-200 shadow-sm p-3 gap-4 snap-start relative">
+              <Card key={i} className="relative flex w-full min-w-0 shrink-0 flex-col gap-4 border-stone-200 p-3 shadow-sm @min-[32rem]/explore:w-[calc(50%-0.5rem)] @min-[62rem]/explore:w-[400px] @min-[62rem]/explore:snap-start @min-[62rem]/explore:flex-row">
                 <div 
-                  className="w-32 h-24 shrink-0 rounded-md bg-stone-100 overflow-hidden relative cursor-pointer group"
+                  className="relative aspect-[16/10] w-full shrink-0 cursor-pointer overflow-hidden rounded-md bg-stone-100 group @min-[62rem]/explore:aspect-auto @min-[62rem]/explore:h-24 @min-[62rem]/explore:w-32"
                   onClick={() => setPickerState({ open: true, target: { type: "dest", index: i } })}
                 >
                   {dest.image ? (
-                    <img src={getDisplayImageUrl(dest.image)} alt={dest.name} onError={(e) => handleImageError(e, "dest")} className="w-full h-full object-cover" />
+                    <img src={getDisplayImageUrl(dest.image)} alt={dest.name} onError={(e) => handleImageError(e, "dest")} className="absolute inset-0 h-full w-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
                   )}
                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Pencil className="h-4 w-4 text-white" />
@@ -576,7 +578,7 @@ function AdminExplorePage() {
                   <div className="flex items-start justify-between gap-2">
                     {isEditing("dest", i) ? (
                       <Input 
-                        className="h-7 text-sm font-bold px-2 py-0"
+                        className="h-10 text-sm font-bold"
                         value={dest.name}
                         onChange={(e) => {
                           const newDests = [...config.destinations];
@@ -587,16 +589,16 @@ function AdminExplorePage() {
                     ) : (
                       <h3 className="text-sm font-bold text-stone-900 truncate">{dest.name}</h3>
                     )}
-                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 -mr-2 -mt-1 text-stone-400">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-stone-400" aria-label="Opsi destinasi">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </div>
                   
                   {isEditing("dest", i) ? (
                     <div className="space-y-1.5 mt-1.5 flex-1 flex flex-col">
-                      <div className="flex gap-1.5 p-1.5 bg-emerald-50 rounded border border-emerald-100">
+                      <div className="flex flex-col gap-2 rounded border border-emerald-100 bg-emerald-50 p-2 @min-[62rem]/explore:flex-row @min-[62rem]/explore:items-center">
                         <Input
-                          className="h-6 text-[10px] px-2 py-0 bg-white"
+                          className="h-10 min-w-0 bg-white text-sm"
                           placeholder="Paste Link Share / Ketik Nama Tempat..."
                           value={autoFillQuery[`dest-${i}`] || ""}
                           onChange={(e) => setAutoFillQuery(prev => ({ ...prev, [`dest-${i}`]: e.target.value }))}
@@ -604,16 +606,16 @@ function AdminExplorePage() {
                         <Button
                           size="sm"
                           type="button"
-                          className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
+                          className="h-10 w-full shrink-0 bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700 @min-[62rem]/explore:w-auto"
                           onClick={() => handleAutoFill(i, "dest")}
                         >
                           Tarik Otomatis
                         </Button>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 gap-2 @min-[62rem]/explore:grid-cols-2">
                         <Input 
-                          className="h-6 text-[10px] px-2 py-0"
+                          className="h-10 min-w-0 text-sm"
                           placeholder="Alamat/Lokasi"
                           value={dest.address || ""}
                           onChange={(e) => {
@@ -623,7 +625,7 @@ function AdminExplorePage() {
                           }}
                         />
                         <Input 
-                          className="h-6 text-[10px] px-2 py-0"
+                          className="h-10 min-w-0 text-sm"
                           placeholder="Ulasan (e.g. 128)"
                           value={dest.reviewCount || ""}
                           onChange={(e) => {
@@ -634,9 +636,9 @@ function AdminExplorePage() {
                         />
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 gap-2 @min-[62rem]/explore:grid-cols-2">
                         <Input 
-                          className="h-6 text-[10px] px-2 py-0"
+                          className="h-10 min-w-0 text-sm"
                           placeholder="Google Place ID"
                           value={dest.google_place_id || ""}
                           onChange={(e) => {
@@ -645,9 +647,9 @@ function AdminExplorePage() {
                             setConfig({ ...config, destinations: newDests });
                           }}
                         />
-                        <div className="flex gap-1">
+                        <div className="flex min-w-0 flex-col gap-2 @min-[62rem]/explore:flex-row">
                           <Input 
-                            className="h-6 text-[10px] px-2 py-0 flex-1"
+                            className="h-10 min-w-0 flex-1 text-sm"
                             placeholder="Jarak Pomah (e.g. 3 km)"
                             value={dest.nearby_distance || ""}
                             onChange={(e) => {
@@ -660,7 +662,7 @@ function AdminExplorePage() {
                             size="sm"
                             type="button"
                             variant="secondary"
-                            className="h-6 text-[9px] px-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shrink-0 font-bold"
+                            className="h-10 shrink-0 bg-emerald-50 px-3 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
                             onClick={async () => {
                               if (!dest.google_place_id) {
                                 toast.error("Isi Google Place ID destinasi terlebih dahulu!");
@@ -680,7 +682,7 @@ function AdminExplorePage() {
                       </div>
 
                       <Textarea 
-                        className="h-12 text-[10px] text-stone-500 mt-1 resize-none p-1.5"
+                        className="mt-1 h-20 resize-none p-2 text-sm text-stone-500"
                         placeholder="Deskripsi..."
                         value={dest.desc}
                         onChange={(e) => {
@@ -690,7 +692,7 @@ function AdminExplorePage() {
                         }}
                       />
                       <Input
-                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        className="mt-1 h-10 px-3 text-sm text-stone-500"
                         placeholder="Meta description (maks. 155 karakter)"
                         maxLength={155}
                         value={dest.metaDescription || ""}
@@ -729,7 +731,7 @@ function AdminExplorePage() {
                       <span className="text-amber-400">★</span>
                       {isEditing("dest", i) ? (
                         <Input 
-                          className="h-6 w-12 text-xs px-1 py-0 text-center font-semibold"
+                          className="h-10 w-16 px-1 text-center text-sm font-semibold"
                           value={dest.rating}
                           onChange={(e) => {
                             const newDests = [...config.destinations];
@@ -746,18 +748,19 @@ function AdminExplorePage() {
                     </div>
                     <div className="flex items-center gap-1">
                       {isEditing("dest", i) ? (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
-                          <Check className="h-3 w-3" />
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-emerald-600" aria-label="Selesai mengedit destinasi" onClick={() => setEditingItem(null)}>
+                          <Check className="h-4 w-4" />
                         </Button>
                       ) : (
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "dest", index: i })}>
-                          <Pencil className="h-3 w-3" />
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-stone-400 hover:text-stone-600" aria-label="Edit destinasi" onClick={() => setEditingItem({ type: "dest", index: i })}>
+                          <Pencil className="h-4 w-4" />
                         </Button>
                       )}
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                        className="h-10 w-10 text-red-400 hover:text-red-600 hover:bg-red-50"
+                        aria-label="Hapus destinasi"
                         onClick={() =>
                           setConfig({ ...config, destinations: config.destinations.filter((_, idx) => idx !== i) })
                         }
@@ -774,7 +777,7 @@ function AdminExplorePage() {
 
         {/* Kuliner Terbaik */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-bold text-stone-900 flex items-center gap-2">
               <ListOrdered className="h-4 w-4 text-emerald-600" />
               Kuliner Terbaik
@@ -782,7 +785,7 @@ function AdminExplorePage() {
             <Button
               size="sm"
               variant="outline"
-              className="h-8 gap-1.5 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              className="h-10 gap-1.5 px-3 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
               onClick={() => {
                 setConfig({
                   ...config,
@@ -796,21 +799,17 @@ function AdminExplorePage() {
             </Button>
           </div>
           
-          <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
+          <div className="flex min-w-0 flex-col gap-4 @min-[32rem]/explore:flex-row @min-[32rem]/explore:flex-wrap @min-[62rem]/explore:flex-nowrap @min-[62rem]/explore:snap-x @min-[62rem]/explore:overflow-x-auto @min-[62rem]/explore:pb-4">
             {config.culinary.map((cul, i) => (
-              <Card key={i} className="w-64 shrink-0 border-stone-200 shadow-sm overflow-hidden flex flex-col snap-start relative group bg-white">
-                <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6 text-white bg-black/20 rounded-full hover:bg-black/40 z-10">
-                  <MoreVertical className="h-3 w-3" />
-                </Button>
-                
+              <Card key={i} className="flex w-full min-w-0 shrink-0 flex-col overflow-hidden border-stone-200 bg-white shadow-sm @min-[32rem]/explore:w-[calc(50%-0.5rem)] @min-[62rem]/explore:w-64 @min-[62rem]/explore:snap-start">
                 <div 
-                  className="h-32 bg-stone-100 relative cursor-pointer group/img"
+                  className="relative aspect-[16/10] cursor-pointer bg-stone-100 group/img @min-[62rem]/explore:aspect-auto @min-[62rem]/explore:h-32"
                   onClick={() => setPickerState({ open: true, target: { type: "culinary", index: i } })}
                 >
                   {cul.image ? (
-                    <img src={getDisplayImageUrl(cul.image)} alt={cul.name} onError={(e) => handleImageError(e, "culinary")} className="w-full h-full object-cover" />
+                    <img src={getDisplayImageUrl(cul.image)} alt={cul.name} onError={(e) => handleImageError(e, "culinary")} className="absolute inset-0 h-full w-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-stone-400">Pilih Gambar</div>
                   )}
                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center">
                     <Pencil className="h-5 w-5 text-white" />
@@ -820,9 +819,9 @@ function AdminExplorePage() {
                 <div className="flex-1 flex flex-col p-4 gap-2">
                   {isEditing("culinary", i) ? (
                     <div className="space-y-2 flex-1 flex flex-col">
-                      <div className="flex gap-1.5 p-1.5 bg-emerald-50 rounded border border-emerald-100">
+                      <div className="flex flex-col gap-2 rounded border border-emerald-100 bg-emerald-50 p-2 @min-[62rem]/explore:flex-row @min-[62rem]/explore:items-center">
                         <Input
-                          className="h-6 text-[10px] px-2 py-0 bg-white"
+                          className="h-10 min-w-0 bg-white text-sm"
                           placeholder="Paste Link Share Google Maps..."
                           value={autoFillQuery[`culinary-${i}`] || ""}
                           onChange={(e) => setAutoFillQuery(prev => ({ ...prev, [`culinary-${i}`]: e.target.value }))}
@@ -830,7 +829,7 @@ function AdminExplorePage() {
                         <Button
                           size="sm"
                           type="button"
-                          className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 font-bold"
+                          className="h-10 w-full shrink-0 bg-emerald-600 px-3 text-sm font-bold text-white hover:bg-emerald-700 @min-[62rem]/explore:w-auto"
                           onClick={() => handleAutoFill(i, "culinary")}
                         >
                           Tarik Data
@@ -838,7 +837,7 @@ function AdminExplorePage() {
                       </div>
 
                       <Input 
-                        className="h-7 text-sm font-bold px-2 py-0"
+                        className="h-10 text-sm font-bold"
                         placeholder="Nama Kuliner"
                         value={cul.name}
                         onChange={(e) => {
@@ -847,9 +846,9 @@ function AdminExplorePage() {
                           setConfig({ ...config, culinary: newCul });
                         }}
                       />
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 gap-2 @min-[62rem]/explore:grid-cols-2">
                         <Input 
-                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          className="h-10 min-w-0 text-sm text-stone-500"
                           placeholder="Kategori (e.g. Cemilan)"
                           value={cul.category}
                           onChange={(e) => {
@@ -859,7 +858,7 @@ function AdminExplorePage() {
                           }}
                         />
                         <Input 
-                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          className="h-10 min-w-0 text-sm text-stone-500"
                           placeholder="Rating (e.g. 4.7)"
                           value={cul.rating || ""}
                           onChange={(e) => {
@@ -869,9 +868,9 @@ function AdminExplorePage() {
                           }}
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 gap-2 @min-[62rem]/explore:grid-cols-2">
                         <Input 
-                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          className="h-10 min-w-0 text-sm text-stone-500"
                           placeholder="Alamat"
                           value={cul.address || ""}
                           onChange={(e) => {
@@ -881,7 +880,7 @@ function AdminExplorePage() {
                           }}
                         />
                         <Input 
-                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          className="h-10 min-w-0 text-sm text-stone-500"
                           placeholder="Ulasan"
                           value={cul.reviewCount || ""}
                           onChange={(e) => {
@@ -891,9 +890,9 @@ function AdminExplorePage() {
                           }}
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-1 gap-2 @min-[62rem]/explore:grid-cols-2">
                         <Input 
-                          className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                          className="h-10 min-w-0 text-sm text-stone-500"
                           placeholder="Google Place ID"
                           value={cul.google_place_id || ""}
                           onChange={(e) => {
@@ -902,9 +901,9 @@ function AdminExplorePage() {
                             setConfig({ ...config, culinary: newCul });
                           }}
                         />
-                        <div className="flex gap-1">
+                        <div className="flex min-w-0 flex-col gap-2 @min-[62rem]/explore:flex-row">
                           <Input 
-                            className="h-6 text-[10px] text-stone-500 px-2 py-0"
+                            className="h-10 min-w-0 text-sm text-stone-500"
                             placeholder="Jarak Pomah (e.g. 3 km)"
                             value={cul.nearby_distance || ""}
                             onChange={(e) => {
@@ -916,7 +915,7 @@ function AdminExplorePage() {
                           <Button 
                             variant="secondary" 
                             size="sm" 
-                            className="h-6 text-[10px] px-2"
+                            className="h-10 shrink-0 px-3 text-xs"
                             disabled={!cul.google_place_id}
                             onClick={() => {
                                if (cul.google_place_id) fetchDistance(cul.google_place_id, i, "culinary");
@@ -927,7 +926,7 @@ function AdminExplorePage() {
                         </div>
                       </div>
                       <Textarea 
-                        className="h-14 text-xs text-stone-650 resize-none p-2 mt-1"
+                        className="mt-1 h-20 resize-none p-2 text-sm text-stone-600"
                         placeholder="Deskripsi..."
                         value={cul.desc}
                         onChange={(e) => {
@@ -937,7 +936,7 @@ function AdminExplorePage() {
                         }}
                       />
                       <Input
-                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        className="mt-1 h-10 px-3 text-sm text-stone-500"
                         placeholder="Meta description (maks. 155 karakter)"
                         maxLength={155}
                         value={cul.metaDescription || ""}
@@ -982,26 +981,27 @@ function AdminExplorePage() {
                     </>
                   )}
                 </div>
-                
-                <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+
+                <div className="flex items-center justify-end gap-1 border-t border-stone-100 p-2">
                   {isEditing("culinary", i) ? (
-                    <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm text-emerald-600" onClick={() => setEditingItem(null)}>
-                      <Check className="h-3.5 w-3.5" />
+                    <Button variant="secondary" size="icon" className="h-10 w-10 text-emerald-600" aria-label="Selesai mengedit kuliner" onClick={() => setEditingItem(null)}>
+                      <Check className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm text-stone-600" onClick={() => setEditingItem({ type: "culinary", index: i })}>
-                      <Pencil className="h-3.5 w-3.5" />
+                    <Button variant="secondary" size="icon" className="h-10 w-10 text-stone-600" aria-label="Edit kuliner" onClick={() => setEditingItem({ type: "culinary", index: i })}>
+                      <Pencil className="h-4 w-4" />
                     </Button>
                   )}
                   <Button 
                     variant="destructive" 
                     size="icon" 
-                    className="h-7 w-7 shadow-sm"
+                    className="h-10 w-10"
+                    aria-label="Hapus kuliner"
                     onClick={() =>
                       setConfig({ ...config, culinary: config.culinary.filter((_, idx) => idx !== i) })
                     }
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </Card>
@@ -1010,55 +1010,45 @@ function AdminExplorePage() {
         </div>
 
         {/* Events & News Container */}
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 gap-8 @min-[32rem]/explore:grid-cols-2">
           
           {/* Event Mendatang — auto-generated (seo_generated_articles) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
-              <div className="flex items-center gap-3">
+          <div className="min-w-0 space-y-3">
+            <div className="flex flex-col gap-3 border-b border-stone-200 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-stone-900">Event Mendatang</h2>
-                <span className="text-[10px] text-stone-400 font-mono bg-stone-100 px-1.5 py-0.5 rounded">
+                <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] text-stone-400">
                   AI · {autoEvents.length}
                 </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 text-[10px] px-2 gap-1 text-emerald-700 hover:text-emerald-800"
+                  className="h-10 gap-1.5 px-3 text-xs text-emerald-700 hover:text-emerald-800"
                   disabled={generateEventMut.isPending}
                   onClick={() => setGenDialogOpen(true)}
                 >
                   {generateEventMut.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Sparkles className="h-3 w-3" />
+                    <Sparkles className="h-4 w-4" />
                   )}
                   {generateEventMut.isPending ? "Menarik..." : "Tarik Data via AI"}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 text-[10px] px-2 gap-1 text-stone-700"
+                  className="h-10 gap-1.5 px-3 text-xs text-stone-700"
                   onClick={() => {
                     setManualForm(emptyManual);
                     setManualDialogOpen(true);
                   }}
                 >
-                  <Plus className="h-3 w-3" />
+                  <Plus className="h-4 w-4" />
                   Buat Manual
                 </Button>
               </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
-                onClick={() => {
-                  setManualForm(emptyManual);
-                  setManualDialogOpen(true);
-                }}
-                title="Buat event manual"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
             </div>
 
             <p className="text-[10px] text-stone-400 leading-snug">
@@ -1091,8 +1081,8 @@ function AdminExplorePage() {
                       : startStr || endStr || "Tanggal menyusul");
 
                   return (
-                    <div key={ev.id} className="flex gap-4 items-start group">
-                      <div className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 relative">
+                    <div key={ev.id} className="flex items-start gap-3">
+                      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
                         {ev.image_url ? (
                           <img
                             src={ev.image_url}
@@ -1107,17 +1097,17 @@ function AdminExplorePage() {
                         )}
                       </div>
 
-                      <div className="flex-1 space-y-1.5 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-[8px] font-bold bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded border border-emerald-100 shrink-0">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span className="shrink-0 rounded border border-emerald-100 bg-emerald-50 px-1 py-0.5 text-[8px] font-bold text-emerald-700">
                               EVENT
                             </span>
-                            <h3 className="text-xs font-bold text-stone-900 truncate">
+                            <h3 className="min-w-0 text-xs font-bold text-stone-900">
                               {ev.title}
                             </h3>
                           </div>
-                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0 font-mono">
+                          <span className="w-fit rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">
                             {dateLabel}
                           </span>
                         </div>
@@ -1134,11 +1124,12 @@ function AdminExplorePage() {
                         </p>
                       </div>
 
-                      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex shrink-0 flex-col gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          className="h-10 w-10 text-red-400 hover:text-red-600 hover:bg-red-50"
+                          aria-label="Hapus event"
                           onClick={() => {
                             if (confirm(`Hapus event "${ev.title}"?`)) {
                               deleteEventMut.mutate(ev.id);
@@ -1157,13 +1148,14 @@ function AdminExplorePage() {
           </div>
 
           {/* Berita Lainnya */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+          <div className="min-w-0 space-y-3">
+            <div className="flex items-center justify-between gap-2 border-b border-stone-200 pb-2">
               <h2 className="text-sm font-bold text-stone-900">Berita Lainnya</h2>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 text-stone-400 hover:text-stone-900"
+                className="h-10 w-10 shrink-0 text-stone-500 hover:text-stone-900"
+                aria-label="Tambah berita"
                 onClick={() => {
                   setConfig({
                     ...config,
@@ -1178,13 +1170,13 @@ function AdminExplorePage() {
             
             <div className="space-y-3">
               {config.news.map((nw, i) => (
-                <div key={i} className="flex gap-4 items-start group">
+                <div key={i} className="flex items-start gap-3">
                   <div 
-                    className="h-16 w-16 bg-stone-100 rounded overflow-hidden shrink-0 border border-stone-200 cursor-pointer relative"
+                    className="relative h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded border border-stone-200 bg-stone-100"
                     onClick={() => setPickerState({ open: true, target: { type: "news", index: i } })}
                   >
                     {nw.image ? (
-                      <img src={getDisplayImageUrl(nw.image)} alt={nw.title} onError={(e) => handleImageError(e, "news")} className="w-full h-full object-cover" />
+                      <img src={getDisplayImageUrl(nw.image)} alt={nw.title} onError={(e) => handleImageError(e, "news")} className="absolute inset-0 h-full w-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[8px] text-stone-400">Img</div>
                     )}
@@ -1196,9 +1188,9 @@ function AdminExplorePage() {
                   <div className="flex-1 space-y-1.5 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       {isEditing("news", i) ? (
-                        <div className="flex gap-1.5 w-full">
+                        <div className="grid w-full min-w-0 grid-cols-1 gap-2">
                           <Input 
-                            className="h-6 flex-1 text-xs font-bold text-stone-900 px-1 py-0"
+                            className="h-10 min-w-0 text-sm font-bold text-stone-900"
                             placeholder="Judul Berita"
                             value={nw.title}
                             onChange={(e) => {
@@ -1208,7 +1200,7 @@ function AdminExplorePage() {
                             }}
                           />
                           <Input 
-                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
+                            className="h-10 min-w-0 text-sm text-stone-500"
                             placeholder="Label (e.g. BERITA)"
                             value={nw.label || ""}
                             onChange={(e) => {
@@ -1218,7 +1210,7 @@ function AdminExplorePage() {
                             }}
                           />
                           <Input 
-                            className="h-6 w-20 text-[10px] text-stone-500 px-1 py-0 shrink-0"
+                            className="h-10 min-w-0 text-sm text-stone-500"
                             placeholder="Tanggal"
                             value={nw.date}
                             onChange={(e) => {
@@ -1229,22 +1221,24 @@ function AdminExplorePage() {
                           />
                         </div>
                       ) : (
-                        <>
-                          <div className="flex items-center gap-1.5 truncate">
-                            <span className="text-[8px] font-bold bg-purple-50 text-purple-700 px-1 py-0.5 rounded border border-purple-100 shrink-0">
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                            <span className="shrink-0 rounded border border-purple-100 bg-purple-50 px-1 py-0.5 text-[8px] font-bold text-purple-700">
                               {nw.label || "BERITA"}
                             </span>
-                            <h3 className="text-xs font-bold text-stone-900 truncate">{nw.title}</h3>
+                            <h3 className="min-w-0 text-xs font-bold text-stone-900">{nw.title}</h3>
                           </div>
-                          <span className="text-[10px] text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">{nw.date}</span>
-                        </>
+                          {nw.date ? (
+                            <span className="w-fit rounded bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-500">{nw.date}</span>
+                          ) : null}
+                        </div>
                       )}
                     </div>
                     
                     {isEditing("news", i) ? (
-                      <div className="grid grid-cols-2 gap-1.5 mt-1">
+                      <div className="mt-1 grid grid-cols-1 gap-2">
                         <Input 
-                          className="h-5 text-[10px] px-1 py-0"
+                          className="h-10 min-w-0 text-sm"
                           placeholder="Lokasi"
                           value={nw.location || ""}
                           onChange={(e) => {
@@ -1254,7 +1248,7 @@ function AdminExplorePage() {
                           }}
                         />
                         <Input 
-                          className="h-5 text-[10px] px-1 py-0"
+                          className="h-10 min-w-0 text-sm"
                           placeholder="URL Artikel"
                           value={nw.url}
                           onChange={(e) => {
@@ -1275,7 +1269,7 @@ function AdminExplorePage() {
                     {isEditing("news", i) ? (
                       <>
                       <Textarea 
-                        className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
+                        className="mt-1 h-20 resize-none p-2 text-sm leading-snug text-stone-500"
                         placeholder="Deskripsi..."
                         value={nw.desc}
                         onChange={(e) => {
@@ -1285,7 +1279,7 @@ function AdminExplorePage() {
                         }}
                       />
                       <Input
-                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        className="mt-1 h-10 px-3 text-sm text-stone-500"
                         placeholder="Meta description (maks. 155 karakter)"
                         maxLength={155}
                         value={nw.metaDescription || ""}
@@ -1303,23 +1297,24 @@ function AdminExplorePage() {
                     )}
                   </div>
                   
-                  <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex shrink-0 flex-col gap-1">
                     {isEditing("news", i) ? (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => setEditingItem(null)}>
-                        <Check className="h-3 w-3" />
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-emerald-600" aria-label="Selesai mengedit berita" onClick={() => setEditingItem(null)}>
+                        <Check className="h-4 w-4" />
                       </Button>
                     ) : (
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-stone-400 hover:text-stone-600" onClick={() => setEditingItem({ type: "news", index: i })}>
-                        <Pencil className="h-3 w-3" />
+                      <Button variant="ghost" size="icon" className="h-10 w-10 text-stone-400 hover:text-stone-600" aria-label="Edit berita" onClick={() => setEditingItem({ type: "news", index: i })}>
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     )}
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50"
+                      className="h-10 w-10 text-red-400 hover:text-red-600 hover:bg-red-50"
+                      aria-label="Hapus berita"
                       onClick={() => setConfig({ ...config, news: config.news.filter((_, idx) => idx !== i) })}
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -1335,7 +1330,7 @@ function AdminExplorePage() {
 
       {/* Generate-event dialog */}
       <Dialog open={genDialogOpen} onOpenChange={setGenDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] flex-col overflow-y-auto sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-emerald-700" />
@@ -1353,7 +1348,7 @@ function AdminExplorePage() {
                 value={genTopic}
                 onChange={(e) => setGenTopic(e.target.value)}
                 placeholder="contoh: festival semarang 2026, event akhir pekan kota lama"
-                className="mt-1 text-sm"
+                className="mt-1 h-10 min-w-0 text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !generateEventMut.isPending && genTopic.trim()) {
                     generateEventMut.mutate(genTopic.trim());
@@ -1365,12 +1360,12 @@ function AdminExplorePage() {
               </p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setGenDialogOpen(false)}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={() => setGenDialogOpen(false)}>
               Batal
             </Button>
             <Button
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="h-10 w-full bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto"
               disabled={generateEventMut.isPending || !genTopic.trim()}
               onClick={() => generateEventMut.mutate(genTopic.trim())}
             >
@@ -1396,7 +1391,7 @@ function AdminExplorePage() {
         onClose={() => setManualPickerOpen(false)}
       />
       <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100%-1.5rem)] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarIcon className="h-4 w-4 text-emerald-700" />
@@ -1407,18 +1402,18 @@ function AdminExplorePage() {
               "Event Mendatang" sampai tanggal berakhir.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-2 space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto py-2 pr-1">
             <div>
               <Label className="text-xs font-semibold">Judul Event *</Label>
               <Input
                 value={manualForm.title}
                 onChange={(e) => setManualForm({ ...manualForm, title: e.target.value })}
                 placeholder="contoh: Semarang Night Carnival 2026"
-                className="mt-1 text-sm"
+                className="mt-1 h-10 min-w-0 text-sm"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="min-w-0">
                 <Label className="text-xs font-semibold">Tanggal Mulai</Label>
                 <Input
                   type="date"
@@ -1426,10 +1421,10 @@ function AdminExplorePage() {
                   onChange={(e) =>
                     setManualForm({ ...manualForm, event_start_date: e.target.value })
                   }
-                  className="mt-1 text-sm"
+                  className="mt-1 h-10 min-w-0 text-sm"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <Label className="text-xs font-semibold">Tanggal Berakhir</Label>
                 <Input
                   type="date"
@@ -1437,7 +1432,7 @@ function AdminExplorePage() {
                   onChange={(e) =>
                     setManualForm({ ...manualForm, event_end_date: e.target.value })
                   }
-                  className="mt-1 text-sm"
+                  className="mt-1 h-10 min-w-0 text-sm"
                 />
               </div>
             </div>
@@ -1449,7 +1444,7 @@ function AdminExplorePage() {
                   setManualForm({ ...manualForm, event_date_label: e.target.value })
                 }
                 placeholder="contoh: 15 Agustus 2026, Setiap Akhir Pekan"
-                className="mt-1 text-sm"
+                className="mt-1 h-10 min-w-0 text-sm"
               />
               <p className="text-[10px] text-stone-400 mt-1">
                 Kosongkan untuk auto-generate dari tanggal mulai/berakhir.
@@ -1463,7 +1458,7 @@ function AdminExplorePage() {
                   setManualForm({ ...manualForm, event_location: e.target.value })
                 }
                 placeholder="contoh: Kawasan Simpang Lima"
-                className="mt-1 text-sm"
+                className="mt-1 h-10 min-w-0 text-sm"
               />
             </div>
             <div>
@@ -1479,8 +1474,8 @@ function AdminExplorePage() {
             </div>
             <div>
               <Label className="text-xs font-semibold">Gambar</Label>
-              <div className="mt-1 flex gap-2 items-start">
-                <div className="h-16 w-16 bg-stone-100 rounded border border-stone-200 overflow-hidden shrink-0">
+              <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100">
                   {manualForm.image_url ? (
                     <img
                       src={getDisplayImageUrl(manualForm.image_url)}
@@ -1494,20 +1489,20 @@ function AdminExplorePage() {
                     </div>
                   )}
                 </div>
-                <div className="flex-1 space-y-1">
+                <div className="min-w-0 flex-1 space-y-2">
                   <Input
                     value={manualForm.image_url}
                     onChange={(e) =>
                       setManualForm({ ...manualForm, image_url: e.target.value })
                     }
                     placeholder="URL gambar atau pilih dari Media"
-                    className="text-sm h-9"
+                    className="h-10 min-w-0 text-sm"
                   />
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs gap-1"
+                    className="h-10 gap-1 px-3 text-xs"
                     onClick={() => setManualPickerOpen(true)}
                   >
                     <Pencil className="h-3 w-3" />
@@ -1517,12 +1512,12 @@ function AdminExplorePage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={() => setManualDialogOpen(false)}>
               Batal
             </Button>
             <Button
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              className="h-10 w-full bg-emerald-700 text-white hover:bg-emerald-800 sm:w-auto"
               disabled={createManualEventMut.isPending || !manualForm.title.trim()}
               onClick={() => createManualEventMut.mutate(manualForm)}
             >
@@ -1539,6 +1534,7 @@ function AdminExplorePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

@@ -230,7 +230,7 @@ export function MediaPicker({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[80vh] max-w-4xl flex-col gap-0 p-0">
+      <DialogContent className="flex max-h-[min(85dvh,900px)] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
           <DialogTitle>Pilih dari Media Library</DialogTitle>
           <DialogDescription>
@@ -248,13 +248,13 @@ export function MediaPicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari nama file…"
-              className="w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-10 w-full rounded-md border border-input bg-background py-1.5 pl-8 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-muted-foreground"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -277,7 +277,7 @@ export function MediaPicker({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {visible.map((asset) => (
                 <Thumb
                   key={asset.id}
@@ -297,8 +297,8 @@ export function MediaPicker({
             {selected ? " · 1 dipilih" : ""}
           </span>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Batal</Button>
-            <Button disabled={!selected} onClick={confirm}>
+            <Button variant="outline" className="h-10" onClick={onClose}>Batal</Button>
+            <Button className="h-10" disabled={!selected} onClick={confirm}>
               Pilih
             </Button>
           </div>

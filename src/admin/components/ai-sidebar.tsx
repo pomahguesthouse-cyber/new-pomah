@@ -4,13 +4,13 @@ import { Card } from "@/components/ui/card";
 
 export function AiSidebar() {
   return (
-    <div className="w-80 shrink-0 space-y-6">
+    <div className="w-full min-w-0 space-y-6 @min-[62rem]/explore:w-80 @min-[62rem]/explore:shrink-0">
       <div className="flex items-center justify-between pb-2 border-b border-border/50">
         <h3 className="flex items-center gap-2 font-semibold">
           <Sparkles className="h-4 w-4 text-purple-600" />
           AI Assistant
         </h3>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+        <Button variant="ghost" size="icon" className="h-10 w-10 text-muted-foreground" aria-label="Tutup asisten">
           <ChevronsRight className="h-4 w-4" />
         </Button>
       </div>
@@ -62,7 +62,7 @@ export function AiSidebar() {
         <p className="text-xs text-purple-700/80 leading-relaxed mb-4">
           Tambahkan 2-3 destinasi lagi dengan keyword 'dekat UNNES' untuk meningkatkan peluang ranking lokal.
         </p>
-        <Button size="sm" variant="outline" className="w-full gap-2 text-purple-700 hover:text-purple-800 hover:bg-purple-100/50 border-purple-200">
+        <Button size="sm" variant="outline" className="h-10 w-full gap-2 border-purple-200 text-purple-700 hover:bg-purple-100/50 hover:text-purple-800">
           Terapkan Saran
           <Sparkles className="h-3 w-3" />
         </Button>
@@ -84,7 +84,7 @@ export function AiSidebar() {
             </p>
             <p className="text-[10px] text-muted-foreground mt-1">2 jam yang lalu</p>
           </div>
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground">
+          <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-muted-foreground" aria-label="Salin">
             <Copy className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -97,7 +97,7 @@ export function AiSidebar() {
 
 function ActionItem({ icon: Icon, title, desc }: { icon: any; title: string; desc: string }) {
   return (
-    <div className="group flex items-center gap-3 rounded-lg border border-transparent bg-white p-2.5 shadow-sm transition-all hover:border-purple-200 hover:shadow-md cursor-pointer">
+    <div className="group flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-white p-2.5 shadow-sm transition-all hover:border-purple-200 hover:shadow-md cursor-pointer">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-purple-50 text-purple-600 group-hover:bg-purple-100">
         <Icon className="h-4 w-4" />
       </div>
