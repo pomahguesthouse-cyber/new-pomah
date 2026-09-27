@@ -71,6 +71,21 @@ assert.equal(
 );
 assert.equal(location("https://pomahguesthouse.com/explore"), null);
 assert.equal(location("https://pomahguesthouse.com/"), null);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/")?.location,
+  "https://pomahguesthouse.com/explore",
+);
+assert.match(location("https://pomahguesthouse.com/explore/")?.reason ?? "", /trailing-slash/);
+assert.equal(
+  location("https://www.pomahguesthouse.com/book/")?.location,
+  "https://pomahguesthouse.com/book",
+);
+assert.equal(
+  location("http://localhost:5173/explore/")?.location,
+  "http://localhost:5173/explore",
+);
+assert.equal(location("https://pomahguesthouse.com/api/public/hook/"), null);
+assert.equal(location("http://localhost:5173/api/cron/"), null);
 
 assert.equal(location("https://www.pomahguesthouse.com/api/public/whatsapp/webhook"), null);
 assert.equal(location("http://pomahguesthouse.com/api/evolution"), null);

@@ -104,9 +104,12 @@ function seoRedirectResponse(location: string, reason: string): Response {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Host canonicalization (www / http → https://pomahguesthouse.com) and
-    // legacy indexed paths. /api is skipped so webhooks are never redirected.
-    // localhost and *.lovable.app are skipped for host changes.
+    // Host canonicalization (www / http → https://pomahguesthouse.com),
+    // trailing-slash 301s, and legacy indexed paths. /api is skipped so
+    // webhooks are never redirected. localhost and *.lovable.app are skipped
+    // for host changes; a trailing slash on those hosts still drops to the
+    // non-slash path. http://www is one hop when this worker sees the request.
+    // A platform edge that upgrades http to https://www first is outside this file.
     try {
       const seoRedirect = await resolveSeoRedirect(request);
       if (seoRedirect) return seoRedirectResponse(seoRedirect.location, seoRedirect.reason);

@@ -159,12 +159,14 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
   } catch {
     return null;
   }
-  const pathname = normalizePathname(url.pathname);
-  if (isApiPath(pathname)) return null;
+  const rawPath = url.pathname || "/";
+  const pathname = normalizePathname(rawPath);
+  if (isApiPath(rawPath) || isApiPath(pathname)) return null;
 
+  const hasTrailingSlash = rawPath.length > 1 && rawPath.endsWith("/");
   const kind = legacyKindForPath(pathname);
   const canonicalizeHost = shouldCanonicalizeHost(url);
-  if (!kind && !canonicalizeHost) return null;
+  if (!kind && !canonicalizeHost && !hasTrailingSlash) return null;
 
   let path = pathname;
   if (kind === "explore-index") path = "/explore";
@@ -182,16 +184,19 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
     ? `${canonicalUrlForPath(path)}${search}`
     : kind
       ? `${path}${search}`
-      : null;
+      : hasTrailingSlash
+        ? `${url.origin}${pathname}${search}`
+        : null;
   if (!location) return null;
 
-  const already =
-    location === url.href ||
-    location === `${url.origin}${url.pathname}${url.search}` ||
-    location === `${url.origin}${pathname}${search}`;
-  if (already) return null;
+  const current = `${url.origin}${rawPath}${search}`;
+  if (location === url.href || location === current || location === `${rawPath}${search}`) return null;
 
-  const reason = [canonicalizeHost ? "host-canonical" : null, kind ? "legacy-url" : null]
+  const reason = [
+    canonicalizeHost ? "host-canonical" : null,
+    hasTrailingSlash ? "trailing-slash" : null,
+    kind ? "legacy-url" : null,
+  ]
     .filter(Boolean)
     .join("+");
   return { location, reason };
