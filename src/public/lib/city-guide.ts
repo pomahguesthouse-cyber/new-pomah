@@ -8,14 +8,19 @@
  */
 import { isPublicExploreEventVisible } from "@/lib/explore-event-date";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
-import { placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
+import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
+import { isRetiredExploreSlug, placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export type CityGuideCategory = "destinasi" | "kuliner" | "event" | "berita" | "tips";
+
+export const CITY_GUIDE_META_MAX = 155;
 
 export type CityGuidePlace = {
   slug: string;
   name: string;
   description: string;
+  /** Short search snippet. Empty means the page still uses `description`. */
+  metaDescription: string;
   imageUrl: string | null;
   category: CityGuideCategory;
   location: string | null;
@@ -28,6 +33,7 @@ export type CityGuidePlace = {
 export type CityGuideItemSource = {
   title?: string | null;
   description?: string | null;
+  meta_description?: string | null;
   image_url?: string | null;
   category?: string | null;
   is_published?: boolean | null;
@@ -44,6 +50,7 @@ export type CityGuideSource = {
   destinations?: Array<{
     name?: string | null;
     desc?: string | null;
+    metaDescription?: string | null;
     image?: string | null;
     rating?: string | null;
     address?: string | null;
@@ -52,6 +59,7 @@ export type CityGuideSource = {
   culinary?: Array<{
     name?: string | null;
     desc?: string | null;
+    metaDescription?: string | null;
     image?: string | null;
     rating?: string | null;
     address?: string | null;
@@ -61,6 +69,7 @@ export type CityGuideSource = {
     title?: string | null;
     date?: string | null;
     desc?: string | null;
+    metaDescription?: string | null;
     image?: string | null;
     location?: string | null;
   }> | null;
@@ -68,6 +77,7 @@ export type CityGuideSource = {
     title?: string | null;
     date?: string | null;
     desc?: string | null;
+    metaDescription?: string | null;
     image?: string | null;
     location?: string | null;
   }> | null;
@@ -94,6 +104,15 @@ function laterStamp(a: string | null, b: string | null): string | null {
   if (Number.isNaN(at)) return b;
   if (Number.isNaN(bt)) return a;
   return at >= bt ? a : b;
+}
+
+/** Search snippet: a filled meta description, capped at 155 characters, otherwise the page description. */
+export function cityGuideMetaContent(
+  place: Pick<CityGuidePlace, "name" | "description" | "metaDescription">,
+): string {
+  const meta = text(place.metaDescription);
+  if (meta) return meta.slice(0, CITY_GUIDE_META_MAX);
+  return text(place.description) || `${place.name} di Semarang. Panduan tamu Pomah Guesthouse.`;
 }
 
 function categoryOfItem(raw: string | null | undefined): CityGuideCategory {
@@ -127,6 +146,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     pushDraft(drafts, {
       name,
       description: text(row.desc),
+      metaDescription: text(row.metaDescription),
       imageUrl: orNull(row.image),
       category: "destinasi",
       location: orNull(row.address) || orNull(row.nearby_distance),
@@ -143,6 +163,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     pushDraft(drafts, {
       name,
       description: text(row.desc),
+      metaDescription: text(row.metaDescription),
       imageUrl: orNull(row.image),
       category: "kuliner",
       location: orNull(row.address),
@@ -160,6 +181,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     pushDraft(drafts, {
       name,
       description: text(row.desc),
+      metaDescription: text(row.metaDescription),
       imageUrl: orNull(row.image),
       category: "event",
       location: orNull(row.location),
@@ -176,6 +198,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     pushDraft(drafts, {
       name,
       description: text(row.desc),
+      metaDescription: text(row.metaDescription),
       imageUrl: orNull(row.image),
       category: "berita",
       location: orNull(row.location),
@@ -197,6 +220,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     pushDraft(drafts, {
       name,
       description: text(row.description),
+      metaDescription: text(row.meta_description),
       imageUrl: orNull(row.image_url),
       category,
       location: orNull(row.location_text),
@@ -217,6 +241,7 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
     merged.set(draft.slugBase, {
       ...existing,
       description: existing.description || draft.description,
+      metaDescription: existing.metaDescription || draft.metaDescription,
       imageUrl: existing.imageUrl || draft.imageUrl,
       location: existing.location || draft.location,
       rating: existing.rating || draft.rating,
@@ -229,14 +254,30 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
   const used = new Set<string>();
   const places: CityGuidePlace[] = [];
   for (const draft of merged.values()) {
-    let slug = draft.slugBase;
-    let n = 2;
-    while (used.has(slug)) slug = `${draft.slugBase}-${n++}`;
+    const article = cityGuideArticleForSlug(draft.name) ?? cityGuideArticleForSlug(draft.slugBase);
+    const slug = article?.canonicalSlug || draft.slugBase;
+    if (used.has(slug)) {
+      const existing = places.find((place) => place.slug === slug);
+      if (existing) {
+        existing.description = existing.description || draft.description;
+        existing.metaDescription = existing.metaDescription || draft.metaDescription;
+        existing.imageUrl = existing.imageUrl || draft.imageUrl;
+        existing.location = existing.location || draft.location;
+        existing.rating = existing.rating || draft.rating;
+        existing.dateText = existing.dateText || draft.dateText;
+        existing.updatedAt = laterStamp(existing.updatedAt, draft.updatedAt);
+        existing.createdAt = existing.createdAt || draft.createdAt;
+      }
+      continue;
+    }
     used.add(slug);
+    if (isRetiredExploreSlug(slug)) continue;
+    if (!article && isRetiredExploreSlug(draft.slugBase)) continue;
     places.push({
       slug,
       name: draft.name,
       description: draft.description,
+      metaDescription: draft.metaDescription,
       imageUrl: draft.imageUrl,
       category: draft.category,
       location: draft.location,

@@ -14,6 +14,7 @@ import {
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { DatePickerID } from "@/components/ui/date-picker";
+import { publicCopy } from "@/public/lib/public-copy";
 import {
   getSeoLandingPageBySlug,
   ensureResponsiveStyles,
@@ -33,6 +34,11 @@ import {
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/public/content/approved-seo";
+import { UnnesLanding } from "@/public/components/unnes-landing";
+import { rewritePublicHref } from "@/public/lib/public-href";
+import { buildStorageImageUrl } from "@/lib/storage-image";
+import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -55,13 +61,16 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
+    const approved = p.slug === APPROVED_LP.slug;
+    const title = approved ? APPROVED_LP.title : p.meta_title || p.title;
+    const description = approved ? APPROVED_LP.meta : p.meta_description || "";
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
     return {
       meta: [
-        { title: p.meta_title || p.title },
-        { name: "description", content: p.meta_description || "" },
-        { property: "og:title", content: p.meta_title || p.title },
-        { property: "og:description", content: p.meta_description || "" },
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
         ...canonical.meta,
         ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
       ],
@@ -74,8 +83,24 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
       page: SeoLandingPage | null;
     };
     if (!result.page) throw notFound();
+    const patched = patchUnnesDistance(result.page) as SeoLandingPage;
+    if (patched.homepage_config) {
+      patched.homepage_config = applyApprovedHomepageSeo(patched.homepage_config);
+    }
+    const page =
+      patched.slug === APPROVED_LP.slug
+        ? {
+            ...patched,
+            title: APPROVED_LP.title,
+            meta_title: APPROVED_LP.title,
+            meta_description: APPROVED_LP.meta,
+            hero_headline: APPROVED_LP.h1,
+            hero_subheadline: APPROVED_LP.cardIntro,
+            target_keyword: null,
+          }
+        : patched;
     const siteData = await getPublicSiteData();
-    return { ...result, property: (siteData as { property?: unknown } | null)?.property };
+    return { page, property: (siteData as { property?: unknown } | null)?.property };
   },
 
   component: LandingPage,
@@ -147,7 +172,7 @@ function LandingPage() {
       });
     };
     if (page.custom_head) appendHtml(page.custom_head);
-    if (page.json_ld_enabled && page.custom_json_ld?.trim()) {
+    if (page.slug !== APPROVED_LP.slug && page.json_ld_enabled && page.custom_json_ld?.trim()) {
       const sc = document.createElement("script");
       sc.type = "application/ld+json";
       sc.textContent = page.custom_json_ld;
@@ -159,7 +184,12 @@ function LandingPage() {
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      {hasSections ? (
+      {page.slug === APPROVED_LP.slug ? (
+        <>
+          <LPNav ctaUrl="/book" ctaText="Pesan kamar" />
+          <UnnesLanding />
+        </>
+      ) : hasSections ? (
         isSplit ? (
           <>
             <div className="hidden md:flex md:flex-col space-y-0">
@@ -205,7 +235,7 @@ function LandingPage() {
               {page.hero_subheadline && (
                 <p className="mx-auto mt-6 max-w-xl text-lg text-teal-100">{page.hero_subheadline}</p>
               )}
-              <a href={page.hero_cta_url}
+              <a href={rewritePublicHref(page.hero_cta_url)}
                 className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
                 {page.hero_cta_text}
               </a>
@@ -215,14 +245,14 @@ function LandingPage() {
           {page.body_content && (
             <section className="mx-auto max-w-3xl px-6 py-16">
               <div className="prose prose-stone prose-headings:font-serif prose-a:text-teal-700 max-w-none"
-                dangerouslySetInnerHTML={{ __html: page.body_content }} />
+                dangerouslySetInnerHTML={{ __html: page.body_content.replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
             </section>
           )}
 
           <section className="border-t border-stone-200 bg-white px-6 py-14 text-center">
             <p className="font-serif text-2xl font-bold text-teal-700">Siap Menginap?</p>
-            <p className="mt-2 text-sm text-stone-500">Pomah Guesthouse — Gunungpati, Semarang</p>
-            <a href={page.hero_cta_url}
+            <p className="mt-2 text-sm text-stone-500">{POMAH_NAP_LINE}</p>
+            <a href={rewritePublicHref(page.hero_cta_url)}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-700 px-8 py-3 text-sm font-bold text-white shadow transition hover:bg-teal-800">
               {page.hero_cta_text}
             </a>
@@ -230,7 +260,7 @@ function LandingPage() {
         </>
       )}
 
-      <LPFooter />
+      <LPFooter phone={whatsappNumber} tagline={page.slug === APPROVED_LP.slug ? APPROVED_LP.tagline : undefined} />
 
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
@@ -340,10 +370,10 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
         </a>
         <div className="hidden items-center gap-6 md:flex">
           {links.map((l, i) => (
-            <a key={i} href={l.url} className="text-sm text-stone-500 transition hover:text-stone-900">{l.label}</a>
+            <a key={i} href={rewritePublicHref(l.url)} className="text-sm text-stone-500 transition hover:text-stone-900">{l.label}</a>
           ))}
           {s.cta_text && (
-            <a href={s.cta_url ?? "/book"}
+            <a href={rewritePublicHref(s.cta_url ?? "/book")}
               className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
               {s.cta_text}
             </a>
@@ -356,10 +386,10 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
       {open && (
         <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
           {links.map((l, i) => (
-            <a key={i} href={l.url} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
+            <a key={i} href={rewritePublicHref(l.url)} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
           ))}
           {s.cta_text && (
-            <a href={s.cta_url ?? "/book"} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+            <a href={rewritePublicHref(s.cta_url ?? "/book")} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
               {s.cta_text}
             </a>
           )}
@@ -399,7 +429,7 @@ function SliderSection({ s }: { s: LPSliderSection }) {
           <video src={active.videoUrl} autoPlay muted loop playsInline
             className="absolute inset-0 h-full w-full object-cover" />
         ) : active.imageUrl ? (
-          <img src={active.imageUrl} alt={active.heading} loading="lazy"
+          <img src={buildStorageImageUrl(active.imageUrl, { width: 1200, quality: 60 })} width={1200} height={675} alt={active.heading || "Pomah Guesthouse"} loading="lazy"
             className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
@@ -465,7 +495,7 @@ function ButtonSection({ s }: { s: LPButtonSection }) {
   return (
     <section className="px-6 py-10">
       <div className={`mx-auto flex max-w-6xl ${justify}`}>
-        <a href={s.url}
+        <a href={rewritePublicHref(s.url)}
           className={`inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold shadow-sm transition ${outline ? outlineCls : solidCls}`}>
           {s.text}
         </a>
@@ -498,7 +528,7 @@ function HeroSection({ s }: { s: LPHeroSection }) {
           <p className="mx-auto mt-6 max-w-xl text-lg text-white/90">{s.subheadline}</p>
         )}
         {s.cta_text && (
-          <a href={s.cta_url ?? "/book"}
+          <a href={rewritePublicHref(s.cta_url ?? "/book")}
             className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
             {s.cta_text}
           </a>
@@ -624,7 +654,7 @@ function CtaBannerSection({ s }: { s: LPCtaBannerSection }) {
       <div className="mx-auto max-w-2xl">
         <h2 className="font-serif text-3xl font-bold">{s.headline}</h2>
         {s.subheadline && <p className="mt-3 text-base opacity-80">{s.subheadline}</p>}
-        <a href={s.cta_url}
+        <a href={rewritePublicHref(s.cta_url)}
           className={`mt-8 inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold shadow-lg transition ${btnCls}`}>
           {s.cta_text}
         </a>
@@ -844,7 +874,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
       <div className="mx-auto max-w-6xl px-6">
         {(s.title || s.subheading) && (
           <div className="mb-2 text-center">
-            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>}
+            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{publicCopy(s.title)}</h2>}
             {s.subheading && <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">{s.subheading}</p>}
           </div>
         )}
@@ -866,7 +896,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                     <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                         {rt.hero_image_url
-                          ? <img src={rt.hero_image_url} alt={rt.name} className="absolute inset-0 h-full w-full object-cover" />
+                          ? <img src={buildStorageImageUrl(rt.hero_image_url, { width: 640, quality: 60 })} width={640} height={480} alt={rt.name} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
                           : <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">Foto Kamar</div>}
                       </div>
                       <div className="p-6">
@@ -927,6 +957,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
 
 /* ─── Nav ───────────────────────────────────────────────────────── */
 function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
+  const ctaHref = rewritePublicHref(ctaUrl);
   const [open, setOpen] = useState(false);
   return (
     <nav className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm">
@@ -938,7 +969,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
         <div className="hidden items-center gap-6 md:flex">
           <Link to="/" className="text-sm text-stone-500 transition hover:text-stone-900">Beranda</Link>
           <Link to="/" hash="rooms" className="text-sm text-stone-500 transition hover:text-stone-900">Kamar</Link>
-          <a href={ctaUrl}
+          <a href={ctaHref}
             className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
             {ctaText || "Pesan Sekarang"}
           </a>
@@ -951,7 +982,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
         <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
           <Link to="/" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Beranda</Link>
           <Link to="/" hash="rooms" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Kamar</Link>
-          <a href={ctaUrl} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+          <a href={ctaHref} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
             {ctaText || "Pesan Sekarang"}
           </a>
         </div>
@@ -961,21 +992,25 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
 }
 
 /* ─── Footer ────────────────────────────────────────────────────── */
-function LPFooter() {
+function LPFooter({ phone, tagline }: { phone?: string; tagline?: string }) {
   return (
     <footer className="border-t border-stone-200 bg-teal-800 text-teal-100">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
             <p className="font-serif text-xl font-bold text-white">Pomah <span className="font-light">Guesthouse</span></p>
-            <p className="mt-2 text-sm text-teal-200/80">Penginapan nyaman & terjangkau di Gunungpati, Semarang.</p>
+            {tagline && <p className="mt-2 text-sm text-teal-100">{tagline}</p>}
+            <p className="mt-2 text-sm text-teal-200/80">
+              {POMAH_NAP_LINE}
+              {phone ? ` · ${formatSitePhone(phone)}` : ""}
+            </p>
           </div>
           <div>
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Quick Links</p>
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Tautan</p>
             <ul className="space-y-2 text-sm">
               {[
                 { href: "/", label: "Beranda" },
-                { href: "/rooms", label: "Kamar" },
+                { href: "/#rooms", label: "Kamar" },
                 { href: "/book", label: "Reservasi" },
               ].map((l) => (
                 <li key={l.href}><a href={l.href} className="transition hover:text-white">{l.label}</a></li>
@@ -984,7 +1019,7 @@ function LPFooter() {
           </div>
           <div>
             <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Kontak</p>
-            <p className="text-sm text-teal-200/80">Gunungpati, Semarang, Jawa Tengah</p>
+            <p className="text-sm text-teal-200/80">{POMAH_NAP_LINE}</p>
           </div>
         </div>
         <div className="mt-10 border-t border-teal-700/60 pt-6 text-center text-xs text-teal-300/70">

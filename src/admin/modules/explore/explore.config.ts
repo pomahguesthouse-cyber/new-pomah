@@ -10,6 +10,8 @@ export type ExploreConfig = {
   destinations: {
     name: string;
     desc: string;
+    /** Search snippet, 155 characters or fewer. Empty keeps the page description. */
+    metaDescription?: string;
     image: string;
     rating: string;
     reviewCount?: string;
@@ -20,6 +22,7 @@ export type ExploreConfig = {
   culinary: {
     name: string;
     desc: string;
+    metaDescription?: string;
     image: string;
     category: string;
     rating?: string;
@@ -33,6 +36,7 @@ export type ExploreConfig = {
     date: string;
     location: string;
     desc: string;
+    metaDescription?: string;
     image: string;
     label?: string;
   }[];
@@ -40,6 +44,7 @@ export type ExploreConfig = {
     title: string;
     date: string;
     desc: string;
+    metaDescription?: string;
     url: string;
     image: string;
     label?: string;

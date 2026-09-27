@@ -84,7 +84,7 @@ function makeDefault(type: LPSection["type"]): LPSection {
     case "testimonials":
       return { id, type: "testimonials", title: "Kata Tamu Kami", items: [{ name: "Tamu", text: "Penginapan yang nyaman dan bersih, pelayanan ramah." }] };
     case "header":
-      return { id, type: "header", logo_url: "", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/rooms" }] };
+      return { id, type: "header", logo_url: "", brand: "Pomah Guesthouse", sticky: true, cta_text: "Pesan Sekarang", cta_url: "/book", links: [{ label: "Beranda", url: "/" }, { label: "Kamar", url: "/#rooms" }] };
     case "room_slider":
       return { id, type: "room_slider", title: "Our Room", subheading: "Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar", cardsPerView: 3, autoplay: true, slideMs: 4000 };
     case "datepicker":

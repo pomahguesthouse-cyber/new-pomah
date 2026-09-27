@@ -4,6 +4,11 @@
  */
 import assert from "node:assert/strict";
 import {
+  applyApprovedHomepageSeo,
+  applyGuideCardIntros,
+  patchUnnesDistance,
+} from "../src/public/content/approved-seo";
+import {
   assertNoSecretSettings,
   findSecretPaths,
   toPublicSettings,
@@ -143,5 +148,24 @@ assertNoSecretSettings(embedded);
 
 assert.equal(toPublicSettings(null), null);
 assert.equal(toPublicSettings("not-a-row"), null);
+
+const seoPatched = toPublicSettings({
+  ...leakedRow,
+  homepage_config: applyApprovedHomepageSeo(
+    patchUnnesDistance({
+      ...((leakedRow.homepage_config ?? {}) as object),
+      lokasi: {
+        nearby: [{ name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" }],
+      },
+    }),
+  ),
+  explore_config: applyGuideCardIntros(leakedRow.explore_config),
+});
+assert.ok(seoPatched);
+assert.equal(findSecretPaths(seoPatched).length, 0);
+assert.equal(JSON.stringify(seoPatched).includes(googleKey), false);
+const patchedExplore = seoPatched.explore_config as { gemini_api_key?: string; destinations: { name: string }[] };
+assert.equal(patchedExplore.gemini_api_key, undefined);
+assert.equal(patchedExplore.destinations[0].name, "Lawang Sewu");
 
 console.log("public settings guard ok");

@@ -47,6 +47,9 @@ import {
 } from "@/components/ui/dialog";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
+import { publicRoomBlurb } from "@/public/content/approved-seo";
+import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { roomPageGraph } from "@/public/lib/structured-data";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -101,7 +104,9 @@ export const Route = createFileRoute("/rooms/$slug")({
             description: seo.description,
             twitterTitle: seo.twitterTitle,
             twitterDescription: seo.twitterDescription,
-            ogImageUrl: seo.ogImageUrl || room.hero_image_url,
+            ogImageUrl: seo.ogImageUrl
+              ? buildStorageImageUrl(seo.ogImageUrl, { width: 1200, quality: 60 })
+              : "",
             robots: "index, follow",
           },
           { title: seo.title, description: seo.description },
@@ -323,16 +328,22 @@ function RoomBookingPage() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <PublicNav property={data?.property} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(roomPageGraph(displayRoom ?? room)),
+        }}
+      />
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">
           <Link to="/" className="flex items-center gap-1 hover:text-amber-700">
             <Home className="h-3.5 w-3.5" />
-            Home
+            Beranda
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <Link to="/" hash="rooms" className="hover:text-amber-700">
-            Rooms
+            Kamar
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="font-medium text-stone-700">{room.name}</span>
@@ -345,8 +356,15 @@ function RoomBookingPage() {
               <div className="aspect-[16/10] w-full bg-stone-100">
                 {gallery[active] ? (
                   <img
-                    src={gallery[active]}
+                    src={buildStorageImageUrl(gallery[active], { width: 960, quality: 60 })}
+                    srcSet={buildStorageImageSrcSet(gallery[active], [480, 768, 960], { quality: 60 })}
+                    sizes="(max-width: 1024px) 100vw, 720px"
+                    width={960}
+                    height={600}
                     alt={room.name}
+                    loading={active === 0 ? "eager" : "lazy"}
+                    fetchPriority={active === 0 ? "high" : "low"}
+                    decoding="async"
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -367,7 +385,15 @@ function RoomBookingPage() {
                       i === active ? "border-amber-600" : "border-transparent opacity-80",
                     )}
                   >
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={buildStorageImageUrl(src, { width: 240, quality: 60 })}
+                      width={112}
+                      height={80}
+                      alt={`Foto ${room.name} di Pomah Guesthouse, gambar ${i + 1}`}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -376,8 +402,10 @@ function RoomBookingPage() {
             <h1 className="mt-8 text-3xl font-bold tracking-tight">
               {resolveRoomPublicSeo(room).h1}
             </h1>
-            {room.description && (
-              <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">{room.description}</p>
+            {publicRoomBlurb(room.slug, room.description) && (
+              <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">
+                {publicRoomBlurb(room.slug, room.description)}
+              </p>
             )}
 
             {tour && tour.scenes.length > 0 && (
@@ -430,7 +458,7 @@ function RoomBookingPage() {
                 <Spec
                   icon={<Users className="h-4 w-4" />}
                   label="Max Tamu"
-                  value={`${capacity} persons`}
+                  value={`${capacity} orang`}
                 />
                 <Spec
                   icon={<Maximize className="h-4 w-4" />}
@@ -440,7 +468,7 @@ function RoomBookingPage() {
                 <Spec
                   icon={<BedDouble className="h-4 w-4" />}
                   label="Kamar Tersedia"
-                  value={`${roomCount} rooms`}
+                  value={`${roomCount} kamar`}
                 />
                 {room.floor_info && (
                   <Spec
@@ -509,7 +537,7 @@ function RoomBookingPage() {
                   }}
                   className="w-full rounded-lg bg-rose-400 py-3 text-sm font-semibold text-white transition hover:bg-rose-500"
                 >
-                  Book This Room
+                  Pesan Kamar Ini
                 </button>
               </div>
 
@@ -517,7 +545,7 @@ function RoomBookingPage() {
                 <Line label="Check-in" value="Mulai 14:00" />
                 <Line label="Check-out" value="Sampai 12:00" />
                 <Line
-                  label="Availability"
+                  label="Ketersediaan"
                   value={availability}
                   highlight={availability === "Tersedia" || availability === "Penuh"}
                   bad={availability === "Penuh"}
@@ -544,7 +572,15 @@ function RoomBookingPage() {
                   >
                     <div className="aspect-[4/3] bg-stone-100">
                       {cover ? (
-                        <img src={cover} alt={o.name} className="h-full w-full object-cover" />
+                        <img
+                          src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
+                          width={640}
+                          height={480}
+                          alt={o.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
                       ) : null}
                     </div>
                     <div className="p-5">
@@ -554,8 +590,10 @@ function RoomBookingPage() {
                           {formatIDR(Number(o.base_rate), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
                         </span>
                       </div>
-                      {o.description && (
-                        <p className="mt-2 line-clamp-2 text-sm text-stone-500">{o.description}</p>
+                      {publicRoomBlurb(o.slug, o.description) && (
+                        <p className="mt-2 line-clamp-2 text-sm text-stone-500">
+                          {publicRoomBlurb(o.slug, o.description)}
+                        </p>
                       )}
                       <span className="mt-3 inline-block rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-amber-800">
                         Lihat & Pesan
@@ -569,7 +607,7 @@ function RoomBookingPage() {
         )}
       </main>
 
-      <PublicFooter property={data?.property} />
+      <PublicFooter property={data?.property} rooms={[room, ...others]} />
 
       <BookingDialog
         open={dialogOpen}

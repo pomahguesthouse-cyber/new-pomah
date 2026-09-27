@@ -3,15 +3,43 @@
  *
  * Title / description / H1 / Twitter cards on `/`, `/explore`, and
  * `/rooms/:slug` must come from saved fields (homepage_config.seo,
- * explore_config.seo, room_types.seo_*), using the seeded copy as
- * fallback. Do not invent new marketing strings here.
+ * explore_config.seo, room_types.seo_*), using the approved copy as
+ * fallback. A later edit in admin is kept. Known older defaults are
+ * replaced so the approved sentences show before the SQL file is run.
  */
+import {
+  APPROVED_HOME,
+  approvedRoomSeo,
+  isLegacyHomepageH1,
+  isLegacyHomepageMeta,
+  isLegacyHomepageTitle,
+} from "@/public/content/approved-seo";
+
+/** Visible homepage H1. Stored configs that still have an older default use this. */
+export const HOMEPAGE_H1 = APPROVED_HOME.h1;
+
+export function resolveHomepageH1(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || isLegacyHomepageH1(value)) return HOMEPAGE_H1;
+  return value;
+}
+
+export function resolveHomepageTitle(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || isLegacyHomepageTitle(value)) return HOME_SEO.title;
+  return value;
+}
+
+export function resolveHomepageMeta(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || isLegacyHomepageMeta(value)) return HOME_SEO.description;
+  return value;
+}
 
 export const HOME_SEO = {
-  h1: "Penginapan Dekat UNNES Semarang",
-  title: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
-  description:
-    "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+  h1: HOMEPAGE_H1,
+  title: APPROVED_HOME.title,
+  description: APPROVED_HOME.meta,
 } as const;
 
 export const EXPLORE_SEO = {
@@ -34,6 +62,20 @@ export type PublicSeoMetaTag =
   | { title: string }
   | { name: string; content: string }
   | { property: string; content: string };
+
+/** Unsplash and similar placeholders are not the property's own photos. */
+export function isStockImageUrl(url: string | null | undefined): boolean {
+  return /images\.unsplash\.com|images\.pexels\.com|source\.unsplash\.com/i.test(url ?? "");
+}
+
+/** First candidate that is a real photo, skipping empty and stock URLs. */
+export function preferredOgImage(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (value && !isStockImageUrl(value)) return value;
+  }
+  return "";
+}
 
 function firstNonEmpty(...values: Array<string | null | undefined>): string {
   for (const v of values) {
@@ -80,6 +122,20 @@ export type RoomSeoSource = {
   hero_image_url?: string | null;
 };
 
+const LEGACY_ROOM_TITLE = /penginapan dekat unnes/i;
+
+/** Drop the old shared "Penginapan Dekat UNNES" title template. Custom copy is kept. */
+function roomSeoField(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || LEGACY_ROOM_TITLE.test(trimmed)) return "";
+  return trimmed;
+}
+
+/** Default document title when a room has no custom SEO title yet. */
+export function defaultRoomSeoTitle(name: string): string {
+  return `${name} – Pomah Guesthouse Semarang`;
+}
+
 /** Resolve a room page's H1 / title / meta from saved room_types SEO columns. */
 export function resolveRoomPublicSeo(room: RoomSeoSource): {
   h1: string;
@@ -90,19 +146,21 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
   ogImageUrl: string;
 } {
   const name = firstNonEmpty(room.name, "Kamar");
-  const title = firstNonEmpty(room.seo_title, `${name} | Penginapan Dekat UNNES Semarang`);
+  const approved = approvedRoomSeo(room.slug);
+  const title = firstNonEmpty(roomSeoField(room.seo_title), approved?.title, defaultRoomSeoTitle(name));
   const description = firstNonEmpty(
     room.meta_description,
+    approved?.meta,
     room.description,
-    `${name} di Pomah Guesthouse, penginapan dekat UNNES Semarang.`,
+    `${name} di Pomah Guesthouse Semarang.`,
   );
   return {
-    h1: firstNonEmpty(room.seo_h1, `${name}, Penginapan Dekat UNNES`),
+    h1: firstNonEmpty(roomSeoField(room.seo_h1), approved?.h1, name),
     title,
     description,
     twitterTitle: title,
     twitterDescription: description,
-    ogImageUrl: firstNonEmpty(room.hero_image_url),
+    ogImageUrl: preferredOgImage(room.hero_image_url),
   };
 }
 
@@ -167,6 +225,7 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   const path = normalizeCandidatePath(pathname);
   if (!path) return false;
   if (path === "/rooms/deluxe-ocean-view") return false;
+  if (path === "/explore/eksplorasi-sejarah-kota-lama-semarang") return false;
   if (path === "/explore-semarang" || path.startsWith("/explore-semarang/")) return false;
   if (path === "/" || path === "/book" || path === "/explore") return true;
   if (BARE_ROOMS_LISTING.test(path)) return false;
@@ -219,4 +278,40 @@ export function collectSitemapPaths(input: {
     consider(`/explore/${slug}`);
   }
   return [...urls];
+}
+
+export type SitemapStamp = {
+  slug?: string | null;
+  updated_at?: string | null;
+};
+
+function stampForSlug(rows: SitemapStamp[] | undefined, slug: string): string | undefined {
+  const wanted = slug.trim().toLowerCase();
+  const row = (rows ?? []).find((item) => (item.slug ?? "").trim().toLowerCase() === wanted);
+  const value = row?.updated_at?.trim();
+  return value || undefined;
+}
+
+/**
+ * lastmod from stored updated_at. Missing dates are omitted so the sitemap
+ * does not pretend the page changed at request time.
+ */
+export function sitemapLastmodForPath(
+  path: string,
+  input: {
+    propertyUpdatedAt?: string | null;
+    rooms?: SitemapStamp[];
+    landings?: SitemapStamp[];
+    pages?: SitemapStamp[];
+  },
+): string | undefined {
+  if (path === "/" || path === "/book" || path === "/explore") {
+    return input.propertyUpdatedAt?.trim() || undefined;
+  }
+  const room = path.match(/^\/rooms\/([^/]+)$/);
+  if (room) return stampForSlug(input.rooms, room[1]);
+  const landing = path.match(/^\/lp\/([^/]+)$/);
+  if (landing) return stampForSlug(input.landings, landing[1]);
+  const pageSlug = path.replace(/^\//, "");
+  return stampForSlug(input.pages, pageSlug) || stampForSlug(input.pages, path);
 }

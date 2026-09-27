@@ -2,7 +2,7 @@
  * Helper untuk membangun URL Supabase Storage Image Transformation.
  *
  * Mengubah URL `/storage/v1/object/public/...` menjadi
- * `/storage/v1/render/image/public/...?width=...&quality=...&format=origin`
+ * `/storage/v1/render/image/public/...?width=...&quality=...&format=webp`
  * sehingga gambar disajikan dalam ukuran yang tepat dan format modern
  * (WebP/AVIF) sesuai negosiasi Accept browser.
  *
@@ -17,6 +17,12 @@ export interface StorageImageOptions {
   height?: number;
   quality?: number; // 1-100
   resize?: "cover" | "contain" | "fill";
+  /**
+   * Supabase transform format. `origin` forces the uploaded file (often a
+   * multi-megabyte PNG). `webp` is the default so crawlers get a small file
+   * even when they do not send Accept: image/webp.
+   */
+  format?: "webp" | "avif" | "origin";
 }
 
 /** Cek apakah URL adalah Supabase Storage public object. */
@@ -31,10 +37,10 @@ export function buildStorageImageUrl(url: string, opts: StorageImageOptions = {}
   const params = new URLSearchParams();
   if (opts.width) params.set("width", String(Math.round(opts.width)));
   if (opts.height) params.set("height", String(Math.round(opts.height)));
-  params.set("quality", String(opts.quality ?? 75));
+  params.set("quality", String(opts.quality ?? 60));
   params.set("resize", opts.resize ?? "cover");
-  // format=origin → Supabase pilih format optimal (WebP) berdasarkan Accept header
-  params.set("format", "origin");
+  // Do not use format=origin: that serves the original PNG/JPEG (1MB+).
+  params.set("format", opts.format ?? "webp");
   return `${transformed}?${params.toString()}`;
 }
 

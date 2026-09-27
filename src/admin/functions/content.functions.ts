@@ -132,17 +132,51 @@ async function purgePastExploreEvents(): Promise<number> {
   return expiredIds.length;
 }
 
+const EXPLORE_ITEM_ADMIN_COLUMNS =
+  "id, title, category, description, date_text, location_text, image_url, badge, is_published, sort_order, updated_at";
+
 export const listExploreItemsForAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const purgedCount = await purgePastExploreEvents();
+    const withMeta = await (supabaseAdmin as any)
+      .from("explore_items")
+      .select(`${EXPLORE_ITEM_ADMIN_COLUMNS}, meta_description`)
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    if (!withMeta.error) return { items: withMeta.data ?? [], purgedCount };
+    const message = String(withMeta.error.message ?? withMeta.error);
+    if (!/meta_description/i.test(message)) throw new Error(message);
     const { data, error } = await (supabaseAdmin as any)
       .from("explore_items")
-      .select("id, title, category, description, date_text, location_text, image_url, badge, is_published, sort_order, updated_at")
+      .select(EXPLORE_ITEM_ADMIN_COLUMNS)
       .order("updated_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(error.message);
     return { items: data ?? [], purgedCount };
+  });
+
+export const updateExploreItemMeta = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({ id: z.string().uuid(), meta_description: z.string().max(155) }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const value = data.meta_description.trim().slice(0, 155);
+    const { error } = await (supabaseAdmin as any)
+      .from("explore_items")
+      .update({ meta_description: value || null })
+      .eq("id", data.id);
+    if (error) {
+      const message = String(error.message ?? error);
+      if (/meta_description/i.test(message)) {
+        throw new Error(
+          "Kolom meta_description belum ada. Jalankan SQL di supabase/migrations/20260927150000_explore_items_meta_description.sql.",
+        );
+      }
+      throw new Error(message);
+    }
+    return { ok: true as const };
   });
 
 export const toggleExplorePublish = createServerFn({ method: "POST" })

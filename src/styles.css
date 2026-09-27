@@ -189,6 +189,17 @@
   --sidebar-ring: oklch(0.55 0.08 152);
 }
 
+.hero-heading {
+  font-size: var(--fs-mob, 32px);
+  line-height: 1.1;
+}
+
+@media (min-width: 768px) {
+  .hero-heading {
+    font-size: var(--fs-desk, 48px);
+  }
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

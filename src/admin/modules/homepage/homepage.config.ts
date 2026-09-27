@@ -7,6 +7,7 @@
  * must stay free of server-only imports.
  */
 
+import { normalizeNearbyList } from "@/public/content/approved-seo";
 import { HOME_SEO } from "@/public/lib/public-seo";
 
 export interface NavLink {
@@ -284,9 +285,9 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     bgColor: "#7c4a21",
     bookLabel: "Pesan Kamar",
     links: [
-      { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
-      { label: "Facilities", href: "#facilities" },
+      { label: "Beranda", href: "/" },
+      { label: "Kamar", href: "/#rooms" },
+      { label: "Fasilitas", href: "#facilities" },
       { label: "Lokasi", href: "#lokasi" },
     ],
     transparent: false,
@@ -366,7 +367,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     ],
   },
   story: {
-    heading: "Your Perfect Stay",
+    heading: "Menginap yang Nyaman",
     paragraphs: [
       "Kata Pomah dalam bahasa Jawa berarti Rumah. Terletak sedikit di pinggir kota Semarang yang dijuluki Venice of Java, Pomah Guesthouse memiliki filosofi yang mencerminkan kehangatan, nyaman dan standar pelayanan terbaik yang kami sajikan kepada tamu.",
       "Kami di Pomah yakin bahwa setiap perjalanan seharusnya memberikan cerita-cerita baru dimulai, kenangan indah tercipta dan momen kebersamaan terjalin.",
@@ -384,7 +385,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     color: "#1c1917",
   },
   roomCarousel: {
-    heading: "Our Room",
+    heading: "Kamar Kami",
     subheading: "Pilih tanggal check-in dan check-out untuk melihat ketersediaan kamar",
     cardsPerView: 3,
     slideMs: 4000,
@@ -402,7 +403,8 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     subheading: "Temukan kami di lokasi strategis yang mudah diakses",
     nearbyTitle: "Lokasi Terdekat (Radius 5km)",
     nearby: [
-      { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
+      { name: "Unnes Sekaran", type: "Universitas", distance: "4,7 km", time: "~10–12 menit" },
+      { name: "Unnes Sampangan (Kelud Utara III)", type: "Universitas", distance: "3,5 km", time: "~8–10 menit" },
       { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
       { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
       { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
@@ -414,7 +416,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     color: "#7c4a21",
   },
   facilities: {
-    heading: "Facilities",
+    heading: "Fasilitas",
     subheading: "Nikmati fasilitas yang dirancang untuk membuat menginap Anda nyaman dan berkesan.",
     fontFamily: "serif",
     fontSize: 32,
@@ -422,7 +424,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     color: "#1c1917",
   },
   news: {
-    heading: "News & Event",
+    heading: "Berita & Acara",
     subheading: "Kabar terbaru, promo, dan acara seputar Semarang dari City Guide kami.",
     fontFamily: "serif",
     fontSize: 32,
@@ -501,7 +503,11 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     story: { ...d.story, ...c.story },
     reviews: { ...d.reviews, ...c.reviews },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
-    lokasi: { ...d.lokasi, ...c.lokasi },
+    lokasi: {
+      ...d.lokasi,
+      ...c.lokasi,
+      nearby: normalizeNearbyList(c.lokasi?.nearby?.length ? c.lokasi.nearby : d.lokasi.nearby),
+    },
     facilities: { ...d.facilities, ...c.facilities },
     news: { ...d.news, ...c.news },
     cta: { ...d.cta, ...c.cta },

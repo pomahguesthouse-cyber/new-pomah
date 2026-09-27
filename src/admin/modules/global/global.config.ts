@@ -51,9 +51,9 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     bgColor: "#7c4a21",
     bookLabel: "Pesan Kamar",
     links: [
-      { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
-      { label: "Facilities", href: "/book" },
+      { label: "Beranda", href: "/" },
+      { label: "Kamar", href: "/#rooms" },
+      { label: "Fasilitas", href: "/book" },
       { label: "Lokasi", href: "/book" },
     ],
     transparent: false,
@@ -73,7 +73,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     showSocials: true,
     companyLinks: [
       { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
+      { label: "Rooms", href: "/#rooms" },
     ],
     serviceLinks: [
       { label: "Amenities", href: "#facilities" },

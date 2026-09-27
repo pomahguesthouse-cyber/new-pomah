@@ -3,12 +3,17 @@ import { Link } from "@tanstack/react-router";
 import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home, Facebook, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { publicCopy } from "@/public/lib/public-copy";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
+import { rewritePublicHref } from "@/public/lib/public-href";
+import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 
 // Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
-const HERO_WIDTHS = [640, 960, 1280, 1600, 1920];
+const HERO_WIDTHS = [480, 768, 1200];
 const HERO_SIZES = "100vw";
+const HERO_QUALITY = 60;
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -127,7 +132,7 @@ export function PublicNav({
           <div className="flex flex-col gap-1 px-6 py-4">
             {[
               { to: "/", label: "Beranda" },
-              { to: "/rooms", label: "Kamar" },
+              { to: "/", hash: "rooms", label: "Kamar" },
               { to: "/explore", label: "Jelajahi Semarang" },
               { to: "/book", label: "Fasilitas" },
               { to: "/book", label: "Lokasi" },
@@ -235,6 +240,7 @@ export function SocialLinks({
 /* ------------------------------------------------------------------ */
 export function PublicFooter({
   property,
+  rooms,
 }: {
   property?: ({
     name?: string;
@@ -243,6 +249,7 @@ export function PublicFooter({
     whatsapp_number?: string | null;
     email?: string | null;
   } & SocialProperty) | null;
+  rooms?: FooterRoomLink[] | null;
 }) {
   const fullName = property?.name || "Pomah Guesthouse";
   const parts = fullName.split(" ");
@@ -261,10 +268,7 @@ export function PublicFooter({
                 <span className="font-serif text-2xl font-light text-amber-400">{restWords}</span>
               )}
             </div>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-teal-200/80">
-              Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
-              istimewa.
-            </p>
+            <FooterNap phone={property?.whatsapp_number} />
             <div className="mt-5">
               <SocialLinks property={property ?? null} variant="compact" />
             </div>
@@ -279,7 +283,6 @@ export function PublicFooter({
               {[
                 { to: "/", label: "Beranda" },
                 { to: "/", hash: "rooms", label: "Kamar" },
-                { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
                 { to: "/connect", label: "Hubungkan AI" },
               ].map((l) => (
@@ -289,6 +292,7 @@ export function PublicFooter({
                   </Link>
                 </li>
               ))}
+              <FooterCrawlLinks rooms={rooms} />
             </ul>
           </div>
 
@@ -298,26 +302,19 @@ export function PublicFooter({
               Kontak
             </p>
             <ul className="space-y-3 text-sm">
-              {property?.address && (
-                <li className="flex items-start gap-2 text-teal-200/80">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <span>
-                    {property.address}
-                    {property.city ? `, ${property.city}` : ""}
-                  </span>
-                </li>
-              )}
-              {property?.whatsapp_number && (
-                <li className="flex items-center gap-2 text-teal-200/80">
-                  <Phone className="h-4 w-4 shrink-0 text-amber-500" />
-                  <a
-                    href={`https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`}
-                    className="hover:text-white"
-                  >
-                    {property.whatsapp_number}
-                  </a>
-                </li>
-              )}
+              <li className="flex items-start gap-2 text-teal-200/80">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>{POMAH_NAP_LINE}</span>
+              </li>
+              <li className="flex items-center gap-2 text-teal-200/80">
+                <Phone className="h-4 w-4 shrink-0 text-amber-500" />
+                <a
+                  href={`https://wa.me/${(property?.whatsapp_number ?? "").replace(/\D/g, "") || "6285190986169"}`}
+                  className="hover:text-white"
+                >
+                  {formatSitePhone(property?.whatsapp_number)}
+                </a>
+              </li>
               {property?.email && (
                 <li className="flex items-center gap-2 text-teal-200/80">
                   <Mail className="h-4 w-4 shrink-0 text-amber-500" />
@@ -339,7 +336,7 @@ export function PublicFooter({
             search={{ next: undefined }}
             className="font-mono text-[10px] uppercase tracking-widest text-teal-400/40 hover:text-teal-300/60"
           >
-            Staff Login
+            Masuk Staf
           </Link>
         </div>
       </div>
@@ -507,10 +504,10 @@ export function PomahNav({
       {header.links.map((n) => (
         <a
           key={n.label}
-          href={n.href}
+          href={rewritePublicHref(n.href)}
           className={`transition ${darkText ? "hover:text-amber-700" : "hover:text-white/70"}`}
         >
-          {n.label}
+          {publicCopy(n.label)}
         </a>
       ))}
     </div>
@@ -581,34 +578,92 @@ export function PomahNav({
   );
 }
 
-export function PomahFooter({ name, property }: { name: string; property?: SocialProperty | null }) {
+export type FooterRoomLink = { name?: string | null; slug?: string | null };
+
+function footerRooms(rooms?: FooterRoomLink[] | null) {
+  return (rooms ?? [])
+    .map((room) => ({
+      name: (room.name ?? "").trim(),
+      slug: (room.slug ?? "").trim(),
+    }))
+    .filter((room) => room.name && room.slug && !room.slug.includes("/"));
+}
+
+function FooterNap({ phone }: { phone?: string | null }) {
+  return (
+    <p className="mt-3 max-w-xs text-sm leading-relaxed text-teal-100">
+      {POMAH_NAP_LINE}
+      {phone ? (
+        <>
+          {" "}
+          <a href={`tel:+${phone.replace(/\D/g, "")}`} className="hover:text-white">
+            {formatSitePhone(phone)}
+          </a>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+function FooterCrawlLinks({ rooms }: { rooms?: FooterRoomLink[] | null }) {
+  const list = footerRooms(rooms);
+  return (
+    <>
+      {list.map((room) => (
+        <li key={room.slug}>
+          <a href={`/rooms/${room.slug}`} className="transition hover:text-white">
+            {room.name}
+          </a>
+        </li>
+      ))}
+      <li>
+        <a href="/explore" className="transition hover:text-white">
+          Jelajahi Semarang
+        </a>
+      </li>
+      <li>
+        <a href={LP_PENGINAPAN_DEKAT_UNNES} className="transition hover:text-white">
+          Penginapan dekat UNNES
+        </a>
+      </li>
+    </>
+  );
+}
+
+export function PomahFooter({
+  name,
+  property,
+  rooms,
+}: {
+  name: string;
+  property?: SocialProperty | null;
+  rooms?: FooterRoomLink[] | null;
+}) {
   return (
     <footer className="bg-teal-900 text-teal-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
         <div>
           <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
-          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
-            Experience comfort and hospitality at {name}.
-          </p>
+          <FooterNap phone={property?.whatsapp_number} />
         </div>
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
-            Quick Links
+            Tautan
           </p>
           <ul className="mt-4 space-y-2 text-sm">
             <li>
               <Link to="/" className="transition hover:text-white">
-                Home
+                Beranda
               </Link>
             </li>
             <li>
               <Link to="/" hash="rooms" className="transition hover:text-white">
-                Rooms
+                Kamar
               </Link>
             </li>
             <li>
               <a href="#facilities" className="transition hover:text-white">
-                Amenities
+                Fasilitas
               </a>
             </li>
             <li>
@@ -616,11 +671,12 @@ export function PomahFooter({ name, property }: { name: string; property?: Socia
                 Lokasi
               </a>
             </li>
+            <FooterCrawlLinks rooms={rooms} />
           </ul>
         </div>
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
-            Follow Us
+            Ikuti Kami
           </p>
           <div className="mt-4">
             <SocialLinks property={property ?? null} />
@@ -651,7 +707,7 @@ export function HeroSlider({
 }: {
   hero: HomepageConfig["hero"];
   fallbackTitle: string;
-  /** Teks H1 dari pengaturan SEO; menggantikan heading slide pertama bila diisi. */
+  /** Static H1, rendered outside the rotating slide. */
   h1Text?: string;
   /** Optional gold script accent rendered just under the heading (home only). */
   accent?: string;
@@ -673,11 +729,19 @@ export function HeroSlider({
 
   const active = slides[i % slides.length];
   const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+  const staticH1 = (h1Text ?? "").trim();
 
   return (
     <header
       className="relative w-full overflow-hidden"
-      style={{ height: hero.height, zIndex: hero.layer }}
+      style={
+        {
+          height: hero.height,
+          zIndex: hero.layer,
+          "--fs-mob": `${hero.fontSizeMobile ?? 32}px`,
+          "--fs-desk": `${hero.fontSize}px`,
+        } as React.CSSProperties
+      }
     >
       <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
         {active.videoUrl ? (
@@ -691,12 +755,18 @@ export function HeroSlider({
           />
         ) : active.imageUrl ? (
           <img
-            src={buildStorageImageUrl(active.imageUrl, { width: 1600, quality: 75 })}
-            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: 75 })}
+            src={buildStorageImageUrl(active.imageUrl, { width: 768, quality: HERO_QUALITY })}
+            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: HERO_QUALITY })}
             sizes={HERO_SIZES}
-            alt={active.heading}
+            width={1200}
+            height={675}
+            alt={
+              active.heading?.trim()
+                ? `Foto ${active.heading.trim()} di Pomah Guesthouse Semarang`
+                : "Foto tamu menginap di Pomah Guesthouse Semarang"
+            }
             loading={i === 0 ? "eager" : "lazy"}
-            fetchPriority={i === 0 ? "high" : "auto"}
+            fetchPriority={i === 0 ? "high" : "low"}
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />
@@ -704,15 +774,17 @@ export function HeroSlider({
           <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
-        <div
-          className={`relative mx-auto flex h-full max-w-6xl flex-col justify-center px-6 ${
-            hero.textAlign === "left"
-              ? "items-start text-left"
-              : hero.textAlign === "right"
-                ? "items-end text-right"
-                : "items-center text-center"
-          }`}
-        >
+      </div>
+      <div
+        className={`relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-center px-6 ${
+          hero.textAlign === "left"
+            ? "items-start text-left"
+            : hero.textAlign === "right"
+              ? "items-end text-right"
+              : "items-center text-center"
+        }`}
+      >
+        {staticH1 ? (
           <h1
             className={`hero-heading max-w-3xl tracking-tight drop-shadow ${
               hero.fontFamily === "mono"
@@ -721,27 +793,35 @@ export function HeroSlider({
                   ? "font-sans"
                   : "font-serif"
             }`}
-            style={
-              {
-                "--fs-mob": `${hero.fontSizeMobile ?? 32}px`,
-                "--fs-desk": `${hero.fontSize}px`,
-                fontSize: "var(--fs-mob)",
-                lineHeight: 1.1,
-                fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
-                fontWeight: hero.fontStyle === "bold" ? 700 : 400,
-                color: hero.color || "#ffffff",
-              } as React.CSSProperties
-            }
+            style={{
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+              color: hero.color || "#ffffff",
+            }}
           >
-            <style>{`
-              @media (min-width: 768px) {
-                .hero-heading {
-                  font-size: var(--fs-desk) !important;
-                }
-              }
-            `}</style>
-            {i === 0 && h1Text ? h1Text : active.heading}
+            {staticH1}
           </h1>
+        ) : null}
+        {active.heading && active.heading !== staticH1 ? (
+          <p
+            className={`max-w-3xl tracking-tight drop-shadow ${
+              staticH1 ? "mt-3 text-2xl md:text-3xl" : "hero-heading"
+            } ${
+              hero.fontFamily === "mono"
+                ? "font-mono"
+                : hero.fontFamily === "sans"
+                  ? "font-sans"
+                  : "font-serif"
+            }`}
+            style={{
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+              color: hero.color || "#ffffff",
+            }}
+          >
+            {active.heading}
+          </p>
+        ) : null}
           {accent && (
             <p className="mt-1 font-serif text-3xl italic text-amber-300 drop-shadow md:text-4xl">
               {accent}
@@ -768,7 +848,6 @@ export function HeroSlider({
           {actions && (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{actions}</div>
           )}
-        </div>
       </div>
       {slides.length > 1 && (
         <>

@@ -7,6 +7,7 @@ import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from 
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { buildStorageImageUrl } from "@/lib/storage-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -350,7 +351,7 @@ function BookPage() {
                           </div>
                           <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
                             {room.hero_image_url ? (
-                              <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
+                              <img src={buildStorageImageUrl(room.hero_image_url, { width: 640, quality: 60 })} width={640} height={480} alt={room.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-stone-300">
                                 <BedDouble className="w-12 h-12" />
@@ -693,7 +694,7 @@ function BookPage() {
       {/* Benefits Section */}
       <section className="bg-white border-t border-stone-200 py-12">
         <div className="max-w-[1440px] mx-auto px-6">
-          <h2 className="font-serif text-2xl font-semibold mb-8 text-center md:text-left">Kenapa memilih New Pomah Guesthouse?</h2>
+          <h2 className="font-serif text-2xl font-semibold mb-8 text-center md:text-left">Kenapa memilih Pomah Guesthouse?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="flex gap-4 p-4 rounded-2xl bg-[#F9F9F7] border border-stone-100">
               <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
@@ -738,7 +739,7 @@ function BookPage() {
         </div>
       </section>
 
-      <PomahFooter name={propertyName} property={data?.property ?? null} />
+      <PomahFooter name={propertyName} property={data?.property ?? null} rooms={data?.roomTypes} />
     </div>
   );
 }

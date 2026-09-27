@@ -11,6 +11,12 @@ import {
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
+import {
+  applyApprovedHomepageSeo,
+  applyGuideCardIntros,
+  patchUnnesDistance,
+  publicRoomBlurb,
+} from "@/public/content/approved-seo";
 import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
 
 /**
@@ -213,12 +219,16 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
   const property = propertyRaw
     ? (toPublicSettings({
         ...propertyRaw,
-        explore_config: stripPastEventsFromExploreConfig(propertyRaw.explore_config),
+        homepage_config: applyApprovedHomepageSeo(patchUnnesDistance(propertyRaw.homepage_config)) as Json,
+        explore_config: applyGuideCardIntros(
+          stripPastEventsFromExploreConfig(propertyRaw.explore_config),
+        ) as Json,
       }) as PublicProperty)
     : null;
 
   const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
+    description: publicRoomBlurb(rt.slug, rt.description),
     rooms: undefined,
     total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
   }));
@@ -939,10 +949,24 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       roomCount = count ?? 0;
     }
 
+    const withPublicBlurb = <T extends { slug?: string | null; description?: string | null }>(row: T | null) =>
+      row ? { ...row, description: publicRoomBlurb(row.slug, row.description) } : null;
+    const property = toPublicSettings(propertyRow) as PublicProperty | null;
+
     return {
-      property: toPublicSettings(propertyRow) as PublicProperty | null,
-      room: room ?? null,
-      others: others ?? [],
+      property: property
+        ? {
+            ...property,
+            homepage_config: applyApprovedHomepageSeo(
+              patchUnnesDistance(property.homepage_config),
+            ) as Json,
+            explore_config: applyGuideCardIntros(
+              stripPastEventsFromExploreConfig(property.explore_config),
+            ) as Json,
+          }
+        : property,
+      room: withPublicBlurb(room),
+      others: (others ?? []).map((row) => withPublicBlurb(row)),
       roomCount,
     };
   });

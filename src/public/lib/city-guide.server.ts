@@ -12,24 +12,41 @@ import {
 
 const CACHE_MS = 60_000;
 
+const ITEM_COLUMNS =
+  "title, description, image_url, category, is_published, date_text, location_text, rating, created_at, updated_at";
+
 let cache: { at: number; places: CityGuidePlace[] } | null = null;
 
 type ExploreConfigShape = Pick<CityGuideSource, "destinations" | "culinary" | "events" | "news">;
+
+/**
+ * meta_description is additive. Until that column exists, retry the original
+ * select so a missing column cannot empty the whole City Guide catalog.
+ */
+async function loadPublishedExploreItems() {
+  const withMeta = await supabasePublic
+    .from("explore_items")
+    .select(`${ITEM_COLUMNS}, meta_description`)
+    .eq("is_published", true);
+  if (!withMeta.error) return withMeta.data ?? [];
+  const message = String(withMeta.error.message ?? withMeta.error);
+  if (!/meta_description/i.test(message)) throw withMeta.error;
+  const fallback = await supabasePublic
+    .from("explore_items")
+    .select(ITEM_COLUMNS)
+    .eq("is_published", true);
+  if (fallback.error) throw fallback.error;
+  return fallback.data ?? [];
+}
 
 export async function loadCityGuidePlaces(): Promise<CityGuidePlace[]> {
   const now = Date.now();
   if (cache && now - cache.at < CACHE_MS) return cache.places;
   try {
-    const [{ data: property }, itemsResult] = await Promise.all([
+    const [{ data: property }, items] = await Promise.all([
       supabasePublic.rpc("get_public_property" as never),
-      supabasePublic
-        .from("explore_items")
-        .select(
-          "title, description, image_url, category, is_published, date_text, location_text, rating, created_at, updated_at",
-        )
-        .eq("is_published", true),
+      loadPublishedExploreItems(),
     ]);
-    if (itemsResult.error) throw itemsResult.error;
     const row = (property ?? null) as {
       updated_at?: string | null;
       created_at?: string | null;
@@ -43,7 +60,7 @@ export async function loadCityGuidePlaces(): Promise<CityGuidePlace[]> {
       culinary: config.culinary,
       events: config.events,
       news: config.news,
-      items: itemsResult.data ?? [],
+      items,
     });
     cache = { at: now, places };
     return places;

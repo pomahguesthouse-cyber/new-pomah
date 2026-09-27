@@ -769,6 +769,7 @@ export type Database = {
           image_url: string | null
           is_published: boolean
           location_text: string | null
+          meta_description: string | null
           rating: number | null
           sort_order: number
           title: string
@@ -784,6 +785,7 @@ export type Database = {
           image_url?: string | null
           is_published?: boolean
           location_text?: string | null
+          meta_description?: string | null
           rating?: number | null
           sort_order?: number
           title: string
@@ -799,6 +801,7 @@ export type Database = {
           image_url?: string | null
           is_published?: boolean
           location_text?: string | null
+          meta_description?: string | null
           rating?: number | null
           sort_order?: number
           title?: string

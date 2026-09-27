@@ -48,7 +48,7 @@ import {
   submitCartBooking,
   getMediaAssetByName,
 } from "@/public/functions/public.functions";
-import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
+import { getGoogleReviews, type GoogleReview, type GoogleReviewsResult } from "@/public/functions/google-reviews.functions";
 import {
   mergeHomepageConfig,
   type HomepageConfig,
@@ -59,17 +59,33 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, publicSeoMeta } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle } from "@/public/lib/public-seo";
+import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
+import { publicCopy } from "@/public/lib/public-copy";
+import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
 const BookingDialog = lazy(() =>
   import("@/routes/rooms.$slug").then((m) => ({ default: m.BookingDialog })),
 );
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
+import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
+import { cardIntroForName, publicRoomBlurb } from "@/public/content/approved-seo";
+import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/components/ui/date-range-picker";
 
 export const Route = createFileRoute("/")({
-  loader: async () => getPublicSiteData(),
+  loader: async () => {
+    const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
+    const [site, guidePlaces, reviews] = await Promise.all([
+      getPublicSiteData(),
+      loadCityGuidePlaces(),
+      getGoogleReviews().catch(
+        (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
+      ),
+    ]);
+    return { ...site, guidePlaces, reviews };
+  },
   // Data property + room types jarang berubah; cache 1 jam mengurangi
   // beban server dan mempercepat navigasi balik ke home.
   staleTime: 60 * 60 * 1000,
@@ -80,16 +96,21 @@ export const Route = createFileRoute("/")({
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
     );
     const seo = cfg.seo;
-    const title = seo.metaTitle || HOME_SEO.title;
-    const desc = seo.metaDescription || HOME_SEO.description;
-    const twitterTitle = seo.twitterTitle || title;
-    const twitterDescription = seo.twitterDescription || desc;
+    const title = resolveHomepageTitle(seo.metaTitle);
+    const desc = resolveHomepageMeta(seo.metaDescription);
+    const twitterTitle = resolveHomepageTitle(seo.twitterTitle || seo.metaTitle);
+    const twitterDescription = resolveHomepageMeta(seo.twitterDescription || seo.metaDescription);
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
+    const roomCover = (loaderData?.roomTypes as Array<{ hero_image_url?: string | null }> | undefined)?.find(
+      (room) => preferredOgImage(room.hero_image_url),
+    )?.hero_image_url;
+    const ogRaw = preferredOgImage(seo.ogImageUrl, heroImageRaw, roomCover);
+    const ogImage = ogRaw ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 }) : "";
     const heroImage = heroImageRaw
-      ? buildStorageImageUrl(heroImageRaw, { width: 1600, quality: 75 })
+      ? buildStorageImageUrl(heroImageRaw, { width: 768, quality: 60 })
       : "";
     const heroImageSrcSet = heroImageRaw
-      ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
+      ? buildStorageImageSrcSet(heroImageRaw, [480, 768, 1200], { quality: 60 })
       : undefined;
     const canonical = canonicalHeadTags("/");
     return {
@@ -100,7 +121,7 @@ export const Route = createFileRoute("/")({
             description: desc,
             twitterTitle,
             twitterDescription,
-            ogImageUrl: seo.ogImageUrl,
+            ogImageUrl: ogImage,
           },
           HOME_SEO,
         ),
@@ -132,9 +153,9 @@ export const Route = createFileRoute("/")({
 /* ------------------------------------------------------------------ */
 
 const FACILITIES = [
-  { icon: Wifi, title: "Free Wifi", desc: "Wifi di Ruang Publik" },
+  { icon: Wifi, title: "Wifi Gratis", desc: "Wifi di Ruang Publik" },
   { icon: Building2, title: "Balkon", desc: "Balkon" },
-  { icon: Car, title: "Free Parking", desc: "Parkir Gratis" },
+  { icon: Car, title: "Parkir Gratis", desc: "Parkir Gratis" },
   { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
 ];
 
@@ -283,9 +304,13 @@ export function PomahHomeView({
   }, 0);
 
   const reviewsFn = useServerFn(getGoogleReviews);
+  const loaderReviews = (
+    initialData as { reviews?: GoogleReviewsResult } | undefined
+  )?.reviews;
   const { data: gr } = useQuery({
     queryKey: ["google-reviews"],
     queryFn: () => reviewsFn(),
+    initialData: loaderReviews,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -302,7 +327,6 @@ export function PomahHomeView({
 
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
-  const address = property?.address ?? "Pomah Guesthouse Semarang";
   const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
   const cfg = configOverride ?? mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
@@ -318,12 +342,24 @@ export function PomahHomeView({
     (property as { explore_config?: unknown } | null | undefined)?.explore_config,
   );
 
+  const guidePlaces =
+    (
+      initialData as
+        | { guidePlaces?: Array<{ slug: string; name: string; category?: string }> }
+        | undefined
+    )?.guidePlaces ??
+    (
+      data as { guidePlaces?: Array<{ slug: string; name: string; category?: string }> } | undefined
+    )?.guidePlaces ??
+    [];
+
   const destinationItems = (exploreCfg.destinations ?? []).map((d: any) => ({
     date: d.nearby_distance || d.address || "",
     category: "Wisata",
     title: d.name,
-    excerpt: d.desc ?? "",
+    excerpt: cardIntroForName(d.name, d.desc ?? ""),
     image: d.image || "",
+    href: exploreHrefForName(d.name),
     ts: 0,
   }));
 
@@ -331,13 +367,34 @@ export function PomahHomeView({
     date: c.address || "",
     category: c.category ? `Kuliner • ${c.category}` : "Kuliner",
     title: c.name,
-    excerpt: c.desc ?? "",
+    excerpt: cardIntroForName(c.name, c.desc ?? ""),
     image: c.image || "",
+    href: exploreHrefForName(c.name),
     ts: 0,
   }));
 
-  const newsEvents = [...destinationItems, ...culinaryItems]
-    .filter((n) => n.title)
+  const eventItems = filterPublicExploreEvents(exploreCfg.events ?? []).map((ev) => ({
+    date: ev.date || "",
+    category: "Event",
+    title: ev.title,
+    excerpt: cardIntroForName(ev.title, ev.desc ?? ""),
+    image: ev.image || "",
+    href: exploreHrefForName(ev.title),
+    ts: 0,
+  }));
+
+  const newsItems = (exploreCfg.news ?? []).map((nw) => ({
+    date: nw.date || "",
+    category: "Berita",
+    title: nw.title,
+    excerpt: cardIntroForName(nw.title, nw.desc ?? ""),
+    image: nw.image || "",
+    href: exploreHrefForName(nw.title),
+    ts: 0,
+  }));
+
+  const newsEvents = [...destinationItems, ...culinaryItems, ...eventItems, ...newsItems]
+    .filter((n) => n.title && n.href && !n.href.endsWith("/eksplorasi-sejarah-kota-lama-semarang"))
     .slice(0, 12);
 
 
@@ -414,7 +471,7 @@ export function PomahHomeView({
           id: rt.id,
           name: rt.name,
           slug: rt.slug,
-          description: rt.description ?? null,
+          description: publicRoomBlurb(rt.slug, rt.description) || null,
           base_rate: rt.base_rate,
           capacity: rt.capacity ?? null,
           bed_type: null,
@@ -549,7 +606,7 @@ export function PomahHomeView({
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
-          h1Text={cfg.seo.h1 || undefined}
+          h1Text={resolveHomepageH1(cfg.seo.h1)}
           accent={cfg.hero.accent}
           rating={{ score: gRating, total: gTotal }}
           actions={
@@ -652,7 +709,7 @@ export function PomahHomeView({
                   type="button"
                   onClick={() =>
                     document
-                      .getElementById("our-room")
+                      .getElementById("rooms")
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
                   aria-label={cfg.datePicker.buttonLabel}
@@ -672,7 +729,34 @@ export function PomahHomeView({
         <Fragment key={key}>{renderHomeSection(key)}</Fragment>
       ))}
 
-      <PomahFooter name={propertyName} property={property} />
+      <section className="mx-auto max-w-3xl px-6 py-12" aria-label="Pertanyaan umum">
+        <h2 className="font-serif text-2xl font-semibold text-stone-900">Pertanyaan umum</h2>
+        <dl className="mt-6 space-y-4">
+          {HOMEPAGE_FAQS.map((faq) => (
+            <div key={faq.question}>
+              <dt className="font-semibold text-stone-800">{faq.question}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-stone-600">{faq.answer}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            homepageLodgingGraph({
+              rooms,
+              reviews: { rating: gRating, total: gTotal },
+              property,
+              faqs: HOMEPAGE_FAQS,
+            }),
+          ),
+        }}
+      />
+
+      <GuideTextLinks places={guidePlaces} />
+
+      <PomahFooter name={propertyName} property={property} rooms={rooms} />
 
       {wa && (
         <a
@@ -772,7 +856,7 @@ export function PomahHomeView({
                     <div key={idx} className="flex flex-col items-center text-center">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12 overflow-hidden">
                         {isCustom && item.iconUrl ? (
-                          <img src={item.iconUrl} className="h-full w-full object-cover" alt="" />
+                          <img src={item.iconUrl} className="h-full w-full object-cover" alt={item.title ? `Ikon ${item.title}` : "Ikon Pomah Guesthouse"} />
                         ) : (
                           <IconComp className="h-4 w-4 md:h-5 md:w-5" />
                         )}
@@ -798,7 +882,7 @@ export function PomahHomeView({
                 color={cfg.story.color}
                 uppercase={cfg.sectionLayouts?.story?.uppercase}
               >
-                {cfg.story.heading}
+                {publicCopy(cfg.story.heading)}
               </SectionHeading>
               <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
                 {cfg.story.paragraphs.map((p, i) => (
@@ -860,7 +944,7 @@ export function PomahHomeView({
         return (
           <PbZone id="carousel" label="Our Room" pb={pb} layout={cfg.sectionLayouts?.carousel}>
             <section
-              id="our-room"
+              id="rooms"
               className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
               style={{
                 zIndex: cfg.roomCarousel.layer,
@@ -881,7 +965,7 @@ export function PomahHomeView({
                     // Adapt the configurable heading when the user has picked
                     // a date range — swap "Hari Ini" → "Tanggal Pilihan Tamu"
                     // so the heading stays consistent with the date below.
-                    const baseHeading = cfg.roomCarousel.heading || "Ketersediaan Kamar";
+                    const baseHeading = publicCopy(cfg.roomCarousel.heading) || "Ketersediaan Kamar";
                     const headingText = usingDateFilter
                       ? baseHeading.replace(/hari ini/i, "Tanggal Pilihan Tamu")
                       : baseHeading;
@@ -997,7 +1081,7 @@ export function PomahHomeView({
                   color={fac.color}
                   uppercase={cfg.sectionLayouts?.facilities?.uppercase}
                 >
-                  {fac.heading}
+                  {publicCopy(fac.heading)}
                 </SectionHeading>
                 {fac.subheading && (
                   <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
@@ -1048,7 +1132,7 @@ export function PomahHomeView({
               <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
                 <iframe
                   title="Lokasi Pomah Guesthouse"
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+                  src={pomahMapEmbedUrl()}
                   className="h-80 w-full"
                   loading="lazy"
                 />
@@ -1104,7 +1188,7 @@ export function PomahHomeView({
                   color={n.color}
                   uppercase={cfg.sectionLayouts?.news?.uppercase}
                 >
-                  {n.heading}
+                  {publicCopy(n.heading)}
                 </SectionHeading>
                 {n.subheading && (
                   <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
@@ -1276,6 +1360,7 @@ type NewsEventItem = {
   title: string;
   excerpt: string;
   image: string;
+  href?: string | null;
 };
 
 function getDisplayImageUrl(url: string | undefined | null) {
@@ -1415,7 +1500,10 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
               className="shrink-0 px-2"
               style={{ width: `${100 / cardsPerView}%` }}
             >
-              <article className="flex h-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:shadow-lg">
+              <a
+                href={n.href || "/explore"}
+                className="flex h-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:shadow-lg"
+              >
                 {n.image && (
                   <div className="aspect-[4/3] w-full overflow-hidden bg-stone-100">
                     <img
@@ -1440,7 +1528,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                   <h3 className="mt-2 font-serif text-sm font-semibold text-stone-900 line-clamp-2">{n.title}</h3>
                   <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-stone-500">{n.excerpt}</p>
                 </div>
-              </article>
+              </a>
             </div>
           ))}
         </div>
@@ -2070,28 +2158,14 @@ function RoomCarousel({
   }, [rc.cardsPerView]);
 
   const maxIndex = Math.max(0, rooms.length - cardsPerView);
-  const isLoopable = rooms.length > cardsPerView;
-
-  // Clone slides for infinite loop
-  const extendedRooms = isLoopable
-    ? [
-        ...rooms.slice(-cardsPerView),
-        ...rooms,
-        ...rooms.slice(0, cardsPerView),
-      ]
-    : rooms;
-
-  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [i, setI] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(true);
 
-  // Sync index when cardsPerView changes on window resize
+  // One card set in the DOM. Cloning the list for a seamless loop made
+  // every room (and its empty-photo label) appear three times to crawlers.
   useEffect(() => {
-    if (isLoopable) {
-      setI(cardsPerView);
-    } else {
-      setI(0);
-    }
-  }, [cardsPerView, isLoopable]);
+    setI(0);
+  }, [cardsPerView]);
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -2113,21 +2187,13 @@ function RoomCarousel({
   };
 
   const handlePrev = () => {
-    if (isLoopable) {
-      setIsTransitioning(true);
-      setI((v) => v - 1);
-    } else {
-      setI((v) => Math.max(0, v - 1));
-    }
+    setIsTransitioning(true);
+    setI((v) => (v <= 0 ? maxIndex : v - 1));
   };
 
   const handleNext = () => {
-    if (isLoopable) {
-      setIsTransitioning(true);
-      setI((v) => v + 1);
-    } else {
-      setI((v) => Math.min(rooms.length - cardsPerView, v + 1));
-    }
+    setIsTransitioning(true);
+    setI((v) => (v >= maxIndex ? 0 : v + 1));
   };
 
   const onTouchEnd = () => {
@@ -2143,37 +2209,23 @@ function RoomCarousel({
     }
   };
 
-  const handleTransitionEnd = () => {
-    if (!isLoopable) return;
-    if (i <= 0) {
-      setIsTransitioning(false);
-      setI(rooms.length);
-    } else if (i >= rooms.length + cardsPerView) {
-      setIsTransitioning(false);
-      setI(cardsPerView);
-    }
-  };
-
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
-    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0 || hovered) return;
+    if (!rc.autoplay || maxIndex <= 0 || rc.slideMs <= 0 || hovered) return;
     const t = setInterval(() => {
       setIsTransitioning(true);
-      setI((v) => v + 1);
+      setI((v) => (v >= maxIndex ? 0 : v + 1));
     }, rc.slideMs);
     return () => clearInterval(t);
-  }, [rc.autoplay, rc.slideMs, isLoopable, hovered]);
+  }, [rc.autoplay, rc.slideMs, maxIndex, hovered]);
 
   if (rooms.length === 0) {
     return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
   }
 
-  const activeDot = isLoopable
-    ? ((i - cardsPerView) % rooms.length + rooms.length) % rooms.length
-    : i;
-
-  const totalDots = isLoopable ? rooms.length : maxIndex + 1;
+  const activeDot = Math.min(i, maxIndex);
+  const totalDots = maxIndex + 1;
 
   return (
     <div
@@ -2212,13 +2264,12 @@ function RoomCarousel({
         <div
           className="flex"
           style={{
-            transform: `translateX(-${i * (100 / cardsPerView)}%)`,
+            transform: `translateX(-${activeDot * (100 / cardsPerView)}%)`,
             transition: isTransitioning ? 'transform 500ms ease-out' : 'none'
           }}
-          onTransitionEnd={handleTransitionEnd}
         >
-          {extendedRooms.map((rt, idx) => (
-            <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
+          {rooms.map((rt) => (
+            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">
                   {availableRooms !== undefined && availableRooms !== null && (
@@ -2248,41 +2299,37 @@ function RoomCarousel({
                     </div>
                   )}
                   {(() => {
-                    // Resolve best available cover: hero → first images[] → null.
                     const cover =
                       rt.hero_image_url ||
                       ((rt as any).images && Array.isArray((rt as any).images) && (rt as any).images[0]) ||
                       null;
-                    return cover ? (
-                      <img
-                        src={cover}
-                        alt={rt.name}
-                        className="absolute inset-0 h-full w-full object-cover"
-                        onError={(e) => {
-                          // Image URL broken / 404 / forbidden — hide and show fallback
-                          const img = e.currentTarget as HTMLImageElement;
-                          img.style.display = "none";
-                          img.parentElement?.querySelector(".room-img-fallback")?.classList.remove("hidden");
-                        }}
-                      />
-                    ) : null;
+                    if (cover) {
+                      return (
+                        <img
+                          src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
+                          srcSet={buildStorageImageSrcSet(cover, [320, 480, 640], { quality: 60 })}
+                          sizes="(max-width: 640px) 100vw, 33vw"
+                          width={640}
+                          height={480}
+                          alt={`Foto ${rt.name} di Pomah Guesthouse Semarang`}
+                          loading="lazy"
+                          decoding="async"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      );
+                    }
+                    return (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70">
+                        <BedDouble className="h-8 w-8 opacity-60" />
+                        <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest">
+                          {rt.name || "Foto Kamar"}
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-widest opacity-60">
+                          Belum ada foto
+                        </span>
+                      </div>
+                    );
                   })()}
-                  <div
-                    className={cn(
-                      "room-img-fallback absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70",
-                      (rt.hero_image_url ||
-                        ((rt as any).images && (rt as any).images[0])) &&
-                        "hidden",
-                    )}
-                  >
-                    <BedDouble className="h-8 w-8 opacity-60" />
-                    <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest">
-                      {rt.name || "Foto Kamar"}
-                    </span>
-                    <span className="font-mono text-[9px] uppercase tracking-widest opacity-60">
-                      Belum ada foto
-                    </span>
-                  </div>
                   {(rt as any).floor_info && (
                     <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
                       <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700">Lantai</span>
@@ -2315,7 +2362,7 @@ function RoomCarousel({
                   </div>
                   {rt.description && (
                     <p className={`line-clamp-2 leading-relaxed text-stone-500 ${cartOpen ? "mt-2 text-xs" : "mt-3 text-sm"}`}>
-                      {rt.description}
+                      {publicRoomBlurb(rt.slug, rt.description)}
                     </p>
                   )}
                   {rt.amenities && rt.amenities.length > 0 && (
@@ -2400,11 +2447,7 @@ function RoomCarousel({
                 key={d}
                 onClick={() => {
                   setIsTransitioning(true);
-                  if (isLoopable) {
-                    setI(d + cardsPerView);
-                  } else {
-                    setI(d);
-                  }
+                  setI(d);
                 }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
@@ -2550,8 +2593,7 @@ function DateStack({
         <img
           // Hash suffix forces a fresh decode so SMIL replays per mount.
           src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
-          alt=""
-          aria-hidden="true"
+          alt="Penanda tanggal menginap"
           // SVG has preserveAspectRatio="none", so it stretches to fill the
           // wrapper box exactly — guarantees the lasso encloses every label.
           className="pointer-events-none absolute inset-0 h-full w-full select-none"

@@ -71,6 +71,21 @@ assert.equal(
 );
 assert.equal(location("https://pomahguesthouse.com/explore"), null);
 assert.equal(location("https://pomahguesthouse.com/"), null);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/")?.location,
+  "https://pomahguesthouse.com/explore",
+);
+assert.match(location("https://pomahguesthouse.com/explore/")?.reason ?? "", /trailing-slash/);
+assert.equal(
+  location("https://www.pomahguesthouse.com/book/")?.location,
+  "https://pomahguesthouse.com/book",
+);
+assert.equal(
+  location("http://localhost:5173/explore/")?.location,
+  "http://localhost:5173/explore",
+);
+assert.equal(location("https://pomahguesthouse.com/api/public/hook/"), null);
+assert.equal(location("http://localhost:5173/api/cron/"), null);
 
 // Staff sign-in and OAuth return must not be rewritten to the homepage,
 // and query/hash must survive a www or http hop.
@@ -148,6 +163,32 @@ assert.equal(
   })?.location,
   "https://pomahguesthouse.com/explore/bandeng-presto",
 );
+
+assert.equal(
+  location("https://pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang")?.location,
+  "https://pomahguesthouse.com/explore/kota-lama-semarang",
+);
+assert.equal(
+  location("https://www.pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang/")?.location,
+  "https://pomahguesthouse.com/explore/kota-lama-semarang",
+);
+assert.match(
+  location("https://pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang")?.reason ?? "",
+  /legacy-url/,
+);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/lawang-sewu")?.location,
+  "https://pomahguesthouse.com/explore/lawang-sewu-semarang",
+);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/masjid-agung-jawa-tengah")?.location,
+  "https://pomahguesthouse.com/explore/masjid-agung-jawa-tengah-majt",
+);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/lawang-sewu-short-film-festival-loff-2026"),
+  null,
+);
+assert.equal(location("https://pomahguesthouse.com/explore/lawang-sewu-semarang"), null);
 
 assert.equal(
   location("https://pomahguesthouse.com/rooms/deluxe-ocean-view")?.location,
