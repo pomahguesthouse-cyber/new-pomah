@@ -28,6 +28,7 @@ export const Route = createFileRoute("/connect")({
         },
         { property: "og:type", content: "website" },
         { name: "twitter:card", content: "summary" },
+        { name: "robots", content: "noindex, follow" },
         ...canonical.meta,
       ],
       links: canonical.links,
