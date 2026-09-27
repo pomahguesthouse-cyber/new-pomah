@@ -7,7 +7,7 @@ import { MapPin, Star } from "lucide-react";
 import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { cityGuideGraph } from "@/public/lib/structured-data";
-import { findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
+import { cityGuideMetaContent, findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
@@ -71,8 +71,7 @@ export const Route = createFileRoute("/explore/$slug")({
       };
     }
     const title = `${place.name} | Jelajahi Semarang`;
-    const description =
-      place.description || `${place.name} di Semarang. Panduan tamu Pomah Guesthouse.`;
+    const description = cityGuideMetaContent(place);
     const canonical = canonicalHeadTags(`/explore/${place.slug}`);
     return {
       meta: [

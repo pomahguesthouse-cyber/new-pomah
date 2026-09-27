@@ -23,6 +23,7 @@ import {
   toggleExplorePublish,
   deleteExploreItem,
   generateExploreImageFn,
+  updateExploreItemMeta,
 } from "@/admin/functions/content.functions";
 
 export const Route = createFileRoute("/admin/content-manager")({
@@ -42,6 +43,7 @@ function ContentManagerPage() {
   const toggleFn = useServerFn(toggleExplorePublish);
   const deleteFn = useServerFn(deleteExploreItem);
   const generateImageFn = useServerFn(generateExploreImageFn);
+  const updateMetaFn = useServerFn(updateExploreItemMeta);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -70,6 +72,14 @@ function ContentManagerPage() {
       toast.error(e.message ?? "Error");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleMetaBlur(id: string, value: string) {
+    try {
+      await updateMetaFn({ data: { id, meta_description: value.slice(0, 155) } });
+    } catch (e: any) {
+      toast.error(e.message ?? "Gagal menyimpan meta description");
     }
   }
 
@@ -216,6 +226,17 @@ function ContentManagerPage() {
                       </div>
                     )}
                   </div>
+                  <Input
+                    defaultValue={it.meta_description ?? ""}
+                    maxLength={155}
+                    placeholder="Meta description (maks. 155)"
+                    className="mt-2 h-7 text-[10px]"
+                    onBlur={(e) => {
+                      const next = e.target.value.trim();
+                      if (next === (it.meta_description ?? "").trim()) return;
+                      handleMetaBlur(it.id, next);
+                    }}
+                  />
                   <div className="mt-2 flex flex-wrap gap-1">
                     {!it.image_url && (
                       <Button

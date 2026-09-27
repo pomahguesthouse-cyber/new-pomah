@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   cityGuideLastmod,
   cityGuideSitemapUrls,
+  cityGuideMetaContent,
   collectCityGuidePlaces,
   findCityGuidePlace,
   renderSitemapXml,
@@ -71,6 +72,31 @@ assert.deepEqual(
   withDuplicate.map((place) => place.slug),
   ["kota-lama-semarang"],
 );
+
+const longMeta = "M".repeat(200);
+const metaPlaces = collectCityGuidePlaces({
+  destinations: [
+    { name: "Lawang Sewu", desc: "Deskripsi halaman yang tidak dipotong.", metaDescription: longMeta },
+    { name: "Sam Poo Kong", desc: "Kelenteng Cheng Ho di Semarang." },
+  ],
+  items: [
+    {
+      title: "Sam Poo Kong",
+      category: "destinasi",
+      is_published: true,
+      description: "",
+      meta_description: "Snippet dari baris database.",
+    },
+  ],
+});
+const lawang = metaPlaces.find((place) => place.slug === "lawang-sewu");
+const samPoo = metaPlaces.find((place) => place.slug === "sam-poo-kong");
+assert.equal(cityGuideMetaContent(lawang!).length, 155);
+assert.equal(cityGuideMetaContent(samPoo!), "Snippet dari baris database.");
+const plain = collectCityGuidePlaces({
+  destinations: [{ name: "Goa Kreo", desc: "Deskripsi halaman yang tidak dipotong." }],
+});
+assert.equal(cityGuideMetaContent(plain[0]), "Deskripsi halaman yang tidak dipotong.");
 
 const slugs = places.map((place) => place.slug).sort();
 assert.deepEqual(slugs, [

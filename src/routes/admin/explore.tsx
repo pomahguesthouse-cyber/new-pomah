@@ -676,6 +676,17 @@ function AdminExplorePage() {
                           setConfig({ ...config, destinations: newDests });
                         }}
                       />
+                      <Input
+                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        placeholder="Meta description (maks. 155 karakter)"
+                        maxLength={155}
+                        value={dest.metaDescription || ""}
+                        onChange={(e) => {
+                          const newDests = [...config.destinations];
+                          newDests[i].metaDescription = e.target.value.slice(0, 155);
+                          setConfig({ ...config, destinations: newDests });
+                        }}
+                      />
                     </div>
                   ) : (
                     <>
@@ -909,6 +920,17 @@ function AdminExplorePage() {
                         onChange={(e) => {
                           const newCul = [...config.culinary];
                           newCul[i].desc = e.target.value;
+                          setConfig({ ...config, culinary: newCul });
+                        }}
+                      />
+                      <Input
+                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        placeholder="Meta description (maks. 155 karakter)"
+                        maxLength={155}
+                        value={cul.metaDescription || ""}
+                        onChange={(e) => {
+                          const newCul = [...config.culinary];
+                          newCul[i].metaDescription = e.target.value.slice(0, 155);
                           setConfig({ ...config, culinary: newCul });
                         }}
                       />
@@ -1245,6 +1267,17 @@ function AdminExplorePage() {
                         onChange={(e) => {
                           const newNw = [...config.news];
                           newNw[i].desc = e.target.value;
+                          setConfig({ ...config, news: newNw });
+                        }}
+                      />
+                      <Input
+                        className="h-6 text-[10px] text-stone-500 mt-1 px-1.5"
+                        placeholder="Meta description (maks. 155 karakter)"
+                        maxLength={155}
+                        value={nw.metaDescription || ""}
+                        onChange={(e) => {
+                          const newNw = [...config.news];
+                          newNw[i].metaDescription = e.target.value.slice(0, 155);
                           setConfig({ ...config, news: newNw });
                         }}
                       />
