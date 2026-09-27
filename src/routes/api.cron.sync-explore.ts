@@ -6,6 +6,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { z } from "zod";
 import { ExploreConfig } from "@/admin/modules/explore/explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
+import { resolveGeminiApiKey } from "@/admin/modules/explore/gemini-key";
 
 export const Route = createFileRoute("/api/cron/sync-explore")({
   server: {
@@ -33,7 +34,10 @@ export const Route = createFileRoute("/api/cron/sync-explore")({
           }
 
           const currentConfig = (propData.explore_config || {}) as ExploreConfig;
-          const apiKey = currentConfig.gemini_api_key;
+          const apiKey = resolveGeminiApiKey({
+            explore_config: currentConfig,
+            gemini_api_key: propData.gemini_api_key,
+          });
           if (!apiKey) {
             return new Response("Gemini API Key belum diatur", { status: 400 });
           }

@@ -120,6 +120,8 @@ function AdminExplorePage() {
   });
 
   const [config, setConfig] = useState<ExploreConfig | null>(null);
+  const [geminiKeyDraft, setGeminiKeyDraft] = useState("");
+  const [geminiKeySet, setGeminiKeySet] = useState(false);
 
   // State to handle MediaPicker
   const [pickerState, setPickerState] = useState<{
@@ -211,9 +213,12 @@ function AdminExplorePage() {
     onError: (e) => toast.error((e as Error).message),
   });
 
-  // Sync state on load
+  // Sync state on load. The stored Gemini key stays on the server.
   if (data && !config && !isLoading) {
-    setConfig(mergeExploreConfig((data as any).explore_config));
+    const merged = mergeExploreConfig((data as any).explore_config);
+    delete merged.gemini_api_key;
+    setConfig(merged);
+    setGeminiKeySet(Boolean((data as { gemini_api_key_set?: boolean }).gemini_api_key_set));
   }
 
   if (isLoading || !config) return <p className="p-6 text-sm text-muted-foreground">Memuat...</p>;
@@ -227,7 +232,12 @@ function AdminExplorePage() {
 
   const handleSave = () => {
     if (!id) return;
-    mutation.mutate({ id, explore_config: config });
+    const explore_config: ExploreConfig = { ...config };
+    delete explore_config.gemini_api_key;
+    const nextKey = geminiKeyDraft.trim();
+    if (nextKey) explore_config.gemini_api_key = nextKey;
+    mutation.mutate({ id, explore_config });
+    setGeminiKeyDraft("");
   };
 
   const fetchDistance = async (destPlaceId: string, index: number, type: "dest" | "culinary" = "dest") => {
@@ -507,13 +517,16 @@ function AdminExplorePage() {
               <label className="text-xs font-semibold text-stone-700">Google Gemini API Key</label>
               <Input
                 type="password"
+                autoComplete="new-password"
                 className="h-9 text-sm"
-                placeholder="AIzaSy..."
-                value={config.gemini_api_key || ""}
-                onChange={(e) => setConfig({ ...config, gemini_api_key: e.target.value })}
+                placeholder={geminiKeySet ? "Key tersimpan di server — isi hanya untuk mengganti" : "Tempel API key baru"}
+                value={geminiKeyDraft}
+                onChange={(e) => setGeminiKeyDraft(e.target.value)}
               />
               <p className="text-[10px] text-stone-500">
-                API Key dari Google AI Studio untuk digunakan fitur Tarik Data via AI. Wajib diisi agar AI bisa memfilter berita.
+                {geminiKeySet
+                  ? "Key aktif tersimpan di server dan tidak dikirim ke browser. Kosongkan field ini saat menyimpan konten agar key yang ada tetap dipakai. Isi field ini hanya untuk mengganti key."
+                  : "API Key dari Google AI Studio untuk fitur Tarik Data via AI. Disimpan di server; browser tidak menerima key yang sudah tersimpan."}
               </p>
             </div>
           </Card>
