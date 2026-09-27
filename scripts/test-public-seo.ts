@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
-import { buildStorageImageUrl } from "../src/lib/storage-image";
+import { buildStorageImageUrl, heroImageSrcSet, heroImageVariants, heroPreloadLinks } from "../src/lib/storage-image";
+import { isAnalyticsSnippet } from "../src/public/lib/defer-analytics";
 import { cityGuideGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
 import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
 import { PUBLIC_HTML_CACHE_CONTROL, publicHtmlCacheControl } from "../src/public/lib/public-cache";
@@ -303,6 +304,29 @@ assert.equal(
   buildStorageImageUrl("https://images.unsplash.com/photo-1", { width: 640 }),
   "https://images.unsplash.com/photo-1",
 );
+
+const heroUrl = "https://example.supabase.co/storage/v1/object/public/room-images/hero.png";
+const heroVariants = heroImageVariants(heroUrl);
+assert.ok(heroVariants);
+assert.deepEqual(
+  heroVariants!.map((variant) => variant.width),
+  [480, 768, 1080],
+);
+assert.match(heroVariants![0].url, /width=480/);
+assert.match(heroVariants![0].url, /quality=70/);
+assert.match(heroVariants![0].url, /format=webp/);
+assert.match(heroVariants![0].media, /max-width: 767px/);
+const heroSet = heroImageSrcSet(heroUrl) || "";
+assert.match(heroSet, /480w/);
+assert.match(heroSet, /768w/);
+assert.match(heroSet, /1080w/);
+const heroPreloads = heroPreloadLinks(heroUrl);
+assert.equal(heroPreloads.length, 3);
+assert.equal(heroPreloads[0].imageSrcSet, `${heroVariants![0].url} 480w`);
+assert.equal(heroPreloads[0].imageSizes, "100vw");
+assert.equal(isAnalyticsSnippet("https://www.googletagmanager.com/gtag/js?id=G-TEST", ""), true);
+assert.equal(isAnalyticsSnippet("", "function gtag(){dataLayer.push(arguments);}"), true);
+assert.equal(isAnalyticsSnippet("", "<meta name=\"google-site-verification\" content=\"abc\">"), false);
 
 const lodging = homepageLodgingGraph({
   rooms: [

@@ -5,15 +5,17 @@ import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { publicCopy } from "@/public/lib/public-copy";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { buildLogoImageUrl, buildStorageImageUrl, buildStorageImageSrcSet, logoDisplaySize } from "@/lib/storage-image";
+import {
+  buildLogoImageUrl,
+  heroImageSrcSet,
+  heroImageVariants,
+  HERO_IMAGE_SIZES,
+  logoDisplaySize,
+} from "@/lib/storage-image";
 import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 
-// Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
-const HERO_WIDTHS = [480, 768, 1200];
-const HERO_SIZES = "100vw";
-const HERO_QUALITY = 60;
 
 /**
  * Header mark as a small WebP with width/height.
@@ -717,6 +719,49 @@ export function PomahFooter({
   );
 }
 
+function HeroPicture({ url, eager, alt }: { url: string; eager: boolean; alt: string }) {
+  const variants = heroImageVariants(url);
+  const loading = eager ? "eager" : "lazy";
+  const fetchPriority = eager ? "high" : "low";
+  if (!variants) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        decoding="async"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    );
+  }
+  const mobile = variants[0];
+  return (
+    <picture>
+      {variants.map((variant) => (
+        <source
+          key={variant.width}
+          media={variant.media}
+          srcSet={`${variant.url} ${variant.width}w`}
+          sizes="100vw"
+        />
+      ))}
+      <img
+        src={mobile.url}
+        srcSet={heroImageSrcSet(url)}
+        sizes={HERO_IMAGE_SIZES}
+        width={480}
+        height={854}
+        alt={alt}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        decoding="async"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    </picture>
+  );
+}
+
 const HERO_ANIM: Record<string, string> = {
   fade: "animate-in fade-in duration-700",
   slide: "animate-in slide-in-from-right-full duration-500 ease-out",
@@ -747,12 +792,25 @@ export function HeroSlider({
     ? hero.slides
     : [{ imageUrl: "", videoUrl: "", heading: fallbackTitle, subheading: "" }];
   const [i, setI] = useState(0);
+  const [autoplay, setAutoplay] = useState(false);
 
+  // Later slides stay out of the network until the first paint has finished.
   useEffect(() => {
     if (slides.length < 2 || hero.autoplayMs <= 0) return;
+    if (document.readyState === "complete") {
+      setAutoplay(true);
+      return;
+    }
+    const onLoad = () => setAutoplay(true);
+    window.addEventListener("load", onLoad, { once: true });
+    return () => window.removeEventListener("load", onLoad);
+  }, [slides.length, hero.autoplayMs]);
+
+  useEffect(() => {
+    if (!autoplay || slides.length < 2 || hero.autoplayMs <= 0) return;
     const t = setInterval(() => setI((v) => (v + 1) % slides.length), hero.autoplayMs);
     return () => clearInterval(t);
-  }, [slides.length, hero.autoplayMs]);
+  }, [autoplay, slides.length, hero.autoplayMs]);
 
   const active = slides[i % slides.length];
   const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
@@ -781,21 +839,14 @@ export function HeroSlider({
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : active.imageUrl ? (
-          <img
-            src={buildStorageImageUrl(active.imageUrl, { width: 768, quality: HERO_QUALITY })}
-            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: HERO_QUALITY })}
-            sizes={HERO_SIZES}
-            width={1200}
-            height={675}
+          <HeroPicture
+            url={active.imageUrl}
+            eager={i === 0}
             alt={
               active.heading?.trim()
                 ? `Foto ${active.heading.trim()} di Pomah Guesthouse Semarang`
                 : "Foto tamu menginap di Pomah Guesthouse Semarang"
             }
-            loading={i === 0 ? "eager" : "lazy"}
-            fetchPriority={i === 0 ? "high" : "low"}
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />

@@ -82,3 +82,61 @@ export function buildStorageImageSrcSet(
     .map((w) => `${buildStorageImageUrl(url, { ...opts, width: w })} ${w}w`)
     .join(", ");
 }
+
+/**
+ * First-slide hero. Phones get 480w (about 70 KB WebP at quality 70 on the
+ * live welcome photo). Tablets get 768w, desktops 1080w. Each breakpoint is
+ * its own file so a high-DPR phone cannot upgrade itself to the desktop file.
+ */
+export const HERO_IMAGE_WIDTHS = [480, 768, 1080] as const;
+export const HERO_IMAGE_QUALITY = 70;
+export const HERO_IMAGE_SIZES = "(max-width: 767px) 100vw, (max-width: 1279px) 100vw, 1080px";
+
+export type HeroImageVariant = {
+  width: number;
+  media: string;
+  url: string;
+};
+
+const HERO_VARIANT_MEDIA: Record<(typeof HERO_IMAGE_WIDTHS)[number], string> = {
+  480: "(max-width: 767px)",
+  768: "(min-width: 768px) and (max-width: 1279px)",
+  1080: "(min-width: 1280px)",
+};
+
+export function heroImageVariants(url: string): HeroImageVariant[] | null {
+  if (!url || !isSupabasePublicObject(url)) return null;
+  return HERO_IMAGE_WIDTHS.map((width) => ({
+    width,
+    media: HERO_VARIANT_MEDIA[width],
+    url: buildStorageImageUrl(url, { width, quality: HERO_IMAGE_QUALITY, format: "webp" }),
+  }));
+}
+
+export function heroImageSrcSet(url: string): string | undefined {
+  return buildStorageImageSrcSet(url, [...HERO_IMAGE_WIDTHS], {
+    quality: HERO_IMAGE_QUALITY,
+    format: "webp",
+  });
+}
+
+/** One preload per breakpoint. A phone only fetches the 480w WebP. */
+export function heroPreloadLinks(url: string | null | undefined): Array<{
+  rel: "preload";
+  as: "image";
+  media: string;
+  imageSrcSet: string;
+  imageSizes: string;
+  fetchPriority: "high";
+}> {
+  const variants = heroImageVariants(url || "");
+  if (!variants) return [];
+  return variants.map((variant) => ({
+    rel: "preload" as const,
+    as: "image" as const,
+    media: variant.media,
+    imageSrcSet: `${variant.url} ${variant.width}w`,
+    imageSizes: "100vw",
+    fetchPriority: "high" as const,
+  }));
+}

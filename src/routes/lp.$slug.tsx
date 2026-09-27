@@ -39,6 +39,7 @@ import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl } from "@/lib/storage-image";
 import { POMAH_NAP_LINE } from "@/public/lib/site-identity";
+import { mountCustomHead } from "@/public/lib/defer-analytics";
 import { PublicFooter } from "@/public/components/public-shell";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
@@ -166,33 +167,19 @@ function LandingPage() {
   }, []);
 
   // Advanced SEO — inject custom head markup + JSON-LD client-side.
+  // Google tag scripts wait until load or the first tap.
   useEffect(() => {
-    const added: Node[] = [];
-    const appendHtml = (html: string) => {
-      const tpl = document.createElement("template");
-      tpl.innerHTML = html;
-      tpl.content.childNodes.forEach((node) => {
-        if (node.nodeName === "SCRIPT") {
-          const orig = node as HTMLScriptElement;
-          const sc = document.createElement("script");
-          Array.from(orig.attributes).forEach((a) => sc.setAttribute(a.name, a.value));
-          sc.textContent = orig.textContent;
-          document.head.appendChild(sc); added.push(sc);
-        } else {
-          const clone = node.cloneNode(true);
-          document.head.appendChild(clone); added.push(clone);
-        }
-      });
-    };
-    if (page.custom_head) appendHtml(page.custom_head);
+    const cleanups: Array<() => void> = [];
+    if (page.custom_head) cleanups.push(mountCustomHead(page.custom_head));
     if (page.slug !== APPROVED_LP.slug && page.json_ld_enabled && page.custom_json_ld?.trim()) {
       const sc = document.createElement("script");
       sc.type = "application/ld+json";
       sc.textContent = page.custom_json_ld;
-      document.head.appendChild(sc); added.push(sc);
+      document.head.appendChild(sc);
+      cleanups.push(() => sc.parentNode?.removeChild(sc));
     }
-    return () => added.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
-  }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled]);
+    return () => cleanups.forEach((cleanup) => cleanup());
+  }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled, page.slug]);
 
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
