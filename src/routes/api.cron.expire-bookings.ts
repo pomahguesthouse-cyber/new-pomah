@@ -10,7 +10,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
  * Logika:
  *   1. Cari semua bookings dengan status='pending' AND payment_status='unpaid'
  *      AND expires_at sudah lewat — berlaku sama untuk semua channel (web,
- *      chatbot WA, webchat, admin) karena expires_at diset di semua titik insert.
+ *      chatbot WA, admin) karena expires_at diset di semua titik insert.
  *   2. Set status='expired' untuk baris-baris tersebut.
  *   3. Booking partial (sudah DP) atau paid tidak pernah tersentuh — filter
  *      payment_status='unpaid' adalah satu-satunya gerbang.

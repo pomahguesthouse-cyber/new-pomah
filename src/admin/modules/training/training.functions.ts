@@ -1,14 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { embedTrainingExample } from "@/ai/training-rag.service";
-
-/** Untyped client view — `source` column isn't in the generated types. */
-function db(client: unknown): SupabaseClient {
-  return client as SupabaseClient;
-}
 
 /**
  * Best-effort re-embedding setelah admin mengubah rating/correction sebuah
@@ -123,49 +117,6 @@ export const saveTrainingExample = createServerFn({ method: "POST" })
     if (data.accepted && inserted?.id) {
       await reembedTrainingExampleAsync(inserted.id);
     }
-    return { ok: true };
-  });
-
-export type WebchatLogMeta = {
-  intent?: string;
-  confidence?: number;
-  tools?: string[];
-};
-
-export type WebchatLogRow = {
-  id: string;
-  thread_id: string | null;
-  user_message: string | null;
-  ai_response: string | null;
-  used: boolean | null;
-  metadata: WebchatLogMeta | null;
-  created_at: string;
-};
-
-/** List logged public webchat exchanges, oldest first (grouped by thread). */
-export const listWebchatLogs = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data } = await db(context.supabase)
-      .from("ai_conversation_logs")
-      .select("id, thread_id, user_message, ai_response, used, metadata, created_at")
-      .eq("source", "webchat")
-      .order("created_at", { ascending: true })
-      .limit(500);
-    return { logs: (data ?? []) as unknown as WebchatLogRow[] };
-  });
-
-/** Mark (or unmark) a whole webchat thread as training material. */
-export const setWebchatTraining = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ threadId: z.string(), used: z.boolean() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { error } = await db(context.supabase)
-      .from("ai_conversation_logs")
-      .update({ used: data.used })
-      .eq("thread_id", data.threadId)
-      .eq("source", "webchat");
-    if (error) throw error;
     return { ok: true };
   });
 
