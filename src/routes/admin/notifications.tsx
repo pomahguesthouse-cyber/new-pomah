@@ -10,7 +10,9 @@ import { getNotificationLogs } from "@/admin/modules/settings/settings.functions
 export const Route = createFileRoute("/admin/notifications")({
   component: NotificationsPage,
   errorComponent: ({ error }) => (
-    <div className="p-6 text-sm text-red-600">Gagal memuat log: {error.message}</div>
+    <div className="p-6 text-sm text-red-600">
+      Gagal memuat log: {error instanceof Error ? error.message : "Unknown error"}
+    </div>
   ),
   notFoundComponent: () => <div className="p-6">Halaman tidak ditemukan.</div>,
 });
