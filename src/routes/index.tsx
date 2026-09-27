@@ -59,6 +59,7 @@ import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
 import { canonicalHeadTags, HOME_SEO, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
+import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
 import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
@@ -318,7 +319,6 @@ export function PomahHomeView({
 
   const propertyName = property?.name ?? "Pomah Guesthouse";
   const wa = property?.whatsapp_number?.replace(/\D/g, "") ?? "";
-  const address = property?.address ?? "Pomah Guesthouse Semarang";
   const logoUrl = (property as { logo_url?: string | null } | null | undefined)?.logo_url ?? null;
   const cfg = configOverride ?? mergeHomepageConfig(
     (property as { homepage_config?: unknown } | null | undefined)?.homepage_config,
@@ -864,7 +864,7 @@ export function PomahHomeView({
                     <div key={idx} className="flex flex-col items-center text-center">
                       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-700 text-white shadow-sm md:h-12 md:w-12 overflow-hidden">
                         {isCustom && item.iconUrl ? (
-                          <img src={item.iconUrl} className="h-full w-full object-cover" alt="" />
+                          <img src={item.iconUrl} className="h-full w-full object-cover" alt={item.title ? `Ikon ${item.title}` : "Ikon Pomah Guesthouse"} />
                         ) : (
                           <IconComp className="h-4 w-4 md:h-5 md:w-5" />
                         )}
@@ -1140,7 +1140,7 @@ export function PomahHomeView({
               <div className="overflow-hidden rounded-2xl border border-stone-200 shadow-sm">
                 <iframe
                   title="Lokasi Pomah Guesthouse"
-                  src={`https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`}
+                  src={pomahMapEmbedUrl()}
                   className="h-80 w-full"
                   loading="lazy"
                 />
@@ -2166,28 +2166,14 @@ function RoomCarousel({
   }, [rc.cardsPerView]);
 
   const maxIndex = Math.max(0, rooms.length - cardsPerView);
-  const isLoopable = rooms.length > cardsPerView;
-
-  // Clone slides for infinite loop
-  const extendedRooms = isLoopable
-    ? [
-        ...rooms.slice(-cardsPerView),
-        ...rooms,
-        ...rooms.slice(0, cardsPerView),
-      ]
-    : rooms;
-
-  const [i, setI] = useState(isLoopable ? cardsPerView : 0);
+  const [i, setI] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(true);
 
-  // Sync index when cardsPerView changes on window resize
+  // One card set in the DOM. Cloning the list for a seamless loop made
+  // every room (and its empty-photo label) appear three times to crawlers.
   useEffect(() => {
-    if (isLoopable) {
-      setI(cardsPerView);
-    } else {
-      setI(0);
-    }
-  }, [cardsPerView, isLoopable]);
+    setI(0);
+  }, [cardsPerView]);
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -2209,21 +2195,13 @@ function RoomCarousel({
   };
 
   const handlePrev = () => {
-    if (isLoopable) {
-      setIsTransitioning(true);
-      setI((v) => v - 1);
-    } else {
-      setI((v) => Math.max(0, v - 1));
-    }
+    setIsTransitioning(true);
+    setI((v) => (v <= 0 ? maxIndex : v - 1));
   };
 
   const handleNext = () => {
-    if (isLoopable) {
-      setIsTransitioning(true);
-      setI((v) => v + 1);
-    } else {
-      setI((v) => Math.min(rooms.length - cardsPerView, v + 1));
-    }
+    setIsTransitioning(true);
+    setI((v) => (v >= maxIndex ? 0 : v + 1));
   };
 
   const onTouchEnd = () => {
@@ -2239,37 +2217,23 @@ function RoomCarousel({
     }
   };
 
-  const handleTransitionEnd = () => {
-    if (!isLoopable) return;
-    if (i <= 0) {
-      setIsTransitioning(false);
-      setI(rooms.length);
-    } else if (i >= rooms.length + cardsPerView) {
-      setIsTransitioning(false);
-      setI(cardsPerView);
-    }
-  };
-
   const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
-    if (!rc.autoplay || !isLoopable || rc.slideMs <= 0 || hovered) return;
+    if (!rc.autoplay || maxIndex <= 0 || rc.slideMs <= 0 || hovered) return;
     const t = setInterval(() => {
       setIsTransitioning(true);
-      setI((v) => v + 1);
+      setI((v) => (v >= maxIndex ? 0 : v + 1));
     }, rc.slideMs);
     return () => clearInterval(t);
-  }, [rc.autoplay, rc.slideMs, isLoopable, hovered]);
+  }, [rc.autoplay, rc.slideMs, maxIndex, hovered]);
 
   if (rooms.length === 0) {
     return <p className="mt-12 text-center text-sm text-stone-400">Belum ada kamar tersedia.</p>;
   }
 
-  const activeDot = isLoopable
-    ? ((i - cardsPerView) % rooms.length + rooms.length) % rooms.length
-    : i;
-
-  const totalDots = isLoopable ? rooms.length : maxIndex + 1;
+  const activeDot = Math.min(i, maxIndex);
+  const totalDots = maxIndex + 1;
 
   return (
     <div
@@ -2308,13 +2272,12 @@ function RoomCarousel({
         <div
           className="flex"
           style={{
-            transform: `translateX(-${i * (100 / cardsPerView)}%)`,
+            transform: `translateX(-${activeDot * (100 / cardsPerView)}%)`,
             transition: isTransitioning ? 'transform 500ms ease-out' : 'none'
           }}
-          onTransitionEnd={handleTransitionEnd}
         >
-          {extendedRooms.map((rt, idx) => (
-            <div key={`${rt.id}-${idx}`} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
+          {rooms.map((rt) => (
+            <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
               <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">
                   {availableRooms !== undefined && availableRooms !== null && (
@@ -2344,47 +2307,37 @@ function RoomCarousel({
                     </div>
                   )}
                   {(() => {
-                    // Resolve best available cover: hero → first images[] → null.
                     const cover =
                       rt.hero_image_url ||
                       ((rt as any).images && Array.isArray((rt as any).images) && (rt as any).images[0]) ||
                       null;
-                    return cover ? (
-                      <img
-                        src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
-                        srcSet={buildStorageImageSrcSet(cover, [320, 480, 640], { quality: 60 })}
-                        sizes="(max-width: 640px) 100vw, 33vw"
-                        width={640}
-                        height={480}
-                        alt={rt.name}
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 h-full w-full object-cover"
-                        onError={(e) => {
-                          // Image URL broken / 404 / forbidden — hide and show fallback
-                          const img = e.currentTarget as HTMLImageElement;
-                          img.style.display = "none";
-                          img.parentElement?.querySelector(".room-img-fallback")?.classList.remove("hidden");
-                        }}
-                      />
-                    ) : null;
+                    if (cover) {
+                      return (
+                        <img
+                          src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
+                          srcSet={buildStorageImageSrcSet(cover, [320, 480, 640], { quality: 60 })}
+                          sizes="(max-width: 640px) 100vw, 33vw"
+                          width={640}
+                          height={480}
+                          alt={`Foto ${rt.name} di Pomah Guesthouse Semarang`}
+                          loading="lazy"
+                          decoding="async"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                      );
+                    }
+                    return (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70">
+                        <BedDouble className="h-8 w-8 opacity-60" />
+                        <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest">
+                          {rt.name || "Foto Kamar"}
+                        </span>
+                        <span className="font-mono text-[9px] uppercase tracking-widest opacity-60">
+                          Belum ada foto
+                        </span>
+                      </div>
+                    );
                   })()}
-                  <div
-                    className={cn(
-                      "room-img-fallback absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-stone-100 text-amber-700/70",
-                      (rt.hero_image_url ||
-                        ((rt as any).images && (rt as any).images[0])) &&
-                        "hidden",
-                    )}
-                  >
-                    <BedDouble className="h-8 w-8 opacity-60" />
-                    <span className="px-3 text-center font-mono text-[10px] uppercase tracking-widest">
-                      {rt.name || "Foto Kamar"}
-                    </span>
-                    <span className="font-mono text-[9px] uppercase tracking-widest opacity-60">
-                      Belum ada foto
-                    </span>
-                  </div>
                   {(rt as any).floor_info && (
                     <div className={`absolute left-2.5 ${cartOpen ? "bottom-2" : "bottom-3"} inline-flex items-center gap-1.5 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-stone-800 shadow-sm backdrop-blur-sm`}>
                       <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700">Lantai</span>
@@ -2502,11 +2455,7 @@ function RoomCarousel({
                 key={d}
                 onClick={() => {
                   setIsTransitioning(true);
-                  if (isLoopable) {
-                    setI(d + cardsPerView);
-                  } else {
-                    setI(d);
-                  }
+                  setI(d);
                 }}
                 aria-label={`Halaman ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
@@ -2652,8 +2601,7 @@ function DateStack({
         <img
           // Hash suffix forces a fresh decode so SMIL replays per mount.
           src={`${svgUrl}#play-${playedRef.current ? 1 : 0}`}
-          alt=""
-          aria-hidden="true"
+          alt="Penanda tanggal menginap"
           // SVG has preserveAspectRatio="none", so it stretches to fill the
           // wrapper box exactly — guarantees the lasso encloses every label.
           className="pointer-events-none absolute inset-0 h-full w-full select-none"
