@@ -6,7 +6,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { buildStorageImageUrl, buildStorageImageSrcSet, heroPreloadLinks } from "@/lib/storage-image";
+import { mountCustomHead } from "@/public/lib/defer-analytics";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -55,8 +56,6 @@ import {
   type HomeSectionKey,
 } from "@/admin/modules/homepage/homepage.config";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
-import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions";
-import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
 import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle } from "@/public/lib/public-seo";
@@ -68,7 +67,7 @@ import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-dat
 const BookingDialog = lazy(() =>
   import("@/routes/rooms.$slug").then((m) => ({ default: m.BookingDialog })),
 );
-import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
+import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
 import { cardIntroForName, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
@@ -106,13 +105,9 @@ export const Route = createFileRoute("/")({
     )?.hero_image_url;
     const ogRaw = preferredOgImage(seo.ogImageUrl, heroImageRaw, roomCover);
     const ogImage = ogRaw ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 }) : "";
-    const heroImage = heroImageRaw
-      ? buildStorageImageUrl(heroImageRaw, { width: 768, quality: 60 })
-      : "";
-    const heroImageSrcSet = heroImageRaw
-      ? buildStorageImageSrcSet(heroImageRaw, [480, 768, 1200], { quality: 60 })
-      : undefined;
     const canonical = canonicalHeadTags("/");
+    // One preload per breakpoint for the first slide only. The <picture>
+    // sources use the same URLs, so the browser fetches a single WebP.
     return {
       meta: [
         ...publicSeoMeta(
@@ -127,21 +122,7 @@ export const Route = createFileRoute("/")({
         ),
         ...canonical.meta,
       ],
-      links: [
-        ...canonical.links,
-        ...(heroImage
-          ? [
-              {
-                rel: "preload",
-                as: "image",
-                href: heroImage,
-                imagesrcset: heroImageSrcSet,
-                imagesizes: "100vw",
-                fetchpriority: "high" as const,
-              },
-            ]
-          : []),
-      ],
+      links: [...canonical.links, ...heroPreloadLinks(heroImageRaw)],
     };
   },
   component: PomahHome,
@@ -335,9 +316,6 @@ export function PomahHomeView({
   // Slider "Jelajah Kutho Semarang" — hanya menampilkan destinasi wisata & kuliner
   // dari sumber yang sama dengan halaman /explore (`property.explore_config`).
   // Events & news sengaja tidak ditampilkan di homepage sesuai permintaan.
-  void getPublicExploreItems;
-  void listActivePublicEvents;
-
   const exploreCfg = mergeExploreConfig(
     (property as { explore_config?: unknown } | null | undefined)?.explore_config,
   );
@@ -401,32 +379,19 @@ export function PomahHomeView({
 
 
   // Advanced SEO — inject custom head markup + JSON-LD for the home page.
+  // Google tag scripts wait until load or the first tap.
   useEffect(() => {
     const seo = cfg.seo;
-    const added: Node[] = [];
-    if (seo.customHead) {
-      const tpl = document.createElement("template");
-      tpl.innerHTML = seo.customHead;
-      tpl.content.childNodes.forEach((node) => {
-        if (node.nodeName === "SCRIPT") {
-          const orig = node as HTMLScriptElement;
-          const sc = document.createElement("script");
-          Array.from(orig.attributes).forEach((a) => sc.setAttribute(a.name, a.value));
-          sc.textContent = orig.textContent;
-          document.head.appendChild(sc); added.push(sc);
-        } else {
-          const clone = node.cloneNode(true);
-          document.head.appendChild(clone); added.push(clone);
-        }
-      });
-    }
+    const cleanups: Array<() => void> = [];
+    if (seo.customHead) cleanups.push(mountCustomHead(seo.customHead));
     if (seo.jsonLdEnabled && seo.customJsonLd?.trim()) {
       const sc = document.createElement("script");
       sc.type = "application/ld+json";
       sc.textContent = seo.customJsonLd;
-      document.head.appendChild(sc); added.push(sc);
+      document.head.appendChild(sc);
+      cleanups.push(() => sc.parentNode?.removeChild(sc));
     }
-    return () => added.forEach((n) => n.parentNode && n.parentNode.removeChild(n));
+    return () => cleanups.forEach((cleanup) => cleanup());
   }, [cfg.seo.customHead, cfg.seo.customJsonLd, cfg.seo.jsonLdEnabled]);
 
   // Page Builder integration: when loaded inside the builder iframe
@@ -661,9 +626,10 @@ export function PomahHomeView({
                   className="hidden shrink-0 items-center gap-2 border-r border-stone-200 pr-4 transition-opacity duration-500 md:flex"
                 >
                   {cfg.datePicker.logoUrl || logoUrl ? (
-                    <img
-                      src={cfg.datePicker.logoUrl || logoUrl || undefined}
+                    <BrandLogo
+                      src={(cfg.datePicker.logoUrl || logoUrl) as string}
                       alt={propertyName}
+                      height={64}
                       className="h-16 w-auto object-contain"
                     />
                   ) : (

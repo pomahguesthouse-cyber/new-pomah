@@ -139,7 +139,7 @@ type TabKey =
   | "reviews"
   | "google_reviews";
 
-export function SeoPage() {
+function SeoPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("search_console");
   const qc = useQueryClient();
 

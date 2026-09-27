@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { runWithCfContext } from "./lib/cf-context";
 import { resolveSeoRedirect } from "./public/lib/seo-redirects.server";
+import { publicHtmlCacheControl } from "./public/lib/public-cache";
 
 type ExecutionContextLike = { waitUntil?: (promise: Promise<unknown>) => void };
 
@@ -91,6 +92,30 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
   return brandedErrorResponse();
 }
 
+function withPublicHtmlCache(request: Request, response: Response): Response {
+  let pathname = "/";
+  try {
+    pathname = new URL(request.url).pathname;
+  } catch {
+    return response;
+  }
+  const cacheControl = publicHtmlCacheControl({
+    method: request.method,
+    pathname,
+    status: response.status,
+    contentType: response.headers.get("content-type"),
+    setCookie: response.headers.get("set-cookie"),
+  });
+  if (!cacheControl) return response;
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", cacheControl);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function seoRedirectResponse(location: string, reason: string): Response {
   return new Response(null, {
     status: 301,
@@ -123,7 +148,7 @@ export default {
       const response = await runWithCfContext({ waitUntil }, () =>
         handler.fetch(request, env, ctx),
       );
-      return await normalizeCatastrophicSsrResponse(response);
+      return withPublicHtmlCache(request, await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       if (isClientAbortError(error)) {
         return new Response(null, { status: 499 });

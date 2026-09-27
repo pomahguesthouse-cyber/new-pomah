@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from "@/public/functions/public.functions";
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
-import { canonicalHeadTags } from "@/public/lib/public-seo";
-import { buildStorageImageUrl } from "@/lib/storage-image";
+import { canonicalHeadTags, resolveBookH1 } from "@/public/lib/public-seo";
+import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -65,6 +65,9 @@ export const Route = createFileRoute("/book/")({
       bookingSeo.metaDescription ||
       "Booking kamar di Pomah Guesthouse Semarang secara langsung. Proses mudah, tanpa perantara, dan konfirmasi instan via WhatsApp.";
     const canonical = canonicalHeadTags("/book");
+    const heroUrl = mergeHomepageConfig(
+      (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
+    ).bookingHero.slides?.[0]?.imageUrl;
     return {
       meta: [
         { title },
@@ -74,7 +77,7 @@ export const Route = createFileRoute("/book/")({
         ...canonical.meta,
         ...(bookingSeo.ogImageUrl ? [{ property: "og:image", content: bookingSeo.ogImageUrl }] : []),
       ],
-      links: canonical.links,
+      links: [...canonical.links, ...heroPreloadLinks(heroUrl)],
     };
   },
   component: BookPage,
@@ -243,7 +246,11 @@ function BookPage() {
       <PomahNav name={propertyName} logo={logoUrl} header={cfg.header} pb={pb} />
 
       {/* Hero Section */}
-      <HeroSlider hero={cfg.bookingHero} fallbackTitle="Pesan kamar dengan mudah" />
+      <HeroSlider
+        hero={cfg.bookingHero}
+        fallbackTitle="Pesan kamar dengan mudah"
+        h1Text={resolveBookH1(cfg.bookingSeo?.h1, cfg.bookingHero.slides?.[0]?.heading)}
+      />
       
       <section className="relative -mt-12 mb-12 z-20">
         <div className="mx-auto max-w-[1440px] px-6">

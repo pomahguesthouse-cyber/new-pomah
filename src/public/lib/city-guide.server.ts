@@ -3,6 +3,7 @@
  * Sitemap, place pages, and legacy /explore-semarang redirects share this.
  */
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { loadPublicPropertyRow } from "@/public/lib/public-property.server";
 import { stripSecretKeys } from "@/public/lib/public-settings";
 import {
   collectCityGuidePlaces,
@@ -43,8 +44,8 @@ export async function loadCityGuidePlaces(): Promise<CityGuidePlace[]> {
   const now = Date.now();
   if (cache && now - cache.at < CACHE_MS) return cache.places;
   try {
-    const [{ data: property }, items] = await Promise.all([
-      supabasePublic.rpc("get_public_property" as never),
+    const [property, items] = await Promise.all([
+      loadPublicPropertyRow(),
       loadPublishedExploreItems(),
     ]);
     const row = (property ?? null) as {
