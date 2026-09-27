@@ -11,7 +11,9 @@ export const POMAH_STREET = "Jl. Dewi Sartika IV No. 71";
 export const POMAH_LOCALITY = "Sampangan, Semarang";
 export const POMAH_POSTAL_CODE = "50232";
 export const POMAH_REGION = "Jawa Tengah";
-export const POMAH_NAP_LINE = `${POMAH_NAME}, ${POMAH_STREET}, ${POMAH_LOCALITY}`;
+/** Street line used in the footer, including the postal code. */
+export const POMAH_NAP_ADDRESS = `${POMAH_STREET}, ${POMAH_LOCALITY} ${POMAH_POSTAL_CODE}`;
+export const POMAH_NAP_LINE = `${POMAH_NAME}, ${POMAH_NAP_ADDRESS}`;
 
 /** Decimal Google Business Profile CID. Empty until the owner supplies it. */
 export const GOOGLE_BUSINESS_PROFILE_CID = "";

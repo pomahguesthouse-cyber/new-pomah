@@ -179,6 +179,18 @@ export function canonicalUrlForPath(pathname: string): string {
   return `${CANONICAL_ORIGIN}${path}`;
 }
 
+/** One visible H1 for /book. Saved booking SEO wins; otherwise the hero heading. */
+export function resolveBookH1(
+  savedH1: string | null | undefined,
+  slideHeading: string | null | undefined,
+): string {
+  const saved = (savedH1 ?? "").trim();
+  if (saved) return saved;
+  const slide = (slideHeading ?? "").trim();
+  if (slide) return slide;
+  return "Pesan kamar dengan mudah";
+}
+
 export function canonicalHeadTags(pathname: string): {
   meta: Array<{ property: "og:url"; content: string }>;
   links: Array<{ rel: "canonical"; href: string }>;

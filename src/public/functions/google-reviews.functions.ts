@@ -21,8 +21,58 @@ const empty = (status: string): GoogleReviewsResult => ({
   status,
 });
 
-export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => {
-  const { data: prop } = await supabasePublic.rpc("get_google_reviews_config" as never);
+const REVIEWS_OK_TTL_MS = 10 * 60_000;
+const REVIEWS_ERROR_TTL_MS = 30_000;
+let reviewsCache: { at: number; ttl: number; value: GoogleReviewsResult } | null = null;
+let reviewsPending: Promise<GoogleReviewsResult> | null = null;
+
+async function loadGoogleReviews(): Promise<GoogleReviewsResult> {
+  const now = Date.now();
+  if (reviewsCache && now - reviewsCache.at < reviewsCache.ttl) return reviewsCache.value;
+  if (reviewsPending) return reviewsPending;
+  reviewsPending = fetchGoogleReviews()
+    .then((value) => {
+      reviewsCache = {
+        at: Date.now(),
+        ttl: value.status === "OK" ? REVIEWS_OK_TTL_MS : REVIEWS_ERROR_TTL_MS,
+        value,
+      };
+      return value;
+    })
+    .finally(() => {
+      reviewsPending = null;
+    });
+  return reviewsPending;
+}
+
+export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async () => loadGoogleReviews());
+
+async function lookupPlacesApiKey(): Promise<string> {
+  let key = process.env.GOOGLE_PLACES_API_KEY?.trim() || "";
+  try {
+    const { data: secretRow } = await supabaseAdmin
+      .from("properties")
+      .select("google_places_api_key")
+      .limit(1)
+      .maybeSingle();
+    const fromDb = secretRow?.google_places_api_key?.trim();
+    if (fromDb) key = fromDb;
+  } catch (error) {
+    console.warn(
+      "[GoogleReviews] service-role key lookup failed:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+  return key;
+}
+
+async function fetchGoogleReviews(): Promise<GoogleReviewsResult> {
+  // Config and the places key are independent. Start both so a live Places
+  // lookup does not wait on a second round-trip after the config returns.
+  // The custom-rating path returns without awaiting the key.
+  const configPromise = supabasePublic.rpc("get_google_reviews_config" as never);
+  const keyPromise = lookupPlacesApiKey();
+  const { data: prop } = await configPromise;
   const row = ((Array.isArray(prop) ? prop[0] : prop) as Record<string, unknown> | null) ?? {};
 
   const customRating = row.custom_google_rating !== null && row.custom_google_rating !== undefined ? Number(row.custom_google_rating) : null;
@@ -55,22 +105,9 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
   }
 
   const placeId = (row.google_place_id as string | undefined)?.trim();
-  // The public RPC must not be the source of the key. Read it with the service role.
-  let key = process.env.GOOGLE_PLACES_API_KEY?.trim() || "";
-  try {
-    const { data: secretRow } = await supabaseAdmin
-      .from("properties")
-      .select("google_places_api_key")
-      .limit(1)
-      .maybeSingle();
-    const fromDb = secretRow?.google_places_api_key?.trim();
-    if (fromDb) key = fromDb;
-  } catch (error) {
-    console.warn(
-      "[GoogleReviews] service-role key lookup failed:",
-      error instanceof Error ? error.message : error,
-    );
-  }
+  // The public RPC must not be the source of the key. The service-role read
+  // was started with the config query above.
+  const key = await keyPromise;
 
   if (!key) return empty("NO_API_KEY");
   if (!placeId) return empty("NO_PLACE_ID");
@@ -119,4 +156,4 @@ export const getGoogleReviews = createServerFn({ method: "GET" }).handler(async 
   } catch (error) {
     return empty(`FETCH_ERROR: ${error instanceof Error ? error.message : "unknown"}`);
   }
-});
+}

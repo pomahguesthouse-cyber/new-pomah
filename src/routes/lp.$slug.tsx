@@ -38,7 +38,8 @@ import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/pub
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl } from "@/lib/storage-image";
-import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
+import { POMAH_NAP_LINE } from "@/public/lib/site-identity";
+import { PublicFooter } from "@/public/components/public-shell";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -79,9 +80,12 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   },
 
   loader: async ({ params }: any) => {
-    const result = (await getSeoLandingPageBySlug({ data: { slug: params.slug } })) as {
-      page: SeoLandingPage | null;
-    };
+    const [result, siteData] = await Promise.all([
+      getSeoLandingPageBySlug({ data: { slug: params.slug } }) as Promise<{
+        page: SeoLandingPage | null;
+      }>,
+      getPublicSiteData(),
+    ]);
     if (!result.page) throw notFound();
     const patched = patchUnnesDistance(result.page) as SeoLandingPage;
     if (patched.homepage_config) {
@@ -99,8 +103,8 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
             target_keyword: null,
           }
         : patched;
-    const siteData = await getPublicSiteData();
-    return { page, property: (siteData as { property?: unknown } | null)?.property };
+    const site = siteData as { property?: unknown; roomTypes?: unknown[] } | null;
+    return { page, property: site?.property, roomTypes: site?.roomTypes ?? [] };
   },
 
   component: LandingPage,
@@ -108,9 +112,18 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
 
 /* ─── Page root ─────────────────────────────────────────────────── */
 function LandingPage() {
-  const { page, property } = Route.useLoaderData() as {
+  const { page, property, roomTypes } = Route.useLoaderData() as {
     page: SeoLandingPage;
-    property?: { whatsapp_number?: string | null };
+    property?: {
+      name?: string | null;
+      whatsapp_number?: string | null;
+      email?: string | null;
+      instagram_url?: string | null;
+      tiktok_url?: string | null;
+      facebook_url?: string | null;
+      youtube_url?: string | null;
+    };
+    roomTypes?: Array<{ name?: string | null; slug?: string | null }>;
   };
   const whatsappNumber = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
@@ -187,7 +200,7 @@ function LandingPage() {
       {page.slug === APPROVED_LP.slug ? (
         <>
           <LPNav ctaUrl="/book" ctaText="Pesan kamar" />
-          <UnnesLanding />
+          <UnnesLanding rooms={roomTypes} property={property} />
         </>
       ) : hasSections ? (
         isSplit ? (
@@ -260,7 +273,7 @@ function LandingPage() {
         </>
       )}
 
-      <LPFooter phone={whatsappNumber} tagline={page.slug === APPROVED_LP.slug ? APPROVED_LP.tagline : undefined} />
+      <PublicFooter property={property} rooms={roomTypes} />
 
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
@@ -991,41 +1004,3 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
   );
 }
 
-/* ─── Footer ────────────────────────────────────────────────────── */
-function LPFooter({ phone, tagline }: { phone?: string; tagline?: string }) {
-  return (
-    <footer className="border-t border-stone-200 bg-teal-800 text-teal-100">
-      <div className="mx-auto max-w-6xl px-6 py-14">
-        <div className="grid gap-10 md:grid-cols-3">
-          <div>
-            <p className="font-serif text-xl font-bold text-white">Pomah <span className="font-light">Guesthouse</span></p>
-            {tagline && <p className="mt-2 text-sm text-teal-100">{tagline}</p>}
-            <p className="mt-2 text-sm text-teal-200/80">
-              {POMAH_NAP_LINE}
-              {phone ? ` · ${formatSitePhone(phone)}` : ""}
-            </p>
-          </div>
-          <div>
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Tautan</p>
-            <ul className="space-y-2 text-sm">
-              {[
-                { href: "/", label: "Beranda" },
-                { href: "/#rooms", label: "Kamar" },
-                { href: "/book", label: "Reservasi" },
-              ].map((l) => (
-                <li key={l.href}><a href={l.href} className="transition hover:text-white">{l.label}</a></li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Kontak</p>
-            <p className="text-sm text-teal-200/80">{POMAH_NAP_LINE}</p>
-          </div>
-        </div>
-        <div className="mt-10 border-t border-teal-700/60 pt-6 text-center text-xs text-teal-300/70">
-          © {new Date().getFullYear()} Pomah Guesthouse. Semua hak dilindungi.
-        </div>
-      </div>
-    </footer>
-  );
-}

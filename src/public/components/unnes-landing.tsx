@@ -1,6 +1,10 @@
 import { APPROVED_LP } from "@/public/content/approved-seo";
-import { canonicalUrlForPath } from "@/public/lib/public-seo";
-import { faqPageGraph } from "@/public/lib/structured-data";
+import {
+  unnesLandingGraph,
+  type FaqItem,
+  type SchemaReviews,
+  type SchemaRoom,
+} from "@/public/lib/structured-data";
 
 function RichText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -17,9 +21,29 @@ function RichText({ text }: { text: string }) {
 }
 
 /** Approved /lp/penginapan-dekat-unnes article. Replaces the section builder for this slug. */
-export function UnnesLanding() {
+export function UnnesLanding({
+  rooms,
+  property,
+  reviews,
+}: {
+  rooms?: SchemaRoom[] | null;
+  property?: {
+    whatsapp_number?: string | null;
+    email?: string | null;
+    instagram_url?: string | null;
+    tiktok_url?: string | null;
+    facebook_url?: string | null;
+    youtube_url?: string | null;
+  } | null;
+  reviews?: SchemaReviews | null;
+}) {
   const page = APPROVED_LP;
-  const pageUrl = canonicalUrlForPath(`/lp/${page.slug}`);
+  const graph = unnesLandingGraph({
+    rooms,
+    property,
+    reviews,
+    faqs: page.faq as FaqItem[],
+  });
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 text-stone-800">
       <h1 className="font-serif text-3xl font-bold leading-tight text-stone-950 sm:text-4xl">{page.h1}</h1>
@@ -118,7 +142,7 @@ export function UnnesLanding() {
         <h2 className="font-serif text-2xl font-bold text-stone-950">{page.faqTitle}</h2>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageGraph(pageUrl, page.faq)) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(graph) }}
         />
         <dl className="mt-4 space-y-4">
           {page.faq.map((item) => (

@@ -255,6 +255,39 @@ function guideType(category: string | null | undefined): string {
   return "Place";
 }
 
+/**
+ * /lp/penginapan-dekat-unnes: LodgingBusiness + BreadcrumbList + the page FAQ.
+ * Room prices come from the same public room rows the rest of the site renders.
+ */
+export function unnesLandingGraph(input: {
+  rooms?: SchemaRoom[] | null;
+  reviews?: SchemaReviews | null;
+  property?: SocialProperty | null;
+  faqs: FaqItem[];
+}) {
+  const pageUrl = canonicalUrlForPath("/lp/penginapan-dekat-unnes");
+  const lodging = homepageLodgingGraph({
+    rooms: input.rooms ?? [],
+    reviews: input.reviews,
+    property: input.property,
+  });
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      ...(lodging["@graph"] as unknown[]),
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${pageUrl}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Beranda", item: `${CANONICAL_ORIGIN}/` },
+          { "@type": "ListItem", position: 2, name: "Penginapan dekat UNNES", item: pageUrl },
+        ],
+      },
+      faqPageNode(pageUrl, input.faqs),
+    ],
+  };
+}
+
 export function cityGuideGraph(place: GuideSchemaInput) {
   const pageUrl = canonicalUrlForPath(`/explore/${place.slug}`);
   const type = guideType(place.category);

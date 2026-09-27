@@ -18,6 +18,7 @@ import {
   publicRoomBlurb,
 } from "@/public/content/approved-seo";
 import { PUBLIC_PROPERTY_FIELDS, toPublicSettings } from "@/public/lib/public-settings";
+import { loadPublicPropertyRow } from "@/public/lib/public-property.server";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -204,16 +205,38 @@ export type PublicProperty = {
   facebook_url?: string | null;
 };
 
-export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => {
-  const [{ data: propertyData }, { data: roomTypesRaw }] = await Promise.all([
-    supabasePublic.rpc("get_public_property" as never),
-    supabasePublic
-      .from("room_types")
-      .select(
-        "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
-      )
-      .order("base_rate"),
-  ]);
+type PublicSiteData = { property: PublicProperty | null; roomTypes: any[] };
+
+const SITE_DATA_TTL_MS = 60_000;
+let siteDataCache: { at: number; value: PublicSiteData } | null = null;
+let siteDataPending: Promise<PublicSiteData> | null = null;
+
+async function loadPublicSiteData(): Promise<PublicSiteData> {
+  const now = Date.now();
+  if (siteDataCache && now - siteDataCache.at < SITE_DATA_TTL_MS) return siteDataCache.value;
+  if (siteDataPending) return siteDataPending;
+  siteDataPending = (async () => {
+    const [propertyData, roomTypesResult] = await Promise.all([
+      loadPublicPropertyRow(),
+      supabasePublic
+        .from("room_types")
+        .select(
+          "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
+        )
+        .order("base_rate"),
+    ]);
+    const value = shapePublicSiteData(propertyData, roomTypesResult.data);
+    if (value.property || value.roomTypes.length > 0) {
+      siteDataCache = { at: Date.now(), value };
+    }
+    return value;
+  })().finally(() => {
+    siteDataPending = null;
+  });
+  return siteDataPending;
+}
+
+function shapePublicSiteData(propertyData: unknown, roomTypesRaw: any[] | null): PublicSiteData {
 
   const propertyRaw = (propertyData ?? null) as (PublicProperty & Record<string, unknown>) | null;
   const property = propertyRaw
@@ -251,7 +274,9 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
   );
 
   return { property, roomTypes };
-});
+}
+
+export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async () => loadPublicSiteData());
 
 /**
  * Resolve a single uploaded media asset by its display name to a public URL.

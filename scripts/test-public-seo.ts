@@ -8,7 +8,10 @@ import assert from "node:assert/strict";
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import { buildStorageImageUrl } from "../src/lib/storage-image";
-import { cityGuideGraph, faqPageGraph, homepageLodgingGraph, roomPageGraph } from "../src/public/lib/structured-data";
+import { cityGuideGraph, faqPageGraph, homepageLodgingGraph, postalAddress, roomPageGraph, unnesLandingGraph } from "../src/public/lib/structured-data";
+import { POMAH_NAP_ADDRESS, POMAH_NAP_LINE, POMAH_POSTAL_CODE } from "../src/public/lib/site-identity";
+import { PUBLIC_HTML_CACHE_CONTROL, publicHtmlCacheControl } from "../src/public/lib/public-cache";
+import { buildLogoImageUrl } from "../src/lib/storage-image";
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { rewritePublicHref } from "../src/public/lib/public-href";
 import {
@@ -19,6 +22,7 @@ import {
   HOME_SEO,
   preferredOgImage,
   publicSeoMeta,
+  resolveBookH1,
   resolveHomepageH1,
   resolveHomepageMeta,
   resolveHomepageTitle,
@@ -398,6 +402,96 @@ assert.equal(lpNearby.time, "~10–12 menit");
 assert.equal(
   DEFAULT_HOMEPAGE_CONFIG.lokasi.nearby.find((item) => item.name === "Undip Tembalang")?.distance,
   "8 km",
+);
+
+assert.equal(POMAH_POSTAL_CODE, "50232");
+assert.equal(POMAH_NAP_ADDRESS, "Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50232");
+assert.equal(
+  POMAH_NAP_LINE,
+  "Pomah Guesthouse, Jl. Dewi Sartika IV No. 71, Sampangan, Semarang 50232",
+);
+assert.equal(postalAddress().postalCode, "50232");
+
+assert.equal(resolveBookH1("", "Pesan kamar dengan mudah"), "Pesan kamar dengan mudah");
+assert.equal(resolveBookH1("   ", null), "Pesan kamar dengan mudah");
+assert.equal(resolveBookH1("Judul booking", "Slide"), "Judul booking");
+assert.equal(DEFAULT_HOMEPAGE_CONFIG.bookingSeo.h1, "Pesan kamar dengan mudah");
+
+const lpSchema = JSON.stringify(
+  unnesLandingGraph({
+    rooms: [{ name: "Kamar Single", slug: "kamar-single", base_rate: 175000, capacity: 1 }],
+    faqs: [{ question: "Di mana lokasinya?", answer: "Sampangan" }],
+  }),
+);
+assert.match(lpSchema, /LodgingBusiness/);
+assert.match(lpSchema, /BreadcrumbList/);
+assert.match(lpSchema, /FAQPage/);
+assert.match(lpSchema, /penginapan-dekat-unnes/);
+assert.match(lpSchema, /"postalCode":"50232"/);
+assert.match(lpSchema, /"price":175000/);
+
+const logoUrl = buildLogoImageUrl(
+  "https://example.supabase.co/storage/v1/object/public/room-images/branding/logo.png",
+  60,
+);
+assert.match(logoUrl, /format=webp/);
+assert.match(logoUrl, /resize=contain/);
+assert.doesNotMatch(logoUrl, /\/object\/public\//);
+assert.doesNotMatch(logoUrl, /format=origin/);
+
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/",
+    status: 200,
+    contentType: "text/html; charset=utf-8",
+  }),
+  PUBLIC_HTML_CACHE_CONTROL,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/lp/penginapan-dekat-unnes",
+    status: 200,
+    contentType: "text/html",
+  }),
+  PUBLIC_HTML_CACHE_CONTROL,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/login",
+    status: 200,
+    contentType: "text/html",
+  }),
+  null,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/admin/settings",
+    status: 200,
+    contentType: "text/html",
+  }),
+  null,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "GET",
+    pathname: "/book/confirmation/ABC",
+    status: 200,
+    contentType: "text/html",
+  }),
+  null,
+);
+assert.equal(
+  publicHtmlCacheControl({
+    method: "POST",
+    pathname: "/",
+    status: 200,
+    contentType: "text/html",
+  }),
+  null,
 );
 
 console.log("test-public-seo: ok");

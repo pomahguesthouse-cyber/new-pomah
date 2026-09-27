@@ -456,7 +456,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     metaTitle: "Booking Kamar | Pomah Guesthouse Semarang",
     metaDescription:
       "Booking kamar di Pomah Guesthouse Semarang. Cek ketersediaan dan pesan kamar dengan harga terbaik langsung dari website resmi kami.",
-    h1: "",
+    h1: "Pesan kamar dengan mudah",
     twitterTitle: "",
     twitterDescription: "",
     targetKeyword: "",

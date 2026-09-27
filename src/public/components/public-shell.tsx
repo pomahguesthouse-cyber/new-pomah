@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { publicCopy } from "@/public/lib/public-copy";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
-import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { buildLogoImageUrl, buildStorageImageUrl, buildStorageImageSrcSet, logoDisplaySize } from "@/lib/storage-image";
 import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
@@ -14,6 +14,37 @@ import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 const HERO_WIDTHS = [480, 768, 1200];
 const HERO_SIZES = "100vw";
 const HERO_QUALITY = 60;
+
+/**
+ * Header mark as a small WebP with width/height.
+ * loading="lazy" stops React from preloading the original PNG ahead of the hero.
+ */
+export function BrandLogo({
+  src,
+  alt,
+  height,
+  className,
+}: {
+  src: string;
+  alt: string;
+  height: number;
+  className?: string;
+}) {
+  const box = logoDisplaySize(height);
+  return (
+    <img
+      src={buildLogoImageUrl(src, box.height)}
+      alt={alt}
+      width={box.width}
+      height={box.height}
+      loading="lazy"
+      fetchPriority="low"
+      decoding="async"
+      className={className ?? "w-auto max-w-[240px] object-contain"}
+      style={{ height: box.height }}
+    />
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -45,9 +76,10 @@ export function PublicNav({
         {/* Logo */}
         <Link to="/" className="flex items-center">
           {property?.logo_url ? (
-            <img
+            <BrandLogo
               src={property.logo_url}
               alt={fullName}
+              height={32}
               className="h-8 max-w-[180px] object-contain"
             />
           ) : (
@@ -243,7 +275,7 @@ export function PublicFooter({
   rooms,
 }: {
   property?: ({
-    name?: string;
+    name?: string | null;
     address?: string | null;
     city?: string | null;
     whatsapp_number?: string | null;
@@ -471,12 +503,7 @@ export function PomahNav({
   const logoEl = (
     <Link to="/" className="flex items-baseline gap-1.5" title={name} key="logo">
       {logo ? (
-        <img
-          src={logo}
-          alt={name}
-          style={{ height: header.logoSize }}
-          className="w-auto max-w-[240px] object-contain"
-        />
+        <BrandLogo src={logo} alt={name} height={header.logoSize} />
       ) : (
         <>
           <span className={`font-serif text-2xl font-bold ${darkText ? "text-stone-900" : "text-white"}`}>

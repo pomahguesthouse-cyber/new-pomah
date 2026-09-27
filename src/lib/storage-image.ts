@@ -44,6 +44,33 @@ export function buildStorageImageUrl(url: string, opts: StorageImageOptions = {}
   return `${transformed}?${params.toString()}`;
 }
 
+/**
+ * Current header mark (`branding/1779972746377-83dfkm.png`) is 1362×944.
+ * The box uses this ratio so width/height are set even when the file changes.
+ */
+export const BRAND_LOGO_ASPECT = 1362 / 944;
+
+/** Small WebP for the header mark. Never the original PNG. */
+export function buildLogoImageUrl(url: string, displayHeight: number): string {
+  const height = Math.max(48, Math.round(displayHeight * 2));
+  const width = Math.max(48, Math.round(height * BRAND_LOGO_ASPECT));
+  return buildStorageImageUrl(url, {
+    width,
+    height,
+    quality: 60,
+    resize: "contain",
+    format: "webp",
+  });
+}
+
+export function logoDisplaySize(displayHeight: number): { width: number; height: number } {
+  const height = Math.max(24, Math.round(displayHeight));
+  return {
+    height,
+    width: Math.max(24, Math.round(height * BRAND_LOGO_ASPECT)),
+  };
+}
+
 /** Bangun srcset multi-lebar untuk responsive images. */
 export function buildStorageImageSrcSet(
   url: string,
