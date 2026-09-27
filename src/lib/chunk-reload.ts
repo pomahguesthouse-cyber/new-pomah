@@ -27,6 +27,16 @@ export function isChunkLoadError(error: unknown): boolean {
   return CHUNK_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
+/** A stuck flag would block the one reload that picks up new chunks after a deploy. */
+export function clearChunkReloadFlag(): void {
+  if (typeof sessionStorage === "undefined") return;
+  try {
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function reloadOnceOnChunkError(): boolean {
   if (typeof window === "undefined") return false;
   try {

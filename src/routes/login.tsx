@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import {
   beginFullPageRedirect,
   clearAuthNext,
-  clearStaffSessionHint,
   loginDestination,
   loginReturnUrl,
   markStaffSessionHint,
@@ -17,6 +16,8 @@ import {
   resetFullPageRedirectGuard,
   safeNext,
 } from "@/lib/auth-return";
+import { oauthReturnLocation, wasOAuthReturnOnLoad } from "@/public/components/staff-oauth-return";
+import { checkSession } from "@/lib/staff-auth-cleanup";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const search = Route.useSearch();
   const nextPath = safeNext(search.next);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -37,45 +38,79 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
+  const [ready, setReady] = useState(false);
+  const fallbackTimer = useRef<number | null>(null);
+
+  const goClient = (target: string) => {
+    console.info("[auth] client navigate ->", target);
+    router.history.push(target);
+  };
+
+  const armLoginFallback = (target: string) => {
+    if (fallbackTimer.current != null) window.clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = window.setTimeout(() => {
+      const path = window.location.pathname;
+      if (path !== "/login" && path !== "/login/") return;
+      console.info("[auth] still on /login 3s after redirect, client fallback ->", target);
+      toast("You're signed in", {
+        description: (
+          <a href="/admin" className="underline">
+            Open admin
+          </a>
+        ),
+        duration: 20000,
+      });
+      goClient(target);
+    }, 3000);
+  };
 
   /**
-   * Setelah login sukses — termasuk balik dari Google OAuth — hormati `next`
-   * (path same-origin saja) dan fallback ke /admin. Full load supaya tab yang
-   * masih memegang bundle lama tidak 404 pada chunk yang sudah tidak ada.
+   * After a real sign-in, honor `next` (same-origin only) and otherwise go to
+   * /admin. A stored session that getUser() rejects is wiped first so the form
+   * stays put instead of looping. Full page load so a tab holding old hashed
+   * chunks does not 404.
    */
-  async function redirectAfterLogin() {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) markStaffSessionHint();
-    else clearStaffSessionHint();
+  async function redirectAfterLogin(reason: string) {
+    const oauthReturn =
+      wasOAuthReturnOnLoad() && oauthReturnLocation.pathname === window.location.pathname;
+    const status = await checkSession(oauthReturn ? `${reason} (oauth return)` : reason);
+    if (status !== "valid") {
+      if (status !== "anonymous") console.info("[auth] not leaving /login:", reason, status);
+      return;
+    }
+    markStaffSessionHint();
     const target = loginDestination(nextPath);
-    beginFullPageRedirect(target, () => {
-      navigate({ to: "/admin" });
-    });
+    console.info("[auth] redirect after sign-in:", reason, "->", target);
+    beginFullPageRedirect(target, () => goClient(target));
+    armLoginFallback(target);
   }
 
   useEffect(() => {
     resetFullPageRedirectGuard();
     let cancelled = false;
-    const sendIfSignedIn = (hasSession: boolean) => {
-      if (cancelled || !hasSession) return;
-      redirectAfterLogin();
-    };
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      if (data.session) sendIfSignedIn(true);
-    });
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return;
-      sendIfSignedIn(!!session);
+      if (!session) return;
+      window.setTimeout(() => {
+        if (!cancelled)
+          void redirectAfterLogin(event === "SIGNED_IN" ? "signed in" : "initial session");
+      }, 0);
     });
+
+    const mountTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      void redirectAfterLogin("login mount").finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    }, 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(mountTimer);
       data.subscription.unsubscribe();
     };
-  }, [navigate, nextPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nextPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +131,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      await redirectAfterLogin();
+      await redirectAfterLogin(mode === "signup" ? "sign up" : "password sign-in");
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -117,7 +152,7 @@ function LoginPage() {
       return;
     }
     // Popup / preview flows set the session in-page instead of leaving.
-    if (!result.redirected) redirectAfterLogin();
+    if (!result.redirected) void redirectAfterLogin("google in-page");
   };
 
   return (
@@ -152,7 +187,13 @@ function LoginPage() {
             </p>
           </div>
 
-          <Button type="button" variant="outline" className="w-full" onClick={onGoogle}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={onGoogle}
+            disabled={!ready || pending}
+          >
             Continue with Google
           </Button>
 
@@ -186,8 +227,8 @@ function LoginPage() {
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "…" : mode === "signin" ? "Sign in" : "Create account"}
+          <Button type="submit" className="w-full" disabled={!ready || pending}>
+            {!ready ? "…" : pending ? "…" : mode === "signin" ? "Sign in" : "Create account"}
           </Button>
 
           <button

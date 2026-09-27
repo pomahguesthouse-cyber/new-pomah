@@ -168,7 +168,10 @@ export function clearStaffSessionHint(): void {
  * second pass uses `onAdminBounce` — that document is already a fresh load.
  */
 export function beginFullPageRedirect(target: string, onAdminBounce?: () => void): void {
-  if (fullPageRedirectStarted) return;
+  if (fullPageRedirectStarted) {
+    console.info("[auth] full-page redirect skipped, already started ->", target);
+    return;
+  }
   fullPageRedirectStarted = true;
   clearAuthNext();
   if (isAdminPath(target)) {
@@ -176,6 +179,7 @@ export function beginFullPageRedirect(target: string, onAdminBounce?: () => void
       if (sessionStorage.getItem(ADMIN_ASSIGN_STORAGE_KEY) === "1") {
         sessionStorage.removeItem(ADMIN_ASSIGN_STORAGE_KEY);
         if (onAdminBounce) {
+          console.info("[auth] /admin bounced once, client navigate ->", target);
           onAdminBounce();
           return;
         }
@@ -186,5 +190,6 @@ export function beginFullPageRedirect(target: string, onAdminBounce?: () => void
       /* assign anyway */
     }
   }
+  console.info("[auth] full-page redirect ->", target);
   window.location.assign(target);
 }
