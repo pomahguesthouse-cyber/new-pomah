@@ -33,6 +33,7 @@ import {
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { rewritePublicHref } from "@/public/lib/public-href";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -205,7 +206,7 @@ function LandingPage() {
               {page.hero_subheadline && (
                 <p className="mx-auto mt-6 max-w-xl text-lg text-teal-100">{page.hero_subheadline}</p>
               )}
-              <a href={page.hero_cta_url}
+              <a href={rewritePublicHref(page.hero_cta_url)}
                 className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
                 {page.hero_cta_text}
               </a>
@@ -215,14 +216,14 @@ function LandingPage() {
           {page.body_content && (
             <section className="mx-auto max-w-3xl px-6 py-16">
               <div className="prose prose-stone prose-headings:font-serif prose-a:text-teal-700 max-w-none"
-                dangerouslySetInnerHTML={{ __html: page.body_content }} />
+                dangerouslySetInnerHTML={{ __html: page.body_content.replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
             </section>
           )}
 
           <section className="border-t border-stone-200 bg-white px-6 py-14 text-center">
             <p className="font-serif text-2xl font-bold text-teal-700">Siap Menginap?</p>
             <p className="mt-2 text-sm text-stone-500">Pomah Guesthouse — Gunungpati, Semarang</p>
-            <a href={page.hero_cta_url}
+            <a href={rewritePublicHref(page.hero_cta_url)}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-700 px-8 py-3 text-sm font-bold text-white shadow transition hover:bg-teal-800">
               {page.hero_cta_text}
             </a>
@@ -340,10 +341,10 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
         </a>
         <div className="hidden items-center gap-6 md:flex">
           {links.map((l, i) => (
-            <a key={i} href={l.url} className="text-sm text-stone-500 transition hover:text-stone-900">{l.label}</a>
+            <a key={i} href={rewritePublicHref(l.url)} className="text-sm text-stone-500 transition hover:text-stone-900">{l.label}</a>
           ))}
           {s.cta_text && (
-            <a href={s.cta_url ?? "/book"}
+            <a href={rewritePublicHref(s.cta_url ?? "/book")}
               className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
               {s.cta_text}
             </a>
@@ -356,10 +357,10 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
       {open && (
         <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
           {links.map((l, i) => (
-            <a key={i} href={l.url} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
+            <a key={i} href={rewritePublicHref(l.url)} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
           ))}
           {s.cta_text && (
-            <a href={s.cta_url ?? "/book"} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+            <a href={rewritePublicHref(s.cta_url ?? "/book")} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
               {s.cta_text}
             </a>
           )}
@@ -465,7 +466,7 @@ function ButtonSection({ s }: { s: LPButtonSection }) {
   return (
     <section className="px-6 py-10">
       <div className={`mx-auto flex max-w-6xl ${justify}`}>
-        <a href={s.url}
+        <a href={rewritePublicHref(s.url)}
           className={`inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold shadow-sm transition ${outline ? outlineCls : solidCls}`}>
           {s.text}
         </a>
@@ -498,7 +499,7 @@ function HeroSection({ s }: { s: LPHeroSection }) {
           <p className="mx-auto mt-6 max-w-xl text-lg text-white/90">{s.subheadline}</p>
         )}
         {s.cta_text && (
-          <a href={s.cta_url ?? "/book"}
+          <a href={rewritePublicHref(s.cta_url ?? "/book")}
             className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
             {s.cta_text}
           </a>
@@ -624,7 +625,7 @@ function CtaBannerSection({ s }: { s: LPCtaBannerSection }) {
       <div className="mx-auto max-w-2xl">
         <h2 className="font-serif text-3xl font-bold">{s.headline}</h2>
         {s.subheadline && <p className="mt-3 text-base opacity-80">{s.subheadline}</p>}
-        <a href={s.cta_url}
+        <a href={rewritePublicHref(s.cta_url)}
           className={`mt-8 inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-bold shadow-lg transition ${btnCls}`}>
           {s.cta_text}
         </a>
@@ -927,6 +928,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
 
 /* ─── Nav ───────────────────────────────────────────────────────── */
 function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
+  const ctaHref = rewritePublicHref(ctaUrl);
   const [open, setOpen] = useState(false);
   return (
     <nav className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm">
@@ -938,7 +940,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
         <div className="hidden items-center gap-6 md:flex">
           <Link to="/" className="text-sm text-stone-500 transition hover:text-stone-900">Beranda</Link>
           <Link to="/" hash="rooms" className="text-sm text-stone-500 transition hover:text-stone-900">Kamar</Link>
-          <a href={ctaUrl}
+          <a href={ctaHref}
             className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
             {ctaText || "Pesan Sekarang"}
           </a>
@@ -951,7 +953,7 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
         <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
           <Link to="/" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Beranda</Link>
           <Link to="/" hash="rooms" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Kamar</Link>
-          <a href={ctaUrl} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+          <a href={ctaHref} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
             {ctaText || "Pesan Sekarang"}
           </a>
         </div>
@@ -975,7 +977,7 @@ function LPFooter() {
             <ul className="space-y-2 text-sm">
               {[
                 { href: "/", label: "Beranda" },
-                { href: "/rooms", label: "Kamar" },
+                { href: "/#rooms", label: "Kamar" },
                 { href: "/book", label: "Reservasi" },
               ].map((l) => (
                 <li key={l.href}><a href={l.href} className="transition hover:text-white">{l.label}</a></li>

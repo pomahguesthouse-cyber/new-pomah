@@ -706,7 +706,7 @@ export function PomahHomeView({
                   type="button"
                   onClick={() =>
                     document
-                      .getElementById("our-room")
+                      .getElementById("rooms")
                       ?.scrollIntoView({ behavior: "smooth", block: "start" })
                   }
                   aria-label={cfg.datePicker.buttonLabel}
@@ -916,7 +916,7 @@ export function PomahHomeView({
         return (
           <PbZone id="carousel" label="Our Room" pb={pb} layout={cfg.sectionLayouts?.carousel}>
             <section
-              id="our-room"
+              id="rooms"
               className="relative scroll-mt-20 py-20 bg-cover bg-center bg-no-repeat"
               style={{
                 zIndex: cfg.roomCarousel.layer,
