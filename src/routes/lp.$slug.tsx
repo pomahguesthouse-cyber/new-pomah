@@ -34,6 +34,7 @@ import {
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { rewritePublicHref } from "@/public/lib/public-href";
+import { buildStorageImageUrl } from "@/lib/storage-image";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -400,7 +401,7 @@ function SliderSection({ s }: { s: LPSliderSection }) {
           <video src={active.videoUrl} autoPlay muted loop playsInline
             className="absolute inset-0 h-full w-full object-cover" />
         ) : active.imageUrl ? (
-          <img src={active.imageUrl} alt={active.heading} loading="lazy"
+          <img src={buildStorageImageUrl(active.imageUrl, { width: 1200, quality: 60 })} width={1200} height={675} alt={active.heading || "Pomah Guesthouse"} loading="lazy"
             className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
@@ -867,7 +868,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                     <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
                         {rt.hero_image_url
-                          ? <img src={rt.hero_image_url} alt={rt.name} className="absolute inset-0 h-full w-full object-cover" />
+                          ? <img src={buildStorageImageUrl(rt.hero_image_url, { width: 640, quality: 60 })} width={640} height={480} alt={rt.name} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
                           : <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">Foto Kamar</div>}
                       </div>
                       <div className="p-6">

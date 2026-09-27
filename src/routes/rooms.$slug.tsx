@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
+import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -345,8 +346,15 @@ function RoomBookingPage() {
               <div className="aspect-[16/10] w-full bg-stone-100">
                 {gallery[active] ? (
                   <img
-                    src={gallery[active]}
+                    src={buildStorageImageUrl(gallery[active], { width: 960, quality: 60 })}
+                    srcSet={buildStorageImageSrcSet(gallery[active], [480, 768, 960], { quality: 60 })}
+                    sizes="(max-width: 1024px) 100vw, 720px"
+                    width={960}
+                    height={600}
                     alt={room.name}
+                    loading={active === 0 ? "eager" : "lazy"}
+                    fetchPriority={active === 0 ? "high" : "low"}
+                    decoding="async"
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -367,7 +375,15 @@ function RoomBookingPage() {
                       i === active ? "border-amber-600" : "border-transparent opacity-80",
                     )}
                   >
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={buildStorageImageUrl(src, { width: 240, quality: 60 })}
+                      width={112}
+                      height={80}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
                   </button>
                 ))}
               </div>
@@ -544,7 +560,15 @@ function RoomBookingPage() {
                   >
                     <div className="aspect-[4/3] bg-stone-100">
                       {cover ? (
-                        <img src={cover} alt={o.name} className="h-full w-full object-cover" />
+                        <img
+                          src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
+                          width={640}
+                          height={480}
+                          alt={o.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-cover"
+                        />
                       ) : null}
                     </div>
                     <div className="p-5">

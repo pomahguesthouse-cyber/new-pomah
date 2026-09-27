@@ -7,6 +7,7 @@ import { getPublicSiteData, submitCartBooking, checkRoomTypeAvailability } from 
 import { PomahNav, PomahFooter, HeroSlider, type Pb } from "@/public/components/public-shell";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { buildStorageImageUrl } from "@/lib/storage-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -352,7 +353,7 @@ function BookPage() {
                           </div>
                           <div className="aspect-[4/3] bg-stone-100 relative overflow-hidden">
                             {room.hero_image_url ? (
-                              <img src={room.hero_image_url} alt={room.name} className="w-full h-full object-cover" />
+                              <img src={buildStorageImageUrl(room.hero_image_url, { width: 640, quality: 60 })} width={640} height={480} alt={room.name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-stone-300">
                                 <BedDouble className="w-12 h-12" />

@@ -9,8 +9,9 @@ import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
 import { rewritePublicHref } from "@/public/lib/public-href";
 
 // Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
-const HERO_WIDTHS = [640, 960, 1280, 1600, 1920];
+const HERO_WIDTHS = [480, 768, 1200];
 const HERO_SIZES = "100vw";
+const HERO_QUALITY = 60;
 
 /* ------------------------------------------------------------------ */
 /* Public Nav                                                           */
@@ -748,12 +749,14 @@ export function HeroSlider({
           />
         ) : active.imageUrl ? (
           <img
-            src={buildStorageImageUrl(active.imageUrl, { width: 1600, quality: 75 })}
-            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: 75 })}
+            src={buildStorageImageUrl(active.imageUrl, { width: 768, quality: HERO_QUALITY })}
+            srcSet={buildStorageImageSrcSet(active.imageUrl, HERO_WIDTHS, { quality: HERO_QUALITY })}
             sizes={HERO_SIZES}
-            alt={active.heading}
+            width={1200}
+            height={675}
+            alt={active.heading || "Pomah Guesthouse Semarang"}
             loading={i === 0 ? "eager" : "lazy"}
-            fetchPriority={i === 0 ? "high" : "auto"}
+            fetchPriority={i === 0 ? "high" : "low"}
             decoding="async"
             className="absolute inset-0 h-full w-full object-cover"
           />

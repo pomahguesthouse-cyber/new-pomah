@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
+import { buildStorageImageUrl } from "../src/lib/storage-image";
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { rewritePublicHref } from "../src/public/lib/public-href";
 import {
@@ -233,5 +234,18 @@ assert.ok(guideLinks.some((link) => link.href === "/explore/gedongsongo-festival
 assert.ok(guideLinks.some((link) => link.href === "/explore/lawang-sewu-short-film-festival-loff-2026"));
 assert.ok(guideLinks.some((link) => link.href === "/explore/rute-bus-trans-semarang-baru-resmi-dibuka"));
 assert.ok(guideLinks.some((link) => link.href === "/lp/penginapan-dekat-unnes"));
+
+const transformed = buildStorageImageUrl(
+  "https://example.supabase.co/storage/v1/object/public/room-images/hero.png",
+  { width: 768, quality: 60 },
+);
+assert.match(transformed, /\/storage\/v1\/render\/image\/public\//);
+assert.match(transformed, /format=webp/);
+assert.match(transformed, /width=768/);
+assert.doesNotMatch(transformed, /format=origin/);
+assert.equal(
+  buildStorageImageUrl("https://images.unsplash.com/photo-1", { width: 640 }),
+  "https://images.unsplash.com/photo-1",
+);
 
 console.log("test-public-seo: ok");

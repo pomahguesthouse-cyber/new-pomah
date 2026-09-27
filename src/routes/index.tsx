@@ -91,10 +91,10 @@ export const Route = createFileRoute("/")({
     const twitterDescription = seo.twitterDescription || desc;
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
     const heroImage = heroImageRaw
-      ? buildStorageImageUrl(heroImageRaw, { width: 1600, quality: 75 })
+      ? buildStorageImageUrl(heroImageRaw, { width: 768, quality: 60 })
       : "";
     const heroImageSrcSet = heroImageRaw
-      ? buildStorageImageSrcSet(heroImageRaw, [640, 960, 1280, 1600, 1920], { quality: 75 })
+      ? buildStorageImageSrcSet(heroImageRaw, [480, 768, 1200], { quality: 60 })
       : undefined;
     const canonical = canonicalHeadTags("/");
     return {
@@ -2315,8 +2315,14 @@ function RoomCarousel({
                       null;
                     return cover ? (
                       <img
-                        src={cover}
+                        src={buildStorageImageUrl(cover, { width: 640, quality: 60 })}
+                        srcSet={buildStorageImageSrcSet(cover, [320, 480, 640], { quality: 60 })}
+                        sizes="(max-width: 640px) 100vw, 33vw"
+                        width={640}
+                        height={480}
                         alt={rt.name}
+                        loading="lazy"
+                        decoding="async"
                         className="absolute inset-0 h-full w-full object-cover"
                         onError={(e) => {
                           // Image URL broken / 404 / forbidden — hide and show fallback
