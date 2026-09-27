@@ -700,7 +700,7 @@ export function HeroSlider({
 }: {
   hero: HomepageConfig["hero"];
   fallbackTitle: string;
-  /** Teks H1 dari pengaturan SEO; menggantikan heading slide pertama bila diisi. */
+  /** Static H1, rendered outside the rotating slide. */
   h1Text?: string;
   /** Optional gold script accent rendered just under the heading (home only). */
   accent?: string;
@@ -722,11 +722,19 @@ export function HeroSlider({
 
   const active = slides[i % slides.length];
   const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+  const staticH1 = (h1Text ?? "").trim();
 
   return (
     <header
       className="relative w-full overflow-hidden"
-      style={{ height: hero.height, zIndex: hero.layer }}
+      style={
+        {
+          height: hero.height,
+          zIndex: hero.layer,
+          "--fs-mob": `${hero.fontSizeMobile ?? 32}px`,
+          "--fs-desk": `${hero.fontSize}px`,
+        } as React.CSSProperties
+      }
     >
       <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
         {active.videoUrl ? (
@@ -753,15 +761,17 @@ export function HeroSlider({
           <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
-        <div
-          className={`relative mx-auto flex h-full max-w-6xl flex-col justify-center px-6 ${
-            hero.textAlign === "left"
-              ? "items-start text-left"
-              : hero.textAlign === "right"
-                ? "items-end text-right"
-                : "items-center text-center"
-          }`}
-        >
+      </div>
+      <div
+        className={`relative z-10 mx-auto flex h-full max-w-6xl flex-col justify-center px-6 ${
+          hero.textAlign === "left"
+            ? "items-start text-left"
+            : hero.textAlign === "right"
+              ? "items-end text-right"
+              : "items-center text-center"
+        }`}
+      >
+        {staticH1 ? (
           <h1
             className={`hero-heading max-w-3xl tracking-tight drop-shadow ${
               hero.fontFamily === "mono"
@@ -770,27 +780,35 @@ export function HeroSlider({
                   ? "font-sans"
                   : "font-serif"
             }`}
-            style={
-              {
-                "--fs-mob": `${hero.fontSizeMobile ?? 32}px`,
-                "--fs-desk": `${hero.fontSize}px`,
-                fontSize: "var(--fs-mob)",
-                lineHeight: 1.1,
-                fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
-                fontWeight: hero.fontStyle === "bold" ? 700 : 400,
-                color: hero.color || "#ffffff",
-              } as React.CSSProperties
-            }
+            style={{
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+              color: hero.color || "#ffffff",
+            }}
           >
-            <style>{`
-              @media (min-width: 768px) {
-                .hero-heading {
-                  font-size: var(--fs-desk) !important;
-                }
-              }
-            `}</style>
-            {i === 0 && h1Text ? h1Text : active.heading}
+            {staticH1}
           </h1>
+        ) : null}
+        {active.heading && active.heading !== staticH1 ? (
+          <p
+            className={`max-w-3xl tracking-tight drop-shadow ${
+              staticH1 ? "mt-3 text-2xl md:text-3xl" : "hero-heading"
+            } ${
+              hero.fontFamily === "mono"
+                ? "font-mono"
+                : hero.fontFamily === "sans"
+                  ? "font-sans"
+                  : "font-serif"
+            }`}
+            style={{
+              fontStyle: hero.fontStyle === "italic" ? "italic" : "normal",
+              fontWeight: hero.fontStyle === "bold" ? 700 : 400,
+              color: hero.color || "#ffffff",
+            }}
+          >
+            {active.heading}
+          </p>
+        ) : null}
           {accent && (
             <p className="mt-1 font-serif text-3xl italic text-amber-300 drop-shadow md:text-4xl">
               {accent}
@@ -817,7 +835,6 @@ export function HeroSlider({
           {actions && (
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">{actions}</div>
           )}
-        </div>
       </div>
       {slides.length > 1 && (
         <>

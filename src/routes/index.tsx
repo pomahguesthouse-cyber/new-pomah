@@ -58,7 +58,7 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, publicSeoMeta } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
 const BookingDialog = lazy(() =>
@@ -587,7 +587,7 @@ export function PomahHomeView({
         <HeroSlider
           hero={cfg.hero}
           fallbackTitle={`Selamat Datang Di ${propertyName}`}
-          h1Text={cfg.seo.h1 || undefined}
+          h1Text={resolveHomepageH1(cfg.seo.h1)}
           accent={cfg.hero.accent}
           rating={{ score: gRating, total: gTotal }}
           actions={

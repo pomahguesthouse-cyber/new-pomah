@@ -16,10 +16,14 @@ import {
   EXPLORE_SEO,
   HOME_SEO,
   publicSeoMeta,
+  resolveHomepageH1,
   resolveRoomPublicSeo,
 } from "../src/public/lib/public-seo";
 
-assert.equal(HOME_SEO.h1, "Penginapan Dekat UNNES Semarang");
+assert.equal(HOME_SEO.h1, "Guesthouse Keluarga di Semarang, Dekat UNNES");
+assert.equal(resolveHomepageH1("Penginapan Dekat UNNES Semarang"), HOME_SEO.h1);
+assert.equal(resolveHomepageH1(""), HOME_SEO.h1);
+assert.equal(resolveHomepageH1("Judul kustom Dewi"), "Judul kustom Dewi");
 assert.equal(HOME_SEO.title, "Pomah Guesthouse | Penginapan Dekat UNNES Semarang");
 assert.equal(
   HOME_SEO.description,

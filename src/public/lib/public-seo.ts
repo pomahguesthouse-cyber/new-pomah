@@ -7,8 +7,20 @@
  * fallback. Do not invent new marketing strings here.
  */
 
+/** Visible homepage H1. Change this constant when the final copy is ready. */
+export const HOMEPAGE_H1 = "Guesthouse Keluarga di Semarang, Dekat UNNES";
+
+/** Previous default. Stored configs that still have this string use HOMEPAGE_H1. */
+const LEGACY_HOMEPAGE_H1 = "Penginapan Dekat UNNES Semarang";
+
+export function resolveHomepageH1(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || value === LEGACY_HOMEPAGE_H1) return HOMEPAGE_H1;
+  return value;
+}
+
 export const HOME_SEO = {
-  h1: "Penginapan Dekat UNNES Semarang",
+  h1: HOMEPAGE_H1,
   title: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
   description:
     "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
