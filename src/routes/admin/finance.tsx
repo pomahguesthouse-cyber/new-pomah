@@ -27,6 +27,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -260,11 +261,11 @@ function FinancePage() {
           {mode !== "custom" && (
             <div className="space-y-1">
               <Label className="text-xs">Tahun</Label>
-              <Input
-                type="number"
+              <NumericInput
                 className="w-[110px]"
+                emptyValue={now.getFullYear()}
                 value={year}
-                onChange={(e) => setYear(Number(e.target.value) || now.getFullYear())}
+                onValueChange={setYear}
               />
             </div>
           )}

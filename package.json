@@ -23,6 +23,7 @@
     "test:security": "tsx scripts/test-security-hardening.ts",
     "test:date-consistency": "tsx scripts/test-date-parsing-consistency.ts",
     "test:guest-count": "tsx scripts/test-guest-count-capacity.ts",
+    "test:numeric-input": "tsx scripts/test-numeric-input.ts",
     "test:chatbot-consistency": "tsx scripts/test-chatbot-consistency-regressions.ts",
     "test:booking-form-followup": "tsx scripts/test-booking-form-followup.ts",
     "test:manager-pricing-command": "tsx scripts/test-manager-pricing-command.ts",

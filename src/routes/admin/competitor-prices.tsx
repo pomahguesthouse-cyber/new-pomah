@@ -11,6 +11,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
@@ -236,10 +237,12 @@ function CompetitorPricesPage() {
             className="flex-1 min-w-[200px]"
             disabled={running}
           />
-          <Input
-            type="number" min={1} max={20}
+          <NumericInput
+            min={1}
+            max={20}
+            emptyValue={8}
             value={limit}
-            onChange={(e) => setLimit(Number(e.target.value) || 8)}
+            onValueChange={setLimit}
             className="w-20"
             disabled={running}
           />

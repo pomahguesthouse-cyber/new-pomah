@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -559,10 +560,10 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   <DatePickerID value={checkOut} min={checkIn || undefined} onChange={(iso) => setCheckOut(iso)} />
                 </Field>
                 <Field label="Dewasa">
-                  <Input type="number" min={1} max={20} value={adults} onChange={(e) => setAdults(Number(e.target.value) || 1)} />
+                  <NumericInput min={1} max={20} emptyValue={1} value={adults} onValueChange={setAdults} />
                 </Field>
                 <Field label="Anak">
-                  <Input type="number" min={0} max={20} value={children} onChange={(e) => setChildren(Number(e.target.value) || 0)} />
+                  <NumericInput min={0} max={20} value={children} onValueChange={setChildren} />
                 </Field>
               </div>
               {nights >= 1 ? (
@@ -722,7 +723,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
                   </Select>
                 </Field>
                 <Field label="Jumlah Dibayar (Rp)">
-                  <Input type="number" min={0} step={10000} value={paidAmount} onChange={(e) => setPaidAmount(Number(e.target.value) || 0)} />
+                  <NumericInput min={0} value={paidAmount} onValueChange={setPaidAmount} />
                 </Field>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2 rounded-md border border-border bg-muted/30 p-3">

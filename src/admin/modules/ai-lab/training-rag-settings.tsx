@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Loader2, Save, Sparkles, Database } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -123,17 +123,13 @@ export function TrainingRagSettings() {
               {matchCount}
             </span>
           </div>
-          <Input
+          <NumericInput
             id="rag-topk"
-            type="number"
             min={1}
             max={10}
-            step={1}
+            emptyValue={1}
             value={matchCount}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n)) setMatchCount(Math.min(10, Math.max(1, Math.round(n))));
-            }}
+            onValueChange={setMatchCount}
             disabled={!enabled}
           />
           <p className="text-xs text-muted-foreground">
