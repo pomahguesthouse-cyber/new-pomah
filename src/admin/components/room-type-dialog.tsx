@@ -629,7 +629,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 <Label className="text-xs">H1 halaman</Label>
                 <Input
                   value={seoH1}
-                  placeholder="mis. Kamar Deluxe, Penginapan Dekat UNNES"
+                  placeholder="mis. Kamar Deluxe"
                   onChange={(e) => setSeoH1(e.target.value)}
                 />
               </div>
@@ -637,7 +637,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 <Label className="text-xs">SEO title ({seoTitle.length}/60)</Label>
                 <Input
                   value={seoTitle}
-                  placeholder="mis. Kamar Deluxe | Penginapan Dekat UNNES Semarang"
+                  placeholder="mis. Kamar Deluxe – Pomah Guesthouse Semarang"
                   onChange={(e) => setSeoTitle(e.target.value)}
                 />
               </div>

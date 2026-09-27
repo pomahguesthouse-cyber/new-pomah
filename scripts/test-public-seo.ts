@@ -98,44 +98,60 @@ const homeFromSeed = mergeHomepageConfig({
 assert.equal(homeFromSeed.seo.h1, HOME_SEO.h1);
 assert.equal(homeFromSeed.seo.twitterTitle, HOME_SEO.title);
 
+const legacy = resolveRoomPublicSeo({
+  name: "Kamar Single",
+  slug: "kamar-single",
+  seo_h1: "Kamar Single, Penginapan Dekat UNNES",
+  seo_title: "Kamar Single | Penginapan Dekat UNNES Semarang",
+  meta_description: "Deskripsi kustom yang tetap dipakai.",
+});
+assert.equal(legacy.h1, "Kamar Single");
+assert.equal(legacy.title, "Kamar Single – Pomah Guesthouse Semarang");
+assert.equal(legacy.description, "Deskripsi kustom yang tetap dipakai.");
+assert.doesNotMatch(legacy.title + legacy.h1, /Penginapan Dekat UNNES/);
+
+const emptyRoom = resolveRoomPublicSeo({ name: "Family Suite 100", slug: "family-suite-100" });
+assert.equal(emptyRoom.title, "Family Suite 100 – Pomah Guesthouse Semarang");
+assert.equal(emptyRoom.h1, "Family Suite 100");
+
 const rooms: Array<{ slug: string; name: string; h1: string; title: string; description: string }> = [
   {
     slug: "kamar-single",
     name: "Kamar Single",
-    h1: "Kamar Single, Penginapan Dekat UNNES",
-    title: "Kamar Single | Penginapan Dekat UNNES Semarang",
+    h1: "Kamar Single",
+    title: "Kamar Single – Pomah Guesthouse Semarang",
     description:
       "Kamar single di penginapan dekat UNNES Semarang. Praktis untuk solo traveler: bersih, WiFi, AC. Pomah Guesthouse, Sampangan.",
   },
   {
     slug: "deluxe",
     name: "Kamar Deluxe",
-    h1: "Kamar Deluxe, Penginapan Dekat UNNES",
-    title: "Kamar Deluxe | Penginapan Dekat UNNES Semarang",
+    h1: "Kamar Deluxe",
+    title: "Kamar Deluxe – Pomah Guesthouse Semarang",
     description:
       "Kamar Deluxe di Pomah Guesthouse, penginapan dekat UNNES Semarang. Nyaman untuk dua orang, WiFi, AC, dan parkir.",
   },
   {
     slug: "grand-deluxe",
     name: "Grand Deluxe",
-    h1: "Grand Deluxe, Penginapan Dekat UNNES",
-    title: "Grand Deluxe | Penginapan Dekat UNNES Semarang",
+    h1: "Grand Deluxe",
+    title: "Grand Deluxe – Pomah Guesthouse Semarang",
     description:
       "Grand Deluxe Pomah Guesthouse: kamar lebih lega di penginapan dekat UNNES Semarang. Tenang, WiFi, AC, parkir tersedia.",
   },
   {
     slug: "family-suite-100",
     name: "Family Suite 100",
-    h1: "Family Suite 100, Penginapan Dekat UNNES",
-    title: "Family Suite 100 | Penginapan Dekat UNNES Semarang",
+    h1: "Family Suite 100",
+    title: "Family Suite 100 – Pomah Guesthouse Semarang",
     description:
       "Family Suite 100 di penginapan dekat UNNES Semarang. Suite luas, 2 kamar tidur, 2 kamar mandi, nyaman untuk keluarga.",
   },
   {
     slug: "family-room-222",
     name: "Family Room 222",
-    h1: "Family Room 222, Penginapan Dekat UNNES",
-    title: "Family Room 222 | Penginapan Dekat UNNES Semarang",
+    h1: "Family Room 222",
+    title: "Family Room 222 – Pomah Guesthouse Semarang",
     description:
       "Family Room 222, kamar andalan Pomah Guesthouse. Penginapan dekat UNNES Semarang untuk keluarga, terasa seperti di rumah.",
   },

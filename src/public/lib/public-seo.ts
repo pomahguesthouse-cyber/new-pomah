@@ -92,6 +92,20 @@ export type RoomSeoSource = {
   hero_image_url?: string | null;
 };
 
+const LEGACY_ROOM_TITLE = /penginapan dekat unnes/i;
+
+/** Drop the old shared "Penginapan Dekat UNNES" title template. Custom copy is kept. */
+function roomSeoField(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed || LEGACY_ROOM_TITLE.test(trimmed)) return "";
+  return trimmed;
+}
+
+/** Default document title when a room has no custom SEO title yet. */
+export function defaultRoomSeoTitle(name: string): string {
+  return `${name} – Pomah Guesthouse Semarang`;
+}
+
 /** Resolve a room page's H1 / title / meta from saved room_types SEO columns. */
 export function resolveRoomPublicSeo(room: RoomSeoSource): {
   h1: string;
@@ -102,14 +116,14 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
   ogImageUrl: string;
 } {
   const name = firstNonEmpty(room.name, "Kamar");
-  const title = firstNonEmpty(room.seo_title, `${name} | Penginapan Dekat UNNES Semarang`);
+  const title = firstNonEmpty(roomSeoField(room.seo_title), defaultRoomSeoTitle(name));
   const description = firstNonEmpty(
     room.meta_description,
     room.description,
-    `${name} di Pomah Guesthouse, penginapan dekat UNNES Semarang.`,
+    `${name} di Pomah Guesthouse Semarang.`,
   );
   return {
-    h1: firstNonEmpty(room.seo_h1, `${name}, Penginapan Dekat UNNES`),
+    h1: firstNonEmpty(roomSeoField(room.seo_h1), name),
     title,
     description,
     twitterTitle: title,
