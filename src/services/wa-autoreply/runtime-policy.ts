@@ -8,6 +8,10 @@
  * yang menyerah lalu menjawab sendiri. Sekarang: minta tamu menunggu, tanpa
  * membebani tamu dengan aksi, dan tanpa mengklaim datanya hilang.
  */
+
+import { isClearGreeting, isClearThanks, isEmojiOnly } from "@/ai/router/message-gates";
+import { isMediaRequest, looksLikeBookingInquiry } from "@/services/wa-autoreply/message-parsers";
+
 export const FALLBACK_MESSAGE =
   "Mohon maaf Kak, balasannya sedikit lebih lama dari biasanya. Pertanyaan Kakak sudah kami terima dan sedang kami siapkan jawabannya ya 🙏";
 
@@ -17,22 +21,20 @@ export const MANAGER_FALLBACK_MESSAGE =
 export const QUICK_ACK_MESSAGE = "Sebentar Kak, saya cekkan dulu ya.";
 
 /**
- * Ack harus berangkat dalam anggaran ini, dihitung dari saat worker
- * mengambil item antrian (`workerStartedAt`), bukan dari akhir retrieval.
+ * Ack "Sebentar Kak…" hanya kalau jawaban belum siap setelah ambang ini,
+ * dihitung dari saat worker mengambil item antrian (`workerStartedAt`).
  *
- * `QUICK_ACK_SEND_BUDGET_MS` menyisakan waktu untuk cek dedup DB + kirim
- * teks. Callback dijadwalkan pada `deadline - sendBudget` supaya kirim
- * biasanya selesai di bawah 2 detik. Diukur oleh
- * `scripts/test-meta-guest-fastpath.ts` (timer dinding-jam, tanpa mengirim
- * WhatsApp).
+ * Nilai lama (deadline 1,6 dtk, timer ~0,9 dtk) menembak bersamaan dengan
+ * balasan cepat. Sapaan "malam" selesai ~1,3 dtk lalu ack Meta-nya menyusul
+ * SETELAH jawaban, karena kirim ack tidak dibatalkan begitu balasan siap.
+ * Sekarang timer baru menyala di ~3 dtk, dan hanya untuk pesan yang
+ * benar-benar butuh lookup tool.
  */
-export const QUICK_ACK_DEADLINE_MS = 1_600;
-export const QUICK_ACK_SEND_BUDGET_MS = 700;
+export const QUICK_ACK_SLOW_THRESHOLD_MS = 3_000;
 
 export function quickAckDelayMs(elapsedSincePickupMs: number): number {
   const elapsed = Number.isFinite(elapsedSincePickupMs) ? Math.max(0, elapsedSincePickupMs) : 0;
-  const targetStart = QUICK_ACK_DEADLINE_MS - QUICK_ACK_SEND_BUDGET_MS;
-  return Math.max(0, targetStart - elapsed);
+  return Math.max(0, QUICK_ACK_SLOW_THRESHOLD_MS - elapsed);
 }
 
 const CLOSING_CHITCHAT_RE =
@@ -44,6 +46,48 @@ export function isQuickAckSuppressedMessage(message: string): boolean {
   if (!text || text.length > 60) return false;
   if (text.includes("?")) return false;
   return CLOSING_CHITCHAT_RE.test(text);
+}
+
+const SHORT_SMALL_TALK_RE =
+  /^(?:ok+|oke+|okay|sip|siap|baik(?:lah)?|iya+|ya+|yoi|hehe+|haha+|wkwk+|hihi+|lol|apa kabar(?:nya)?|kabar baik|gimana kabar(?:nya)?|lagi apa|ngapain)(?:\s+(?:kak|kakak|ka|ya|yah|dong|deh|nih))*[.!\s]*$/i;
+
+/**
+ * Availability, harga, booking, atau foto/brosur — pekerjaan yang sering
+ * menunggu tool. "malam" saja TIDAK masuk: itu sapaan, walaupun
+ * `HEAVY_INTENT_RE` memakai kata yang sama untuk anggaran AI ("2 malam").
+ */
+export function messageLikelyNeedsToolLookup(message: string): boolean {
+  const text = (message ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (isMediaRequest(text)) return true;
+  if (
+    /\b(?:harga|tarif|rate|biaya|pricelist|price|tersedia|ketersediaan|available|availability|kosong|booking|reservasi|check-?in|check-?out|invoice|refund)\b/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  if (/\d+\s*malam\b/i.test(text)) return true;
+  return looksLikeBookingInquiry(text);
+}
+
+/**
+ * Jadwalkan ack hanya bila pesan ini pantas menunggu lookup.
+ * Sapaan, terima kasih, dan small talk singkat tidak pernah di-ack.
+ */
+export function shouldArmQuickAck(message: string): boolean {
+  const text = (message ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (
+    isClearGreeting(text) ||
+    isClearThanks(text) ||
+    isEmojiOnly(text) ||
+    isQuickAckSuppressedMessage(text) ||
+    (text.length <= 40 && SHORT_SMALL_TALK_RE.test(text))
+  ) {
+    return false;
+  }
+  return messageLikelyNeedsToolLookup(text);
 }
 
 export function buildStateAwareFallback(state?: string): string {

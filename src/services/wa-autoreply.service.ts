@@ -44,10 +44,11 @@ import {
   MANAGER_FALLBACK_MESSAGE,
   QUICK_ACK_MESSAGE,
   buildStateAwareFallback,
-  isQuickAckSuppressedMessage,
   pickAiBudgetMs,
   quickAckDelayMs,
+  shouldArmQuickAck,
 } from "@/services/wa-autoreply/runtime-policy";
+import { createQuickAckGate, type QuickAckGate } from "@/services/wa-autoreply/quick-ack-gate";
 import {
   MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
   planMediaFastPath,
@@ -624,123 +625,121 @@ export async function executeAutoreplyForPhone(
     return "skipped_config";
   }
 
-  // Ack "Sebentar Kak…" dijadwalkan dari awal pemrosesan, bukan setelah
-  // retrieval. Anggaran: quickAckDelayMs + kirim ≈ di bawah 2 detik sejak
-  // workerStartedAt. Fast-path yang sudah punya balasan membatalkan timer.
+  // Ack "Sebentar Kak…" hanya untuk lookup yang masih berjalan setelah ~3 dtk.
+  // Sapaan/basa-basi tidak dijadwalkan. Timer dibatalkan begitu jawaban ada;
+  // kalau kirim ack sudah diklaim, balasan menunggu Meta ack selesai.
   let reply: string | null = null;
-  let quickAckTimer: ReturnType<typeof setTimeout> | undefined;
-  let quickAckAborted = false;
-  const clearQuickAck = () => {
-    quickAckAborted = true;
-    if (quickAckTimer) {
-      clearTimeout(quickAckTimer);
-      quickAckTimer = undefined;
-    }
+  let quickAck: QuickAckGate = createQuickAckGate({
+    enabled: false,
+    delayMs: 0,
+    prepare: async () => null,
+    send: async () => {},
+  });
+  const adoptReply = (text: string) => {
+    reply = text;
+    quickAck.noteAnswerReady();
   };
   const earlyInbound =
     [...((c.messages ?? []) as Array<{ direction?: string; body?: string }>)]
       .reverse()
       .find((m) => m.direction === "in")?.body ?? "";
-  if (
-    QUICK_ACK_ENABLED &&
-    !isManager &&
-    queueEntryId &&
-    c.wpp_token &&
-    earlyInbound.trim() &&
-    !isQuickAckSuppressedMessage(earlyInbound)
-  ) {
-    const ackEntryId = queueEntryId;
-    const delay = quickAckDelayMs(Date.now() - metrics.workerStartedAt);
-    quickAckTimer = setTimeout(() => {
-      void (async () => {
-        if (quickAckAborted || reply) return;
-        try {
-          const { data: existingAck } = await (supabaseAdmin as any)
-            .from("whatsapp_messages")
-            .select("id")
-            .eq("thread_id", c.thread_id)
-            .eq("direction", "out")
-            .filter("metadata->>queue_entry_id", "eq", ackEntryId)
-            .filter("metadata->>is_ack", "eq", "true")
-            .limit(1);
-          if (quickAckAborted || reply || (existingAck ?? []).length > 0) return;
+  const ackEntryId = queueEntryId ?? "";
+  const supersedeAckRow = async (ackRowId: string | null) => {
+    if (!ackRowId) return;
+    try {
+      await (supabaseAdmin as any)
+        .from("whatsapp_messages")
+        .update({
+          metadata: {
+            agent: "system",
+            agent_key: "quick-ack",
+            is_ack: true,
+            queue_entry_id: ackEntryId,
+            send_status: "superseded",
+          } as any,
+        })
+        .eq("id", ackRowId);
+    } catch {
+      // ignore
+    }
+  };
+  quickAck = createQuickAckGate({
+    enabled:
+      QUICK_ACK_ENABLED &&
+      !isManager &&
+      !!queueEntryId &&
+      !!c.wpp_token &&
+      !!earlyInbound.trim() &&
+      shouldArmQuickAck(earlyInbound),
+    delayMs: quickAckDelayMs(Date.now() - metrics.workerStartedAt),
+    prepare: async (stillPending) => {
+      if (!stillPending()) return null;
+      try {
+        const { data: existingAck } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "out")
+          .filter("metadata->>queue_entry_id", "eq", ackEntryId)
+          .filter("metadata->>is_ack", "eq", "true")
+          .not("metadata->>send_status", "eq", "superseded")
+          .limit(1);
+        if (!stillPending() || (existingAck ?? []).length > 0) return null;
 
-          const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
-          const { data: recentAck } = await (supabaseAdmin as any)
-            .from("whatsapp_messages")
-            .select("id")
-            .eq("thread_id", c.thread_id)
-            .eq("direction", "out")
-            .filter("metadata->>is_ack", "eq", "true")
-            .gte("sent_at", sixtySecAgo)
-            .limit(1);
-          if (quickAckAborted || reply || (recentAck ?? []).length > 0) return;
+        const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
+        const { data: recentAck } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "out")
+          .filter("metadata->>is_ack", "eq", "true")
+          .not("metadata->>send_status", "eq", "superseded")
+          .gte("sent_at", sixtySecAgo)
+          .limit(1);
+        if (!stillPending() || (recentAck ?? []).length > 0) return null;
 
-          const ackRowId = await saveOutboundMessage(supabaseAdmin, {
-            threadId: c.thread_id,
-            body: QUICK_ACK_MESSAGE,
-            metadata: {
-              agent: "system",
-              agent_key: "quick-ack",
-              is_ack: true,
-              queue_entry_id: ackEntryId,
-              send_status: "pending",
-            } as any,
-          });
+        const ackRowId = await saveOutboundMessage(supabaseAdmin, {
+          threadId: c.thread_id,
+          body: QUICK_ACK_MESSAGE,
+          metadata: {
+            agent: "system",
+            agent_key: "quick-ack",
+            is_ack: true,
+            queue_entry_id: ackEntryId,
+            send_status: "pending",
+          } as any,
+        });
+        if (!ackRowId || !stillPending()) {
+          await supersedeAckRow(ackRowId);
+          return null;
+        }
 
-          const { data: allAcks } = await (supabaseAdmin as any)
-            .from("whatsapp_messages")
-            .select("id, sent_at")
-            .eq("thread_id", c.thread_id)
-            .eq("direction", "out")
-            .filter("metadata->>queue_entry_id", "eq", ackEntryId)
-            .filter("metadata->>is_ack", "eq", "true")
-            .order("sent_at", { ascending: true })
-            .limit(5);
-          const winnerId = (allAcks ?? [])[0]?.id ?? null;
-          if (winnerId && winnerId !== ackRowId) {
-            try {
-              await (supabaseAdmin as any)
-                .from("whatsapp_messages")
-                .update({
-                  metadata: {
-                    agent: "system",
-                    agent_key: "quick-ack",
-                    is_ack: true,
-                    queue_entry_id: ackEntryId,
-                    send_status: "superseded",
-                  } as any,
-                })
-                .eq("id", ackRowId);
-            } catch {
-              // ignore
-            }
-            return;
-          }
-          if (quickAckAborted || reply) return;
-
-          const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, sendTarget, QUICK_ACK_MESSAGE);
-          if (!ok) {
-            console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
-            try {
-              await (supabaseAdmin as any)
-                .from("whatsapp_messages")
-                .update({
-                  metadata: {
-                    agent: "system",
-                    agent_key: "quick-ack",
-                    is_ack: true,
-                    queue_entry_id: ackEntryId,
-                    send_status: "failed",
-                  } as any,
-                })
-                .eq("id", ackRowId);
-            } catch {
-              // ignore
-            }
-            return;
-          }
-          metrics.ackSentAt = Date.now();
+        const { data: allAcks } = await (supabaseAdmin as any)
+          .from("whatsapp_messages")
+          .select("id, sent_at")
+          .eq("thread_id", c.thread_id)
+          .eq("direction", "out")
+          .filter("metadata->>queue_entry_id", "eq", ackEntryId)
+          .filter("metadata->>is_ack", "eq", "true")
+          .not("metadata->>send_status", "eq", "superseded")
+          .order("sent_at", { ascending: true })
+          .limit(5);
+        const winnerId = (allAcks ?? [])[0]?.id ?? null;
+        if ((winnerId && winnerId !== ackRowId) || !stillPending()) {
+          await supersedeAckRow(ackRowId);
+          return null;
+        }
+        return ackRowId;
+      } catch (e) {
+        console.warn("[Autoreply] quick ack error (non-fatal):", e);
+        return null;
+      }
+    },
+    send: async (ackRowId) => {
+      try {
+        const { ok, error: ackErr } = await sendWhatsAppMessage(c.wpp_token, sendTarget, QUICK_ACK_MESSAGE);
+        if (!ok) {
+          console.warn(`[Autoreply] quick ack failed for ${phone.slice(-6)}: ${ackErr}`);
           try {
             await (supabaseAdmin as any)
               .from("whatsapp_messages")
@@ -750,24 +749,42 @@ export async function executeAutoreplyForPhone(
                   agent_key: "quick-ack",
                   is_ack: true,
                   queue_entry_id: ackEntryId,
-                  send_status: "sent",
-                  latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+                  send_status: "failed",
                 } as any,
               })
               .eq("id", ackRowId);
           } catch {
             // ignore
           }
-          console.info(
-            `[Autoreply] quick ack sent to ${phone.slice(-6)} ` +
-              `(entry ${ackEntryId.slice(0, 8)}, latency=${metrics.ackSentAt - metrics.workerStartedAt}ms)`,
-          );
-        } catch (e) {
-          console.warn("[Autoreply] quick ack error (non-fatal):", e);
+          return;
         }
-      })();
-    }, delay);
-  }
+        metrics.ackSentAt = Date.now();
+        try {
+          await (supabaseAdmin as any)
+            .from("whatsapp_messages")
+            .update({
+              metadata: {
+                agent: "system",
+                agent_key: "quick-ack",
+                is_ack: true,
+                queue_entry_id: ackEntryId,
+                send_status: "sent",
+                latency_ms: metrics.ackSentAt - metrics.workerStartedAt,
+              } as any,
+            })
+            .eq("id", ackRowId);
+        } catch {
+          // ignore
+        }
+        console.info(
+          `[Autoreply] quick ack sent to ${phone.slice(-6)} ` +
+            `(entry ${ackEntryId.slice(0, 8)}, latency=${metrics.ackSentAt - metrics.workerStartedAt}ms)`,
+        );
+      } catch (e) {
+        console.warn("[Autoreply] quick ack error (non-fatal):", e);
+      }
+    },
+  });
 
   // Rasa manusiawi: tandai dibaca + tampilkan "sedang mengetik" sebelum
   // orchestration. Best-effort, tidak boleh memblokir alur balasan.
@@ -786,6 +803,7 @@ export async function executeAutoreplyForPhone(
         (handoffContext as { handoff?: unknown }).handoff === true
       ) {
         console.info(`[Autoreply] Human handoff active — skipping bot reply for ${phone.slice(-6)}`);
+        await quickAck.beforeReplySend();
         // Kirim satu ack sopan supaya tamu tidak merasa diabaikan saat admin
         // belum sempat membalas. Throttle 15 menit: hanya kirim jika ack
         // terakhir dari sistem (metadata.handoff_ack=true) lebih lama dari itu.
@@ -826,7 +844,6 @@ export async function executeAutoreplyForPhone(
         } catch (ackErr) {
           console.warn("[Autoreply] handoff ack guard failed:", ackErr);
         }
-        clearQuickAck();
         return "skipped_config";
       }
 
@@ -879,13 +896,14 @@ export async function executeAutoreplyForPhone(
         console.info(
           `[Autoreply] Zombie rescue: msg ${stuckMsg.id.slice(0, 8)} sudah diklaim worker lain — skip`,
         );
-        clearQuickAck();
+        await quickAck.beforeReplySend();
         return "ok";
       }
 
       console.warn(
         `[Autoreply] 🧟 Zombie rescue: resending pending msg ${stuckMsg.id.slice(0, 8)} to ${phone.slice(-6)}`,
       );
+      await quickAck.beforeReplySend();
       const { ok: reSent, error: reErr } = await (
         await import("@/services/whatsapp.service")
       ).sendWhatsAppMessage(c.wpp_token, sendTarget, stuckMsg.body);
@@ -1047,6 +1065,7 @@ export async function executeAutoreplyForPhone(
       const mediaPlan = planMediaFastPath(rollingMessages, (rooms ?? []) as any[]);
       if (mediaPlan?.kind === "room_photos") {
         const selected = roomsForPhotoPlan((rooms ?? []) as any[], mediaPlan);
+        await quickAck.beforeReplySend();
         const raw = await sendRoomPhotos(
           { room_type: mediaPlan.roomType ?? "", max_photos: mediaPlan.maxPhotos },
           {
@@ -1070,7 +1089,7 @@ export async function executeAutoreplyForPhone(
           const toolsUsed = ["Room - Kirim Foto ke WA Tamu"];
           // Commit the photo reply before the brochure send. A brochure failure
           // must not drop a successful photo send back into the LLM turn.
-          reply = sent ? mediaPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY;
+          adoptReply(sent ? mediaPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY);
           orchResult = {
             agentKey: "front-office",
             intent: "media_request",
@@ -1081,6 +1100,7 @@ export async function executeAutoreplyForPhone(
           };
           if (mediaPlan.alsoBrochure) {
             try {
+              await quickAck.beforeReplySend();
               const attached = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
               if (attached) toolsUsed.push("brochure-fast-path");
             } catch (brochureErr) {
@@ -1092,9 +1112,10 @@ export async function executeAutoreplyForPhone(
           );
         }
       } else if (mediaPlan?.kind === "brochure") {
+        await quickAck.beforeReplySend();
         const attached = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
         if (attached) {
-          reply = mediaPlan.reply;
+          adoptReply(mediaPlan.reply);
           orchResult = {
             agentKey: "front-office",
             intent: "media_request",
@@ -1125,7 +1146,7 @@ export async function executeAutoreplyForPhone(
       mode: "early",
     });
     if (fastFaq) {
-      reply = fastFaq.reply;
+      adoptReply(fastFaq.reply);
       orchResult = {
         agentKey: "front-office",
         intent: fastFaq.intent,
@@ -1139,7 +1160,7 @@ export async function executeAutoreplyForPhone(
   }
 
   if (!reply && !isManager && !bookingActive && !multiPendingInbound && isPerRoomRentalClarification(lastMessage)) {
-    reply = PER_ROOM_RENTAL_REPLY;
+    adoptReply(PER_ROOM_RENTAL_REPLY);
     orchResult = {
       agentKey: "front-office",
       intent: "per_room_rental_clarification",
@@ -1166,7 +1187,7 @@ export async function executeAutoreplyForPhone(
   if (!reply && !isManager && !bookingActive && !multiPendingInbound && !wantsMedia && lastMessage && !hasStoredAvailabilityDates) {
     const needDatesReply = buildRecentAvailabilityNeedDatesReply(rollingMessages);
     if (needDatesReply) {
-      reply = needDatesReply.reply;
+      adoptReply(needDatesReply.reply);
       orchResult = {
         agentKey: "front-office",
         intent: needDatesReply.intent,
@@ -1190,7 +1211,7 @@ export async function executeAutoreplyForPhone(
         origin,
       });
       if (tonightReply) {
-        reply = tonightReply.reply;
+        adoptReply(tonightReply.reply);
         orchResult = {
           agentKey: "front-office",
           intent: tonightReply.intent,
@@ -1222,7 +1243,7 @@ export async function executeAutoreplyForPhone(
         messages: rollingMessages,
       });
       if (guestCountReply) {
-        reply = guestCountReply.reply;
+        adoptReply(guestCountReply.reply);
         orchResult = {
           agentKey: "front-office",
           intent: guestCountReply.intent,
@@ -1247,7 +1268,7 @@ export async function executeAutoreplyForPhone(
         origin,
       });
       if (availabilityReply) {
-        reply = availabilityReply.reply;
+        adoptReply(availabilityReply.reply);
         orchResult = {
           agentKey: "front-office",
           intent: availabilityReply.intent,
@@ -1296,7 +1317,7 @@ export async function executeAutoreplyForPhone(
         chatSummary: chatSummaryJson as any,
       });
       if (contextualReply) {
-        reply = contextualReply.reply;
+        adoptReply(contextualReply.reply);
         orchResult = {
           agentKey: "front-office",
           intent: contextualReply.intent,
@@ -1340,7 +1361,7 @@ export async function executeAutoreplyForPhone(
         mode: "late",
       });
       if (propertyFaq) {
-        reply = propertyFaq.reply;
+        adoptReply(propertyFaq.reply);
         orchResult = {
           agentKey: "front-office",
           intent: propertyFaq.intent,
@@ -1361,7 +1382,10 @@ export async function executeAutoreplyForPhone(
   const lovableKey = process.env.LOVABLE_API_KEY?.trim();
   const useLovable = !explicitKey && !!lovableKey;
   const apiKey = explicitKey || lovableKey;
-  if (!apiKey && !reply) return "no_api_key";
+  if (!apiKey && !reply) {
+    await quickAck.beforeReplySend();
+    return "no_api_key";
+  }
 
   const baseUrl = useLovable
     ? "https://ai.gateway.lovable.dev/v1"
@@ -1458,7 +1482,7 @@ export async function executeAutoreplyForPhone(
         const { data: bs } = await (supabaseAdmin as any).rpc("get_active_booking_state", { p_phone: phone });
         const bookingContext = (bs as { context?: unknown } | null)?.context ?? {};
         const { reply: fReply, shouldHandoff } = buildFrustrationReply(kind, bookingContext);
-        reply = fReply;
+        adoptReply(fReply);
         if (shouldHandoff) {
           await markHumanHandoff(supabaseAdmin, phone, bookingContext);
           // Buat tiket admin (dengan ringkasan booking, skor frustrasi, status open).
@@ -1493,11 +1517,9 @@ export async function executeAutoreplyForPhone(
     }
   }
 
-  // Balasan cepat atau basa-basi tidak perlu "Sebentar Kak…".
-  // Permintaan yang masih menuju LLM membiarkan timer yang dijadwalkan di awal.
-  if (reply || isQuickAckSuppressedMessage(lastMessage ?? "")) {
-    clearQuickAck();
-  }
+  // Balasan yang sudah tersusun membatalkan ack yang belum mengirim.
+  // Sapaan dan small talk tidak dijadwalkan (shouldArmQuickAck).
+  if (reply) quickAck.noteAnswerReady();
 
   let trainingExamples: any[] = [];
   let negativeExamples: any[] = [];
@@ -1644,7 +1666,7 @@ export async function executeAutoreplyForPhone(
       }
 
       if (orchResult?.reply) {
-        reply = orchResult.reply;
+        adoptReply(orchResult.reply);
 
         // Heartbeat berbasis kemajuan: orkestrasi AI (bagian terlama pipeline)
         // baru saja selesai — segarkan lock SEKARANG, jangan bergantung pada
@@ -1744,7 +1766,6 @@ export async function executeAutoreplyForPhone(
       clearTimeout(aiTimeout);
     }
   }
-  if (quickAckTimer) clearTimeout(quickAckTimer);
   if (metrics.aiStartedAt && !metrics.aiFinishedAt) metrics.aiFinishedAt = Date.now();
 
   let finalFallback = isManager ? MANAGER_FALLBACK_MESSAGE : FALLBACK_MESSAGE;
@@ -1785,7 +1806,7 @@ export async function executeAutoreplyForPhone(
         (typeof r?.reason === "string" && r.reason.startsWith("fallback_openai_after_") && r.reason.includes("_failed_")),
     );
   if (creditFailure && queueEntryId) {
-    if (quickAckTimer) clearTimeout(quickAckTimer);
+    await quickAck.beforeReplySend();
     try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
     console.error(
       `[Autoreply] AI credit failure (gateway 402/403) for ${phone.slice(-6)} — tidak di-retry`,
@@ -1798,10 +1819,10 @@ export async function executeAutoreplyForPhone(
     (t: string) => t === "Room - Kirim Foto ke WA Tamu" || t === "Room - Kirim Link Virtual Tour 360°",
   );
   if (!reply && mediaAlreadySent) {
-    reply = "Itu foto kamarnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?";
+    adoptReply("Itu foto kamarnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?");
   }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
-    if (quickAckTimer) clearTimeout(quickAckTimer);
+    await quickAck.beforeReplySend();
     try { void setWaTyping(c.wpp_token, sendTarget, false); } catch { /* non-fatal */ }
     console.warn(
       `[Autoreply] AI produced no reply for ${phone.slice(-6)} ` +
@@ -1878,6 +1899,7 @@ export async function executeAutoreplyForPhone(
           `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
             `(entry=${queueEntryId.slice(0, 8)}, match=entry)`,
         );
+        await quickAck.beforeReplySend();
         return "ok";
       }
     }
@@ -1934,6 +1956,7 @@ export async function executeAutoreplyForPhone(
         `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} ` +
           `(entry=${queueEntryId?.slice(0, 8) ?? "-"}, match=body/prefix)`,
       );
+      await quickAck.beforeReplySend();
       return "ok";
     }
 
@@ -1958,6 +1981,7 @@ export async function executeAutoreplyForPhone(
           console.warn(
             `[Autoreply] Duplicate suppressed for ${phone.slice(-6)} (match=opening-line)`,
           );
+          await quickAck.beforeReplySend();
           return "ok";
         }
         console.warn(`[Autoreply] Repeated opening line stripped for ${phone.slice(-6)}`);
@@ -2044,6 +2068,7 @@ export async function executeAutoreplyForPhone(
             `(entry=${queueEntryId.slice(0, 8)}) — skip WhatsApp gateway`,
         );
         void updateBookingFormSendLog({ body: finalReply, status: "superseded" });
+        await quickAck.beforeReplySend();
         return "ok";
       }
     } catch (e) {
@@ -2055,6 +2080,7 @@ export async function executeAutoreplyForPhone(
   // pastikan lock masih milik worker ini walau setInterval sempat di-skip.
   if (onBeforeAttempt) await onBeforeAttempt().catch(() => {});
 
+  await quickAck.beforeReplySend();
   metrics.sendStartedAt = Date.now();
   let { ok: sent, error: sendErr } = await sendWhatsAppMessage(
     c.wpp_token,

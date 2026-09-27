@@ -1,17 +1,17 @@
 /**
- * Fast-path foto/brosur, konversi WebP sebelum kirim Meta, anggaran quick-ack
- * di bawah 2 detik sejak worker mengambil antrian, dan gerbang poll Evolution.
+ * Fast-path foto/brosur, konversi WebP sebelum kirim Meta, ambang quick-ack
+ * (hanya setelah jawaban belum siap ~3 dtk), dan gerbang poll Evolution.
  *
- * Tidak mengirim WhatsApp. Latensi ack diukur dari timer dinding-jam
- * `quickAckDelayMs(0)` plus anggaran kirim yang dicadangkan.
+ * Tidak mengirim WhatsApp. Urutan ack vs balasan diuji di
+ * `scripts/test-quick-ack.ts` dengan timer palsu.
  */
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {
-  QUICK_ACK_DEADLINE_MS,
-  QUICK_ACK_SEND_BUDGET_MS,
+  QUICK_ACK_SLOW_THRESHOLD_MS,
   isQuickAckSuppressedMessage,
   quickAckDelayMs,
+  shouldArmQuickAck,
 } from "../src/services/wa-autoreply/runtime-policy";
 import {
   MEDIA_FAST_PATH_BROCHURE_REPLY,
@@ -61,26 +61,16 @@ function inbound(body: string) {
   return [{ direction: "in", body }];
 }
 
-// ─── Quick-ack di bawah 2 detik sejak pickup ────────────────────────────────
+// ─── Quick-ack hanya setelah jawaban belum siap ~3 detik ────────────────────
 
-assert.ok(QUICK_ACK_DEADLINE_MS <= 2_000, "deadline ack harus di bawah 2 detik");
-assert.equal(quickAckDelayMs(0), QUICK_ACK_DEADLINE_MS - QUICK_ACK_SEND_BUDGET_MS);
-assert.ok(
-  quickAckDelayMs(0) + QUICK_ACK_SEND_BUDGET_MS <= 2_000,
-  "jeda timer + anggaran kirim harus muat dalam 2 detik",
-);
-assert.equal(quickAckDelayMs(500), 400);
-assert.equal(quickAckDelayMs(QUICK_ACK_DEADLINE_MS), 0);
+assert.equal(QUICK_ACK_SLOW_THRESHOLD_MS, 3_000);
+assert.equal(quickAckDelayMs(0), QUICK_ACK_SLOW_THRESHOLD_MS);
+assert.equal(quickAckDelayMs(500), 2_500);
+assert.equal(quickAckDelayMs(QUICK_ACK_SLOW_THRESHOLD_MS), 0);
+assert.equal(quickAckDelayMs(QUICK_ACK_SLOW_THRESHOLD_MS + 400), 0);
 assert.equal(quickAckDelayMs(-10), quickAckDelayMs(0));
-
-const pickup = Date.now();
-const delay = quickAckDelayMs(Date.now() - pickup);
-await new Promise((resolve) => setTimeout(resolve, delay));
-const ackElapsed = Date.now() - pickup;
-assert.ok(
-  ackElapsed < 2_000,
-  `callback ack harus mulai sebelum 2 detik, dapat ${ackElapsed}ms (tanpa panggilan WhatsApp)`,
-);
+assert.equal(shouldArmQuickAck("malam"), false);
+assert.equal(shouldArmQuickAck("ada kamar tanggal 12?"), true);
 
 assert.equal(isQuickAckSuppressedMessage("makasih ya kak"), true);
 assert.equal(isQuickAckSuppressedMessage("minta foto?"), false);
@@ -168,6 +158,8 @@ assert.ok(toolSource.includes("roomPhotoCaption"));
 const serviceSource = fs.readFileSync("src/services/wa-autoreply.service.ts", "utf8");
 assert.ok(serviceSource.includes("planMediaFastPath"));
 assert.ok(serviceSource.includes("quickAckDelayMs"));
+assert.ok(serviceSource.includes("shouldArmQuickAck"));
+assert.ok(serviceSource.includes("beforeReplySend"));
 assert.equal(
   serviceSource.includes("QUICK_ACK_AFTER_MS"),
   false,
@@ -301,5 +293,5 @@ assert.ok(pollSource.includes("evolutionInboxPollDecision"));
 assert.ok(!pollSource.includes("delete from"), "kode Evolution tidak dihapus");
 
 console.log(
-  `✓ meta guest fast-path: ack timer ${ackElapsed}ms (<2000), photo gate, webp remap, evolution poll gated`,
+  "✓ meta guest fast-path: ack waits 3s, photo gate, webp remap, evolution poll gated",
 );
