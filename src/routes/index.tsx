@@ -65,10 +65,16 @@ const BookingDialog = lazy(() =>
   import("@/routes/rooms.$slug").then((m) => ({ default: m.BookingDialog })),
 );
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
+import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
+import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/components/ui/date-range-picker";
 
 export const Route = createFileRoute("/")({
-  loader: async () => getPublicSiteData(),
+  loader: async () => {
+    const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
+    const [site, guidePlaces] = await Promise.all([getPublicSiteData(), loadCityGuidePlaces()]);
+    return { ...site, guidePlaces };
+  },
   // Data property + room types jarang berubah; cache 1 jam mengurangi
   // beban server dan mempercepat navigasi balik ke home.
   staleTime: 60 * 60 * 1000,
@@ -317,12 +323,24 @@ export function PomahHomeView({
     (property as { explore_config?: unknown } | null | undefined)?.explore_config,
   );
 
+  const guidePlaces =
+    (
+      initialData as
+        | { guidePlaces?: Array<{ slug: string; name: string; category?: string }> }
+        | undefined
+    )?.guidePlaces ??
+    (
+      data as { guidePlaces?: Array<{ slug: string; name: string; category?: string }> } | undefined
+    )?.guidePlaces ??
+    [];
+
   const destinationItems = (exploreCfg.destinations ?? []).map((d: any) => ({
     date: d.nearby_distance || d.address || "",
     category: "Wisata",
     title: d.name,
     excerpt: d.desc ?? "",
     image: d.image || "",
+    href: exploreHrefForName(d.name),
     ts: 0,
   }));
 
@@ -332,11 +350,32 @@ export function PomahHomeView({
     title: c.name,
     excerpt: c.desc ?? "",
     image: c.image || "",
+    href: exploreHrefForName(c.name),
     ts: 0,
   }));
 
-  const newsEvents = [...destinationItems, ...culinaryItems]
-    .filter((n) => n.title)
+  const eventItems = filterPublicExploreEvents(exploreCfg.events ?? []).map((ev) => ({
+    date: ev.date || "",
+    category: "Event",
+    title: ev.title,
+    excerpt: ev.desc ?? "",
+    image: ev.image || "",
+    href: exploreHrefForName(ev.title),
+    ts: 0,
+  }));
+
+  const newsItems = (exploreCfg.news ?? []).map((nw) => ({
+    date: nw.date || "",
+    category: "Berita",
+    title: nw.title,
+    excerpt: nw.desc ?? "",
+    image: nw.image || "",
+    href: exploreHrefForName(nw.title),
+    ts: 0,
+  }));
+
+  const newsEvents = [...destinationItems, ...culinaryItems, ...eventItems, ...newsItems]
+    .filter((n) => n.title && n.href)
     .slice(0, 12);
 
 
@@ -687,7 +726,9 @@ export function PomahHomeView({
         <Fragment key={key}>{renderHomeSection(key)}</Fragment>
       ))}
 
-      <PomahFooter name={propertyName} property={property} />
+      <GuideTextLinks places={guidePlaces} />
+
+      <PomahFooter name={propertyName} property={property} rooms={rooms} />
 
       {wa && (
         <a
@@ -1291,6 +1332,7 @@ type NewsEventItem = {
   title: string;
   excerpt: string;
   image: string;
+  href?: string | null;
 };
 
 function getDisplayImageUrl(url: string | undefined | null) {
@@ -1430,7 +1472,10 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
               className="shrink-0 px-2"
               style={{ width: `${100 / cardsPerView}%` }}
             >
-              <article className="flex h-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:shadow-lg">
+              <a
+                href={n.href || "/explore"}
+                className="flex h-full flex-col overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:shadow-lg"
+              >
                 {n.image && (
                   <div className="aspect-[4/3] w-full overflow-hidden bg-stone-100">
                     <img
@@ -1455,7 +1500,7 @@ function NewsEventSlider({ items }: { items: NewsEventItem[] }) {
                   <h3 className="mt-2 font-serif text-sm font-semibold text-stone-900 line-clamp-2">{n.title}</h3>
                   <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-stone-500">{n.excerpt}</p>
                 </div>
-              </article>
+              </a>
             </div>
           ))}
         </div>

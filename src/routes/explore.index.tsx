@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getPublicSiteData } from "@/public/functions/public.functions";
@@ -33,21 +33,32 @@ import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { canonicalHeadTags, EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
 import { slugifyPlaceName } from "@/public/lib/seo-redirects";
+import { GuideTextLinks, exploreHrefForName, type GuideLinkPlace } from "@/public/components/guide-links";
 
 function PlaceNameLink({ name }: { name: string }) {
-  const slug = slugifyPlaceName(name);
-  if (!slug) return <>{name}</>;
+  const href = exploreHrefForName(name);
+  if (!href) return <>{name}</>;
+  return <a href={href}>{name}</a>;
+}
+
+function CardCrawlLink({ name, knownSlugs }: { name: string; knownSlugs?: Set<string> }) {
+  const href = exploreHrefForName(name);
+  if (!href) return null;
+  const slug = href.slice("/explore/".length);
+  if (knownSlugs && !knownSlugs.has(slug)) return null;
   return (
-    <Link to="/explore/$slug" params={{ slug }}>
-      {name}
-    </Link>
+    <a href={href} className="absolute inset-0 z-10">
+      <span className="sr-only">{name}</span>
+    </a>
   );
 }
 
 export const Route = createFileRoute("/explore/")({
   loader: async () => {
     const { getPublicSiteData } = await import("@/public/functions/public.functions");
-    return getPublicSiteData();
+    const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
+    const [site, guidePlaces] = await Promise.all([getPublicSiteData(), loadCityGuidePlaces()]);
+    return { ...site, guidePlaces };
   },
   head: ({ loaderData }: any) => {
     const seo = mergeExploreConfig(loaderData?.property?.explore_config).seo;
@@ -232,6 +243,10 @@ function ExploreSemarang() {
     initialData: loaderData,
   });
 
+  const guidePlaces = ((loaderData as { guidePlaces?: GuideLinkPlace[] } | undefined)?.guidePlaces ??
+    (data as { guidePlaces?: GuideLinkPlace[] } | undefined)?.guidePlaces ??
+    []) as GuideLinkPlace[];
+  const knownSlugs = new Set(guidePlaces.map((place) => place.slug));
   const mergedConfig = mergeExploreConfig(data?.property?.explore_config);
   const config = {
     ...mergedConfig,
@@ -301,8 +316,6 @@ function ExploreSemarang() {
       inCatalog: true,
     })),
   ];
-  const catalogEventTitles = new Set(config.events.map((ev) => ev.title));
-
   // Filters for keyword-based tabs (Alam, Belanja, Budaya, Transportasi)
   const getKeywordsForTab = (tab: string) => {
     if (tab === "alam") return ["alam", "pantai", "gunung", "wisata alam", "outdoor", "park", "taman", "air", "sungai", "curug", "laut"];
@@ -551,9 +564,10 @@ function ExploreSemarang() {
                           {filteredDestinations.map((dest, i) => (
                             <div
                             key={`dest-${dest.name}-${i}`}
-                            className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            className="relative shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
                           >
+                            <CardCrawlLink name={dest.name} knownSlugs={knownSlugs} />
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {dest.image ? (
                                 <img
@@ -647,9 +661,10 @@ function ExploreSemarang() {
                           {filteredCulinary.map((cul, i) => (
                             <div
                             key={`cul-${cul.name}-${i}`}
-                            className="shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
+                            className="relative shrink-0 w-[220px] bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer animate-card-slide"
                             style={{ animationDelay: `${i * 80}ms` }}
                           >
+                            <CardCrawlLink name={cul.name} knownSlugs={knownSlugs} />
                             <div className="relative h-[135px] overflow-hidden bg-stone-100">
                               {cul.image ? (
                                 <img
@@ -747,9 +762,10 @@ function ExploreSemarang() {
                     filteredDestinations.map((dest, i) => (
                       <div
                         key={`dest-grid-${dest.name}-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        className="relative bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
                         style={{ animationDelay: `${i * 80}ms` }}
                       >
+                        <CardCrawlLink name={dest.name} knownSlugs={knownSlugs} />
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {dest.image ? (
                             <img
@@ -800,9 +816,10 @@ function ExploreSemarang() {
                     filteredCulinary.map((cul, i) => (
                       <div
                         key={`cul-grid-${cul.name}-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        className="relative bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
                         style={{ animationDelay: `${i * 80}ms` }}
                       >
+                        <CardCrawlLink name={cul.name} knownSlugs={knownSlugs} />
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {cul.image ? (
                             <img
@@ -852,9 +869,10 @@ function ExploreSemarang() {
                     filteredEvents.map((ev, i) => (
                       <div
                         key={`ev-grid-${ev.title}-${i}`}
-                        className="bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
+                        className="relative bg-white rounded-xl border border-stone-200/60 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 group/card cursor-pointer flex flex-col animate-card-slide"
                         style={{ animationDelay: `${i * 80}ms` }}
                       >
+                        <CardCrawlLink name={ev.title} knownSlugs={knownSlugs} />
                         <div className="relative h-[150px] overflow-hidden bg-stone-100">
                           {ev.image ? (
                             <img
@@ -878,11 +896,7 @@ function ExploreSemarang() {
                         <div className="p-4 flex-1 flex flex-col justify-between">
                           <div>
                             <h3 className="font-bold text-sm text-stone-900 group-hover/card:text-emerald-700 transition truncate">
-                              {catalogEventTitles.has(ev.title) ? (
-                                <PlaceNameLink name={ev.title} />
-                              ) : (
-                                ev.title
-                              )}
+                              <PlaceNameLink name={ev.title} />
                             </h3>
                             <div className="mt-2 space-y-0.5 text-[10px] text-stone-400 font-medium">
                               <p className="flex items-center gap-1">
@@ -933,8 +947,9 @@ function ExploreSemarang() {
                 {filteredSidebarItems.slice(0, 4).map((item, i) => (
                   <div
                     key={i}
-                    className="flex gap-4 bg-white rounded-xl border border-stone-200/60 p-3.5 hover:shadow-md transition-shadow duration-300 cursor-pointer group/item relative"
+                    className="relative flex gap-4 bg-white rounded-xl border border-stone-200/60 p-3.5 hover:shadow-md transition-shadow duration-300 cursor-pointer group/item"
                   >
+                    <CardCrawlLink name={item.title} knownSlugs={knownSlugs} />
                     {/* Image */}
                     <div className="w-22 h-[92px] shrink-0 rounded-lg overflow-hidden bg-stone-100">
                       {item.image ? (
@@ -967,7 +982,7 @@ function ExploreSemarang() {
                       </div>
 
                       <h3 className="mt-2 text-xs font-bold text-stone-900 leading-snug line-clamp-2 group-hover/item:text-emerald-700 transition-colors">
-                        {item.inCatalog ? <PlaceNameLink name={item.title} /> : item.title}
+                        <PlaceNameLink name={item.title} />
                       </h3>
 
                       <div className="mt-1.5 space-y-0.5 text-[10px] text-stone-400 font-medium">
@@ -1040,7 +1055,8 @@ function ExploreSemarang() {
         </div>
       </div>
 
-      <PublicFooter property={data?.property} />
+      <GuideTextLinks places={guidePlaces} />
+      <PublicFooter property={data?.property} rooms={data?.roomTypes} />
 
       {/* ─── Scrollbar-hide utility & animations ─── */}
       <style>{`

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
+import { rewritePublicHref } from "@/public/lib/public-href";
 
 // Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
 const HERO_WIDTHS = [640, 960, 1280, 1600, 1920];
@@ -127,7 +129,7 @@ export function PublicNav({
           <div className="flex flex-col gap-1 px-6 py-4">
             {[
               { to: "/", label: "Beranda" },
-              { to: "/rooms", label: "Kamar" },
+              { to: "/", hash: "rooms", label: "Kamar" },
               { to: "/explore", label: "Jelajahi Semarang" },
               { to: "/book", label: "Fasilitas" },
               { to: "/book", label: "Lokasi" },
@@ -235,6 +237,7 @@ export function SocialLinks({
 /* ------------------------------------------------------------------ */
 export function PublicFooter({
   property,
+  rooms,
 }: {
   property?: ({
     name?: string;
@@ -243,6 +246,7 @@ export function PublicFooter({
     whatsapp_number?: string | null;
     email?: string | null;
   } & SocialProperty) | null;
+  rooms?: FooterRoomLink[] | null;
 }) {
   const fullName = property?.name || "Pomah Guesthouse";
   const parts = fullName.split(" ");
@@ -279,7 +283,6 @@ export function PublicFooter({
               {[
                 { to: "/", label: "Beranda" },
                 { to: "/", hash: "rooms", label: "Kamar" },
-                { to: "/explore", label: "Jelajahi Semarang" },
                 { to: "/book", label: "Reservasi" },
                 { to: "/connect", label: "Hubungkan AI" },
               ].map((l) => (
@@ -289,6 +292,7 @@ export function PublicFooter({
                   </Link>
                 </li>
               ))}
+              <FooterCrawlLinks rooms={rooms} />
             </ul>
           </div>
 
@@ -507,7 +511,7 @@ export function PomahNav({
       {header.links.map((n) => (
         <a
           key={n.label}
-          href={n.href}
+          href={rewritePublicHref(n.href)}
           className={`transition ${darkText ? "hover:text-amber-700" : "hover:text-white/70"}`}
         >
           {n.label}
@@ -581,7 +585,51 @@ export function PomahNav({
   );
 }
 
-export function PomahFooter({ name, property }: { name: string; property?: SocialProperty | null }) {
+export type FooterRoomLink = { name?: string | null; slug?: string | null };
+
+function footerRooms(rooms?: FooterRoomLink[] | null) {
+  return (rooms ?? [])
+    .map((room) => ({
+      name: (room.name ?? "").trim(),
+      slug: (room.slug ?? "").trim(),
+    }))
+    .filter((room) => room.name && room.slug && !room.slug.includes("/"));
+}
+
+function FooterCrawlLinks({ rooms }: { rooms?: FooterRoomLink[] | null }) {
+  const list = footerRooms(rooms);
+  return (
+    <>
+      {list.map((room) => (
+        <li key={room.slug}>
+          <a href={`/rooms/${room.slug}`} className="transition hover:text-white">
+            {room.name}
+          </a>
+        </li>
+      ))}
+      <li>
+        <a href="/explore" className="transition hover:text-white">
+          Jelajahi Semarang
+        </a>
+      </li>
+      <li>
+        <a href={LP_PENGINAPAN_DEKAT_UNNES} className="transition hover:text-white">
+          Penginapan dekat UNNES
+        </a>
+      </li>
+    </>
+  );
+}
+
+export function PomahFooter({
+  name,
+  property,
+  rooms,
+}: {
+  name: string;
+  property?: SocialProperty | null;
+  rooms?: FooterRoomLink[] | null;
+}) {
   return (
     <footer className="bg-teal-900 text-teal-100">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
@@ -616,6 +664,7 @@ export function PomahFooter({ name, property }: { name: string; property?: Socia
                 Lokasi
               </a>
             </li>
+            <FooterCrawlLinks rooms={rooms} />
           </ul>
         </div>
         <div>

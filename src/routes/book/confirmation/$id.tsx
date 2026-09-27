@@ -553,7 +553,7 @@ function ConfirmationPage() {
         )}
       </main>
       <div className="print:hidden">
-        <PublicFooter property={siteData?.property} />
+        <PublicFooter property={siteData?.property} rooms={siteData?.roomTypes} />
       </div>
     </div>
   );

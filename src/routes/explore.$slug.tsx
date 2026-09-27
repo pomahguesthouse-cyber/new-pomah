@@ -5,6 +5,7 @@
 import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-router";
 import { MapPin, Star } from "lucide-react";
 import { PublicFooter, PublicNav } from "@/public/components/public-shell";
+import { StayNearby } from "@/public/components/guide-links";
 import { findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { slugifyPlaceName } from "@/public/lib/seo-redirects";
@@ -37,7 +38,8 @@ function displayImageUrl(url: string | null): string {
 export const Route = createFileRoute("/explore/$slug")({
   loader: async ({ params }) => {
     const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
-    const places = await loadCityGuidePlaces();
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    const [places, site] = await Promise.all([loadCityGuidePlaces(), getPublicSiteData()]);
     const place = findCityGuidePlace(places, params.slug);
     if (!place) throw notFound();
     if (place.slug !== slugifyPlaceName(params.slug)) {
@@ -47,7 +49,7 @@ export const Route = createFileRoute("/explore/$slug")({
         statusCode: 301,
       });
     }
-    return { place };
+    return { place, rooms: site.roomTypes ?? [] };
   },
   head: ({ loaderData }) => {
     const place = loaderData?.place;
@@ -80,7 +82,7 @@ export const Route = createFileRoute("/explore/$slug")({
 });
 
 function ExplorePlacePage() {
-  const { place } = Route.useLoaderData();
+  const { place, rooms } = Route.useLoaderData();
   const image = displayImageUrl(place.imageUrl);
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
@@ -119,6 +121,7 @@ function ExplorePlacePage() {
         {place.description && (
           <p className="mt-6 text-base leading-relaxed text-stone-700">{place.description}</p>
         )}
+        <StayNearby rooms={rooms} />
         <Link
           to="/explore"
           className="mt-8 inline-flex text-sm font-semibold text-emerald-700 hover:text-emerald-800"
@@ -126,7 +129,7 @@ function ExplorePlacePage() {
           ← Semua panduan Semarang
         </Link>
       </main>
-      <PublicFooter />
+      <PublicFooter rooms={rooms} />
     </div>
   );
 }

@@ -6,6 +6,10 @@ import { PublicNav, PublicFooter } from "@/public/components/public-shell";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/connect")({
+  loader: async () => {
+    const { getPublicSiteData } = await import("@/public/functions/public.functions");
+    return getPublicSiteData();
+  },
   head: () => {
     const canonical = canonicalHeadTags("/connect");
     return {
@@ -33,6 +37,7 @@ export const Route = createFileRoute("/connect")({
 });
 
 function ConnectPage() {
+  const data = Route.useLoaderData();
   const [mcpUrl, setMcpUrl] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -173,7 +178,7 @@ function ConnectPage() {
           </p>
         </section>
       </main>
-      <PublicFooter />
+      <PublicFooter property={data?.property} rooms={data?.roomTypes} />
     </div>
   );
 }

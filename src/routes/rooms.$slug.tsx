@@ -569,7 +569,7 @@ function RoomBookingPage() {
         )}
       </main>
 
-      <PublicFooter property={data?.property} />
+      <PublicFooter property={data?.property} rooms={[room, ...others]} />
 
       <BookingDialog
         open={dialogOpen}

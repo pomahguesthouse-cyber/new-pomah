@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
+import { buildGuideTextLinks } from "../src/public/components/guide-links";
+import { rewritePublicHref } from "../src/public/lib/public-href";
 import {
   canonicalHeadTags,
   canonicalUrlForPath,
@@ -194,5 +196,22 @@ const homeBlob = JSON.stringify(DEFAULT_HOMEPAGE_CONFIG.seo);
 const exploreBlob = JSON.stringify(DEFAULT_EXPLORE_CONFIG.seo);
 assert.doesNotMatch(homeBlob, /Gunungpati/i);
 assert.doesNotMatch(exploreBlob, /Gunungpati/i);
+
+assert.equal(rewritePublicHref("/rooms"), "/#rooms");
+assert.equal(rewritePublicHref("/rooms/"), "/#rooms");
+assert.equal(rewritePublicHref("/rooms/deluxe"), "/rooms/deluxe");
+
+const guideLinks = buildGuideTextLinks(
+  [
+    { slug: "lawang-sewu-semarang", name: "Lawang Sewu Semarang" },
+    { slug: "kota-lama-semarang", name: "Kota Lama Semarang" },
+  ],
+  8,
+);
+assert.ok(guideLinks.some((link) => link.href === "/explore/lawang-sewu-semarang"));
+assert.ok(guideLinks.some((link) => link.href === "/explore/gedongsongo-festival"));
+assert.ok(guideLinks.some((link) => link.href === "/explore/lawang-sewu-short-film-festival-loff-2026"));
+assert.ok(guideLinks.some((link) => link.href === "/explore/rute-bus-trans-semarang-baru-resmi-dibuka"));
+assert.ok(guideLinks.some((link) => link.href === "/lp/penginapan-dekat-unnes"));
 
 console.log("test-public-seo: ok");

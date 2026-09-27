@@ -285,7 +285,7 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     bookLabel: "Pesan Kamar",
     links: [
       { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
+      { label: "Rooms", href: "/#rooms" },
       { label: "Facilities", href: "#facilities" },
       { label: "Lokasi", href: "#lokasi" },
     ],

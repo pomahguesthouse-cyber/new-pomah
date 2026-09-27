@@ -52,7 +52,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     bookLabel: "Pesan Kamar",
     links: [
       { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
+      { label: "Rooms", href: "/#rooms" },
       { label: "Facilities", href: "/book" },
       { label: "Lokasi", href: "/book" },
     ],
@@ -73,7 +73,7 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
     showSocials: true,
     companyLinks: [
       { label: "Home", href: "/" },
-      { label: "Rooms", href: "/rooms" },
+      { label: "Rooms", href: "/#rooms" },
     ],
     serviceLinks: [
       { label: "Amenities", href: "#facilities" },
