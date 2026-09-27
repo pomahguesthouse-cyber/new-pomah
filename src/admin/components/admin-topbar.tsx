@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/command";
 import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
+import { clearAdminAssignFlag, clearAuthNext, clearStaffSessionHint } from "@/lib/auth-return";
 
 const SECTION_TITLES: Record<string, string> = {
   "/admin": "Overview",
@@ -134,6 +135,10 @@ export function AdminTopbar({
   }, []);
 
   const signOut = async () => {
+    clearStaffSessionHint();
+    clearAuthNext();
+    clearAdminAssignFlag();
+    console.info("[auth] sign out, redirect to /login");
     await supabase.auth.signOut();
     navigate({ to: "/login", search: { next: undefined } });
   };

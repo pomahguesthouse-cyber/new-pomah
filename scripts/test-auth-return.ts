@@ -13,6 +13,15 @@ import {
   safeNext,
   staffHintFromCookie,
 } from "../src/lib/auth-return";
+import {
+  accessTokenProjectRef,
+  authStorageKeysToRemove,
+  currentSupabaseAuthStorageKey,
+  isForeignProjectAccessToken,
+  isInvalidSessionError,
+  isSupabaseAuthStorageKey,
+  isTransientAuthError,
+} from "../src/lib/auth-storage";
 import { isChunkLoadError } from "../src/lib/chunk-reload";
 
 assert.equal(safeNext("/admin"), "/admin");
@@ -124,10 +133,7 @@ assert.equal(
   true,
 );
 assert.equal(isChunkLoadError(new Error("Importing a module script failed.")), true);
-assert.equal(
-  isChunkLoadError(new Error("error loading dynamically imported module")),
-  true,
-);
+assert.equal(isChunkLoadError(new Error("error loading dynamically imported module")), true);
 assert.equal(isChunkLoadError(new Error("something else")), false);
 assert.equal(
   isChunkLoadError({
@@ -135,6 +141,83 @@ assert.equal(
     cause: new Error("Failed to fetch dynamically imported module"),
   }),
   true,
+);
+
+assert.equal(currentSupabaseAuthStorageKey("https://abcd.supabase.co"), "sb-abcd-auth-token");
+assert.equal(
+  currentSupabaseAuthStorageKey("https://abcd.supabase.co/auth/v1"),
+  "sb-abcd-auth-token",
+);
+assert.equal(currentSupabaseAuthStorageKey("not a url"), null);
+assert.equal(currentSupabaseAuthStorageKey("http://localhost:54321"), null);
+
+assert.equal(isSupabaseAuthStorageKey("sb-old-auth-token"), true);
+assert.equal(isSupabaseAuthStorageKey("supabase.auth.token"), true);
+assert.equal(isSupabaseAuthStorageKey("pomah.theme"), false);
+
+const currentKey = "sb-abcd-auth-token";
+assert.deepEqual(
+  authStorageKeysToRemove(
+    [
+      currentKey,
+      `${currentKey}-code-verifier`,
+      "sb-old-auth-token",
+      "supabase.auth.token",
+      "pomah.theme",
+    ],
+    { currentKey, dropCurrent: false },
+  ),
+  ["sb-old-auth-token", "supabase.auth.token"],
+);
+assert.deepEqual(
+  authStorageKeysToRemove([currentKey, `${currentKey}-code-verifier`, "sb-old-auth-token"], {
+    currentKey,
+    dropCurrent: true,
+  }),
+  [currentKey, `${currentKey}-code-verifier`, "sb-old-auth-token"],
+);
+
+function jwt(payload: Record<string, unknown>): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `header.${body}.sig`;
+}
+
+assert.equal(accessTokenProjectRef(jwt({ ref: "oldproject" })), "oldproject");
+assert.equal(
+  accessTokenProjectRef(jwt({ iss: "https://newproject.supabase.co/auth/v1" })),
+  "newproject",
+);
+assert.equal(accessTokenProjectRef("not-a-jwt"), null);
+assert.equal(
+  isForeignProjectAccessToken(jwt({ ref: "oldproject" }), "https://newproject.supabase.co"),
+  true,
+);
+assert.equal(
+  isForeignProjectAccessToken(jwt({ ref: "newproject" }), "https://newproject.supabase.co"),
+  false,
+);
+assert.equal(
+  isForeignProjectAccessToken(jwt({ ref: "oldproject" }), "https://auth.example.com"),
+  false,
+);
+
+assert.equal(
+  isInvalidSessionError({
+    code: "refresh_token_not_found",
+    message: "Invalid Refresh Token: Refresh Token Not Found",
+  }),
+  true,
+);
+assert.equal(isInvalidSessionError({ message: "invalid claim: iss" }), true);
+assert.equal(isInvalidSessionError({ message: "Auth session missing!" }), false);
+assert.equal(isInvalidSessionError(null), false);
+assert.equal(
+  isTransientAuthError({ name: "AuthRetryableFetchError", message: "Failed to fetch" }),
+  true,
+);
+assert.equal(
+  isInvalidSessionError({ name: "AuthRetryableFetchError", message: "Failed to fetch" }),
+  false,
 );
 
 console.log("test-auth-return: ok");

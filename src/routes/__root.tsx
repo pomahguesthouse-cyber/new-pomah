@@ -19,7 +19,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { HOME_SEO } from "@/public/lib/public-seo";
-import { clearStaffSessionHint } from "@/lib/auth-return";
+import { clearAdminAssignFlag, clearAuthNext, clearStaffSessionHint } from "@/lib/auth-return";
 import { isChunkLoadError, reloadOnceOnChunkError } from "@/lib/chunk-reload";
 import { siteIdentityGraph } from "@/public/lib/structured-data";
 import { StaffOAuthReturn } from "@/public/components/staff-oauth-return";
@@ -44,8 +44,8 @@ function NotFoundComponent() {
 
       <h1 className="text-2xl font-bold text-stone-800">Halaman Tidak Ditemukan</h1>
       <p className="mt-3 max-w-sm text-sm leading-relaxed text-stone-500">
-        Maaf, halaman yang kamu cari tidak ada atau telah dipindahkan.
-        Coba kembali ke beranda atau lihat pilihan kamar kami.
+        Maaf, halaman yang kamu cari tidak ada atau telah dipindahkan. Coba kembali ke beranda atau
+        lihat pilihan kamar kami.
       </p>
 
       {/* Tombol navigasi */}
@@ -57,7 +57,8 @@ function NotFoundComponent() {
           ← Kembali ke Beranda
         </Link>
         <Link
-          to="/" hash="rooms"
+          to="/"
+          hash="rooms"
           className="inline-flex items-center gap-2 rounded-lg bg-amber-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-800"
         >
           Lihat Kamar
@@ -141,9 +142,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      ...(loaderData?.faviconUrl
-        ? [{ rel: "icon", href: loaderData.faviconUrl }]
-        : []),
+      ...(loaderData?.faviconUrl ? [{ rel: "icon", href: loaderData.faviconUrl }] : []),
     ],
   }),
   shellComponent: RootShell,
@@ -181,6 +180,9 @@ function AuthSync() {
       // (akan memicu refetch serverFn tanpa token -> 401 blank screen).
       if (event === "SIGNED_OUT") {
         clearStaffSessionHint();
+        clearAuthNext();
+        clearAdminAssignFlag();
+        console.info("[auth] signed out, redirect to /login");
         qc.clear();
         router.navigate({ to: "/login", search: { next: undefined } });
         return;
