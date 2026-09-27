@@ -34,6 +34,8 @@ import {
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { APPROVED_LP, patchUnnesDistance } from "@/public/content/approved-seo";
+import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl } from "@/lib/storage-image";
 import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
@@ -59,13 +61,16 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
+    const approved = p.slug === APPROVED_LP.slug;
+    const title = approved ? APPROVED_LP.title : p.meta_title || p.title;
+    const description = approved ? APPROVED_LP.meta : p.meta_description || "";
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
     return {
       meta: [
-        { title: p.meta_title || p.title },
-        { name: "description", content: p.meta_description || "" },
-        { property: "og:title", content: p.meta_title || p.title },
-        { property: "og:description", content: p.meta_description || "" },
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
         ...canonical.meta,
         ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
       ],
@@ -78,8 +83,21 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
       page: SeoLandingPage | null;
     };
     if (!result.page) throw notFound();
+    const patched = patchUnnesDistance(result.page) as SeoLandingPage;
+    const page =
+      patched.slug === APPROVED_LP.slug
+        ? {
+            ...patched,
+            title: APPROVED_LP.title,
+            meta_title: APPROVED_LP.title,
+            meta_description: APPROVED_LP.meta,
+            hero_headline: APPROVED_LP.h1,
+            hero_subheadline: APPROVED_LP.cardIntro,
+            target_keyword: null,
+          }
+        : patched;
     const siteData = await getPublicSiteData();
-    return { ...result, property: (siteData as { property?: unknown } | null)?.property };
+    return { page, property: (siteData as { property?: unknown } | null)?.property };
   },
 
   component: LandingPage,
@@ -151,7 +169,7 @@ function LandingPage() {
       });
     };
     if (page.custom_head) appendHtml(page.custom_head);
-    if (page.json_ld_enabled && page.custom_json_ld?.trim()) {
+    if (page.slug !== APPROVED_LP.slug && page.json_ld_enabled && page.custom_json_ld?.trim()) {
       const sc = document.createElement("script");
       sc.type = "application/ld+json";
       sc.textContent = page.custom_json_ld;
@@ -163,7 +181,12 @@ function LandingPage() {
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
     <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      {hasSections ? (
+      {page.slug === APPROVED_LP.slug ? (
+        <>
+          <LPNav ctaUrl="/book" ctaText="Pesan kamar" />
+          <UnnesLanding />
+        </>
+      ) : hasSections ? (
         isSplit ? (
           <>
             <div className="hidden md:flex md:flex-col space-y-0">
@@ -234,7 +257,7 @@ function LandingPage() {
         </>
       )}
 
-      <LPFooter phone={whatsappNumber} />
+      <LPFooter phone={whatsappNumber} tagline={page.slug === APPROVED_LP.slug ? APPROVED_LP.tagline : undefined} />
 
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
@@ -966,20 +989,21 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
 }
 
 /* ─── Footer ────────────────────────────────────────────────────── */
-function LPFooter({ phone }: { phone?: string }) {
+function LPFooter({ phone, tagline }: { phone?: string; tagline?: string }) {
   return (
     <footer className="border-t border-stone-200 bg-teal-800 text-teal-100">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
             <p className="font-serif text-xl font-bold text-white">Pomah <span className="font-light">Guesthouse</span></p>
+            {tagline && <p className="mt-2 text-sm text-teal-100">{tagline}</p>}
             <p className="mt-2 text-sm text-teal-200/80">
               {POMAH_NAP_LINE}
               {phone ? ` · ${formatSitePhone(phone)}` : ""}
             </p>
           </div>
           <div>
-            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Quick Links</p>
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Tautan</p>
             <ul className="space-y-2 text-sm">
               {[
                 { href: "/", label: "Beranda" },

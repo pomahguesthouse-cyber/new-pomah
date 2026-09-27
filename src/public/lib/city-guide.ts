@@ -8,6 +8,7 @@
  */
 import { isPublicExploreEventVisible } from "@/lib/explore-event-date";
 import { canonicalUrlForPath } from "@/public/lib/public-seo";
+import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
 import { isRetiredExploreSlug, placeSlugMatches, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export type CityGuideCategory = "destinasi" | "kuliner" | "event" | "berita" | "tips";
@@ -253,11 +254,25 @@ export function collectCityGuidePlaces(source: CityGuideSource): CityGuidePlace[
   const used = new Set<string>();
   const places: CityGuidePlace[] = [];
   for (const draft of merged.values()) {
-    let slug = draft.slugBase;
-    let n = 2;
-    while (used.has(slug)) slug = `${draft.slugBase}-${n++}`;
+    const article = cityGuideArticleForSlug(draft.name) ?? cityGuideArticleForSlug(draft.slugBase);
+    const slug = article?.canonicalSlug || draft.slugBase;
+    if (used.has(slug)) {
+      const existing = places.find((place) => place.slug === slug);
+      if (existing) {
+        existing.description = existing.description || draft.description;
+        existing.metaDescription = existing.metaDescription || draft.metaDescription;
+        existing.imageUrl = existing.imageUrl || draft.imageUrl;
+        existing.location = existing.location || draft.location;
+        existing.rating = existing.rating || draft.rating;
+        existing.dateText = existing.dateText || draft.dateText;
+        existing.updatedAt = laterStamp(existing.updatedAt, draft.updatedAt);
+        existing.createdAt = existing.createdAt || draft.createdAt;
+      }
+      continue;
+    }
     used.add(slug);
     if (isRetiredExploreSlug(slug)) continue;
+    if (!article && isRetiredExploreSlug(draft.slugBase)) continue;
     places.push({
       slug,
       name: draft.name,

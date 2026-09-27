@@ -67,6 +67,8 @@ export function shouldCanonicalizeHost(url: URL): boolean {
  */
 export const EXPLORE_SLUG_ALIASES: Record<string, string> = {
   "eksplorasi-sejarah-kota-lama-semarang": "kota-lama-semarang",
+  "lawang-sewu": "lawang-sewu-semarang",
+  "masjid-agung-jawa-tengah": "masjid-agung-jawa-tengah-majt",
 };
 
 export function exploreAliasTarget(pathname: string): string | null {

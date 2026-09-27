@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
 import { cityGuideSitemapUrls, renderSitemapXml, type SitemapUrl } from "@/public/lib/city-guide";
+import { CITY_GUIDE_ARTICLES } from "@/public/content/approved-seo";
 import { loadCityGuidePlaces } from "@/public/lib/city-guide.server";
 import { canonicalUrlForPath, collectSitemapPaths, sitemapLastmodForPath } from "@/public/lib/public-seo";
 
@@ -30,12 +31,18 @@ export const Route = createFileRoute("/sitemap.xml")({
           landings,
           pages: pages ?? [],
         };
+        const guideEntries = cityGuideSitemapUrls(places);
+        const guideLocs = new Set(guideEntries.map((entry) => entry.loc));
+        for (const article of CITY_GUIDE_ARTICLES) {
+          const loc = canonicalUrlForPath(`/explore/${article.canonicalSlug}`);
+          if (!guideLocs.has(loc)) guideEntries.push({ loc });
+        }
         const entries: SitemapUrl[] = [
           ...paths.map((path) => ({
             loc: canonicalUrlForPath(path),
             lastmod: sitemapLastmodForPath(path, stamps),
           })),
-          ...cityGuideSitemapUrls(places),
+          ...guideEntries,
         ];
         const xml = renderSitemapXml(entries);
         return new Response(xml, {

@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import { DatePickerID } from "@/components/ui/date-picker";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
+import { publicRoomBlurb } from "@/public/content/approved-seo";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { roomPageGraph } from "@/public/lib/structured-data";
 
@@ -401,8 +402,10 @@ function RoomBookingPage() {
             <h1 className="mt-8 text-3xl font-bold tracking-tight">
               {resolveRoomPublicSeo(room).h1}
             </h1>
-            {room.description && (
-              <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">{room.description}</p>
+            {publicRoomBlurb(room.slug, room.description) && (
+              <p className="mt-3 max-w-2xl leading-relaxed text-stone-500">
+                {publicRoomBlurb(room.slug, room.description)}
+              </p>
             )}
 
             {tour && tour.scenes.length > 0 && (
@@ -587,8 +590,10 @@ function RoomBookingPage() {
                           {formatIDR(Number(o.base_rate), "text-sm", "font-sans font-bold text-amber-700 tabular-nums")}
                         </span>
                       </div>
-                      {o.description && (
-                        <p className="mt-2 line-clamp-2 text-sm text-stone-500">{o.description}</p>
+                      {publicRoomBlurb(o.slug, o.description) && (
+                        <p className="mt-2 line-clamp-2 text-sm text-stone-500">
+                          {publicRoomBlurb(o.slug, o.description)}
+                        </p>
                       )}
                       <span className="mt-3 inline-block rounded-lg bg-amber-700 px-4 py-2 text-xs font-semibold text-white transition group-hover:bg-amber-800">
                         Lihat & Pesan

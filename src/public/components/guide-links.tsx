@@ -2,6 +2,7 @@
  * Crawlable City Guide links. Cards and this list use real <a href>
  * so Google can discover /explore/<slug> without executing onClick.
  */
+import { cityGuideArticleForSlug } from "@/public/content/approved-seo";
 import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 export const LP_PENGINAPAN_DEKAT_UNNES = "/lp/penginapan-dekat-unnes";
@@ -29,6 +30,8 @@ export function exploreHrefForSlug(slug: string | null | undefined): string | nu
 }
 
 export function exploreHrefForName(name: string | null | undefined): string | null {
+  const article = cityGuideArticleForSlug(name);
+  if (article) return exploreHrefForSlug(article.canonicalSlug);
   const slug = slugifyPlaceName(name ?? "");
   return exploreHrefForSlug(slug);
 }

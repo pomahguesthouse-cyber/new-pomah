@@ -89,7 +89,7 @@ const metaPlaces = collectCityGuidePlaces({
     },
   ],
 });
-const lawang = metaPlaces.find((place) => place.slug === "lawang-sewu");
+const lawang = metaPlaces.find((place) => place.slug === "lawang-sewu-semarang");
 const samPoo = metaPlaces.find((place) => place.slug === "sam-poo-kong");
 assert.equal(cityGuideMetaContent(lawang!).length, 155);
 assert.equal(cityGuideMetaContent(samPoo!), "Snippet dari baris database.");
@@ -126,6 +126,28 @@ assert.equal(cityGuideLastmod(sam), "2026-09-01T12:00:00.000Z");
 assert.equal(findCityGuidePlace(places, "goa-kreo")?.slug, "obyek-wisata-goa-kreo");
 assert.equal(findCityGuidePlace(places, "wingko-babat")?.slug, "wingko-babat");
 assert.equal(findCityGuidePlace(places, "tidak-ada"), null);
+
+const lawangPlaces = collectCityGuidePlaces({
+  destinations: [
+    { name: "Lawang Sewu", desc: "blurb lama" },
+    { name: "Lawang Sewu Short Film Festival (LOFF) 2026", desc: "acara film" },
+    { name: "Masjid Agung Jawa Tengah", desc: "blurb lama" },
+  ],
+  news: [{ title: "Eksplorasi Sejarah Kota Lama Semarang", desc: "duplikat" }],
+});
+assert.equal(findCityGuidePlace(lawangPlaces, "lawang-sewu-semarang")?.slug, "lawang-sewu-semarang");
+assert.equal(
+  lawangPlaces.find((place) => place.name.includes("LOFF"))?.slug,
+  "lawang-sewu-short-film-festival-loff-2026",
+);
+assert.equal(
+  findCityGuidePlace(lawangPlaces, "masjid-agung-jawa-tengah-majt")?.slug,
+  "masjid-agung-jawa-tengah-majt",
+);
+assert.equal(
+  lawangPlaces.find((place) => place.name.includes("Eksplorasi")),
+  undefined,
+);
 
 const bandeng = places.find((place) => place.slug === "bandeng-presto");
 assert.equal(cityGuideLastmod(bandeng!), "2026-07-02T03:04:05.000Z");

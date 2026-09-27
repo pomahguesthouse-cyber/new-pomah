@@ -7,6 +7,7 @@
  * must stay free of server-only imports.
  */
 
+import { normalizeNearbyList } from "@/public/content/approved-seo";
 import { HOME_SEO } from "@/public/lib/public-seo";
 
 export interface NavLink {
@@ -402,7 +403,8 @@ export const DEFAULT_HOMEPAGE_CONFIG: HomepageConfig = {
     subheading: "Temukan kami di lokasi strategis yang mudah diakses",
     nearbyTitle: "Lokasi Terdekat (Radius 5km)",
     nearby: [
-      { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
+      { name: "Unnes Sekaran", type: "Universitas", distance: "4,7 km", time: "~10–12 menit" },
+      { name: "Unnes Sampangan (Kelud Utara III)", type: "Universitas", distance: "3,5 km", time: "~8–10 menit" },
       { name: "Unwahas Menoreh", type: "Universitas", distance: "1.3 km", time: "~5 menit" },
       { name: "Jatidiri GOR", type: "Olahraga", distance: "3.7 km", time: "~10 menit" },
       { name: "Pintu Tol Jatingaleh", type: "Pintu Tol", distance: "5 km", time: "~12 menit" },
@@ -501,7 +503,11 @@ export function mergeHomepageConfig(raw: unknown): HomepageConfig {
     story: { ...d.story, ...c.story },
     reviews: { ...d.reviews, ...c.reviews },
     roomCarousel: { ...d.roomCarousel, ...c.roomCarousel },
-    lokasi: { ...d.lokasi, ...c.lokasi },
+    lokasi: {
+      ...d.lokasi,
+      ...c.lokasi,
+      nearby: normalizeNearbyList(c.lokasi?.nearby?.length ? c.lokasi.nearby : d.lokasi.nearby),
+    },
     facilities: { ...d.facilities, ...c.facilities },
     news: { ...d.news, ...c.news },
     cta: { ...d.cta, ...c.cta },

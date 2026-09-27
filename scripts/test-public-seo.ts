@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import { buildStorageImageUrl } from "../src/lib/storage-image";
-import { cityGuideGraph, homepageLodgingGraph, roomPageGraph } from "../src/public/lib/structured-data";
+import { cityGuideGraph, faqPageGraph, homepageLodgingGraph, roomPageGraph } from "../src/public/lib/structured-data";
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { rewritePublicHref } from "../src/public/lib/public-href";
 import {
@@ -20,9 +20,22 @@ import {
   preferredOgImage,
   publicSeoMeta,
   resolveHomepageH1,
+  resolveHomepageMeta,
+  resolveHomepageTitle,
   resolveRoomPublicSeo,
   sitemapLastmodForPath,
 } from "../src/public/lib/public-seo";
+import {
+  APPROVED_HOME,
+  APPROVED_ROOMS,
+  CITY_GUIDE_ARTICLES,
+  FAMILY_SUITE_DESCRIPTION_NEW,
+  FAMILY_SUITE_DESCRIPTION_OLD,
+  cardIntroForName,
+  cityGuideArticleForSlug,
+  patchUnnesDistance,
+  publicRoomBlurb,
+} from "../src/public/content/approved-seo";
 
 assert.equal(
   preferredOgImage(
@@ -33,15 +46,25 @@ assert.equal(
 );
 assert.equal(preferredOgImage("https://images.unsplash.com/photo-1"), "");
 
-assert.equal(HOME_SEO.h1, "Guesthouse Keluarga di Semarang, Dekat UNNES");
+assert.equal(HOME_SEO.h1, APPROVED_HOME.h1);
 assert.equal(resolveHomepageH1("Penginapan Dekat UNNES Semarang"), HOME_SEO.h1);
+assert.equal(resolveHomepageH1("Guesthouse Keluarga di Semarang, Dekat UNNES"), HOME_SEO.h1);
 assert.equal(resolveHomepageH1(""), HOME_SEO.h1);
 assert.equal(resolveHomepageH1("Judul kustom Dewi"), "Judul kustom Dewi");
-assert.equal(HOME_SEO.title, "Pomah Guesthouse | Penginapan Dekat UNNES Semarang");
+assert.equal(HOME_SEO.title, APPROVED_HOME.title);
+assert.equal(HOME_SEO.description, APPROVED_HOME.meta);
 assert.equal(
-  HOME_SEO.description,
-  "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+  resolveHomepageTitle("Pomah Guesthouse | Penginapan Dekat UNNES Semarang"),
+  HOME_SEO.title,
 );
+assert.equal(resolveHomepageTitle("Judul kustom Dewi"), "Judul kustom Dewi");
+assert.equal(
+  resolveHomepageMeta(
+    "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+  ),
+  HOME_SEO.description,
+);
+assert.equal(resolveHomepageMeta("Meta kustom Dewi"), "Meta kustom Dewi");
 
 assert.equal(DEFAULT_HOMEPAGE_CONFIG.seo.h1, HOME_SEO.h1);
 assert.equal(DEFAULT_HOMEPAGE_CONFIG.seo.metaTitle, HOME_SEO.title);
@@ -118,14 +141,15 @@ const legacy = resolveRoomPublicSeo({
   seo_title: "Kamar Single | Penginapan Dekat UNNES Semarang",
   meta_description: "Deskripsi kustom yang tetap dipakai.",
 });
-assert.equal(legacy.h1, "Kamar Single");
-assert.equal(legacy.title, "Kamar Single – Pomah Guesthouse Semarang");
+assert.equal(legacy.h1, APPROVED_ROOMS["kamar-single"].h1);
+assert.equal(legacy.title, APPROVED_ROOMS["kamar-single"].title);
 assert.equal(legacy.description, "Deskripsi kustom yang tetap dipakai.");
 assert.doesNotMatch(legacy.title + legacy.h1, /Penginapan Dekat UNNES/);
 
 const emptyRoom = resolveRoomPublicSeo({ name: "Family Suite 100", slug: "family-suite-100" });
-assert.equal(emptyRoom.title, "Family Suite 100 – Pomah Guesthouse Semarang");
-assert.equal(emptyRoom.h1, "Family Suite 100");
+assert.equal(emptyRoom.title, APPROVED_ROOMS["family-suite-100"].title);
+assert.equal(emptyRoom.h1, APPROVED_ROOMS["family-suite-100"].h1);
+assert.equal(emptyRoom.description, APPROVED_ROOMS["family-suite-100"].meta);
 
 const rooms: Array<{ slug: string; name: string; h1: string; title: string; description: string }> = [
   {
@@ -321,5 +345,59 @@ const placeSchema = JSON.stringify(
   cityGuideGraph({ slug: "lawang-sewu-semarang", name: "Lawang Sewu", category: "destinasi" }),
 );
 assert.match(placeSchema, /TouristAttraction/);
+assert.doesNotMatch(placeSchema, /FAQPage/);
+
+const faqOnly = JSON.stringify(
+  faqPageGraph("https://pomahguesthouse.com/explore/lawang-sewu-semarang", [
+    { question: "Berapa harga tiket Lawang Sewu?", answer: "Rp20.000" },
+  ]),
+);
+assert.match(faqOnly, /FAQPage/);
+assert.match(faqOnly, /lawang-sewu-semarang#faq/);
+
+for (const article of CITY_GUIDE_ARTICLES) {
+  const firstParagraph = article.sections.flatMap((section) => section.paragraphs).find(Boolean) ?? "";
+  assert.notEqual(article.cardIntro, firstParagraph, article.canonicalSlug);
+  assert.equal(cardIntroForName(article.names[0], "fallback"), article.cardIntro);
+  assert.equal(cityGuideArticleForSlug(article.canonicalSlug)?.h1, article.h1);
+  assert.ok(article.meta.length > 0 && article.meta.length <= 160, article.canonicalSlug);
+}
+assert.equal(cityGuideArticleForSlug("lawang-sewu")?.canonicalSlug, "lawang-sewu-semarang");
+assert.equal(cityGuideArticleForSlug("lawang-sewu-short-film-festival-loff-2026"), null);
+assert.equal(
+  publicRoomBlurb("family-suite-100", FAMILY_SUITE_DESCRIPTION_OLD),
+  FAMILY_SUITE_DESCRIPTION_NEW,
+);
+assert.doesNotMatch(FAMILY_SUITE_DESCRIPTION_NEW, /di pusat kota|kelompok besar/);
+
+const nearby = mergeHomepageConfig({
+  lokasi: {
+    heading: "Lokasi",
+    subheading: "",
+    nearbyTitle: "Dekat",
+    nearby: [
+      { name: "Unnes Sekaran", type: "Universitas", distance: "8 km", time: "~13 menit" },
+      { name: "Undip Tembalang", type: "Universitas", distance: "8 km", time: "~20 menit" },
+    ],
+  },
+}).lokasi.nearby;
+assert.equal(nearby[0]?.distance, "4,7 km");
+assert.equal(nearby[0]?.time, "~10–12 menit");
+assert.equal(nearby[1]?.name, "Unnes Sampangan (Kelud Utara III)");
+assert.equal(nearby[2]?.distance, "8 km");
+assert.equal(nearby[2]?.time, "~20 menit");
+
+const lpNearby = patchUnnesDistance({
+  name: "Unnes Sekaran",
+  type: "Universitas",
+  distance: "8 km",
+  time: "~10 menit",
+});
+assert.equal(lpNearby.distance, "4,7 km");
+assert.equal(lpNearby.time, "~10–12 menit");
+assert.equal(
+  DEFAULT_HOMEPAGE_CONFIG.lokasi.nearby.find((item) => item.name === "Undip Tembalang")?.distance,
+  "8 km",
+);
 
 console.log("test-public-seo: ok");

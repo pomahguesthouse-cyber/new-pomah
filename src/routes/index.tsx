@@ -58,7 +58,7 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle } from "@/public/lib/public-seo";
 import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
 import { publicCopy } from "@/public/lib/public-copy";
 import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
@@ -69,6 +69,7 @@ const BookingDialog = lazy(() =>
 );
 import { PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/components/public-shell";
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
+import { cardIntroForName, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
 import { DateRangePickerID } from "@/components/ui/date-range-picker";
 
@@ -94,10 +95,10 @@ export const Route = createFileRoute("/")({
       (loaderData?.property as { homepage_config?: unknown } | undefined)?.homepage_config,
     );
     const seo = cfg.seo;
-    const title = seo.metaTitle || HOME_SEO.title;
-    const desc = seo.metaDescription || HOME_SEO.description;
-    const twitterTitle = seo.twitterTitle || title;
-    const twitterDescription = seo.twitterDescription || desc;
+    const title = resolveHomepageTitle(seo.metaTitle);
+    const desc = resolveHomepageMeta(seo.metaDescription);
+    const twitterTitle = resolveHomepageTitle(seo.twitterTitle || seo.metaTitle);
+    const twitterDescription = resolveHomepageMeta(seo.twitterDescription || seo.metaDescription);
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
     const roomCover = (loaderData?.roomTypes as Array<{ hero_image_url?: string | null }> | undefined)?.find(
       (room) => preferredOgImage(room.hero_image_url),
@@ -355,7 +356,7 @@ export function PomahHomeView({
     date: d.nearby_distance || d.address || "",
     category: "Wisata",
     title: d.name,
-    excerpt: d.desc ?? "",
+    excerpt: cardIntroForName(d.name, d.desc ?? ""),
     image: d.image || "",
     href: exploreHrefForName(d.name),
     ts: 0,
@@ -365,7 +366,7 @@ export function PomahHomeView({
     date: c.address || "",
     category: c.category ? `Kuliner • ${c.category}` : "Kuliner",
     title: c.name,
-    excerpt: c.desc ?? "",
+    excerpt: cardIntroForName(c.name, c.desc ?? ""),
     image: c.image || "",
     href: exploreHrefForName(c.name),
     ts: 0,
@@ -375,7 +376,7 @@ export function PomahHomeView({
     date: ev.date || "",
     category: "Event",
     title: ev.title,
-    excerpt: ev.desc ?? "",
+    excerpt: cardIntroForName(ev.title, ev.desc ?? ""),
     image: ev.image || "",
     href: exploreHrefForName(ev.title),
     ts: 0,
@@ -385,7 +386,7 @@ export function PomahHomeView({
     date: nw.date || "",
     category: "Berita",
     title: nw.title,
-    excerpt: nw.desc ?? "",
+    excerpt: cardIntroForName(nw.title, nw.desc ?? ""),
     image: nw.image || "",
     href: exploreHrefForName(nw.title),
     ts: 0,
@@ -469,7 +470,7 @@ export function PomahHomeView({
           id: rt.id,
           name: rt.name,
           slug: rt.slug,
-          description: rt.description ?? null,
+          description: publicRoomBlurb(rt.slug, rt.description) || null,
           base_rate: rt.base_rate,
           capacity: rt.capacity ?? null,
           bed_type: null,
@@ -2376,7 +2377,7 @@ function RoomCarousel({
                   </div>
                   {rt.description && (
                     <p className={`line-clamp-2 leading-relaxed text-stone-500 ${cartOpen ? "mt-2 text-xs" : "mt-3 text-sm"}`}>
-                      {rt.description}
+                      {publicRoomBlurb(rt.slug, rt.description)}
                     </p>
                   )}
                   {rt.amenities && rt.amenities.length > 0 && (

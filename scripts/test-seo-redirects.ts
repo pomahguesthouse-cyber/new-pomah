@@ -142,6 +142,19 @@ assert.match(
   location("https://pomahguesthouse.com/explore/eksplorasi-sejarah-kota-lama-semarang")?.reason ?? "",
   /legacy-url/,
 );
+assert.equal(
+  location("https://pomahguesthouse.com/explore/lawang-sewu")?.location,
+  "https://pomahguesthouse.com/explore/lawang-sewu-semarang",
+);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/masjid-agung-jawa-tengah")?.location,
+  "https://pomahguesthouse.com/explore/masjid-agung-jawa-tengah-majt",
+);
+assert.equal(
+  location("https://pomahguesthouse.com/explore/lawang-sewu-short-film-festival-loff-2026"),
+  null,
+);
+assert.equal(location("https://pomahguesthouse.com/explore/lawang-sewu-semarang"), null);
 
 assert.equal(
   location("https://pomahguesthouse.com/rooms/deluxe-ocean-view")?.location,

@@ -194,17 +194,28 @@ export function homepageLodgingGraph(input: {
   ];
   const faqs = input.faqs ?? [];
   if (faqs.length > 0) {
-    graph.push({
-      "@type": "FAQPage",
-      "@id": `${CANONICAL_ORIGIN}/#faq`,
-      mainEntity: faqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: { "@type": "Answer", text: faq.answer },
-      })),
-    });
+    graph.push(faqPageNode(`${CANONICAL_ORIGIN}/#faq`, faqs));
   }
   return { "@context": "https://schema.org", "@graph": graph };
+}
+
+export function faqPageGraph(pageUrl: string, faqs: FaqItem[]) {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [faqPageNode(pageUrl, faqs)],
+  };
+}
+
+function faqPageNode(pageUrl: string, faqs: FaqItem[]) {
+  return {
+    "@type": "FAQPage",
+    "@id": `${pageUrl}#faq`,
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: { "@type": "Answer", text: faq.answer },
+    })),
+  };
 }
 
 export function roomPageGraph(room: SchemaRoom) {

@@ -3,27 +3,43 @@
  *
  * Title / description / H1 / Twitter cards on `/`, `/explore`, and
  * `/rooms/:slug` must come from saved fields (homepage_config.seo,
- * explore_config.seo, room_types.seo_*), using the seeded copy as
- * fallback. Do not invent new marketing strings here.
+ * explore_config.seo, room_types.seo_*), using the approved copy as
+ * fallback. A later edit in admin is kept. Known older defaults are
+ * replaced so the approved sentences show before the SQL file is run.
  */
+import {
+  APPROVED_HOME,
+  approvedRoomSeo,
+  isLegacyHomepageH1,
+  isLegacyHomepageMeta,
+  isLegacyHomepageTitle,
+} from "@/public/content/approved-seo";
 
-/** Visible homepage H1. Change this constant when the final copy is ready. */
-export const HOMEPAGE_H1 = "Guesthouse Keluarga di Semarang, Dekat UNNES";
-
-/** Previous default. Stored configs that still have this string use HOMEPAGE_H1. */
-const LEGACY_HOMEPAGE_H1 = "Penginapan Dekat UNNES Semarang";
+/** Visible homepage H1. Stored configs that still have an older default use this. */
+export const HOMEPAGE_H1 = APPROVED_HOME.h1;
 
 export function resolveHomepageH1(stored?: string | null): string {
   const value = stored?.trim() ?? "";
-  if (!value || value === LEGACY_HOMEPAGE_H1) return HOMEPAGE_H1;
+  if (!value || isLegacyHomepageH1(value)) return HOMEPAGE_H1;
+  return value;
+}
+
+export function resolveHomepageTitle(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || isLegacyHomepageTitle(value)) return HOME_SEO.title;
+  return value;
+}
+
+export function resolveHomepageMeta(stored?: string | null): string {
+  const value = stored?.trim() ?? "";
+  if (!value || isLegacyHomepageMeta(value)) return HOME_SEO.description;
   return value;
 }
 
 export const HOME_SEO = {
   h1: HOMEPAGE_H1,
-  title: "Pomah Guesthouse | Penginapan Dekat UNNES Semarang",
-  description:
-    "Penginapan dekat UNNES Semarang di Sampangan. Pomah Guesthouse: family room, WiFi, parkir, suasana tenang. Pesan di situs resmi.",
+  title: APPROVED_HOME.title,
+  description: APPROVED_HOME.meta,
 } as const;
 
 export const EXPLORE_SEO = {
@@ -130,14 +146,16 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
   ogImageUrl: string;
 } {
   const name = firstNonEmpty(room.name, "Kamar");
-  const title = firstNonEmpty(roomSeoField(room.seo_title), defaultRoomSeoTitle(name));
+  const approved = approvedRoomSeo(room.slug);
+  const title = firstNonEmpty(roomSeoField(room.seo_title), approved?.title, defaultRoomSeoTitle(name));
   const description = firstNonEmpty(
     room.meta_description,
+    approved?.meta,
     room.description,
     `${name} di Pomah Guesthouse Semarang.`,
   );
   return {
-    h1: firstNonEmpty(roomSeoField(room.seo_h1), name),
+    h1: firstNonEmpty(roomSeoField(room.seo_h1), approved?.h1, name),
     title,
     description,
     twitterTitle: title,

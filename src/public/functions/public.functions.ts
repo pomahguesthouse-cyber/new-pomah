@@ -13,6 +13,11 @@ import {
 import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
+import {
+  applyGuideCardIntros,
+  patchUnnesDistance,
+  publicRoomBlurb,
+} from "@/public/content/approved-seo";
 
 /**
  * Resolve dynamic per-night rate AND extrabed rate for ONE room type
@@ -214,12 +219,16 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
   const property = propertyRaw
     ? {
         ...propertyRaw,
-        explore_config: stripPastEventsFromExploreConfig(propertyRaw.explore_config),
+        homepage_config: patchUnnesDistance(propertyRaw.homepage_config) as Json,
+        explore_config: applyGuideCardIntros(
+          stripPastEventsFromExploreConfig(propertyRaw.explore_config),
+        ) as Json,
       }
     : null;
 
   const normalizedRoomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
     ...rt,
+    description: publicRoomBlurb(rt.slug, rt.description),
     rooms: undefined,
     total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
   }));
@@ -936,7 +945,22 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       roomCount = count ?? 0;
     }
 
-    return { property, room: room ?? null, others: others ?? [], roomCount };
+    const withPublicBlurb = <T extends { slug?: string | null; description?: string | null }>(row: T | null) =>
+      row ? { ...row, description: publicRoomBlurb(row.slug, row.description) } : null;
+
+    return {
+      property: property
+        ? {
+            ...property,
+            homepage_config: patchUnnesDistance(
+              (property as { homepage_config?: Json | null }).homepage_config,
+            ) as Json,
+          }
+        : property,
+      room: withPublicBlurb(room),
+      others: (others ?? []).map((row) => withPublicBlurb(row)),
+      roomCount,
+    };
   });
 
 /* ------------------------------------------------------------------ */

@@ -35,6 +35,11 @@ import { buildStorageImageUrl } from "@/lib/storage-image";
 import { canonicalHeadTags, EXPLORE_SEO, preferredOgImage, publicSeoMeta } from "@/public/lib/public-seo";
 import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 import { GuideTextLinks, exploreHrefForName, type GuideLinkPlace } from "@/public/components/guide-links";
+import { CITY_GUIDE_ARTICLES, cardIntroForName } from "@/public/content/approved-seo";
+
+function cardText(name: string | null | undefined, desc: string | null | undefined): string {
+  return cardIntroForName(name, desc ?? "");
+}
 
 function PlaceNameLink({ name }: { name: string }) {
   const href = exploreHrefForName(name);
@@ -255,7 +260,10 @@ function ExploreSemarang() {
   const guidePlaces = ((loaderData as { guidePlaces?: GuideLinkPlace[] } | undefined)?.guidePlaces ??
     (data as { guidePlaces?: GuideLinkPlace[] } | undefined)?.guidePlaces ??
     []) as GuideLinkPlace[];
-  const knownSlugs = new Set(guidePlaces.map((place) => place.slug));
+  const knownSlugs = new Set([
+    ...guidePlaces.map((place) => place.slug),
+    ...CITY_GUIDE_ARTICLES.map((article) => article.canonicalSlug),
+  ]);
   const mergedConfig = mergeExploreConfig(data?.property?.explore_config);
   const config = {
     ...mergedConfig,
@@ -613,7 +621,7 @@ function ExploreSemarang() {
                                 </div>
                               )}
                               <p className="mt-1.5 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
-                                {dest.desc}
+                                {cardText(dest.name, dest.desc)}
                               </p>
                               <div className="mt-3.5 pt-2.5 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
                                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -717,7 +725,7 @@ function ExploreSemarang() {
                                 </p>
                               )}
                               <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-2">
-                                {cul.desc}
+                                {cardText(cul.name, cul.desc)}
                               </p>
                               <div className="mt-3.5 pt-2.5 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
                                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
@@ -812,7 +820,7 @@ function ExploreSemarang() {
                               </div>
                             )}
                             <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
-                              {dest.desc}
+                              {cardText(dest.name, dest.desc)}
                             </p>
                           </div>
                           <div className="mt-4 pt-3 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
@@ -865,7 +873,7 @@ function ExploreSemarang() {
                               </p>
                             )}
                             <p className="mt-2 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
-                              {cul.desc}
+                              {cardText(cul.name, cul.desc)}
                             </p>
                           </div>
                           <div className="mt-4 pt-3 border-t border-stone-100 flex items-center gap-1 text-[11px] text-stone-600 font-medium">
@@ -924,7 +932,7 @@ function ExploreSemarang() {
                               )}
                             </div>
                             <p className="mt-2.5 text-[11px] text-stone-500 leading-relaxed line-clamp-3">
-                              {ev.desc}
+                              {cardText(ev.title, ev.desc)}
                             </p>
                           </div>
                         </div>
@@ -1012,7 +1020,7 @@ function ExploreSemarang() {
                       </div>
 
                       <p className="mt-2 text-[10px] text-stone-500 line-clamp-2 leading-relaxed">
-                        {item.desc}
+                        {cardText(item.title, item.desc)}
                       </p>
                     </div>
                   </div>
