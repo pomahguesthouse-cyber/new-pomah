@@ -14,6 +14,7 @@ import { resolveOrCreateGuest } from "@/services/guest-resolver.service";
 import { computeBookingExpiryIso } from "@/lib/booking-expiry";
 import { stripPastEventsFromExploreConfig } from "@/lib/explore-event-date";
 import {
+  applyApprovedHomepageSeo,
   applyGuideCardIntros,
   patchUnnesDistance,
   publicRoomBlurb,
@@ -219,7 +220,7 @@ export const getPublicSiteData = createServerFn({ method: "GET" }).handler(async
   const property = propertyRaw
     ? {
         ...propertyRaw,
-        homepage_config: patchUnnesDistance(propertyRaw.homepage_config) as Json,
+        homepage_config: applyApprovedHomepageSeo(patchUnnesDistance(propertyRaw.homepage_config)) as Json,
         explore_config: applyGuideCardIntros(
           stripPastEventsFromExploreConfig(propertyRaw.explore_config),
         ) as Json,
@@ -952,8 +953,8 @@ export const getRoomTypeDetail = createServerFn({ method: "GET" })
       property: property
         ? {
             ...property,
-            homepage_config: patchUnnesDistance(
-              (property as { homepage_config?: Json | null }).homepage_config,
+            homepage_config: applyApprovedHomepageSeo(
+              patchUnnesDistance((property as { homepage_config?: Json | null }).homepage_config),
             ) as Json,
           }
         : property,

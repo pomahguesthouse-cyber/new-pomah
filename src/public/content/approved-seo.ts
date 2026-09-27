@@ -704,6 +704,29 @@ function patchUnnesDistanceText(value: string): string {
 
 type ExploreList = Array<Record<string, unknown>>;
 
+/** Replace known older homepage SEO defaults in stored JSON before it is rendered. */
+export function applyApprovedHomepageSeo<T>(config: T): T {
+  if (!config || typeof config !== "object") return config;
+  const cloned = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+  const current = cloned.seo && typeof cloned.seo === "object" ? (cloned.seo as Record<string, unknown>) : {};
+  const seo = { ...current };
+  const h1 = typeof seo.h1 === "string" ? seo.h1 : "";
+  const title = typeof seo.metaTitle === "string" ? seo.metaTitle : "";
+  const meta = typeof seo.metaDescription === "string" ? seo.metaDescription : "";
+  const twitterTitle = typeof seo.twitterTitle === "string" ? seo.twitterTitle : "";
+  const twitterDescription = typeof seo.twitterDescription === "string" ? seo.twitterDescription : "";
+  if (!h1 || isLegacyHomepageH1(h1)) seo.h1 = APPROVED_HOME.h1;
+  if (!title || isLegacyHomepageTitle(title)) seo.metaTitle = APPROVED_HOME.title;
+  if (!meta || isLegacyHomepageMeta(meta)) seo.metaDescription = APPROVED_HOME.meta;
+  if (!twitterTitle || isLegacyHomepageTitle(twitterTitle)) seo.twitterTitle = APPROVED_HOME.title;
+  if (!twitterDescription || isLegacyHomepageMeta(twitterDescription)) seo.twitterDescription = APPROVED_HOME.meta;
+  if (typeof seo.targetKeyword === "string" && seo.targetKeyword.trim().toLowerCase() === "guesthouse keluarga semarang") {
+    seo.targetKeyword = "";
+  }
+  cloned.seo = seo;
+  return cloned as T;
+}
+
 export function applyGuideCardIntros(config: unknown): unknown {
   if (!config || typeof config !== "object") return config;
   const cloned = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;

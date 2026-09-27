@@ -34,7 +34,7 @@ import {
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
-import { APPROVED_LP, patchUnnesDistance } from "@/public/content/approved-seo";
+import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/public/content/approved-seo";
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl } from "@/lib/storage-image";
@@ -84,6 +84,9 @@ export const Route = (createFileRoute as any)("/lp/$slug")({
     };
     if (!result.page) throw notFound();
     const patched = patchUnnesDistance(result.page) as SeoLandingPage;
+    if (patched.homepage_config) {
+      patched.homepage_config = applyApprovedHomepageSeo(patched.homepage_config);
+    }
     const page =
       patched.slug === APPROVED_LP.slug
         ? {
