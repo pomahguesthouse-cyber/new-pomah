@@ -165,7 +165,11 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
   const pathname = normalizePathname(rawPath);
   if (isApiPath(rawPath) || isApiPath(pathname)) return null;
 
-  const hasTrailingSlash = rawPath.length > 1 && rawPath.endsWith("/");
+  // A trailing-slash hop on /admin or /login would drop a client-side OAuth
+  // hash. Those paths stay put unless the host itself is changing.
+  const staffPath =
+    pathname === "/login" || pathname === "/admin" || pathname.startsWith("/admin/");
+  const hasTrailingSlash = rawPath.length > 1 && rawPath.endsWith("/") && !staffPath;
   const kind = legacyKindForPath(pathname);
   const canonicalizeHost = shouldCanonicalizeHost(url);
   if (!kind && !canonicalizeHost && !hasTrailingSlash) return null;
@@ -180,19 +184,27 @@ export function buildSeoRedirect(input: SeoRedirectInput): SeoRedirect | null {
     path = input.deluxeRoomPath?.trim() || DELUXE_OCEAN_VIEW_FALLBACK;
   }
 
+  // Query and hash ride along. OAuth returns (`?code=`, `?next=`, `#access_token`)
+  // must survive www/http canonicalization. The hash is not sent on a normal
+  // browser request; when it is present on the URL we still keep it.
+  // `/admin` and `/login` are not legacy paths, so they are never rewritten
+  // down to `/` — only the host (and a trailing slash on that host change) moves.
   const search = url.search;
+  const hash = url.hash;
   const onProduction = isProductionHost(url.hostname);
   const location = onProduction
-    ? `${canonicalUrlForPath(path)}${search}`
+    ? `${canonicalUrlForPath(path)}${search}${hash}`
     : kind
-      ? `${path}${search}`
+      ? `${path}${search}${hash}`
       : hasTrailingSlash
-        ? `${url.origin}${pathname}${search}`
+        ? `${url.origin}${pathname}${search}${hash}`
         : null;
   if (!location) return null;
 
-  const current = `${url.origin}${rawPath}${search}`;
-  if (location === url.href || location === current || location === `${rawPath}${search}`) return null;
+  const current = `${url.origin}${rawPath}${search}${hash}`;
+  if (location === url.href || location === current || location === `${rawPath}${search}${hash}`) {
+    return null;
+  }
 
   const reason = [
     canonicalizeHost ? "host-canonical" : null,

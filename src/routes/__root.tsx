@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
@@ -19,7 +19,10 @@ import "@fontsource/jetbrains-mono/500.css";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { HOME_SEO } from "@/public/lib/public-seo";
+import { clearStaffSessionHint } from "@/lib/auth-return";
+import { isChunkLoadError, reloadOnceOnChunkError } from "@/lib/chunk-reload";
 import { siteIdentityGraph } from "@/public/lib/structured-data";
+import { StaffOAuthReturn } from "@/public/components/staff-oauth-return";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -71,14 +74,30 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const [reloading, setReloading] = useState(false);
+  const message = error instanceof Error ? error.message : "Something went wrong";
+
+  useEffect(() => {
+    if (!isChunkLoadError(error)) return;
+    if (reloadOnceOnChunkError()) setReloading(true);
+  }, [error]);
+
+  if (reloading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <p className="text-sm text-muted-foreground">Memuat ulang…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <h1 className="text-xl font-semibold">This page didn't load</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{message}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -161,6 +180,7 @@ function AuthSync() {
       // Saat sign-out: kosongkan cache & arahkan ke /login. JANGAN invalidate
       // (akan memicu refetch serverFn tanpa token -> 401 blank screen).
       if (event === "SIGNED_OUT") {
+        clearStaffSessionHint();
         qc.clear();
         router.navigate({ to: "/login", search: { next: undefined } });
         return;
@@ -178,6 +198,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSync />
+      <StaffOAuthReturn />
       <Outlet />
       <Toaster />
     </QueryClientProvider>

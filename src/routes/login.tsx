@@ -6,6 +6,17 @@ import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  beginFullPageRedirect,
+  clearAuthNext,
+  clearStaffSessionHint,
+  loginDestination,
+  loginReturnUrl,
+  markStaffSessionHint,
+  rememberAuthNext,
+  resetFullPageRedirectGuard,
+  safeNext,
+} from "@/lib/auth-return";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -17,13 +28,6 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-// Hanya izinkan redirect ke path same-origin (harus diawali "/" dan bukan "//").
-function safeNext(next: string | undefined): string | null {
-  if (!next) return null;
-  if (!next.startsWith("/") || next.startsWith("//")) return null;
-  return next;
-}
-
 function LoginPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
@@ -34,23 +38,44 @@ function LoginPage() {
   const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) redirectAfterLogin();
-    });
-  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
-
   /**
-   * Setelah login sukses, hormati `next` (mis. alur consent OAuth) —
-   * fallback ke /admin bila tidak ada.
+   * Setelah login sukses — termasuk balik dari Google OAuth — hormati `next`
+   * (path same-origin saja) dan fallback ke /admin. Full load supaya tab yang
+   * masih memegang bundle lama tidak 404 pada chunk yang sudah tidak ada.
    */
-  function redirectAfterLogin() {
-    if (nextPath) {
-      window.location.assign(nextPath);
-      return;
-    }
-    navigate({ to: "/admin" });
+  async function redirectAfterLogin() {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) markStaffSessionHint();
+    else clearStaffSessionHint();
+    const target = loginDestination(nextPath);
+    beginFullPageRedirect(target, () => {
+      navigate({ to: "/admin" });
+    });
   }
+
+  useEffect(() => {
+    resetFullPageRedirectGuard();
+    let cancelled = false;
+    const sendIfSignedIn = (hasSession: boolean) => {
+      if (cancelled || !hasSession) return;
+      redirectAfterLogin();
+    };
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      if (data.session) sendIfSignedIn(true);
+    });
+
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return;
+      sendIfSignedIn(!!session);
+    });
+
+    return () => {
+      cancelled = true;
+      data.subscription.unsubscribe();
+    };
+  }, [navigate, nextPath]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +86,7 @@ function LoginPage() {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin + (nextPath ?? "/"),
+            emailRedirectTo: loginReturnUrl(window.location.origin, nextPath),
             data: { full_name: name },
           },
         });
@@ -71,7 +96,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      redirectAfterLogin();
+      await redirectAfterLogin();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -80,11 +105,19 @@ function LoginPage() {
   };
 
   const onGoogle = async () => {
+    const next = loginDestination(nextPath);
+    rememberAuthNext(next);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + (nextPath ?? "/"),
+      redirect_uri: loginReturnUrl(window.location.origin, next),
       extraParams: { prompt: "select_account" },
     });
-    if (result.error) toast.error(result.error.message);
+    if (result.error) {
+      clearAuthNext();
+      toast.error(result.error.message);
+      return;
+    }
+    // Popup / preview flows set the session in-page instead of leaving.
+    if (!result.redirected) redirectAfterLogin();
   };
 
   return (
