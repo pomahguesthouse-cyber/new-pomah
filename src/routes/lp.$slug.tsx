@@ -58,7 +58,7 @@ const isoAddDays = (iso: string, n: number) => {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const Route = (createFileRoute as any)("/lp/$slug")({
+export const Route = createFileRoute("/lp/$slug")({
   head: ({ loaderData }: any) => {
     const p = loaderData?.page as SeoLandingPage | undefined;
     if (!p) return {};
@@ -349,7 +349,7 @@ function SectionWrapper({ section, children }: { section: LPSection; children: R
 }
 
 /* ─── Section dispatcher ────────────────────────────────────────── */
-export function LPSectionRenderer({ section }: { section: LPSection }) {
+function LPSectionRenderer({ section }: { section: LPSection }) {
   switch (section.type) {
     case "header":       return <HeaderSection       s={section} />;
     case "hero":         return <HeroSection         s={section} />;

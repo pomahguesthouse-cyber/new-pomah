@@ -84,11 +84,11 @@ import { SmartDelaySettings } from "@/admin/modules/ai-lab/smart-delay-settings"
 import { SopKnowledgeView } from "@/admin/modules/ai-lab/sop-knowledge-view";
 import { TrainingRagSettings } from "@/admin/modules/ai-lab/training-rag-settings";
 import { WhatsappCorrectionsPage } from "@/admin/modules/training/whatsapp-corrections-live-page";
-import { HealthPage } from "@/routes/admin/health";
-import { RoutingDebugPage } from "@/routes/admin/routing-debug";
-import { TelegramPage } from "@/routes/admin/telegram";
-import { TrainingPage } from "@/routes/admin/training";
-import { WhatsAppPage } from "@/routes/admin/whatsapp";
+import { HealthPage } from "@/admin/modules/health/health-page";
+import { RoutingDebugPage } from "@/admin/modules/routing/routing-debug-page";
+import { TelegramPage } from "@/admin/modules/telegram/telegram-page";
+import { TrainingPage } from "@/admin/modules/training/training-page";
+import { WhatsAppPage } from "@/admin/modules/whatsapp/whatsapp-page";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
