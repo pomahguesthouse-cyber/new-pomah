@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home, Facebook, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type HomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { publicCopy } from "@/public/lib/public-copy";
 import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
@@ -335,7 +336,7 @@ export function PublicFooter({
             search={{ next: undefined }}
             className="font-mono text-[10px] uppercase tracking-widest text-teal-400/40 hover:text-teal-300/60"
           >
-            Staff Login
+            Masuk Staf
           </Link>
         </div>
       </div>
@@ -506,7 +507,7 @@ export function PomahNav({
           href={rewritePublicHref(n.href)}
           className={`transition ${darkText ? "hover:text-amber-700" : "hover:text-white/70"}`}
         >
-          {n.label}
+          {publicCopy(n.label)}
         </a>
       ))}
     </div>
@@ -647,22 +648,22 @@ export function PomahFooter({
         </div>
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
-            Quick Links
+            Tautan
           </p>
           <ul className="mt-4 space-y-2 text-sm">
             <li>
               <Link to="/" className="transition hover:text-white">
-                Home
+                Beranda
               </Link>
             </li>
             <li>
               <Link to="/" hash="rooms" className="transition hover:text-white">
-                Rooms
+                Kamar
               </Link>
             </li>
             <li>
               <a href="#facilities" className="transition hover:text-white">
-                Amenities
+                Fasilitas
               </a>
             </li>
             <li>
@@ -675,7 +676,7 @@ export function PomahFooter({
         </div>
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
-            Follow Us
+            Ikuti Kami
           </p>
           <div className="mt-4">
             <SocialLinks property={property ?? null} />

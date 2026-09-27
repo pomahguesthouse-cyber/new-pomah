@@ -14,6 +14,7 @@ import {
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
 import { DatePickerID } from "@/components/ui/date-picker";
+import { publicCopy } from "@/public/lib/public-copy";
 import {
   getSeoLandingPageBySlug,
   ensureResponsiveStyles,
@@ -847,7 +848,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
       <div className="mx-auto max-w-6xl px-6">
         {(s.title || s.subheading) && (
           <div className="mb-2 text-center">
-            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>}
+            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{publicCopy(s.title)}</h2>}
             {s.subheading && <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">{s.subheading}</p>}
           </div>
         )}
