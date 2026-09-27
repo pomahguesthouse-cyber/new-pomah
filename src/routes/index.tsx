@@ -58,8 +58,9 @@ import { listActivePublicEvents } from "@/admin/modules/seo/schedules.functions"
 import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
 import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
+import { publicCopy } from "@/public/lib/public-copy";
 import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
@@ -98,6 +99,11 @@ export const Route = createFileRoute("/")({
     const twitterTitle = seo.twitterTitle || title;
     const twitterDescription = seo.twitterDescription || desc;
     const heroImageRaw = cfg.hero.slides?.[0]?.imageUrl;
+    const roomCover = (loaderData?.roomTypes as Array<{ hero_image_url?: string | null }> | undefined)?.find(
+      (room) => preferredOgImage(room.hero_image_url),
+    )?.hero_image_url;
+    const ogRaw = preferredOgImage(seo.ogImageUrl, heroImageRaw, roomCover);
+    const ogImage = ogRaw ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 }) : "";
     const heroImage = heroImageRaw
       ? buildStorageImageUrl(heroImageRaw, { width: 768, quality: 60 })
       : "";
@@ -113,7 +119,7 @@ export const Route = createFileRoute("/")({
             description: desc,
             twitterTitle,
             twitterDescription,
-            ogImageUrl: seo.ogImageUrl,
+            ogImageUrl: ogImage,
           },
           HOME_SEO,
         ),
@@ -145,9 +151,9 @@ export const Route = createFileRoute("/")({
 /* ------------------------------------------------------------------ */
 
 const FACILITIES = [
-  { icon: Wifi, title: "Free Wifi", desc: "Wifi di Ruang Publik" },
+  { icon: Wifi, title: "Wifi Gratis", desc: "Wifi di Ruang Publik" },
   { icon: Building2, title: "Balkon", desc: "Balkon" },
-  { icon: Car, title: "Free Parking", desc: "Parkir Gratis" },
+  { icon: Car, title: "Parkir Gratis", desc: "Parkir Gratis" },
   { icon: Coffee, title: "Mini Cafe", desc: "Mini Cafe" },
 ];
 
@@ -890,7 +896,7 @@ export function PomahHomeView({
                 color={cfg.story.color}
                 uppercase={cfg.sectionLayouts?.story?.uppercase}
               >
-                {cfg.story.heading}
+                {publicCopy(cfg.story.heading)}
               </SectionHeading>
               <div className="mt-8 space-y-5 text-base leading-relaxed text-stone-500">
                 {cfg.story.paragraphs.map((p, i) => (
@@ -973,7 +979,7 @@ export function PomahHomeView({
                     // Adapt the configurable heading when the user has picked
                     // a date range — swap "Hari Ini" → "Tanggal Pilihan Tamu"
                     // so the heading stays consistent with the date below.
-                    const baseHeading = cfg.roomCarousel.heading || "Ketersediaan Kamar";
+                    const baseHeading = publicCopy(cfg.roomCarousel.heading) || "Ketersediaan Kamar";
                     const headingText = usingDateFilter
                       ? baseHeading.replace(/hari ini/i, "Tanggal Pilihan Tamu")
                       : baseHeading;
@@ -1089,7 +1095,7 @@ export function PomahHomeView({
                   color={fac.color}
                   uppercase={cfg.sectionLayouts?.facilities?.uppercase}
                 >
-                  {fac.heading}
+                  {publicCopy(fac.heading)}
                 </SectionHeading>
                 {fac.subheading && (
                   <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">
@@ -1196,7 +1202,7 @@ export function PomahHomeView({
                   color={n.color}
                   uppercase={cfg.sectionLayouts?.news?.uppercase}
                 >
-                  {n.heading}
+                  {publicCopy(n.heading)}
                 </SectionHeading>
                 {n.subheading && (
                   <p className="mx-auto mt-4 max-w-lg text-sm text-stone-500">

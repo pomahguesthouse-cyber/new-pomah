@@ -8,7 +8,8 @@ import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
 import { cityGuideGraph } from "@/public/lib/structured-data";
 import { cityGuideMetaContent, findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
-import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { buildStorageImageUrl } from "@/lib/storage-image";
+import { canonicalHeadTags, preferredOgImage } from "@/public/lib/public-seo";
 import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
 
 const CATEGORY_LABEL: Record<CityGuidePlace["category"], string> = {
@@ -73,6 +74,7 @@ export const Route = createFileRoute("/explore/$slug")({
     const title = `${place.name} | Jelajahi Semarang`;
     const description = cityGuideMetaContent(place);
     const canonical = canonicalHeadTags(`/explore/${place.slug}`);
+    const ogImage = preferredOgImage(place.imageUrl);
     return {
       meta: [
         { title },
@@ -80,7 +82,9 @@ export const Route = createFileRoute("/explore/$slug")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:type", content: "article" },
-        ...(place.imageUrl ? [{ property: "og:image", content: place.imageUrl }] : []),
+        ...(ogImage
+          ? [{ property: "og:image", content: buildStorageImageUrl(ogImage, { width: 1200, quality: 60 }) }]
+          : []),
         ...canonical.meta,
       ],
       links: canonical.links,

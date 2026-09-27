@@ -47,6 +47,20 @@ export type PublicSeoMetaTag =
   | { name: string; content: string }
   | { property: string; content: string };
 
+/** Unsplash and similar placeholders are not the property's own photos. */
+export function isStockImageUrl(url: string | null | undefined): boolean {
+  return /images\.unsplash\.com|images\.pexels\.com|source\.unsplash\.com/i.test(url ?? "");
+}
+
+/** First candidate that is a real photo, skipping empty and stock URLs. */
+export function preferredOgImage(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (value && !isStockImageUrl(value)) return value;
+  }
+  return "";
+}
+
 function firstNonEmpty(...values: Array<string | null | undefined>): string {
   for (const v of values) {
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -128,7 +142,7 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
     description,
     twitterTitle: title,
     twitterDescription: description,
-    ogImageUrl: firstNonEmpty(room.hero_image_url),
+    ogImageUrl: preferredOgImage(room.hero_image_url),
   };
 }
 

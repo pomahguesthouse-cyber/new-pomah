@@ -103,7 +103,9 @@ export const Route = createFileRoute("/rooms/$slug")({
             description: seo.description,
             twitterTitle: seo.twitterTitle,
             twitterDescription: seo.twitterDescription,
-            ogImageUrl: seo.ogImageUrl || room.hero_image_url,
+            ogImageUrl: seo.ogImageUrl
+              ? buildStorageImageUrl(seo.ogImageUrl, { width: 1200, quality: 60 })
+              : "",
             robots: "index, follow",
           },
           { title: seo.title, description: seo.description },
@@ -336,11 +338,11 @@ function RoomBookingPage() {
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">
           <Link to="/" className="flex items-center gap-1 hover:text-amber-700">
             <Home className="h-3.5 w-3.5" />
-            Home
+            Beranda
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <Link to="/" hash="rooms" className="hover:text-amber-700">
-            Rooms
+            Kamar
           </Link>
           <ChevronRight className="h-3.5 w-3.5" />
           <span className="font-medium text-stone-700">{room.name}</span>
@@ -453,7 +455,7 @@ function RoomBookingPage() {
                 <Spec
                   icon={<Users className="h-4 w-4" />}
                   label="Max Tamu"
-                  value={`${capacity} persons`}
+                  value={`${capacity} orang`}
                 />
                 <Spec
                   icon={<Maximize className="h-4 w-4" />}
@@ -463,7 +465,7 @@ function RoomBookingPage() {
                 <Spec
                   icon={<BedDouble className="h-4 w-4" />}
                   label="Kamar Tersedia"
-                  value={`${roomCount} rooms`}
+                  value={`${roomCount} kamar`}
                 />
                 {room.floor_info && (
                   <Spec
@@ -532,7 +534,7 @@ function RoomBookingPage() {
                   }}
                   className="w-full rounded-lg bg-rose-400 py-3 text-sm font-semibold text-white transition hover:bg-rose-500"
                 >
-                  Book This Room
+                  Pesan Kamar Ini
                 </button>
               </div>
 
@@ -540,7 +542,7 @@ function RoomBookingPage() {
                 <Line label="Check-in" value="Mulai 14:00" />
                 <Line label="Check-out" value="Sampai 12:00" />
                 <Line
-                  label="Availability"
+                  label="Ketersediaan"
                   value={availability}
                   highlight={availability === "Tersedia" || availability === "Penuh"}
                   bad={availability === "Penuh"}

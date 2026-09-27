@@ -31,7 +31,8 @@ import {
 } from "lucide-react";
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
-import { canonicalHeadTags, EXPLORE_SEO, publicSeoMeta } from "@/public/lib/public-seo";
+import { buildStorageImageUrl } from "@/lib/storage-image";
+import { canonicalHeadTags, EXPLORE_SEO, preferredOgImage, publicSeoMeta } from "@/public/lib/public-seo";
 import { isRetiredExploreSlug, slugifyPlaceName } from "@/public/lib/seo-redirects";
 import { GuideTextLinks, exploreHrefForName, type GuideLinkPlace } from "@/public/components/guide-links";
 
@@ -64,6 +65,13 @@ export const Route = createFileRoute("/explore/")({
     const seo = mergeExploreConfig(loaderData?.property?.explore_config).seo;
     const title = seo.metaTitle || EXPLORE_SEO.title;
     const desc = seo.metaDescription || EXPLORE_SEO.description;
+    const placeImage = (loaderData?.guidePlaces as Array<{ imageUrl?: string | null }> | undefined)
+      ?.map((place) => place.imageUrl)
+      .find((url) => preferredOgImage(url));
+    const roomCover = (loaderData?.roomTypes as Array<{ hero_image_url?: string | null }> | undefined)
+      ?.map((room) => room.hero_image_url)
+      .find((url) => preferredOgImage(url));
+    const ogRaw = preferredOgImage(placeImage, roomCover);
     const canonical = canonicalHeadTags("/explore");
     return {
       meta: [
@@ -73,6 +81,7 @@ export const Route = createFileRoute("/explore/")({
             description: desc,
             twitterTitle: seo.twitterTitle || title,
             twitterDescription: seo.twitterDescription || desc,
+            ogImageUrl: ogRaw ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 }) : "",
           },
           EXPLORE_SEO,
         ),

@@ -119,14 +119,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { title: HOME_SEO.title },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      {
-        property: "og:image",
-        content: "https://pomahguesthouse.com/og-home.jpg",
-      },
-      {
-        name: "twitter:image",
-        content: "https://pomahguesthouse.com/og-home.jpg",
-      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },

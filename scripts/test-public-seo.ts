@@ -17,11 +17,21 @@ import {
   collectSitemapPaths,
   EXPLORE_SEO,
   HOME_SEO,
+  preferredOgImage,
   publicSeoMeta,
   resolveHomepageH1,
   resolveRoomPublicSeo,
   sitemapLastmodForPath,
 } from "../src/public/lib/public-seo";
+
+assert.equal(
+  preferredOgImage(
+    "https://images.unsplash.com/photo-1",
+    "https://example.supabase.co/storage/v1/object/public/rooms/hero.png",
+  ),
+  "https://example.supabase.co/storage/v1/object/public/rooms/hero.png",
+);
+assert.equal(preferredOgImage("https://images.unsplash.com/photo-1"), "");
 
 assert.equal(HOME_SEO.h1, "Guesthouse Keluarga di Semarang, Dekat UNNES");
 assert.equal(resolveHomepageH1("Penginapan Dekat UNNES Semarang"), HOME_SEO.h1);
