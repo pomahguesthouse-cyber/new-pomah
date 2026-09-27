@@ -48,6 +48,7 @@ import {
 import { DatePickerID } from "@/components/ui/date-picker";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
+import { roomPageGraph } from "@/public/lib/structured-data";
 
 export const Route = createFileRoute("/rooms/$slug")({
   // Optional date prefill carried from the homepage date picker.
@@ -324,6 +325,12 @@ function RoomBookingPage() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <PublicNav property={data?.property} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(roomPageGraph(displayRoom ?? room)),
+        }}
+      />
       <main className="mx-auto max-w-6xl px-6 py-8">
         {/* Breadcrumb */}
         <nav className="mb-6 flex items-center gap-1.5 text-sm text-stone-500">

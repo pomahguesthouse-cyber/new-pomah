@@ -47,7 +47,7 @@ import {
   submitCartBooking,
   getMediaAssetByName,
 } from "@/public/functions/public.functions";
-import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
+import { getGoogleReviews, type GoogleReview, type GoogleReviewsResult } from "@/public/functions/google-reviews.functions";
 import {
   mergeHomepageConfig,
   type HomepageConfig,
@@ -59,6 +59,7 @@ import { getPublicExploreItems } from "@/public/functions/public.functions";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
 import { canonicalHeadTags, HOME_SEO, publicSeoMeta, resolveHomepageH1 } from "@/public/lib/public-seo";
+import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
 // Lazy-load BookingDialog — komponen ini hanya dibutuhkan saat user
 // membuka dialog booking, sehingga tidak perlu masuk initial bundle.
 const BookingDialog = lazy(() =>
@@ -72,8 +73,14 @@ import { DateRangePickerID } from "@/components/ui/date-range-picker";
 export const Route = createFileRoute("/")({
   loader: async () => {
     const { loadCityGuidePlaces } = await import("@/public/lib/city-guide.server");
-    const [site, guidePlaces] = await Promise.all([getPublicSiteData(), loadCityGuidePlaces()]);
-    return { ...site, guidePlaces };
+    const [site, guidePlaces, reviews] = await Promise.all([
+      getPublicSiteData(),
+      loadCityGuidePlaces(),
+      getGoogleReviews().catch(
+        (): GoogleReviewsResult => ({ rating: null, total: null, reviews: [], status: "ERROR" }),
+      ),
+    ]);
+    return { ...site, guidePlaces, reviews };
   },
   // Data property + room types jarang berubah; cache 1 jam mengurangi
   // beban server dan mempercepat navigasi balik ke home.
@@ -288,9 +295,13 @@ export function PomahHomeView({
   }, 0);
 
   const reviewsFn = useServerFn(getGoogleReviews);
+  const loaderReviews = (
+    initialData as { reviews?: GoogleReviewsResult } | undefined
+  )?.reviews;
   const { data: gr } = useQuery({
     queryKey: ["google-reviews"],
     queryFn: () => reviewsFn(),
+    initialData: loaderReviews,
     staleTime: 10 * 60 * 1000,
   });
 
@@ -725,6 +736,31 @@ export function PomahHomeView({
       {cfg.sectionOrder.map((key) => (
         <Fragment key={key}>{renderHomeSection(key)}</Fragment>
       ))}
+
+      <section className="mx-auto max-w-3xl px-6 py-12" aria-label="Pertanyaan umum">
+        <h2 className="font-serif text-2xl font-semibold text-stone-900">Pertanyaan umum</h2>
+        <dl className="mt-6 space-y-4">
+          {HOMEPAGE_FAQS.map((faq) => (
+            <div key={faq.question}>
+              <dt className="font-semibold text-stone-800">{faq.question}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-stone-600">{faq.answer}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(
+            homepageLodgingGraph({
+              rooms,
+              reviews: { rating: gRating, total: gTotal },
+              property,
+              faqs: HOMEPAGE_FAQS,
+            }),
+          ),
+        }}
+      />
 
       <GuideTextLinks places={guidePlaces} />
 

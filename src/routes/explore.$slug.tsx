@@ -6,6 +6,7 @@ import { createFileRoute, Link, notFound, redirect } from "@tanstack/react-route
 import { MapPin, Star } from "lucide-react";
 import { PublicFooter, PublicNav } from "@/public/components/public-shell";
 import { StayNearby } from "@/public/components/guide-links";
+import { cityGuideGraph } from "@/public/lib/structured-data";
 import { findCityGuidePlace, type CityGuidePlace } from "@/public/lib/city-guide";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { exploreAliasTarget, slugifyPlaceName } from "@/public/lib/seo-redirects";
@@ -95,6 +96,10 @@ function ExplorePlacePage() {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
       <PublicNav showBackHome />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(cityGuideGraph(place)) }}
+      />
       <main className="mx-auto max-w-3xl px-6 py-10">
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
           <Link to="/explore" className="hover:underline">

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { DEFAULT_HOMEPAGE_CONFIG, mergeHomepageConfig } from "../src/admin/modules/homepage/homepage.config";
 import { DEFAULT_EXPLORE_CONFIG, mergeExploreConfig } from "../src/admin/modules/explore/explore.config";
 import { buildStorageImageUrl } from "../src/lib/storage-image";
+import { cityGuideGraph, homepageLodgingGraph, roomPageGraph } from "../src/public/lib/structured-data";
 import { buildGuideTextLinks } from "../src/public/components/guide-links";
 import { rewritePublicHref } from "../src/public/lib/public-href";
 import {
@@ -249,5 +250,51 @@ assert.equal(
   buildStorageImageUrl("https://images.unsplash.com/photo-1", { width: 640 }),
   "https://images.unsplash.com/photo-1",
 );
+
+const lodging = homepageLodgingGraph({
+  rooms: [
+    { name: "Kamar Single", slug: "kamar-single", base_rate: 175000, capacity: 1 },
+    { name: "Kamar Deluxe", slug: "deluxe", base_rate: 230000, capacity: 2 },
+    { name: "Family Suite 100", slug: "family-suite-100", base_rate: 450000, capacity: 4 },
+  ],
+  reviews: { rating: 4.8, total: 77 },
+  faqs: [{ question: "Di mana?", answer: "Sampangan" }],
+});
+const lodgingJson = JSON.stringify(lodging);
+assert.match(lodgingJson, /"reviewCount":77/);
+assert.match(lodgingJson, /"price":175000/);
+assert.match(lodgingJson, /"price":230000/);
+assert.match(lodgingJson, /family-suite-100/);
+assert.doesNotMatch(lodgingJson, /UNDIP|Simpang Lima|200000|300000/);
+assert.match(lodgingJson, /FAQPage/);
+assert.match(lodgingJson, /"latitude":-6.9936/);
+
+const roomSchema = JSON.stringify(
+  roomPageGraph({ name: "Kamar Single", slug: "kamar-single", base_rate: 175000, capacity: 1 }),
+);
+assert.match(roomSchema, /HotelRoom/);
+assert.match(roomSchema, /BreadcrumbList/);
+assert.match(roomSchema, /"price":175000/);
+assert.doesNotMatch(roomSchema, /FAQPage/);
+
+const culinary = JSON.stringify(
+  cityGuideGraph({ slug: "soto-pak-wito-trangkil", name: "Soto Pak Wito", category: "kuliner" }),
+);
+assert.match(culinary, /Restaurant/);
+assert.match(culinary, /BreadcrumbList/);
+const eventSchema = JSON.stringify(
+  cityGuideGraph({
+    slug: "gedongsongo-festival",
+    name: "Gedongsongo Festival",
+    category: "event",
+    dateText: "22 Oktober 2026",
+    location: "Gedong Songo",
+  }),
+);
+assert.match(eventSchema, /"@type":"Event"/);
+const placeSchema = JSON.stringify(
+  cityGuideGraph({ slug: "lawang-sewu-semarang", name: "Lawang Sewu", category: "destinasi" }),
+);
+assert.match(placeSchema, /TouristAttraction/);
 
 console.log("test-public-seo: ok");
