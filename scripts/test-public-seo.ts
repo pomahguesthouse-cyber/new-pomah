@@ -20,6 +20,7 @@ import {
   publicSeoMeta,
   resolveHomepageH1,
   resolveRoomPublicSeo,
+  sitemapLastmodForPath,
 } from "../src/public/lib/public-seo";
 
 assert.equal(HOME_SEO.h1, "Guesthouse Keluarga di Semarang, Dekat UNNES");
@@ -209,6 +210,20 @@ for (const path of paths) {
   assert.match(loc, /^https:\/\/pomahguesthouse\.com(\/|$)/);
   assert.doesNotMatch(loc, /www\.|http:\/\/|explore-semarang|deluxe-ocean-view/);
 }
+const stamps = {
+  propertyUpdatedAt: "2026-08-01T00:00:00.000Z",
+  rooms: [{ slug: "deluxe", updated_at: "2026-07-02T03:04:05.000Z" }],
+  landings: [{ slug: "penginapan-dekat-unnes", updated_at: "2026-06-01T00:00:00.000Z" }],
+  pages: [],
+};
+assert.equal(sitemapLastmodForPath("/", stamps), "2026-08-01T00:00:00.000Z");
+assert.equal(sitemapLastmodForPath("/rooms/deluxe", stamps), "2026-07-02T03:04:05.000Z");
+assert.equal(
+  sitemapLastmodForPath("/lp/penginapan-dekat-unnes", stamps),
+  "2026-06-01T00:00:00.000Z",
+);
+assert.equal(sitemapLastmodForPath("/rooms/missing", stamps), undefined);
+
 assert.equal(canonicalUrlForPath("/"), "https://pomahguesthouse.com/");
 assert.equal(canonicalUrlForPath("/explore?utm=1"), "https://pomahguesthouse.com/explore");
 assert.equal(canonicalUrlForPath("/rooms/deluxe/"), "https://pomahguesthouse.com/rooms/deluxe");

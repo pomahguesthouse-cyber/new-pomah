@@ -247,3 +247,39 @@ export function collectSitemapPaths(input: {
   }
   return [...urls];
 }
+
+export type SitemapStamp = {
+  slug?: string | null;
+  updated_at?: string | null;
+};
+
+function stampForSlug(rows: SitemapStamp[] | undefined, slug: string): string | undefined {
+  const wanted = slug.trim().toLowerCase();
+  const row = (rows ?? []).find((item) => (item.slug ?? "").trim().toLowerCase() === wanted);
+  const value = row?.updated_at?.trim();
+  return value || undefined;
+}
+
+/**
+ * lastmod from stored updated_at. Missing dates are omitted so the sitemap
+ * does not pretend the page changed at request time.
+ */
+export function sitemapLastmodForPath(
+  path: string,
+  input: {
+    propertyUpdatedAt?: string | null;
+    rooms?: SitemapStamp[];
+    landings?: SitemapStamp[];
+    pages?: SitemapStamp[];
+  },
+): string | undefined {
+  if (path === "/" || path === "/book" || path === "/explore") {
+    return input.propertyUpdatedAt?.trim() || undefined;
+  }
+  const room = path.match(/^\/rooms\/([^/]+)$/);
+  if (room) return stampForSlug(input.rooms, room[1]);
+  const landing = path.match(/^\/lp\/([^/]+)$/);
+  if (landing) return stampForSlug(input.landings, landing[1]);
+  const pageSlug = path.replace(/^\//, "");
+  return stampForSlug(input.pages, pageSlug) || stampForSlug(input.pages, path);
+}
