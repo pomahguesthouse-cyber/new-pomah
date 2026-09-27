@@ -238,6 +238,8 @@ export function isIndexableSitemapPath(pathname: string): boolean {
   if (!path) return false;
   if (path === "/rooms/deluxe-ocean-view") return false;
   if (path === "/explore/eksplorasi-sejarah-kota-lama-semarang") return false;
+  // Staff MCP setup page. The route stays live, but it is not a public URL.
+  if (path === "/connect" || path.startsWith("/connect/")) return false;
   if (path === "/explore-semarang" || path.startsWith("/explore-semarang/")) return false;
   if (path === "/" || path === "/book" || path === "/explore") return true;
   if (BARE_ROOMS_LISTING.test(path)) return false;

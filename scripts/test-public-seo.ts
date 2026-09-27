@@ -241,6 +241,12 @@ assert.ok(!paths.includes("/explore-semarang"));
 assert.ok(!paths.includes("/explore-semarang/sam-poo-kong"));
 assert.ok(!paths.includes("/rooms/deluxe-ocean-view"));
 assert.ok(!paths.includes("/explore/eksplorasi-sejarah-kota-lama-semarang"));
+assert.ok(!paths.includes("/connect"), "/connect must not be listed in the sitemap");
+const connectBlocked = collectSitemapPaths({
+  pageSlugs: ["/connect", "connect", "https://pomahguesthouse.com/connect"],
+});
+assert.ok(!connectBlocked.includes("/connect"));
+assert.ok(!connectBlocked.some((path) => path === "/connect" || path.startsWith("/connect/")));
 for (const room of rooms) {
   assert.ok(paths.includes(`/rooms/${room.slug}`), room.slug);
 }
