@@ -1260,6 +1260,7 @@ function AdminExplorePage() {
                     )}
                     
                     {isEditing("news", i) ? (
+                      <>
                       <Textarea 
                         className="h-12 text-[10px] text-stone-500 resize-none p-1 leading-snug mt-1"
                         placeholder="Deskripsi..."
@@ -1281,6 +1282,7 @@ function AdminExplorePage() {
                           setConfig({ ...config, news: newNw });
                         }}
                       />
+                      </>
                     ) : (
                       <p className="text-[11px] text-stone-600 line-clamp-2 leading-snug mt-1">
                         {nw.desc || "Tidak ada deskripsi."}
