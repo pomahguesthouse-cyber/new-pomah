@@ -783,16 +783,18 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
   const updateFn = useServerFn(updateBookingFromAdmin);
   const [status, setStatus] = React.useState("");
   const [roomId, setRoomId] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
   React.useEffect(() => {
     if (booking) {
-      setStatus(booking.status);
+      setStatus(booking.status ?? "");
       setRoomId(booking.room_id ?? "");
+      setSaving(false);
     }
   }, [booking]);
   if (!booking) return null;
   const typeRooms = (rooms ?? []).filter((r: any) => r.room_type_id === booking.room_type_id);
   return (
-    <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={!!booking} onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="font-black text-xl tracking-tighter uppercase">
@@ -809,6 +811,7 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
             <Select
               value={roomId || "none"}
               onValueChange={(v) => setRoomId(v === "none" ? "" : v)}
+              disabled={saving}
             >
               <SelectTrigger className="font-bold">
                 <SelectValue placeholder="Pilih kamar" />
@@ -822,41 +825,65 @@ function EditBookingDialog({ booking, rooms, onClose, onSaved }: any) {
                 ))}
               </SelectContent>
             </Select>
+            {!booking.booking_room_id && (
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Booking ini belum punya baris kamar. Status tetap bisa disimpan jika kamar dibiarkan
+                &quot;Belum ditugaskan&quot;. Untuk menetapkan kamar, gunakan halaman Bookings.
+              </p>
+            )}
           </Field>
           <Field label="Status">
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status} onValueChange={setStatus} disabled={saving}>
               <SelectTrigger className="font-bold">
-                <SelectValue />
+                <SelectValue placeholder="Pilih status" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="pending">PENDING</SelectItem>
                 <SelectItem value="confirmed">CONFIRMED</SelectItem>
                 <SelectItem value="checked_in">CHECKED-IN</SelectItem>
                 <SelectItem value="checked_out">CHECKED-OUT</SelectItem>
                 <SelectItem value="cancelled">CANCELLED</SelectItem>
+                <SelectItem value="expired">EXPIRED</SelectItem>
               </SelectContent>
             </Select>
           </Field>
         </div>
         <DialogFooter>
-          <Button variant="outline" className="font-bold" onClick={onClose}>
+          <Button variant="outline" className="font-bold" onClick={onClose} disabled={saving}>
             TUTUP
           </Button>
           <Button
             className="font-bold"
+            disabled={saving || !status}
             onClick={async () => {
-              await updateFn({
-                data: {
-                  id: booking.id,
-                  status,
-                  bookingRoomId: booking.booking_room_id,
-                  roomId,
-                },
-              });
-              toast.success("UPDATE BERHASIL!");
-              onSaved();
+              if (saving) return;
+              setSaving(true);
+              try {
+                await updateFn({
+                  data: {
+                    id: booking.id,
+                    status,
+                    // "" gagal validasi uuid. "Belum ditugaskan" harus null.
+                    bookingRoomId: booking.booking_room_id || null,
+                    roomId: roomId || null,
+                  },
+                });
+                toast.success("UPDATE BERHASIL!");
+                onSaved();
+                onClose();
+              } catch (e) {
+                const message =
+                  e instanceof Error && e.message.trim()
+                    ? e.message
+                    : "Gagal menyimpan booking. Cek console untuk detail.";
+                console.error("[EditBookingDialog] gagal menyimpan booking:", e);
+                toast.error(message, { duration: 8000 });
+              } finally {
+                setSaving(false);
+              }
             }}
           >
-            SIMPAN
+            {saving ? "MENYIMPAN..." : "SIMPAN"}
           </Button>
         </DialogFooter>
       </DialogContent>

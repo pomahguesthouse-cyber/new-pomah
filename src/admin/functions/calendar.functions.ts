@@ -16,7 +16,10 @@ const bookingStatusSchema = z.enum(["pending", "confirmed", "checked_in", "check
  * dijalankan, atau izinnya kurang. Pesan RPC sendiri sudah berbahasa Indonesia
  * dan informatif, jadi untuk error yang kita raise sendiri cukup diteruskan.
  */
-function describeBookingRpcError(error: unknown): string {
+function describeBookingRpcError(
+  error: unknown,
+  fnName = "create_admin_booking_with_lock",
+): string {
   const err = (error ?? {}) as { code?: string; message?: string; details?: string; hint?: string };
   const raw = (err.message ?? "").trim();
 
@@ -27,11 +30,23 @@ function describeBookingRpcError(error: unknown): string {
     case "P0002": // no_data_found — kamar/property tidak ketemu
       return raw || "Data booking tidak valid. Periksa kamar dan tanggalnya.";
     case "42883":
+      if (fnName !== "create_admin_booking_with_lock") {
+        return (
+          `Fungsi database \`${fnName}\` tidak ditemukan. ` +
+          "Migrasi Supabase kemungkinan belum dijalankan di environment ini."
+        );
+      }
       return (
         "Fungsi database `create_admin_booking_with_lock` tidak ditemukan. " +
         "Migrasi Supabase kemungkinan belum dijalankan di environment ini."
       );
     case "42501":
+      if (fnName !== "create_admin_booking_with_lock") {
+        return (
+          `Akun ini tidak punya izin menjalankan \`${fnName}\`. ` +
+          "Periksa GRANT EXECUTE pada fungsi tersebut."
+        );
+      }
       return (
         "Akun ini tidak punya izin menjalankan pembuatan booking. " +
         "Periksa GRANT EXECUTE pada fungsi `create_admin_booking_with_lock`."
@@ -57,10 +72,17 @@ const createBookingFromAdminSchema = z.object({
   status: bookingStatusSchema,
 });
 
+/** "" dikirim dialog untuk "Belum ditugaskan"; uuid() menolak string kosong. */
+const optionalUuidField = (message: string) =>
+  z
+    .union([z.string().uuid(message), z.literal(""), z.null()])
+    .optional()
+    .transform((value) => (typeof value === "string" && value.length > 0 ? value : null));
+
 const updateBookingFromAdminSchema = z.object({
   id: z.string().uuid("Booking ID tidak valid"),
-  bookingRoomId: z.string().uuid("Booking room ID tidak valid").optional().nullable(),
-  roomId: z.string().uuid("Room ID tidak valid").optional().nullable(),
+  bookingRoomId: optionalUuidField("Booking room ID tidak valid"),
+  roomId: optionalUuidField("Room ID tidak valid"),
   status: bookingStatusSchema,
 });
 
@@ -106,6 +128,55 @@ async function updateBookingStatusWithLock({
   });
 
   if (error) throw error;
+}
+
+/**
+ * Kalender mengirim bookingRoomId null untuk booking lama yang tidak punya
+ * baris booking_rooms. RPC `update_booking_room_with_lock` hanya menulis
+ * kamar bila id itu terisi, lalu tetap mengembalikan sukses — perubahan kamar
+ * hilang diam-diam.
+ *
+ * Baris yang sudah ada dipakai. Kalau belum ada dan admin memilih kamar,
+ * simpan ditolak: INSERT booking_rooms memicu trigger yang menghitung ulang
+ * total_amount / paid_amount. Dialog kalender tidak mengedit harga, jadi
+ * baris baru tidak dibuat di sini.
+ */
+async function resolveCalendarBookingRoomId({
+  supabase,
+  bookingId,
+  bookingRoomId,
+  roomId,
+}: {
+  supabase: any;
+  bookingId: string;
+  bookingRoomId: string | null;
+  roomId: string | null;
+}): Promise<string | null> {
+  if (bookingRoomId) return bookingRoomId;
+
+  const { data, error } = await supabase
+    .from("booking_rooms")
+    .select("id")
+    .eq("booking_id", bookingId);
+
+  if (error) throw error;
+
+  const ids = ((data ?? []) as Array<{ id?: string | null }>)
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  if (ids.length === 1) return ids[0];
+  if (!roomId) return null;
+
+  if (ids.length === 0) {
+    throw new Error(
+      "Booking ini belum punya baris kamar, jadi kamar tidak bisa ditetapkan dari kalender. Tidak ada yang diubah. Tetapkan kamar lewat halaman Bookings.",
+    );
+  }
+
+  throw new Error(
+    "Booking ini punya beberapa kamar, jadi kalender tidak tahu baris mana yang harus diubah. Tidak ada yang diubah. Ubah kamar lewat halaman Bookings.",
+  );
 }
 
 export const getCalendarData = createServerFn({ method: "GET" })
@@ -237,13 +308,37 @@ export const updateBookingFromAdmin = createServerFn({ method: "POST" })
       ? await snapshotBookingForDiff(context.supabase, data.id)
       : null;
 
-    await updateBookingStatusWithLock({
-      supabase: context.supabase,
-      bookingId: data.id,
-      bookingRoomId: data.bookingRoomId ?? null,
-      roomId: data.roomId ?? null,
-      status: data.status,
-    });
+    try {
+      const bookingRoomId = await resolveCalendarBookingRoomId({
+        supabase: context.supabase,
+        bookingId: data.id,
+        bookingRoomId: data.bookingRoomId ?? null,
+        roomId: data.roomId ?? null,
+      });
+
+      await updateBookingStatusWithLock({
+        supabase: context.supabase,
+        bookingId: data.id,
+        bookingRoomId,
+        roomId: data.roomId ?? null,
+        status: data.status,
+      });
+    } catch (error) {
+      console.error("[updateBookingFromAdmin] gagal:", {
+        code: (error as { code?: string } | null)?.code,
+        message:
+          error instanceof Error ? error.message : (error as { message?: string } | null)?.message,
+        details: (error as { details?: string } | null)?.details,
+        hint: (error as { hint?: string } | null)?.hint,
+        payload: {
+          bookingId: data.id,
+          bookingRoomId: data.bookingRoomId ?? null,
+          roomId: data.roomId ?? null,
+          status: data.status,
+        },
+      });
+      throw new Error(describeBookingRpcError(error, "update_booking_room_with_lock"));
+    }
 
     // Status changes punya flow notifikasinya sendiri; di sini hanya alert
     // bila terjadi reassignment kamar.
