@@ -3,6 +3,7 @@
  * Sitemap, place pages, and legacy /explore-semarang redirects share this.
  */
 import { supabasePublic } from "@/integrations/supabase/client.server";
+import { stripSecretKeys } from "@/public/lib/public-settings";
 import {
   collectCityGuidePlaces,
   type CityGuidePlace,
@@ -51,7 +52,7 @@ export async function loadCityGuidePlaces(): Promise<CityGuidePlace[]> {
       created_at?: string | null;
       explore_config?: ExploreConfigShape | null;
     } | null;
-    const config = row?.explore_config ?? {};
+    const config = (stripSecretKeys(row?.explore_config) ?? {}) as ExploreConfigShape;
     const places = collectCityGuidePlaces({
       propertyUpdatedAt: row?.updated_at,
       propertyCreatedAt: row?.created_at,

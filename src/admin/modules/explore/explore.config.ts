@@ -223,7 +223,6 @@ export function mergeExploreConfig(data: any): ExploreConfig {
     culinary: clonedData.culinary || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.culinary)),
     events: clonedData.events || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.events)),
     news: clonedData.news || JSON.parse(JSON.stringify(DEFAULT_EXPLORE_CONFIG.news)),
-    gemini_api_key: clonedData.gemini_api_key || DEFAULT_EXPLORE_CONFIG.gemini_api_key,
     seo: { ...DEFAULT_EXPLORE_CONFIG.seo, ...(clonedData.seo || {}) },
   };
 }

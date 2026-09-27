@@ -10,6 +10,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { createClient } from "@supabase/supabase-js";
 import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
+import { stripSecretKeys } from "@/public/lib/public-settings";
 
 /** Cast to an untyped client — seo_landing_pages is not in the generated types yet. */
 function db(client: unknown): SupabaseClient {
@@ -576,10 +577,10 @@ export const getSeoLandingPageBySlug = createServerFn({ method: "GET" })
     if (!row) return { page: null };
     const page = row as unknown as SeoLandingPage;
     return {
-      page: {
+      page: stripSecretKeys({
         ...page,
         sections: (await loadPageSections(client, page.id)) ?? page.sections,
-      },
+      }),
     };
   });
 

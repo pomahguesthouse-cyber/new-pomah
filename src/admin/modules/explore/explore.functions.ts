@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { Json } from "@/integrations/supabase/types";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { stripSecretKeys } from "@/public/lib/public-settings";
+import { resolveGeminiApiKey } from "./gemini-key";
 
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
@@ -33,11 +36,26 @@ export const updateExploreConfig = createServerFn({ method: "POST" })
       updateId = String(prop?.id ?? updateId);
     }
 
+    const { data: existing, error: readError } = await context.supabase
+      .from("properties")
+      .select("explore_config")
+      .eq("id", updateId)
+      .maybeSingle();
+    if (readError) throw readError;
+
+    const incoming = { ...(data.explore_config as Record<string, unknown>) };
+    const previous = (existing?.explore_config ?? {}) as { gemini_api_key?: string | null };
+    const incomingKey = typeof incoming.gemini_api_key === "string" ? incoming.gemini_api_key.trim() : "";
+    // Blank means "keep the key already stored". The browser is not sent the current key.
+    const preserved = incomingKey || resolveGeminiApiKey({ explore_config: previous }) || "";
+    if (preserved) incoming.gemini_api_key = preserved;
+    else delete incoming.gemini_api_key;
+
     const { error } = await context.supabase
       .from("properties")
-      .update({ explore_config: data.explore_config })
+      .update({ explore_config: incoming as Json })
       .eq("id", updateId);
-    
+
     if (error) throw error;
     return { ok: true };
   });
@@ -52,7 +70,16 @@ export const getAdminExploreData = createServerFn({ method: "GET" })
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    if (!data) return data;
+
+    const config = (data.explore_config ?? {}) as { gemini_api_key?: string | null };
+    return {
+      id: data.id,
+      google_place_id: data.google_place_id,
+      updated_at: data.updated_at,
+      explore_config: stripSecretKeys(config),
+      gemini_api_key_set: Boolean(resolveGeminiApiKey({ explore_config: config })),
+    };
   });
 
 export const getDistanceBetweenPlaces = createServerFn({ method: "POST" })

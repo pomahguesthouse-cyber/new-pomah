@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabasePublic } from "@/integrations/supabase/client.server";
-import type { PublicProperty } from "@/public/functions/public.functions";
+import { toPublicSettings } from "@/public/lib/public-settings";
 
 async function handle(): Promise<Response> {
   try {
@@ -14,7 +14,7 @@ async function handle(): Promise<Response> {
         .order("base_rate"),
     ]);
 
-    const property = (propertyData ?? null) as PublicProperty | null;
+    const property = toPublicSettings(propertyData);
 
     const roomTypes = (roomTypesRaw ?? []).map((rt: any) => ({
       ...rt,

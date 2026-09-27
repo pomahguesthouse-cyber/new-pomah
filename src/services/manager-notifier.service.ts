@@ -961,101 +961,6 @@ export async function notifyComplaint(db: Db, complaintId: string): Promise<void
 }
 
 /* ------------------------------------------------------------------ */
-/* 4. New Conversation Session                                         */
-/* ------------------------------------------------------------------ */
-
-/**
- * Kirim notifikasi ke super admin via Telegram ketika tamu memulai
- * sesi percakapan WhatsApp baru (gap > 15 menit atau tamu baru sama sekali).
- *
- * Hanya menyasar super_admin dengan telegram_chat_id — tidak ke WA
- * agar tidak flooding manajer dengan notif rutin.
- *
- * Fire-and-forget-safe: tidak pernah throw.
- */
-export async function notifyNewConversationSession(
-  db: Db,
-  opts: {
-    phone: string;
-    guestName: string | null;
-    firstMessage: string;
-    isNewThread: boolean; // true = tamu baru sama sekali, false = sesi baru dari tamu lama
-    threadId: string | null;
-  },
-): Promise<void> {
-  try {
-    const { waToken, telegramToken } = await getPropertyTokens(db);
-
-    // Super admin via property_managers (yang punya nomor HP / chat id)
-    const superAdmins = await getActiveManagers(db, "super_admin");
-    if (superAdmins.length === 0) {
-      console.info("[ManagerNotifier] notifyNewSession: no super_admin manager configured");
-      return;
-    }
-
-    const sessionLabel = opts.isNewThread ? "🆕 TAMU BARU" : "🔄 SESI BARU";
-    const preview = opts.firstMessage.length > 200 ? opts.firstMessage.slice(0, 197) + "…" : opts.firstMessage;
-    const wibTime = new Date().toLocaleString("id-ID", {
-      timeZone: "Asia/Jakarta",
-      dateStyle: "short",
-      timeStyle: "short",
-    });
-
-    const message =
-      `💬 ${sessionLabel} — Percakapan WhatsApp\n\n` +
-      `👤 Tamu: ${opts.guestName ?? "Tidak dikenal"}\n` +
-      `📱 No HP: ${opts.phone}\n` +
-      `⏱️ Waktu: ${wibTime}\n\n` +
-      `💬 Pesan Pertama:\n"${preview}"\n\n` +
-      (opts.isNewThread
-        ? "Ini adalah tamu baru yang belum pernah menghubungi sebelumnya."
-        : "Tamu sudah dikenal, memulai sesi percakapan baru.") +
-      "\n\nℹ️ AI Customer Care sedang menangani percakapan ini.";
-
-    const dedupeKeySuffix = opts.threadId ?? opts.phone;
-    const dedupeWindow = Math.floor(Date.now() / (15 * 60 * 1000));
-    const dedupeKey = `new_session:${dedupeKeySuffix}:${dedupeWindow}`;
-
-    const jobs: Promise<unknown>[] = [];
-    for (const admin of superAdmins) {
-      // Kirim ke WA jika ada nomor
-      if (admin.phone) {
-        jobs.push(
-          sendWithRetry(db, waToken, {
-            eventType: "new_session",
-            message,
-            relatedId: opts.threadId,
-            recipient: admin,
-            channel: "wa",
-            dedupeKey: `${dedupeKey}:wa:${admin.id}`,
-          }),
-        );
-      }
-      // Mirror ke Telegram bila terdaftar (opsional, tidak fatal)
-      if (telegramToken && admin.telegram_chat_id) {
-        jobs.push(
-          sendWithRetry(db, null, {
-            eventType: "new_session",
-            message,
-            relatedId: opts.threadId,
-            recipient: admin,
-            channel: "telegram",
-            dedupeKey: `${dedupeKey}:tg:${admin.id}`,
-          }),
-        );
-      }
-    }
-    await Promise.all(jobs);
-
-    console.info(
-      `[ManagerNotifier] New session notif → ${superAdmins.length} super admin(s) | ${opts.phone.slice(-6)}`,
-    );
-  } catch (e) {
-    console.warn("[ManagerNotifier] notifyNewConversationSession error (non-fatal):", e);
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /* 5. Bot Health Alerts — loop & zombie                                */
 /* ------------------------------------------------------------------ */
 
@@ -1326,9 +1231,7 @@ export async function fanOutAgentChannelsForMonitor(
 
 /**
  * Kirim notifikasi WhatsApp ke super admin SETIAP kali ada pesan baru
- * masuk dari tamu. Berbeda dengan `notifyNewConversationSession` yang
- * hanya memicu saat awal sesi (gap >15 menit), fungsi ini akan memicu
- * untuk setiap pesan inbound.
+ * masuk dari tamu.
  *
  * Dedupe per `messageId` sehingga walau dipanggil berulang untuk pesan
  * yang sama (mis. retry webhook) tetap hanya 1 notif terkirim.

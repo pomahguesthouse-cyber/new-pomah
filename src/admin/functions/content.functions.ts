@@ -171,7 +171,7 @@ export const updateExploreItemMeta = createServerFn({ method: "POST" })
       const message = String(error.message ?? error);
       if (/meta_description/i.test(message)) {
         throw new Error(
-          "Kolom meta_description belum ada. Jalankan SQL di supabase/migrations/20260927120000_explore_items_meta_description.sql.",
+          "Kolom meta_description belum ada. Jalankan SQL di supabase/migrations/20260927150000_explore_items_meta_description.sql.",
         );
       }
       throw new Error(message);

@@ -1,6 +1,6 @@
 /**
  * Batas waktu pembayaran booking: 1 jam sejak booking dibuat, berlaku untuk
- * semua channel (web, chatbot WA, webchat, admin). Cron `expire-bookings`
+ * semua channel (web, chatbot WA, admin). Cron `expire-bookings`
  * yang menentukan apakah batas ini benar-benar ditegakkan (hanya untuk
  * payment_status='unpaid' — booking partial/lunas tidak pernah expire),
  * jadi nilai ini diset unconditional di setiap insert booking.

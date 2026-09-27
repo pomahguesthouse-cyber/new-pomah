@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -255,21 +256,20 @@ function BookingFormPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="rm">Kamar</Label>
-                  <Input id="rm" type="number" min={1} max={10} value={rooms} onChange={(e) => setRooms(Number(e.target.value) || 1)} />
+                  <NumericInput id="rm" min={1} max={10} emptyValue={1} value={rooms} onValueChange={setRooms} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="gc">Tamu</Label>
-                  <Input id="gc" type="number" min={1} max={20} value={guestCount} onChange={(e) => setGuestCount(Number(e.target.value) || 1)} />
+                  <NumericInput id="gc" min={1} max={20} emptyValue={1} value={guestCount} onValueChange={setGuestCount} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="eb">Extra bed</Label>
-                  <Input
+                  <NumericInput
                     id="eb"
-                    type="number"
                     min={0}
                     max={maxExtrabed || 0}
                     value={extrabed}
-                    onChange={(e) => setExtrabed(Math.min(Number(e.target.value) || 0, maxExtrabed))}
+                    onValueChange={(n) => setExtrabed(Math.min(n, maxExtrabed))}
                     disabled={maxExtrabed === 0}
                   />
                 </div>

@@ -26,6 +26,7 @@ import {
 import { MediaPicker, type MediaKind } from "@/admin/components/media-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -529,8 +530,8 @@ function RoomSliderEditor({ s, onUpdate }: { s: LPRoomSliderSection; onUpdate: U
           </Select>
         </Fld>
         <Fld label="Kecepatan (ms)">
-          <Input type="number" value={s.slideMs ?? 4000} className="mt-1 text-xs"
-            onChange={(e) => onUpdate({ slideMs: +e.target.value } as any)} />
+          <NumericInput value={s.slideMs ?? 4000} className="mt-1 text-xs"
+            onValueChange={(slideMs) => onUpdate({ slideMs } as any)} />
         </Fld>
       </div>
       <label className="flex items-center gap-2 text-xs font-medium text-stone-600">
@@ -570,12 +571,12 @@ function SliderEditor({ s, onUpdate }: { s: LPSliderSection; onUpdate: UpFn }) {
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <Fld label="Kecepatan slide (ms)">
-          <Input type="number" value={s.autoplayMs} className="mt-1 text-xs"
-            onChange={(e) => onUpdate({ autoplayMs: +e.target.value } as any)} />
+          <NumericInput value={s.autoplayMs} className="mt-1 text-xs"
+            onValueChange={(autoplayMs) => onUpdate({ autoplayMs } as any)} />
         </Fld>
         <Fld label="Tinggi banner (px)">
-          <Input type="number" value={s.height} className="mt-1 text-xs"
-            onChange={(e) => onUpdate({ height: +e.target.value } as any)} />
+          <NumericInput value={s.height} className="mt-1 text-xs"
+            onValueChange={(height) => onUpdate({ height } as any)} />
         </Fld>
       </div>
 
@@ -1181,10 +1182,9 @@ function ResponsiveStyleEditor({
             />
           </div>
           <Fld label="Urutan / Posisi (Flex Order)" hint="Mengatur susunan vertikal di Mobile">
-            <Input
-              type="number"
+            <NumericInput
               value={currentStyles.order ?? 0}
-              onChange={(e) => updateStyle("order", parseInt(e.target.value, 10) || 0)}
+              onValueChange={(order) => updateStyle("order", order)}
               className="h-8 text-xs"
             />
           </Fld>

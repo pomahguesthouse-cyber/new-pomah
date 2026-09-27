@@ -32,6 +32,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -343,22 +344,21 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Kapasitas (tamu)</Label>
-                  <Input
-                    type="number"
+                  <NumericInput
                     min={1}
                     max={20}
+                    emptyValue={1}
                     value={capacity}
-                    onChange={(e) => setCapacity(Number(e.target.value))}
+                    onValueChange={setCapacity}
                   />
                 </div>
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Extrabed</Label>
-                  <Input
-                    type="number"
+                  <NumericInput
                     min={0}
                     max={10}
                     value={extrabedCapacity}
-                    onChange={(e) => setExtrabedCapacity(Number(e.target.value))}
+                    onValueChange={setExtrabedCapacity}
                   />
                 </div>
                 <div className="grid gap-1.5">
@@ -432,13 +432,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
             <div className="grid gap-4">
               <div className="grid gap-1.5">
                 <Label className="text-xs">Tarif dasar (per malam, Rp)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={1000}
-                  value={baseRate}
-                  onChange={(e) => setBaseRate(Number(e.target.value))}
-                />
+                <NumericInput min={0} value={baseRate} onValueChange={setBaseRate} />
                 <p className="text-[10px] text-muted-foreground">
                   Harga acuan per malam untuk tipe kamar ini.
                 </p>
@@ -449,13 +443,7 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-1.5">
                     <Label className="text-xs">Harga Extra Bed (per malam, Rp)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={1000}
-                      value={extrabedRate}
-                      onChange={(e) => setExtrabedRate(Number(e.target.value))}
-                    />
+                    <NumericInput min={0} value={extrabedRate} onValueChange={setExtrabedRate} />
                     <p className="text-[10px] text-muted-foreground">
                       Biaya tambahan per malam jika tamu menambah extra bed.
                       Isi 0 jika gratis atau tidak tersedia.
@@ -463,12 +451,11 @@ export function RoomTypeDialog({ mode, open, roomType, onClose, onSaved }: Props
                   </div>
                   <div className="grid gap-1.5">
                     <Label className="text-xs">Maks Extra Bed</Label>
-                    <Input
-                      type="number"
+                    <NumericInput
                       min={0}
                       max={10}
                       value={extrabedCapacity}
-                      onChange={(e) => setExtrabedCapacity(Number(e.target.value))}
+                      onValueChange={setExtrabedCapacity}
                     />
                     <p className="text-[10px] text-muted-foreground">
                       Jumlah maksimal extra bed yang bisa ditambahkan ke kamar ini.

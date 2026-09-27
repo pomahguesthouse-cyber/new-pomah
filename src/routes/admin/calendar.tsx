@@ -35,6 +35,7 @@ import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { BlockRoomDialog } from "@/admin/components/block-room-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -730,10 +731,9 @@ function CreateBookingDialog({ ctx, onClose, onSaved }: any) {
             </Field>
           </div>
           <Field label="Harga/Malam">
-            <Input
-              type="number"
+            <NumericInput
               value={form.nightlyRate}
-              onChange={(e) => setForm({ ...form, nightlyRate: Number(e.target.value) })}
+              onValueChange={(nightlyRate) => setForm({ ...form, nightlyRate })}
               className="font-bold"
             />
           </Field>

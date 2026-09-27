@@ -87,6 +87,7 @@ import {
 import { Calendar as CalendarIcon, Clock, Power } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -893,21 +894,19 @@ function KeywordsSection({ keywords, onChanged }: { keywords: any[]; onChanged: 
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-xs font-semibold">Volume (Pencarian Bulanan)</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   value={newVol}
-                  onChange={(e) => setNewVol(Number(e.target.value))}
+                  onValueChange={setNewVol}
                   className="mt-1 text-sm"
                 />
               </div>
               <div>
                 <Label className="text-xs font-semibold">Difficulty (Kesulitan 0-100)</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={0}
                   max={100}
                   value={newDiff}
-                  onChange={(e) => setNewDiff(Number(e.target.value))}
+                  onValueChange={setNewDiff}
                   className="mt-1 text-sm"
                 />
               </div>
@@ -3331,14 +3330,12 @@ function SchedulesManager() {
             {form.frequency === "monthly" && (
               <div>
                 <Label className="text-xs font-semibold">Tanggal (1-28)</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={1}
                   max={28}
+                  emptyValue={1}
                   value={form.day_of_month}
-                  onChange={(e) =>
-                    setForm({ ...form, day_of_month: Math.max(1, Math.min(28, Number(e.target.value))) })
-                  }
+                  onValueChange={(day_of_month) => setForm({ ...form, day_of_month })}
                   className="mt-1 text-sm"
                 />
               </div>
@@ -3347,27 +3344,21 @@ function SchedulesManager() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-semibold">Jam (WIB, 0-23)</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={0}
                   max={23}
                   value={form.hour}
-                  onChange={(e) =>
-                    setForm({ ...form, hour: Math.max(0, Math.min(23, Number(e.target.value))) })
-                  }
+                  onValueChange={(hour) => setForm({ ...form, hour })}
                   className="mt-1 text-sm"
                 />
               </div>
               <div>
                 <Label className="text-xs font-semibold">Menit (0-59)</Label>
-                <Input
-                  type="number"
+                <NumericInput
                   min={0}
                   max={59}
                   value={form.minute}
-                  onChange={(e) =>
-                    setForm({ ...form, minute: Math.max(0, Math.min(59, Number(e.target.value))) })
-                  }
+                  onValueChange={(minute) => setForm({ ...form, minute })}
                   className="mt-1 text-sm"
                 />
               </div>
