@@ -700,7 +700,7 @@ function BookPage() {
       {/* Benefits Section */}
       <section className="bg-white border-t border-stone-200 py-12">
         <div className="max-w-[1440px] mx-auto px-6">
-          <h2 className="font-serif text-2xl font-semibold mb-8 text-center md:text-left">Kenapa memilih New Pomah Guesthouse?</h2>
+          <h2 className="font-serif text-2xl font-semibold mb-8 text-center md:text-left">Kenapa memilih Pomah Guesthouse?</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="flex gap-4 p-4 rounded-2xl bg-[#F9F9F7] border border-stone-100">
               <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">

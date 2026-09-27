@@ -35,6 +35,7 @@ import {
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { rewritePublicHref } from "@/public/lib/public-href";
 import { buildStorageImageUrl } from "@/lib/storage-image";
+import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -223,7 +224,7 @@ function LandingPage() {
 
           <section className="border-t border-stone-200 bg-white px-6 py-14 text-center">
             <p className="font-serif text-2xl font-bold text-teal-700">Siap Menginap?</p>
-            <p className="mt-2 text-sm text-stone-500">Pomah Guesthouse — Gunungpati, Semarang</p>
+            <p className="mt-2 text-sm text-stone-500">{POMAH_NAP_LINE}</p>
             <a href={rewritePublicHref(page.hero_cta_url)}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-700 px-8 py-3 text-sm font-bold text-white shadow transition hover:bg-teal-800">
               {page.hero_cta_text}
@@ -232,7 +233,7 @@ function LandingPage() {
         </>
       )}
 
-      <LPFooter />
+      <LPFooter phone={whatsappNumber} />
 
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
@@ -964,14 +965,17 @@ function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
 }
 
 /* ─── Footer ────────────────────────────────────────────────────── */
-function LPFooter() {
+function LPFooter({ phone }: { phone?: string }) {
   return (
     <footer className="border-t border-stone-200 bg-teal-800 text-teal-100">
       <div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-3">
           <div>
             <p className="font-serif text-xl font-bold text-white">Pomah <span className="font-light">Guesthouse</span></p>
-            <p className="mt-2 text-sm text-teal-200/80">Penginapan nyaman & terjangkau di Gunungpati, Semarang.</p>
+            <p className="mt-2 text-sm text-teal-200/80">
+              {POMAH_NAP_LINE}
+              {phone ? ` · ${formatSitePhone(phone)}` : ""}
+            </p>
           </div>
           <div>
             <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Quick Links</p>
@@ -987,7 +991,7 @@ function LPFooter() {
           </div>
           <div>
             <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">Kontak</p>
-            <p className="text-sm text-teal-200/80">Gunungpati, Semarang, Jawa Tengah</p>
+            <p className="text-sm text-teal-200/80">{POMAH_NAP_LINE}</p>
           </div>
         </div>
         <div className="mt-10 border-t border-teal-700/60 pt-6 text-center text-xs text-teal-300/70">

@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
 import { LP_PENGINAPAN_DEKAT_UNNES } from "@/public/components/guide-links";
 import { rewritePublicHref } from "@/public/lib/public-href";
+import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 
 // Lebar responsif untuk hero image — disesuaikan dengan breakpoint umum.
 const HERO_WIDTHS = [480, 768, 1200];
@@ -266,10 +267,7 @@ export function PublicFooter({
                 <span className="font-serif text-2xl font-light text-amber-400">{restWords}</span>
               )}
             </div>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-teal-200/80">
-              Guesthouse butik dengan pengalaman menginap yang personal. Setiap tamu adalah tamu
-              istimewa.
-            </p>
+            <FooterNap phone={property?.whatsapp_number} />
             <div className="mt-5">
               <SocialLinks property={property ?? null} variant="compact" />
             </div>
@@ -303,26 +301,19 @@ export function PublicFooter({
               Kontak
             </p>
             <ul className="space-y-3 text-sm">
-              {property?.address && (
-                <li className="flex items-start gap-2 text-teal-200/80">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-                  <span>
-                    {property.address}
-                    {property.city ? `, ${property.city}` : ""}
-                  </span>
-                </li>
-              )}
-              {property?.whatsapp_number && (
-                <li className="flex items-center gap-2 text-teal-200/80">
-                  <Phone className="h-4 w-4 shrink-0 text-amber-500" />
-                  <a
-                    href={`https://wa.me/${property.whatsapp_number.replace(/\D/g, "")}`}
-                    className="hover:text-white"
-                  >
-                    {property.whatsapp_number}
-                  </a>
-                </li>
-              )}
+              <li className="flex items-start gap-2 text-teal-200/80">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <span>{POMAH_NAP_LINE}</span>
+              </li>
+              <li className="flex items-center gap-2 text-teal-200/80">
+                <Phone className="h-4 w-4 shrink-0 text-amber-500" />
+                <a
+                  href={`https://wa.me/${(property?.whatsapp_number ?? "").replace(/\D/g, "") || "6285190986169"}`}
+                  className="hover:text-white"
+                >
+                  {formatSitePhone(property?.whatsapp_number)}
+                </a>
+              </li>
               {property?.email && (
                 <li className="flex items-center gap-2 text-teal-200/80">
                   <Mail className="h-4 w-4 shrink-0 text-amber-500" />
@@ -597,6 +588,22 @@ function footerRooms(rooms?: FooterRoomLink[] | null) {
     .filter((room) => room.name && room.slug && !room.slug.includes("/"));
 }
 
+function FooterNap({ phone }: { phone?: string | null }) {
+  return (
+    <p className="mt-3 max-w-xs text-sm leading-relaxed text-teal-100">
+      {POMAH_NAP_LINE}
+      {phone ? (
+        <>
+          {" "}
+          <a href={`tel:+${phone.replace(/\D/g, "")}`} className="hover:text-white">
+            {formatSitePhone(phone)}
+          </a>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
 function FooterCrawlLinks({ rooms }: { rooms?: FooterRoomLink[] | null }) {
   const list = footerRooms(rooms);
   return (
@@ -636,9 +643,7 @@ export function PomahFooter({
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-3">
         <div>
           <p className="font-serif text-xl font-bold uppercase tracking-wide text-white">{name}</p>
-          <p className="mt-3 max-w-xs text-sm text-teal-200/80">
-            Experience comfort and hospitality at {name}.
-          </p>
+          <FooterNap phone={property?.whatsapp_number} />
         </div>
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-teal-300">
