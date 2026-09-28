@@ -471,13 +471,22 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "deskripsi + fasilitas kamar itu ke tamu — JANGAN cukup mengulang daftar availability. " +
       "JANGAN menebak detail fisik kamar."),
 
-    when(g.roomFacts, "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Family Suite 100 dan Family Room 222 sama-sama " +
-      "unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, ruang keluarga, " +
-      "smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
-      "Kapasitas 4 tamu, Rp 500.000/malam per unit. Bila tamu bertanya 'family room isinya berapa " +
-      "kamar tidur', 'fasilitasnya apa', atau 'boleh lihat tipe family room', JAWAB LANGSUNG dengan " +
-      "rincian fasilitas di atas (satu paragraf ringkas atau bullet singkat) dan tawarkan kirim " +
-      "foto/tour 360 — DILARANG mengirim ulang daftar ketersediaan semua tipe kamar sebagai jawaban. " +
+    when(g.roomFacts, "PERTANYAAN TIPE FAMILY (2 KAMAR TIDUR): Ada dua unit family dengan fasilitas BERBEDA — " +
+      "jangan disamakan. " +
+      "(1) FAMILY SUITE 100: unit 2 kamar tidur + 2 kamar mandi dalam (shower), toilet tamu terpisah, " +
+      "ruang keluarga, smart TV 32 inci, area makan mini, dapur dengan fasilitas dasar, dan teras pribadi. " +
+      "Kapasitas 4 tamu, Rp 500.000/malam per unit. " +
+      "(2) FAMILY ROOM 222: HANYA fakta terverifikasi berikut — 2 kamar tidur, 2 kamar mandi, ruang keluarga, " +
+      "WiFi, luas 50 m², lantai 2, maksimal 4 tamu, extra bed maksimal 2. Untuk detail lain Family Room 222 " +
+      "(mis. AC, shower/air panas, toilet tamu, TV, dapur, teras, tipe kasur) WAJIB panggil " +
+      "`get_room_specifications` dulu; bila data tidak menyebutkannya, katakan akan dicek ke admin. " +
+      "DILARANG mengklaim Family Room 222 punya shower, toilet tamu, TV, dapur, teras, atau AC tanpa " +
+      "konfirmasi dari `get_room_specifications`, dan JANGAN menyalin fasilitas Family Suite 100 ke Family Room 222. " +
+      "Harga selalu ikuti hasil tool, bukan asumsi. " +
+      "Bila tamu bertanya 'family room isinya berapa kamar tidur', 'fasilitasnya apa', atau 'boleh lihat tipe " +
+      "family room', JAWAB LANGSUNG dengan rincian fasilitas unit yang relevan di atas (satu paragraf ringkas " +
+      "atau bullet singkat) dan tawarkan kirim foto/tour 360 — DILARANG mengirim ulang daftar ketersediaan " +
+      "semua tipe kamar sebagai jawaban. " +
       "Bila tamu mengonfirmasi jumlah unit ('berarti dapatnya 1 kamar ya Kak?'), jawab langsung " +
       "berdasarkan stok yang sudah disebut sebelumnya (mis. 'Betul Kak, untuk tanggal itu tersisa " +
       "1 unit Family Room 222') tanpa mencetak ulang seluruh daftar."),

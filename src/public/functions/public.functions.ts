@@ -223,6 +223,8 @@ async function loadPublicSiteData(): Promise<PublicSiteData> {
         .select(
           "id, name, slug, description, base_rate, extrabed_rate, extrabed_capacity, capacity, bed_type, floor_info, size_sqm, amenities, hero_image_url, images, rooms(id)",
         )
+        .eq("is_published", true)
+        .eq("is_active", true)
         .order("base_rate"),
     ]);
     const value = shapePublicSiteData(propertyData, roomTypesResult.data);
@@ -256,9 +258,20 @@ function shapePublicSiteData(propertyData: unknown, roomTypesRaw: any[] | null):
     total_physical_rooms: Array.isArray(rt.rooms) ? rt.rooms.length : 0,
   }));
 
+  // Dedupe by id first (a row must never render twice), then by slug/name
+  // below so two rows describing the same public room type collapse to one.
+  const seenIds = new Set<string>();
+  const uniqueById = normalizedRoomTypes.filter((rt: any) => {
+    const id = rt?.id == null ? "" : String(rt.id);
+    if (!id) return true;
+    if (seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
+
   const roomTypesByKey = new Map<string, any>();
 
-  for (const rt of normalizedRoomTypes) {
+  for (const rt of uniqueById) {
     const key = String(rt.slug || rt.name || rt.id).trim().toLowerCase();
     const existing = roomTypesByKey.get(key);
     const existingRooms = Number(existing?.total_physical_rooms ?? 0);
