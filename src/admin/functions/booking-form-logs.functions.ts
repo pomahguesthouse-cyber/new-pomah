@@ -104,8 +104,11 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
         if (domain) baseUrl = domain.startsWith("http") ? domain : `https://${domain}`;
       }
     }
-    if (!waToken) {
-      throw new Error("Properti belum mempunyai token WhatsApp gateway aktif.");
+    const { guestWhatsAppAvailable, sendGuestWhatsApp } = await import(
+      "@/services/guest-whatsapp.service"
+    );
+    if (!guestWhatsAppAvailable(waToken)) {
+      throw new Error("WhatsApp tamu belum terkonfigurasi (Meta atau Evolution).");
     }
 
     // Buat token baru memakai prefill yang sama dengan log lama.
@@ -163,8 +166,7 @@ export const resendBookingFormLink = createServerFn({ method: "POST" })
       .single();
     if (insErr) throw new Error(`Gagal mencatat log baru: ${insErr.message}`);
 
-    const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
-    const result = await sendWhatsAppMessage(waToken, log.phone, message);
+    const result = await sendGuestWhatsApp(log.phone, message, { evolutionToken: waToken });
 
     const patch: Record<string, unknown> = {
       status: result.ok ? "sent" : "failed",

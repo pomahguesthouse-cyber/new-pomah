@@ -84,6 +84,107 @@ function guessMediaType(url: string, filename?: string): "image" | "video" | "au
   return "document";
 }
 
+/** Parameter body template: tanpa baris baru, tidak kosong, batas Cloud API. */
+export function sanitizeTemplateParam(value: string): string {
+  const cleaned = String(value ?? "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/ {5,}/g, "    ")
+    .trim()
+    .slice(0, 1024);
+  return cleaned || "-";
+}
+
+/** Payload template Utility. `bodyParams` urut sesuai variabel {{1}}… di template. */
+export function buildMetaTemplatePayload(
+  to: string,
+  name: string,
+  languageCode: string,
+  bodyParams: string[],
+): Record<string, unknown> {
+  return {
+    messaging_product: "whatsapp",
+    to,
+    type: "template",
+    template: {
+      name,
+      language: { code: languageCode || "id" },
+      components: [
+        {
+          type: "body",
+          parameters: bodyParams.map((text) => ({
+            type: "text",
+            text: sanitizeTemplateParam(text),
+          })),
+        },
+      ],
+    },
+  };
+}
+
+/** POST ke gateway Meta dan catat baris whatsapp_meta_outbound (sukses maupun gagal). */
+async function deliverMetaPayload(
+  to: string,
+  payload: Record<string, unknown>,
+  outboundBody: string,
+): Promise<MetaSendResult> {
+  const headers = gatewayHeaders();
+  if (!headers) return { ok: false, error: "WhatsApp Business belum terhubung" };
+
+  const admin = await getAdmin();
+  try {
+    const res = await fetch(`${GATEWAY_URL}/messages`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = text;
+    }
+    if (!res.ok) {
+      console.error(`[WhatsAppMeta] send failed [${res.status}]: ${text.slice(0, 500)}`);
+      const errText = `HTTP ${res.status}: ${text}`;
+      noteMetaChannelHealth(false, errText);
+      await admin.from("whatsapp_meta_outbound").insert({
+        recipient: to,
+        body: outboundBody,
+        status: "failed",
+        error: { http_status: res.status, body: json },
+      });
+      return { ok: false, status: res.status, error: errText, raw: json };
+    }
+    const messageId =
+      (json as { messages?: Array<{ id?: string }> } | null)?.messages?.[0]?.id ?? null;
+    noteMetaChannelHealth(true, null);
+    const { error: insErr } = await admin.from("whatsapp_meta_outbound").insert({
+      provider_message_id: messageId,
+      recipient: to,
+      body: outboundBody,
+      status: "accepted",
+    });
+    if (insErr) console.error("[WhatsAppMeta] outbound record failed:", insErr.message);
+    // Status yang sempat datang lebih dulu akan diproses ulang oleh drain inbox.
+    if (messageId) {
+      await admin
+        .from("whatsapp_webhook_events")
+        .update({ next_attempt_at: new Date().toISOString() })
+        .is("processed_at", null)
+        .eq("event", "whatsapp.status");
+    }
+    return { ok: true, status: res.status, error: null, raw: json, messageId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    noteMetaChannelHealth(false, msg);
+    await admin
+      .from("whatsapp_meta_outbound")
+      .insert({ recipient: to, body: outboundBody, status: "failed", error: { exception: msg } });
+    return { ok: false, error: msg };
+  }
+}
+
 /** Kirim teks/media lewat Meta dan catat id pesan untuk pelacakan status. */
 export async function sendMetaMessage(
   phone: string,
@@ -130,61 +231,33 @@ export async function sendMetaMessage(
     };
   }
 
-  const admin = await getAdmin();
-  try {
-    const res = await fetch(`${GATEWAY_URL}/messages`, {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const text = await res.text();
-    let json: unknown = null;
-    try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = text;
-    }
-    if (!res.ok) {
-      console.error(`[WhatsAppMeta] send failed [${res.status}]: ${text.slice(0, 500)}`);
-      const errText = `HTTP ${res.status}: ${text}`;
-      noteMetaChannelHealth(false, errText);
-      await admin.from("whatsapp_meta_outbound").insert({
-        recipient: to,
-        body: outboundBody,
-        status: "failed",
-        error: { http_status: res.status, body: json },
-      });
-      return { ok: false, status: res.status, error: errText, raw: json };
-    }
-    const messageId =
-      (json as { messages?: Array<{ id?: string }> } | null)?.messages?.[0]?.id ?? null;
-    noteMetaChannelHealth(true, null);
-    const { error: insErr } = await admin
-      .from("whatsapp_meta_outbound")
-      .insert({
-        provider_message_id: messageId,
-        recipient: to,
-        body: outboundBody,
-        status: "accepted",
-      });
-    if (insErr) console.error("[WhatsAppMeta] outbound record failed:", insErr.message);
-    // Status yang sempat datang lebih dulu akan diproses ulang oleh drain inbox.
-    if (messageId) {
-      await admin
-        .from("whatsapp_webhook_events")
-        .update({ next_attempt_at: new Date().toISOString() })
-        .is("processed_at", null)
-        .eq("event", "whatsapp.status");
-    }
-    return { ok: true, status: res.status, error: null, raw: json, messageId };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    noteMetaChannelHealth(false, msg);
-    await admin
-      .from("whatsapp_meta_outbound")
-      .insert({ recipient: to, body: outboundBody, status: "failed", error: { exception: msg } });
-    return { ok: false, error: msg };
-  }
+  return deliverMetaPayload(to, payload, outboundBody);
+}
+
+/**
+ * Kirim template Utility yang sudah disetujui Meta.
+ * Dipakai saat pesan bebas ditolak karena jendela 24 jam (131047 / 131026 / 470).
+ */
+export async function sendMetaTemplateMessage(
+  phone: string,
+  templateName: string,
+  languageCode: string,
+  bodyParams: string[],
+  logBody?: string,
+): Promise<MetaSendResult> {
+  const headers = gatewayHeaders();
+  if (!headers) return { ok: false, error: "WhatsApp Business belum terhubung" };
+  const to = toMetaRecipient(phone);
+  if (!/^\d{8,15}$/.test(to)) return { ok: false, error: `Nomor tidak valid: ${phone}` };
+  const name = templateName.trim();
+  if (!name) return { ok: false, error: "Nama template WhatsApp kosong" };
+  const lang = languageCode.trim() || "id";
+  const payload = buildMetaTemplatePayload(to, name, lang, bodyParams);
+  const paramSummary = bodyParams.map((param) => sanitizeTemplateParam(param)).join(" | ");
+  const outboundBody = logBody?.trim()
+    ? `[template:${name}] ${logBody.trim()}`
+    : `[template:${name}] ${paramSummary}`;
+  return deliverMetaPayload(to, payload, outboundBody);
 }
 
 /** Catat kesehatan kanal Meta tanpa menahan jalur kirim (termasuk quick-ack). */
