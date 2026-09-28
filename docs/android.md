@@ -145,6 +145,7 @@ Then copy the results into `android/app/src/main/res` (see the script’s output
 - The Android back button walks the WebView history, including from a chat thread back to the thread list. At the start of the history stack it leaves the app.
 - Pull down from the top of a scrollable admin page to reload.
 - A notification tap opens that WhatsApp thread or booking. Inbound guest messages and new booking inserts are the only triggers. Outbound replies, AI drafts, and old synced history are ignored.
+- Invoice **Download PDF** / **Cetak Invoice** writes the PDF with `@capacitor/filesystem` and opens the Android share sheet (`@capacitor/share`) so the WebView does not depend on `window.print()` or a blob download. Those plugins are native. A website deploy is enough for desktop and mobile Chrome. The installed APK must be rebuilt and reinstalled (`bash scripts/build-android-debug.sh`) before the share sheet works inside the app. Until then the buttons still build the PDF, but the WebView cannot save it.
 
 ## OAuth redirect allow-list
 

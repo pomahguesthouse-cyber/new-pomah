@@ -1,5 +1,5 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Image, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
@@ -203,6 +203,18 @@ function formatDateFull(iso: string) {
   }
 }
 
+/** Built-in PDF faces only. A remote font file that fails to load aborts the whole document. */
+function pdfSafeLogo(url?: string | null): string | null {
+  if (!url) return null;
+  const value = url.trim();
+  if (!value) return null;
+  if (/^data:image\/(?:png|jpe?g)(?:;|,)/i.test(value)) return value;
+  if (value.startsWith("data:")) return null;
+  const path = value.split("?")[0]?.split("#")[0]?.toLowerCase() ?? "";
+  if (path.endsWith(".png") || path.endsWith(".jpg") || path.endsWith(".jpeg")) return value;
+  return null;
+}
+
 function nightsBetween(checkIn: string, checkOut: string) {
   if (!checkIn || !checkOut) return 0;
   const a = Date.parse(`${checkIn}T00:00:00Z`);
@@ -295,6 +307,7 @@ export function InvoiceDocument({
         : "Belum Bayar";
 
   const today = format(new Date(), "dd MMM yyyy, HH:mm", { locale: id });
+  const safeLogo = pdfSafeLogo(logoUrl);
 
   return (
     <Document>
@@ -313,8 +326,8 @@ export function InvoiceDocument({
             </View>
           </View>
           <View style={styles.headerRight}>
-            {logoUrl ? (
-              <Image src={logoUrl} style={{ width: 120, height: 40, objectFit: "contain" }} />
+            {safeLogo ? (
+              <Image src={safeLogo} style={{ width: 120, height: 40, objectFit: "contain" }} />
             ) : (
               <View style={{ backgroundColor: "#0ea5e9", padding: 10, borderRadius: 4 }}>
                 <Text style={{ color: "white", fontFamily: "Helvetica-Bold", fontSize: 16 }}>

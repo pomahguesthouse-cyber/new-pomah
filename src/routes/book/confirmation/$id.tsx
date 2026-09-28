@@ -479,7 +479,7 @@ function ConfirmationPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3 print:hidden max-[360px]:flex-col max-[360px]:items-stretch">
               {mappedBooking ? (
                 <React.Suspense
                   fallback={
@@ -505,7 +505,7 @@ function ConfirmationPage() {
               ) : (
                 <button
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800 max-[360px]:w-full"
                   title="Gunakan dialog cetak browser dan pilih 'Save as PDF' untuk menyimpan sebagai PDF"
                 >
                   <Download className="h-4 w-4" />
@@ -513,8 +513,29 @@ function ConfirmationPage() {
                 </button>
               )}
               <button
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const { canSharePdfNatively, printInvoicePdf } = await import("@/admin/lib/invoice-pdf-client");
+                      if (mappedBooking && (await canSharePdfNatively())) {
+                        await printInvoicePdf({
+                          booking: mappedBooking,
+                          logoUrl,
+                          propertyName,
+                          propertyAddress,
+                          propertyPhone,
+                          propertyWebsite,
+                          fileName: `Invoice-${inv.reference_code || id.slice(0, 8)}.pdf`,
+                        });
+                        return;
+                      }
+                    } catch (error) {
+                      console.error("[invoice-pdf]", error);
+                    }
+                    window.print();
+                  })();
+                }}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 max-[360px]:w-full"
               >
                 <Printer className="h-4 w-4" />
                 Cetak Invoice
@@ -523,7 +544,7 @@ function ConfirmationPage() {
                 type="button"
                 onClick={handleSendInvoice}
                 disabled={sendState === "sending"}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-600/70"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-sky-600/70 max-[360px]:w-full"
               >
                 {sendState === "sending" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -538,7 +559,7 @@ function ConfirmationPage() {
               </button>
               <Link
                 to="/"
-                className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                className="rounded-lg border border-stone-300 px-4 py-2 text-center text-sm font-medium text-stone-700 transition hover:bg-stone-100 max-[360px]:w-full"
               >
                 Kembali ke Beranda
               </Link>

@@ -13,6 +13,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
+const InvoiceDialog = React.lazy(() =>
+  import("@/admin/components/invoice-dialog").then((m) => ({ default: m.InvoiceDialog })),
+);
+
 const BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const Route = createFileRoute("/admin/bookings")({
@@ -75,7 +79,15 @@ type BookingListRow = {
   payment_status?: "unpaid" | "partial" | "paid" | null;
   paid_amount?: number | null;
   guests?: { full_name?: string | null; email?: string | null; phone?: string | null } | null;
-  booking_rooms?: { id: string; room_id: string | null; nightly_rate: number; room_types?: { name?: string | null } | null; rooms?: { number?: string | null } | null }[] | null;
+  booking_rooms?: {
+    id: string;
+    room_id: string | null;
+    nightly_rate: number;
+    extra_bed_count?: number | null;
+    extra_bed_rate?: number | null;
+    room_types?: { name?: string | null } | null;
+    rooms?: { number?: string | null } | null;
+  }[] | null;
 };
 
 type ListResult = { bookings: BookingListRow[]; total: number; page: number; pageSize: number; degraded?: boolean };
@@ -196,6 +208,7 @@ function BookingsPage() {
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
+  const [invoiceBooking, setInvoiceBooking] = React.useState<BookingListRow | null>(null);
 
   React.useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
@@ -349,12 +362,14 @@ function BookingsPage() {
               onEdit={() => setEditCtx(b as unknown as EditableBooking)}
               onStatusChange={(status) => mut.mutate({ id: b.id, status })}
               onDelete={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}
+              onOpenInvoice={() => setInvoiceBooking(b)}
             />
             <DesktopBookingRow
               booking={b}
               onEdit={() => setEditCtx(b as unknown as EditableBooking)}
               onStatusChange={(status) => mut.mutate({ id: b.id, status })}
               onDelete={() => setDeleteCtx({ id: b.id, ref: b.reference_code ?? "booking ini" })}
+              onOpenInvoice={() => setInvoiceBooking(b)}
             />
           </React.Fragment>
         ))}
@@ -364,12 +379,17 @@ function BookingsPage() {
 
       <NewBookingDialog open={newOpen} onClose={() => setNewOpen(false)} />
       <EditBookingDialog open={!!editCtx} booking={editCtx} onClose={() => setEditCtx(null)} />
+      {invoiceBooking ? (
+        <React.Suspense fallback={null}>
+          <InvoiceDialog booking={invoiceBooking} onClose={() => setInvoiceBooking(null)} />
+        </React.Suspense>
+      ) : null}
       <Dialog open={!!deleteCtx} onOpenChange={(o) => !o && setDeleteCtx(null)}><DialogContent className="sm:max-w-[440px]"><DialogHeader><DialogTitle>Hapus booking {deleteCtx?.ref}?</DialogTitle><DialogDescription>Seluruh data booking ini akan dihapus permanen dan tidak bisa dikembalikan. Data tamu tidak ikut terhapus.</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" onClick={() => setDeleteCtx(null)}>Batal</Button><Button variant="destructive" disabled={deleteMut.isPending} onClick={() => deleteCtx && deleteMut.mutate(deleteCtx.id)}>{deleteMut.isPending ? "Menghapus…" : "Hapus booking"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
 
-function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void }) {
+function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete, onOpenInvoice }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void; onOpenInvoice: () => void }) {
   const nights = nightsBetween(b.check_in, b.check_out);
   return (
     <article onClick={onEdit} className="relative cursor-pointer overflow-hidden rounded-[28px] border border-border/80 bg-card p-5 shadow-sm transition hover:border-primary/35 hover:shadow-md lg:hidden">
@@ -395,7 +415,7 @@ function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete }: { b
         <p className="pb-0.5 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">{nights} malam</p>
       </div>
 
-      <div className="mt-6 rounded-2xl bg-muted/35 p-4"><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} roomy /></div>
+      <div className="mt-6 rounded-2xl bg-muted/35 p-4"><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} roomy onOpenInvoice={onOpenInvoice} /></div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
         <Select value={b.status} onValueChange={(v) => onStatusChange(v as BookingStatus)}>
@@ -413,7 +433,7 @@ function MobileBookingCard({ booking: b, onEdit, onStatusChange, onDelete }: { b
   );
 }
 
-function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void }) {
+function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete, onOpenInvoice }: { booking: BookingListRow; onEdit: () => void; onStatusChange: (status: BookingStatus) => void; onDelete: () => void; onOpenInvoice: () => void }) {
   return (
     <div onClick={onEdit} className="hidden cursor-pointer gap-4 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md lg:grid lg:items-center lg:px-5" style={{ gridTemplateColumns: BOOKING_GRID }}>
       <div><span className="inline-block rounded-md bg-secondary px-2 py-1 font-mono text-xs font-semibold text-secondary-foreground">{b.reference_code ?? "—"}</span></div>
@@ -421,7 +441,7 @@ function DesktopBookingRow({ booking: b, onEdit, onStatusChange, onDelete }: { b
       <div><RoomSummary rooms={b.booking_rooms} /></div>
       <div className="text-center font-mono tabular-nums">{b.booking_rooms?.length ?? 0}</div>
       <div className="text-xs"><p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-In</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_in)}</p><p className="mt-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Check-Out</p><p className="font-mono font-semibold tabular-nums">{formatDateID(b.check_out)}</p><p className="mt-1.5 font-mono text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{nightsBetween(b.check_in, b.check_out)} malam</p></div>
-      <div><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} booking={b} /></div>
+      <div><PaymentCell total={Number(b.total_amount)} paid={Number(b.paid_amount ?? 0)} status={b.payment_status} onOpenInvoice={onOpenInvoice} /></div>
       <div onClick={(e) => e.stopPropagation()}><Select value={b.status} onValueChange={(v) => onStatusChange(v as BookingStatus)}><SelectTrigger className={`h-7 w-fit gap-1 rounded-full border-0 px-3 text-xs font-semibold capitalize focus:ring-2 focus:ring-ring/50 ${statusPillClass(b.status)}`}><SelectValue /></SelectTrigger><SelectContent>{STATUSES.map((s) => <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>)}</SelectContent></Select></div>
       <div><span className="inline-block rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">{b.source}</span></div>
       <div className="font-mono text-xs tabular-nums text-muted-foreground">{formatDateTimeID(b.created_at)}</div>
@@ -442,15 +462,14 @@ function RoomSummary({ rooms, prominent = false }: { rooms: BookingListRow["book
   return <div className="space-y-2">{[...groups].map(([name, nums]) => <div key={name} className="leading-tight"><p className={prominent ? "text-xl font-semibold" : "font-medium"}>{name}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{nums.join(", ")}</p></div>)}</div>;
 }
 
-function PaymentCell({ total, paid, status, booking, roomy = false }: { total: number; paid: number; status?: "unpaid" | "partial" | "paid" | null; booking: BookingListRow; roomy?: boolean }) {
-  const invoiceRef = booking.reference_code || booking.id;
+function PaymentCell({ total, paid, status, onOpenInvoice, roomy = false }: { total: number; paid: number; status?: "unpaid" | "partial" | "paid" | null; onOpenInvoice: () => void; roomy?: boolean }) {
   return (
     <div className={`${roomy ? "space-y-1 text-sm" : "space-y-0.5 text-xs"} font-mono tabular-nums`}>
       <div className="flex justify-between gap-4"><span className="text-muted-foreground">Total</span><span className="font-semibold text-foreground">{formatIDR(total)}</span></div>
       {status === "partial" && <><div className="flex justify-between gap-4 text-muted-foreground"><span>DP</span><span>{formatIDR(paid)}</span></div><div className="flex justify-between gap-4"><span className="text-muted-foreground">Sisa</span><span className="font-semibold text-amber-600 dark:text-amber-400">{formatIDR(Math.max(0, total - paid))}</span></div></>}
       {status === "paid" && <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">Lunas</p>}
       {(!status || status === "unpaid") && <p className="font-sans text-[10px] font-semibold uppercase tracking-widest text-destructive">Belum bayar</p>}
-      <a href={`/book/confirmation/${encodeURIComponent(invoiceRef)}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="mt-2 inline-flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"><Receipt className="h-4 w-4" />Invoice</a>
+      <button type="button" onClick={(e) => { e.stopPropagation(); onOpenInvoice(); }} className="mt-2 inline-flex items-center gap-1.5 font-sans text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"><Receipt className="h-4 w-4" />Invoice</button>
     </div>
   );
 }
