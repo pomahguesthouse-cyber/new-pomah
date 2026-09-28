@@ -6,7 +6,7 @@
  * times, guest details, hotel policy, payment method) that creates the
  * reservation directly.
  */
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate, notFound, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -35,7 +35,7 @@ import {
   submitPublicBooking,
 } from "@/public/functions/public.functions";
 import { PublicNav, PublicFooter } from "@/public/components/public-shell";
-import { Pannellum360Viewer } from "@/admin/modules/walkthrough/pannellum-viewer";
+import { DatePickerID, Pannellum360Viewer } from "@/public/components/lazy-public-widgets";
 import { loadPublishedTourByRoomTypeId } from "@/admin/modules/walkthrough/public-tour";
 import { cn } from "@/lib/utils";
 import {
@@ -45,7 +45,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { DatePickerID } from "@/components/ui/date-picker";
 import { canonicalHeadTags, publicSeoMeta, resolveRoomPublicSeo } from "@/public/lib/public-seo";
 import { publicRoomBlurb } from "@/public/content/approved-seo";
 import { buildStorageImageUrl, buildStorageImageSrcSet } from "@/lib/storage-image";
@@ -427,7 +426,9 @@ function RoomBookingPage() {
                   )}
                 </div>
                 <div className="relative mt-3 h-[420px] overflow-hidden rounded-2xl border border-stone-200 bg-black">
-                  <Pannellum360Viewer scenes={tour.scenes} firstSceneId={tour.firstSceneId} />
+                  <Suspense fallback={<div className="h-full w-full bg-black" />}>
+                    <Pannellum360Viewer scenes={tour.scenes} firstSceneId={tour.firstSceneId} />
+                  </Suspense>
                 </div>
                 <p className="mt-2 text-xs text-stone-400">
                   Seret untuk melihat sekeliling · klik titik hijau untuk berpindah ruangan.
@@ -998,14 +999,16 @@ function DateField({
 }) {
   return (
     <div>
-      <DatePickerID
-        value={value}
-        min={min}
-        onChange={onChange}
-        open={open}
-        onOpenChange={onOpenChange}
-        className="h-[42px] border-stone-200 bg-white shadow-none hover:bg-stone-50"
-      />
+      <Suspense fallback={<div className="h-[42px] w-full rounded-md border border-stone-200 bg-white" />}>
+        <DatePickerID
+          value={value}
+          min={min}
+          onChange={onChange}
+          open={open}
+          onOpenChange={onOpenChange}
+          className="h-[42px] border-stone-200 bg-white shadow-none hover:bg-stone-50"
+        />
+      </Suspense>
     </div>
   );
 }

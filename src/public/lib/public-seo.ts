@@ -168,6 +168,32 @@ export function resolveRoomPublicSeo(room: RoomSeoSource): {
 export const CANONICAL_ORIGIN = "https://pomahguesthouse.com";
 
 /**
+ * Share card for the homepage and landing pages. The stored asset is a
+ * ~1.9 MB PNG; crawlers do not need that file.
+ */
+export const SHARE_OG_IMAGE = {
+  url: `${CANONICAL_ORIGIN}/og/pomah-1200x630.jpg`,
+  width: "1200",
+  height: "630",
+  type: "image/jpeg",
+} as const;
+
+/** Original Supabase object PNGs. Render URLs are already transformed. */
+export function isUnoptimizedSharePng(url: string | null | undefined): boolean {
+  return /\/storage\/v1\/object\/public\/[^?\s]+\.png(?:$|\?)/i.test((url ?? "").trim());
+}
+
+export function shareOgImageTags(): PublicSeoMetaTag[] {
+  return [
+    { property: "og:image", content: SHARE_OG_IMAGE.url },
+    { property: "og:image:width", content: SHARE_OG_IMAGE.width },
+    { property: "og:image:height", content: SHARE_OG_IMAGE.height },
+    { property: "og:image:type", content: SHARE_OG_IMAGE.type },
+    { name: "twitter:image", content: SHARE_OG_IMAGE.url },
+  ];
+}
+
+/**
  * Homepage keeps a trailing slash. Every other public path does not.
  * Query strings and hashes are dropped — canonicals never include tracking params.
  */

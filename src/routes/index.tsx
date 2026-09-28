@@ -58,7 +58,7 @@ import {
 import { mergeExploreConfig } from "@/admin/modules/explore/explore.config";
 import type { RoomRow } from "@/routes/rooms.$slug";
 import { DEFAULT_HOTEL_POLICY } from "@/public/lib/hotel-policy";
-import { canonicalHeadTags, HOME_SEO, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle } from "@/public/lib/public-seo";
+import { canonicalHeadTags, HOME_SEO, isUnoptimizedSharePng, preferredOgImage, publicSeoMeta, resolveHomepageH1, resolveHomepageMeta, resolveHomepageTitle, shareOgImageTags } from "@/public/lib/public-seo";
 import { pomahMapEmbedUrl } from "@/public/lib/site-identity";
 import { publicCopy } from "@/public/lib/public-copy";
 import { HOMEPAGE_FAQS, homepageLodgingGraph } from "@/public/lib/structured-data";
@@ -71,7 +71,7 @@ import { BrandLogo, PomahNav, PomahFooter, HeroSlider, PbZone } from "@/public/c
 import { GuideTextLinks, exploreHrefForName } from "@/public/components/guide-links";
 import { cardIntroForName, publicRoomBlurb } from "@/public/content/approved-seo";
 import { filterPublicExploreEvents } from "@/lib/explore-event-date";
-import { DateRangePickerID } from "@/components/ui/date-range-picker";
+import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -104,7 +104,12 @@ export const Route = createFileRoute("/")({
       (room) => preferredOgImage(room.hero_image_url),
     )?.hero_image_url;
     const ogRaw = preferredOgImage(seo.ogImageUrl, heroImageRaw, roomCover);
-    const ogImage = ogRaw ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 }) : "";
+    const useShareImage = isUnoptimizedSharePng(ogRaw);
+    const ogImage = useShareImage
+      ? ""
+      : ogRaw
+        ? buildStorageImageUrl(ogRaw, { width: 1200, quality: 60 })
+        : "";
     const canonical = canonicalHeadTags("/");
     // One preload per breakpoint for the first slide only. The <picture>
     // sources use the same URLs, so the browser fetches a single WebP.
@@ -120,6 +125,7 @@ export const Route = createFileRoute("/")({
           },
           HOME_SEO,
         ),
+        ...(useShareImage ? shareOgImageTags() : []),
         ...canonical.meta,
       ],
       links: [...canonical.links, ...heroPreloadLinks(heroImageRaw)],
@@ -647,16 +653,18 @@ export function PomahHomeView({
 
               <div className="flex flex-row items-end gap-1.5 md:gap-3">
                 <Field label="Tanggal Menginap" className="flex-1 min-w-0">
-                  <DateRangePickerID
-                    className="bg-[#5f6d61] text-white hover:bg-[#5f6d61]/90 border-none"
-                    checkIn={checkIn || null}
-                    checkOut={checkOut || null}
-                    min={today}
-                    onChange={({ checkIn: ci, checkOut: co }) => {
-                      setCheckIn(ci);
-                      setCheckOut(co);
-                    }}
-                  />
+                  <Suspense fallback={<div className="h-12 w-full rounded-md bg-[#5f6d61]" />}>
+                    <DateRangePickerID
+                      className="bg-[#5f6d61] text-white hover:bg-[#5f6d61]/90 border-none"
+                      checkIn={checkIn || null}
+                      checkOut={checkOut || null}
+                      min={today}
+                      onChange={({ checkIn: ci, checkOut: co }) => {
+                        setCheckIn(ci);
+                        setCheckOut(co);
+                      }}
+                    />
+                  </Suspense>
                 </Field>
                 <Field label="Tamu" className="flex-none w-[72px] md:flex-1 md:w-auto">
                   <div className="relative">

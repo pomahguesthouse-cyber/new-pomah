@@ -84,13 +84,22 @@ export function buildStorageImageSrcSet(
 }
 
 /**
- * First-slide hero. Phones get 480w (about 70 KB WebP at quality 70 on the
- * live welcome photo). Tablets get 768w, desktops 1080w. Each breakpoint is
- * its own file so a high-DPR phone cannot upgrade itself to the desktop file.
+ * First-slide hero. Phones get 480w, tablets 768w, desktops 1080w. Each
+ * breakpoint is its own file so a high-DPR phone cannot upgrade itself to
+ * the desktop file.
+ *
+ * Quality 70 made the live welcome photo ~70 KB at 480w. Quality 55 was still
+ * ~58 KB. The mobile file uses quality 30 so 480w stays under 40 KB. Wider
+ * breakpoints stay at quality 70.
  */
 export const HERO_IMAGE_WIDTHS = [480, 768, 1080] as const;
 export const HERO_IMAGE_QUALITY = 70;
+export const HERO_MOBILE_IMAGE_QUALITY = 30;
 export const HERO_IMAGE_SIZES = "(max-width: 767px) 100vw, (max-width: 1279px) 100vw, 1080px";
+
+export function heroQualityForWidth(width: number): number {
+  return width <= 480 ? HERO_MOBILE_IMAGE_QUALITY : HERO_IMAGE_QUALITY;
+}
 
 export type HeroImageVariant = {
   width: number;
@@ -109,15 +118,28 @@ export function heroImageVariants(url: string): HeroImageVariant[] | null {
   return HERO_IMAGE_WIDTHS.map((width) => ({
     width,
     media: HERO_VARIANT_MEDIA[width],
-    url: buildStorageImageUrl(url, { width, quality: HERO_IMAGE_QUALITY, format: "webp" }),
+    url: buildStorageImageUrl(url, {
+      width,
+      quality: heroQualityForWidth(width),
+      format: "webp",
+    }),
   }));
 }
 
 export function heroImageSrcSet(url: string): string | undefined {
-  return buildStorageImageSrcSet(url, [...HERO_IMAGE_WIDTHS], {
-    quality: HERO_IMAGE_QUALITY,
-    format: "webp",
-  });
+  if (!url || !isSupabasePublicObject(url)) return undefined;
+  return HERO_IMAGE_WIDTHS.map(
+    (width) =>
+      `${buildStorageImageUrl(url, { width, quality: heroQualityForWidth(width), format: "webp" })} ${width}w`,
+  ).join(", ");
+}
+
+/** Variant the browser will paint for this viewport. Used to preload the next slide. */
+export function heroImageUrlForViewport(url: string, viewportWidth = 480): string {
+  const variants = heroImageVariants(url);
+  if (!variants?.length) return url;
+  const width = viewportWidth >= 1280 ? 1080 : viewportWidth >= 768 ? 768 : 480;
+  return variants.find((variant) => variant.width === width)?.url ?? variants[0].url;
 }
 
 /** One preload per breakpoint. A phone only fetches the 480w WebP. */
