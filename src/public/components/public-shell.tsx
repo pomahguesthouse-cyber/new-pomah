@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { preconnect, preload } from "react-dom";
 import { Link } from "@tanstack/react-router";
 import { MessageCircle, MapPin, Phone, Mail, Instagram, Menu, X, Home, Facebook, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { ChevronLeft, ChevronRight, Star } from "lucide-react";
 import {
   buildLogoImageUrl,
   heroImageSrcSet,
+  heroImageUrlForViewport,
   heroImageVariants,
   HERO_IMAGE_SIZES,
   logoDisplaySize,
@@ -18,8 +20,9 @@ import { formatSitePhone, POMAH_NAP_LINE } from "@/public/lib/site-identity";
 
 
 /**
- * Header mark as a small WebP with width/height.
- * loading="lazy" stops React from preloading the original PNG ahead of the hero.
+ * Header mark as a small WebP with explicit width/height.
+ * Eager so the logo is discovered with the document. No preload link —
+ * the hero image stays the high-priority fetch.
  */
 export function BrandLogo({
   src,
@@ -39,7 +42,9 @@ export function BrandLogo({
       alt={alt}
       width={box.width}
       height={box.height}
-      loading="lazy"
+      loading="eager"
+      // React 19 preloads every eager image. Low priority skips that hint
+      // so the hero preload stays the only high-priority image request.
       fetchPriority="low"
       decoding="async"
       className={className ?? "w-auto max-w-[240px] object-contain"}
@@ -768,6 +773,69 @@ const HERO_ANIM: Record<string, string> = {
   none: "",
 };
 
+const decodedHeroSrc = new Set<string>();
+
+function runWhenIdle(task: () => void): () => void {
+  const win = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof win.requestIdleCallback === "function") {
+    const id = win.requestIdleCallback(task, { timeout: 2000 });
+    return () => win.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(task, 1);
+  return () => window.clearTimeout(id);
+}
+
+/**
+ * Register the first-slide preload during render so React emits it before
+ * stylesheets and modulepreloads. A later head link loses the connection
+ * queue to the entry chunk.
+ */
+function preloadHeroLcp(url: string) {
+  const variants = heroImageVariants(url);
+  if (!variants) return;
+  try {
+    const origin = new URL(variants[0].url).origin;
+    if (origin.startsWith("http")) preconnect(origin);
+  } catch {
+    // Relative hero URLs share the document connection.
+  }
+  for (const variant of variants) {
+    preload(variant.url, {
+      as: "image",
+      imageSrcSet: `${variant.url} ${variant.width}w`,
+      imageSizes: "100vw",
+      fetchPriority: "high",
+      media: variant.media,
+    });
+  }
+}
+
+/** Decode the viewport-sized hero file. Resolves even if the image fails. */
+function decodeHeroImage(url: string): Promise<void> {
+  if (typeof window === "undefined" || !url) return Promise.resolve();
+  const src = heroImageUrlForViewport(url, window.innerWidth);
+  if (!src || decodedHeroSrc.has(src)) return Promise.resolve();
+  const img = new Image();
+  img.decoding = "async";
+  img.src = src;
+  const remember = () => {
+    decodedHeroSrc.add(src);
+  };
+  if (typeof img.decode === "function") {
+    return img.decode().then(remember, remember);
+  }
+  return new Promise((resolve) => {
+    img.onload = () => {
+      remember();
+      resolve();
+    };
+    img.onerror = () => resolve();
+  });
+}
+
 export function HeroSlider({
   hero,
   fallbackTitle,
@@ -792,27 +860,54 @@ export function HeroSlider({
     : [{ imageUrl: "", videoUrl: "", heading: fallbackTitle, subheading: "" }];
   const [i, setI] = useState(0);
   const [autoplay, setAutoplay] = useState(false);
+  // Enter animation starts offscreen. Keep it off until the guest changes slides
+  // so the LCP image is painted in place on the first render.
+  const [hasChanged, setHasChanged] = useState(false);
+  const nextImageUrl = slides[(i + 1) % slides.length]?.imageUrl ?? "";
 
-  // Later slides stay out of the network until the first paint has finished.
+  // After load, decode the next slide during idle time. Do not fetch it before
+  // the first paint.
   useEffect(() => {
-    if (slides.length < 2 || hero.autoplayMs <= 0) return;
-    if (document.readyState === "complete") {
-      setAutoplay(true);
-      return;
-    }
-    const onLoad = () => setAutoplay(true);
-    window.addEventListener("load", onLoad, { once: true });
-    return () => window.removeEventListener("load", onLoad);
-  }, [slides.length, hero.autoplayMs]);
+    if (slides.length < 2) return;
+    let cancelIdle = () => {};
+    const arm = () => {
+      if (hero.autoplayMs > 0) setAutoplay(true);
+      cancelIdle = runWhenIdle(() => {
+        if (nextImageUrl) void decodeHeroImage(nextImageUrl);
+      });
+    };
+    if (document.readyState === "complete") arm();
+    else window.addEventListener("load", arm, { once: true });
+    return () => {
+      window.removeEventListener("load", arm);
+      cancelIdle();
+    };
+  }, [slides.length, hero.autoplayMs, nextImageUrl]);
 
   useEffect(() => {
     if (!autoplay || slides.length < 2 || hero.autoplayMs <= 0) return;
-    const t = setInterval(() => setI((v) => (v + 1) % slides.length), hero.autoplayMs);
-    return () => clearInterval(t);
-  }, [autoplay, slides.length, hero.autoplayMs]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void decodeHeroImage(nextImageUrl).then(() => {
+        if (cancelled) return;
+        setHasChanged(true);
+        setI((v) => (v + 1) % slides.length);
+      });
+    }, hero.autoplayMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [autoplay, slides.length, hero.autoplayMs, nextImageUrl]);
 
+  const firstImage = slides[0]?.imageUrl ?? "";
+  if (firstImage) preloadHeroLcp(firstImage);
   const active = slides[i % slides.length];
-  const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+  const go = (d: number) => {
+    setHasChanged(true);
+    setI((v) => (v + d + slides.length) % slides.length);
+  };
+  const enterClass = hasChanged ? (HERO_ANIM[hero.transition] ?? "") : "";
   const staticH1 = (h1Text ?? "").trim();
 
   return (
@@ -827,7 +922,7 @@ export function HeroSlider({
         } as React.CSSProperties
       }
     >
-      <div key={i} className={`absolute inset-0 ${HERO_ANIM[hero.transition] ?? ""}`}>
+      <div key={i} className={`absolute inset-0${enterClass ? ` ${enterClass}` : ""}`}>
         {active.videoUrl ? (
           <video
             src={active.videoUrl}
@@ -946,7 +1041,10 @@ export function HeroSlider({
             {slides.map((s, d) => (
               <button
                 key={d}
-                onClick={() => setI(d)}
+                onClick={() => {
+                  setHasChanged(true);
+                  setI(d);
+                }}
                 aria-label={`Slide ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${
                   d === i % slides.length ? "w-6 bg-white" : "w-2 bg-white/50"

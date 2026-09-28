@@ -5,12 +5,13 @@
  * only published tours) and renders it fullscreen with Pannellum. Scene
  * hotspots let the visitor walk between rooms.
  */
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Compass, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Pannellum360Viewer, type WalkScene } from "@/admin/modules/walkthrough/pannellum-viewer";
+import type { WalkScene } from "@/admin/modules/walkthrough/pannellum-viewer";
+import { Pannellum360Viewer } from "@/public/components/lazy-public-widgets";
 import { canonicalHeadTags } from "@/public/lib/public-seo";
 
 export const Route = createFileRoute("/tour/$slug")({
@@ -151,7 +152,9 @@ function TourViewerPage() {
 
   return (
     <div className="relative h-screen w-screen bg-black">
-      <Pannellum360Viewer scenes={scenes} firstSceneId={data.firstSceneId} />
+      <Suspense fallback={<div className="h-full w-full bg-black" />}>
+        <Pannellum360Viewer scenes={scenes} firstSceneId={data.firstSceneId} />
+      </Suspense>
       <div className="pointer-events-none absolute left-0 top-0 flex w-full items-center justify-between p-3">
         <Link
           to="/"

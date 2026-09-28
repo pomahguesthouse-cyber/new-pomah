@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -20,7 +20,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { DateRangePickerID, addDaysIso as isoAddDays } from "@/components/ui/date-range-picker";
+import { DateRangePickerID } from "@/public/components/lazy-public-widgets";
 import { 
   Users, 
   CalendarDays, 
@@ -88,6 +88,12 @@ type CartItem = {
   quantity: number;
   extraBeds: number;
 };
+
+function isoAddDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function BookPage() {
   const loaderData = Route.useLoaderData();
@@ -257,6 +263,7 @@ function BookPage() {
 
           {/* Search Bar — 1 kolom vertikal */}
           <div className="mt-10 bg-white rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col gap-3 w-full max-w-md mx-auto">
+            <Suspense fallback={<div className="h-14 w-full rounded-xl border border-stone-200 bg-white" />}>
             <DateRangePickerID
               checkIn={form.checkIn || null}
               checkOut={form.checkOut || null}
@@ -294,6 +301,7 @@ function BookPage() {
                 </button>
               }
             />
+            </Suspense>
 
             <div className="w-full flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3">
               <Users className="w-5 h-5 text-stone-400 shrink-0" />

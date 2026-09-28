@@ -3,7 +3,7 @@
  * Serves SEO-optimised landing pages created in the AI SEO Control Room.
  * Design matches the main Pomah Guesthouse site.
  */
-import { useState, useEffect, createContext, useContext, useMemo } from "react";
+import { Suspense, useState, useEffect, createContext, useContext, useMemo } from "react";
 import { createFileRoute, notFound, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -13,7 +13,7 @@ import {
   checkRoomTypeAvailability,
 } from "@/public/functions/public.functions";
 import { getGoogleReviews, type GoogleReview } from "@/public/functions/google-reviews.functions";
-import { DatePickerID } from "@/components/ui/date-picker";
+import { DatePickerID } from "@/public/components/lazy-public-widgets";
 import { publicCopy } from "@/public/lib/public-copy";
 import {
   getSeoLandingPageBySlug,
@@ -33,7 +33,7 @@ import {
   type LPRoomSliderSection,
   type LPDatePickerSection,
 } from "@/admin/modules/seo/landing-page.functions";
-import { canonicalHeadTags } from "@/public/lib/public-seo";
+import { canonicalHeadTags, isUnoptimizedSharePng, shareOgImageTags } from "@/public/lib/public-seo";
 import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/public/content/approved-seo";
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
@@ -78,7 +78,11 @@ export const Route = createFileRoute("/lp/$slug")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         ...canonical.meta,
-        ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
+        ...(isUnoptimizedSharePng(p.og_image_url)
+          ? shareOgImageTags()
+          : p.og_image_url
+            ? [{ property: "og:image", content: p.og_image_url }]
+            : []),
       ],
       links: [...canonical.links, ...heroPreloadLinks(heroImage)],
     };
@@ -435,19 +439,27 @@ function SliderSection({ s }: { s: LPSliderSection }) {
     ? s.slides
     : [{ imageUrl: "", videoUrl: "", heading: "Selamat Datang", subheading: "" }];
   const [i, setI] = useState(0);
+  const [hasChanged, setHasChanged] = useState(false);
 
   useEffect(() => {
     if (slides.length < 2 || s.autoplayMs <= 0) return;
-    const t = setInterval(() => setI((v) => (v + 1) % slides.length), s.autoplayMs);
+    const t = setInterval(() => {
+      setHasChanged(true);
+      setI((v) => (v + 1) % slides.length);
+    }, s.autoplayMs);
     return () => clearInterval(t);
   }, [slides.length, s.autoplayMs]);
 
   const active = slides[i % slides.length];
-  const go = (d: number) => setI((v) => (v + d + slides.length) % slides.length);
+  const go = (d: number) => {
+    setHasChanged(true);
+    setI((v) => (v + d + slides.length) % slides.length);
+  };
+  const enterClass = hasChanged ? (HERO_ANIM[s.transition] ?? "") : "";
 
   return (
     <header className="relative w-full overflow-hidden" style={{ height: s.height }}>
-      <div key={i} className={`absolute inset-0 ${HERO_ANIM[s.transition] ?? ""}`}>
+      <div key={i} className={`absolute inset-0${enterClass ? ` ${enterClass}` : ""}`}>
         {active.videoUrl ? (
           <video src={active.videoUrl} autoPlay muted loop playsInline
             className="absolute inset-0 h-full w-full object-cover" />
@@ -492,7 +504,7 @@ function SliderSection({ s }: { s: LPSliderSection }) {
           </button>
           <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-1.5">
             {slides.map((_, d) => (
-              <button key={d} onClick={() => setI(d)} aria-label={`Slide ${d + 1}`}
+              <button key={d} onClick={() => { setHasChanged(true); setI(d); }} aria-label={`Slide ${d + 1}`}
                 className={`h-2 rounded-full transition-all ${d === i % slides.length ? "w-6 bg-white" : "w-2 bg-white/50"}`} />
             ))}
           </div>
@@ -796,6 +808,7 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-stone-500">Check-In</label>
+            <Suspense fallback={<div className="h-10 w-full rounded-md border border-stone-200 bg-white" />}>
             <DatePickerID
               value={checkIn}
               onChange={handleCheckInChange}
@@ -805,9 +818,11 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
               placeholder="Pilih tanggal"
               className="h-10"
             />
+            </Suspense>
           </div>
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-stone-500">Check-Out</label>
+            <Suspense fallback={<div className="h-10 w-full rounded-md border border-stone-200 bg-white" />}>
             <DatePickerID
               value={checkOut}
               onChange={setCheckOut}
@@ -817,6 +832,7 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
               placeholder="Pilih tanggal"
               className="h-10"
             />
+            </Suspense>
           </div>
           <button type="button" onClick={onSubmit}
             className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800">
