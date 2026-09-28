@@ -15,6 +15,7 @@ import {
 } from "../src/services/wa-autoreply/runtime-policy";
 import {
   MEDIA_FAST_PATH_BROCHURE_REPLY,
+  MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY,
   MEDIA_FAST_PATH_PHOTO_REPLY,
   matchGalleryRoom,
   planMediaFastPath,
@@ -78,24 +79,27 @@ assert.equal(isQuickAckSuppressedMessage("minta foto dong"), false);
 
 // ─── Gerbang foto / brosur ───────────────────────────────────────────────────
 
+// Permintaan foto → brosur PDF (dokumen); foto per kamar hanya cadangan.
 const photo = planMediaFastPath(inbound("minta foto dong"), rooms);
-assert.equal(photo?.kind, "room_photos");
-if (photo?.kind === "room_photos") {
-  assert.equal(photo.roomType, null);
-  assert.equal(photo.maxPhotos, 1);
-  assert.equal(photo.reply, MEDIA_FAST_PATH_PHOTO_REPLY);
-  const selected = roomsForPhotoPlan(rooms, photo);
+assert.equal(photo?.kind, "brochure");
+if (photo?.kind === "brochure") {
+  assert.equal(photo.reply, MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY);
+  const fb = photo.photoFallback;
+  assert.ok(fb, "foto per kamar tetap jadi cadangan");
+  assert.equal(fb?.roomType, null);
+  assert.equal(fb?.maxPhotos, 1);
+  assert.equal(fb?.reply, MEDIA_FAST_PATH_PHOTO_REPLY);
   assert.deepEqual(
-    selected.map((r) => r.name),
+    roomsForPhotoPlan(rooms, fb!).map((r) => r.name),
     ["Deluxe", "Family Suite", "Junior Suite"],
   );
 }
 
 const deluxe = planMediaFastPath(inbound("kirim gambar kamar deluxe"), rooms);
-assert.equal(deluxe?.kind, "room_photos");
-if (deluxe?.kind === "room_photos") {
-  assert.equal(deluxe.roomType, "Deluxe");
-  assert.equal(deluxe.maxPhotos, 3);
+assert.equal(deluxe?.kind, "brochure");
+if (deluxe?.kind === "brochure") {
+  assert.equal(deluxe.photoFallback?.roomType, "Deluxe");
+  assert.equal(deluxe.photoFallback?.maxPhotos, 3);
 }
 
 assert.equal(matchGalleryRoom("foto family suite kak", rooms)?.name, "Family Suite");
@@ -106,10 +110,11 @@ assert.equal(
   brochure && brochure.kind === "brochure" ? brochure.reply : "",
   MEDIA_FAST_PATH_BROCHURE_REPLY,
 );
+assert.equal(brochure?.kind === "brochure" ? brochure.photoFallback : "x", null);
 
 const both = planMediaFastPath(inbound("minta pricelist beserta gambar kamarnya"), rooms);
-assert.equal(both?.kind, "room_photos");
-if (both?.kind === "room_photos") assert.equal(both.alsoBrochure, true);
+assert.equal(both?.kind, "brochure");
+if (both?.kind === "brochure") assert.equal(both.reply, MEDIA_FAST_PATH_BROCHURE_REPLY);
 
 assert.equal(planMediaFastPath(inbound("harganya berapa ya ka"), rooms), null);
 assert.equal(
@@ -135,15 +140,18 @@ assert.equal(
   ),
   null,
 );
+const ambiguous = planMediaFastPath(inbound("foto suite"), rooms);
+assert.equal(ambiguous?.kind, "brochure", "brosur mencakup semua tipe kamar");
 assert.equal(
-  planMediaFastPath(inbound("foto suite"), rooms),
+  ambiguous?.kind === "brochure" ? ambiguous.photoFallback : "x",
   null,
-  "suite ambigu tidak boleh menebak",
+  "suite ambigu tidak boleh menebak foto cadangan",
 );
-assert.equal(
-  planMediaFastPath(inbound("minta foto"), [{ name: "Single", hero_image_url: null, images: [] }]),
-  null,
-);
+const noGallery = planMediaFastPath(inbound("minta foto"), [
+  { name: "Single", hero_image_url: null, images: [] },
+]);
+assert.equal(noGallery?.kind, "brochure");
+assert.equal(noGallery?.kind === "brochure" ? noGallery.photoFallback : "x", null);
 
 assert.equal(roomPhotoCaption("Deluxe"), "Foto kamar *Deluxe* 📸");
 assert.equal(MEDIA_DEDUP_WINDOW_MS, 30 * 60_000);

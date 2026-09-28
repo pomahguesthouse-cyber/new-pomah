@@ -34,6 +34,7 @@
     "test:summary-window": "tsx scripts/test-summary-window.ts",
     "test:property-faq": "tsx scripts/test-property-faq.ts",
     "test:meta-guest-fastpath": "tsx scripts/test-meta-guest-fastpath.ts",
+    "test:wa-brochure-document": "tsx scripts/test-wa-brochure-document.ts",
     "test:quick-ack": "tsx scripts/test-quick-ack.ts",
     "test:meta-inbound-enqueue": "tsx scripts/test-meta-inbound-enqueue.ts",
     "test:guest-whatsapp": "tsx scripts/test-guest-whatsapp.ts",
