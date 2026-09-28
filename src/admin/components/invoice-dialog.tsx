@@ -26,6 +26,11 @@ function formatDateID(iso: string | null | undefined) {
   return `${d}/${m}/${y}`;
 }
 
+const solidBtn =
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0e7490] px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-[#0e7490]/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[360px]:w-full";
+const outlineBtn =
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#0e7490] bg-transparent px-4 py-2 text-sm font-medium text-[#0e7490] shadow-sm transition-colors hover:bg-[#0e7490]/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[360px]:w-full";
+
 function getWhatsAppLink(phone: string) {
   let cleaned = phone.replace(/\D/g, "");
   if (cleaned.startsWith("0")) {
@@ -78,9 +83,12 @@ export function InvoiceDialog({
     onSuccess: (res) => {
       if (res.wa_sent) {
         toast.success("Invoice berhasil dikirim ulang via WhatsApp");
-      } else {
-        toast.success("PDF invoice diperbarui (WhatsApp tidak dikonfigurasi)");
+        return;
       }
+      toast.warning(
+        res.error?.trim() ||
+          "Invoice tidak terkirim via WhatsApp. Kirim manual via tombol Kirim Whatsapp.",
+      );
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -121,9 +129,9 @@ Silakan simpan pesan ini sebagai referensi.`;
 
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[850px] max-h-[95vh] flex flex-col p-6">
-        <DialogHeader className="shrink-0 mb-2">
-          <DialogTitle className="text-2xl">
+      <DialogContent className="flex max-h-[95vh] w-[min(850px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] flex-col overflow-x-hidden overflow-y-auto p-4 sm:max-w-[850px] sm:p-6">
+        <DialogHeader className="mb-2 shrink-0 pr-8">
+          <DialogTitle className="break-words text-xl sm:text-2xl">
             Invoice : {booking.reference_code ?? booking.id.slice(0, 8)}
           </DialogTitle>
           <DialogDescription className="text-base text-foreground font-medium">
@@ -131,7 +139,7 @@ Silakan simpan pesan ini sebagai referensi.`;
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap gap-2 mb-4 shrink-0">
+        <div className="mb-4 flex shrink-0 flex-wrap gap-2 max-[360px]:flex-col">
           {isMounted && (
             <PDFDownloadLink
               document={<InvoiceDocument
@@ -143,7 +151,7 @@ Silakan simpan pesan ini sebagai referensi.`;
                 propertyWebsite={propertyWebsite}
               />}
               fileName={`Invoice-${booking.reference_code || booking.id.slice(0, 8)}.pdf`}
-              className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+              className={solidBtn}
             >
               {({ loading }: PDFDownloadLinkRenderProps) => (
                 <>
@@ -158,7 +166,7 @@ Silakan simpan pesan ini sebagai referensi.`;
             href={mailtoLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+            className={solidBtn}
           >
             <Mail className="h-4 w-4" />
             Kirim Email
@@ -168,7 +176,7 @@ Silakan simpan pesan ini sebagai referensi.`;
             href={waLink}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+            className={solidBtn}
             onClick={(e) => {
               if (!booking.guests?.phone) {
                 e.preventDefault();
@@ -184,7 +192,7 @@ Silakan simpan pesan ini sebagai referensi.`;
             href={`${webInvoiceUrl}?print=true`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-[#0e7490] text-primary-foreground shadow hover:bg-[#0e7490]/90 h-9 px-4 py-2"
+            className={solidBtn}
           >
             <Printer className="h-4 w-4" />
             Cetak Invoice
@@ -195,16 +203,19 @@ Silakan simpan pesan ini sebagai referensi.`;
             type="button"
             disabled={resendMut.isPending}
             onClick={() => resendMut.mutate()}
-            className="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-[#0e7490] text-[#0e7490] bg-transparent shadow-sm hover:bg-[#0e7490]/10 h-9 px-4 py-2"
+            className={outlineBtn}
           >
             <RefreshCw className={`h-4 w-4 ${resendMut.isPending ? "animate-spin" : ""}`} />
             {resendMut.isPending ? "Memperbarui…" : "Kirim Ulang Invoice"}
           </button>
         </div>
 
-        <div className="flex-1 min-h-[500px] border border-border rounded-md overflow-hidden bg-muted/20">
+        <div className="min-h-[320px] w-full min-w-0 max-w-full flex-1 overflow-hidden rounded-md border border-border bg-muted/20 min-[361px]:min-h-[500px]">
           {isMounted ? (
-            <PDFViewer className="w-full h-full min-h-[500px]" showToolbar={true}>
+            <PDFViewer
+              className="block h-full min-h-[320px] w-full max-w-full min-[361px]:min-h-[500px]"
+              showToolbar={true}
+            >
               <InvoiceDocument
                 booking={booking}
                 logoUrl={logoUrl}

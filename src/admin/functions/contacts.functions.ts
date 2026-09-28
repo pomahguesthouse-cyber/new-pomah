@@ -176,8 +176,7 @@ export const sendPreArrivalReminder = createServerFn({ method: "POST" })
       .select("wpp_token")
       .limit(1)
       .maybeSingle();
-    const token = (prop as { wpp_token?: string } | null)?.wpp_token;
-    if (!token) throw new Error("Token WhatsApp gateway belum diset di property");
+    const token = (prop as { wpp_token?: string } | null)?.wpp_token ?? null;
 
     const name = guest?.full_name ?? "Kak";
     const defaultMsg =
@@ -186,8 +185,11 @@ export const sendPreArrivalReminder = createServerFn({ method: "POST" })
       `Kalau ada permintaan khusus atau perkiraan jam tiba, silakan balas pesan ini ya. Terima kasih!`;
     const body = data.message?.trim() || defaultMsg;
 
-    const { sendWhatsAppMessage } = await import("@/services/whatsapp.service");
-    const { ok, error } = await sendWhatsAppMessage(token, target, body);
+    const { guestWhatsAppAvailable, sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
+    if (!guestWhatsAppAvailable(token)) {
+      throw new Error("WhatsApp tamu belum terkonfigurasi (Meta atau Evolution).");
+    }
+    const { ok, error } = await sendGuestWhatsApp(target, body, { evolutionToken: token });
     if (!ok) throw new Error(error ?? "Gagal kirim WhatsApp");
     return { ok: true };
   });

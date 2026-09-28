@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { guestWhatsAppAvailable, sendGuestWhatsApp } from "@/services/guest-whatsapp.service";
 import { saveOutboundMessage } from "@/repositories/message.repository";
 import { updateBookingState, type BookingContext } from "@/ai/state-machine/booking-machine";
 import {
@@ -105,13 +105,15 @@ async function resolveThreadId(row: FollowupTokenRow): Promise<string | null> {
  * ini, LLM tidak tahu nudge pernah dikirim dan berpotensi mengulanginya.
  */
 async function sendAndRecord(params: {
-  waToken: string;
+  waToken: string | null;
   phone: string;
   message: string;
   threadId: string | null;
   agent: string;
 }): Promise<boolean> {
-  const result = await sendWhatsAppMessage(params.waToken, params.phone, params.message);
+  const result = await sendGuestWhatsApp(params.phone, params.message, {
+    evolutionToken: params.waToken,
+  });
   if (!result.ok) {
     console.warn(
       `[booking-form-followup] gagal kirim WA ke ${params.phone.slice(-6)}: ${result.error ?? "unknown"}`,
@@ -172,9 +174,10 @@ async function handle(): Promise<Response> {
   let expired = 0;
 
   // ── Fase 1: NUDGE ────────────────────────────────────────────────────────
+  const canSend = guestWhatsAppAvailable(waToken);
   for (const row of plan.nudge) {
-    if (!waToken) {
-      console.warn("[booking-form-followup] wpp_token kosong — nudge dilewati");
+    if (!canSend) {
+      console.warn("[booking-form-followup] WhatsApp tamu belum terkonfigurasi — nudge dilewati");
       break;
     }
 
@@ -244,7 +247,7 @@ async function handle(): Promise<Response> {
       continue;
     }
 
-    if (!item.notify || !waToken) continue;
+    if (!item.notify || !canSend) continue;
 
     await sendAndRecord({
       waToken,

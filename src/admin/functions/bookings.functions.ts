@@ -795,8 +795,15 @@ export const resendInvoice = createServerFn({ method: "POST" })
       force: true,
     });
 
-    if (!result.ok) throw new Error(result.error ?? "Gagal generate invoice");
-    return { ok: true, pdf_url: result.pdf_url, wa_sent: result.wa_sent };
+    if (!result.ok && !result.pdf_url) {
+      throw new Error(result.error ?? "Gagal generate invoice");
+    }
+    return {
+      ok: result.ok,
+      pdf_url: result.pdf_url,
+      wa_sent: result.wa_sent,
+      error: result.wa_sent ? null : result.error,
+    };
   });
 
 export const listRoomTypes = createServerFn({ method: "GET" })

@@ -1,18 +1,26 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { sendWhatsAppMessage } from "./whatsapp.service";
 import { fmtDateID } from "@/lib/date";
 import { findNotificationThreadId } from "./notification-thread-resolver";
+import {
+  CHANNEL_UNAVAILABLE_ERROR,
+  guestWhatsAppAvailable,
+  sendGuestWhatsApp,
+} from "./guest-whatsapp.service";
+import { toMetaRecipient } from "./whatsapp-meta.service";
 
 async function resolveOrCreateNotificationThread({
   supabase,
   phone,
   displayName,
   guestId,
+  provider,
 }: {
   supabase: SupabaseClient;
   phone: string;
   displayName: string;
   guestId?: string | null;
+  /** Set `meta` hanya saat thread baru dibuat untuk kiriman Meta. */
+  provider?: "meta" | null;
 }): Promise<string | null> {
   const existingId = await findNotificationThreadId(supabase, phone);
   if (existingId) {
@@ -35,6 +43,7 @@ async function resolveOrCreateNotificationThread({
       ...(guestId ? { guest_id: guestId } : {}),
       status: "open",
       unread_count: 0,
+      ...(provider === "meta" ? { provider: "meta" } : {}),
     })
     .select("id")
     .single();
@@ -66,8 +75,9 @@ export interface InvoiceResult {
  * (`/book/confirmation/{id}`), which renders and downloads the invoice
  * client-side (browser react-pdf) and always works.
  *
- * - The message is sent only when a WhatsApp gateway token is configured; the function
- *   still returns ok=true if WA is skipped (wa_sent=false).
+ * - WhatsApp goes out through the guest helper: Meta Cloud when configured,
+ *   Evolution only as a fallback when Meta is not configured. `wpp_token` is
+ *   not required for the Meta path.
  * - `skipWhatsApp` keeps the `invoices` record in sync (e.g. after a payment
  *   update) without re-messaging the guest.
  */
@@ -208,19 +218,21 @@ export async function generateAndSendInvoiceNotification({
 
     // ── 5. WhatsApp send (optional, skipped gracefully) ─────────────────
     let waSent = false;
-    const wpp_token = property?.wpp_token;
+    const wppToken = (property?.wpp_token as string | null | undefined) ?? null;
 
     if (skipWhatsApp) {
       return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
     }
 
-    if (!wpp_token) {
-      console.warn("[InvoiceNotification] WhatsApp gateway token not configured — WhatsApp skipped");
-      return { ok: true, error: null, pdf_url: invoiceUrl, wa_sent: false };
+    const cleanedPhone = toMetaRecipient(String(guest.phone ?? ""));
+    if (!/^\d{8,15}$/.test(cleanedPhone)) {
+      return {
+        ok: false,
+        error: `Nomor tidak valid: ${guest.phone}`,
+        pdf_url: invoiceUrl,
+        wa_sent: false,
+      };
     }
-
-    let cleanedPhone = guest.phone.replace(/\D/g, "");
-    if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
 
     const totalFormatted = `Rp ${Number(booking.total_amount ?? 0).toLocaleString("id-ID")}`;
     const paidAmount = Number((booking as any).paid_amount ?? 0);
@@ -273,6 +285,11 @@ ${invoiceUrl}
 
 Terima kasih.`;
 
+    if (!guestWhatsAppAvailable(wppToken)) {
+      console.warn(`[InvoiceNotification] ${CHANNEL_UNAVAILABLE_ERROR}`);
+      return { ok: false, error: CHANNEL_UNAVAILABLE_ERROR, pdf_url: invoiceUrl, wa_sent: false };
+    }
+
     // ── Atomic claim ────────────────────────────────────────────────────
     // Idempotency key = invoices.booking_id. Set wa_sent_at HANYA jika
     // masih NULL. Kalau worker/retry lain sudah klaim (baris terupdate <1),
@@ -310,7 +327,17 @@ Terima kasih.`;
 
 
     console.log(`[InvoiceNotification] Sending invoice link via WhatsApp to ${cleanedPhone}…`);
-    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(wpp_token, cleanedPhone, messageBody);
+    const sendResult = await sendGuestWhatsApp(cleanedPhone, messageBody, {
+      evolutionToken: wppToken,
+      invoiceTemplate: {
+        guestName: String(guest.full_name ?? "Tamu"),
+        bookingCode: String(booking.reference_code ?? booking.id.slice(0, 8)),
+        total: totalFormatted,
+        invoiceUrl,
+      },
+    });
+    const sent = sendResult.ok;
+    const sendErr = sendResult.error;
 
     if (sent) {
       waSent = true;
@@ -322,6 +349,7 @@ Terima kasih.`;
         phone: cleanedPhone,
         displayName: guest.full_name,
         guestId: guest.id,
+        provider: sendResult.channel === "meta" ? "meta" : null,
       });
 
       if (threadId) {
@@ -412,10 +440,7 @@ export async function sendExtraBedUpdateSummary({
     if (!guest?.phone) {
       return { ok: false, wa_sent: false, error: "Guest tanpa nomor HP" };
     }
-    const wpp_token = property?.wpp_token;
-    if (!wpp_token) {
-      return { ok: true, wa_sent: false, error: null };
-    }
+    const wppToken = (property?.wpp_token as string | null | undefined) ?? null;
 
     const { data: brs } = await supabase
       .from("booking_rooms")
@@ -471,14 +496,16 @@ ${summary}
 
 Terima kasih.`;
 
-    let cleanedPhone = String(guest.phone).replace(/\D/g, "");
-    if (cleanedPhone.startsWith("0")) cleanedPhone = "62" + cleanedPhone.slice(1);
+    const cleanedPhone = toMetaRecipient(String(guest.phone ?? ""));
+    if (!/^\d{8,15}$/.test(cleanedPhone)) {
+      return { ok: false, wa_sent: false, error: `Nomor tidak valid: ${guest.phone}` };
+    }
 
-    const { ok: sent, error: sendErr } = await sendWhatsAppMessage(
-      wpp_token,
-      cleanedPhone,
-      messageBody,
-    );
+    const sendResult = await sendGuestWhatsApp(cleanedPhone, messageBody, {
+      evolutionToken: wppToken,
+    });
+    const sent = sendResult.ok;
+    const sendErr = sendResult.error;
 
     if (sent) {
       try {
@@ -487,6 +514,7 @@ Terima kasih.`;
           phone: cleanedPhone,
           displayName: guest.full_name,
           guestId: guest.id,
+          provider: sendResult.channel === "meta" ? "meta" : null,
         });
         if (threadId) {
           await supabase.from("whatsapp_messages").insert({
