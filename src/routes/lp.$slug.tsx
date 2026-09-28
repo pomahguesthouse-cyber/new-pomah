@@ -37,10 +37,11 @@ import { canonicalHeadTags } from "@/public/lib/public-seo";
 import { APPROVED_LP, applyApprovedHomepageSeo, patchUnnesDistance } from "@/public/content/approved-seo";
 import { UnnesLanding } from "@/public/components/unnes-landing";
 import { rewritePublicHref } from "@/public/lib/public-href";
-import { buildStorageImageUrl } from "@/lib/storage-image";
+import { buildStorageImageUrl, heroPreloadLinks } from "@/lib/storage-image";
 import { POMAH_NAP_LINE } from "@/public/lib/site-identity";
 import { mountCustomHead } from "@/public/lib/defer-analytics";
-import { PublicFooter } from "@/public/components/public-shell";
+import { BrandLogo, PomahFooter } from "@/public/components/public-shell";
+import { mergeHomepageConfig } from "@/admin/modules/homepage/homepage.config";
 // NOTE: Home-page duplication via landing page (PomahHomeView) sementara
 // dinonaktifkan — komponen sumber sudah tidak diekspor lagi.
 
@@ -67,6 +68,9 @@ export const Route = createFileRoute("/lp/$slug")({
     const title = approved ? APPROVED_LP.title : p.meta_title || p.title;
     const description = approved ? APPROVED_LP.meta : p.meta_description || "";
     const canonical = canonicalHeadTags(`/lp/${p.slug || ""}`);
+    const heroImage = approved
+      ? mergeHomepageConfig(loaderData?.property?.homepage_config).hero.slides?.[0]?.imageUrl
+      : "";
     return {
       meta: [
         { title },
@@ -76,7 +80,7 @@ export const Route = createFileRoute("/lp/$slug")({
         ...canonical.meta,
         ...(p.og_image_url ? [{ property: "og:image", content: p.og_image_url }] : []),
       ],
-      links: canonical.links,
+      links: [...canonical.links, ...heroPreloadLinks(heroImage)],
     };
   },
 
@@ -117,6 +121,8 @@ function LandingPage() {
     page: SeoLandingPage;
     property?: {
       name?: string | null;
+      logo_url?: string | null;
+      homepage_config?: unknown;
       whatsapp_number?: string | null;
       email?: string | null;
       instagram_url?: string | null;
@@ -124,7 +130,7 @@ function LandingPage() {
       facebook_url?: string | null;
       youtube_url?: string | null;
     };
-    roomTypes?: Array<{ name?: string | null; slug?: string | null }>;
+    roomTypes?: Array<{ name?: string | null; slug?: string | null; hero_image_url?: string | null }>;
   };
   const whatsappNumber = String(property?.whatsapp_number || "6285190986169").replace(/\D/g, "");
   // Halaman hasil duplikasi Home sementara di-skip; fallback ke render section
@@ -181,19 +187,36 @@ function LandingPage() {
     return () => cleanups.forEach((cleanup) => cleanup());
   }, [page.custom_head, page.custom_json_ld, page.json_ld_enabled, page.slug]);
 
+  const homeCfg = mergeHomepageConfig(property?.homepage_config);
+  const approved = page.slug === APPROVED_LP.slug;
+
   return (
     <BookingCtx.Provider value={{ checkIn, checkOut, today, setCheckIn, setCheckOut, checkInOpen, setCheckInOpen, checkOutOpen, setCheckOutOpen, handleCheckInChange }}>
-    <div className="min-h-screen bg-[#f6f1e8] text-stone-800">
-      {page.slug === APPROVED_LP.slug ? (
+    <div className="relative min-h-screen bg-[#f6f1e8] text-stone-800">
+      {approved ? (
         <>
-          <LPNav ctaUrl="/book" ctaText="Pesan kamar" />
-          <UnnesLanding rooms={roomTypes} property={property} />
+          <LPNav
+            overlay
+            ctaUrl="/book"
+            ctaText="Pesan kamar"
+            logoUrl={property?.logo_url}
+            brand={property?.name || "Pomah Guesthouse"}
+            logoSize={homeCfg.header.logoSize}
+            links={homeCfg.header.links.map((link) => ({ label: link.label, url: link.href }))}
+          />
+          <UnnesLanding
+            rooms={roomTypes}
+            property={property}
+            hero={homeCfg.hero}
+            ctaHref="/book"
+            ctaText="Pesan kamar"
+          />
         </>
       ) : hasSections ? (
         isSplit ? (
           <>
             <div className="hidden md:flex md:flex-col space-y-0">
-              {!hasDesktopHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+              {!hasDesktopHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
               {desktopSections.map((s: any) => (
                 <SectionWrapper key={s.id} section={s}>
                   <LPSectionRenderer section={s} />
@@ -201,7 +224,7 @@ function LandingPage() {
               ))}
             </div>
             <div className="flex flex-col md:hidden space-y-0">
-              {!hasMobileHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+              {!hasMobileHeader && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
               {mobileSections.map((s: any) => (
                 <SectionWrapper key={s.id} section={s}>
                   <LPSectionRenderer section={s} />
@@ -211,7 +234,7 @@ function LandingPage() {
           </>
         ) : (
           <div className="flex flex-col space-y-0">
-            {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} />}
+            {!hasHeaderSection && <LPNav ctaUrl={page.hero_cta_url} ctaText={page.hero_cta_text} logoUrl={property?.logo_url} brand={property?.name || "Pomah Guesthouse"} />}
             {desktopSections.map((s: any) => (
               <SectionWrapper key={s.id} section={s}>
                 <LPSectionRenderer section={s} />
@@ -222,10 +245,10 @@ function LandingPage() {
       ) : (
         /* ── Legacy fallback for pages without sections ── */
         <>
-          <section className="relative overflow-hidden bg-gradient-to-br from-teal-800 via-teal-700 to-stone-800 px-6 py-28 text-center text-white">
+          <section className="relative overflow-hidden bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900 px-6 py-28 text-center text-white">
             <div className="mx-auto max-w-3xl">
               {page.target_keyword && (
-                <p className="mb-4 font-mono text-xs uppercase tracking-[0.3em] text-teal-200">
+                <p className="mb-4 font-mono text-xs uppercase tracking-[0.3em] text-amber-200">
                   {page.target_keyword}
                 </p>
               )}
@@ -233,10 +256,10 @@ function LandingPage() {
                 {page.hero_headline || page.title}
               </h1>
               {page.hero_subheadline && (
-                <p className="mx-auto mt-6 max-w-xl text-lg text-teal-100">{page.hero_subheadline}</p>
+                <p className="mx-auto mt-6 max-w-xl text-lg text-amber-100">{page.hero_subheadline}</p>
               )}
               <a href={rewritePublicHref(page.hero_cta_url)}
-                className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
+                className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-amber-800 shadow-lg transition hover:bg-amber-50">
                 {page.hero_cta_text}
               </a>
             </div>
@@ -244,23 +267,23 @@ function LandingPage() {
 
           {page.body_content && (
             <section className="mx-auto max-w-3xl px-6 py-16">
-              <div className="prose prose-stone prose-headings:font-serif prose-a:text-teal-700 max-w-none"
+              <div className="prose prose-stone prose-headings:font-serif prose-a:text-amber-800 max-w-none"
                 dangerouslySetInnerHTML={{ __html: page.body_content.replace(/href=(["'])\/rooms\/?\1/g, 'href=$1/#rooms$1') }} />
             </section>
           )}
 
           <section className="border-t border-stone-200 bg-white px-6 py-14 text-center">
-            <p className="font-serif text-2xl font-bold text-teal-700">Siap Menginap?</p>
+            <p className="font-serif text-2xl font-bold text-amber-700">Siap Menginap?</p>
             <p className="mt-2 text-sm text-stone-500">{POMAH_NAP_LINE}</p>
             <a href={rewritePublicHref(page.hero_cta_url)}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-teal-700 px-8 py-3 text-sm font-bold text-white shadow transition hover:bg-teal-800">
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-amber-700 px-8 py-3 text-sm font-bold text-white shadow transition hover:bg-amber-800">
               {page.hero_cta_text}
             </a>
           </section>
         </>
       )}
 
-      <PublicFooter property={property} rooms={roomTypes} />
+      <PomahFooter name={property?.name || "Pomah Guesthouse"} property={property} rooms={roomTypes} />
 
       {/* WhatsApp float */}
       <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer"
@@ -374,7 +397,7 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
           ))}
           {s.cta_text && (
             <a href={rewritePublicHref(s.cta_url ?? "/book")}
-              className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
+              className="rounded-full bg-amber-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-800">
               {s.cta_text}
             </a>
           )}
@@ -389,7 +412,7 @@ function HeaderSection({ s }: { s: LPHeaderSection }) {
             <a key={i} href={rewritePublicHref(l.url)} className="block text-sm text-stone-600" onClick={() => setOpen(false)}>{l.label}</a>
           ))}
           {s.cta_text && (
-            <a href={rewritePublicHref(s.cta_url ?? "/book")} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+            <a href={rewritePublicHref(s.cta_url ?? "/book")} className="block rounded-full bg-amber-700 py-2 text-center text-sm font-semibold text-white">
               {s.cta_text}
             </a>
           )}
@@ -432,7 +455,7 @@ function SliderSection({ s }: { s: LPSliderSection }) {
           <img src={buildStorageImageUrl(active.imageUrl, { width: 1200, quality: 60 })} width={1200} height={675} alt={active.heading || "Pomah Guesthouse"} loading="lazy"
             className="absolute inset-0 h-full w-full object-cover" />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-teal-900" />
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
         )}
         <div className="absolute inset-0 bg-black/35" />
         <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
@@ -487,11 +510,11 @@ function ButtonSection({ s }: { s: LPButtonSection }) {
   const solidCls =
     color === "dark"  ? "bg-stone-800 text-white hover:bg-stone-900" :
     color === "light" ? "bg-white text-stone-800 hover:bg-stone-100 border border-stone-200" :
-                        "bg-teal-700 text-white hover:bg-teal-800";
+                        "bg-amber-700 text-white hover:bg-amber-800";
   const outlineCls =
     color === "dark"  ? "border border-stone-800 text-stone-800 hover:bg-stone-800 hover:text-white" :
     color === "light" ? "border border-white text-white hover:bg-white hover:text-stone-800" :
-                        "border border-teal-700 text-teal-700 hover:bg-teal-700 hover:text-white";
+                        "border border-amber-700 text-amber-700 hover:bg-amber-700 hover:text-white";
   return (
     <section className="px-6 py-10">
       <div className={`mx-auto flex max-w-6xl ${justify}`}>
@@ -515,7 +538,7 @@ function HeroSection({ s }: { s: LPHeroSection }) {
         <img src={s.image_url} alt={s.headline}
           className="absolute inset-0 h-full w-full object-cover" />
       ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-teal-800 via-teal-700 to-stone-800" />
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900" />
       )}
       <div className="absolute inset-0" style={{ background: `rgba(0,0,0,${overlay / 100})` }} />
 
@@ -529,7 +552,7 @@ function HeroSection({ s }: { s: LPHeroSection }) {
         )}
         {s.cta_text && (
           <a href={rewritePublicHref(s.cta_url ?? "/book")}
-            className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-teal-800 shadow-lg transition hover:bg-teal-50">
+            className="mt-10 inline-flex items-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-bold text-amber-800 shadow-lg transition hover:bg-amber-50">
             {s.cta_text}
           </a>
         )}
@@ -545,11 +568,11 @@ function TextSection({ s }: { s: LPTextSection }) {
     <section className="mx-auto max-w-3xl px-6 py-16">
       {s.title && (
         <div className={`mb-8 flex flex-col ${center ? "items-center" : "items-start"}`}>
-          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>
-          <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
+          <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
         </div>
       )}
-      <div className={`prose prose-stone prose-headings:font-serif prose-a:text-teal-700 max-w-none ${center ? "text-center" : ""}`}
+      <div className={`prose prose-stone prose-headings:font-serif prose-a:text-amber-800 max-w-none ${center ? "text-center" : ""}`}
         dangerouslySetInnerHTML={{ __html: s.content }} />
     </section>
   );
@@ -563,14 +586,14 @@ function FeaturesSection({ s }: { s: LPFeaturesSection }) {
     <section className="mx-auto max-w-6xl px-6 py-16">
       {s.title && (
         <div className="mb-10 flex flex-col items-center text-center">
-          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>
-          <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
+          <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
         </div>
       )}
       <div className={`grid grid-cols-1 gap-5 ${gridCls}`}>
         {(s.items ?? []).map((item, i) => (
           <div key={i} className="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-teal-50 text-teal-700 font-serif font-bold">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-700 font-serif font-bold">
               {i + 1}
             </div>
             <h3 className="font-serif text-lg font-semibold text-stone-900">{item.title}</h3>
@@ -592,13 +615,13 @@ function GallerySection({ s }: { s: LPGallerySection }) {
     <section className="mx-auto max-w-6xl px-6 py-16">
       {s.title && (
         <div className="mb-10 flex flex-col items-center text-center">
-          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>
-          <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
+          <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
         </div>
       )}
       <div className={`grid grid-cols-1 gap-3 ${gridCls}`}>
         {images.map((url, i) => (
-          <div key={i} className="overflow-hidden rounded-2xl border border-stone-200 bg-teal-50 shadow-sm aspect-[4/3]">
+          <div key={i} className="overflow-hidden rounded-2xl border border-stone-200 bg-amber-50 shadow-sm aspect-[4/3]">
             <img src={url} alt={`${s.title ?? "Foto"} ${i + 1}`}
               className="h-full w-full object-cover transition hover:scale-105" />
           </div>
@@ -615,8 +638,8 @@ function FaqSection({ s }: { s: LPFaqSection }) {
     <section className="mx-auto max-w-3xl px-6 py-16">
       {s.title && (
         <div className="mb-10 flex flex-col items-center text-center">
-          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>
-          <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+          <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
+          <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
         </div>
       )}
       <div className="space-y-2">
@@ -625,7 +648,7 @@ function FaqSection({ s }: { s: LPFaqSection }) {
             <button type="button" onClick={() => setOpen(open === i ? null : i)}
               className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-stone-50">
               <span className="font-medium text-stone-800">{item.question}</span>
-              <ChevronDown className={`h-4 w-4 shrink-0 text-teal-600 transition-transform ${open === i ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-4 w-4 shrink-0 text-amber-600 transition-transform ${open === i ? "rotate-180" : ""}`} />
             </button>
             {open === i && (
               <div className="border-t border-stone-100 px-5 py-4 text-sm leading-relaxed text-stone-600">
@@ -644,11 +667,11 @@ function CtaBannerSection({ s }: { s: LPCtaBannerSection }) {
   const bgCls =
     s.style === "dark"  ? "bg-stone-800 text-white" :
     s.style === "light" ? "bg-white text-stone-800 border-t border-b border-stone-200" :
-                          "bg-teal-700 text-white";
+                          "bg-amber-700 text-white";
   const btnCls =
     s.style === "dark"  ? "bg-white text-stone-900 hover:bg-stone-100" :
-    s.style === "light" ? "bg-teal-700 text-white hover:bg-teal-800" :
-                          "bg-white text-teal-800 hover:bg-teal-50";
+    s.style === "light" ? "bg-amber-700 text-white hover:bg-amber-800" :
+                          "bg-white text-amber-800 hover:bg-amber-50";
   return (
     <section className={`px-6 py-16 text-center ${bgCls}`}>
       <div className="mx-auto max-w-2xl">
@@ -694,12 +717,12 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
       <div className="mx-auto max-w-3xl">
         {s.title && (
           <div className="mb-10 flex flex-col items-center text-center">
-            <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{s.title}</h2>
-            <span className="mt-3 h-1 w-16 rounded-full bg-teal-600" />
+            <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{s.title}</h2>
+            <span className="mt-3 h-1 w-16 rounded-full bg-amber-600" />
           </div>
         )}
         <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm">
-          <Quote className="mx-auto h-7 w-7 text-teal-600/40" />
+          <Quote className="mx-auto h-7 w-7 text-amber-600/40" />
           <p className="mt-4 text-base leading-relaxed text-stone-600">&ldquo;{cur.text}&rdquo;</p>
           {cur.name && <p className="mt-5 text-sm font-semibold text-stone-700">— {cur.name}</p>}
         </div>
@@ -718,7 +741,7 @@ function TestimonialsSection({ s }: { s: LPTestimonialsSection }) {
           <div className="mt-5 flex justify-center gap-2">
             {items.map((_: (typeof items)[number], d: number) => (
               <button key={d} onClick={() => setI(d)} aria-label={`Testimoni ${d + 1}`}
-                className={`h-2 rounded-full transition-all ${d === i % items.length ? "w-6 bg-teal-700" : "w-2 bg-stone-300"}`} />
+                className={`h-2 rounded-full transition-all ${d === i % items.length ? "w-6 bg-amber-700" : "w-2 bg-stone-300"}`} />
             ))}
           </div>
         )}
@@ -769,7 +792,7 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
   return (
     <section className="mx-auto max-w-4xl px-6 py-10">
       <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xl">
-        {s.heading && <p className="mb-3 text-center font-serif text-lg font-bold text-teal-700">{s.heading}</p>}
+        {s.heading && <p className="mb-3 text-center font-serif text-lg font-bold text-amber-700">{s.heading}</p>}
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="flex-1">
             <label className="mb-1 block text-xs font-medium text-stone-500">Check-In</label>
@@ -796,7 +819,7 @@ function DatePickerSection({ s }: { s: LPDatePickerSection }) {
             />
           </div>
           <button type="button" onClick={onSubmit}
-            className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-teal-700 px-8 text-sm font-semibold text-white transition hover:bg-teal-800">
+            className="flex h-10 shrink-0 items-center justify-center rounded-lg bg-amber-700 px-8 text-sm font-semibold text-white transition hover:bg-amber-800">
             {s.buttonLabel || "Cek Ketersediaan"}
           </button>
         </div>
@@ -874,7 +897,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
       <div className="mx-auto max-w-6xl px-6">
         {(s.title || s.subheading) && (
           <div className="mb-2 text-center">
-            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800">{publicCopy(s.title)}</h2>}
+            {s.title && <h2 className="font-serif text-3xl font-bold tracking-tight text-stone-800 md:text-4xl">{publicCopy(s.title)}</h2>}
             {s.subheading && <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">{s.subheading}</p>}
           </div>
         )}
@@ -894,10 +917,10 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                 {displayRooms.map((rt) => (
                   <div key={rt.id} className="shrink-0 px-3" style={{ width: `${100 / cardsPerView}%` }}>
                     <article className="h-full overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:shadow-xl">
-                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-teal-50">
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-amber-50">
                         {rt.hero_image_url
                           ? <img src={buildStorageImageUrl(rt.hero_image_url, { width: 640, quality: 60 })} width={640} height={480} alt={rt.name} loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
-                          : <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-teal-600/50">Foto Kamar</div>}
+                          : <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] uppercase tracking-widest text-amber-700/60">Foto Kamar</div>}
                       </div>
                       <div className="p-6">
                         <div className="flex items-start justify-between gap-3">
@@ -911,7 +934,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                             <p className="text-[10px] text-stone-400">
                               {usingFilter ? "Harga" : "Harga Hari Ini"}
                             </p>
-                            <p className="text-lg font-bold text-teal-700">Rp {Number(rt.base_rate).toLocaleString("id-ID")}</p>
+                            <p className="text-lg font-bold text-amber-700">Rp {Number(rt.base_rate).toLocaleString("id-ID")}</p>
                           </div>
                         </div>
                         {rt.description && <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-stone-500">{rt.description}</p>}
@@ -920,7 +943,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
                         ) : (
                           <Link to="/rooms/$slug" params={{ slug: rt.slug }}
                             search={{ checkIn: checkIn || undefined, checkOut: checkOut || undefined }}
-                            className="mt-5 block rounded-lg bg-teal-700 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-teal-800">
+                            className="mt-5 block rounded-lg border border-amber-700 bg-white py-2.5 text-center text-sm font-semibold text-amber-700 transition hover:bg-amber-50">
                             Pesan Kamar
                           </Link>
                         )}
@@ -933,17 +956,17 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
             {maxIndex > 0 && (
               <div className="mt-6 flex items-center justify-center gap-3">
                 <button onClick={() => setI((v) => Math.max(0, v - 1))} aria-label="Sebelumnya"
-                  className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50">
+                  className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50">
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <div className="flex gap-1.5">
                   {Array.from({ length: maxIndex + 1 }).map((_, d) => (
                     <button key={d} onClick={() => setI(d)} aria-label={`Halaman ${d + 1}`}
-                      className={`h-2 rounded-full transition-all ${d === i ? "w-6 bg-teal-700" : "w-2 bg-stone-300"}`} />
+                      className={`h-2 rounded-full transition-all ${d === i ? "w-6 bg-amber-700" : "w-2 bg-stone-300"}`} />
                   ))}
                 </div>
                 <button onClick={() => setI((v) => Math.min(maxIndex, v + 1))} aria-label="Berikutnya"
-                  className="rounded-full border border-stone-300 bg-white p-2 text-teal-700 hover:bg-teal-50">
+                  className="rounded-full border border-stone-300 bg-white p-2 text-amber-700 hover:bg-amber-50">
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
@@ -956,33 +979,105 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
 }
 
 /* ─── Nav ───────────────────────────────────────────────────────── */
-function LPNav({ ctaUrl, ctaText }: { ctaUrl: string; ctaText: string }) {
+function LPNav({
+  ctaUrl,
+  ctaText,
+  overlay = false,
+  logoUrl,
+  brand = "Pomah Guesthouse",
+  logoSize = 36,
+  links,
+}: {
+  ctaUrl: string;
+  ctaText: string;
+  /** Floats over the hero the same way as the homepage header. */
+  overlay?: boolean;
+  logoUrl?: string | null;
+  brand?: string;
+  logoSize?: number;
+  links?: Array<{ label: string; url: string }>;
+}) {
   const ctaHref = rewritePublicHref(ctaUrl);
   const [open, setOpen] = useState(false);
+  const items = (links?.length
+    ? links
+    : [
+        { label: "Beranda", url: "/" },
+        { label: "Kamar", url: "/#rooms" },
+      ]
+  ).map((item) => ({ ...item, label: publicCopy(item.label) }));
+  const linkClass = overlay
+    ? "text-sm font-medium text-white transition hover:text-white/70"
+    : "text-sm font-medium text-stone-700 transition hover:text-amber-700";
   return (
-    <nav className="sticky top-0 z-40 border-b border-stone-200 bg-white/95 backdrop-blur-sm shadow-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-baseline gap-1">
-          <span className="font-serif text-xl font-semibold tracking-tight text-stone-900">Pomah</span>
-          <span className="font-serif text-xl font-light text-teal-700">Guesthouse</span>
+    <nav
+      className={
+        overlay
+          ? "absolute inset-x-0 top-0 z-50"
+          : "sticky top-0 z-40 border-b border-stone-200 bg-white/95 shadow-sm backdrop-blur-sm"
+      }
+      style={
+        overlay
+          ? { background: "transparent", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }
+          : undefined
+      }
+    >
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
+        <Link to="/" className="flex min-w-0 items-center" title={brand}>
+          {logoUrl ? (
+            <BrandLogo
+              src={logoUrl}
+              alt={brand}
+              height={overlay ? logoSize : Math.min(logoSize, 40)}
+              className="w-auto max-w-[150px] object-contain sm:max-w-[220px]"
+            />
+          ) : (
+            <span className="flex items-baseline gap-1.5">
+              <span className={`font-serif text-xl font-bold sm:text-2xl ${overlay ? "text-white" : "text-stone-900"}`}>
+                Pomah
+              </span>
+              <span className={`font-mono text-[10px] uppercase tracking-[0.2em] ${overlay ? "text-white/70" : "text-stone-400"}`}>
+                guesthouse
+              </span>
+            </span>
+          )}
         </Link>
-        <div className="hidden items-center gap-6 md:flex">
-          <Link to="/" className="text-sm text-stone-500 transition hover:text-stone-900">Beranda</Link>
-          <Link to="/" hash="rooms" className="text-sm text-stone-500 transition hover:text-stone-900">Kamar</Link>
-          <a href={ctaHref}
-            className="rounded-full bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-800">
-            {ctaText || "Pesan Sekarang"}
-          </a>
+        <div className={`hidden items-center gap-4 md:flex lg:gap-7 ${overlay ? "text-white" : "text-stone-700"}`}>
+          {items.map((item) => (
+            <a key={`${item.label}-${item.url}`} href={rewritePublicHref(item.url)} className={linkClass}>
+              {item.label}
+            </a>
+          ))}
+          {overlay ? null : (
+            <a
+              href={ctaHref}
+              className="rounded-full bg-amber-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-amber-800"
+            >
+              {ctaText || "Pesan Sekarang"}
+            </a>
+          )}
         </div>
-        <button className="md:hidden text-stone-700" onClick={() => setOpen(!open)} aria-label="Menu">
+        <button
+          className={`md:hidden rounded-full p-2 ${overlay ? "bg-black/35 text-white" : "text-stone-700"}`}
+          onClick={() => setOpen(!open)}
+          aria-label="Menu"
+        >
           {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
       {open && (
-        <div className="border-t border-stone-100 bg-white px-6 py-4 md:hidden space-y-3">
-          <Link to="/" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Beranda</Link>
-          <Link to="/" hash="rooms" className="block text-sm text-stone-600" onClick={() => setOpen(false)}>Kamar</Link>
-          <a href={ctaHref} className="block rounded-full bg-teal-700 py-2 text-center text-sm font-semibold text-white">
+        <div className="mx-3 mb-3 space-y-3 rounded-2xl border border-stone-200 bg-white px-5 py-4 shadow-lg md:hidden">
+          {items.map((item) => (
+            <a
+              key={`${item.label}-${item.url}`}
+              href={rewritePublicHref(item.url)}
+              className="block text-sm text-stone-600"
+              onClick={() => setOpen(false)}
+            >
+              {item.label}
+            </a>
+          ))}
+          <a href={ctaHref} className="block rounded-full bg-amber-700 py-2 text-center text-sm font-semibold text-white">
             {ctaText || "Pesan Sekarang"}
           </a>
         </div>
