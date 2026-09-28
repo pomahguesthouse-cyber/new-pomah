@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { canRegisterStaffPush } from "@/lib/native-push";
 import { loginDestination } from "@/lib/auth-return";
 import {
   NATIVE_OAUTH_STATE_KEY,
@@ -189,7 +190,6 @@ export async function startNativeAdmin(): Promise<{ stop: Stop }> {
   const { App } = await import("@capacitor/app");
   const { SplashScreen } = await import("@capacitor/splash-screen");
   const { StatusBar, Style } = await import("@capacitor/status-bar");
-  const { PushNotifications } = await import("@capacitor/push-notifications");
 
   const handles: Array<{ remove: () => Promise<void> }> = [];
 
@@ -221,42 +221,77 @@ export async function startNativeAdmin(): Promise<{ stop: Stop }> {
   }
 
   const stopPull = attachPullToRefresh();
-
-  const syncPush = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) return;
-    const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== "granted") return;
-    await PushNotifications.register();
-  };
-
-  handles.push(
-    await PushNotifications.addListener("registration", (token) => {
-      void registerPushToken(token.value);
-    }),
-  );
-  handles.push(
-    await PushNotifications.addListener("registrationError", (error) => {
-      console.info("[push] registration error", error.error);
-    }),
-  );
-  handles.push(
-    await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-      openNotificationTarget(action.notification.data as Record<string, unknown> | undefined);
-    }),
-  );
-
-  const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_IN" && session) void syncPush();
-  });
-
-  void syncPush();
+  const stopPush = await startStaffPush();
 
   return {
     stop: () => {
       stopPull();
-      authSub.subscription.unsubscribe();
+      stopPush();
       for (const handle of handles) void handle.remove();
     },
   };
+}
+
+async function isFirebasePushConfigured(): Promise<boolean> {
+  try {
+    const { registerPlugin } = await import("@capacitor/core");
+    const pomahFirebase = registerPlugin<{
+      isConfigured: () => Promise<{ configured?: boolean }>;
+    }>("PomahFirebase");
+    const result = await pomahFirebase.isConfigured();
+    return result?.configured === true;
+  } catch (error) {
+    console.info("[push] could not read Firebase configuration", error);
+    return false;
+  }
+}
+
+/** Listeners and register() run only when Firebase is packaged. Failures are logged. */
+async function startStaffPush(): Promise<Stop> {
+  try {
+    const configured = await isFirebasePushConfigured();
+    if (!configured) {
+      console.info("[push] Firebase is not configured; skipping registration");
+      return () => {};
+    }
+    const { PushNotifications } = await import("@capacitor/push-notifications");
+    const handles: Array<{ remove: () => Promise<void> }> = [];
+    const syncPush = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!canRegisterStaffPush(true, !!data.session)) return;
+        const perm = await PushNotifications.requestPermissions();
+        if (perm.receive !== "granted") return;
+        await PushNotifications.register();
+      } catch (error) {
+        console.info("[push] registration skipped", error);
+      }
+    };
+    handles.push(
+      await PushNotifications.addListener("registration", (token) => {
+        void registerPushToken(token.value);
+      }),
+    );
+    handles.push(
+      await PushNotifications.addListener("registrationError", (error) => {
+        console.info("[push] registration error", error.error);
+      }),
+    );
+    handles.push(
+      await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        openNotificationTarget(action.notification.data as Record<string, unknown> | undefined);
+      }),
+    );
+    const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) void syncPush();
+    });
+    void syncPush();
+    return () => {
+      authSub.subscription.unsubscribe();
+      for (const handle of handles) void handle.remove();
+    };
+  } catch (error) {
+    console.info("[push] disabled", error);
+    return () => {};
+  }
 }
