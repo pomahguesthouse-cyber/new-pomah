@@ -140,10 +140,6 @@ const styles = StyleSheet.create({
     borderColor: "#0284c7", // blue color like in the screenshot
     color: "#0284c7",
   },
-  stampUnpaid: {
-    borderColor: "#e11d48",
-    color: "#e11d48",
-  },
   stampText: {
     fontSize: 20,
     fontFamily: "Helvetica-Bold",
@@ -473,14 +469,16 @@ export function InvoiceDocument({
           </View>
         </View>
 
-        {/* Stamp */}
-        <View style={styles.stampContainer}>
-          <View style={[styles.stampBox, isPaid ? styles.stampPaid : styles.stampUnpaid]}>
-            <Text style={styles.stampText}>{isPaid ? "PAID" : "UNPAID"}</Text>
-            <Text style={styles.stampSub}>RECEIPT</Text>
-            <Text style={{ fontSize: 6, marginTop: 2 }}>* * * *</Text>
+        {/* Paid stamp only. Unpaid and partial (DP) invoices show nothing here. */}
+        {isPaid ? (
+          <View style={styles.stampContainer}>
+            <View style={[styles.stampBox, styles.stampPaid]}>
+              <Text style={styles.stampText}>PAID</Text>
+              <Text style={styles.stampSub}>RECEIPT</Text>
+              <Text style={{ fontSize: 6, marginTop: 2 }}>* * * *</Text>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {/* Footer */}
         <View style={styles.footer}>
