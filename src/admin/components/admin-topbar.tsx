@@ -37,6 +37,7 @@ import {
 import { useTheme } from "@/hooks/use-theme";
 import { supabase } from "@/integrations/supabase/client";
 import { clearAdminAssignFlag, clearAuthNext, clearStaffSessionHint } from "@/lib/auth-return";
+import { unregisterStaffPush } from "@/lib/native-admin";
 
 const SECTION_TITLES: Record<string, string> = {
   "/admin": "Overview",
@@ -139,6 +140,7 @@ export function AdminTopbar({
     clearAuthNext();
     clearAdminAssignFlag();
     console.info("[auth] sign out, redirect to /login");
+    await unregisterStaffPush();
     await supabase.auth.signOut();
     navigate({ to: "/login", search: { next: undefined } });
   };
@@ -146,8 +148,8 @@ export function AdminTopbar({
   return (
     <>
       <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/75 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 md:px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-1 h-5" />
+        <SidebarTrigger className="-ml-1 max-md:hidden" />
+        <Separator orientation="vertical" className="mr-1 h-5 max-md:hidden" />
 
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">

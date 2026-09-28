@@ -713,6 +713,33 @@ export type Database = {
           },
         ]
       }
+      device_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number
@@ -3840,6 +3867,11 @@ export type Database = {
       }
     }
     Functions: {
+      register_device_token: {
+        Args: { p_platform: string; p_token: string }
+        Returns: undefined
+      }
+      unregister_device_token: { Args: { p_token: string }; Returns: undefined }
       _jsonb_bool: {
         Args: { p_default?: boolean; p_json: Json; p_key: string }
         Returns: boolean

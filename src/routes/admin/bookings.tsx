@@ -13,7 +13,16 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { NewBookingDialog } from "@/admin/components/new-booking-dialog";
 import { EditBookingDialog, type EditableBooking } from "@/admin/components/edit-booking-dialog";
 
-export const Route = createFileRoute("/admin/bookings")({ component: BookingsPage });
+const BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const Route = createFileRoute("/admin/bookings")({
+  validateSearch: (search: Record<string, unknown>): { booking?: string } => {
+    const booking =
+      typeof search.booking === "string" && BOOKING_ID.test(search.booking) ? search.booking : undefined;
+    return booking ? { booking } : {};
+  },
+  component: BookingsPage,
+});
 
 const STATUSES = ["pending", "confirmed", "checked_in", "checked_out", "cancelled", "expired"] as const;
 type BookingStatus = (typeof STATUSES)[number];
@@ -183,6 +192,7 @@ function BookingsPage() {
   const [sortDir, setSortDir] = React.useState<SortDir>("desc");
   const [searchInput, setSearchInput] = React.useState("");
   const [search, setSearch] = React.useState("");
+  const { booking: deepLinkId } = Route.useSearch();
   const [newOpen, setNewOpen] = React.useState(false);
   const [editCtx, setEditCtx] = React.useState<EditableBooking | null>(null);
   const [deleteCtx, setDeleteCtx] = React.useState<{ id: string; ref: string } | null>(null);
@@ -191,6 +201,35 @@ function BookingsPage() {
     const t = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  React.useEffect(() => {
+    if (!deepLinkId) return;
+    let cancelled = false;
+    void (async () => {
+      const full = await supabase.from("bookings").select(FULL_SELECT).eq("id", deepLinkId).maybeSingle();
+      let row = full.data as BookingListRow | null;
+      if (full.error && (full.error as { code?: string }).code === "42703") {
+        const base = await supabase.from("bookings").select(BASE_SELECT).eq("id", deepLinkId).maybeSingle();
+        if (base.error) {
+          if (!cancelled) toast.error(base.error.message);
+          return;
+        }
+        row = base.data as BookingListRow | null;
+      } else if (full.error) {
+        if (!cancelled) toast.error(full.error.message);
+        return;
+      }
+      if (cancelled) return;
+      if (!row) {
+        toast.error("Booking tidak ditemukan");
+        return;
+      }
+      setEditCtx(row as unknown as EditableBooking);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkId]);
 
   const filtersActive = statusFilter !== "all" || sourceFilter !== "all" || search !== "";
   const { data, isLoading, isFetching, error } = useQuery({
@@ -266,13 +305,13 @@ function BookingsPage() {
   const sortLabel = (key: SortKey) => (sortBy === key ? (sortDir === "desc" ? "↓" : "↑") : "");
 
   return (
-    <div className="space-y-6 p-4 md:p-8 lg:p-10">
+    <div className="space-y-6 p-3 sm:p-4 md:p-8 lg:p-10">
       <header className="flex flex-wrap items-end justify-between gap-3">
-        <div><p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Bookings</h1></div>
+        <div><p className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Reservations</p><h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Bookings</h1></div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => runExport("csv")} disabled={exporting !== null} className="gap-2">{exporting === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}Export CSV</Button>
           <Button variant="outline" onClick={() => runExport("pdf")} disabled={exporting !== null} className="gap-2">{exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}Cetak / PDF</Button>
-          <Button onClick={() => setNewOpen(true)} className="gap-2"><Plus className="h-4 w-4" />Booking Baru</Button>
+          <Button onClick={() => setNewOpen(true)} className="h-11 gap-2 md:h-9"><Plus className="h-4 w-4" />Booking Baru</Button>
         </div>
       </header>
 

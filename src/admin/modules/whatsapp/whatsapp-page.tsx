@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -232,7 +233,7 @@ function contactInitials(thread: { phone?: string | null; display_name?: string 
   return d ? d.slice(-2) : "WA";
 }
 
-export function WhatsAppPage() {
+export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: string | null }) {
   const listFn = useServerFn(listThreads);
   const getFn = useServerFn(getThread);
   const sendFn = useServerFn(sendMessage);
@@ -274,8 +275,22 @@ export function WhatsAppPage() {
     [["conv-alerts"]],
   );
 
+  const navigate = useNavigate();
   const [sidebarTab, setSidebarTab] = useState<"inbox" | "monitor">("inbox");
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(initialThreadId);
+
+  useEffect(() => {
+    setActiveId(initialThreadId);
+  }, [initialThreadId]);
+
+  const openThread = (id: string) => {
+    setActiveId(id);
+    void navigate({ to: "/admin/whatsapp", search: { thread: id } });
+  };
+  const closeThread = () => {
+    setActiveId(null);
+    void navigate({ to: "/admin/whatsapp", search: {}, replace: true });
+  };
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
   const [draft, setDraft] = useState("");
@@ -459,7 +474,7 @@ export function WhatsAppPage() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { threadId: id } }),
     onSuccess: () => {
-      setActiveId(null);
+      closeThread();
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
       toast.success("Percakapan dihapus");
     },
@@ -492,7 +507,7 @@ export function WhatsAppPage() {
 
   return (
     <div
-      className="flex h-[calc(100vh-3.5rem)] bg-background lg:grid"
+      className="flex h-full min-h-0 flex-1 bg-background lg:grid"
       style={{ gridTemplateColumns: `300px 1fr ${rightOpen ? "320px" : "44px"}` }}
     >
       {/* THREADS LIST */}
@@ -547,7 +562,7 @@ export function WhatsAppPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search name, phone, message"
-                  className="h-8 pl-8 text-xs"
+                  className="h-11 pl-8 text-base md:h-8 md:text-xs"
                 />
               </div>
               <div className="mt-2 flex gap-1">
@@ -556,7 +571,7 @@ export function WhatsAppPage() {
                     key={f}
                     onClick={() => setFilter(f)}
                     className={cn(
-                      "rounded-md border px-2 py-0.5 text-[10px] uppercase tracking-wider transition-colors",
+                      "min-h-9 rounded-md border px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors md:min-h-0 md:px-2 md:py-0.5 md:text-[10px]",
                       filter === f
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border text-muted-foreground hover:bg-accent/10",
@@ -579,7 +594,7 @@ export function WhatsAppPage() {
               return (
                 <li key={t.id}>
                   <button
-                    onClick={() => setActiveId(t.id)}
+                    onClick={() => openThread(t.id)}
                     className={cn(
                       "group block w-full border-b border-border px-3 py-3 text-left transition-colors hover:bg-accent/10",
                       active && "bg-accent/15",
@@ -685,7 +700,7 @@ export function WhatsAppPage() {
                     alert={alert}
                     onOpenThread={(threadId: string) => {
                       setSidebarTab("inbox");
-                      setActiveId(threadId);
+                      openThread(threadId);
                     }}
                     onHandled={(id: string) => dismissMut.mutate({ alertId: id, status: "handled" })}
                     onDismissed={(id: string) => dismissMut.mutate({ alertId: id, status: "dismissed" })}
@@ -708,7 +723,7 @@ export function WhatsAppPage() {
                           alert={alert}
                           onOpenThread={(threadId: string) => {
                             setSidebarTab("inbox");
-                            setActiveId(threadId);
+                            openThread(threadId);
                           }}
                           onHandled={() => {}}
                           onDismissed={() => {}}
@@ -732,7 +747,10 @@ export function WhatsAppPage() {
               <div className="flex items-center gap-2 md:gap-3 min-w-0">
                 <button
                   type="button"
-                  onClick={() => setActiveId(null)}
+                  onClick={() => {
+                    if (initialThreadId && window.history.length > 1) window.history.back();
+                    else closeThread();
+                  }}
                   className="lg:hidden -ml-1 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/10"
                   aria-label="Kembali ke daftar"
                 >
@@ -834,7 +852,7 @@ export function WhatsAppPage() {
               </div>
             </header>
 
-            <div ref={scrollRef} className="flex-1 overflow-y-auto bg-[#efeae2] px-6 py-4 dark:bg-[#0b141a] relative">
+            <div ref={scrollRef} className="relative flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4">
               <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
               <div className="relative z-10">
                 <MessageStream messages={thread.messages} aiLabConfig={aiLabConfig} />
@@ -887,7 +905,7 @@ export function WhatsAppPage() {
               </div>
               <Textarea
                 placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
-                rows={3}
+                rows={2}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
@@ -895,12 +913,13 @@ export function WhatsAppPage() {
                     sendMut.mutate();
                   }
                 }}
-                className="resize-none"
+                className="min-h-16 resize-none text-base md:text-sm"
               />
               <div className="mt-2 flex items-center justify-between">
                 <p className="font-mono text-[10px] text-muted-foreground">{draft.length} chars</p>
                 <Button
                   size="sm"
+                  className="h-11 px-4 md:h-8"
                   disabled={!draft.trim() || sendMut.isPending}
                   onClick={() => sendMut.mutate()}
                 >

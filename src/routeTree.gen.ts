@@ -17,6 +17,7 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
+import { Route as NativeOauthReturnRouteImport } from './routes/native-oauth-return'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -122,6 +123,11 @@ const LoginRoute = LoginRouteImport.update({
 const McpRoute = McpRouteImport.update({
   id: '/mcp',
   path: '/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NativeOauthReturnRoute = NativeOauthReturnRouteImport.update({
+  id: '/native-oauth-return',
+  path: '/native-oauth-return',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -474,6 +480,7 @@ export interface FileRoutesByFullPath {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/native-oauth-return': typeof NativeOauthReturnRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -548,6 +555,7 @@ export interface FileRoutesByTo {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/native-oauth-return': typeof NativeOauthReturnRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -625,6 +633,7 @@ export interface FileRoutesById {
   '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
+  '/native-oauth-return': typeof NativeOauthReturnRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -703,6 +712,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/mcp'
+    | '/native-oauth-return'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -777,6 +787,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/mcp'
+    | '/native-oauth-return'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -853,6 +864,7 @@ export interface FileRouteTypes {
     | '/llms.txt'
     | '/login'
     | '/mcp'
+    | '/native-oauth-return'
     | '/robots.txt'
     | '/sitemap.xml'
     | '/.mcp/list-tools'
@@ -930,6 +942,7 @@ export interface RootRouteChildren {
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
+  NativeOauthReturnRoute: typeof NativeOauthReturnRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
@@ -1020,6 +1033,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp'
       preLoaderRoute: typeof McpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/native-oauth-return': {
+      id: '/native-oauth-return'
+      path: '/native-oauth-return'
+      fullPath: '/native-oauth-return'
+      preLoaderRoute: typeof NativeOauthReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -1609,6 +1629,7 @@ const rootRouteChildren: RootRouteChildren = {
   LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
+  NativeOauthReturnRoute: NativeOauthReturnRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
