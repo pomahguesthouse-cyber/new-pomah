@@ -51,10 +51,19 @@ import {
 import { createQuickAckGate, type QuickAckGate } from "@/services/wa-autoreply/quick-ack-gate";
 import {
   MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
+  MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
   planMediaFastPath,
   roomsForPhotoPlan,
 } from "@/services/wa-autoreply/media-fast-path";
 import { BROCHURE_CAPTION, loadRecentOutboundCaptions } from "@/services/wa-media-dedup";
+import {
+  BROCHURE_BUCKET,
+  BROCHURE_FILENAME,
+  brochureLinkFallbackReply,
+  isPdfUrl,
+  pickBrochure,
+  type BrochureFile,
+} from "@/services/wa-autoreply/brochure-source";
 import {
   generateSessionSummary,
   planSummaryWindow,
@@ -519,34 +528,68 @@ async function buildTonightPriceReply(params: {
 /** Hard cap on persisted `short_summary` length (chars). Prevents prompt bloat. */
 export { regenerateThreadSummary };
 
-async function loadPublicBrochure(): Promise<{ name: string; url: string } | null> {
+/**
+ * Brosur PDF publik untuk dikirim ke tamu. Lihat `brochure-source.ts` untuk
+ * urutan sumber (env → sop_documents bucket `brosur` → Storage bucket `brosur`).
+ */
+async function loadPublicBrochure(): Promise<BrochureFile | null> {
   const supabaseUrl = (process.env.SUPABASE_URL ?? "").replace(/\/+$/, "");
-  if (!supabaseUrl) return null;
-  const { data } = await (supabaseAdmin as any)
-    .from("sop_documents")
-    .select("name, file_path, storage_bucket")
-    .order("created_at", { ascending: true })
-    .limit(40);
-  const files = ((data ?? []) as Array<{ name?: string; file_path?: string; storage_bucket?: string | null }>)
-    .filter((d) => isBrosurDoc(d) && d.file_path)
-    .map((d) => {
-      const bucket = (d.storage_bucket ?? "").trim() || "sop-documents";
-      return {
-        name: d.name || "brosur",
-        url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`,
-      };
-    });
-  return files.find((f) => /\.pdf(\?|$)/i.test(f.url)) ?? files[0] ?? null;
+  const envUrl = process.env.BROCHURE_PDF_URL ?? "";
+  if (!supabaseUrl && !envUrl) return null;
+  const direct = pickBrochure({ supabaseUrl, envUrl });
+  if (direct) return direct;
+  const [{ data: docs }, storageList] = await Promise.all([
+    (supabaseAdmin as any)
+      .from("sop_documents")
+      .select("name, file_path, storage_bucket")
+      .eq("storage_bucket", BROCHURE_BUCKET)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    (supabaseAdmin as any).storage
+      .from(BROCHURE_BUCKET)
+      .list("", { limit: 50, sortBy: { column: "created_at", order: "desc" } })
+      .catch((e: unknown) => ({ data: null, error: e })),
+  ]);
+  if (storageList?.error) {
+    console.warn("[Autoreply] brosur bucket list failed:", storageList.error);
+  }
+  return pickBrochure({ supabaseUrl, docs: docs ?? [], storageObjects: storageList?.data ?? [] });
 }
 
-/** Kirim brosur sekali. `true` bila terkirim atau sudah terkirim dalam jendela dedup. */
-async function sendBrochureFastPath(token: string, target: string, phone: string): Promise<boolean> {
+type BrochureSendOutcome =
+  | { status: "sent"; file: BrochureFile }
+  | { status: "already_sent"; file: BrochureFile }
+  | { status: "failed"; file: BrochureFile; error: string | null }
+  | { status: "unavailable" };
+
+/**
+ * Kirim brosur PDF sekali sebagai dokumen WhatsApp (Meta Cloud API bila
+ * terhubung; Evolution hanya bila Meta tidak dikonfigurasi). Dedup 30 menit
+ * lewat caption di `whatsapp_meta_outbound`.
+ */
+async function sendBrochureFastPath(
+  token: string,
+  target: string,
+  phone: string,
+): Promise<BrochureSendOutcome> {
   const file = await loadPublicBrochure();
-  if (!file) return false;
+  if (!file) {
+    console.warn("[Autoreply] brosur PDF tidak ditemukan (env/sop_documents/bucket brosur)");
+    return { status: "unavailable" };
+  }
   const recent = await loadRecentOutboundCaptions(phone);
-  if (recent.has(BROCHURE_CAPTION)) return true;
-  const result = await sendWhatsAppMessage(token, target, BROCHURE_CAPTION, file.url, file.name);
-  return result.ok;
+  if (recent.has(BROCHURE_CAPTION)) return { status: "already_sent", file };
+  const { sendGuestWhatsApp } = await import("@/services/guest-whatsapp.service");
+  const result = await sendGuestWhatsApp(phone || target, BROCHURE_CAPTION, {
+    evolutionToken: token,
+    fileUrl: file.url,
+    filename: file.name,
+  });
+  if (!result.ok) {
+    console.warn(`[Autoreply] brosur document send failed (${result.channel}): ${result.error}`);
+    return { status: "failed", file, error: result.error };
+  }
+  return { status: "sent", file };
 }
 
 export async function executeAutoreplyForPhone(
@@ -1063,11 +1106,22 @@ export async function executeAutoreplyForPhone(
   if (!reply && !isManager && lastMessage) {
     try {
       const mediaPlan = planMediaFastPath(rollingMessages, (rooms ?? []) as any[]);
-      if (mediaPlan?.kind === "room_photos") {
-        const selected = roomsForPhotoPlan((rooms ?? []) as any[], mediaPlan);
+      const mediaOrchResult = (toolsUsed: string[]) => ({
+        agentKey: "front-office",
+        intent: "media_request",
+        routingConfidence: 1,
+        escalated: false,
+        toolsUsed,
+        fastPath: true,
+      });
+      /** Foto per kamar (cadangan bila brosur tidak ada). `true` bila balasan diambil. */
+      const runRoomPhotoPlan = async (
+        photoPlan: Extract<NonNullable<typeof mediaPlan>, { kind: "room_photos" }>,
+      ): Promise<boolean> => {
+        const selected = roomsForPhotoPlan((rooms ?? []) as any[], photoPlan);
         await quickAck.beforeReplySend();
         const raw = await sendRoomPhotos(
-          { room_type: mediaPlan.roomType ?? "", max_photos: mediaPlan.maxPhotos },
+          { room_type: photoPlan.roomType ?? "", max_photos: photoPlan.maxPhotos },
           {
             supabasePublic: supabasePublic as any,
             supabaseAdmin: supabaseAdmin as any,
@@ -1085,46 +1139,37 @@ export async function executeAutoreplyForPhone(
         };
         const sent = (parsed.total_sent ?? 0) > 0;
         const skipped = (parsed.results ?? []).some((r) => r.skipped);
-        if (parsed.ok && (sent || skipped)) {
-          const toolsUsed = ["Room - Kirim Foto ke WA Tamu"];
-          // Commit the photo reply before the brochure send. A brochure failure
-          // must not drop a successful photo send back into the LLM turn.
-          adoptReply(sent ? mediaPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY);
-          orchResult = {
-            agentKey: "front-office",
-            intent: "media_request",
-            routingConfidence: 1,
-            escalated: false,
-            toolsUsed,
-            fastPath: true,
-          };
-          if (mediaPlan.alsoBrochure) {
-            try {
-              await quickAck.beforeReplySend();
-              const attached = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
-              if (attached) toolsUsed.push("brochure-fast-path");
-            } catch (brochureErr) {
-              console.warn("[Autoreply] brochure fast-path failed after photos:", brochureErr);
-            }
-          }
-          console.info(
-            `[Autoreply] Media fast-path photos for ${phone.slice(-6)} sent=${parsed.total_sent ?? 0}`,
-          );
-        }
+        if (!(parsed.ok && (sent || skipped))) return false;
+        adoptReply(sent ? photoPlan.reply : MEDIA_FAST_PATH_ALREADY_SENT_REPLY);
+        orchResult = mediaOrchResult(["Room - Kirim Foto ke WA Tamu"]);
+        console.info(
+          `[Autoreply] Media fast-path photos for ${phone.slice(-6)} sent=${parsed.total_sent ?? 0}`,
+        );
+        return true;
+      };
+
+      if (mediaPlan?.kind === "room_photos") {
+        await runRoomPhotoPlan(mediaPlan);
       } else if (mediaPlan?.kind === "brochure") {
+        // Brosur PDF dikirim sebagai dokumen; teks singkat menyusul lewat jalur
+        // kirim normal (satu dokumen + satu teks, tanpa balasan ganda).
         await quickAck.beforeReplySend();
-        const attached = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
-        if (attached) {
+        const outcome = await sendBrochureFastPath(c.wpp_token, sendTarget, phone);
+        if (outcome.status === "sent") {
           adoptReply(mediaPlan.reply);
-          orchResult = {
-            agentKey: "front-office",
-            intent: "media_request",
-            routingConfidence: 1,
-            escalated: false,
-            toolsUsed: ["brochure-fast-path"],
-            fastPath: true,
-          };
-          console.info(`[Autoreply] Media fast-path brochure for ${phone.slice(-6)}`);
+          orchResult = mediaOrchResult(["brochure-fast-path"]);
+          console.info(`[Autoreply] Media fast-path brochure PDF for ${phone.slice(-6)}`);
+        } else if (outcome.status === "already_sent") {
+          adoptReply(MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY);
+          orchResult = mediaOrchResult(["brochure-fast-path"]);
+        } else if (outcome.status === "failed") {
+          // Dokumen ditolak (mis. Meta 131053 / URL tak terjangkau): kirim teks
+          // dengan tautan brosur supaya tamu tetap bisa membukanya.
+          adoptReply(brochureLinkFallbackReply(outcome.file.url));
+          orchResult = mediaOrchResult(["brochure-fast-path", "brochure-link-fallback"]);
+          console.warn(`[Autoreply] brochure document failed, sent link for ${phone.slice(-6)}`);
+        } else if (mediaPlan.photoFallback) {
+          await runRoomPhotoPlan(mediaPlan.photoFallback);
         }
       }
     } catch (e) {
@@ -1459,11 +1504,17 @@ export async function executeAutoreplyForPhone(
         .filter((d) => d.file_path)
         .map((d) => {
           const bucket = (d.storage_bucket as string | undefined)?.trim() || "sop-documents";
-          return {
-            name: d.name,
-            url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`,
-          };
+          const url = `${supabaseUrl}/storage/v1/object/public/${bucket}/${d.file_path}`;
+          return { name: isPdfUrl(url) ? BROCHURE_FILENAME : d.name, url };
         });
+      // PDF di bucket `brosur` bisa saja belum terdaftar di sop_documents
+      // (insiden 28 Sep 2026) — ambil langsung dari Storage/env.
+      if (!brosurFiles.some((f) => isPdfUrl(f.url))) {
+        const fallbackBrochure = await loadPublicBrochure().catch(() => null);
+        if (fallbackBrochure) {
+          brosurFiles = [{ name: fallbackBrochure.name, url: fallbackBrochure.url }, ...brosurFiles];
+        }
+      }
     } catch (e) {
       console.warn("[Autoreply] relevant SOP retrieval failed (continuing without SOP):", e);
     }
