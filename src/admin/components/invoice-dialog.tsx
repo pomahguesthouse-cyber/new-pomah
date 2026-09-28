@@ -8,16 +8,20 @@ import {
 } from "@/components/ui/dialog";
 import { Download, Mail, Phone, RefreshCw, Printer } from "lucide-react";
 import { toast } from "sonner";
-import { PDFViewer, PDFDownloadLink } from "@react-pdf/renderer";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getBrandingSettings, getPropertySettings } from "@/admin/modules/settings/settings.functions";
 import { resendInvoice } from "@/admin/functions/bookings.functions";
-import { InvoiceDocument, type InvoiceBookingData } from "./invoice-pdf";
-
-type PDFDownloadLinkRenderProps = {
-  loading: boolean;
-};
+import type { InvoiceBookingData } from "./invoice-pdf";
+import {
+  canSharePdfNatively,
+  createInvoicePdfBlob,
+  downloadInvoicePdfBlob,
+  invoicePdfFileName,
+  prefersExternalPdfPreview,
+  printInvoicePdfBlob,
+  type PdfDeliveryResult,
+} from "@/admin/lib/invoice-pdf-client";
 
 function formatDateID(iso: string | null | undefined) {
   if (!iso) return "—";
@@ -27,9 +31,9 @@ function formatDateID(iso: string | null | undefined) {
 }
 
 const solidBtn =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0e7490] px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-[#0e7490]/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[360px]:w-full";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#0e7490] px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-[#0e7490]/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[400px]:w-full max-[360px]:w-full";
 const outlineBtn =
-  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#0e7490] bg-transparent px-4 py-2 text-sm font-medium text-[#0e7490] shadow-sm transition-colors hover:bg-[#0e7490]/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[360px]:w-full";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#0e7490] bg-transparent px-4 py-2 text-sm font-medium text-[#0e7490] shadow-sm transition-colors hover:bg-[#0e7490]/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 max-[400px]:w-full max-[360px]:w-full";
 
 function getWhatsAppLink(phone: string) {
   let cleaned = phone.replace(/\D/g, "");
@@ -39,6 +43,23 @@ function getWhatsAppLink(phone: string) {
   return `https://wa.me/${cleaned}`;
 }
 
+function deliveryToast(result: PdfDeliveryResult, fileName: string) {
+  if (result.cancelled) return;
+  if (result.method === "native-share" || result.method === "web-share") {
+    toast.success("Pilih aplikasi untuk menyimpan atau membuka PDF");
+    return;
+  }
+  if (result.method === "print") {
+    toast.success("Dialog cetak terbuka");
+    return;
+  }
+  if (result.method === "open") {
+    toast.success("Invoice PDF dibuka di tab baru");
+    return;
+  }
+  toast.success(`Invoice diunduh: ${fileName}`);
+}
+
 export function InvoiceDialog({
   booking,
   onClose,
@@ -46,21 +67,15 @@ export function InvoiceDialog({
   booking: InvoiceBookingData | null;
   onClose: () => void;
 }) {
-  const [isMounted, setIsMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
   const fetchBranding = useServerFn(getBrandingSettings);
   const fetchProperty = useServerFn(getPropertySettings);
   const resendFn = useServerFn(resendInvoice);
-  
+
   const { data: branding } = useQuery({
     queryKey: ["branding-settings"],
     queryFn: () => fetchBranding(),
   });
-  
+
   const { data: property } = useQuery({
     queryKey: ["property-settings"],
     queryFn: () => fetchProperty(),
@@ -69,11 +84,10 @@ export function InvoiceDialog({
   const logoUrl = branding?.invoice_logo_url || branding?.logo_url;
   const propertyName = property?.name || "Pomah Guesthouse";
 
-  // Build address and contact from property settings (Fix 1: no more hardcodes)
   const addressParts = [property?.address, property?.city, property?.country].filter(Boolean);
   const propertyAddress = addressParts.length > 0 ? addressParts.join(", ") : undefined;
-  const propertyPhone = (property as any)?.whatsapp_number || property?.phone || undefined;
-  const rawDomain = (property as any)?.public_domain ?? null;
+  const propertyPhone = (property as { whatsapp_number?: string | null } | undefined)?.whatsapp_number || property?.phone || undefined;
+  const rawDomain = (property as { public_domain?: string | null } | undefined)?.public_domain ?? null;
   const propertyWebsite = rawDomain
     ? rawDomain.startsWith("http") ? rawDomain : `https://${rawDomain}`
     : undefined;
@@ -93,9 +107,63 @@ export function InvoiceDialog({
     onError: (e) => toast.error((e as Error).message),
   });
 
+  const fileName = booking ? invoicePdfFileName(booking) : "invoice.pdf";
+  const [pdfBlob, setPdfBlob] = React.useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [pdfError, setPdfError] = React.useState<string | null>(null);
+  const [preparing, setPreparing] = React.useState(false);
+  const [busy, setBusy] = React.useState<"download" | "print" | null>(null);
+  const [nativeShare, setNativeShare] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!booking) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setPreparing(true);
+    setPdfError(null);
+    setPdfBlob(null);
+    setPreviewUrl(null);
+
+    void (async () => {
+      try {
+        const native = await canSharePdfNatively();
+        if (cancelled) return;
+        setNativeShare(native);
+        const blob = await createInvoicePdfBlob({
+          booking,
+          logoUrl,
+          propertyName,
+          propertyAddress,
+          propertyPhone,
+          propertyWebsite,
+          fileName,
+        });
+        if (cancelled) return;
+        setPdfBlob(blob);
+        if (!native && !prefersExternalPdfPreview()) {
+          objectUrl = URL.createObjectURL(blob);
+          setPreviewUrl(objectUrl);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "Gagal membuat PDF invoice";
+          setPdfError(message);
+          console.error("[invoice-pdf]", error);
+        }
+      } finally {
+        if (!cancelled) setPreparing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [booking, fileName, logoUrl, propertyAddress, propertyName, propertyPhone, propertyWebsite]);
+
   if (!booking) return null;
 
-  const origin = typeof window !== 'undefined' ? window.location.origin : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const webInvoiceUrl = `${origin}/book/confirmation/${booking.reference_code ?? booking.id}`;
 
   const emailBody = `Halo ${booking.guests?.full_name || ""},
@@ -127,6 +195,26 @@ Silakan simpan pesan ini sebagai referensi.`;
     ? `${getWhatsAppLink(booking.guests.phone)}?text=${encodeURIComponent(waBody)}`
     : "#";
 
+  async function runDelivery(kind: "download" | "print") {
+    if (!pdfBlob || busy) return;
+    setBusy(kind);
+    try {
+      const result =
+        kind === "download"
+          ? await downloadInvoicePdfBlob(pdfBlob, fileName)
+          : await printInvoicePdfBlob(pdfBlob, fileName);
+      deliveryToast(result, fileName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Gagal membuka PDF invoice";
+      toast.error(message);
+      console.error("[invoice-pdf]", error);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const pdfReady = !!pdfBlob && !preparing;
+
   return (
     <Dialog open={!!booking} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[95vh] w-[min(850px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] flex-col overflow-x-hidden overflow-y-auto p-4 sm:max-w-[850px] sm:p-6">
@@ -139,28 +227,16 @@ Silakan simpan pesan ini sebagai referensi.`;
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mb-4 flex shrink-0 flex-wrap gap-2 max-[360px]:flex-col">
-          {isMounted && (
-            <PDFDownloadLink
-              document={<InvoiceDocument
-                booking={booking}
-                logoUrl={logoUrl}
-                propertyName={propertyName}
-                propertyAddress={propertyAddress}
-                propertyPhone={propertyPhone}
-                propertyWebsite={propertyWebsite}
-              />}
-              fileName={`Invoice-${booking.reference_code || booking.id.slice(0, 8)}.pdf`}
-              className={solidBtn}
-            >
-              {({ loading }: PDFDownloadLinkRenderProps) => (
-                <>
-                  <Download className="h-4 w-4" />
-                  {loading ? "Menyiapkan PDF..." : "Download PDF"}
-                </>
-              )}
-            </PDFDownloadLink>
-          )}
+        <div className="mb-4 flex shrink-0 flex-wrap gap-2 max-[400px]:flex-col max-[360px]:flex-col">
+          <button
+            type="button"
+            className={solidBtn}
+            disabled={!pdfReady || busy !== null}
+            onClick={() => void runDelivery("download")}
+          >
+            <Download className="h-4 w-4" />
+            {preparing || busy === "download" ? "Menyiapkan PDF..." : nativeShare ? "Simpan / Bagikan PDF" : "Download PDF"}
+          </button>
 
           <a
             href={mailtoLink}
@@ -188,17 +264,16 @@ Silakan simpan pesan ini sebagai referensi.`;
             Kirim Whatsapp
           </a>
 
-          <a
-            href={`${webInvoiceUrl}?print=true`}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
             className={solidBtn}
+            disabled={!pdfReady || busy !== null}
+            onClick={() => void runDelivery("print")}
           >
             <Printer className="h-4 w-4" />
-            Cetak Invoice
-          </a>
+            {busy === "print" ? "Menyiapkan cetak..." : nativeShare ? "Buka PDF" : "Cetak Invoice"}
+          </button>
 
-          {/* Fix 2: Kirim ulang invoice (regenerate PDF + send WA) */}
           <button
             type="button"
             disabled={resendMut.isPending}
@@ -210,24 +285,31 @@ Silakan simpan pesan ini sebagai referensi.`;
           </button>
         </div>
 
-        <div className="min-h-[320px] w-full min-w-0 max-w-full flex-1 overflow-hidden rounded-md border border-border bg-muted/20 min-[361px]:min-h-[500px]">
-          {isMounted ? (
-            <PDFViewer
-              className="block h-full min-h-[320px] w-full max-w-full min-[361px]:min-h-[500px]"
-              showToolbar={true}
-            >
-              <InvoiceDocument
-                booking={booking}
-                logoUrl={logoUrl}
-                propertyName={propertyName}
-                propertyAddress={propertyAddress}
-                propertyPhone={propertyPhone}
-                propertyWebsite={propertyWebsite}
-              />
-            </PDFViewer>
+        <div className="min-h-[140px] w-full min-w-0 max-w-full flex-1 overflow-hidden rounded-md border border-border bg-muted/20 min-[401px]:min-h-[500px]">
+          {pdfError ? (
+            <div className="flex h-full min-h-[140px] items-center justify-center p-6 text-center text-sm text-destructive">
+              {pdfError}
+            </div>
+          ) : previewUrl ? (
+            <iframe
+              title={`Pratinjau ${fileName}`}
+              src={previewUrl}
+              className="block h-full min-h-[320px] w-full max-w-full border-0 min-[401px]:min-h-[500px]"
+            />
           ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              Memuat penampil PDF...
+            <div className="flex h-full min-h-[140px] flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+              {preparing ? (
+                "Menyiapkan PDF..."
+              ) : (
+                <>
+                  <p className="font-medium text-foreground">{fileName}</p>
+                  <p>
+                    {nativeShare
+                      ? "Di aplikasi Android, PDF dibuka lewat menu simpan atau bagikan. Pratinjau di dalam halaman tidak didukung WebView."
+                      : "Gunakan Download PDF atau Cetak Invoice. Pratinjau di dalam halaman tidak tersedia di layar ini."}
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
