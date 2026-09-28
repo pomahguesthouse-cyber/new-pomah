@@ -253,9 +253,10 @@ export async function sendMetaTemplateMessage(
   if (!name) return { ok: false, error: "Nama template WhatsApp kosong" };
   const lang = languageCode.trim() || "id";
   const payload = buildMetaTemplatePayload(to, name, lang, bodyParams);
-  const outboundBody =
-    logBody?.trim() ||
-    `[template:${name}] ${bodyParams.map((param) => sanitizeTemplateParam(param)).join(" | ")}`;
+  const paramSummary = bodyParams.map((param) => sanitizeTemplateParam(param)).join(" | ");
+  const outboundBody = logBody?.trim()
+    ? `[template:${name}] ${logBody.trim()}`
+    : `[template:${name}] ${paramSummary}`;
   return deliverMetaPayload(to, payload, outboundBody);
 }
 
