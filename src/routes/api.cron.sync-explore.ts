@@ -95,7 +95,7 @@ ${rssText}
             ...currentConfig,
             news: object.news.length > 0 ? object.news : (currentConfig.news || []),
             events: filterPublicExploreEvents(
-              object.events.length > 0 ? object.events : (currentConfig.events || []),
+              (object.events.length > 0 ? object.events : (currentConfig.events || [])).map((e) => ({ ...e, label: e.label ?? "" })),
             ),
           };
 

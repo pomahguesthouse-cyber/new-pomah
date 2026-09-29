@@ -156,7 +156,7 @@ ${rssText}
       // Untuk news, karena diupdate tiap 2 hari, kita bisa replace langsung dengan hasil AI terbaru.
       news: object.news.length > 0 ? object.news : (currentConfig.news || []),
       events: filterPublicExploreEvents(
-        object.events.length > 0 ? object.events : (currentConfig.events || []),
+        (object.events.length > 0 ? object.events : (currentConfig.events || [])).map((e) => ({ ...e, label: e.label ?? "" })),
       ),
     };
 
