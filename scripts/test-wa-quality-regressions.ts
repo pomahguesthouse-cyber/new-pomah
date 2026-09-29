@@ -80,7 +80,7 @@ assert.equal(
 
 // ── E. 16 Sep: wa_queue_upsert idempoten per pesan ─────────────────────────
 const migration = readFileSync(
-  new URL("../supabase/migrations/20260929120000_wa_queue_upsert_idempotent_message.sql", import.meta.url),
+  new URL("../drizzle/migrations/0002_wa_queue_upsert_idempotent_message.sql", import.meta.url),
   "utf8",
 );
 const lockAt = migration.indexOf("pg_advisory_xact_lock");
