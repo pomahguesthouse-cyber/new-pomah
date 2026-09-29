@@ -52,6 +52,7 @@ import { createQuickAckGate, type QuickAckGate } from "@/services/wa-autoreply/q
 import {
   MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
   MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
+  adaptMediaSlotQuestion,
   planMediaFastPath,
   roomsForPhotoPlan,
 } from "@/services/wa-autoreply/media-fast-path";
@@ -97,6 +98,7 @@ import {
   formatAvailabilityReply,
   detectFocusRoomName,
   lastBotAskedGuestCount,
+  repeatsLastBotReply,
 } from "@/services/wa-autoreply/availability-formatters";
 import {
   buildRecentAvailabilityNeedDatesReply,
@@ -1287,7 +1289,9 @@ export async function executeAutoreplyForPhone(
         dates: availabilitySlots,
         messages: rollingMessages,
       });
-      if (guestCountReply) {
+      if (guestCountReply && repeatsLastBotReply(guestCountReply.reply, rollingMessages)) {
+        console.info(`[Autoreply] guest-count fast-path would repeat last reply for ${phone.slice(-6)} — handing to AI`);
+      } else if (guestCountReply) {
         adoptReply(guestCountReply.reply);
         orchResult = {
           agentKey: "front-office",
@@ -1312,7 +1316,9 @@ export async function executeAutoreplyForPhone(
         property: p,
         origin,
       });
-      if (availabilityReply) {
+      if (availabilityReply && repeatsLastBotReply(availabilityReply.reply, rollingMessages)) {
+        console.info(`[Autoreply] availability fast-path would repeat last reply for ${phone.slice(-6)} — handing to AI`);
+      } else if (availabilityReply) {
         adoptReply(availabilityReply.reply);
         orchResult = {
           agentKey: "front-office",
@@ -1361,7 +1367,9 @@ export async function executeAutoreplyForPhone(
         bookingSlots: ((bookingState as any)?.slots ?? null) as Record<string, unknown> | null,
         chatSummary: chatSummaryJson as any,
       });
-      if (contextualReply) {
+      if (contextualReply && repeatsLastBotReply(contextualReply.reply, rollingMessages)) {
+        console.info(`[Autoreply] contextual fast-path would repeat last reply for ${phone.slice(-6)} — handing to AI`);
+      } else if (contextualReply) {
         adoptReply(contextualReply.reply);
         orchResult = {
           agentKey: "front-office",
@@ -1919,6 +1927,29 @@ export async function executeAutoreplyForPhone(
   const pdfToStrip = attachUrl && /\.pdf(\?|$)/i.test(attachUrl) ? attachUrl : undefined;
   const normalizedReply = normalizeBrochureReply(lastMessage, rawReply, attachName);
   let finalReply = cleanReplyBody(normalizedReply, pdfToStrip);
+
+  // Invarian #5: balasan media jangan menanyakan ulang slot yang sudah
+  // disebut tamu di percakapan ini (insiden 28 Sep 2026).
+  try {
+    const todayIso = todayWIB();
+    const slots = ((bookingState as any)?.slots ?? {}) as Record<string, unknown>;
+    const recentInbound = rollingMessages.filter((m) => m.direction === "in").map((m) => m.body ?? "");
+    const summaryCheckIn =
+      typeof chatSummaryJson?.check_in === "string" && chatSummaryJson.check_in >= todayIso
+        ? chatSummaryJson.check_in
+        : null;
+    const hasDates =
+      (typeof slots.checkIn === "string" && (slots.checkIn as string) >= todayIso) ||
+      !!summaryCheckIn ||
+      recentInbound.some((b) => !!parseAvailabilityDateRange(b, todayIso));
+    const hasGuests =
+      Number(slots.adults ?? slots.guestCount ?? 0) > 0 ||
+      (!!summaryCheckIn && Number(chatSummaryJson?.guest_count ?? 0) > 0) ||
+      recentInbound.some((b) => !!parseGuestCountFollowup(b));
+    finalReply = adaptMediaSlotQuestion(finalReply, { hasDates, hasGuests });
+  } catch (e) {
+    console.warn("[Autoreply] adaptMediaSlotQuestion failed (non-fatal):", e);
+  }
 
   // ── Duplicate-send guard ────────────────────────────────────────────────
   // Worker bisa mati setelah WhatsApp gateway sukses tapi sebelum sempat menyimpan

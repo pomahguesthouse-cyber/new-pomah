@@ -207,3 +207,30 @@ export function planRoomPhotos(text: string, rooms: GalleryRoom[]): RoomPhotosPl
     reply: MEDIA_FAST_PATH_PHOTO_REPLY,
   };
 }
+
+/** Kalimat penutup baku balasan media — lihat konstanta di atas. */
+export const MEDIA_SLOT_QUESTION = "Rencana menginap tanggal berapa dan untuk berapa orang?";
+
+/**
+ * Invarian #5 ("satu slot ditanya sekali"). Insiden 28 Sep 2026: tamu sudah
+ * menyebut "29-30" dan "dewasa 5 anak 2", lalu minta foto — balasan media
+ * tetap bertanya "tanggal berapa dan untuk berapa orang?". Ganti pertanyaan
+ * baku dengan pertanyaan untuk slot yang BELUM diketahui saja.
+ */
+export function adaptMediaSlotQuestion(
+  reply: string,
+  known: { hasDates: boolean; hasGuests: boolean },
+): string {
+  if (!reply || !reply.includes(MEDIA_SLOT_QUESTION)) return reply;
+  let question: string;
+  if (known.hasDates && known.hasGuests) {
+    question = "Kalau sudah cocok, mau saya lanjutkan cek kamarnya untuk tanggal yang Kakak sebut?";
+  } else if (known.hasDates) {
+    question = "Untuk berapa orang ya Kak?";
+  } else if (known.hasGuests) {
+    question = "Rencana menginap tanggal berapa ya Kak?";
+  } else {
+    return reply;
+  }
+  return reply.replace(MEDIA_SLOT_QUESTION, question);
+}
