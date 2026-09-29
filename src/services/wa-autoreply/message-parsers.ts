@@ -92,6 +92,46 @@ export function parseAvailabilityDateRange(
   return null;
 }
 
+/**
+ * Pertanyaan PROSES booking ("sistem bookingnya gimana", "cara pesannya",
+ * "syarat DP-nya apa") — bukan pertanyaan ketersediaan. Insiden 16 Sep 2026:
+ * kata "booking" membuat fast-path kontekstual membalas daftar ketersediaan
+ * yang sama untuk keempat kalinya.
+ */
+const BOOKING_PROCESS_RE =
+  /\b(sistem(?:nya)?|cara(?:nya)?|prosedur(?:nya)?|alur(?:nya)?|proses(?:nya)?|syarat(?:nya)?|mekanisme(?:nya)?|gimana|gmn|bagaimana|bgmn)\b/i;
+const BOOKING_NOUN_RE = /\b(booking(?:nya)?|book|pesan(?:nya)?|reservasi(?:nya)?|dp(?:nya)?|bayar(?:nya)?|pembayaran(?:nya)?)\b/i;
+export function isBookingProcessQuestion(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  return BOOKING_PROCESS_RE.test(text) && BOOKING_NOUN_RE.test(text);
+}
+
+/**
+ * Permintaan HITUNG harga dengan jumlah kamar dan/atau jumlah malam
+ * ("deluxe 2 kamar 2 malam harganya berapa", "totalnya jadi berapa").
+ * Fast-path availability hanya bisa mengirim daftar harga per malam untuk
+ * tanggal sesi — jumlah malam baru di pesan diabaikan dan totalnya tidak
+ * pernah dijawab. Serahkan ke agent.
+ */
+export function isPriceCalculationRequest(message: string): boolean {
+  const text = message.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  if (/\b(total(?:nya)?|semuanya|jadi(?:nya)? berapa|jadi brp|dikali|kali berapa)\b/i.test(text)) return true;
+  const hasRoomCount = /\b\d{1,2}\s*(?:kamar|kmr|unit|rooms?)\b/i.test(text);
+  const hasNightCount = /\b\d{1,2}\s*(?:malam|mlm|hari|nights?)\b/i.test(text);
+  return hasRoomCount && hasNightCount;
+}
+
+/**
+ * Pesan yang menyebut kata kamar/booking/harga tetapi BUKAN pertanyaan
+ * ketersediaan: proses booking atau hitung total. Dipakai kedua fast-path
+ * availability sebagai rem.
+ */
+export function isNonAvailabilityFollowup(message: string): boolean {
+  return isBookingProcessQuestion(message) || isPriceCalculationRequest(message);
+}
+
 export function shouldUseDeterministicAvailability(message: string): boolean {
   const text = message.toLowerCase();
   const asksAvailability =
@@ -101,6 +141,7 @@ export function shouldUseDeterministicAvailability(message: string): boolean {
   const hasDateSignal =
     mentionsExplicitDateSignal(text) ||
     /\b\d{1,2}\s*(?:-|–|—|sampai|sd|s\/d|to)\s*\d{1,2}\b/i.test(text);
+  if (isNonAvailabilityFollowup(text)) return false;
   return asksAvailability && hasDateSignal;
 }
 
@@ -156,16 +197,28 @@ export function parseGuestCountFollowup(message: string): ParsedGuestCount | nul
   )
     return null;
 
-  const adultMatch = text.match(
-    /(?:dewasa|adult|pax|tamu)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:dewasa|adult|pax|tamu)\b/i,
+  const ADULT = "(?:dewasa|adult|pax|tamu)";
+  const CHILD = "(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)";
+  // Tamu menulis dengan SATU gaya: "5 dewasa 2 anak" (angka dulu) atau
+  // "dewasa 5 anak 2" (label dulu). Regex gabungan lama mengambil pasangan
+  // PERTAMA yang cocok, sehingga "Dewasa 5 anak 2" terbaca anak = 5 (angka
+  // milik dewasa ikut dipakai anak) → 10 tamu. Insiden 28 Sep 2026.
+  const firstPair = text.match(
+    new RegExp(`(\\d{1,2})\\s*(?:orang\\s+)?(?:${ADULT}|${CHILD})\\b|(?:${ADULT}|${CHILD})\\s*:?\\s*(\\d{1,2})`, "i"),
   );
-  const childMatch = text.match(
-    /(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\s*(?::?\s*)?(\d{1,2})|(\d{1,2})\s*(?:orang\s+)?(?:anak|bocil|bocah|balita|child(?:ren)?|kids?)\b/i,
-  );
+  const labelFirst = !!firstPair && firstPair[1] === undefined;
+  const pick = (label: string): number => {
+    const numFirst = text.match(new RegExp(`(\\d{1,2})\\s*(?:orang\\s+)?${label}\\b`, "i"));
+    const lblFirst = text.match(new RegExp(`${label}\\s*:?\\s*(\\d{1,2})`, "i"));
+    const primary = labelFirst ? lblFirst : numFirst;
+    const secondary = labelFirst ? numFirst : lblFirst;
+    const m = primary ?? secondary;
+    return m ? Number(m[1]) : 0;
+  };
   const genericMatch = text.match(/\b(\d{1,2})\s*(?:orang|pax|tamu)\b/i);
 
-  let adults = adultMatch ? Number(adultMatch[1] ?? adultMatch[2]) : 0;
-  const children = childMatch ? Number(childMatch[1] ?? childMatch[2]) : 0;
+  let adults = pick(ADULT);
+  const children = pick(CHILD);
 
   if (!adults && !children && genericMatch) {
     adults = Number(genericMatch[1]);
@@ -203,7 +256,7 @@ export function isExplicitRoomCountRequirement(message: string): boolean {
   if (!text || text.length > 180 || parseRequestedRoomCount(text) === null) return false;
   if (/\b(hanya|cuma|tinggal|tersedia|available|ada)\b/i.test(text)) return false;
   return (
-    /\b(mau|ingin|butuh|perlu|memerlukan|cari|ambil|pesan|booking|book|reserve)\b/i.test(text) ||
+    /\b(mau|ingin|butuh|perlu|memerlukan|cari|ambil|pesan|booking|book|reserve|rencana|rencananya|jadinya)\b/i.test(text) ||
     /^\d{1,2}\s*(?:kamar|rooms?)\b/i.test(text)
   );
 }
@@ -273,8 +326,9 @@ export function looksLikeBookingInquiry(message: string): boolean {
   if (isExplicitRoomCountRequirement(text)) return false;
   if (isRoomTypeDetailQuestion(text)) return false;
   if (isRoomCountConfirmationQuestion(text)) return false;
+  if (isNonAvailabilityFollowup(text)) return false;
   if (
-    /\b(ukuran|kasur|bed|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(
+    /\b(ukuran|kasur|bed|tempat tidur|ruang tamu|ruang tengah|ruang keluarga|ruang kumpul|living room|dapur|pantry|mushola|musholla|lift|fasilitas|sarapan|breakfast|wifi|ac\b|tv\b|air panas|handuk|kamar mandi|toilet|shower|luas|meter|m2|lantai|view|pemandangan|smoking|merokok|parkir|kolam|balkon|bersih|kebersihan|berisik|bising|tenang|aman|keamanan)\b/i.test(
       text,
     )
   ) {

@@ -2601,6 +2601,27 @@ export type Database = {
           },
         ]
       }
+      staff_push_config: {
+        Row: {
+          function_url: string | null
+          id: number
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          function_url?: string | null
+          id: number
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          function_url?: string | null
+          id?: number
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       telegram_agent_bots: {
         Row: {
           agent_key: string
@@ -3867,11 +3888,6 @@ export type Database = {
       }
     }
     Functions: {
-      register_device_token: {
-        Args: { p_platform: string; p_token: string }
-        Returns: undefined
-      }
-      unregister_device_token: { Args: { p_token: string }; Returns: undefined }
       _jsonb_bool: {
         Args: { p_default?: boolean; p_json: Json; p_key: string }
         Returns: boolean
@@ -3938,6 +3954,7 @@ export type Database = {
         Args: { p_body: string; p_message_id: string; p_phone: string }
         Returns: string
       }
+      enqueue_staff_push: { Args: { p_payload: Json }; Returns: undefined }
       generate_booking_reference: { Args: never; Returns: string }
       get_active_booking_state: { Args: { p_phone: string }; Returns: Json }
       get_autoreply_context: { Args: { p_phone: string }; Returns: Json }
@@ -4142,6 +4159,10 @@ export type Database = {
             }
             Returns: string
           }
+      register_device_token: {
+        Args: { p_platform: string; p_token: string }
+        Returns: undefined
+      }
       resolve_wa_canonical_phone: {
         Args: { p_identity: string }
         Returns: string
@@ -4175,7 +4196,9 @@ export type Database = {
         }
         Returns: string
       }
+      strip_secret_json_keys: { Args: { input: Json }; Returns: Json }
       test_context_summary: { Args: never; Returns: string }
+      unregister_device_token: { Args: { p_token: string }; Returns: undefined }
       update_booking_room_with_lock: {
         Args: {
           p_booking_id: string

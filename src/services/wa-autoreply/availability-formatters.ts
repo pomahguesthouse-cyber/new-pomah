@@ -321,6 +321,40 @@ export function formatAvailabilityReply(
   };
 }
 
+/**
+ * True bila `reply` (hampir) sama dengan balasan bot terakhir di riwayat.
+ *
+ * Insiden 16 Sep 2026: tamu bertanya jumlah tempat tidur, harga 2 kamar
+ * 2 malam, ruang tamu, dan cara booking — keempatnya dibalas daftar
+ * ketersediaan yang IDENTIK. Dedup pra-kirim sengaja tidak memblokir ini
+ * (jendelanya dipotong di inbound terakhir supaya pertanyaan ulang tetap
+ * terjawab). Fast-path deterministik lah yang harus mundur: bila jawabannya
+ * sama persis dengan yang barusan dikirim, pesan tamu jelas meminta hal lain
+ * → serahkan ke agent.
+ */
+export function repeatsLastBotReply(
+  reply: string,
+  messages: Array<{ direction: string; body?: string }>,
+): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  const target = norm(reply ?? "");
+  if (target.length < 40) return false;
+  const lastOutbound = [...messages]
+    .reverse()
+    .find((m) => m.direction === "out" && norm(m.body ?? "").length > 0);
+  if (!lastOutbound) return false;
+  const prev = norm(lastOutbound.body ?? "");
+  if (prev === target) return true;
+  // Sapaan pembuka bisa berbeda ("Halo Kak, untuk" vs "Untuk"); bandingkan
+  // badan balasan setelah sapaan.
+  const stripGreeting = (v: string) => v.replace(/^halo kak,?\s*/, "");
+  const a = stripGreeting(prev);
+  const b = stripGreeting(target);
+  if (a === b) return true;
+  const prefix = b.slice(0, 120);
+  return prefix.length >= 60 && a.startsWith(prefix);
+}
+
 export function lastBotAskedGuestCount(
   messages: Array<{ direction: string; body?: string }>,
 ): boolean {
