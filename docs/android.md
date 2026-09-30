@@ -29,7 +29,7 @@ The first file creates:
 
 - `device_tokens` — staff user id, FCM token, platform, timestamps. RLS lets the owning staff member or an admin read and write rows.
 - `register_device_token` / `unregister_device_token` — the app calls these after login and on sign-out. Any staff caller (admin, staff, or manager) may register. Only admin and manager tokens receive pushes.
-- `staff_push_config` — holds the webhook secret. No client policies.
+- `staff_push_config` — holds the webhook secret (and, after the 20260930150000 migration, optionally the FCM service account). No client policies.
 - Triggers on new inbound WhatsApp rows (`whatsapp_messages`, direction `in`) and new `bookings` rows. They only call `pg_net`. They do not change prices, availability, or auto-reply.
 
 Run the second file on its own. It only adds `manager` to the `app_role` enum. PostgreSQL cannot use a new enum value in the same transaction that adds it.
@@ -62,7 +62,31 @@ supabase functions deploy send-staff-push --no-verify-jwt
 
 `supabase/config.toml` already sets `verify_jwt = false` for `send-staff-push`. The function rejects calls that do not send the same value in the `x-push-secret` header. `FCM_SERVICE_ACCOUNT_JSON` is read only inside the function.
 
-Copy the webhook secret into the database (SQL editor, not git):
+**Alternative: store the secrets in the database instead of function env.** Run `supabase/migrations/20260930150000_staff_push_config_fcm_key.sql`, which adds `staff_push_config.fcm_service_account` (jsonb). The table has RLS on, no policies, and no grants for `anon` or `authenticated`, so only the service role (the edge function) and the SECURITY DEFINER trigger can read it. The function looks for each secret in this order:
+
+| Secret | 1st choice (function env) | Fallback (`staff_push_config`, `id = 1`) |
+| --- | --- | --- |
+| Webhook secret | `PUSH_WEBHOOK_SECRET` | `webhook_secret` |
+| FCM service account | `FCM_SERVICE_ACCOUNT_JSON` | `fcm_service_account` |
+
+So you can skip `supabase secrets set` entirely and only deploy the function. Run this in the SQL editor, not in git. The service account JSON contains a private key; do not paste it into a file that gets committed or into chat:
+
+```sql
+insert into public.staff_push_config (id, webhook_secret, fcm_service_account)
+values (
+  1,
+  '<random secret, at least 16 characters>',
+  '<contents of the service account JSON>'::jsonb
+)
+on conflict (id) do update
+  set webhook_secret = excluded.webhook_secret,
+      fcm_service_account = excluded.fcm_service_account,
+      updated_at = now();
+```
+
+If you set the env variables, they win over the database values. The trigger always signs calls with `staff_push_config.webhook_secret`, so when `PUSH_WEBHOOK_SECRET` is set in env it must equal that column.
+
+Otherwise (env approach), copy the webhook secret into the database (SQL editor, not git):
 
 ```sql
 insert into public.staff_push_config (id, webhook_secret)

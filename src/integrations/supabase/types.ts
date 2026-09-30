@@ -2603,18 +2603,21 @@ export type Database = {
       }
       staff_push_config: {
         Row: {
+          fcm_service_account: Json | null
           function_url: string | null
           id: number
           updated_at: string
           webhook_secret: string | null
         }
         Insert: {
+          fcm_service_account?: Json | null
           function_url?: string | null
           id: number
           updated_at?: string
           webhook_secret?: string | null
         }
         Update: {
+          fcm_service_account?: Json | null
           function_url?: string | null
           id?: number
           updated_at?: string
