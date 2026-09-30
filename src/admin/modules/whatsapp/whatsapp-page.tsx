@@ -28,6 +28,8 @@ import {
   RotateCcw,
   FileText,
   Download,
+  Paperclip,
+  X,
   Bell,
   AlertOctagon,
   CheckCircle2,
@@ -77,6 +79,30 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn, formatDateID, formatRelativeDateID, formatTimeID } from "@/lib/utils";
+import {
+  prepareOutboundFile,
+  removeOutboundObject,
+  uploadOutboundObject,
+} from "@/admin/modules/whatsapp/wa-outbound-upload";
+import {
+  META_WINDOW_CLOSED_MESSAGE,
+  WA_FILE_INPUT_ACCEPT,
+  buildOutboundObjectPath,
+  formatFileSize,
+  lastInboundAt,
+  metaCustomerWindowClosed,
+  validateClientPick,
+} from "@/services/wa-outbound-attachment";
+
+type ComposerAttachment = {
+  phase: "processing" | "uploading" | "ready";
+  name: string;
+  size: number;
+  mime: string;
+  previewUrl: string | null;
+  progress: number;
+  path: string | null;
+};
 
 
 const INTENT_STYLES: Record<string, { label: string; className: string }> = {
@@ -294,6 +320,11 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "open" | "closed">("all");
   const [draft, setDraft] = useState("");
+  const [attachment, setAttachment] = useState<ComposerAttachment | null>(null);
+  const attachmentRef = useRef<ComposerAttachment | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<(() => void) | null>(null);
+  const pickGenRef = useRef(0);
   const [manualAlertNote, setManualAlertNote] = useState("");
   const [rightOpen, setRightOpen] = useState(true);
 
@@ -372,15 +403,168 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [thread?.messages?.length]);
 
+  const setComposerAttachment = (next: ComposerAttachment | null) => {
+    attachmentRef.current = next;
+    setAttachment(next);
+  };
+
+  const releaseAttachment = (att: ComposerAttachment | null, removeObject: boolean) => {
+    if (!att) return;
+    if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+    if (removeObject && att.path) void removeOutboundObject(att.path);
+  };
+
+  useEffect(() => {
+    return () => {
+      pickGenRef.current += 1;
+      uploadAbortRef.current?.();
+      uploadAbortRef.current = null;
+      const pending = attachmentRef.current;
+      attachmentRef.current = null;
+      setAttachment(null);
+      releaseAttachment(pending, true);
+    };
+  }, [current]);
+
+  const metaWindowClosed = useMemo(() => {
+    const provider = (thread?.thread as { provider?: string } | undefined)?.provider;
+    if (provider !== "meta") return false;
+    return metaCustomerWindowClosed(lastInboundAt(thread?.messages ?? []));
+  }, [thread]);
+
+  const attachmentReady = attachment?.phase === "ready" && !!attachment.path;
+  const attachmentBusy = attachment?.phase === "processing" || attachment?.phase === "uploading";
+
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
   const sendMut = useMutation({
-    mutationFn: () => sendFn({ data: { threadId: current!, body: draft } }),
-    onSuccess: () => {
+    mutationFn: () => {
+      const att = attachmentRef.current;
+      const ready = att?.phase === "ready" && !!att.path;
+      return sendFn({
+        data: {
+          threadId: current!,
+          body: draftRef.current,
+          ...(ready
+            ? {
+                attachment: {
+                  path: att.path as string,
+                  name: att.name,
+                  mime: att.mime,
+                  size: att.size,
+                },
+              }
+            : {}),
+        },
+      });
+    },
+    onSuccess: (res) => {
+      if (!res.ok) {
+        toast.error(res.error);
+        qc.invalidateQueries({ queryKey: ["wa-thread", current] });
+        return;
+      }
       setDraft("");
+      const sent = attachmentRef.current;
+      setComposerAttachment(null);
+      if (sent?.previewUrl) URL.revokeObjectURL(sent.previewUrl);
       qc.invalidateQueries({ queryKey: ["wa-thread", current] });
       qc.invalidateQueries({ queryKey: ["wa-threads"] });
     },
     onError: (e) => toast.error((e as Error).message),
   });
+
+  const canSend =
+    !!current &&
+    !metaWindowClosed &&
+    !sendMut.isPending &&
+    !attachmentBusy &&
+    (!!draft.trim() || attachmentReady);
+
+  const clearAttachment = () => {
+    pickGenRef.current += 1;
+    uploadAbortRef.current?.();
+    uploadAbortRef.current = null;
+    const pending = attachmentRef.current;
+    setComposerAttachment(null);
+    releaseAttachment(pending, true);
+  };
+
+  const onPickFile = async (list: FileList | null) => {
+    const file = list?.[0];
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file || !current || metaWindowClosed) return;
+    const checked = validateClientPick(file);
+    if (!checked.ok) {
+      toast.error(checked.error);
+      return;
+    }
+
+    const gen = ++pickGenRef.current;
+    uploadAbortRef.current?.();
+    uploadAbortRef.current = null;
+    releaseAttachment(attachmentRef.current, true);
+
+    setComposerAttachment({
+      phase: "processing",
+      name: file.name,
+      size: file.size,
+      mime: file.type,
+      previewUrl: null,
+      progress: 0,
+      path: null,
+    });
+
+    try {
+      const prepared = await prepareOutboundFile(file);
+      if (pickGenRef.current !== gen) {
+        if (prepared.previewUrl) URL.revokeObjectURL(prepared.previewUrl);
+        return;
+      }
+      const path = buildOutboundObjectPath(current, prepared.name);
+      setComposerAttachment({
+        phase: "uploading",
+        name: prepared.name,
+        size: prepared.blob.size,
+        mime: prepared.mime,
+        previewUrl: prepared.previewUrl,
+        progress: 0,
+        path,
+      });
+      const upload = uploadOutboundObject(path, prepared.blob, prepared.mime, (pct) => {
+        if (pickGenRef.current !== gen) return;
+        const currentAtt = attachmentRef.current;
+        if (!currentAtt || currentAtt.path !== path) return;
+        setComposerAttachment({ ...currentAtt, progress: pct });
+      });
+      uploadAbortRef.current = upload.abort;
+      await upload.promise;
+      if (pickGenRef.current !== gen) {
+        if (prepared.previewUrl) URL.revokeObjectURL(prepared.previewUrl);
+        void removeOutboundObject(path);
+        return;
+      }
+      uploadAbortRef.current = null;
+      setComposerAttachment({
+        phase: "ready",
+        name: prepared.name,
+        size: prepared.blob.size,
+        mime: prepared.mime,
+        previewUrl: prepared.previewUrl,
+        progress: 100,
+        path,
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === "AbortError") return;
+      if (pickGenRef.current !== gen) return;
+      const pending = attachmentRef.current;
+      setComposerAttachment(null);
+      if (pending?.previewUrl) URL.revokeObjectURL(pending.previewUrl);
+      if (pending?.path) void removeOutboundObject(pending.path);
+      toast.error((error as Error).message);
+    }
+  };
 
   const draftMut = useMutation({
     mutationFn: () => draftFn({ data: { threadId: current! } }),
@@ -852,14 +1036,22 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
               </div>
             </header>
 
-            <div ref={scrollRef} className="relative flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4">
+            <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto bg-[#efeae2] px-3 py-3 dark:bg-[#0b141a] md:px-6 md:py-4">
               <div className="absolute inset-0 opacity-[0.06] dark:opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'url("https://w7.pngwing.com/pngs/396/505/png-transparent-whatsapp-pattern-black-and-white-floral.png")', backgroundSize: '400px', backgroundRepeat: 'repeat' }} />
               <div className="relative z-10">
                 <MessageStream messages={thread.messages} aiLabConfig={aiLabConfig} />
               </div>
             </div>
 
-            <footer className="border-t border-border bg-card p-3">
+            <footer className="relative z-20 shrink-0 border-t border-border bg-card p-3">
+              {metaWindowClosed && (
+                <p
+                  role="status"
+                  className="mb-2 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs leading-snug text-amber-950"
+                >
+                  {META_WINDOW_CLOSED_MESSAGE}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-1.5 pb-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -903,24 +1095,86 @@ export function WhatsAppPage({ initialThreadId = null }: { initialThreadId?: str
                   {classifyMut.isPending ? "Menganalisis…" : "Auto-tag"}
                 </Button>
               </div>
+              {attachment && (
+                <div className="mb-2 flex max-w-full items-center gap-2 rounded-md border border-border bg-muted/50 px-2 py-1.5">
+                  {attachment.previewUrl ? (
+                    <img
+                      src={attachment.previewUrl}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-red-500 text-white">
+                      <FileText className="h-4 w-4" />
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">{attachment.name}</span>
+                    <span className="block text-[10px] text-muted-foreground">
+                      {attachment.phase === "processing"
+                        ? "Memproses gambar…"
+                        : attachment.phase === "uploading"
+                          ? `Mengunggah ${attachment.progress}% · ${formatFileSize(attachment.size)}`
+                          : formatFileSize(attachment.size)}
+                    </span>
+                    {attachment.phase === "uploading" && (
+                      <span className="mt-1 block h-1 overflow-hidden rounded-full bg-black/10">
+                        <span
+                          className="block h-full bg-[#008069]"
+                          style={{ width: `${attachment.progress}%` }}
+                        />
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent"
+                    aria-label="Hapus lampiran"
+                    onClick={clearAttachment}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <Textarea
                 placeholder="Type a reply…  ⌘/Ctrl + Enter to send"
                 rows={2}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && draft.trim()) {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSend) {
+                    e.preventDefault();
                     sendMut.mutate();
                   }
                 }}
                 className="min-h-16 resize-none text-base md:text-sm"
               />
-              <div className="mt-2 flex items-center justify-between">
-                <p className="font-mono text-[10px] text-muted-foreground">{draft.length} chars</p>
+              <div className="mt-2 flex min-w-0 items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={WA_FILE_INPUT_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => void onPickFile(e.target.files)}
+                />
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent disabled:opacity-40"
+                  aria-label="Lampirkan berkas"
+                  title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : "Lampirkan berkas"}
+                  disabled={metaWindowClosed || attachmentBusy || sendMut.isPending}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
+                <p className="min-w-0 flex-1 truncate font-mono text-[10px] text-muted-foreground">
+                  {draft.length} chars
+                </p>
                 <Button
                   size="sm"
-                  className="h-11 px-4 md:h-8"
-                  disabled={!draft.trim() || sendMut.isPending}
+                  className="h-11 shrink-0 px-4"
+                  disabled={!canSend}
+                  title={metaWindowClosed ? META_WINDOW_CLOSED_MESSAGE : undefined}
                   onClick={() => sendMut.mutate()}
                 >
                   <Send className="mr-2 h-3.5 w-3.5" />
@@ -1522,22 +1776,22 @@ function MessageAttachment({ m }: { m: any }) {
 
   if (a.kind === "image") {
     return (
-      <a href={a.url} target="_blank" rel="noopener noreferrer" className="mb-1 block">
-        <img src={a.url} alt={a.name} className="max-h-64 w-full max-w-[280px] rounded-md object-cover" />
+      <a href={a.url} target="_blank" rel="noopener noreferrer" className="mb-1 block max-w-full">
+        <img src={a.url} alt={a.name} className="max-h-64 w-full max-w-full rounded-md object-cover sm:max-w-[280px]" />
       </a>
     );
   }
   if (a.kind === "video") {
-    return <video src={a.url} controls className="mb-1 max-h-64 w-full max-w-[280px] rounded-md" />;
+    return <video src={a.url} controls className="mb-1 max-h-64 w-full max-w-full rounded-md sm:max-w-[280px]" />;
   }
   if (a.kind === "audio") {
-    return <audio src={a.url} controls className="mb-1 w-[240px]" />;
+    return <audio src={a.url} controls className="mb-1 w-full max-w-[240px]" />;
   }
   // Generic file (PDF, doc, etc.) — card with icon + name + download.
   const label = a.mime.includes("pdf") || a.name.toLowerCase().endsWith(".pdf") ? "PDF" : (a.mime || "Berkas");
   return (
     <a href={a.url} target="_blank" rel="noopener noreferrer"
-      className="mb-1 flex items-center gap-2.5 rounded-md bg-black/[0.06] px-2.5 py-2 transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15">
+      className="mb-1 flex max-w-full items-center gap-2.5 rounded-md bg-black/[0.06] px-2.5 py-2 transition hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-red-500 text-white">
         <FileText className="h-4 w-4" />
       </span>
@@ -1575,16 +1829,20 @@ function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig
             {g.items.map((m) => (
               <div
                 key={m.id}
-                className={cn("flex flex-col group", m.direction === "out" ? "items-end pl-16" : "items-start pr-16")}
+                className={cn(
+                  "flex min-w-0 max-w-full flex-col group",
+                  m.direction === "out" ? "items-end pl-6 sm:pl-16" : "items-start pr-6 sm:pr-16",
+                )}
               >
                 <div
                   className={cn(
-                    "relative whitespace-pre-wrap rounded-md px-2 pb-1 pt-1 text-[13px] shadow-sm flex flex-col",
+                    "relative flex min-w-0 max-w-[76%] flex-col overflow-hidden whitespace-pre-wrap break-words rounded-md px-2 pb-1 pt-1 text-[13px] shadow-sm",
                     m.direction === "out"
                       ? "rounded-tr-none bg-[#d9fdd3] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]"
                       : "rounded-tl-none bg-[#ffffff] text-[#111b21] dark:bg-[#202c33] dark:text-[#e9edef]",
+                    (m.metadata as { send_status?: string } | null)?.send_status === "failed" &&
+                      "ring-1 ring-red-400",
                   )}
-                  style={{ maxWidth: '76%' }}
                 >
                   {/* Tail for bubbles */}
                   <div className={cn(
@@ -1605,6 +1863,9 @@ function MessageStream({ messages, aiLabConfig }: { messages: any[]; aiLabConfig
                     )}
                   >
                     {formatTimeID(m.sent_at)}
+                    {(m.metadata as { send_status?: string } | null)?.send_status === "failed" && (
+                      <span className="font-medium text-red-600 dark:text-red-300">Gagal terkirim</span>
+                    )}
                   </div>
                 </div>
                   <MessageBadges m={m} aiLabConfig={aiLabConfig} />
