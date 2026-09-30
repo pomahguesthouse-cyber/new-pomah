@@ -40,7 +40,7 @@ The triggers do nothing until the secret row exists.
 4. In Firebase, open Project settings → Service accounts → Generate new private key.
 5. That JSON is the FCM HTTP v1 credential. Do not commit it.
 
-Rebuild the APK after adding `google-services.json`. The debug build still succeeds without the file; push registration will fail until it is present.
+Rebuild the APK after adding `google-services.json`. The debug build still succeeds without the file. Push is skipped until that file is present: the shell checks a build flag before calling `PushNotifications.register()`, and a push failure is logged instead of closing the app. A WebView renderer crash reloads `/admin` instead of killing the process.
 
 ### 3. Deploy the edge function and secrets
 

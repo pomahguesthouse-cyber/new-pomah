@@ -3,6 +3,9 @@ import java.util.Properties
 
 apply plugin: 'com.android.application'
 
+def firebaseServices = file('google-services.json')
+def firebaseConfigured = firebaseServices.exists() && firebaseServices.length() > 0
+
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
@@ -19,6 +22,8 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Read at runtime before any Firebase or push call. False when google-services.json is absent.
+        resValue "bool", "pomah_firebase_configured", firebaseConfigured ? "true" : "false"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -67,11 +72,28 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-try {
-    def servicesJSON = file('google-services.json')
-    if (servicesJSON.text) {
-        apply plugin: 'com.google.gms.google-services'
-    }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+if (firebaseConfigured) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.lifecycle("google-services.json not found. Push registration is skipped and will not crash the app.")
 }
+
+// cap sync writes the stock push plugin class. Route it through the safe wrapper
+// so PushNotifications.register() cannot kill the process when Firebase is absent.
+tasks.register("guardCapacitorPushPlugin") {
+    doLast {
+        def pluginsFile = file("src/main/assets/capacitor.plugins.json")
+        if (!pluginsFile.exists()) {
+            logger.warn("capacitor.plugins.json is missing; run cap sync before assembling")
+            return
+        }
+        def original = "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin"
+        def safe = "com.pomahguesthouse.admin.SafePushNotificationsPlugin"
+        def text = pluginsFile.getText("UTF-8")
+        if (text.contains(original)) {
+            pluginsFile.write(text.replace(original, safe), "UTF-8")
+            logger.lifecycle("Push plugin routed through SafePushNotificationsPlugin")
+        }
+    }
+}
+preBuild.dependsOn guardCapacitorPushPlugin
