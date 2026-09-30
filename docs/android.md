@@ -17,18 +17,24 @@ Google blocks OAuth inside an Android WebView. The app opens the existing Lovabl
 
 Lovable does not apply `supabase/migrations` for you. Push also needs a Firebase project. Until those steps are done, the app still installs and the admin still works. Notifications stay off.
 
-### 1. Run the migration
+### 1. Run the migrations
 
-In the Supabase SQL editor (Lovable Cloud project `gofvxeiulaljwyfyhnww`), run the whole file:
+In the Supabase SQL editor (Lovable Cloud project `gofvxeiulaljwyfyhnww`), run these files in order, each one fully:
 
-`supabase/migrations/20260927234500_staff_device_tokens_and_push.sql`
+1. `supabase/migrations/20260927234500_staff_device_tokens_and_push.sql`
+2. `supabase/migrations/20260930130000_app_role_manager.sql`
+3. `supabase/migrations/20260930130100_staff_push_admin_manager.sql`
 
-That creates:
+The first file creates:
 
 - `device_tokens` — staff user id, FCM token, platform, timestamps. RLS lets the owning staff member or an admin read and write rows.
-- `register_device_token` / `unregister_device_token` — the app calls these after login and on sign-out.
+- `register_device_token` / `unregister_device_token` — the app calls these after login and on sign-out. Any staff caller (admin, staff, or manager) may register. Only admin and manager tokens receive pushes.
 - `staff_push_config` — holds the webhook secret. No client policies.
 - Triggers on new inbound WhatsApp rows (`whatsapp_messages`, direction `in`) and new `bookings` rows. They only call `pg_net`. They do not change prices, availability, or auto-reply.
+
+Run the second file on its own. It only adds `manager` to the `app_role` enum. PostgreSQL cannot use a new enum value in the same transaction that adds it.
+
+The third file includes `manager` in `is_staff()`, limits push delivery to users with role `admin` or `manager`, and throttles WhatsApp pushes to one per thread every 30 seconds (`staff_push_throttle`).
 
 The triggers do nothing until the secret row exists.
 
@@ -36,7 +42,7 @@ The triggers do nothing until the secret row exists.
 
 1. Create a Firebase project (or use an existing one).
 2. Add an Android app with package name `com.pomahguesthouse.admin`.
-3. Download `google-services.json` and place it at `android/app/google-services.json`. That path is gitignored. Do not commit it.
+3. Download `google-services.json` and place it at `android/app/google-services.json` (the `android/app` directory, next to `build.gradle`). That path is gitignored. Do not commit it.
 4. In Firebase, open Project settings → Service accounts → Generate new private key.
 5. That JSON is the FCM HTTP v1 credential. Do not commit it.
 
@@ -74,7 +80,23 @@ set function_url = 'https://gofvxeiulaljwyfyhnww.supabase.co/functions/v1/send-s
 where id = 1;
 ```
 
-### 4. Deploy the website
+### 4. Grant the manager role
+
+Pushes go to accounts with role `admin` or `manager`. A `staff` account can still sign in and register a phone token; that phone does not receive pushes until the account also has `admin` or `manager`.
+
+In the SQL editor, after the person has signed up once:
+
+```sql
+insert into public.user_roles (user_id, role)
+select id, 'manager'::public.app_role
+from auth.users
+where email = 'pengelola@example.com'
+on conflict (user_id, role) do nothing;
+```
+
+Replace the email with the pengelola account. An existing admin already receives pushes and does not need this row.
+
+### 5. Deploy the website
 
 The shell loads the live site, so these repo changes have to be on `https://pomahguesthouse.com` before the phone can:
 
@@ -83,9 +105,11 @@ The shell loads the live site, so these repo changes have to be on `https://poma
 - finish Google sign-in via `/native-oauth-return`
 - open a chat or booking when a notification is tapped (`/admin/whatsapp?thread=…`, `/admin/bookings?booking=…`)
 
-### 5. Install the APK
+### 6. Install the APK
 
 A debug APK is signed with the Android debug key and can be sideloaded. On the phone, allow installs from that source, copy the APK, and open it.
+
+Rebuild and reinstall after this change. The manifest declares `POST_NOTIFICATIONS` and the default FCM channel `pomah-staff`. The website deploy creates that channel at runtime and shows a toast while the app is open; the manifest entries are in the APK.
 
 ```bash
 bash scripts/build-android-debug.sh
@@ -144,7 +168,8 @@ Then copy the results into `android/app/src/main/res` (see the script’s output
 - Bottom nav on small screens: Dashboard, Booking, Chat WA, More. More opens the existing sidebar. Desktop layout is unchanged.
 - The Android back button walks the WebView history, including from a chat thread back to the thread list. At the start of the history stack it leaves the app.
 - Pull down from the top of a scrollable admin page to reload.
-- A notification tap opens that WhatsApp thread or booking. Inbound guest messages and new booking inserts are the only triggers. Outbound replies, AI drafts, and old synced history are ignored.
+- A notification tap opens that WhatsApp thread or booking. Only phones signed in as admin or manager receive it. Inbound guest messages and every new booking insert are the triggers, including a booking a staff member creates in the admin. Outbound replies, AI drafts, and old synced history are ignored. WhatsApp is limited to one push per thread every 30 seconds. While the app is open, the same alert shows as a toast. The Android channel is `pomah-staff` (“Pesan & booking”).
+- On a Samsung phone, set the app battery mode to Unrestricted or pushes are delayed or dropped after the screen turns off: Settings → Apps → Pomah Admin → Battery → Unrestricted (Tidak dibatasi). Remove Pomah Admin from Sleeping apps and Deep sleeping apps if it is listed there.
 - Invoice **Download PDF** / **Cetak Invoice** writes the PDF with `@capacitor/filesystem` and opens the Android share sheet (`@capacitor/share`) so the WebView does not depend on `window.print()` or a blob download. Those plugins are native. A website deploy is enough for desktop and mobile Chrome. The installed APK must be rebuilt and reinstalled (`bash scripts/build-android-debug.sh`) before the share sheet works inside the app. Until then the buttons still build the PDF, but the WebView cannot save it.
 
 ## OAuth redirect allow-list

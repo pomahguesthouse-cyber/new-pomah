@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 /**
- * Sends FCM HTTP v1 notifications to staff devices.
+ * Sends FCM HTTP v1 notifications to admin and manager devices.
  * Called by the database trigger via pg_net. Requires:
  * - FCM_SERVICE_ACCOUNT_JSON (Firebase service account, never committed)
  * - PUSH_WEBHOOK_SECRET (must match staff_push_config.webhook_secret)
@@ -22,7 +22,23 @@ type PushBody = {
   thread_id?: string;
   booking_id?: string;
   message_id?: string;
+  recipient_user_ids?: unknown;
 };
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Null means the payload has no recipient filter (query every admin/manager token).
+ * A present filter is intersected with that set, including an empty list.
+ */
+function recipientFilter(body: PushBody): string[] | null {
+  if (!Object.prototype.hasOwnProperty.call(body, "recipient_user_ids")) return null;
+  const value = body.recipient_user_ids;
+  if (!Array.isArray(value)) return [];
+  const ids = value.filter((id): id is string => typeof id === "string" && UUID_RE.test(id));
+  return [...new Set(ids)];
+}
 
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
@@ -143,10 +159,10 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
-    const { data: tokens, error } = await supabase
-      .from("device_tokens")
-      .select("token")
-      .eq("platform", "android");
+    const requested = recipientFilter(body);
+    const { data: tokens, error } = await supabase.rpc("list_staff_push_tokens", {
+      p_user_ids: requested,
+    });
     if (error) throw error;
 
     const stale: string[] = [];
@@ -175,7 +191,10 @@ Deno.serve(async (req) => {
               booking_id: dataValue(body.booking_id),
               message_id: dataValue(body.message_id),
             },
-            android: { priority: "HIGH" },
+            android: {
+              priority: "HIGH",
+              notification: { channel_id: "pomah-staff" },
+            },
           },
         }),
       });

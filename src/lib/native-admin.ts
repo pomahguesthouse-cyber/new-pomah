@@ -256,6 +256,17 @@ async function startStaffPush(): Promise<Stop> {
     }
     const { PushNotifications } = await import("@capacitor/push-notifications");
     const handles: Array<{ remove: () => Promise<void> }> = [];
+    try {
+      await PushNotifications.createChannel({
+        id: "pomah-staff",
+        name: "Pesan & booking",
+        importance: 4,
+        sound: "default",
+        vibration: true,
+      });
+    } catch (error) {
+      console.info("[push] notification channel skipped", error);
+    }
     const syncPush = async () => {
       try {
         const { data } = await supabase.auth.getSession();
@@ -280,6 +291,15 @@ async function startStaffPush(): Promise<Stop> {
     handles.push(
       await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
         openNotificationTarget(action.notification.data as Record<string, unknown> | undefined);
+      }),
+    );
+    handles.push(
+      await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+        const title = notification.title?.trim() || "Pomah Admin";
+        const body = notification.body?.trim() || "";
+        void import("sonner").then(({ toast }) => {
+          toast(title, body ? { description: body } : undefined);
+        });
       }),
     );
     const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
