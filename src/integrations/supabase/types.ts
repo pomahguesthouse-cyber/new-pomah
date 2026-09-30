@@ -2625,6 +2625,47 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_push_seen: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          thread_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          thread_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          thread_id?: string | null
+        }
+        Relationships: []
+      }
+      staff_push_throttle: {
+        Row: {
+          last_sent_at: string
+          thread_id: string
+        }
+        Insert: {
+          last_sent_at?: string
+          thread_id: string
+        }
+        Update: {
+          last_sent_at?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_push_throttle_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telegram_agent_bots: {
         Row: {
           agent_key: string
@@ -3993,6 +4034,12 @@ export type Database = {
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       is_still_winner: { Args: { p_entry_id: string }; Returns: boolean }
+      list_staff_push_tokens: {
+        Args: { p_user_ids?: string[] }
+        Returns: {
+          token: string
+        }[]
+      }
       list_wa_correction_candidates: {
         Args: { p_limit?: number }
         Returns: {
@@ -4242,6 +4289,11 @@ export type Database = {
           p_role?: string
           p_source?: string
         }
+        Returns: string
+      }
+      wa_push_media_label: { Args: { p_hint: string }; Returns: string }
+      wa_push_preview: {
+        Args: { p_body: string; p_metadata?: Json }
         Returns: string
       }
       wa_queue_claim: {
