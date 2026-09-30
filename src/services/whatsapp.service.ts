@@ -22,6 +22,8 @@ export interface SendResult {
   error: string | null;
   status?: number;
   raw?: unknown;
+  /** Id pesan dari Meta (`messages[0].id`) atau Evolution (`key.id`). */
+  messageId?: string | null;
 }
 
 export interface SendWhatsAppMessageInput {
@@ -30,6 +32,9 @@ export interface SendWhatsAppMessageInput {
   message: string;
   fileUrl?: string;
   filename?: string;
+  /** Paksa image/document. Gambar > 5MB dikirim sebagai document. */
+  mediaType?: "image" | "document";
+  mimetype?: string;
 }
 
 const SEND_TIMEOUT_MS = 12_000;
@@ -80,13 +85,22 @@ export async function sendWhatsAppMessage(
   message: string,
   fileUrl?: string,
   filename?: string,
+  hint?: { mediaType?: "image" | "document"; mimetype?: string },
 ): Promise<SendResult> {
   // Tamu yang chat lewat nomor resmi Meta dibalas lewat kanal yang sama.
   const { resolveThreadProvider, sendMetaMessage } = await import("./whatsapp-meta.service");
   if ((await resolveThreadProvider(phone)) === "meta") {
-    return sendMetaMessage(phone, message, fileUrl, filename);
+    return sendMetaMessage(phone, message, fileUrl, filename, hint?.mediaType);
   }
-  return sendEvolutionMessage({ token, phone, message, fileUrl, filename });
+  return sendEvolutionMessage({
+    token,
+    phone,
+    message,
+    fileUrl,
+    filename,
+    mediaType: hint?.mediaType,
+    mimetype: hint?.mimetype,
+  });
 }
 
 function evolutionApiKey(fallbackToken: string): string {
@@ -146,18 +160,19 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
         if (/\.(mp3|ogg|opus|wav|m4a|aac)(\?|$)/.test(src)) return "audio";
         return "document";
       };
-      const mediatype = hasMedia ? guessMediatype() : "document";
+      const mediatype = hasMedia ? (input.mediaType ?? guessMediatype()) : "document";
       const url = evolutionEndpoint(hasMedia ? "message/sendMedia" : "message/sendText");
       const payload = hasMedia
         ? {
             number,
             mediatype,
             mimetype:
-              mediatype === "image"
+              input.mimetype ??
+              (mediatype === "image"
                 ? "image/jpeg"
                 : mediatype === "video"
                   ? "video/mp4"
-                  : undefined,
+                  : undefined),
             media: input.fileUrl,
             fileName: input.filename ?? "file",
             caption: input.message ?? "",
@@ -215,7 +230,14 @@ async function sendEvolutionMessage(input: SendWhatsAppMessageInput): Promise<Se
         continue;
       }
 
-      return { ok: true, status: res.status, error: null, raw };
+      const evolutionId = responseJson?.key?.id;
+      return {
+        ok: true,
+        status: res.status,
+        error: null,
+        raw,
+        messageId: typeof evolutionId === "string" && evolutionId ? evolutionId : null,
+      };
     }
 
     return lastResult ?? { ok: false, error: "Tidak ada target Evolution valid" };

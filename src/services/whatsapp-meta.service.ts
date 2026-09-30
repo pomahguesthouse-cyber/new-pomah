@@ -76,7 +76,7 @@ export async function resolveThreadProvider(phone: string): Promise<"meta" | "ev
   }
 }
 
-function guessMediaType(url: string, filename?: string): "image" | "video" | "audio" | "document" {
+export function guessMediaType(url: string, filename?: string): "image" | "video" | "audio" | "document" {
   const src = `${url} ${filename ?? ""}`.toLowerCase();
   if (/\.(jpe?g|png|webp)(\?|$)/.test(src)) return "image";
   if (/\.(mp4|3gp)(\?|$)/.test(src)) return "video";
@@ -191,6 +191,7 @@ export async function sendMetaMessage(
   message: string,
   fileUrl?: string,
   filename?: string,
+  mediaType?: "image" | "video" | "audio" | "document",
 ): Promise<MetaSendResult> {
   const headers = gatewayHeaders();
   if (!headers) return { ok: false, error: "WhatsApp Business belum terhubung" };
@@ -217,7 +218,7 @@ export async function sendMetaMessage(
     if (/\.webp(\?|#|$)/i.test(link)) {
       return { ok: false, error: "WebP tidak didukung WhatsApp Cloud API (131053)" };
     }
-    const type = guessMediaType(link, name);
+    const type = mediaType ?? guessMediaType(link, name);
     const media: Record<string, unknown> = { link };
     if (type !== "audio" && message) media.caption = message;
     if (type === "document") media.filename = name ?? "file";

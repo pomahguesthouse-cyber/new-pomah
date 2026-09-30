@@ -13,6 +13,17 @@ import {
   resolvePropertyAiConfig,
 } from "@/services/ai-client.service";
 import { sendWhatsAppMessage } from "@/services/whatsapp.service";
+import { isMetaReengagementError } from "@/services/guest-whatsapp.service";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import {
+  WA_OUTBOUND_BUCKET,
+  WA_SIGNED_URL_TTL_SECONDS,
+  adminSendFailureMessage,
+  fileNameForMime,
+  parseAdminSendInput,
+  selectOutboundMediaType,
+  threadPreview,
+} from "@/services/wa-outbound-attachment";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
 
 export const listThreads = createServerFn({ method: "GET" })
@@ -57,6 +68,7 @@ export const getThread = createServerFn({ method: "GET" })
       .eq("thread_id", data.id)
       .order("sent_at", { ascending: true });
     if (messagesError) throw messagesError;
+    const visibleMessages = await withOutboundMediaUrls(messages ?? []);
 
     // Look up guest context by phone (best-effort)
     let guest: any = null;
@@ -82,14 +94,61 @@ export const getThread = createServerFn({ method: "GET" })
       }
     }
 
-    return { thread: currentThread, messages: messages ?? [], guest, booking };
+    return { thread: currentThread, messages: visibleMessages, guest, booking };
   });
+
+function metadataRecord(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  return metadata as Record<string, unknown>;
+}
+
+/** Satu batch signed URL untuk baris yang menyimpan storage_path. */
+async function withOutboundMediaUrls<T extends { metadata?: unknown }>(messages: T[]): Promise<T[]> {
+  const paths = [
+    ...new Set(
+      messages
+        .map((message) => metadataRecord(message.metadata)?.storage_path)
+        .filter((path): path is string => typeof path === "string" && path.length > 0 && !path.includes("..")),
+    ),
+  ];
+  if (paths.length === 0) return messages;
+
+  const signed = new Map<string, string>();
+  try {
+    for (let i = 0; i < paths.length; i += 100) {
+      const slice = paths.slice(i, i + 100);
+      const { data, error } = await supabaseAdmin.storage
+        .from(WA_OUTBOUND_BUCKET)
+        .createSignedUrls(slice, WA_SIGNED_URL_TTL_SECONDS);
+      if (error) {
+        console.error("[Admin WhatsApp] createSignedUrls:", error.message);
+        continue;
+      }
+      slice.forEach((requested, index) => {
+        const row = data?.[index];
+        const url = row?.signedUrl;
+        if (!url || row?.error) return;
+        signed.set(requested, url);
+        if (row.path) signed.set(row.path, url);
+      });
+    }
+  } catch (error) {
+    console.error("[Admin WhatsApp] createSignedUrls failed:", error);
+    return messages;
+  }
+
+  return messages.map((message) => {
+    const meta = metadataRecord(message.metadata);
+    const path = meta?.storage_path;
+    const url = typeof path === "string" ? signed.get(path) : undefined;
+    if (!url || !meta) return message;
+    return { ...message, metadata: { ...meta, media_url: url } };
+  });
+}
 
 export const sendMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) =>
-    z.object({ threadId: z.string().uuid(), body: z.string().min(1).max(4000) }).parse(d),
-  )
+  .inputValidator((d) => parseAdminSendInput(d))
   .handler(async ({ data, context }) => {
     const { data: thread } = await context.supabase
       .from("whatsapp_threads")
@@ -104,45 +163,101 @@ export const sendMessage = createServerFn({ method: "POST" })
       .limit(1)
       .maybeSingle();
 
-    let wppId: string | null = null;
-    if (prop?.wpp_token) {
-      const sendResult = await sendWhatsAppMessage(prop.wpp_token, thread.phone, data.body);
-      if (!sendResult.ok) {
-        console.error("[Admin WhatsApp] WhatsApp gateway send failed:", sendResult.error);
-      }
-      const raw = sendResult.raw as any;
-      wppId =
-        raw?.id ??
-        raw?.message_id ??
-        raw?.data?.id ??
-        raw?.data?.message_id ??
-        raw?.detail?.id ??
-        null;
+    const caption = data.body;
+    const fileName = data.attachment
+      ? fileNameForMime(data.attachment.name, data.attachment.mime)
+      : null;
+    const mediaType = data.attachment
+      ? selectOutboundMediaType({
+          mime: data.attachment.mime,
+          size: data.attachment.size,
+          name: fileName ?? data.attachment.name,
+        })
+      : null;
+
+    const metadataBase: Record<string, unknown> = {
+      is_manual_admin: true,
+      source: "admin_inbox",
+    };
+    if (data.attachment && fileName && mediaType) {
+      metadataBase.media_type = mediaType;
+      metadataBase.mime_type = data.attachment.mime;
+      metadataBase.file_name = fileName;
+      metadataBase.storage_path = data.attachment.path;
+      metadataBase.size = data.attachment.size;
     }
 
-    const { error } = await context.supabase.from("whatsapp_messages").insert({
-      thread_id: data.threadId,
-      direction: "out",
-      body: data.body,
-      wpp_id: wppId,
-      metadata: {
-        is_manual_admin: true,
-        source: "admin_inbox",
-        send_status: prop?.wpp_token ? "sent" : "local_only",
-      },
-    } as any);
-    if (error) throw error;
+    const insertOutbound = async (
+      sendStatus: "sent" | "failed" | "local_only",
+      wppId: string | null,
+      errorText?: string,
+    ) => {
+      const { error } = await context.supabase.from("whatsapp_messages").insert({
+        thread_id: data.threadId,
+        direction: "out",
+        body: caption,
+        wpp_id: wppId,
+        metadata: {
+          ...metadataBase,
+          send_status: sendStatus,
+          ...(errorText ? { error: errorText.slice(0, 500) } : {}),
+        },
+      } as any);
+      if (error) throw error;
+    };
+
+    if (prop?.wpp_token) {
+      let fileUrl: string | undefined;
+      if (data.attachment) {
+        const signed = await supabaseAdmin.storage
+          .from(WA_OUTBOUND_BUCKET)
+          .createSignedUrl(data.attachment.path, WA_SIGNED_URL_TTL_SECONDS);
+        const signedUrl = signed.data?.signedUrl;
+        if (signed.error || !signedUrl) {
+          const message = "Gagal membuat tautan lampiran. Coba unggah ulang.";
+          console.error("[Admin WhatsApp] signed url:", signed.error?.message);
+          await insertOutbound("failed", null, message);
+          return { ok: false as const, error: message };
+        }
+        fileUrl = signedUrl;
+      }
+
+      const sendResult = await sendWhatsAppMessage(
+        prop.wpp_token,
+        thread.phone,
+        caption,
+        fileUrl,
+        fileName ?? undefined,
+        mediaType ? { mediaType, mimetype: data.attachment?.mime } : undefined,
+      );
+      if (!sendResult.ok) {
+        const message = adminSendFailureMessage(
+          isMetaReengagementError(sendResult),
+          sendResult.error,
+        );
+        console.error("[Admin WhatsApp] WhatsApp gateway send failed:", sendResult.error);
+        await insertOutbound("failed", null, message);
+        return { ok: false as const, error: message };
+      }
+
+      const messageId = sendResult.messageId;
+      const wppId = typeof messageId === "string" && messageId.trim() ? messageId.trim() : null;
+      await insertOutbound("sent", wppId);
+    } else {
+      await insertOutbound("local_only", null);
+    }
+
     const pauseMs = await resolveHumanTakeoverMs(context.supabase);
     await context.supabase
       .from("whatsapp_threads")
       .update({
-        last_message_preview: data.body.slice(0, 120),
+        last_message_preview: threadPreview(caption, fileName),
         last_message_at: new Date().toISOString(),
         unread_count: 0,
         ai_paused_until: pauseMs > 0 ? new Date(Date.now() + pauseMs).toISOString() : null,
       } as any)
       .eq("id", data.threadId);
-    return { ok: true };
+    return { ok: true as const };
   });
 
 export const markRead = createServerFn({ method: "POST" })
