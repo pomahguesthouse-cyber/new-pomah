@@ -2,11 +2,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 /**
  * Sends FCM HTTP v1 notifications to admin and manager devices.
- * Called by the database trigger via pg_net. Requires:
- * - FCM_SERVICE_ACCOUNT_JSON (Firebase service account, never committed)
- * - PUSH_WEBHOOK_SECRET (must match staff_push_config.webhook_secret)
+ * Called by the database trigger via pg_net. Secrets, env first, database second:
+ * - PUSH_WEBHOOK_SECRET, else staff_push_config.webhook_secret (id = 1)
+ * - FCM_SERVICE_ACCOUNT_JSON, else staff_push_config.fcm_service_account (id = 1)
+ * The database is read with the service-role client only. Secrets and the
+ * private key are never committed or logged.
  * Deploy with JWT verification off; this function checks the shared secret.
  */
+
+// deno-lint-ignore no-explicit-any
+type ServiceClient = ReturnType<typeof createClient<any>>;
 
 type ServiceAccount = {
   project_id: string;
@@ -114,11 +119,20 @@ async function googleAccessToken(account: ServiceAccount): Promise<string> {
   return payload.access_token;
 }
 
-function loadServiceAccount(): ServiceAccount {
-  const raw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON") ?? "";
-  if (!raw.trim()) throw new Error("FCM_SERVICE_ACCOUNT_JSON is not set");
-  const parsed = JSON.parse(raw) as Partial<ServiceAccount>;
-  if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+function normalizeServiceAccount(value: unknown): ServiceAccount {
+  const parsed = (typeof value === "string" ? JSON.parse(value) : value) as
+    | Partial<ServiceAccount>
+    | null;
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    typeof parsed.project_id !== "string" ||
+    !parsed.project_id ||
+    typeof parsed.client_email !== "string" ||
+    !parsed.client_email ||
+    typeof parsed.private_key !== "string" ||
+    !parsed.private_key
+  ) {
     throw new Error("FCM service account is missing project_id, client_email, or private_key");
   }
   return {
@@ -126,6 +140,47 @@ function loadServiceAccount(): ServiceAccount {
     client_email: parsed.client_email,
     private_key: parsed.private_key.replace(/\\n/g, "\n"),
   };
+}
+
+type PushConfigRow = { webhook_secret: string | null; fcm_service_account: unknown };
+
+/** staff_push_config row 1 (service role only). Null when missing or unreadable. */
+async function readPushConfig(supabase: ServiceClient): Promise<PushConfigRow | null> {
+  const { data, error } = await supabase
+    .from("staff_push_config")
+    .select("webhook_secret, fcm_service_account")
+    .eq("id", 1)
+    .maybeSingle();
+  if (error) {
+    console.error("[send-staff-push] config read failed");
+    return null;
+  }
+  return (data as PushConfigRow | null) ?? null;
+}
+
+/** Env var first, staff_push_config.fcm_service_account as fallback. */
+function loadServiceAccount(config: PushConfigRow | null): ServiceAccount {
+  const raw = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON") ?? "";
+  if (raw.trim()) return normalizeServiceAccount(raw);
+  const stored = config?.fcm_service_account;
+  if (stored === null || stored === undefined) {
+    throw new Error("FCM service account is not configured (env or staff_push_config)");
+  }
+  return normalizeServiceAccount(stored);
+}
+
+/** Constant-time string compare (compares SHA-256 digests byte by byte). */
+async function secretsMatch(provided: string, expected: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(provided)),
+    crypto.subtle.digest("SHA-256", enc.encode(expected)),
+  ]);
+  const x = new Uint8Array(a);
+  const y = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
 }
 
 function dataValue(value: unknown): string {
@@ -136,9 +191,22 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return json(200, { ok: true });
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
-  const expected = Deno.env.get("PUSH_WEBHOOK_SECRET") ?? "";
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+  );
+
+  // Env first; the database is only read when the env secret is not set.
+  let config: PushConfigRow | null = null;
+  let expected = Deno.env.get("PUSH_WEBHOOK_SECRET") ?? "";
+  if (!expected) {
+    config = await readPushConfig(supabase);
+    expected = config?.webhook_secret ?? "";
+  }
   const provided = req.headers.get("x-push-secret") ?? "";
-  if (!expected || provided !== expected) return json(401, { error: "unauthorized" });
+  if (!expected || !(await secretsMatch(provided, expected))) {
+    return json(401, { error: "unauthorized" });
+  }
 
   let body: PushBody;
   try {
@@ -153,12 +221,11 @@ Deno.serve(async (req) => {
   if (url && !url.startsWith("/admin")) return json(400, { error: "invalid url" });
 
   try {
-    const account = loadServiceAccount();
+    if (!Deno.env.get("FCM_SERVICE_ACCOUNT_JSON")?.trim() && !config) {
+      config = await readPushConfig(supabase);
+    }
+    const account = loadServiceAccount(config);
     const accessToken = await googleAccessToken(account);
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
     const requested = recipientFilter(body);
     const { data: tokens, error } = await supabase.rpc("list_staff_push_tokens", {
       p_user_ids: requested,
