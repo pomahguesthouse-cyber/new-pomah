@@ -21,7 +21,10 @@ export const getMyAccess = createServerFn({ method: "GET" })
       email,
       profile: profile ?? null,
       roles: roleList,
-      isStaff: roleList.includes("admin") || roleList.includes("staff"),
+      isStaff:
+        roleList.includes("admin") ||
+        roleList.includes("staff") ||
+        roleList.includes("manager"),
     };
   });
 
