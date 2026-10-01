@@ -14,6 +14,8 @@ import {
   shouldArmQuickAck,
 } from "../src/services/wa-autoreply/runtime-policy";
 import {
+  MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
+  MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
   MEDIA_FAST_PATH_BROCHURE_REPLY,
   MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY,
   MEDIA_FAST_PATH_PHOTO_REPLY,
@@ -22,6 +24,8 @@ import {
   roomsForPhotoPlan,
   type GalleryRoom,
 } from "../src/services/wa-autoreply/media-fast-path";
+import { isMediaRequest, isViewRoomRequest } from "../src/services/wa-autoreply/message-parsers";
+import { isBrochureRequest } from "../src/services/reply-postprocess";
 import { evolutionInboxPollDecision } from "../src/services/evolution-inbox-gate";
 import {
   BROCHURE_CAPTION,
@@ -115,6 +119,74 @@ assert.equal(brochure?.kind === "brochure" ? brochure.photoFallback : "x", null)
 const both = planMediaFastPath(inbound("minta pricelist beserta gambar kamarnya"), rooms);
 assert.equal(both?.kind, "brochure");
 if (both?.kind === "brochure") assert.equal(both.reply, MEDIA_FAST_PATH_BROCHURE_REPLY);
+
+// "Mau lihat kamar" / "boleh lihat kamarnya" (tanpa kata foto) → brosur PDF juga,
+// dengan balasan ramah yang sama seperti permintaan foto.
+for (const phrase of [
+  "mau lihat kamar",
+  "boleh lihat kamarnya",
+  "boleh lihat kamarnya kak?",
+  "Kak mau liat kamarnya dong",
+  "boleh dilihat kamarnya?",
+  "Selamat sore, mau lihat kamar nya boleh?",
+  // Insiden 1 Okt 2026: awalan "me-" membuat pola lama gagal → bot hanya menjawab deskripsi kamar.
+  "apakah saya boleh melihat kamarnya kak?",
+  "pengen lihat kamar",
+  "pengen melihat kamarnya",
+  "lihat kamar dong",
+  "mau liat kamar",
+  "kak bisa saya lihat kamarnya?",
+  "boleh saya lihat-lihat kamarnya dulu?",
+  "ingin melihat kamar grand deluxe",
+  "boleh lihat kamar yang deluxe?",
+  "show me the room",
+]) {
+  const view = planMediaFastPath(inbound(phrase), rooms);
+  assert.equal(view?.kind, "brochure", `"${phrase}" harus dijawab brosur PDF`);
+  if (view?.kind === "brochure") {
+    assert.equal(view.reply, MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, `"${phrase}" memakai balasan ramah`);
+    assert.equal(view.photoFallback, null, "tanpa kata foto → tidak ada cadangan foto per kamar");
+  }
+}
+// Kunjungan langsung bukan permintaan media.
+assert.equal(planMediaFastPath(inbound("mau lihat kamar langsung"), rooms), null);
+assert.equal(planMediaFastPath(inbound("mau datang survei lihat kamar"), rooms), null);
+assert.equal(isViewRoomRequest("boleh lihat kamar mandinya?"), false, "kamar mandi bukan permintaan media");
+assert.equal(isMediaRequest("apakah saya boleh melihat kamarnya kak?"), true, "router/orchestrator ikut mengenali");
+// Pesan sudah dijawab sebelumnya: hanya burst inbound terakhir yang dihitung (alur insiden 1 Okt 2026).
+assert.equal(
+  planMediaFastPath(
+    [
+      { direction: "in", body: "kalau grand deluxe brp ya kak?" },
+      { direction: "out", body: "Grand Deluxe harganya Rp300.000/malam, Kak." },
+      { direction: "in", body: "apakah saya boleh melihat kamarnya kak?" },
+    ],
+    rooms,
+  )?.kind,
+  "brochure",
+);
+// Campuran dengan harga/tanggal tetap ke Front Office (LLM) — tool media + lampiran brosur tetap aktif di sana.
+assert.equal(planMediaFastPath(inbound("boleh lihat kamarnya, harganya berapa?"), rooms), null);
+assert.equal(isBrochureRequest("apakah saya boleh melihat kamarnya kak?"), true);
+// Teks > 280 karakter tidak masuk fast-path (dibiarkan ke LLM).
+assert.equal(planMediaFastPath(inbound("mau lihat kamar " + "x".repeat(300)), rooms), null);
+
+// Nada balasan: hangat (sapaan "Kak", tanpa huruf kapital teriak / tanda seru berulang / teguran).
+for (const reply of [
+  MEDIA_FAST_PATH_PHOTO_REPLY,
+  MEDIA_FAST_PATH_ALREADY_SENT_REPLY,
+  MEDIA_FAST_PATH_BROCHURE_REPLY,
+  MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY,
+  MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY,
+]) {
+  assert.ok(reply.includes("Kak"), `sapaan Kak: ${reply}`);
+  assert.ok(!/[A-Z]{4,}/.test(reply), `tanpa huruf kapital teriak: ${reply}`);
+  assert.ok(!/[!?]{2,}/.test(reply), `tanpa tanda seru/tanya berulang: ${reply}`);
+  assert.ok(!/\b(jangan|dilarang|tidak boleh|harus)\b/i.test(reply), `tanpa teguran: ${reply}`);
+  assert.ok(!/https?:\/\//i.test(reply), `tanpa URL di teks: ${reply}`);
+}
+assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /Dengan senang hati Kak/);
+assert.match(MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY, /foto-foto lengkap tiap tipe kamar/);
 
 assert.equal(planMediaFastPath(inbound("harganya berapa ya ka"), rooms), null);
 assert.equal(

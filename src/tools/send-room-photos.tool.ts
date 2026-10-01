@@ -125,9 +125,9 @@ export const sendRoomPhotos: ToolHandler = async (args, ctx): Promise<string> =>
     results,
     note:
       totalSent > 0 || anySkipped
-        ? "BERHASIL: foto sudah terkirim ke chat tamu. JANGAN kirim permintaan maaf, " +
-          "pesan 'kendala teknis', atau fallback ke website. Cukup tutup dengan CTA singkat, " +
-          "mis. tanyakan tanggal menginap atau tawarkan booking."
-        : "Semua percobaan kirim foto gagal; sampaikan kendala teknis singkat dan arahkan tamu ke pomahguesthouse.com.",
+        ? "BERHASIL: foto sudah terkirim ke chat tamu. Tidak perlu meminta maaf, " +
+          "menyebut 'kendala teknis', atau mengarahkan ke website. Cukup tutup dengan CTA singkat " +
+          "yang hangat, mis. tanyakan tanggal menginap atau tawarkan bantuan booking."
+        : "Semua percobaan kirim foto gagal; sampaikan dengan sopan dan hangat bahwa ada kendala teknis singkat, mohon maaf atas ketidaknyamanannya, lalu arahkan tamu ke pomahguesthouse.com.",
   });
 };

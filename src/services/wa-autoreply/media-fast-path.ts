@@ -10,7 +10,7 @@
  * jawaban harga tidak tertelan — insiden 9 Agu 2026.
  */
 
-import { isMediaRequest } from "@/services/wa-autoreply/message-parsers";
+import { isMediaRequest, isViewRoomRequest } from "@/services/wa-autoreply/message-parsers";
 
 export interface GalleryRoom {
   name: string;
@@ -19,19 +19,19 @@ export interface GalleryRoom {
 }
 
 export const MEDIA_FAST_PATH_PHOTO_REPLY =
-  "Ini foto kamarnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?";
+  "Dengan senang hati Kak 😊 Ini foto kamarnya ya. Rencana menginap tanggal berapa dan untuk berapa orang?";
 
 export const MEDIA_FAST_PATH_ALREADY_SENT_REPLY =
-  "Foto kamarnya sudah saya kirim tadi ya Kak 😊 Mau saya bantu cek tanggal menginap?";
+  "Foto kamarnya sudah kami kirim tadi ya Kak 😊 Silakan dilihat-lihat dulu, dan kalau berkenan, boleh kami bantu cek tanggal menginapnya?";
 
 export const MEDIA_FAST_PATH_BROCHURE_REPLY =
-  "Ini brosurnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?";
+  "Dengan senang hati Kak 😊 Ini brosur kami ya. Rencana menginap tanggal berapa dan untuk berapa orang?";
 
 export const MEDIA_FAST_PATH_PHOTO_BROCHURE_REPLY =
-  "Ini brosur Pomah Guesthouse berisi foto semua tipe kamar ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?";
+  "Dengan senang hati Kak 😊 Ini brosur kamar kami ya, di dalamnya ada foto-foto lengkap tiap tipe kamar. Rencana menginap tanggal berapa dan untuk berapa orang?";
 
 export const MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY =
-  "Brosurnya sudah saya kirim tadi ya Kak 😊 Mau saya bantu cek tanggal menginap?";
+  "Brosurnya sudah kami kirim tadi ya Kak 😊 Silakan dibuka dulu, dan kalau berkenan, boleh kami bantu cek tanggal menginapnya?";
 
 export interface RoomPhotosPlan {
   kind: "room_photos";
@@ -53,14 +53,6 @@ export type MediaFastPathPlan =
 
 const PHOTO_RE =
   /\b(foto(?:2|nya|-foto)?|photos?|gambar(?:2|nya|-gambar)?|pict?ures?|pics?|images?|penampakan|nampakan)\b/i;
-/**
- * "Lihat kamar" tanpa kata foto: "liat kamarnya dong", "show me the room",
- * "contoh kamarnya". Kunjungan langsung ("lihat kamar langsung", "datang
- * survei") bukan permintaan media.
- */
-const VIEW_ROOM_RE =
-  /\b(lihat|liat|lihatin|liatin|tunjuk(?:kan|in)?|show(?:\s+me)?|see)\b[^\n]{0,20}?\b(kamar(?:nya)?|rooms?|interior(?:nya)?)\b|\bcontoh\s+kamar(?:nya)?\b/i;
-const IN_PERSON_VISIT_RE = /\b(langsung|datang|survei|survey|ke lokasi|on ?site|in person)\b/i;
 const BROCHURE_RE =
   /\b(?:(?:brosur|brochure|katalog|catalog|catalogue)(?:nya)?|pricelist|price list|daftar harga bergambar)\b/i;
 const TOUR_OR_VIDEO_RE = /\b(virtual tour|tour 360|tur 360|walkthrough|video|videonya|reels?)\b/i;
@@ -160,7 +152,7 @@ export function planMediaFastPath(
 
   const wantsPhoto = PHOTO_RE.test(text);
   const wantsBrochure = BROCHURE_RE.test(text);
-  const wantsView = VIEW_ROOM_RE.test(text) && !IN_PERSON_VISIT_RE.test(text);
+  const wantsView = isViewRoomRequest(text);
   if (!wantsPhoto && !wantsBrochure && !wantsView && !isMediaRequest(text)) return null;
   // Burst campuran (keluhan + minta foto) tidak boleh dijawab hanya dengan foto.
   const fillerOnly = /^(?:halo+|hai+|hi+|hey+|kak|kakak|ya+|ok|oke|permisi|min)[\s!.]*$/i;
@@ -168,7 +160,7 @@ export function planMediaFastPath(
     const line = body.trim();
     if (!line) return false;
     if (PHOTO_RE.test(line) || BROCHURE_RE.test(line) || isMediaRequest(line)) return false;
-    if (VIEW_ROOM_RE.test(line)) return false;
+    if (isViewRoomRequest(line)) return false;
     if (fillerOnly.test(line)) return false;
     return true;
   });

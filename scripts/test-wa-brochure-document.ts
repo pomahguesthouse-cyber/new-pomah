@@ -109,6 +109,9 @@ assert.ok(isPdfUrl("https://x/y.pdf?download=1"));
 assert.ok(!isPdfUrl("https://x/y.webp"));
 const linkReply = brochureLinkFallbackReply(fromStorage!.url);
 assert.ok(linkReply.includes(fromStorage!.url), "fallback teks wajib memuat tautan brosur");
+assert.ok(linkReply.startsWith("Dengan senang hati Kak"), "fallback tautan bernada ramah");
+assert.ok(!/[A-Z]{4,}/.test(linkReply.replace(fromStorage!.url, "")), "fallback tanpa huruf kapital teriak");
+assert.ok(!/\b(jangan|dilarang)\b/i.test(linkReply), "fallback tanpa teguran");
 
 // ─── Kirim lewat Meta sebagai dokumen ────────────────────────────────────────
 
