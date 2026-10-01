@@ -869,6 +869,7 @@ function RoomSliderSection({ s }: { s: LPRoomSliderSection }) {
   const availFn = useServerFn(checkRoomTypeAvailability);
   const { data: availData } = useQuery({
     queryKey: ["lp-availability", effIn, effOut],
+    staleTime: 0,
     queryFn: () => availFn({ data: { checkIn: effIn, checkOut: effOut } }),
     enabled: !!effIn && !!effOut && effIn < effOut,
   });

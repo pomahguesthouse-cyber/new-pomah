@@ -405,7 +405,7 @@ export function NewBookingDialog({ open, onClose, onCreated }: Props) {
         {/* Body — 2-col on lg+, stacked on mobile */}
         <div className="grid flex-1 min-h-0 grid-cols-1 lg:grid-cols-[1fr_320px]">
           <ScrollArea className="border-r border-border">
-            <div className="space-y-5 p-4 sm:p-6">
+            <div className="space-y-4 p-3 sm:space-y-5 sm:p-6">
               {/* Tamu */}
               <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -890,7 +890,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <section className="rounded-lg border border-border bg-card p-3 sm:p-4">
       <header className="mb-3 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">
           {icon}

@@ -506,8 +506,8 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[680px] p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-6 py-5">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] sm:w-full sm:max-w-[680px] p-0 gap-0 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] flex flex-col">
+        <div className="relative shrink-0 border-b border-border bg-gradient-to-br from-primary/15 via-accent/5 to-transparent px-4 py-4 pr-12 sm:px-6 sm:py-5">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
@@ -533,7 +533,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-          <div className="space-y-5 p-6">
+          <div className="space-y-4 p-3 sm:space-y-5 sm:p-6">
             <Section icon={<User className="h-4 w-4" />} title="Informasi Tamu">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Nama Lengkap" required>
@@ -746,9 +746,9 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 border-t border-border bg-muted/30 px-6 py-3">
-          <Button variant="outline" onClick={onClose} disabled={updateMut.isPending}>Batal</Button>
-          <Button onClick={() => updateMut.mutate()} disabled={!canSave} className="gap-1.5">
+        <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/30 px-4 py-3 sm:gap-0 sm:px-6">
+          <Button variant="outline" onClick={onClose} disabled={updateMut.isPending} className="h-10 sm:h-9">Batal</Button>
+          <Button onClick={() => updateMut.mutate()} disabled={!canSave} className="h-10 gap-1.5 sm:h-9">
             {updateMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {updateMut.isPending ? "Menyimpan…" : "Simpan Perubahan"}
           </Button>
@@ -760,7 +760,7 @@ export function EditBookingDialog({ open, booking, onClose }: Props) {
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <section className="rounded-lg border border-border bg-card p-3 sm:p-4">
       <header className="mb-3 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-primary">{icon}</span>
         <h3 className="text-sm font-semibold">{title}</h3>

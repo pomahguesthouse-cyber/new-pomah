@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
@@ -173,10 +173,24 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function AuthSync() {
   const router = useRouter();
   const qc = useQueryClient();
+  const knownUserId = useRef<string | null>(null);
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       // TOKEN_REFRESHED fires every jam pada auto-refresh — skip agar tidak reload.
-      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") return;
+      if (event === "INITIAL_SESSION") {
+        knownUserId.current = session?.user?.id ?? null;
+        return;
+      }
+      if (event === "TOKEN_REFRESHED") return;
+      // Resuming the app (WebView back to foreground) re-emits SIGNED_IN for the
+      // same user. Nothing changed, so keep the cache instead of refetching
+      // every page; a different user or first sign-in still invalidates.
+      if (event === "SIGNED_IN") {
+        const uid = session?.user?.id ?? null;
+        if (uid && uid === knownUserId.current) return;
+        knownUserId.current = uid;
+      }
+      if (event === "SIGNED_OUT") knownUserId.current = null;
       // Saat sign-out: kosongkan cache & arahkan ke /login. JANGAN invalidate
       // (akan memicu refetch serverFn tanpa token -> 401 blank screen).
       if (event === "SIGNED_OUT") {
