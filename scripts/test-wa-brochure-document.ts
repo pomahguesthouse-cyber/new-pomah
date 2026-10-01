@@ -161,6 +161,9 @@ async function main() {
   assert.ok(svc.includes("brochureLinkFallbackReply(outcome.file.url)"));
   assert.ok(svc.includes("MEDIA_FAST_PATH_BROCHURE_ALREADY_SENT_REPLY"));
   assert.ok(svc.includes("loadRecentOutboundCaptions(phone)"));
+  // Dokumen brosur harus tercatat di whatsapp_messages (terlihat di inbox admin).
+  assert.ok(svc.includes('source: "bot_brochure"'));
+  assert.ok(svc.includes("sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id)"));
 
   console.log("test-wa-brochure-document: OK");
 }
