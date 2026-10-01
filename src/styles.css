@@ -246,3 +246,42 @@ body:has(.ai-lab-react-flow) {
     padding-bottom: env(safe-area-inset-bottom) !important;
   }
 }
+
+/*
+ * Android app (Capacitor WebView) only. The runtime adds .native-app to <html>
+ * when window.androidBridge exists, so the website and desktop are unchanged.
+ * - touch-action: manipulation drops the double-tap-zoom wait on controls.
+ * - backdrop-filter re-blurs on every scroll frame in a WebView; the top bar and
+ *   bottom nav already have a near-opaque background, so use it as-is.
+ * - Sheets/dialogs open in ~200ms instead of 500ms (sidebar "More" drawer).
+ */
+html.native-app a,
+html.native-app button,
+html.native-app [role="button"],
+html.native-app [role="tab"],
+html.native-app [role="menuitem"],
+html.native-app summary,
+html.native-app label,
+html.native-app select,
+html.native-app input,
+html.native-app textarea {
+  touch-action: manipulation;
+}
+html.native-app .backdrop-blur-md,
+html.native-app .backdrop-blur-sm,
+html.native-app .backdrop-blur {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html.native-app .admin-mobile-nav,
+html.native-app .admin-topbar {
+  background-color: var(--background);
+}
+html.native-app [data-state="open"].animate-in {
+  animation-duration: 200ms;
+  transition-duration: 200ms;
+}
+html.native-app [data-state="closed"].animate-out {
+  animation-duration: 150ms;
+  transition-duration: 150ms;
+}
