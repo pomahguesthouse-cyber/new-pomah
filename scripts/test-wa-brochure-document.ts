@@ -167,6 +167,9 @@ async function main() {
     dedupSource.includes("Date.now() - windowMs"),
     "pencarian caption outbound harus memakai jendela yang diteruskan, bukan 30 menit tetap",
   );
+  // Dokumen brosur harus tercatat di whatsapp_messages (terlihat di inbox admin).
+  assert.ok(svc.includes('source: "bot_brochure"'));
+  assert.ok(svc.includes("sendBrochureFastPath(c.wpp_token, sendTarget, phone, c.thread_id)"));
 
   console.log("test-wa-brochure-document: OK");
 }
