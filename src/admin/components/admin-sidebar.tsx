@@ -267,7 +267,7 @@ function SortableNavRow({
         tooltip={item.label}
         className="group/item relative"
       >
-        <Link to={item.to}>
+        <Link to={item.to} preload="intent">
           {active && (
             <span className="absolute left-0 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r-full bg-accent" />
           )}

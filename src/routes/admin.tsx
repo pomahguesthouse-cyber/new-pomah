@@ -10,6 +10,15 @@ import {
 import { authErrorText, isInvalidSessionError, isTransientAuthError } from "@/lib/auth-storage";
 import { checkSession, clearStaleStaffAuth } from "@/lib/staff-auth-cleanup";
 
+/**
+ * beforeLoad runs on every /admin/* navigation. A full checkSession() calls the
+ * auth server (getUser), which made each page switch wait on the network.
+ * After one successful check we trust the local session for a few minutes.
+ * The first check, expired tokens, and sign-out still take the full path.
+ */
+const SESSION_TRUST_MS = 3 * 60_000;
+let lastValidAt = 0;
+
 export const Route = createFileRoute("/admin")({
   // The session lives in localStorage, so a server render cannot call getUser().
   // Gating the document on the pomah_staff cookie bounced a good sign-in back
@@ -21,8 +30,18 @@ export const Route = createFileRoute("/admin")({
   }),
   beforeLoad: async () => {
     if (typeof window === "undefined") return;
+    if (Date.now() - lastValidAt < SESSION_TRUST_MS) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return;
+      } catch {
+        /* fall through to the full check */
+      }
+    }
+    lastValidAt = 0;
     const status = await checkSession("admin beforeLoad");
     if (status === "valid") {
+      lastValidAt = Date.now();
       markStaffSessionHint();
       return;
     }

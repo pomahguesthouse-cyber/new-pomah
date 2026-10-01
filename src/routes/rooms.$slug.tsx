@@ -263,6 +263,7 @@ function RoomBookingPage() {
 
   const { data: availData } = useQuery({
     queryKey: ["room-avail", checkIn, checkOut],
+    staleTime: 0,
     queryFn: () => availFn({ data: { checkIn, checkOut } }),
     enabled: !!checkIn && !!checkOut && checkIn < checkOut,
   });
