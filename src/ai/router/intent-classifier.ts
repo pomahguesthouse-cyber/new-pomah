@@ -147,6 +147,7 @@ export const RULES: IntentRule[] = [
       /\b(video|videonya|reels?|penampakan|nampakan|visual)\b/i,
       /\b(virtual tour|tour 360|tur 360|360|walkthrough|walk through|lihat kamar(?:nya)? langsung)\b/i,
       /\b(liat|lihat|minta|ada|punya|boleh)\b.{0,20}\b(foto|gambar|video|brosur|katalog)\b/i,
+      /\b(?:me)?(?:lihat|liat)(?:in|kan)?\b.{0,25}\bkamar(?:nya)?\b(?!.{0,20}\b(?:langsung|datang|survei|survey|ke lokasi)\b)/i,
     ],
   },
 

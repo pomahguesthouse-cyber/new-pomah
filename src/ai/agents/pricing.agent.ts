@@ -226,9 +226,9 @@ function buildGuestPrompt(s: Scaffold): string {
 
 
     "FOTO/BROSUR KAMAR: Bila tamu minta foto, gambar, video, atau brosur kamar, " +
-      "JANGAN bilang Pomah tidak bisa kirim foto. Pricing tidak mengirim media sendiri — " +
-      "arahkan tamu ke Front Office yang akan mengirim foto/brosur tipe kamar yang diminta. " +
-      "Jangan mengarang URL atau nama file foto.",
+      "Pomah selalu bisa mengirim foto/brosur, jadi jangan pernah menyatakan sebaliknya. Pricing tidak mengirim media sendiri — " +
+      "sampaikan dengan ramah bahwa foto/brosur tipe kamar yang diminta akan dikirim (oleh Front Office). " +
+      "Gunakan sapaan 'Kak' dan nada hangat, tanpa menegur tamu. Jangan mengarang URL atau nama file foto.",
 
     CAPABILITY_HONESTY_BLOCK,
 

@@ -1903,13 +1903,13 @@ export async function executeAutoreplyForPhone(
     );
     return "ai_credit_exhausted";
   }
-  // Jika foto/tour sudah terkirim ke tamu, JANGAN retry — retry akan
+  // Jika foto/tour sudah terkirim ke tamu, tidak perlu retry — retry akan
   // menjalankan ulang tool dan mengirim foto yang sama berulang kali.
   const mediaAlreadySent = (orchResult?.toolsUsed ?? []).some(
     (t: string) => t === "Room - Kirim Foto ke WA Tamu" || t === "Room - Kirim Link Virtual Tour 360°",
   );
   if (!reply && mediaAlreadySent) {
-    adoptReply("Itu foto kamarnya ya Kak 😊 Rencana menginap tanggal berapa dan untuk berapa orang?");
+    adoptReply("Dengan senang hati Kak 😊 Ini foto kamarnya ya. Rencana menginap tanggal berapa dan untuk berapa orang?");
   }
   if (!reply && isGenericFallback && queueEntryId && queueAttempt < QUEUE_MAX_ATTEMPTS) {
     await quickAck.beforeReplySend();

@@ -55,7 +55,8 @@ const BROCHURE_REQUEST_PATTERNS: RegExp[] = [
   // they say "liat contoh kamarnya", "tunjukin kamar", "ada kamar yang bisa
   // dilihat?". Catch those so the brochure attaches instead of the agent
   // promising to "kirim brosur" with nothing actually attached.
-  /\b(lihat|liat|liyat|tunjuk(?:kan|in)?|tunjuin|kirim(?:in|kan)?|minta)\b.*\b(contoh\s+)?(kamar|tipe|room)(?:nya|nya)?\b/i,
+  /\b(?:me)?(lihat|liat|liyat)(?:in|kan)?\b.*\b(contoh\s+)?(kamar|tipe|room)(?:nya|nya)?\b/i,
+  /\b(tunjuk(?:kan|in)?|menunjukkan|tunjuin|kirim(?:in|kan)?|minta)\b.*\b(contoh\s+)?(kamar|tipe|room)(?:nya|nya)?\b/i,
   /\bcontoh(?:nya)?\b.*\b(kamar|tipe|room|penginapan)(?:nya)?\b/i,
   /\b(kamar|tipe|room)(?:nya)?\b.*\bcontoh(?:nya)?\b/i,
 ];
@@ -183,8 +184,8 @@ export function normalizeBrochureReply(
 
   const fileText = attachmentName.trim() ? ` (${attachmentName.trim()})` : "";
   return (
-    `Baik Kak, berikut saya kirimkan brosur kamar Pomah Guesthouse${fileText} ya.\n\n` +
-    "Silakan dibuka PDF-nya. Kalau ingin saya bantu pilih kamar, sebutkan tanggal menginap dan jumlah tamunya."
+    `Dengan senang hati Kak 😊 Ini brosur kamar Pomah Guesthouse${fileText} ya.\n\n` +
+    "Silakan dibuka PDF-nya. Kalau Kakak berkenan, kami siap bantu pilihkan kamar — cukup kabari tanggal menginap dan jumlah tamunya ya."
   );
 }
 

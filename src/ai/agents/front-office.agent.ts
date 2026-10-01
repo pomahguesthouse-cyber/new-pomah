@@ -496,18 +496,19 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
       "Rujuk tanggal yang sudah ada (mis. '20–22 November 2026') dan tawarkan langkah berikutnya."),
 
     when(g.media, "FOTO / GAMBAR / VIDEO / BROSUR KAMAR: Bila tamu minta 'foto', 'gambar', 'video', " +
-      "'penampakan', 'brosur', 'katalog', atau menanyakan 'ada foto/gambar/video unit nya kah?', " +
-      "WAJIB balas persis dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
+      "'penampakan', 'brosur', 'katalog', 'mau lihat kamar', 'boleh lihat kamarnya', atau menanyakan " +
+      "'ada foto/gambar/video unit nya kah?', " +
+      "balas dengan nada hangat dan sopan (sapaan 'Kak', tanpa menegur), dibuka dengan kalimat: 'Baik Kak, kita kirimkan brosur ya Kak 📸' " +
       "lalu LANGSUNG panggil `send_room_photos` di turn yang sama (sertakan `room_type` bila " +
       "tamu sudah menyebut tipe tertentu; kosongkan untuk semua tipe). Foto akan terkirim " +
-      "otomatis ke chat WhatsApp tamu. DILARANG menjawab 'saya tidak bisa mengirim foto/video' " +
-      "atau mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
+      "otomatis ke chat WhatsApp tamu. Jangan menjawab 'saya tidak bisa mengirim foto/video' " +
+      "dan jangan mengarahkan tamu ke Instagram / website / link eksternal — website hanya boleh " +
       "jadi fallback bila tool mengembalikan `ok:false`. Untuk permintaan video, kirim foto " +
       "via tool dan beri catatan singkat bahwa video tersedia di Instagram @pomahguesthouse " +
       "sebagai pelengkap (bukan sebagai pengganti). Setelah tool sukses, tutup dengan CTA singkat."),
 
     "TAMU MENGIRIM GAMBAR: Bila pesan tamu berisi '[Tamu mengirim lampiran bukti transfer...]' atau lampiran " +
-      "gambar, DILARANG menjawab 'saya tidak bisa memproses gambar' / 'kirim dalam bentuk teks'. " +
+      "gambar, jangan menjawab 'saya tidak bisa memproses gambar' / 'kirim dalam bentuk teks'. " +
       "Gambar dari tamu hampir selalu bukti transfer. Serahkan ke Finance (escalate/handoff " +
       "internal) supaya hasil OCR bukti transfer dibaca. Bila memang harus membalas sendiri, " +
       "cukup: 'Baik Kak, bukti transfernya kami terima, sedang kami cek dulu ya 🙏' tanpa " +
@@ -720,7 +721,7 @@ function buildGuestPromptParts(s: Scaffold, ctx: AgentContext): GuestPromptParts
 
     when(g.media, brosurFiles && brosurFiles.length > 0
       ? "BROSUR: Saat tamu minta brosur/katalog/gambar, bilang file akan dikirim bersama " +
-        "pesan ('Baik Kak, berikut saya kirimkan brosur kami ya.'). JANGAN tulis URL — " +
+        "pesan ('Dengan senang hati Kak 😊 Berikut brosur kami ya.'). Jangan tulis URL — " +
         "PDF akan otomatis terlampir.\nFile tersedia: " +
         brosurFiles.map((f) => f.name).join(", ")
       : ""),

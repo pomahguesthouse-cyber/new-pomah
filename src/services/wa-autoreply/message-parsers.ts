@@ -361,8 +361,34 @@ export function looksLikeBookingInquiry(message: string): boolean {
 const MEDIA_REQUEST_RE =
   /\b(foto|photo|fotonya|gambar|gambarnya|pic|pics|picture|image|brosur|brochure|katalog|catalog|video|videonya|reels?|penampakan|nampakan|virtual tour|tour 360|tur 360|walkthrough)\b/i;
 
+/**
+ * "Lihat kamar" tanpa kata foto: "mau lihat kamar", "boleh melihat kamarnya",
+ * "pengen liat kamar2nya", "show me the room", "contoh kamarnya".
+ *
+ * Insiden 1 Okt 2026: "apakah saya boleh melihat kamarnya kak?" tidak dikenali
+ * karena pola hanya mengenal "lihat/liat" tanpa awalan "me-"; bot menjawab
+ * deskripsi kamar tanpa brosur. Kunjungan langsung ("lihat kamar langsung",
+ * "datang survei") BUKAN permintaan media — lihat `IN_PERSON_VISIT_RE`.
+ */
+const VIEW_ROOM_RE =
+  /\b(?:me|di)?(?:lihat|liat)(?:in|kan)?(?:[-\s]+(?:me|di)?(?:lihat|liat)(?:in|kan)?)?\b|\b(?:me)?(?:perlihat|tunjuk|nunjuk)(?:kan|in)?\b|\bshow(?:\s+me)?\b|\bsee\b/i;
+const VIEW_ROOM_TARGET_RE =
+  /\b(?:kamar(?:2|-kamar)?(?:nya)?(?!\s+mandi)|rooms?|interior(?:nya)?)\b/i;
+const IN_PERSON_VISIT_RE = /\b(langsung|datang|survei|survey|ke lokasi|on ?site|in person)\b/i;
+
+export function isViewRoomRequest(message: string): boolean {
+  const text = message ?? "";
+  if (IN_PERSON_VISIT_RE.test(text)) return false;
+  if (/\bcontoh\s+kamar(?:nya)?\b/i.test(text)) return true;
+  // Kata kerja "lihat" lalu kamar dalam ±25 karakter (bukan "kamar" lalu "lihat" saja).
+  const m = VIEW_ROOM_RE.exec(text);
+  if (!m) return false;
+  const after = text.slice(m.index + m[0].length, m.index + m[0].length + 25);
+  return VIEW_ROOM_TARGET_RE.test(after);
+}
+
 export function isMediaRequest(message: string): boolean {
-  return MEDIA_REQUEST_RE.test(message ?? "");
+  return MEDIA_REQUEST_RE.test(message ?? "") || isViewRoomRequest(message ?? "");
 }
 
 /**
