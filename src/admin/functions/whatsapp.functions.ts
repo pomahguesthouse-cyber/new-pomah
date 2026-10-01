@@ -24,78 +24,196 @@ import {
   selectOutboundMediaType,
   threadPreview,
 } from "@/services/wa-outbound-attachment";
+import { runDeferred } from "@/lib/cf-context";
 import { resolveHumanTakeoverMs } from "@/admin/modules/ai-lab/ai-lab.functions";
+
+/**
+ * Kolom daftar thread yang benar-benar dipakai UI inbox. Dulu `select("*")`
+ * membawa kolom summary/analisis yang besar untuk setiap baris.
+ */
+const THREAD_LIST_COLUMNS =
+  "id, guest_id, phone, display_name, last_message_at, last_message_preview, unread_count, status, pinned, intent, ai_auto, provider";
+
+/** Kolom pesan yang dirender UI. `raw_payload` (payload mentah webhook) sengaja tidak ikut. */
+const MESSAGE_COLUMNS = "id, thread_id, direction, body, sent_at, metadata";
+
+const THREAD_LIST_DEFAULT_LIMIT = 200;
+const THREAD_MESSAGES_DEFAULT_LIMIT = 200;
+
+const listThreadsInput = z
+  .object({
+    limit: z.number().int().min(1).max(500).optional(),
+    q: z.string().max(80).optional(),
+    filter: z.enum(["all", "unread", "open", "closed"]).optional(),
+  })
+  .optional();
+
+/** Buang karakter yang memecah sintaks filter PostgREST `or(...)` / wildcard ilike. */
+function sanitizeSearch(q: string | undefined): string {
+  return (q ?? "").replace(/[%_,()"\\*]/g, " ").replace(/\s+/g, " ").trim();
+}
 
 export const listThreads = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d) => listThreadsInput.parse(d))
+  .handler(async ({ data, context }) => {
+    const limit = data?.limit ?? THREAD_LIST_DEFAULT_LIMIT;
+    const term = sanitizeSearch(data?.q);
+    const filter = data?.filter ?? "all";
+
+    let query = context.supabase
       .from("whatsapp_threads")
-      .select("*")
+      .select(THREAD_LIST_COLUMNS)
       .order("pinned", { ascending: false })
-      .order("last_message_at", { ascending: false });
-    if (error) throw error;
-    return { threads: data ?? [] };
+      .order("last_message_at", { ascending: false })
+      .limit(limit + 1);
+    if (term) {
+      query = query.or(
+        `display_name.ilike.%${term}%,phone.ilike.%${term}%,last_message_preview.ilike.%${term}%`,
+      );
+    }
+    if (filter === "unread") query = query.gt("unread_count", 0);
+    else if (filter === "open" || filter === "closed") query = query.eq("status", filter);
+
+    // Total belum dibaca dihitung terpisah (paralel) supaya badge Inbox tetap
+    // benar walau daftar hanya memuat sebagian thread.
+    const [listRes, unreadRes] = await Promise.all([
+      query,
+      context.supabase.from("whatsapp_threads").select("unread_count").gt("unread_count", 0),
+    ]);
+    if (listRes.error) throw listRes.error;
+    const rows = listRes.data ?? [];
+    const unreadTotal = (unreadRes.data ?? []).reduce((sum, r) => sum + (r.unread_count ?? 0), 0);
+    return { threads: rows.slice(0, limit), hasMore: rows.length > limit, unreadTotal };
   });
+
+/** Thread yang sedang diisi summary-nya di latar belakang (hindari seed ganda per isolate). */
+const seedingThreads = new Set<string>();
 
 export const getThread = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ id: z.string().uuid() }).parse(d))
+  .inputValidator((d) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        /** Jumlah pesan TERBARU yang dikembalikan (urut naik). */
+        limit: z.number().int().min(1).max(500).optional(),
+        /** false di HP: panel tamu/booking tidak tampil, lewati 2 query. Default true. */
+        withContext: z.boolean().optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data, context }) => {
-    const { data: thread, error: threadError } = await context.supabase
-      .from("whatsapp_threads")
-      .select("*")
-      .eq("id", data.id)
-      .single();
-    if (threadError) throw threadError;
+    const limit = data.limit ?? THREAD_MESSAGES_DEFAULT_LIMIT;
+    const withContext = data.withContext !== false;
 
-    let currentThread = thread;
-    if (summaryIsMissing(currentThread as any)) {
-      const seedResult = await seedMissingThreadSummary(context.supabase as any, data.id);
-      if (seedResult.updated) {
-        const { data: refreshedThread } = await context.supabase
-          .from("whatsapp_threads")
-          .select("*")
-          .eq("id", data.id)
-          .single();
-        currentThread = refreshedThread ?? currentThread;
-      }
+    // Thread dan pesan diambil paralel (dulu berurutan, plus seed summary yang
+    // memblokir). Pesan: hanya `limit` terbaru, kolom seperlunya, tanpa raw_payload.
+    const [threadRes, messagesRes, lastInboundRes] = await Promise.all([
+      context.supabase.from("whatsapp_threads").select("*").eq("id", data.id).single(),
+      context.supabase
+        .from("whatsapp_messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("thread_id", data.id)
+        .order("sent_at", { ascending: false })
+        .limit(limit + 1),
+      // Pesan masuk terakhir (untuk jendela 24 jam Meta) walau di luar `limit` terbaru.
+      context.supabase
+        .from("whatsapp_messages")
+        .select("sent_at")
+        .eq("thread_id", data.id)
+        .eq("direction", "in")
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (threadRes.error) throw threadRes.error;
+    if (messagesRes.error) throw messagesRes.error;
+    const currentThread = threadRes.data;
+
+    const newestFirst = messagesRes.data ?? [];
+    const hasMore = newestFirst.length > limit;
+    const page = newestFirst.slice(0, limit).reverse();
+
+    // Guest/booking (best-effort) dan signed URL lampiran berjalan bersamaan.
+    const [visibleMessages, { guest, booking }] = await Promise.all([
+      withOutboundMediaUrls(page),
+      withContext
+        ? loadGuestContext(context.supabase, currentThread?.phone)
+        : Promise.resolve({ guest: null, booking: null }),
+    ]);
+
+    // Seed summary yang hilang tidak lagi menahan respons. Hasilnya muncul lewat
+    // event realtime (update whatsapp_threads) -> refetch thread.
+    if (summaryIsMissing(currentThread as any) && !seedingThreads.has(data.id)) {
+      seedingThreads.add(data.id);
+      const threadId = data.id;
+      const job = runDeferred("wa-summary-seed", () =>
+        seedMissingThreadSummary(context.supabase as any, threadId),
+      );
+      void Promise.resolve(job).finally(() => seedingThreads.delete(threadId));
     }
 
-    const { data: messages, error: messagesError } = await context.supabase
-      .from("whatsapp_messages")
-      .select("*")
-      .eq("thread_id", data.id)
-      .order("sent_at", { ascending: true });
-    if (messagesError) throw messagesError;
-    const visibleMessages = await withOutboundMediaUrls(messages ?? []);
-
-    // Look up guest context by phone (best-effort)
-    let guest: any = null;
-    let booking: any = null;
-    if (currentThread?.phone) {
-      const { data: g } = await context.supabase
-        .from("guests")
-        .select("*")
-        .eq("phone", currentThread.phone)
-        .maybeSingle();
-      guest = g;
-      if (g) {
-        const { data: b } = await context.supabase
-          .from("bookings")
-          .select(
-            "id, check_in, check_out, status, adults, children, total_amount, special_requests, room_type_id, room_id",
-          )
-          .eq("guest_id", g.id)
-          .order("check_in", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        booking = b;
-      }
-    }
-
-    return { thread: currentThread, messages: visibleMessages, guest, booking };
+    return {
+      thread: currentThread,
+      messages: visibleMessages,
+      guest,
+      booking,
+      hasMore,
+      lastInboundAt: (lastInboundRes.data?.sent_at as string | undefined) ?? null,
+    };
   });
+
+/** Pesan lebih lama dari `before` (inklusif; klien membuang duplikat by id). */
+export const getOlderMessages = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z
+      .object({
+        threadId: z.string().uuid(),
+        before: z.string().min(10).max(40),
+        limit: z.number().int().min(1).max(100).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const limit = data.limit ?? 50;
+    const { data: rows, error } = await context.supabase
+      .from("whatsapp_messages")
+      .select(MESSAGE_COLUMNS)
+      .eq("thread_id", data.threadId)
+      .lte("sent_at", data.before)
+      .order("sent_at", { ascending: false })
+      .limit(limit + 1);
+    if (error) throw error;
+    const newestFirst = rows ?? [];
+    const hasMore = newestFirst.length > limit;
+    const page = newestFirst.slice(0, limit).reverse();
+    return { messages: await withOutboundMediaUrls(page), hasMore };
+  });
+
+async function loadGuestContext(
+  supabase: any,
+  phone: string | null | undefined,
+): Promise<{ guest: any; booking: any }> {
+  if (!phone) return { guest: null, booking: null };
+  const { data: g } = await supabase
+    .from("guests")
+    .select("id, full_name, email, country, notes")
+    .eq("phone", phone)
+    .maybeSingle();
+  if (!g) return { guest: null, booking: null };
+  const { data: b } = await supabase
+    .from("bookings")
+    .select(
+      "id, check_in, check_out, status, adults, children, total_amount, special_requests, room_type_id, room_id",
+    )
+    .eq("guest_id", g.id)
+    .order("check_in", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { guest: g, booking: b };
+}
 
 function metadataRecord(metadata: unknown): Record<string, unknown> | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;

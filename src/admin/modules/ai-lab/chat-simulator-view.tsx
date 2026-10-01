@@ -715,7 +715,7 @@ export function ChatSimulatorView() {
     if (importingId) return;
     setImportingId(thread.id);
     try {
-      const res: any = await runGetThread({ data: { id: thread.id } });
+      const res: any = await runGetThread({ data: { id: thread.id, limit: 500, withContext: false } });
       const messages: any[] = res?.messages ?? [];
       const imported: TranscriptMsg[] = messages
         .filter((m) => m.body)
